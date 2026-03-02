@@ -1937,14 +1937,14 @@ fn submenu_visible_row_indices(
                 .sub_choice_indices_select_music
                 .get(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX)
                 .copied()
-                .unwrap_or(1)
-                == 1;
+                .unwrap_or_else(|| yes_no_choice_index(true));
+            let show_breakdown = yes_no_from_choice(show_breakdown);
             let show_previews = state
                 .sub_choice_indices_select_music
                 .get(SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX)
                 .copied()
-                .unwrap_or(1)
-                == 1;
+                .unwrap_or_else(|| yes_no_choice_index(true));
+            let show_previews = yes_no_from_choice(show_previews);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, _)| {
@@ -2533,12 +2533,13 @@ fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConf
 
 #[inline(always)]
 fn score_import_only_missing_gs_scores(state: &State) -> bool {
-    state
+    yes_no_from_choice(
+        state
         .sub_choice_indices_score_import
         .get(SCORE_IMPORT_ROW_ONLY_MISSING_INDEX)
         .copied()
-        .unwrap_or(0)
-        == 1
+        .unwrap_or_else(|| yes_no_choice_index(false)),
+    )
 }
 
 fn selected_score_import_selection(state: &State) -> Option<ScoreImportSelection> {
@@ -2970,6 +2971,14 @@ const fn default_fail_type_from_choice(idx: usize) -> DefaultFailType {
     }
 }
 
+const fn yes_no_choice_index(enabled: bool) -> usize {
+    if enabled { 1 } else { 0 }
+}
+
+const fn yes_no_from_choice(idx: usize) -> bool {
+    idx == 1
+}
+
 const fn translated_titles_choice_index(translated_titles: bool) -> usize {
     if translated_titles { 0 } else { 1 }
 }
@@ -3313,7 +3322,7 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
         "Wait for VSync",
-        usize::from(cfg.vsync),
+        yes_no_choice_index(cfg.vsync),
     );
     let max_fps_idx = max_fps_choice_index(&state.max_fps_choices, cfg.max_fps);
     set_max_fps_choice_index(&mut state, max_fps_idx);
@@ -3327,7 +3336,7 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
         GRAPHICS_ROW_VALIDATION_LAYERS,
-        usize::from(cfg.gfx_debug),
+        yes_no_choice_index(cfg.gfx_debug),
     );
     if let Some(slot) = state
         .sub_choice_indices_graphics
@@ -3464,25 +3473,25 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_course,
         COURSE_OPTIONS_ROWS,
         COURSE_ROW_SHOW_RANDOM,
-        usize::from(cfg.show_random_courses),
+        yes_no_choice_index(cfg.show_random_courses),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_course,
         COURSE_OPTIONS_ROWS,
         COURSE_ROW_SHOW_MOST_PLAYED,
-        usize::from(cfg.show_most_played_courses),
+        yes_no_choice_index(cfg.show_most_played_courses),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_course,
         COURSE_OPTIONS_ROWS,
         COURSE_ROW_SHOW_INDIVIDUAL_SCORES,
-        usize::from(cfg.show_course_individual_scores),
+        yes_no_choice_index(cfg.show_course_individual_scores),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_course,
         COURSE_OPTIONS_ROWS,
         COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES,
-        usize::from(cfg.autosubmit_course_scores_individually),
+        yes_no_choice_index(cfg.autosubmit_course_scores_individually),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_gameplay,
@@ -3548,13 +3557,13 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_SHOW_BANNERS,
-        usize::from(cfg.show_select_music_banners),
+        yes_no_choice_index(cfg.show_select_music_banners),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_SHOW_BREAKDOWN,
-        usize::from(cfg.show_select_music_breakdown),
+        yes_no_choice_index(cfg.show_select_music_breakdown),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -3578,19 +3587,19 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_CDTITLES,
-        usize::from(cfg.show_select_music_cdtitles),
+        yes_no_choice_index(cfg.show_select_music_cdtitles),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_WHEEL_GRADES,
-        usize::from(cfg.show_music_wheel_grades),
+        yes_no_choice_index(cfg.show_music_wheel_grades),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_WHEEL_LAMPS,
-        usize::from(cfg.show_music_wheel_lamps),
+        yes_no_choice_index(cfg.show_music_wheel_lamps),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -3602,7 +3611,7 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_PREVIEWS,
-        usize::from(cfg.show_select_music_previews),
+        yes_no_choice_index(cfg.show_select_music_previews),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -3614,39 +3623,45 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_GAMEPLAY_TIMER,
-        usize::from(cfg.show_select_music_gameplay_timer),
+        yes_no_choice_index(cfg.show_select_music_gameplay_timer),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_SHOW_RIVALS,
-        usize::from(cfg.show_select_music_scorebox),
+        yes_no_choice_index(cfg.show_select_music_scorebox),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
         GS_ROW_ENABLE,
-        usize::from(cfg.enable_groovestats),
+        yes_no_choice_index(cfg.enable_groovestats),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
         GS_ROW_ENABLE_BOOGIE,
-        usize::from(cfg.enable_boogiestats),
+        yes_no_choice_index(cfg.enable_boogiestats),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
         GS_ROW_AUTO_POPULATE,
-        usize::from(cfg.auto_populate_gs_scores),
+        yes_no_choice_index(cfg.auto_populate_gs_scores),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_arrowcloud,
         ARROWCLOUD_OPTIONS_ROWS,
         ARROWCLOUD_ROW_ENABLE,
-        usize::from(cfg.enable_arrowcloud),
+        yes_no_choice_index(cfg.enable_arrowcloud),
     );
     refresh_score_import_options(&mut state);
+    set_choice_by_label(
+        &mut state.sub_choice_indices_score_import,
+        SCORE_IMPORT_OPTIONS_ROWS,
+        SCORE_IMPORT_ROW_ONLY_MISSING,
+        yes_no_choice_index(false),
+    );
     sync_submenu_cursor_indices(&mut state);
     state
 }
@@ -4769,14 +4784,14 @@ fn apply_submenu_choice_delta(
             rebuild_resolution_choices(state, cur_w, cur_h);
         }
         if row.label == "Wait for VSync" {
-            config::update_vsync(new_index == 1);
+            config::update_vsync(yes_no_from_choice(new_index));
         }
         if row.label == "Show Stats" {
             let mode = new_index.min(2) as u8;
             action = Some(ScreenAction::UpdateShowOverlay(mode));
         }
         if row.label == GRAPHICS_ROW_VALIDATION_LAYERS {
-            config::update_gfx_debug(new_index == 1);
+            config::update_gfx_debug(yes_no_from_choice(new_index));
         }
         if row.label == GRAPHICS_ROW_SOFTWARE_THREADS {
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
@@ -4834,7 +4849,7 @@ fn apply_submenu_choice_delta(
         }
     } else if matches!(kind, SubmenuKind::Course) {
         let row = &rows[row_index];
-        let enabled = new_index == 1;
+        let enabled = yes_no_from_choice(new_index);
         match row.label {
             COURSE_ROW_SHOW_RANDOM => config::update_show_random_courses(enabled),
             COURSE_ROW_SHOW_MOST_PLAYED => config::update_show_most_played_courses(enabled),
@@ -4897,9 +4912,9 @@ fn apply_submenu_choice_delta(
     } else if matches!(kind, SubmenuKind::SelectMusic) {
         let row = &rows[row_index];
         if row.label == SELECT_MUSIC_ROW_SHOW_BANNERS {
-            config::update_show_select_music_banners(new_index == 1);
+            config::update_show_select_music_banners(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_SHOW_BREAKDOWN {
-            config::update_show_select_music_breakdown(new_index == 1);
+            config::update_show_select_music_breakdown(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_BREAKDOWN_STYLE {
             config::update_select_music_breakdown_style(breakdown_style_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_NATIVE_LANGUAGE {
@@ -4909,41 +4924,41 @@ fn apply_submenu_choice_delta(
                 new_index,
             ));
         } else if row.label == SELECT_MUSIC_ROW_CDTITLES {
-            config::update_show_select_music_cdtitles(new_index == 1);
+            config::update_show_select_music_cdtitles(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_WHEEL_GRADES {
-            config::update_show_music_wheel_grades(new_index == 1);
+            config::update_show_music_wheel_grades(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_WHEEL_LAMPS {
-            config::update_show_music_wheel_lamps(new_index == 1);
+            config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_PATTERN_INFO {
             config::update_select_music_pattern_info_mode(select_music_pattern_info_from_choice(
                 new_index,
             ));
         } else if row.label == SELECT_MUSIC_ROW_PREVIEWS {
-            config::update_show_select_music_previews(new_index == 1);
+            config::update_show_select_music_previews(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_PREVIEW_LOOP {
             config::update_select_music_preview_loop(new_index == 1);
         } else if row.label == SELECT_MUSIC_ROW_GAMEPLAY_TIMER {
-            config::update_show_select_music_gameplay_timer(new_index == 1);
+            config::update_show_select_music_gameplay_timer(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_SHOW_RIVALS {
-            config::update_show_select_music_scorebox(new_index == 1);
+            config::update_show_select_music_scorebox(yes_no_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];
         if row.label == GS_ROW_ENABLE {
-            let enabled = new_index == 1;
+            let enabled = yes_no_from_choice(new_index);
             config::update_enable_groovestats(enabled);
             // Re-run connectivity logic so toggling this option applies immediately.
             crate::core::network::init();
         } else if row.label == GS_ROW_ENABLE_BOOGIE {
-            config::update_enable_boogiestats(new_index == 1);
+            config::update_enable_boogiestats(yes_no_from_choice(new_index));
             crate::core::network::init();
         } else if row.label == GS_ROW_AUTO_POPULATE {
-            config::update_auto_populate_gs_scores(new_index == 1);
+            config::update_auto_populate_gs_scores(yes_no_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::ArrowCloud) {
         let row = &rows[row_index];
         if row.label == ARROWCLOUD_ROW_ENABLE {
-            config::update_enable_arrowcloud(new_index == 1);
+            config::update_enable_arrowcloud(yes_no_from_choice(new_index));
             crate::core::network::init();
         }
     } else if matches!(kind, SubmenuKind::ScoreImport) {

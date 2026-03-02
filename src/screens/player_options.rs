@@ -1183,7 +1183,7 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
         },
         Row {
             name: ROW_CARRY_COMBO.to_string(),
-            choices: vec!["Yes".to_string(), "No".to_string()],
+            choices: vec!["No".to_string(), "Yes".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Carry current combo into the next song.".to_string()],
             choice_difficulty_indices: None,
@@ -1320,7 +1320,7 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
         },
         Row {
             name: "Rescore Early Hits".to_string(),
-            choices: vec!["Yes".to_string(), "No".to_string()],
+            choices: vec!["No".to_string(), "Yes".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
                 "Allow early hits of Decents and Way Offs to be rescored to better judgments."
@@ -1371,7 +1371,7 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
         },
         Row {
             name: "Custom Blue Fantastic Window".to_string(),
-            choices: vec!["Yes".to_string(), "No".to_string()],
+            choices: vec!["No".to_string(), "Yes".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
                 "Override the default FA+ blue Fantastic split with a custom window.".to_string(),
@@ -1689,9 +1689,9 @@ fn apply_profile_defaults(
     }
     if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_CARRY_COMBO) {
         row.selected_choice_index[player_idx] = if profile.carry_combo_between_songs {
-            0
-        } else {
             1
+        } else {
+            0
         };
     }
     // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
@@ -1943,7 +1943,7 @@ fn apply_profile_defaults(
         .min(row.choices.len().saturating_sub(1));
     }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Rescore Early Hits") {
-        row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 0 } else { 1 };
+        row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 1 } else { 0 };
     }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Mini Indicator") {
         row.selected_choice_index[player_idx] = match profile.mini_indicator {
@@ -2005,9 +2005,9 @@ fn apply_profile_defaults(
         .find(|r| r.name == ROW_CUSTOM_FANTASTIC_WINDOW)
     {
         row.selected_choice_index[player_idx] = if profile.custom_fantastic_window {
-            0
-        } else {
             1
+        } else {
+            0
         };
     }
     if let Some(row) = rows
@@ -2697,7 +2697,7 @@ fn custom_fantastic_window_ms_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]
         }
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
-        if choice_idx == 0 {
+        if choice_idx != 0 {
             return true;
         }
     }
@@ -3526,13 +3526,13 @@ fn change_choice_for_player(
             crate::game::profile::update_hide_light_type_for_side(persist_side, setting);
         }
     } else if row_name == "Rescore Early Hits" {
-        let enabled = row.selected_choice_index[player_idx] == 0;
+        let enabled = row.selected_choice_index[player_idx] == 1;
         state.player_profiles[player_idx].rescore_early_hits = enabled;
         if should_persist {
             crate::game::profile::update_rescore_early_hits_for_side(persist_side, enabled);
         }
     } else if row_name == ROW_CUSTOM_FANTASTIC_WINDOW {
-        let enabled = row.selected_choice_index[player_idx] == 0;
+        let enabled = row.selected_choice_index[player_idx] == 1;
         state.player_profiles[player_idx].custom_fantastic_window = enabled;
         if should_persist {
             crate::game::profile::update_custom_fantastic_window_for_side(persist_side, enabled);
@@ -3848,7 +3848,7 @@ fn change_choice_for_player(
             crate::game::profile::update_combo_mode_for_side(persist_side, setting);
         }
     } else if row_name == ROW_CARRY_COMBO {
-        let enabled = row.selected_choice_index[player_idx] == 0;
+        let enabled = row.selected_choice_index[player_idx] == 1;
         state.player_profiles[player_idx].carry_combo_between_songs = enabled;
         if should_persist {
             crate::game::profile::update_carry_combo_between_songs_for_side(persist_side, enabled);
