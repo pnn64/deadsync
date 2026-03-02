@@ -67,6 +67,9 @@ jobs:
           elif [ "${{ github.event_name }}" = "workflow_call" ]; then
             selected="${{ inputs.arch }}"
           fi
+          if [ -z "${selected}" ]; then
+            selected="all"
+          fi
           if [ "${selected}" = "all" ] || [ "${selected}" = "${{ matrix.arch }}" ]; then
             echo "enabled=true" >> "${GITHUB_OUTPUT}"
           else

@@ -44,7 +44,7 @@ jobs:
           - arch: arm64
             runner: macos-15
           - arch: x86_64
-            runner: macos-13
+            runner: macos-15
     runs-on: ${{ matrix.runner }}
     env:
       CARGO_TERM_COLOR: always
@@ -64,6 +64,9 @@ jobs:
             selected="${{ github.event.inputs.arch }}"
           elif [ "${{ github.event_name }}" = "workflow_call" ]; then
             selected="${{ inputs.arch }}"
+          fi
+          if [ -z "${selected}" ]; then
+            selected="all"
           fi
           if [ "${selected}" = "all" ] || [ "${selected}" = "${{ matrix.arch }}" ]; then
             echo "enabled=true" >> "${GITHUB_OUTPUT}"
