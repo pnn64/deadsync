@@ -1,6 +1,4 @@
 /cache
-/courses/*
-!/courses/instructions.txt
 /save
 /songs/*
 !/songs/instructions.txt
