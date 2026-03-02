@@ -10,13 +10,32 @@ on:
         description: "Release tag (example: v0.2.22)"
         required: true
         type: string
+      arch:
+        description: "Build target arch"
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - arm64
+          - x86_64
 
 permissions:
   contents: write
 
 jobs:
   build-release:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15-arm64
+          - arch: x86_64
+            runner: macos-15-intel
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.arch == 'all' || github.event.inputs.arch == matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     env:
       CARGO_TERM_COLOR: always
     steps:
@@ -72,7 +91,7 @@ jobs:
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deadsync-macos-${{ steps.tag.outputs.tag }}-${{ runner.arch }}
+          name: deadsync-macos-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
           if-no-files-found: error
           path: |
             ${{ steps.package.outputs.archive }}

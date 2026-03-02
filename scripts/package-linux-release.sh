@@ -3,14 +3,40 @@ set -euo pipefail
 
 tag="${1:-}"
 if [ -z "${tag}" ]; then
-  echo "usage: $0 <tag>" >&2
+  echo "usage: $0 <tag> [arch] [target]" >&2
   exit 1
 fi
 
-arch_raw="${RUNNER_ARCH:-X64}"
-arch="$(printf '%s' "${arch_raw}" | tr '[:upper:]' '[:lower:]')"
-bin_path="target/release/deadsync"
-assets_path="target/release/assets"
+map_arch() {
+  local value
+  value="$(printf '%s' "${1}" | tr '[:upper:]' '[:lower:]')"
+  case "${value}" in
+    x64 | amd64 | x86_64) echo "x86_64" ;;
+    arm64 | aarch64) echo "arm64" ;;
+    *)
+      echo "unknown arch: ${1}" >&2
+      return 1
+      ;;
+  esac
+}
+
+arch_raw="${RUNNER_ARCH:-$(uname -m)}"
+if [ -n "${2:-}" ]; then
+  arch_raw="${2}"
+fi
+arch="$(map_arch "${arch_raw}")"
+
+target="${3:-native}"
+if [ "${target}" = "native" ]; then
+  bin_path="target/release/deadsync"
+  assets_path="target/release/assets"
+else
+  bin_path="target/${target}/release/deadsync"
+  assets_path="target/${target}/release/assets"
+  if [ ! -d "${assets_path}" ]; then
+    assets_path="target/release/assets"
+  fi
+fi
 
 if [ ! -x "${bin_path}" ]; then
   echo "missing executable: ${bin_path}" >&2
@@ -22,7 +48,7 @@ if [ ! -d "${assets_path}" ]; then
 fi
 
 dist_dir="dist"
-pkg_name="deadsync-${tag}-linux-${arch}"
+pkg_name="deadsync-${tag}-${arch}-linux"
 stage_dir="${dist_dir}/${pkg_name}"
 archive_path="${dist_dir}/${pkg_name}.tar.gz"
 checksum_path="${archive_path}.sha256"

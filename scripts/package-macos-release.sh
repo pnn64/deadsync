@@ -7,8 +7,21 @@ if [ -z "${tag}" ]; then
   exit 1
 fi
 
-arch_raw="${RUNNER_ARCH:-X64}"
-arch="$(printf '%s' "${arch_raw}" | tr '[:upper:]' '[:lower:]')"
+map_arch() {
+  local value
+  value="$(printf '%s' "${1}" | tr '[:upper:]' '[:lower:]')"
+  case "${value}" in
+    x64 | amd64 | x86_64) echo "x86_64" ;;
+    arm64 | aarch64) echo "arm64" ;;
+    *)
+      echo "unknown arch: ${1}" >&2
+      return 1
+      ;;
+  esac
+}
+
+arch_raw="${RUNNER_ARCH:-$(uname -m)}"
+arch="$(map_arch "${arch_raw}")"
 bin_path="target/release/deadsync"
 assets_path="target/release/assets"
 
@@ -22,7 +35,7 @@ if [ ! -d "${assets_path}" ]; then
 fi
 
 dist_dir="dist"
-pkg_name="deadsync-${tag}-macos-${arch}"
+pkg_name="deadsync-${tag}-${arch}-macos"
 stage_dir="${dist_dir}/${pkg_name}"
 archive_path="${dist_dir}/${pkg_name}.tar.gz"
 checksum_path="${archive_path}.sha256"
