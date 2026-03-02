@@ -28,6 +28,20 @@ sudo apt update
 sudo apt install --no-install-recommends build-essential cmake pkg-config libudev-dev libasound2-dev libvulkan-dev libgl1-mesa-dev
 ```
 
+### macOS build dependencies (Homebrew)
+```bash
+xcode-select --install
+brew install vulkan-loader molten-vk
+```
+
+If linking fails with `library 'vulkan' not found`, export the Homebrew library paths:
+```bash
+brew_prefix="$(brew --prefix)"
+export LIBRARY_PATH="$brew_prefix/lib:$brew_prefix/opt/vulkan-loader/lib:${LIBRARY_PATH:-}"
+export DYLD_FALLBACK_LIBRARY_PATH="$brew_prefix/lib:$brew_prefix/opt/vulkan-loader/lib:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+export RUSTFLAGS="-L native=$brew_prefix/lib -L native=$brew_prefix/opt/vulkan-loader/lib"
+```
+
 ### BSD build dependencies (FreeBSD)
 ```bash
 pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers

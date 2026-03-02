@@ -129,6 +129,38 @@ jobs:
             exit 0
           fi
           sudo dpkg --add-architecture arm64
+          if [ -r /etc/os-release ]; then
+            # shellcheck disable=SC1091
+            . /etc/os-release
+          fi
+          if [ "${ID:-}" = "ubuntu" ]; then
+            codename="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
+            if [ -n "${codename}" ]; then
+              if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+                if grep -q '^Architectures:' /etc/apt/sources.list.d/ubuntu.sources; then
+                  sudo sed -Ei 's/^Architectures:.*/Architectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+                else
+                  sudo sed -i '/^Suites:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+                fi
+                sudo tee /etc/apt/sources.list.d/ubuntu-arm64.sources >/dev/null <<EOF
+Types: deb
+URIs: http://ports.ubuntu.com/ubuntu-ports
+Suites: ${codename} ${codename}-updates ${codename}-backports ${codename}-security
+Components: main restricted universe multiverse
+Architectures: arm64
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+EOF
+              elif [ -f /etc/apt/sources.list ]; then
+                sudo sed -Ei '/^[[:space:]]*deb[[:space:]]+/ { /\[arch=/! s|^[[:space:]]*deb[[:space:]]+|deb [arch=amd64] | }' /etc/apt/sources.list
+                sudo tee /etc/apt/sources.list.d/ubuntu-arm64.list >/dev/null <<EOF
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename} main restricted universe multiverse
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-updates main restricted universe multiverse
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-backports main restricted universe multiverse
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-security main restricted universe multiverse
+EOF
+              fi
+            fi
+          fi
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             build-essential \
