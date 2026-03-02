@@ -379,17 +379,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             min_x = min_x.min(xf);
             max_x = max_x.max(xf);
         }
-        let field_zoom = state.field_zoom[player_idx].max(0.0);
-        let target_arrow_px = 64.0 * field_zoom;
+
+        // SL parity (GetNotefieldWidth): layout width is style/lane based and must
+        // not shrink/grow with Mini (field zoom).
+        let target_arrow_px = 64.0;
         let size = ns.receptor_off[0].size();
         let w = size[0].max(0) as f32;
         let h = size[1].max(0) as f32;
         let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {
             w * (target_arrow_px / h)
         } else {
-            w * field_zoom
+            w
         };
-        ((max_x - min_x) * field_zoom) + arrow_w
+        (max_x - min_x) + arrow_w
     };
 
     let (p1_actors, p2_actors, playfield_center_x, per_player_fields): (
