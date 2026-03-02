@@ -2255,6 +2255,35 @@ fn load_for_side(side: PlayerSide) {
         }
     };
 
+    // If the requested profile folder no longer exists (e.g. the user renamed
+    // the default folder on disk), fall back to the first available local
+    // profile or Guest.
+    let profile_id = match profile_id {
+        Some(id) if !local_profile_dir(&id).is_dir() => {
+            let fallback = scan_local_profiles()
+                .into_iter()
+                .next()
+                .map(|p| p.id);
+            if let Some(ref fb_id) = fallback {
+                info!(
+                    "Profile folder '{id}' not found; falling back to '{fb_id}'."
+                );
+                let mut session = SESSION.lock().unwrap();
+                session.active_profiles[side_ix(side)] = ActiveProfile::Local {
+                    id: fb_id.clone(),
+                };
+            } else {
+                info!(
+                    "Profile folder '{id}' not found and no other profiles exist; using Guest."
+                );
+                let mut session = SESSION.lock().unwrap();
+                session.active_profiles[side_ix(side)] = ActiveProfile::Guest;
+            }
+            fallback
+        }
+        other => other,
+    };
+
     let Some(profile_id) = profile_id else {
         let mut profiles = PROFILES.lock().unwrap();
         profiles[side_ix(side)] = make_guest_profile();
@@ -2836,7 +2865,11 @@ pub struct LocalProfileSummary {
 
 #[inline(always)]
 fn is_local_profile_id(s: &str) -> bool {
-    s.len() == 8 && s.bytes().all(|b| b.is_ascii_hexdigit())
+    !s.is_empty()
+        && s.len() <= 64
+        && s != "."
+        && s != ".."
+        && !s.contains(['/', '\\', '\0'])
 }
 
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
@@ -2888,7 +2921,7 @@ pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
         });
     }
 
-    out.sort_by(|a, b| a.id.cmp(&b.id));
+    out.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
     out
 }
 
