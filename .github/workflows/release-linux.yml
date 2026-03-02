@@ -18,6 +18,7 @@ jobs:
   build-release:
     runs-on:
       - self-hosted
+      - Linux
     env:
       CARGO_TERM_COLOR: always
     steps:
@@ -26,6 +27,56 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+
+      - name: Install Linux build deps (best effort)
+        shell: bash
+        run: |
+          if ! command -v apt-get >/dev/null 2>&1; then
+            echo "apt-get not found; skipping auto-install."
+            exit 0
+          fi
+          if ! command -v sudo >/dev/null 2>&1; then
+            echo "sudo not found; skipping auto-install."
+            exit 0
+          fi
+          if ! sudo -n true 2>/dev/null; then
+            echo "passwordless sudo unavailable; skipping auto-install."
+            exit 0
+          fi
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            cmake \
+            pkg-config \
+            libudev-dev \
+            libasound2-dev \
+            libvulkan-dev \
+            libgl1-mesa-dev
+
+      - name: Verify Linux native deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          if ! command -v pkg-config >/dev/null 2>&1; then
+            echo "::error::pkg-config is missing."
+            exit 1
+          fi
+          if ! pkg-config --exists vulkan; then
+            echo "::error::Missing Vulkan dev package. Install libvulkan-dev (or distro equivalent)."
+            missing=1
+          fi
+          if ! pkg-config --exists alsa; then
+            echo "::error::Missing ALSA dev package. Install libasound2-dev (or distro equivalent)."
+            missing=1
+          fi
+          if ! pkg-config --exists libudev; then
+            echo "::error::Missing libudev dev package. Install libudev-dev (or distro equivalent)."
+            missing=1
+          fi
+          if [ "${missing}" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Resolve release tag
         id: tag
