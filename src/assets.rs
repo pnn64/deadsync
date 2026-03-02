@@ -567,28 +567,30 @@ fn ensure_cached_banner_on_disk(path: &Path, opts: BannerCacheOptions) -> image:
 }
 
 enum BannerPrewarmOutcome {
-    Built { millis: f64 },
-    Reused { millis: f64 },
-    SkippedNonFile,
-    SkippedNonImage,
+    Built { path: PathBuf, millis: f64 },
+    Reused { path: PathBuf, millis: f64 },
+    SkippedNonFile { path: PathBuf },
+    SkippedNonImage { path: PathBuf },
     Failed { path: PathBuf, msg: String },
 }
 
 #[inline(always)]
 fn prewarm_one_banner(path: PathBuf, opts: BannerCacheOptions) -> BannerPrewarmOutcome {
     if !path.is_file() {
-        return BannerPrewarmOutcome::SkippedNonFile;
+        return BannerPrewarmOutcome::SkippedNonFile { path };
     }
     if !is_cacheable_banner_path(&path) {
-        return BannerPrewarmOutcome::SkippedNonImage;
+        return BannerPrewarmOutcome::SkippedNonImage { path };
     }
 
     let started = Instant::now();
     match ensure_cached_banner_on_disk(&path, opts) {
         Ok(true) => BannerPrewarmOutcome::Built {
+            path,
             millis: started.elapsed().as_secs_f64() * 1000.0,
         },
         Ok(false) => BannerPrewarmOutcome::Reused {
+            path,
             millis: started.elapsed().as_secs_f64() * 1000.0,
         },
         Err(e) => BannerPrewarmOutcome::Failed {
@@ -609,9 +611,13 @@ fn banner_prewarm_workers(job_count: usize) -> usize {
         .min(job_count)
 }
 
-pub fn prewarm_banner_cache(paths: &[PathBuf]) {
+pub fn prewarm_banner_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
+where
+    F: FnMut(usize, usize, Option<&Path>),
+{
     let opts = BannerCacheOptions::from_config(&crate::config::get());
     if !opts.enabled {
+        progress(0, 0, None);
         return;
     }
 
@@ -628,10 +634,12 @@ pub fn prewarm_banner_cache(paths: &[PathBuf]) {
     }
 
     let worker_count = banner_prewarm_workers(deduped.len());
+    let total_jobs = deduped.len();
+    progress(0, total_jobs, None);
     debug!(
         "Banner cache prewarm start: {} input, {} unique, {} duplicate, {} worker threads.",
         paths.len(),
-        deduped.len(),
+        total_jobs,
         duplicate,
         worker_count
     );
@@ -670,22 +678,32 @@ pub fn prewarm_banner_cache(paths: &[PathBuf]) {
     let mut failed = 0usize;
     let mut built_ms = 0.0f64;
     let mut reused_ms = 0.0f64;
+    let mut completed = 0usize;
     for result in res_rx {
+        let current_path = match &result {
+            BannerPrewarmOutcome::Built { path, .. }
+            | BannerPrewarmOutcome::Reused { path, .. }
+            | BannerPrewarmOutcome::SkippedNonFile { path }
+            | BannerPrewarmOutcome::SkippedNonImage { path }
+            | BannerPrewarmOutcome::Failed { path, .. } => Some(path.as_path()),
+        };
+        completed = completed.saturating_add(1);
+        progress(completed, total_jobs, current_path);
         match result {
-            BannerPrewarmOutcome::Built { millis } => {
+            BannerPrewarmOutcome::Built { millis, .. } => {
                 prepared += 1;
                 built += 1;
                 built_ms += millis;
             }
-            BannerPrewarmOutcome::Reused { millis } => {
+            BannerPrewarmOutcome::Reused { millis, .. } => {
                 prepared += 1;
                 reused += 1;
                 reused_ms += millis;
             }
-            BannerPrewarmOutcome::SkippedNonFile => {
+            BannerPrewarmOutcome::SkippedNonFile { .. } => {
                 skipped_non_file += 1;
             }
-            BannerPrewarmOutcome::SkippedNonImage => {
+            BannerPrewarmOutcome::SkippedNonImage { .. } => {
                 skipped_non_image += 1;
             }
             BannerPrewarmOutcome::Failed { path, msg } => {

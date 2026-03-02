@@ -9,7 +9,7 @@ use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use log::{info, warn};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -41,7 +41,7 @@ const LOADING_BAR_H: f32 = 30.0;
 enum LoadingPhase {
     Songs,
     Courses,
-    Finalizing,
+    Banners,
 }
 
 enum LoadingMsg {
@@ -58,6 +58,12 @@ enum LoadingMsg {
         group: String,
         course: String,
     },
+    Banner {
+        done: usize,
+        total: usize,
+        line2: String,
+        line3: String,
+    },
     Done,
 }
 
@@ -69,6 +75,8 @@ struct LoadingState {
     songs_total: usize,
     courses_done: usize,
     courses_total: usize,
+    banners_done: usize,
+    banners_total: usize,
     done: bool,
     started_at: Instant,
     rx: mpsc::Receiver<LoadingMsg>,
@@ -84,6 +92,8 @@ impl LoadingState {
             songs_total: 0,
             courses_done: 0,
             courses_total: 0,
+            banners_done: 0,
+            banners_total: 0,
             done: false,
             started_at: Instant::now(),
             rx,
@@ -166,6 +176,53 @@ fn collect_banner_cache_paths() -> Vec<PathBuf> {
     out
 }
 
+fn banner_progress_lines(path: Option<&Path>) -> (String, String) {
+    let Some(path) = path else {
+        return (String::new(), String::new());
+    };
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let file_stem = path
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .unwrap_or(file_name)
+        .to_owned();
+
+    let mut parts: Vec<&str> = Vec::with_capacity(16);
+    for component in path.components() {
+        if let std::path::Component::Normal(name) = component
+            && let Some(name) = name.to_str()
+        {
+            parts.push(name);
+        }
+    }
+
+    if let Some(idx) = parts.iter().position(|p| p.eq_ignore_ascii_case("songs"))
+        && let Some(pack) = parts.get(idx + 1)
+    {
+        let line3 = parts
+            .get(idx + 2)
+            .copied()
+            .filter(|name| !name.eq_ignore_ascii_case(file_name))
+            .map(str::to_owned)
+            .unwrap_or(file_stem);
+        return ((*pack).to_owned(), line3);
+    }
+
+    if let Some(idx) = parts.iter().position(|p| p.eq_ignore_ascii_case("courses"))
+        && let Some(group) = parts.get(idx + 1)
+    {
+        return ((*group).to_owned(), file_stem);
+    }
+
+    let line2 = path
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_owned();
+    (line2, file_stem)
+}
+
 fn start_loading_thread(state: &mut State) {
     let (tx, rx) = mpsc::channel::<LoadingMsg>();
     state.loading = Some(LoadingState::new(rx));
@@ -197,13 +254,22 @@ fn start_loading_thread(state: &mut State) {
             &mut on_course,
         );
 
-        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Finalizing));
+        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Banners));
         let banner_paths = collect_banner_cache_paths();
         info!(
             "Init loading: caching banners ({} textures)...",
             banner_paths.len()
         );
-        crate::assets::prewarm_banner_cache(&banner_paths);
+        let mut on_banner = |done: usize, total: usize, path: Option<&Path>| {
+            let (line2, line3) = banner_progress_lines(path);
+            let _ = tx.send(LoadingMsg::Banner {
+                done,
+                total,
+                line2,
+                line3,
+            });
+        };
+        crate::assets::prewarm_banner_cache_with_progress(&banner_paths, &mut on_banner);
         info!("Init loading: banner cache prewarm complete.");
         std::thread::spawn(|| {
             if std::panic::catch_unwind(noteskin::prewarm_itg_preview_cache).is_err() {
@@ -245,6 +311,18 @@ fn poll_loading_state(loading: &mut LoadingState) {
                 loading.courses_total = total;
                 loading.line2 = group;
                 loading.line3 = course;
+            }
+            LoadingMsg::Banner {
+                done,
+                total,
+                line2,
+                line3,
+            } => {
+                loading.phase = LoadingPhase::Banners;
+                loading.banners_done = done;
+                loading.banners_total = total;
+                loading.line2 = line2;
+                loading.line3 = line3;
             }
             LoadingMsg::Done => {
                 loading.done = true;
@@ -370,8 +448,11 @@ fn loading_progress(loading: Option<&LoadingState>) -> (usize, usize, f32) {
     let Some(loading) = loading else {
         return (0, 0, 0.0);
     };
-    let done = loading.songs_done.saturating_add(loading.courses_done);
-    let mut total = loading.songs_total.saturating_add(loading.courses_total);
+    let (done, mut total) = match loading.phase {
+        LoadingPhase::Songs => (loading.songs_done, loading.songs_total),
+        LoadingPhase::Courses => (loading.courses_done, loading.courses_total),
+        LoadingPhase::Banners => (loading.banners_done, loading.banners_total),
+    };
     if total < done {
         total = done;
     }
@@ -390,7 +471,7 @@ fn loading_phase_label(phase: LoadingPhase) -> &'static str {
     match phase {
         LoadingPhase::Songs => "Loading songs...",
         LoadingPhase::Courses => "Loading courses...",
-        LoadingPhase::Finalizing => "Caching banners...",
+        LoadingPhase::Banners => "Caching banners...",
     }
 }
 
@@ -411,7 +492,10 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>) {
         let pct = 100.0 * progress;
         format!("{done}/{total} ({pct:.1}%)")
     };
-    let show_speed_row = matches!(phase, LoadingPhase::Songs | LoadingPhase::Courses) && total > 0;
+    let show_speed_row = matches!(
+        phase,
+        LoadingPhase::Songs | LoadingPhase::Courses | LoadingPhase::Banners
+    ) && total > 0;
     let speed_text = if elapsed > 0.0 && show_speed_row {
         format!("Current speed: {:.1} items/s", done as f32 / elapsed)
     } else if show_speed_row {
@@ -445,7 +529,7 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>) {
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(if total == 0 { "Initializing..." } else { loading_phase_label(phase) }):
+        settext(loading.map_or("Initializing...", |_| loading_phase_label(phase))):
         align(0.5, 0.5):
         xy(screen_center_x(), bar_cy - 96.0):
         zoom(1.05):
