@@ -5325,7 +5325,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.extend(sl_select_music_wheel_cascade_mask());
 
     // GrooveStats scorebox placement.
-    // Keep P1 single where it already is, but move P2 single/versus up so they sit above PaneDisplay.
+    // Keep solo→versus transitions symmetric regardless of which side started.
+    // In both-GS versus, render smaller scoreboxes over each pane's far-right side.
     if is_wide() {
         let scorebox_zoom = widescale(0.95, 1.0);
         let scorebox_side_inset = 320.0;
@@ -5337,8 +5338,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let pane_to_tech_gap = pane_layout.pane_top - tech_box_bottom_y;
         let scorebox_center_y_above_pane =
             pane_layout.pane_top - (40.0 * scorebox_zoom) - pane_to_tech_gap;
+        let p1_gs = scores::is_gs_active_for_side(profile::PlayerSide::P1);
+        let p2_gs = scores::is_gs_active_for_side(profile::PlayerSide::P2);
+        let both_gs_versus = is_versus && p1_gs && p2_gs;
         let mut push_scorebox =
-            |side: profile::PlayerSide, steps_idx: usize, center_x: f32, center_y: f32| {
+            |side: profile::PlayerSide,
+             steps_idx: usize,
+             center_x: f32,
+             center_y: f32,
+             zoom: f32,
+             z_boost: i16| {
                 let chart_hash = if allow_gs_fetch {
                     match selected_entry {
                         Some(MusicWheelEntry::Song(song)) => {
@@ -5350,36 +5359,100 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     None
                 };
-                actors.extend(gs_scorebox::gameplay_scorebox_actors(
+                let scorebox = gs_scorebox::gameplay_scorebox_actors(
                     side,
                     chart_hash,
                     cfg.show_select_music_scorebox,
                     center_x,
                     center_y,
-                    scorebox_zoom,
+                    zoom,
                     state.selection_animation_timer,
-                ));
+                );
+                if z_boost == 0 || scorebox.is_empty() {
+                    actors.extend(scorebox);
+                } else {
+                    actors.push(Actor::Frame {
+                        align: [0.0, 0.0],
+                        offset: [0.0, 0.0],
+                        size: [SizeSpec::Fill, SizeSpec::Fill],
+                        background: None,
+                        z: z_boost,
+                        children: scorebox,
+                    });
+                }
             };
 
-        if is_versus {
+        if both_gs_versus {
+            let pane_scorebox_zoom = widescale(0.60, 0.64);
+            let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
+            let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
+            let pane_right_inset = 6.0;
+            let pane_box_center_x = |pane_cx: f32| {
+                pane_cx + pane_layout.pane_width * 0.5
+                    - pane_scorebox_width * 0.5
+                    - pane_right_inset
+            };
             push_scorebox(
                 profile::PlayerSide::P1,
                 state.selected_steps_index,
-                scorebox_center_p1,
-                scorebox_center_y_above_pane,
+                pane_box_center_x(screen_width() * 0.25 - 5.0),
+                pane_scorebox_center_y,
+                pane_scorebox_zoom,
+                60,
             );
             push_scorebox(
                 profile::PlayerSide::P2,
                 state.p2_selected_steps_index,
-                scorebox_center_p2,
-                scorebox_center_y_above_pane,
+                pane_box_center_x(screen_width() * 0.75 + 5.0),
+                pane_scorebox_center_y,
+                pane_scorebox_zoom,
+                60,
             );
+        } else if is_versus {
+            let incumbent = profile::get_session_player_side();
+            if incumbent == profile::PlayerSide::P2 {
+                push_scorebox(
+                    profile::PlayerSide::P2,
+                    state.p2_selected_steps_index,
+                    scorebox_center_p1,
+                    scorebox_center_y_above_pane,
+                    scorebox_zoom,
+                    0,
+                );
+                push_scorebox(
+                    profile::PlayerSide::P1,
+                    state.selected_steps_index,
+                    scorebox_center_p2,
+                    scorebox_center_y_above_pane,
+                    scorebox_zoom,
+                    0,
+                );
+            } else {
+                push_scorebox(
+                    profile::PlayerSide::P1,
+                    state.selected_steps_index,
+                    scorebox_center_p1,
+                    scorebox_center_y_above_pane,
+                    scorebox_zoom,
+                    0,
+                );
+                push_scorebox(
+                    profile::PlayerSide::P2,
+                    state.p2_selected_steps_index,
+                    scorebox_center_p2,
+                    scorebox_center_y_above_pane,
+                    scorebox_zoom,
+                    0,
+                );
+            }
         } else if is_p2_single {
             push_scorebox(
                 profile::PlayerSide::P2,
                 state.p2_selected_steps_index,
                 scorebox_center_p1,
                 scorebox_center_y_above_pane,
+                scorebox_zoom,
+                0,
             );
         } else {
             push_scorebox(
@@ -5387,6 +5460,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 state.selected_steps_index,
                 scorebox_center_p1,
                 scorebox_center_y_p1_single,
+                scorebox_zoom,
+                0,
             );
         }
     }
