@@ -338,6 +338,8 @@ fn open_image_fallback_quiet(path: &Path) -> image::ImageResult<image::DynamicIm
 }
 
 const BANNER_CACHE_DIR: &str = "cache/banner";
+const CDTITLE_CACHE_DIR: &str = "cache/cdtitle";
+const BACKGROUND_CACHE_DIR: &str = "cache/background";
 static BANNER_CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug)]
@@ -347,9 +349,23 @@ struct BannerCacheOptions {
 
 impl BannerCacheOptions {
     #[inline(always)]
-    fn from_config(cfg: &crate::config::Config) -> Self {
+    fn from_banner_config(cfg: &crate::config::Config) -> Self {
         Self {
             enabled: cfg.banner_cache,
+        }
+    }
+
+    #[inline(always)]
+    fn from_cdtitle_config(cfg: &crate::config::Config) -> Self {
+        Self {
+            enabled: cfg.cdtitle_cache,
+        }
+    }
+
+    #[inline(always)]
+    fn from_background_config(cfg: &crate::config::Config) -> Self {
+        Self {
+            enabled: cfg.background_cache,
         }
     }
 }
@@ -364,7 +380,11 @@ fn banner_cache_opthash(opts: BannerCacheOptions) -> u64 {
 const BANNER_CACHE_MAGIC: [u8; 8] = *b"DSBNR02\0";
 const BANNER_CACHE_HEADER_SIZE: usize = 16;
 
-fn banner_cache_paths_for(path: &Path, opts: BannerCacheOptions) -> Option<(PathBuf, String)> {
+fn dynamic_image_cache_path_for(
+    path: &Path,
+    opts: BannerCacheOptions,
+    cache_dir: &str,
+) -> Option<(PathBuf, String)> {
     let canonical = path.canonicalize().ok()?;
     let mut hasher = XxHash64::with_seed(0);
     hasher.write(canonical.to_string_lossy().replace('\\', "/").as_bytes());
@@ -373,7 +393,7 @@ fn banner_cache_paths_for(path: &Path, opts: BannerCacheOptions) -> Option<(Path
     let opt_hash = banner_cache_opthash(opts);
     let shard2 = &path_hex[..2];
     let stem = format!("{path_hex}-{opt_hash:016x}");
-    let dir = Path::new(BANNER_CACHE_DIR).join(shard2);
+    let dir = Path::new(cache_dir).join(shard2);
     Some((dir.join(format!("{stem}.rgba")), path_hex))
 }
 
@@ -519,7 +539,29 @@ fn load_or_build_cached_banner(
     path: &Path,
     opts: BannerCacheOptions,
 ) -> image::ImageResult<RgbaImage> {
-    let Some((cache_path, path_hex)) = banner_cache_paths_for(path, opts) else {
+    load_or_build_cached_dynamic_image(path, opts, BANNER_CACHE_DIR)
+}
+
+fn load_or_build_cached_cdtitle(
+    path: &Path,
+    opts: BannerCacheOptions,
+) -> image::ImageResult<RgbaImage> {
+    load_or_build_cached_dynamic_image(path, opts, CDTITLE_CACHE_DIR)
+}
+
+fn load_or_build_cached_background(
+    path: &Path,
+    opts: BannerCacheOptions,
+) -> image::ImageResult<RgbaImage> {
+    load_or_build_cached_dynamic_image(path, opts, BACKGROUND_CACHE_DIR)
+}
+
+fn load_or_build_cached_dynamic_image(
+    path: &Path,
+    opts: BannerCacheOptions,
+    cache_dir: &str,
+) -> image::ImageResult<RgbaImage> {
+    let Some((cache_path, path_hex)) = dynamic_image_cache_path_for(path, opts, cache_dir) else {
         return build_cached_banner_rgba(path, opts);
     };
 
@@ -534,7 +576,7 @@ fn load_or_build_cached_banner(
 }
 
 #[inline(always)]
-fn is_cacheable_banner_path(path: &Path) -> bool {
+fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
     let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
         return false;
     };
@@ -544,8 +586,12 @@ fn is_cacheable_banner_path(path: &Path) -> bool {
     )
 }
 
-fn ensure_cached_banner_on_disk(path: &Path, opts: BannerCacheOptions) -> image::ImageResult<bool> {
-    let Some((cache_path, path_hex)) = banner_cache_paths_for(path, opts) else {
+fn ensure_cached_dynamic_image_on_disk(
+    path: &Path,
+    opts: BannerCacheOptions,
+    cache_dir: &str,
+) -> image::ImageResult<bool> {
+    let Some((cache_path, path_hex)) = dynamic_image_cache_path_for(path, opts, cache_dir) else {
         return Ok(false);
     };
     if load_cached_banner_image(&cache_path, path).is_some() {
@@ -557,7 +603,7 @@ fn ensure_cached_banner_on_disk(path: &Path, opts: BannerCacheOptions) -> image:
     Ok(true)
 }
 
-enum BannerPrewarmOutcome {
+enum DynamicImagePrewarmOutcome {
     Built { path: PathBuf, millis: f64 },
     Reused { path: PathBuf, millis: f64 },
     SkippedNonFile { path: PathBuf },
@@ -566,25 +612,29 @@ enum BannerPrewarmOutcome {
 }
 
 #[inline(always)]
-fn prewarm_one_banner(path: PathBuf, opts: BannerCacheOptions) -> BannerPrewarmOutcome {
+fn prewarm_one_dynamic_image(
+    path: PathBuf,
+    opts: BannerCacheOptions,
+    cache_dir: &'static str,
+) -> DynamicImagePrewarmOutcome {
     if !path.is_file() {
-        return BannerPrewarmOutcome::SkippedNonFile { path };
+        return DynamicImagePrewarmOutcome::SkippedNonFile { path };
     }
-    if !is_cacheable_banner_path(&path) {
-        return BannerPrewarmOutcome::SkippedNonImage { path };
+    if !is_cacheable_dynamic_image_path(&path) {
+        return DynamicImagePrewarmOutcome::SkippedNonImage { path };
     }
 
     let started = Instant::now();
-    match ensure_cached_banner_on_disk(&path, opts) {
-        Ok(true) => BannerPrewarmOutcome::Built {
+    match ensure_cached_dynamic_image_on_disk(&path, opts, cache_dir) {
+        Ok(true) => DynamicImagePrewarmOutcome::Built {
             path,
             millis: started.elapsed().as_secs_f64() * 1000.0,
         },
-        Ok(false) => BannerPrewarmOutcome::Reused {
+        Ok(false) => DynamicImagePrewarmOutcome::Reused {
             path,
             millis: started.elapsed().as_secs_f64() * 1000.0,
         },
-        Err(e) => BannerPrewarmOutcome::Failed {
+        Err(e) => DynamicImagePrewarmOutcome::Failed {
             path,
             msg: e.to_string(),
         },
@@ -592,7 +642,7 @@ fn prewarm_one_banner(path: PathBuf, opts: BannerCacheOptions) -> BannerPrewarmO
 }
 
 #[inline(always)]
-fn banner_prewarm_workers(job_count: usize) -> usize {
+fn dynamic_image_prewarm_workers(job_count: usize) -> usize {
     if job_count == 0 {
         return 0;
     }
@@ -602,11 +652,15 @@ fn banner_prewarm_workers(job_count: usize) -> usize {
         .min(job_count)
 }
 
-pub fn prewarm_banner_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
-where
+fn prewarm_dynamic_image_cache_with_progress<F>(
+    paths: &[PathBuf],
+    opts: BannerCacheOptions,
+    cache_dir: &'static str,
+    label: &'static str,
+    progress: &mut F,
+) where
     F: FnMut(usize, usize, Option<&Path>),
 {
-    let opts = BannerCacheOptions::from_config(&crate::config::get());
     if !opts.enabled {
         progress(0, 0, None);
         return;
@@ -617,7 +671,7 @@ where
     let mut deduped = Vec::with_capacity(paths.len());
     let mut duplicate = 0usize;
     for path in paths {
-        let dedupe_key = banner_cache_paths_for(path, opts).map_or_else(
+        let dedupe_key = dynamic_image_cache_path_for(path, opts, cache_dir).map_or_else(
             || path.to_string_lossy().replace('\\', "/"),
             |(cache_path, _)| cache_path.to_string_lossy().replace('\\', "/"),
         );
@@ -628,11 +682,12 @@ where
         }
     }
 
-    let worker_count = banner_prewarm_workers(deduped.len());
+    let worker_count = dynamic_image_prewarm_workers(deduped.len());
     let total_jobs = deduped.len();
     progress(0, total_jobs, None);
     debug!(
-        "Banner cache prewarm start: {} input, {} unique, {} duplicate, {} worker threads.",
+        "{} cache prewarm start: {} input, {} unique, {} duplicate, {} worker threads.",
+        label,
         paths.len(),
         total_jobs,
         duplicate,
@@ -641,7 +696,7 @@ where
 
     let (job_tx, job_rx) = mpsc::channel::<PathBuf>();
     let job_rx = Arc::new(Mutex::new(job_rx));
-    let (res_tx, res_rx) = mpsc::channel::<BannerPrewarmOutcome>();
+    let (res_tx, res_rx) = mpsc::channel::<DynamicImagePrewarmOutcome>();
     let mut workers = Vec::with_capacity(worker_count);
     for _ in 0..worker_count {
         let job_rx = Arc::clone(&job_rx);
@@ -655,7 +710,7 @@ where
                 let Ok(path) = job else {
                     return;
                 };
-                let _ = res_tx.send(prewarm_one_banner(path, opts));
+                let _ = res_tx.send(prewarm_one_dynamic_image(path, opts, cache_dir));
             }
         }));
     }
@@ -676,35 +731,36 @@ where
     let mut completed = 0usize;
     for result in res_rx {
         let current_path = match &result {
-            BannerPrewarmOutcome::Built { path, .. }
-            | BannerPrewarmOutcome::Reused { path, .. }
-            | BannerPrewarmOutcome::SkippedNonFile { path }
-            | BannerPrewarmOutcome::SkippedNonImage { path }
-            | BannerPrewarmOutcome::Failed { path, .. } => Some(path.as_path()),
+            DynamicImagePrewarmOutcome::Built { path, .. }
+            | DynamicImagePrewarmOutcome::Reused { path, .. }
+            | DynamicImagePrewarmOutcome::SkippedNonFile { path }
+            | DynamicImagePrewarmOutcome::SkippedNonImage { path }
+            | DynamicImagePrewarmOutcome::Failed { path, .. } => Some(path.as_path()),
         };
         completed = completed.saturating_add(1);
         progress(completed, total_jobs, current_path);
         match result {
-            BannerPrewarmOutcome::Built { millis, .. } => {
+            DynamicImagePrewarmOutcome::Built { millis, .. } => {
                 prepared += 1;
                 built += 1;
                 built_ms += millis;
             }
-            BannerPrewarmOutcome::Reused { millis, .. } => {
+            DynamicImagePrewarmOutcome::Reused { millis, .. } => {
                 prepared += 1;
                 reused += 1;
                 reused_ms += millis;
             }
-            BannerPrewarmOutcome::SkippedNonFile { .. } => {
+            DynamicImagePrewarmOutcome::SkippedNonFile { .. } => {
                 skipped_non_file += 1;
             }
-            BannerPrewarmOutcome::SkippedNonImage { .. } => {
+            DynamicImagePrewarmOutcome::SkippedNonImage { .. } => {
                 skipped_non_image += 1;
             }
-            BannerPrewarmOutcome::Failed { path, msg } => {
+            DynamicImagePrewarmOutcome::Failed { path, msg } => {
                 failed += 1;
                 warn!(
-                    "Banner cache prewarm failed for '{}': {}",
+                    "{} cache prewarm failed for '{}': {}",
+                    label,
                     path.display(),
                     msg
                 );
@@ -733,9 +789,10 @@ where
         0.0
     };
     debug!(
-        "Banner cache prewarm complete in {:.2}s: prepared={} (built={}, reused={}), \
+        "{} cache prewarm complete in {:.2}s: prepared={} (built={}, reused={}), \
          skipped={} (non-file={}, non-image={}, duplicate={}), failed={}, workers={}, \
          throughput={:.1}/s, avg_ms={{built:{:.2}, reused:{:.2}}}.",
+        label,
         elapsed,
         prepared,
         built,
@@ -749,6 +806,36 @@ where
         prep_per_sec,
         built_avg_ms,
         reused_avg_ms
+    );
+}
+
+pub fn prewarm_banner_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
+where
+    F: FnMut(usize, usize, Option<&Path>),
+{
+    let opts = BannerCacheOptions::from_banner_config(&crate::config::get());
+    prewarm_dynamic_image_cache_with_progress(paths, opts, BANNER_CACHE_DIR, "Banner", progress);
+}
+
+pub fn prewarm_cdtitle_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
+where
+    F: FnMut(usize, usize, Option<&Path>),
+{
+    let opts = BannerCacheOptions::from_cdtitle_config(&crate::config::get());
+    prewarm_dynamic_image_cache_with_progress(paths, opts, CDTITLE_CACHE_DIR, "CDTitle", progress);
+}
+
+pub fn prewarm_background_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
+where
+    F: FnMut(usize, usize, Option<&Path>),
+{
+    let opts = BannerCacheOptions::from_background_config(&crate::config::get());
+    prewarm_dynamic_image_cache_with_progress(
+        paths,
+        opts,
+        BACKGROUND_CACHE_DIR,
+        "Background",
+        progress,
     );
 }
 
@@ -863,6 +950,7 @@ pub struct AssetManager {
     dynamic_banner_keys: HashSet<String>,
     current_dynamic_cdtitle: Option<(String, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
+    dynamic_pack_banner_keys: HashSet<String>,
     current_dynamic_background: Option<(String, PathBuf)>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
 }
@@ -891,6 +979,7 @@ impl AssetManager {
             dynamic_banner_keys: HashSet::new(),
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
+            dynamic_pack_banner_keys: HashSet::new(),
             current_dynamic_background: None,
             current_profile_avatars: std::array::from_fn(|_| None),
         }
@@ -1440,6 +1529,7 @@ impl AssetManager {
             || !self.dynamic_banner_keys.is_empty()
             || self.current_dynamic_cdtitle.is_some()
             || self.current_dynamic_pack_banner.is_some()
+            || !self.dynamic_pack_banner_keys.is_empty()
             || self.current_dynamic_background.is_some()
         {
             backend.wait_for_idle(); // Wait for GPU to finish using old textures
@@ -1454,6 +1544,10 @@ impl AssetManager {
                 self.textures.remove(&key);
             }
             if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
+                self.dynamic_pack_banner_keys.remove(&key);
+                self.textures.remove(&key);
+            }
+            for key in self.dynamic_pack_banner_keys.drain() {
                 self.textures.remove(&key);
             }
             if let Some((key, _)) = self.current_dynamic_background.take() {
@@ -1475,6 +1569,7 @@ impl AssetManager {
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) -> Option<String> {
+        let cache_opts = BannerCacheOptions::from_cdtitle_config(&crate::config::get());
         if let Some(path) = path_opt {
             if let Some((key, current_path)) = self.current_dynamic_cdtitle.as_ref()
                 && current_path == &path
@@ -1483,28 +1578,40 @@ impl AssetManager {
             }
 
             self.destroy_current_dynamic_cdtitle(backend);
-            match open_image_fallback(&path) {
-                Ok(img) => {
-                    let rgba = img.to_rgba8();
-                    match backend.create_texture(&rgba, SamplerDesc::default()) {
-                        Ok(texture) => {
-                            let path_key = path.to_string_lossy();
-                            let key = format!("__cdtitle::{path_key}");
-                            self.textures.insert(key.clone(), texture);
-                            register_texture_dims(&key, rgba.width(), rgba.height());
-                            self.current_dynamic_cdtitle = Some((key.clone(), path));
-                            Some(key)
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Failed to create GPU texture for CDTitle image {path:?}: {e}. Skipping."
-                            );
-                            None
-                        }
+            let rgba = if cache_opts.enabled {
+                match load_or_build_cached_cdtitle(&path, cache_opts) {
+                    Ok(cached) => cached,
+                    Err(e) => {
+                        warn!(
+                            "Failed to load cached CDTitle '{}': {e}. Skipping.",
+                            path.display()
+                        );
+                        return None;
                     }
                 }
+            } else {
+                match open_image_fallback(&path) {
+                    Ok(img) => img.to_rgba8(),
+                    Err(e) => {
+                        warn!("Failed to open CDTitle image {path:?}: {e}. Skipping.");
+                        return None;
+                    }
+                }
+            };
+
+            match backend.create_texture(&rgba, SamplerDesc::default()) {
+                Ok(texture) => {
+                    let path_key = path.to_string_lossy();
+                    let key = format!("__cdtitle::{path_key}");
+                    self.textures.insert(key.clone(), texture);
+                    register_texture_dims(&key, rgba.width(), rgba.height());
+                    self.current_dynamic_cdtitle = Some((key.clone(), path));
+                    Some(key)
+                }
                 Err(e) => {
-                    warn!("Failed to open CDTitle image {path:?}: {e}. Skipping.");
+                    warn!(
+                        "Failed to create GPU texture for CDTitle image {path:?}: {e}. Skipping."
+                    );
                     None
                 }
             }
@@ -1515,6 +1622,7 @@ impl AssetManager {
     }
 
     pub fn set_dynamic_pack_banner(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) {
+        let banner_cache_opts = BannerCacheOptions::from_banner_config(&crate::config::get());
         if let Some(path) = path_opt {
             if self
                 .current_dynamic_pack_banner
@@ -1524,36 +1632,65 @@ impl AssetManager {
                 return;
             }
 
-            backend.wait_for_idle();
-            if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
-                self.textures.remove(&key);
+            let key = path.to_string_lossy().into_owned();
+            if banner_cache_opts.enabled && self.dynamic_pack_banner_keys.contains(&key) {
+                self.current_dynamic_pack_banner = Some((key, path));
+                return;
             }
 
-            match open_image_fallback(&path) {
-                Ok(img) => {
-                    let rgba = img.to_rgba8();
-                    match backend.create_texture(&rgba, SamplerDesc::default()) {
-                        Ok(texture) => {
-                            let key = path.to_string_lossy().into_owned();
-                            self.textures.insert(key.clone(), texture);
-                            register_texture_dims(&key, rgba.width(), rgba.height());
-                            self.current_dynamic_pack_banner = Some((key, path));
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Failed to create GPU texture for pack banner {path:?}: {e}. Skipping."
-                            );
-                        }
+            if banner_cache_opts.enabled {
+                self.current_dynamic_pack_banner = None;
+            } else {
+                backend.wait_for_idle();
+                if let Some((old_key, _)) = self.current_dynamic_pack_banner.take() {
+                    self.dynamic_pack_banner_keys.remove(&old_key);
+                    self.textures.remove(&old_key);
+                }
+            }
+
+            let rgba = if banner_cache_opts.enabled && is_cacheable_dynamic_image_path(&path) {
+                match load_or_build_cached_banner(&path, banner_cache_opts) {
+                    Ok(cached) => cached,
+                    Err(e) => {
+                        warn!(
+                            "Failed to load cached pack banner '{}': {e}. Skipping.",
+                            path.display()
+                        );
+                        return;
                     }
                 }
+            } else {
+                match open_image_fallback(&path) {
+                    Ok(img) => img.to_rgba8(),
+                    Err(e) => {
+                        warn!("Failed to open pack banner image {path:?}: {e}. Skipping.");
+                        return;
+                    }
+                }
+            };
+
+            match backend.create_texture(&rgba, SamplerDesc::default()) {
+                Ok(texture) => {
+                    self.textures.insert(key.clone(), texture);
+                    register_texture_dims(&key, rgba.width(), rgba.height());
+                    if banner_cache_opts.enabled {
+                        self.dynamic_pack_banner_keys.insert(key.clone());
+                    }
+                    self.current_dynamic_pack_banner = Some((key, path));
+                }
                 Err(e) => {
-                    warn!("Failed to open pack banner image {path:?}: {e}. Skipping.");
+                    warn!("Failed to create GPU texture for pack banner {path:?}: {e}. Skipping.");
                 }
             }
         } else {
-            backend.wait_for_idle();
-            if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
-                self.textures.remove(&key);
+            if banner_cache_opts.enabled {
+                self.current_dynamic_pack_banner = None;
+            } else {
+                backend.wait_for_idle();
+                if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
+                    self.dynamic_pack_banner_keys.remove(&key);
+                    self.textures.remove(&key);
+                }
             }
         }
     }
@@ -1564,7 +1701,7 @@ impl AssetManager {
         path_opt: Option<PathBuf>,
     ) -> String {
         const FALLBACK_KEY: &str = "banner1.png";
-        let banner_cache_opts = BannerCacheOptions::from_config(&crate::config::get());
+        let banner_cache_opts = BannerCacheOptions::from_banner_config(&crate::config::get());
 
         if let Some(path) = path_opt {
             let key = path.to_string_lossy().into_owned();
@@ -1591,7 +1728,7 @@ impl AssetManager {
                 self.destroy_current_dynamic_banner(backend);
             }
 
-            let rgba = if banner_cache_opts.enabled && is_cacheable_banner_path(&path) {
+            let rgba = if banner_cache_opts.enabled && is_cacheable_dynamic_image_path(&path) {
                 match load_or_build_cached_banner(&path, banner_cache_opts) {
                     Ok(cached) => cached,
                     Err(e) => {
@@ -1648,6 +1785,7 @@ impl AssetManager {
         path_opt: Option<PathBuf>,
     ) -> String {
         const FALLBACK_KEY: &str = "__black";
+        let cache_opts = BannerCacheOptions::from_background_config(&crate::config::get());
 
         if let Some(path) = path_opt {
             if self
@@ -1660,27 +1798,39 @@ impl AssetManager {
 
             self.destroy_current_dynamic_background(backend);
 
-            match open_image_fallback(&path) {
-                Ok(img) => {
-                    let rgba = img.to_rgba8();
-                    match backend.create_texture(&rgba, SamplerDesc::default()) {
-                        Ok(texture) => {
-                            let key = path.to_string_lossy().into_owned();
-                            self.textures.insert(key.clone(), texture);
-                            register_texture_dims(&key, rgba.width(), rgba.height());
-                            self.current_dynamic_background = Some((key.clone(), path));
-                            key
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Failed to create GPU texture for background {path:?}: {e}. Using fallback."
-                            );
-                            FALLBACK_KEY.to_string()
-                        }
+            let rgba = if cache_opts.enabled {
+                match load_or_build_cached_background(&path, cache_opts) {
+                    Ok(cached) => cached,
+                    Err(e) => {
+                        warn!(
+                            "Failed to load cached background '{}': {e}. Using fallback.",
+                            path.display()
+                        );
+                        return FALLBACK_KEY.to_string();
                     }
                 }
+            } else {
+                match open_image_fallback(&path) {
+                    Ok(img) => img.to_rgba8(),
+                    Err(e) => {
+                        warn!("Failed to open background image {path:?}: {e}. Using fallback.");
+                        return FALLBACK_KEY.to_string();
+                    }
+                }
+            };
+
+            match backend.create_texture(&rgba, SamplerDesc::default()) {
+                Ok(texture) => {
+                    let key = path.to_string_lossy().into_owned();
+                    self.textures.insert(key.clone(), texture);
+                    register_texture_dims(&key, rgba.width(), rgba.height());
+                    self.current_dynamic_background = Some((key.clone(), path));
+                    key
+                }
                 Err(e) => {
-                    warn!("Failed to open background image {path:?}: {e}. Using fallback.");
+                    warn!(
+                        "Failed to create GPU texture for background {path:?}: {e}. Using fallback."
+                    );
                     FALLBACK_KEY.to_string()
                 }
             }

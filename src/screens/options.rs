@@ -297,6 +297,8 @@ pub const ITEMS: &[Item] = &[
             "Adjust machine-level fail and cache/parsing behavior.",
             "Default Fail Type",
             "Banner Cache",
+            "CDTitle Cache",
+            "Background Cache",
             "Song Parsing Threads",
             "Cache Songs",
             "Fast Load",
@@ -577,6 +579,8 @@ const MACHINE_ROW_MENU_MUSIC: &str = "Menu Music";
 const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
 const ADVANCED_ROW_DEFAULT_FAIL_TYPE: &str = "Default Fail Type";
 const ADVANCED_ROW_BANNER_CACHE: &str = "Banner Cache";
+const ADVANCED_ROW_CDTITLE_CACHE: &str = "CDTitle Cache";
+const ADVANCED_ROW_BACKGROUND_CACHE: &str = "Background Cache";
 const ADVANCED_ROW_SONG_PARSING_THREADS: &str = "Song Parsing Threads";
 const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
 const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
@@ -777,7 +781,7 @@ const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
 const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
 const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
 const MACHINE_PREFERRED_MODE_ROW_INDEX: usize = 5;
-const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 2;
+const ADVANCED_SONG_PARSING_THREADS_ROW_INDEX: usize = 4;
 
 const BG_BRIGHTNESS_CHOICES: [&str; 11] = [
     "0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%",
@@ -1478,6 +1482,16 @@ pub const ADVANCED_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: ADVANCED_ROW_CDTITLE_CACHE,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
+        label: ADVANCED_ROW_BACKGROUND_CACHE,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
         label: ADVANCED_ROW_SONG_PARSING_THREADS,
         choices: &["Auto"],
         inline: false,
@@ -1509,6 +1523,20 @@ pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Enable or disable the wheel banner cache on disk.",
             "Default: On (BannerCache=1).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_CDTITLE_CACHE,
+        help: &[
+            "Enable or disable CDTitle raw texture cache on disk.",
+            "Default: On (CDTitleCache=1).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_BACKGROUND_CACHE,
+        help: &[
+            "Enable or disable gameplay background raw texture cache on disk.",
+            "Default: On (BackgroundCache=1).",
         ],
     },
     Item {
@@ -3401,6 +3429,18 @@ pub fn init() -> State {
         ADVANCED_ROW_BANNER_CACHE,
         usize::from(cfg.banner_cache),
     );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_CDTITLE_CACHE,
+        usize::from(cfg.cdtitle_cache),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_BACKGROUND_CACHE,
+        usize::from(cfg.background_cache),
+    );
     if let Some(slot) = state
         .sub_choice_indices_advanced
         .get_mut(ADVANCED_SONG_PARSING_THREADS_ROW_INDEX)
@@ -4780,6 +4820,10 @@ fn apply_submenu_choice_delta(
             config::update_default_fail_type(default_fail_type_from_choice(new_index));
         } else if row.label == ADVANCED_ROW_BANNER_CACHE {
             config::update_banner_cache(new_index == 1);
+        } else if row.label == ADVANCED_ROW_CDTITLE_CACHE {
+            config::update_cdtitle_cache(new_index == 1);
+        } else if row.label == ADVANCED_ROW_BACKGROUND_CACHE {
+            config::update_background_cache(new_index == 1);
         } else if row.label == ADVANCED_ROW_SONG_PARSING_THREADS {
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
             config::update_song_parsing_threads(threads);

@@ -406,6 +406,10 @@ pub struct Config {
     pub center_1player_notefield: bool,
     /// ITGmania-style wheel banner cache toggle.
     pub banner_cache: bool,
+    /// Cache Select Music CDTitles as raw RGBA blobs on disk.
+    pub cdtitle_cache: bool,
+    /// Cache gameplay/eval backgrounds as raw RGBA blobs on disk.
+    pub background_cache: bool,
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
@@ -511,6 +515,8 @@ impl Default for Config {
             bg_brightness: 0.7,
             center_1player_notefield: false,
             banner_cache: true,
+            cdtitle_cache: true,
+            background_cache: true,
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
@@ -760,12 +766,20 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     ));
     content.push_str(&format!("BGBrightness={}\n", default.bg_brightness));
     content.push_str(&format!(
+        "BackgroundCache={}\n",
+        if default.background_cache { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
         "BannerCache={}\n",
         if default.banner_cache { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "CacheSongs={}\n",
         if default.cachesongs { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "CDTitleCache={}\n",
+        if default.cdtitle_cache { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "Center1Player={}\n",
@@ -1273,6 +1287,14 @@ pub fn load() {
                     .get("Options", "BannerCache")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.banner_cache, |v| v != 0);
+                cfg.background_cache = conf
+                    .get("Options", "BackgroundCache")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.background_cache, |v| v != 0);
+                cfg.cdtitle_cache = conf
+                    .get("Options", "CDTitleCache")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.cdtitle_cache, |v| v != 0);
                 cfg.display_width = conf
                     .get("Options", "DisplayWidth")
                     .and_then(|v| v.parse().ok())
@@ -1724,8 +1746,10 @@ pub fn load() {
                     "AdditionalSongFolders",
                     "AutoPopulateGrooveStatsScores",
                     "BGBrightness",
+                    "BackgroundCache",
                     "BannerCache",
                     "CacheSongs",
+                    "CDTitleCache",
                     "Center1Player",
                     "CourseAutosubmitScoresIndividually",
                     "CourseShowIndividualScores",
@@ -2490,12 +2514,20 @@ fn save_without_keymaps() {
         cfg.bg_brightness.clamp(0.0, 1.0)
     ));
     content.push_str(&format!(
+        "BackgroundCache={}\n",
+        if cfg.background_cache { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
         "BannerCache={}\n",
         if cfg.banner_cache { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "CacheSongs={}\n",
         if cfg.cachesongs { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "CDTitleCache={}\n",
+        if cfg.cdtitle_cache { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "Center1Player={}\n",
@@ -3049,6 +3081,28 @@ pub fn update_banner_cache(enabled: bool) {
             return;
         }
         cfg.banner_cache = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_cdtitle_cache(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.cdtitle_cache == enabled {
+            return;
+        }
+        cfg.cdtitle_cache = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_background_cache(enabled: bool) {
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.background_cache == enabled {
+            return;
+        }
+        cfg.background_cache = enabled;
     }
     save_without_keymaps();
 }
