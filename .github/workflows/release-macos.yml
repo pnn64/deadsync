@@ -31,9 +31,9 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            runner: macos-15-arm64
+            runner: macos-15
           - arch: x86_64
-            runner: macos-15-intel
+            runner: macos-13
     runs-on: ${{ matrix.runner }}
     env:
       CARGO_TERM_COLOR: always
