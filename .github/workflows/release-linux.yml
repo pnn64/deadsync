@@ -10,12 +10,31 @@ on:
         description: "Release tag (example: v0.2.22)"
         required: true
         type: string
+      arch:
+        description: "Build target arch"
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - x86_64
+          - arm64
 
 permissions:
   contents: write
 
 jobs:
   build-release:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - arch: x86_64
+            target: native
+          - arch: arm64
+            target: aarch64-unknown-linux-gnu
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.arch == 'all' || github.event.inputs.arch == matrix.arch }}
     runs-on:
       - self-hosted
       - Linux
@@ -28,7 +47,31 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Install Linux build deps (best effort)
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ github.event.inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          tag="${tag#refs/tags/}"
+          if [ -z "${tag}" ]; then
+            echo "Release tag is required." >&2
+            exit 1
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Linux ARM64 Rust target
+        if: ${{ matrix.arch == 'arm64' }}
+        run: rustup target add aarch64-unknown-linux-gnu
+
+      - name: Install Linux native deps (best effort)
+        if: ${{ matrix.arch == 'x86_64' }}
         shell: bash
         run: |
           if ! command -v apt-get >/dev/null 2>&1; then
@@ -53,7 +96,37 @@ jobs:
             libvulkan-dev \
             libgl1-mesa-dev
 
+      - name: Install Linux ARM64 deps (best effort)
+        if: ${{ matrix.arch == 'arm64' }}
+        shell: bash
+        run: |
+          if ! command -v apt-get >/dev/null 2>&1; then
+            echo "apt-get not found; skipping auto-install."
+            exit 0
+          fi
+          if ! command -v sudo >/dev/null 2>&1; then
+            echo "sudo not found; skipping auto-install."
+            exit 0
+          fi
+          if ! sudo -n true 2>/dev/null; then
+            echo "passwordless sudo unavailable; skipping auto-install."
+            exit 0
+          fi
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            cmake \
+            gcc-aarch64-linux-gnu \
+            libc6-dev-arm64-cross \
+            pkg-config \
+            libudev-dev:arm64 \
+            libasound2-dev:arm64 \
+            libvulkan-dev:arm64 \
+            libgl1-mesa-dev:arm64
+
       - name: Verify Linux native deps
+        if: ${{ matrix.arch == 'x86_64' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -78,37 +151,59 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve release tag
-        id: tag
+      - name: Verify Linux ARM64 deps
+        if: ${{ matrix.arch == 'arm64' }}
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag="${{ github.event.inputs.tag }}"
-          else
-            tag="${GITHUB_REF_NAME}"
-          fi
-          tag="${tag#refs/tags/}"
-          if [ -z "${tag}" ]; then
-            echo "Release tag is required." >&2
+          set -euo pipefail
+          missing=0
+          if ! command -v pkg-config >/dev/null 2>&1; then
+            echo "::error::pkg-config is missing."
             exit 1
           fi
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+          export PKG_CONFIG_ALLOW_CROSS=1
+          export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+          if ! command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then
+            echo "::error::Missing aarch64-linux-gnu-gcc. Install gcc-aarch64-linux-gnu."
+            missing=1
+          fi
+          if ! pkg-config --exists vulkan; then
+            echo "::error::Missing ARM64 Vulkan dev package. Install libvulkan-dev:arm64."
+            missing=1
+          fi
+          if ! pkg-config --exists alsa; then
+            echo "::error::Missing ARM64 ALSA dev package. Install libasound2-dev:arm64."
+            missing=1
+          fi
+          if ! pkg-config --exists libudev; then
+            echo "::error::Missing ARM64 libudev dev package. Install libudev-dev:arm64."
+            missing=1
+          fi
+          if [ "${missing}" -ne 0 ]; then
+            exit 1
+          fi
 
       - name: Build release
+        if: ${{ matrix.arch == 'x86_64' }}
         run: cargo build --release --locked
+
+      - name: Build release (ARM64 cross)
+        if: ${{ matrix.arch == 'arm64' }}
+        env:
+          PKG_CONFIG_ALLOW_CROSS: "1"
+          PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --release --locked --target aarch64-unknown-linux-gnu
 
       - name: Package Linux release
         id: package
         shell: bash
-        run: bash scripts/package-linux-release.sh "${{ steps.tag.outputs.tag }}"
+        run: bash scripts/package-linux-release.sh "${{ steps.tag.outputs.tag }}" "${{ matrix.arch }}" "${{ matrix.target }}"
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deadsync-linux-${{ steps.tag.outputs.tag }}-${{ runner.arch }}
+          name: deadsync-linux-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
           if-no-files-found: error
           path: |
             ${{ steps.package.outputs.archive }}
