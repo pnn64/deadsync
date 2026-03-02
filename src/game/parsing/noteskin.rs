@@ -2764,6 +2764,8 @@ enum ScriptControl {
     FinishTweening,
     PlayCommand,
     Animate,
+    SetState,
+    SetStateProperties,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -3019,6 +3021,8 @@ fn parse_script_control(cmd: &str) -> Option<ScriptControl> {
         "finishtweening" => Some(ScriptControl::FinishTweening),
         "playcommand" => Some(ScriptControl::PlayCommand),
         "animate" => Some(ScriptControl::Animate),
+        "setstate" => Some(ScriptControl::SetState),
+        "setstateproperties" => Some(ScriptControl::SetStateProperties),
         _ => None,
     }
 }
@@ -4216,10 +4220,13 @@ fn itg_parse_sprite_block(
 
 fn itg_parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
     let value = raw.trim().trim_end_matches(';').trim();
-    if !value.starts_with("Sprite.LinearFrames") {
+    let Some(open) = value.find('(') else {
+        return None;
+    };
+    let head = value[..open].trim();
+    if !head.eq_ignore_ascii_case("Sprite.LinearFrames") {
         return None;
     }
-    let open = value.find('(')?;
     let close = itg_find_matching(value, open, '(', ')')?;
     let args = itg_split_call_args(&value[open + 1..close]);
     if args.len() < 2 {
@@ -4234,6 +4241,128 @@ fn itg_parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
     let seconds = itg_parse_lua_float_token(&args[1])?;
     let delay = (seconds / frame_count as f32).max(0.0);
     Some((frame_count, vec![delay; frame_count]))
+}
+
+fn parse_script_state_properties(args: &[String]) -> Option<(usize, Vec<f32>)> {
+    args.first().and_then(|expr| itg_parse_linear_frames_expr(expr))
+}
+
+fn slot_is_beat_based(slot: &SpriteSlot) -> bool {
+    matches!(
+        slot.source.as_ref(),
+        SpriteSource::Animated {
+            rate: AnimationRate::FramesPerBeat(_),
+            ..
+        }
+    )
+}
+
+fn itg_apply_slot_state_properties(
+    slot: &mut SpriteSlot,
+    frame_count: usize,
+    frame_delays: &[f32],
+    beat_based: bool,
+) {
+    if slot.model.is_some() {
+        return;
+    }
+    let (texture_key, tex_dims) = match slot.source.as_ref() {
+        SpriteSource::Atlas {
+            texture_key,
+            tex_dims,
+        }
+        | SpriteSource::Animated {
+            texture_key,
+            tex_dims,
+            ..
+        } => (texture_key.clone(), *tex_dims),
+    };
+    let (grid_x, grid_y) = assets::sprite_sheet_dims(&texture_key);
+    let cols = grid_x.max(1) as usize;
+    let rows = grid_y.max(1) as usize;
+    let available = (cols * rows).max(1);
+    if available <= 1 {
+        return;
+    }
+    let anim_frames = frame_count.min(available).max(1);
+    if anim_frames <= 1 {
+        return;
+    }
+
+    let frame_w = (tex_dims.0 / cols as u32).max(1) as i32;
+    let frame_h = (tex_dims.1 / rows as u32).max(1) as i32;
+    let src_x = slot.def.src[0].max(0) as usize;
+    let src_y = slot.def.src[1].max(0) as usize;
+    let col = (src_x / frame_w.max(1) as usize).min(cols.saturating_sub(1));
+    let row = (src_y / frame_h.max(1) as usize).min(rows.saturating_sub(1));
+    let start_idx = row.saturating_mul(cols).saturating_add(col).min(available - 1);
+
+    let fallback = frame_delays.first().copied().unwrap_or(1.0).max(0.0);
+    let mut durations = Vec::with_capacity(anim_frames);
+    for idx in 0..anim_frames {
+        durations.push(frame_delays.get(idx).copied().unwrap_or(fallback).max(0.0));
+    }
+    let default_delay = durations.first().copied().unwrap_or(1.0).max(1e-6);
+    let rate = if beat_based {
+        AnimationRate::FramesPerBeat(1.0 / default_delay)
+    } else {
+        AnimationRate::FramesPerSecond(1.0 / default_delay)
+    };
+
+    slot.source = Arc::new(SpriteSource::Animated {
+        texture_key: texture_key.clone(),
+        tex_dims,
+        frame_size: [frame_w, frame_h],
+        grid: (cols, rows),
+        frame_count: anim_frames,
+        rate,
+        frame_durations: Some(Arc::<[f32]>::from(durations)),
+    });
+    let start_col = start_idx % cols;
+    let start_row = start_idx / cols;
+    slot.def.src = [start_col as i32 * frame_w, start_row as i32 * frame_h];
+    slot.def.size = [frame_w, frame_h];
+    let source_frame = assets::texture_source_frame_dims_from_real(&texture_key, tex_dims.0, tex_dims.1);
+    slot.source_size = [source_frame.0 as i32, source_frame.1 as i32];
+}
+
+fn itg_apply_state_properties_from_script(
+    slot: &mut SpriteSlot,
+    script: &str,
+    beat_based: bool,
+) {
+    for raw_token in script.split(';') {
+        let token = raw_token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let Some((command, args)) = split_script_token(token) else {
+            continue;
+        };
+        if command != "setstateproperties" {
+            continue;
+        }
+        if let Some((frame_count, delays)) = parse_script_state_properties(&args) {
+            itg_apply_slot_state_properties(slot, frame_count, &delays, beat_based);
+        }
+    }
+}
+
+fn itg_apply_state_properties_from_commands(slot: &mut SpriteSlot, commands: &HashMap<String, String>) {
+    if commands.is_empty() {
+        return;
+    }
+    let mut sorted = commands.iter().collect::<Vec<_>>();
+    sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
+    let mut beat_based = slot_is_beat_based(slot);
+    for (_, script) in sorted.iter().copied() {
+        if let Some(script_clock) = parse_script_effectclock_from_commands(script) {
+            beat_based = script_clock;
+        }
+    }
+    for (_, script) in sorted {
+        itg_apply_state_properties_from_script(slot, script, beat_based);
+    }
 }
 
 fn itg_parse_model_block(block: &str, metrics: &noteskin_itg::IniData) -> Option<ItgLuaModelDecl> {
@@ -4704,6 +4833,7 @@ fn itg_resolve_actor_file(
         {
             slot.set_rotation_deg(*rot);
         }
+        itg_apply_state_properties_from_commands(&mut slot, &sprite.commands);
         out.push(ItgLuaResolvedSprite {
             element: element.to_string(),
             slot,
@@ -4822,6 +4952,7 @@ fn itg_resolve_actor_file(
             for (k, v) in &path_ref.commands {
                 sprite.commands.insert(k.clone(), v.clone());
             }
+            itg_apply_state_properties_from_commands(&mut sprite.slot, &sprite.commands);
         }
         out.extend(child);
     }
@@ -4851,6 +4982,7 @@ fn itg_resolve_actor_file(
             for (k, v) in &reference.commands {
                 sprite.commands.insert(k.clone(), v.clone());
             }
+            itg_apply_state_properties_from_commands(&mut sprite.slot, &sprite.commands);
         }
         out.extend(child);
     }
@@ -5811,6 +5943,10 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             continue;
         }
         if parse_script_control(command.as_str()).is_some() || command == "blend" {
+            finish_pending(&mut pending, &mut animation, &mut current_state);
+            continue;
+        }
+        if command == "setstateproperties" {
             finish_pending(&mut pending, &mut animation, &mut current_state);
             continue;
         }
@@ -6927,6 +7063,77 @@ mod tests {
         assert_eq!(
             advanced, 1,
             "ddr-vivid hold explosion should advance to frame 1 after one delay"
+        );
+    }
+
+    #[test]
+    fn setstateproperties_linear_frames_applies_to_bundled_mine_slot() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        let mut slot = ns
+            .mine_hit_explosion
+            .as_ref()
+            .expect("default should define mine hit explosion")
+            .slot
+            .clone();
+        let key = slot.texture_key().to_string();
+        let (cols, rows) = crate::assets::sprite_sheet_dims(&key);
+        let available = (cols.max(1) as usize).saturating_mul(rows.max(1) as usize);
+        assert!(
+            available > 1,
+            "expected bundled mine explosion texture to have multiple frames, got {available} for '{key}'"
+        );
+
+        itg_apply_state_properties_from_script(
+            &mut slot,
+            "setstateproperties,Sprite.LinearFrames(64,(64/60))",
+            false,
+        );
+
+        let SpriteSource::Animated {
+            frame_count,
+            frame_durations,
+            rate,
+            ..
+        } = slot.source.as_ref()
+        else {
+            panic!("setstateproperties should convert mine slot source to animated");
+        };
+        let expected_frames = available.min(64);
+        assert_eq!(
+            *frame_count, expected_frames,
+            "setstateproperties should clamp frame count by available frames"
+        );
+        let delays = frame_durations
+            .as_ref()
+            .expect("setstateproperties should preserve linear frame delays");
+        assert_eq!(
+            delays.len(),
+            expected_frames,
+            "expected one delay per mine animation frame"
+        );
+        assert!(
+            delays.iter().all(|delay| (*delay - (1.0 / 60.0)).abs() < 1e-4),
+            "expected setstateproperties delays to be 1/60s, got {delays:?}"
+        );
+        match rate {
+            AnimationRate::FramesPerSecond(fps) => {
+                assert!(
+                    (fps - 60.0).abs() < 1e-3,
+                    "expected setstateproperties mine animation to run at 60fps, got {fps}"
+                );
+            }
+            AnimationRate::FramesPerBeat(v) => panic!("expected time-based animation, got {v} fpb"),
+        }
+        assert_eq!(slot.frame_index(0.0, 0.0), 0);
+        assert_eq!(
+            slot.frame_index((1.0 / 60.0) + 0.001, 0.0),
+            1,
+            "mine animation should advance after one frame delay"
         );
     }
 
