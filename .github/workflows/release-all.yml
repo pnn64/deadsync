@@ -20,7 +20,6 @@ jobs:
     secrets: inherit
 
   release-macos:
-    needs: release-linux
     uses: ./.github/workflows/release-macos.yml
     with:
       tag: ${{ inputs.tag }}
