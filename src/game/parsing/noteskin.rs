@@ -6319,6 +6319,33 @@ mod tests {
     }
 
     #[test]
+    fn ddr_note_and_cel_keep_distinct_reverse_hold_flags() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ddr_note_ns = load_itg_skin(&style, "ddr-note")
+            .expect("dance/ddr-note should load from assets/noteskins");
+        assert!(
+            !ddr_note_ns
+                .note_display_metrics
+                .flip_head_and_tail_when_reverse
+        );
+        assert!(!ddr_note_ns.note_display_metrics.flip_hold_body_when_reverse);
+        assert!(
+            !ddr_note_ns
+                .note_display_metrics
+                .top_hold_anchor_when_reverse
+        );
+
+        let cel_ns =
+            load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
+        assert!(cel_ns.note_display_metrics.flip_head_and_tail_when_reverse);
+        assert!(cel_ns.note_display_metrics.flip_hold_body_when_reverse);
+        assert!(cel_ns.note_display_metrics.top_hold_anchor_when_reverse);
+    }
+
+    #[test]
     fn default_and_cel_parse_note_color_translation_metrics() {
         let style = Style {
             num_cols: 4,
@@ -6366,8 +6393,8 @@ mod tests {
             "dance/default should resolve hold bottomcap visuals"
         );
 
-        let cel_ns = load_itg_skin(&style, "cel")
-            .expect("dance/cel should load from assets/noteskins");
+        let cel_ns =
+            load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
         let cel_visuals = cel_ns.hold_visuals_for_col(0, false);
         assert!(
             cel_visuals.topcap_inactive.is_none() && cel_visuals.topcap_active.is_none(),

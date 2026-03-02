@@ -372,11 +372,25 @@ fn maybe_flip_uv_vert(mut uv: [f32; 4], flip: bool) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn maybe_flip_uv_horiz(mut uv: [f32; 4], flip: bool) -> [f32; 4] {
-    if flip {
-        (uv[0], uv[2]) = (uv[2], uv[0]);
+const fn maybe_mirror_uv_horiz_for_reverse_flipped(
+    uv: [f32; 4],
+    lane_reverse: bool,
+    body_flipped: bool,
+) -> [f32; 4] {
+    if lane_reverse && body_flipped {
+        [uv[2], uv[1], uv[0], uv[3]]
+    } else {
+        uv
     }
-    uv
+}
+
+#[inline(always)]
+const fn top_cap_rotation_deg(lane_reverse: bool, body_flipped: bool) -> f32 {
+    if lane_reverse && body_flipped {
+        180.0
+    } else {
+        0.0
+    }
 }
 
 #[inline(always)]
@@ -462,6 +476,29 @@ fn clipped_hold_body_bounds(
     let clipped_top = body_top.max(natural_top);
     let clipped_bottom = body_bottom.min(natural_bottom);
     (clipped_bottom > clipped_top).then_some((clipped_top, clipped_bottom))
+}
+
+#[inline(always)]
+fn bottom_cap_uv_window(
+    v_base0: f32,
+    v_base1: f32,
+    draw_height: f32,
+    cap_span: f32,
+    anchor_to_top: bool,
+) -> Option<(f32, f32)> {
+    if cap_span <= f32::EPSILON || draw_height <= f32::EPSILON {
+        return None;
+    }
+    // ITG DrawHoldPart computes add_to_tex_coord from the visible cap height.
+    let tex_add = if anchor_to_top {
+        0.0
+    } else {
+        (1.0 - draw_height / cap_span).clamp(0.0, 1.0)
+    };
+    let v_span = v_base1 - v_base0;
+    let t0 = tex_add;
+    let t1 = (draw_height / cap_span) + tex_add;
+    Some((v_base0 + v_span * t0, v_base0 + v_span * t1))
 }
 
 #[inline(always)]
@@ -2812,9 +2849,9 @@ pub fn build(
 
                                 let tail_gap = (natural_bottom - body_bottom).max(0.0);
                                 let body_reaches_tail = tail_gap <= segment_height + 1.0;
-                                let is_last_visible_segment =
-                                    (body_bottom - segment_bottom).abs() <= 0.5
-                                        || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
+                                let is_last_visible_segment = (body_bottom - segment_bottom).abs()
+                                    <= 0.5
+                                    || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
 
                                 if body_reaches_tail && is_last_visible_segment {
                                     if v_range >= 0.0 {
@@ -2880,7 +2917,11 @@ pub fn build(
                         ),
                         body_flipped,
                     );
-                    let cap_uv = maybe_flip_uv_horiz(cap_uv, lane_reverse && body_flipped);
+                    let cap_uv = maybe_mirror_uv_horiz_for_reverse_flipped(
+                        cap_uv,
+                        lane_reverse,
+                        body_flipped,
+                    );
                     let cap_size = scale_cap(cap_slot.size());
                     let cap_width = cap_size[0];
                     let mut cap_height = cap_size[1];
@@ -2906,8 +2947,7 @@ pub fn build(
                     }
                     if cap_height > f32::EPSILON {
                         let cap_center = (cap_top + cap_bottom) * 0.5;
-                        let cap_rotation =
-                            if lane_reverse && body_flipped { 180.0 } else { 0.0 };
+                        let cap_rotation = top_cap_rotation_deg(lane_reverse, body_flipped);
                         actors.push(act!(sprite(cap_slot.texture_key().to_string()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset, cap_center):
@@ -2926,7 +2966,7 @@ pub fn build(
                 }
             }
             if draw_body_or_cap && let Some(cap_slot) = bottom_cap_slot {
-                let tail_position = y_tail;
+                let tail_position = y_tail + 1.0;
                 if tail_position > -400.0 && tail_position < screen_height() + 400.0 {
                     let cap_frame = cap_slot.frame_index_from_phase(hold_bottomcap_phase);
                     let cap_uv_elapsed = if cap_slot.model.is_some() {
@@ -2941,46 +2981,55 @@ pub fn build(
                         ),
                         body_flipped,
                     );
-                    let cap_uv = maybe_flip_uv_horiz(cap_uv, lane_reverse && !body_flipped);
+                    let cap_uv = maybe_mirror_uv_horiz_for_reverse_flipped(
+                        cap_uv,
+                        lane_reverse,
+                        body_flipped,
+                    );
                     let cap_size = scale_cap(cap_slot.size());
                     let cap_width = cap_size[0];
-                    let mut cap_height = cap_size[1];
+                    let cap_span = cap_size[1];
                     let u0 = cap_uv[0];
                     let u1 = cap_uv[2];
-                    let mut v0 = cap_uv[1];
-                    let v1 = cap_uv[3];
+                    let v_base0 = cap_uv[1];
+                    let v_base1 = cap_uv[3];
                     // Prefer attaching to rendered body edge when available; fall
                     // back to native tail anchoring for collapsed micro-holds.
-                    let Some((mut cap_top, cap_bottom)) = hold_tail_cap_bounds(
-                        y_tail,
-                        cap_height,
+                    let Some((raw_top, raw_bottom)) = hold_tail_cap_bounds(
+                        y_tail + 1.0,
+                        cap_span,
                         rendered_body_top,
                         rendered_body_bottom,
                     ) else {
                         continue;
                     };
-                    let mut cap_center = (cap_top + cap_bottom) * 0.5;
-                    if cap_height > f32::EPSILON {
-                        let v_span = v1 - v0;
-                        // ITG clips hold-cap geometry against the offset-adjusted hold head/body
-                        // coordinates (DrawHoldBody y_head/y_tail), not the raw head actor anchor.
-                        let head_limit = y_head;
-                        if head_limit > cap_top {
-                            let trimmed = (head_limit - cap_top).clamp(0.0, cap_height);
-                            if trimmed >= cap_height - f32::EPSILON {
-                                cap_height = 0.0;
-                            } else if trimmed > f32::EPSILON {
-                                let fraction = trimmed / cap_height;
-                                v0 += v_span * fraction;
-                                cap_top += trimmed;
-                                cap_center = (cap_top + cap_bottom) * 0.5;
-                                cap_height = cap_bottom - cap_top;
-                            }
-                        }
+                    if cap_span <= f32::EPSILON {
+                        continue;
                     }
+
+                    // ITG DrawHoldPart bottom-cap UV progression:
+                    // add_to_tex_coord = (frame_h - visible_h / zoom) / frame_h, clamped at 0.
+                    // In our renderer cap_span is already zoomed size, so this reduces to
+                    // add_to_tex_coord = 1 - visible_h / cap_span.
+                    let mut draw_top = raw_top;
+                    let draw_bottom = raw_bottom;
+                    if y_head > draw_top {
+                        draw_top = y_head.min(draw_bottom);
+                    }
+                    let draw_height = draw_bottom - draw_top;
+                    let anchor_to_top = lane_reverse && note_display.top_hold_anchor_when_reverse;
+                    let Some((v0, v1)) = bottom_cap_uv_window(
+                        v_base0,
+                        v_base1,
+                        draw_height,
+                        cap_span,
+                        anchor_to_top,
+                    ) else {
+                        continue;
+                    };
+                    let cap_center = (draw_top + draw_bottom) * 0.5;
+                    let cap_height = draw_height;
                     if cap_height > f32::EPSILON {
-                        let cap_rotation =
-                            if lane_reverse && !body_flipped { 180.0 } else { 0.0 };
                         actors.push(act!(sprite(cap_slot.texture_key().to_string()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset, cap_center):
@@ -2992,7 +3041,7 @@ pub fn build(
                                 hold_diffuse[2],
                                 hold_diffuse[3]
                             ):
-                            rotationz(cap_rotation):
+                            rotationz(0.0):
                             z(Z_HOLD_CAP)
                         ));
                     }
@@ -3131,10 +3180,7 @@ pub fn build(
                         );
                     }
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
-                    let primary_h = note_slots
-                        .first()
-                        .map(note_scale_height)
-                        .unwrap_or(1.0);
+                    let primary_h = note_slots.first().map(note_scale_height).unwrap_or(1.0);
                     let note_scale = if primary_h > f32::EPSILON {
                         target_arrow_px / primary_h
                     } else {
@@ -3571,10 +3617,7 @@ pub fn build(
                     let elapsed = state.total_elapsed_in_screen;
                     let note_uv_phase =
                         ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
-                    let primary_h = note_slots
-                        .first()
-                        .map(note_scale_height)
-                        .unwrap_or(1.0);
+                    let primary_h = note_slots.first().map(note_scale_height).unwrap_or(1.0);
                     let note_scale = if primary_h > f32::EPSILON {
                         target_arrow_px / primary_h
                     } else {
@@ -4807,7 +4850,9 @@ pub fn build(
 #[cfg(test)]
 mod tests {
     use super::{
-        clipped_hold_body_bounds, hold_tail_cap_bounds, note_scale_height, offset_center,
+        bottom_cap_uv_window, clipped_hold_body_bounds, hold_tail_cap_bounds,
+        maybe_mirror_uv_horiz_for_reverse_flipped, note_scale_height, offset_center,
+        top_cap_rotation_deg,
     };
     use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization, Style, load_itg_skin};
 
@@ -4815,9 +4860,8 @@ mod tests {
     fn hold_tail_cap_bounds_join_at_body_bottom_for_normal_scroll() {
         let body_tail_y = 100.0;
         let cap_height = 24.0;
-        let (top, bottom) =
-            hold_tail_cap_bounds(body_tail_y, cap_height, Some(20.0), Some(96.0))
-                .expect("cap should connect when rendered body reaches tail side");
+        let (top, bottom) = hold_tail_cap_bounds(body_tail_y, cap_height, Some(20.0), Some(96.0))
+            .expect("cap should connect when rendered body reaches tail side");
         assert!((top - 96.0).abs() <= 1e-6);
         assert!((bottom - 120.0).abs() <= 1e-6);
     }
@@ -4867,13 +4911,64 @@ mod tests {
     }
 
     #[test]
+    fn reverse_flipped_cap_uv_only_mirrors_when_both_flags_are_enabled() {
+        let uv = [0.125, 0.25, 0.75, 0.875];
+        assert_eq!(
+            maybe_mirror_uv_horiz_for_reverse_flipped(uv, true, true),
+            [0.75, 0.25, 0.125, 0.875]
+        );
+        assert_eq!(
+            maybe_mirror_uv_horiz_for_reverse_flipped(uv, true, false),
+            uv
+        );
+        assert_eq!(
+            maybe_mirror_uv_horiz_for_reverse_flipped(uv, false, true),
+            uv
+        );
+    }
+
+    #[test]
+    fn reverse_flipped_top_cap_rotation_matches_itg_parity_path() {
+        assert!((top_cap_rotation_deg(true, true) - 180.0).abs() <= f32::EPSILON);
+        assert!((top_cap_rotation_deg(true, false) - 0.0).abs() <= f32::EPSILON);
+        assert!((top_cap_rotation_deg(false, true) - 0.0).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn bottom_cap_uv_window_matches_itg_add_to_tex_coord_progression() {
+        let (v0, v1) = bottom_cap_uv_window(0.0, 1.0, 12.0, 24.0, false)
+            .expect("non-zero cap span and draw height should produce UVs");
+        assert!((v0 - 0.5).abs() <= 1e-6);
+        assert!((v1 - 1.0).abs() <= 1e-6);
+
+        let (full_v0, full_v1) = bottom_cap_uv_window(0.0, 1.0, 24.0, 24.0, false)
+            .expect("full-height cap should preserve full UV range");
+        assert!((full_v0 - 0.0).abs() <= 1e-6);
+        assert!((full_v1 - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn bottom_cap_uv_window_honors_top_anchor_when_reverse() {
+        let (v0, v1) = bottom_cap_uv_window(0.2, 0.8, 12.0, 24.0, true)
+            .expect("top-anchored reverse path should produce UVs");
+        assert!((v0 - 0.2).abs() <= 1e-6);
+        assert!((v1 - 0.5).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn bottom_cap_uv_window_rejects_degenerate_inputs() {
+        assert_eq!(bottom_cap_uv_window(0.0, 1.0, 0.0, 24.0, false), None);
+        assert_eq!(bottom_cap_uv_window(0.0, 1.0, 24.0, 0.0, false), None);
+    }
+
+    #[test]
     fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
         let style = Style {
             num_cols: 4,
             num_players: 1,
         };
-        let ns = load_itg_skin(&style, "cyber")
-            .expect("dance/cyber should load from assets/noteskins");
+        let ns =
+            load_itg_skin(&style, "cyber").expect("dance/cyber should load from assets/noteskins");
         let slot = ns
             .note_layers
             .first()
