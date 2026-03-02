@@ -34,7 +34,6 @@ jobs:
             target: native
           - arch: arm64
             target: aarch64-unknown-linux-gnu
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.arch == 'all' || github.event.inputs.arch == matrix.arch }}
     runs-on:
       - self-hosted
       - Linux
@@ -47,8 +46,24 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Select matrix arch
+        id: select_arch
+        shell: bash
+        run: |
+          selected="all"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            selected="${{ github.event.inputs.arch }}"
+          fi
+          if [ "${selected}" = "all" ] || [ "${selected}" = "${{ matrix.arch }}" ]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "Skipping matrix arch '${{ matrix.arch }}' for requested arch '${selected}'."
+          fi
+
       - name: Resolve release tag
         id: tag
+        if: steps.select_arch.outputs.enabled == 'true'
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -64,14 +79,15 @@ jobs:
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
       - name: Setup Rust
+        if: steps.select_arch.outputs.enabled == 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Add Linux ARM64 Rust target
-        if: ${{ matrix.arch == 'arm64' }}
+        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'arm64'
         run: rustup target add aarch64-unknown-linux-gnu
 
       - name: Install Linux native deps (best effort)
-        if: ${{ matrix.arch == 'x86_64' }}
+        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'x86_64'
         shell: bash
         run: |
           if ! command -v apt-get >/dev/null 2>&1; then
@@ -97,7 +113,7 @@ jobs:
             libgl1-mesa-dev
 
       - name: Install Linux ARM64 deps (best effort)
-        if: ${{ matrix.arch == 'arm64' }}
+        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'arm64'
         shell: bash
         run: |
           if ! command -v apt-get >/dev/null 2>&1; then
@@ -126,7 +142,7 @@ jobs:
             libgl1-mesa-dev:arm64
 
       - name: Verify Linux native deps
-        if: ${{ matrix.arch == 'x86_64' }}
+        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'x86_64'
         shell: bash
         run: |
           set -euo pipefail
@@ -152,7 +168,7 @@ jobs:
           fi
 
       - name: Verify Linux ARM64 deps
-        if: ${{ matrix.arch == 'arm64' }}
+        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'arm64'
         shell: bash
         run: |
           set -euo pipefail
@@ -184,11 +200,11 @@ jobs:
           fi
 
       - name: Build release
-        if: ${{ matrix.arch == 'x86_64' }}
+        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'x86_64'
         run: cargo build --release --locked
 
       - name: Build release (ARM64 cross)
-        if: ${{ matrix.arch == 'arm64' }}
+        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'arm64'
         env:
           PKG_CONFIG_ALLOW_CROSS: "1"
           PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
@@ -197,10 +213,12 @@ jobs:
 
       - name: Package Linux release
         id: package
+        if: steps.select_arch.outputs.enabled == 'true'
         shell: bash
         run: bash scripts/package-linux-release.sh "${{ steps.tag.outputs.tag }}" "${{ matrix.arch }}" "${{ matrix.target }}"
 
       - name: Upload workflow artifacts
+        if: steps.select_arch.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: deadsync-linux-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
@@ -210,6 +228,7 @@ jobs:
             ${{ steps.package.outputs.checksum }}
 
       - name: Publish GitHub release
+        if: steps.select_arch.outputs.enabled == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
