@@ -17,7 +17,11 @@ use crate::game::note::{HoldResult, NoteType};
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelEffectMode, ModelMesh, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
 };
-use crate::game::{gameplay::PlayerRuntime, gameplay::State, profile, scroll::ScrollSpeedSetting};
+use crate::game::{
+    gameplay::{ActiveHold, PlayerRuntime, State},
+    profile,
+    scroll::ScrollSpeedSetting,
+};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
@@ -1688,6 +1692,18 @@ fn notefield_view_proj(
     Some((proj * view) * world_to_screen * field)
 }
 
+#[inline(always)]
+fn hold_head_render_flags(
+    active_state: Option<&ActiveHold>,
+    current_beat: f32,
+    note_beat: f32,
+) -> (bool, bool) {
+    let reached_receptor = current_beat >= note_beat;
+    let engaged = reached_receptor && active_state.map(active_hold_is_engaged).unwrap_or(false);
+    let use_active = engaged && active_state.map(|h| h.is_pressed).unwrap_or(false);
+    (engaged, use_active)
+}
+
 pub fn build(
     state: &State,
     profile: &profile::Profile,
@@ -2592,10 +2608,10 @@ pub fn build(
             let active_state = state.active_holds[note.column]
                 .as_ref()
                 .filter(|h| h.note_index == note_index);
-            let engaged = active_state.map(active_hold_is_engaged).unwrap_or(false);
-            let use_active = active_state
-                .map(|h| h.is_pressed && !h.let_go)
-                .unwrap_or(false);
+            // ITG keeps early-hit hold heads scrolling as inactive until the head
+            // reaches the receptor row; only then does hold-active rendering clamp.
+            let (engaged, use_active) =
+                hold_head_render_flags(active_state, current_beat, note.beat);
             // ITG swaps hold start/end for reverse before applying hold-body offsets.
             let mut hold_start_y = if lane_reverse { tail_y } else { head_y };
             let mut hold_end_y = if lane_reverse { head_y } else { tail_y };
@@ -4855,11 +4871,76 @@ pub fn build(
 #[cfg(test)]
 mod tests {
     use super::{
-        bottom_cap_uv_window, clipped_hold_body_bounds, hold_tail_cap_bounds,
+        bottom_cap_uv_window, clipped_hold_body_bounds, hold_head_render_flags, hold_tail_cap_bounds,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_scale_height, offset_center,
         top_cap_rotation_deg,
     };
+    use crate::game::gameplay::ActiveHold;
+    use crate::game::note::NoteType;
     use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization, Style, load_itg_skin};
+
+    #[test]
+    fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
+        let active = ActiveHold {
+            note_index: 42,
+            end_time: 12.0,
+            note_type: NoteType::Hold,
+            let_go: false,
+            is_pressed: true,
+            life: 1.0,
+        };
+        let (engaged, use_active) = hold_head_render_flags(Some(&active), 99.99, 100.0);
+        assert!(!engaged);
+        assert!(!use_active);
+    }
+
+    #[test]
+    fn hold_head_render_flags_switch_to_active_at_receptor() {
+        let mut active = ActiveHold {
+            note_index: 42,
+            end_time: 12.0,
+            note_type: NoteType::Hold,
+            let_go: false,
+            is_pressed: true,
+            life: 1.0,
+        };
+        let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
+        assert!(engaged);
+        assert!(use_active);
+
+        active.is_pressed = false;
+        let (engaged_released, use_active_released) = hold_head_render_flags(Some(&active), 100.0, 100.0);
+        assert!(engaged_released);
+        assert!(!use_active_released);
+    }
+
+    #[test]
+    fn hold_head_render_flags_require_engaged_life_state() {
+        let exhausted = ActiveHold {
+            note_index: 7,
+            end_time: 8.0,
+            note_type: NoteType::Roll,
+            let_go: false,
+            is_pressed: true,
+            life: 0.0,
+        };
+        let let_go = ActiveHold {
+            note_index: 7,
+            end_time: 8.0,
+            note_type: NoteType::Roll,
+            let_go: true,
+            is_pressed: true,
+            life: 1.0,
+        };
+        assert_eq!(
+            hold_head_render_flags(Some(&exhausted), 200.0, 100.0),
+            (false, false)
+        );
+        assert_eq!(
+            hold_head_render_flags(Some(&let_go), 200.0, 100.0),
+            (false, false)
+        );
+    }
 
     #[test]
     fn hold_tail_cap_bounds_join_at_body_bottom_for_normal_scroll() {
