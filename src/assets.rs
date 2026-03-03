@@ -668,6 +668,33 @@ fn dynamic_image_prewarm_workers(job_count: usize) -> usize {
         .min(job_count)
 }
 
+#[inline(always)]
+fn dynamic_image_prewarm_dedupe_key(
+    path: &Path,
+    opts: BannerCacheOptions,
+    cache_dir: &'static str,
+) -> String {
+    dynamic_image_cache_path_for(path, opts, cache_dir).map_or_else(
+        || path.to_string_lossy().replace('\\', "/"),
+        |(cache_path, _)| cache_path.to_string_lossy().replace('\\', "/"),
+    )
+}
+
+fn dynamic_image_prewarm_total_jobs(
+    paths: &[PathBuf],
+    opts: BannerCacheOptions,
+    cache_dir: &'static str,
+) -> usize {
+    if !opts.enabled {
+        return 0;
+    }
+    let mut unique = HashSet::<String>::with_capacity(paths.len());
+    for path in paths {
+        unique.insert(dynamic_image_prewarm_dedupe_key(path, opts, cache_dir));
+    }
+    unique.len()
+}
+
 fn prewarm_dynamic_image_cache_with_progress<F>(
     paths: &[PathBuf],
     opts: BannerCacheOptions,
@@ -687,10 +714,7 @@ fn prewarm_dynamic_image_cache_with_progress<F>(
     let mut deduped = Vec::with_capacity(paths.len());
     let mut duplicate = 0usize;
     for path in paths {
-        let dedupe_key = dynamic_image_cache_path_for(path, opts, cache_dir).map_or_else(
-            || path.to_string_lossy().replace('\\', "/"),
-            |(cache_path, _)| cache_path.to_string_lossy().replace('\\', "/"),
-        );
+        let dedupe_key = dynamic_image_prewarm_dedupe_key(path, opts, cache_dir);
         if unique.insert(dedupe_key) {
             deduped.push(path.clone());
         } else {
@@ -833,12 +857,22 @@ where
     prewarm_dynamic_image_cache_with_progress(paths, opts, BANNER_CACHE_DIR, "Banner", progress);
 }
 
+pub fn banner_cache_jobs(paths: &[PathBuf]) -> usize {
+    let opts = BannerCacheOptions::from_banner_config(&crate::config::get());
+    dynamic_image_prewarm_total_jobs(paths, opts, BANNER_CACHE_DIR)
+}
+
 pub fn prewarm_cdtitle_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
 where
     F: FnMut(usize, usize, Option<&Path>),
 {
     let opts = BannerCacheOptions::from_cdtitle_config(&crate::config::get());
     prewarm_dynamic_image_cache_with_progress(paths, opts, CDTITLE_CACHE_DIR, "CDTitle", progress);
+}
+
+pub fn cdtitle_cache_jobs(paths: &[PathBuf]) -> usize {
+    let opts = BannerCacheOptions::from_cdtitle_config(&crate::config::get());
+    dynamic_image_prewarm_total_jobs(paths, opts, CDTITLE_CACHE_DIR)
 }
 
 pub fn prewarm_background_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
@@ -853,6 +887,11 @@ where
         "Background",
         progress,
     );
+}
+
+pub fn background_cache_jobs(paths: &[PathBuf]) -> usize {
+    let opts = BannerCacheOptions::from_background_config(&crate::config::get());
+    dynamic_image_prewarm_total_jobs(paths, opts, BACKGROUND_CACHE_DIR)
 }
 
 fn build_cached_banner_rgba(

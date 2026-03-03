@@ -41,9 +41,7 @@ const LOADING_BAR_H: f32 = 30.0;
 enum LoadingPhase {
     Songs,
     Courses,
-    Banners,
-    CDTitles,
-    Backgrounds,
+    Artwork,
 }
 
 enum LoadingMsg {
@@ -60,19 +58,7 @@ enum LoadingMsg {
         group: String,
         course: String,
     },
-    Banner {
-        done: usize,
-        total: usize,
-        line2: String,
-        line3: String,
-    },
-    CDTitle {
-        done: usize,
-        total: usize,
-        line2: String,
-        line3: String,
-    },
-    Background {
+    Artwork {
         done: usize,
         total: usize,
         line2: String,
@@ -89,12 +75,8 @@ struct LoadingState {
     songs_total: usize,
     courses_done: usize,
     courses_total: usize,
-    banners_done: usize,
-    banners_total: usize,
-    cdtitles_done: usize,
-    cdtitles_total: usize,
-    backgrounds_done: usize,
-    backgrounds_total: usize,
+    artwork_done: usize,
+    artwork_total: usize,
     done: bool,
     started_at: Instant,
     rx: mpsc::Receiver<LoadingMsg>,
@@ -110,12 +92,8 @@ impl LoadingState {
             songs_total: 0,
             courses_done: 0,
             courses_total: 0,
-            banners_done: 0,
-            banners_total: 0,
-            cdtitles_done: 0,
-            cdtitles_total: 0,
-            backgrounds_done: 0,
-            backgrounds_total: 0,
+            artwork_done: 0,
+            artwork_total: 0,
             done: false,
             started_at: Instant::now(),
             rx,
@@ -302,53 +280,61 @@ fn start_loading_thread(state: &mut State) {
             &mut on_course,
         );
 
-        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Banners));
         let banner_paths = collect_banner_cache_paths();
+        let cdtitle_paths = collect_cdtitle_cache_paths();
+        let background_paths = collect_background_cache_paths();
+        let banner_total = crate::assets::banner_cache_jobs(&banner_paths);
+        let cdtitle_total = crate::assets::cdtitle_cache_jobs(&cdtitle_paths);
+        let background_total = crate::assets::background_cache_jobs(&background_paths);
+        let artwork_total = banner_total
+            .saturating_add(cdtitle_total)
+            .saturating_add(background_total);
+
+        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Artwork));
+        let mut artwork_base_done = 0usize;
         info!(
             "Init loading: caching banners ({} textures)...",
             banner_paths.len()
         );
-        let mut on_banner = |done: usize, total: usize, path: Option<&Path>| {
+        let mut on_banner = |done: usize, _total: usize, path: Option<&Path>| {
             let (line2, line3) = cache_progress_lines(path);
-            let _ = tx.send(LoadingMsg::Banner {
-                done,
-                total,
+            let _ = tx.send(LoadingMsg::Artwork {
+                done: artwork_base_done.saturating_add(done),
+                total: artwork_total,
                 line2,
                 line3,
             });
         };
         crate::assets::prewarm_banner_cache_with_progress(&banner_paths, &mut on_banner);
         info!("Init loading: banner cache prewarm complete.");
+        artwork_base_done = artwork_base_done.saturating_add(banner_total);
 
-        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::CDTitles));
-        let cdtitle_paths = collect_cdtitle_cache_paths();
         info!(
             "Init loading: caching cdtitles ({} textures)...",
             cdtitle_paths.len()
         );
-        let mut on_cdtitle = |done: usize, total: usize, path: Option<&Path>| {
+        let mut on_cdtitle = |done: usize, _total: usize, path: Option<&Path>| {
             let (line2, line3) = cache_progress_lines(path);
-            let _ = tx.send(LoadingMsg::CDTitle {
-                done,
-                total,
+            let _ = tx.send(LoadingMsg::Artwork {
+                done: artwork_base_done.saturating_add(done),
+                total: artwork_total,
                 line2,
                 line3,
             });
         };
         crate::assets::prewarm_cdtitle_cache_with_progress(&cdtitle_paths, &mut on_cdtitle);
         info!("Init loading: cdtitle cache prewarm complete.");
+        artwork_base_done = artwork_base_done.saturating_add(cdtitle_total);
 
-        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Backgrounds));
-        let background_paths = collect_background_cache_paths();
         info!(
             "Init loading: caching backgrounds ({} textures)...",
             background_paths.len()
         );
-        let mut on_background = |done: usize, total: usize, path: Option<&Path>| {
+        let mut on_background = |done: usize, _total: usize, path: Option<&Path>| {
             let (line2, line3) = cache_progress_lines(path);
-            let _ = tx.send(LoadingMsg::Background {
-                done,
-                total,
+            let _ = tx.send(LoadingMsg::Artwork {
+                done: artwork_base_done.saturating_add(done),
+                total: artwork_total,
                 line2,
                 line3,
             });
@@ -399,39 +385,15 @@ fn poll_loading_state(loading: &mut LoadingState) {
                 loading.line2 = group;
                 loading.line3 = course;
             }
-            LoadingMsg::Banner {
+            LoadingMsg::Artwork {
                 done,
                 total,
                 line2,
                 line3,
             } => {
-                loading.phase = LoadingPhase::Banners;
-                loading.banners_done = done;
-                loading.banners_total = total;
-                loading.line2 = line2;
-                loading.line3 = line3;
-            }
-            LoadingMsg::CDTitle {
-                done,
-                total,
-                line2,
-                line3,
-            } => {
-                loading.phase = LoadingPhase::CDTitles;
-                loading.cdtitles_done = done;
-                loading.cdtitles_total = total;
-                loading.line2 = line2;
-                loading.line3 = line3;
-            }
-            LoadingMsg::Background {
-                done,
-                total,
-                line2,
-                line3,
-            } => {
-                loading.phase = LoadingPhase::Backgrounds;
-                loading.backgrounds_done = done;
-                loading.backgrounds_total = total;
+                loading.phase = LoadingPhase::Artwork;
+                loading.artwork_done = done;
+                loading.artwork_total = total;
                 loading.line2 = line2;
                 loading.line3 = line3;
             }
@@ -562,9 +524,7 @@ fn loading_progress(loading: Option<&LoadingState>) -> (usize, usize, f32) {
     let (done, mut total) = match loading.phase {
         LoadingPhase::Songs => (loading.songs_done, loading.songs_total),
         LoadingPhase::Courses => (loading.courses_done, loading.courses_total),
-        LoadingPhase::Banners => (loading.banners_done, loading.banners_total),
-        LoadingPhase::CDTitles => (loading.cdtitles_done, loading.cdtitles_total),
-        LoadingPhase::Backgrounds => (loading.backgrounds_done, loading.backgrounds_total),
+        LoadingPhase::Artwork => (loading.artwork_done, loading.artwork_total),
     };
     if total < done {
         total = done;
@@ -584,9 +544,7 @@ fn loading_phase_label(phase: LoadingPhase) -> &'static str {
     match phase {
         LoadingPhase::Songs => "Loading songs...",
         LoadingPhase::Courses => "Loading courses...",
-        LoadingPhase::Banners => "Caching banners...",
-        LoadingPhase::CDTitles => "Caching cdtitles...",
-        LoadingPhase::Backgrounds => "Caching backgrounds...",
+        LoadingPhase::Artwork => "Caching artwork...",
     }
 }
 
@@ -609,11 +567,7 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>) {
     };
     let show_speed_row = matches!(
         phase,
-        LoadingPhase::Songs
-            | LoadingPhase::Courses
-            | LoadingPhase::Banners
-            | LoadingPhase::CDTitles
-            | LoadingPhase::Backgrounds
+        LoadingPhase::Songs | LoadingPhase::Courses | LoadingPhase::Artwork
     ) && total > 0;
     let speed_text = if elapsed > 0.0 && show_speed_row {
         format!("Current speed: {:.1} items/s", done as f32 / elapsed)
