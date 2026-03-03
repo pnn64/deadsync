@@ -40,11 +40,19 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        include:
-          - arch: arm64
-            runner: macos-15
-          - arch: x86_64
-            runner: macos-15-intel
+        include: ${{ fromJSON(
+          (github.event_name == 'workflow_dispatch' && (
+            github.event.inputs.arch == 'arm64' && '[{"arch":"arm64","runner":"macos-15"}]' ||
+            github.event.inputs.arch == 'x86_64' && '[{"arch":"x86_64","runner":"macos-15-intel"}]' ||
+            '[{"arch":"arm64","runner":"macos-15"},{"arch":"x86_64","runner":"macos-15-intel"}]'
+          )) ||
+          (github.event_name == 'workflow_call' && (
+            inputs.arch == 'arm64' && '[{"arch":"arm64","runner":"macos-15"}]' ||
+            inputs.arch == 'x86_64' && '[{"arch":"x86_64","runner":"macos-15-intel"}]' ||
+            '[{"arch":"arm64","runner":"macos-15"},{"arch":"x86_64","runner":"macos-15-intel"}]'
+          )) ||
+          '[{"arch":"arm64","runner":"macos-15"},{"arch":"x86_64","runner":"macos-15-intel"}]'
+        ) }}
     runs-on: ${{ matrix.runner }}
     env:
       CARGO_TERM_COLOR: always
@@ -55,28 +63,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Select matrix arch
-        id: select_arch
-        shell: bash
-        run: |
-          selected="all"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            selected="${{ github.event.inputs.arch }}"
-          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
-            selected="${{ inputs.arch }}"
-          fi
-          if [ -z "${selected}" ]; then
-            selected="all"
-          fi
-          if [ "${selected}" = "all" ] || [ "${selected}" = "${{ matrix.arch }}" ]; then
-            echo "enabled=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "Skipping matrix arch '${{ matrix.arch }}' for requested arch '${selected}'."
-          fi
-
       - name: Install macOS Vulkan deps
-        if: steps.select_arch.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -94,7 +81,6 @@ jobs:
 
       - name: Resolve release tag
         id: tag
-        if: steps.select_arch.outputs.enabled == 'true'
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -112,21 +98,17 @@ jobs:
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
       - name: Setup Rust
-        if: steps.select_arch.outputs.enabled == 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build release
-        if: steps.select_arch.outputs.enabled == 'true'
         run: cargo build --release --locked
 
       - name: Package macOS release
         id: package
-        if: steps.select_arch.outputs.enabled == 'true'
         shell: bash
         run: bash scripts/package-macos-release.sh "${{ steps.tag.outputs.tag }}" "${{ matrix.arch }}"
 
       - name: Upload workflow artifacts
-        if: steps.select_arch.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: deadsync-macos-${{ steps.tag.outputs.tag }}-${{ matrix.arch }}
@@ -134,7 +116,6 @@ jobs:
           path: ${{ steps.package.outputs.archive }}
 
       - name: Publish GitHub release
-        if: steps.select_arch.outputs.enabled == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
