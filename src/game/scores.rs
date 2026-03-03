@@ -1683,6 +1683,34 @@ struct ArrowCloudNpsInfo {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum ArrowCloudTimingOffset {
+    Seconds(f64),
+    Miss(&'static str),
+}
+
+type ArrowCloudTimingDatum = (f64, ArrowCloudTimingOffset);
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArrowCloudJudgmentCounts {
+    fantastic_plus: u32,
+    fantastic: u32,
+    excellent: u32,
+    great: u32,
+    decent: u32,
+    way_off: u32,
+    miss: u32,
+    total_steps: u32,
+    holds_held: u32,
+    total_holds: u32,
+    mines_hit: u32,
+    total_mines: u32,
+    rolls_held: u32,
+    total_rolls: u32,
+}
+
+#[derive(Debug, Serialize)]
 struct ArrowCloudPayload {
     #[serde(rename = "songName")]
     song_name: String,
@@ -1691,10 +1719,12 @@ struct ArrowCloudPayload {
     length: String,
     hash: String,
     #[serde(rename = "timingData")]
-    timing_data: Vec<[f64; 2]>,
+    timing_data: Vec<ArrowCloudTimingDatum>,
     difficulty: u32,
     stepartist: String,
     radar: ArrowCloudRadar,
+    #[serde(rename = "judgmentCounts")]
+    judgment_counts: ArrowCloudJudgmentCounts,
     #[serde(rename = "npsInfo")]
     nps_info: ArrowCloudNpsInfo,
     #[serde(rename = "lifebarInfo")]
@@ -1913,7 +1943,29 @@ fn arrowcloud_lifebar_points(gs: &gameplay::State, player_idx: usize) -> Vec<Arr
 }
 
 #[inline(always)]
-fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<[f64; 2]> {
+fn arrowcloud_timing_data_from_scatter(
+    scatter: &[crate::game::timing::ScatterPoint],
+) -> Vec<ArrowCloudTimingDatum> {
+    let mut out = Vec::with_capacity(scatter.len());
+    for point in scatter {
+        if !point.time_sec.is_finite() {
+            continue;
+        }
+        let value = if let Some(offset_ms) = point.offset_ms {
+            if !offset_ms.is_finite() {
+                continue;
+            }
+            ArrowCloudTimingOffset::Seconds((offset_ms / 1000.0) as f64)
+        } else {
+            ArrowCloudTimingOffset::Miss("Miss")
+        };
+        out.push((point.time_sec as f64, value));
+    }
+    out
+}
+
+#[inline(always)]
+fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<ArrowCloudTimingDatum> {
     let (start, end) = gs.note_ranges[player_idx];
     let notes = &gs.notes[start..end];
     let note_times = &gs.note_time_cache[start..end];
@@ -1925,18 +1977,7 @@ fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<[f64; 
         gs.cols_per_player,
         &gs.mini_indicator_stream_segments[player_idx],
     );
-
-    let mut out = Vec::with_capacity(scatter.len());
-    for point in scatter {
-        let Some(offset_ms) = point.offset_ms else {
-            continue;
-        };
-        if !point.time_sec.is_finite() || !offset_ms.is_finite() {
-            continue;
-        }
-        out.push([point.time_sec as f64, (offset_ms / 1000.0) as f64]);
-    }
-    out
+    arrowcloud_timing_data_from_scatter(&scatter)
 }
 
 #[inline(always)]
@@ -1985,6 +2026,45 @@ fn arrowcloud_nps_info(gs: &gameplay::State, player_idx: usize) -> ArrowCloudNps
 }
 
 #[inline(always)]
+fn arrowcloud_judgment_counts(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> ArrowCloudJudgmentCounts {
+    let player = &gs.players[player_idx];
+    let counts = player.judgment_counts;
+    let windows = gs.live_window_counts[player_idx];
+    let fantastic_total = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)];
+    let fantastic_plus = windows.w0;
+    let fantastic = fantastic_total.saturating_sub(fantastic_plus);
+    let excellent = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Excellent)];
+    let great = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Great)];
+    let decent = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Decent)];
+    let way_off = counts[judgment::judge_grade_ix(judgment::JudgeGrade::WayOff)];
+    let miss = counts[judgment::judge_grade_ix(judgment::JudgeGrade::Miss)];
+    let mut total_steps = 0u32;
+    for count in counts {
+        total_steps = total_steps.saturating_add(count);
+    }
+
+    ArrowCloudJudgmentCounts {
+        fantastic_plus,
+        fantastic,
+        excellent,
+        great,
+        decent,
+        way_off,
+        miss,
+        total_steps,
+        holds_held: player.holds_held,
+        total_holds: gs.holds_total[player_idx],
+        mines_hit: player.mines_hit,
+        total_mines: gs.mines_total[player_idx],
+        rolls_held: player.rolls_held,
+        total_rolls: gs.rolls_total[player_idx],
+    }
+}
+
+#[inline(always)]
 fn arrowcloud_payload_for_player(
     gs: &gameplay::State,
     player_idx: usize,
@@ -2018,6 +2098,7 @@ fn arrowcloud_payload_for_player(
             mines: [player.mines_avoided, gs.mines_total[player_idx]],
             rolls: [player.rolls_held, gs.rolls_total[player_idx]],
         },
+        judgment_counts: arrowcloud_judgment_counts(gs, player_idx),
         nps_info: arrowcloud_nps_info(gs, player_idx),
         lifebar_info: arrowcloud_lifebar_points(gs, player_idx),
         modifiers: arrowcloud_modifiers(profile),
@@ -3982,4 +4063,112 @@ pub fn fetch_and_store_grade(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::timing::ScatterPoint;
+    use serde_json::{json, Value};
+
+    fn sample_scatter(time_sec: f32, offset_ms: Option<f32>) -> ScatterPoint {
+        ScatterPoint {
+            time_sec,
+            offset_ms,
+            direction_code: 1,
+            is_stream: false,
+            is_left_foot: false,
+            miss_because_held: false,
+        }
+    }
+
+    #[test]
+    fn arrowcloud_timing_data_keeps_miss_rows() {
+        let scatter = [
+            sample_scatter(12.5, Some(8.0)),
+            sample_scatter(12.75, None),
+            sample_scatter(f32::NAN, Some(2.0)),
+        ];
+        let timing_data = arrowcloud_timing_data_from_scatter(&scatter);
+        assert_eq!(timing_data.len(), 2);
+
+        let value = serde_json::to_value(&timing_data).expect("serialize timingData");
+        assert_eq!(value[0][0], json!(12.5));
+        let first_offset = value[0][1]
+            .as_f64()
+            .expect("timingData[0][1] should be numeric");
+        assert!((first_offset - 0.008).abs() < 1e-6);
+        assert_eq!(value[1][0], json!(12.75));
+        assert_eq!(value[1][1], json!("Miss"));
+    }
+
+    #[test]
+    fn arrowcloud_payload_serializes_miss_and_counts() {
+        let payload = ArrowCloudPayload {
+            song_name: "Test Song".to_string(),
+            artist: "Test Artist".to_string(),
+            pack: "Test Pack".to_string(),
+            length: "1:23".to_string(),
+            hash: "deadbeefcafebabe".to_string(),
+            timing_data: vec![(24.488_208_770_752, ArrowCloudTimingOffset::Miss("Miss"))],
+            difficulty: 12,
+            stepartist: "Tester".to_string(),
+            radar: ArrowCloudRadar {
+                holds: [1, 2],
+                mines: [3, 4],
+                rolls: [5, 6],
+            },
+            judgment_counts: ArrowCloudJudgmentCounts {
+                fantastic_plus: 10,
+                fantastic: 20,
+                excellent: 30,
+                great: 40,
+                decent: 50,
+                way_off: 60,
+                miss: 3,
+                total_steps: 213,
+                holds_held: 1,
+                total_holds: 2,
+                mines_hit: 3,
+                total_mines: 4,
+                rolls_held: 5,
+                total_rolls: 6,
+            },
+            nps_info: ArrowCloudNpsInfo {
+                peak_nps: 0.0,
+                points: Vec::new(),
+            },
+            lifebar_info: Vec::new(),
+            modifiers: ArrowCloudModifiers {
+                visual_delay: 0,
+                acceleration: Vec::new(),
+                appearance: Vec::new(),
+                effect: Vec::new(),
+                mini: 0,
+                turn: "None".to_string(),
+                disabled_windows: "None".to_string(),
+                speed: ArrowCloudSpeed {
+                    value: 600.0,
+                    speed_type: "C",
+                },
+                perspective: "Overhead".to_string(),
+                noteskin: "cel".to_string(),
+                scroll: None,
+            },
+            music_rate: 1.0,
+            used_autoplay: false,
+            passed: true,
+            body_version: ARROWCLOUD_BODY_VERSION,
+            arrow_cloud_body_version: ARROWCLOUD_BODY_VERSION,
+            engine_name: ARROWCLOUD_ENGINE_NAME,
+            engine_version: ARROWCLOUD_ENGINE_VERSION,
+        };
+
+        let value = serde_json::to_value(&payload).expect("serialize ArrowCloud payload");
+        assert_eq!(value["timingData"][0][1], json!("Miss"));
+        assert_eq!(value["judgmentCounts"]["miss"], json!(3));
+        assert_eq!(value["judgmentCounts"]["wayOff"], json!(60));
+        assert_eq!(value["bodyVersion"], Value::String("1.3".to_string()));
+        assert_eq!(value["_arrowCloudBodyVersion"], Value::String("1.3".to_string()));
+    }
 }
