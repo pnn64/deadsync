@@ -1041,27 +1041,62 @@ pub struct TimingStats {
 }
 
 #[inline(always)]
+fn for_each_row_final_judgment<F>(notes: &[Note], mut f: F)
+where
+    F: FnMut(&Judgment),
+{
+    if notes.is_empty() {
+        return;
+    }
+
+    let mut idx: usize = 0;
+    let len = notes.len();
+    let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(8);
+
+    while idx < len {
+        let row_index = notes[idx].row_index;
+        row_judgments.clear();
+
+        while idx < len && notes[idx].row_index == row_index {
+            let note = &notes[idx];
+            if !note.is_fake
+                && note.can_be_judged
+                && !matches!(note.note_type, NoteType::Mine)
+                && let Some(j) = note.result.as_ref()
+            {
+                row_judgments.push(j);
+            }
+            idx += 1;
+        }
+
+        if let Some(j) = judgment::aggregate_row_final_judgment(row_judgments.iter().copied()) {
+            f(j);
+        }
+    }
+}
+
+#[inline(always)]
 pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
-    // First pass: accumulate sums and maxima over non-miss judgments
+    // First pass: aggregate one final judgment per row, mirroring Simply Love's
+    // JudgmentMessage-driven sequential_offsets behavior.
     let mut sum_abs = 0.0_f32;
     let mut sum_signed = 0.0_f32;
     let mut max_abs = 0.0_f32;
     let mut count: usize = 0;
 
-    for n in notes {
-        if let Some(j) = &n.result
-            && j.grade != JudgeGrade::Miss
-        {
-            let e = j.time_error_ms;
-            let a = e.abs();
-            sum_abs += a;
-            sum_signed += e;
-            if a > max_abs {
-                max_abs = a;
-            }
-            count += 1;
+    for_each_row_final_judgment(notes, |j| {
+        if j.grade == JudgeGrade::Miss {
+            return;
         }
-    }
+        let e = j.time_error_ms;
+        let a = e.abs();
+        sum_abs += a;
+        sum_signed += e;
+        if a > max_abs {
+            max_abs = a;
+        }
+        count += 1;
+    });
 
     if count == 0 {
         return TimingStats::default();
@@ -1070,21 +1105,17 @@ pub fn compute_note_timing_stats(notes: &[Note]) -> TimingStats {
     let mean_ms = sum_signed / (count as f32);
     let mean_abs_ms = sum_abs / (count as f32);
 
-    // Second pass: sample standard deviation of signed offsets
-    let stddev_ms = if count > 1 {
-        let mut sum_diff_sq = 0.0_f32;
-        for n in notes {
-            if let Some(j) = &n.result
-                && j.grade != JudgeGrade::Miss
-            {
-                let d = j.time_error_ms - mean_ms;
-                sum_diff_sq += d * d;
-            }
+    // Second pass: population standard deviation of signed offsets.
+    // This matches ArrowCloud's current website/share-service calculation.
+    let mut sum_diff_sq = 0.0_f32;
+    for_each_row_final_judgment(notes, |j| {
+        if j.grade == JudgeGrade::Miss {
+            return;
         }
-        (sum_diff_sq / ((count as f32) - 1.0)).sqrt()
-    } else {
-        0.0
-    };
+        let d = j.time_error_ms - mean_ms;
+        sum_diff_sq += d * d;
+    });
+    let stddev_ms = (sum_diff_sq / (count as f32)).sqrt();
 
     TimingStats {
         mean_abs_ms,
@@ -1347,55 +1378,91 @@ pub fn compute_window_counts_10ms_blue(notes: &[Note]) -> WindowCounts {
 #[inline(always)]
 pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> WindowCounts {
     let mut out = WindowCounts::default();
-    if notes.is_empty() {
-        return out;
-    }
     let split_ms = if blue_window_ms.is_finite() && blue_window_ms > 0.0 {
         blue_window_ms
     } else {
         FA_PLUS_W010_MS
     };
 
-    let mut idx: usize = 0;
-    let len = notes.len();
-
-    while idx < len {
-        let row_index = notes[idx].row_index;
-        let mut row_judgments: Vec<&Judgment> = Vec::new();
-
-        while idx < len && notes[idx].row_index == row_index {
-            let note = &notes[idx];
-            if !note.is_fake
-                && note.can_be_judged
-                && !matches!(note.note_type, NoteType::Mine)
-                && let Some(j) = note.result.as_ref()
-            {
-                row_judgments.push(j);
+    for_each_row_final_judgment(notes, |j| match j.grade {
+        JudgeGrade::Fantastic => {
+            if j.time_error_ms.abs() <= split_ms {
+                out.w0 = out.w0.saturating_add(1);
+            } else {
+                out.w1 = out.w1.saturating_add(1);
             }
-            idx += 1;
         }
+        JudgeGrade::Excellent => out.w2 = out.w2.saturating_add(1),
+        JudgeGrade::Great => out.w3 = out.w3.saturating_add(1),
+        JudgeGrade::Decent => out.w4 = out.w4.saturating_add(1),
+        JudgeGrade::WayOff => out.w5 = out.w5.saturating_add(1),
+        JudgeGrade::Miss => out.miss = out.miss.saturating_add(1),
+    });
 
-        if row_judgments.is_empty() {
-            continue;
-        }
+    out
+}
 
-        if let Some(j) = judgment::aggregate_row_final_judgment(row_judgments.iter().copied()) {
-            match j.grade {
-                JudgeGrade::Fantastic => {
-                    if j.time_error_ms.abs() <= split_ms {
-                        out.w0 = out.w0.saturating_add(1);
-                    } else {
-                        out.w1 = out.w1.saturating_add(1);
-                    }
-                }
-                JudgeGrade::Excellent => out.w2 = out.w2.saturating_add(1),
-                JudgeGrade::Great => out.w3 = out.w3.saturating_add(1),
-                JudgeGrade::Decent => out.w4 = out.w4.saturating_add(1),
-                JudgeGrade::WayOff => out.w5 = out.w5.saturating_add(1),
-                JudgeGrade::Miss => out.miss = out.miss.saturating_add(1),
-            }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[inline(always)]
+    fn test_note(row_index: usize, column: usize, grade: JudgeGrade, time_error_ms: f32) -> Note {
+        let window = match grade {
+            JudgeGrade::Fantastic => Some(TimingWindow::W1),
+            JudgeGrade::Excellent => Some(TimingWindow::W2),
+            JudgeGrade::Great => Some(TimingWindow::W3),
+            JudgeGrade::Decent => Some(TimingWindow::W4),
+            JudgeGrade::WayOff => Some(TimingWindow::W5),
+            JudgeGrade::Miss => None,
+        };
+        Note {
+            beat: row_index as f32,
+            quantization_idx: 0,
+            column,
+            note_type: NoteType::Tap,
+            row_index,
+            result: Some(Judgment {
+                time_error_ms,
+                grade,
+                window,
+                miss_because_held: false,
+            }),
+            early_result: None,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
         }
     }
 
-    out
+    #[test]
+    fn timing_stats_aggregate_rows() {
+        let notes = vec![
+            test_note(10, 0, JudgeGrade::Fantastic, -10.0),
+            test_note(10, 1, JudgeGrade::Fantastic, 30.0),
+            test_note(11, 0, JudgeGrade::Great, -20.0),
+        ];
+
+        let stats = compute_note_timing_stats(&notes);
+        assert!((stats.mean_ms - 5.0).abs() < 0.0001);
+        assert!((stats.mean_abs_ms - 25.0).abs() < 0.0001);
+        assert!((stats.max_abs_ms - 30.0).abs() < 0.0001);
+        assert!((stats.stddev_ms - 25.0).abs() < 0.0002);
+    }
+
+    #[test]
+    fn timing_stats_skip_miss_rows() {
+        let notes = vec![
+            test_note(20, 0, JudgeGrade::Miss, 0.0),
+            test_note(20, 1, JudgeGrade::Excellent, 15.0),
+            test_note(21, 0, JudgeGrade::Great, -10.0),
+        ];
+
+        let stats = compute_note_timing_stats(&notes);
+        assert!((stats.mean_ms + 10.0).abs() < 0.0001);
+        assert!((stats.mean_abs_ms - 10.0).abs() < 0.0001);
+        assert!((stats.max_abs_ms - 10.0).abs() < 0.0001);
+        assert!(stats.stddev_ms.abs() < 0.0001);
+    }
 }

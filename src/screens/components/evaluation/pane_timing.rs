@@ -244,10 +244,10 @@ pub fn build_timing_pane(
     let label_zoom = 0.575;
     let value_zoom = 0.8;
 
-    let max_error_text = format!("{:.1}ms", score_info.timing.max_abs_ms);
-    let mean_abs_text = format!("{:.1}ms", score_info.timing.mean_abs_ms);
-    let mean_text = format!("{:.1}ms", score_info.timing.mean_ms);
-    let stddev3_text = format!("{:.1}ms", score_info.timing.stddev_ms * 3.0);
+    let max_error_text = format!("{:.2}ms", score_info.timing.max_abs_ms);
+    let mean_abs_text = format!("{:.2}ms", score_info.timing.mean_abs_ms);
+    let mean_text = format!("{:.2}ms", score_info.timing.mean_ms);
+    let stddev3_text = format!("{:.2}ms", score_info.timing.stddev_ms * 3.0);
 
     let labels_and_values = [
         ("mean abs error", 40.0, mean_abs_text),
