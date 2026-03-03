@@ -4218,6 +4218,49 @@ fn itg_parse_sprite_block(
     })
 }
 
+fn strip_wrapped_parens(raw: &str) -> &str {
+    let mut value = raw.trim();
+    loop {
+        if !(value.starts_with('(') && value.ends_with(')')) {
+            break;
+        }
+        let Some(close) = itg_find_matching(value, 0, '(', ')') else {
+            break;
+        };
+        if close + 1 != value.len() {
+            break;
+        }
+        value = value[1..value.len() - 1].trim();
+    }
+    value
+}
+
+fn itg_parse_lua_float_expr(raw: &str) -> Option<f32> {
+    let value = strip_wrapped_parens(raw.trim().trim_end_matches(';'));
+    if let Some(v) = itg_parse_lua_float_token(value) {
+        return Some(v);
+    }
+    let bytes = value.as_bytes();
+    let mut depth = 0usize;
+    for (idx, b) in bytes.iter().enumerate() {
+        match *b {
+            b'(' => depth += 1,
+            b')' => depth = depth.saturating_sub(1),
+            b'/' if depth == 0 => {
+                let lhs = value[..idx].trim();
+                let rhs = value[idx + 1..].trim();
+                let denom = itg_parse_lua_float_expr(rhs)?;
+                if denom.abs() <= f32::EPSILON {
+                    return None;
+                }
+                return Some(itg_parse_lua_float_expr(lhs)? / denom);
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 fn itg_parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
     let value = raw.trim().trim_end_matches(';').trim();
     let Some(open) = value.find('(') else {
@@ -4236,9 +4279,9 @@ fn itg_parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
         .trim()
         .parse::<usize>()
         .ok()
-        .or_else(|| itg_parse_lua_float_token(&args[0]).map(|v| v as usize))?
+        .or_else(|| itg_parse_lua_float_expr(&args[0]).map(|v| v as usize))?
         .max(1);
-    let seconds = itg_parse_lua_float_token(&args[1])?;
+    let seconds = itg_parse_lua_float_expr(&args[1])?;
     let delay = (seconds / frame_count as f32).max(0.0);
     Some((frame_count, vec![delay; frame_count]))
 }
@@ -6133,12 +6176,14 @@ fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
 mod tests {
     use super::{
         AnimationRate, ModelEffectClock, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart,
-        NoteColorType, Quantization, SpriteSource, Style, itg_load_lua_behavior,
+        NoteColorType, Quantization, SpriteSource, Style, itg_apply_state_properties_from_script,
+        itg_load_lua_behavior,
         itg_model_draw_program, load_itg_skin, parse_explosion_animation,
     };
     use crate::game::parsing::noteskin_itg;
     use std::collections::{HashMap, HashSet};
     use std::path::Path;
+    use std::sync::Arc;
 
     #[test]
     fn actor_mod_parser_supports_vertalign_and_glow() {
@@ -7067,7 +7112,7 @@ mod tests {
     }
 
     #[test]
-    fn setstateproperties_linear_frames_applies_to_bundled_mine_slot() {
+    fn setstateproperties_linear_frames_applies_to_synthetic_8x8_slot() {
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -7080,12 +7125,17 @@ mod tests {
             .expect("default should define mine hit explosion")
             .slot
             .clone();
-        let key = slot.texture_key().to_string();
+        let key = "tests/fake/Fallback HitMine Explosion 8x8 (res 1536x1536).png".to_string();
+        slot.source = Arc::new(SpriteSource::Atlas {
+            texture_key: key.clone(),
+            tex_dims: (2048, 2048),
+        });
+        slot.model = None;
         let (cols, rows) = crate::assets::sprite_sheet_dims(&key);
         let available = (cols.max(1) as usize).saturating_mul(rows.max(1) as usize);
         assert!(
             available > 1,
-            "expected bundled mine explosion texture to have multiple frames, got {available} for '{key}'"
+            "expected synthetic mine explosion texture to have multiple frames, got {available} for '{key}'"
         );
 
         itg_apply_state_properties_from_script(
