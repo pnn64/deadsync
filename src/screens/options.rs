@@ -2535,10 +2535,10 @@ fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConf
 fn score_import_only_missing_gs_scores(state: &State) -> bool {
     yes_no_from_choice(
         state
-        .sub_choice_indices_score_import
-        .get(SCORE_IMPORT_ROW_ONLY_MISSING_INDEX)
-        .copied()
-        .unwrap_or_else(|| yes_no_choice_index(false)),
+            .sub_choice_indices_score_import
+            .get(SCORE_IMPORT_ROW_ONLY_MISSING_INDEX)
+            .copied()
+            .unwrap_or_else(|| yes_no_choice_index(false)),
     )
 }
 

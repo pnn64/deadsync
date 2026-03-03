@@ -2263,22 +2263,13 @@ fn load_for_side(side: PlayerSide) {
     // profile or Guest.
     let profile_id = match profile_id {
         Some(id) if !local_profile_dir(&id).is_dir() => {
-            let fallback = scan_local_profiles()
-                .into_iter()
-                .next()
-                .map(|p| p.id);
+            let fallback = scan_local_profiles().into_iter().next().map(|p| p.id);
             if let Some(ref fb_id) = fallback {
-                info!(
-                    "Profile folder '{id}' not found; falling back to '{fb_id}'."
-                );
+                info!("Profile folder '{id}' not found; falling back to '{fb_id}'.");
                 let mut session = SESSION.lock().unwrap();
-                session.active_profiles[side_ix(side)] = ActiveProfile::Local {
-                    id: fb_id.clone(),
-                };
+                session.active_profiles[side_ix(side)] = ActiveProfile::Local { id: fb_id.clone() };
             } else {
-                info!(
-                    "Profile folder '{id}' not found and no other profiles exist; using Guest."
-                );
+                info!("Profile folder '{id}' not found and no other profiles exist; using Guest.");
                 let mut session = SESSION.lock().unwrap();
                 session.active_profiles[side_ix(side)] = ActiveProfile::Guest;
             }
@@ -2868,11 +2859,7 @@ pub struct LocalProfileSummary {
 
 #[inline(always)]
 fn is_local_profile_id(s: &str) -> bool {
-    !s.is_empty()
-        && s.len() <= 64
-        && s != "."
-        && s != ".."
-        && !s.contains(['/', '\\', '\0'])
+    !s.is_empty() && s.len() <= 64 && s != "." && s != ".." && !s.contains(['/', '\\', '\0'])
 }
 
 #[inline(always)]

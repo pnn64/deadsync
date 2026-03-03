@@ -2026,10 +2026,7 @@ fn arrowcloud_nps_info(gs: &gameplay::State, player_idx: usize) -> ArrowCloudNps
 }
 
 #[inline(always)]
-fn arrowcloud_judgment_counts(
-    gs: &gameplay::State,
-    player_idx: usize,
-) -> ArrowCloudJudgmentCounts {
+fn arrowcloud_judgment_counts(gs: &gameplay::State, player_idx: usize) -> ArrowCloudJudgmentCounts {
     let player = &gs.players[player_idx];
     let counts = player.judgment_counts;
     let windows = gs.live_window_counts[player_idx];
@@ -4069,7 +4066,7 @@ pub fn fetch_and_store_grade(
 mod tests {
     use super::*;
     use crate::game::timing::ScatterPoint;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     fn sample_scatter(time_sec: f32, offset_ms: Option<f32>) -> ScatterPoint {
         ScatterPoint {
@@ -4169,6 +4166,9 @@ mod tests {
         assert_eq!(value["judgmentCounts"]["miss"], json!(3));
         assert_eq!(value["judgmentCounts"]["wayOff"], json!(60));
         assert_eq!(value["bodyVersion"], Value::String("1.3".to_string()));
-        assert_eq!(value["_arrowCloudBodyVersion"], Value::String("1.3".to_string()));
+        assert_eq!(
+            value["_arrowCloudBodyVersion"],
+            Value::String("1.3".to_string())
+        );
     }
 }

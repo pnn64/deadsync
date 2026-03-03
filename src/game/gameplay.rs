@@ -24,7 +24,7 @@ use crate::game::{
 use crate::screens::components::density_graph::DensityHistCache;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use rssp::streams::StreamSegment;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
@@ -145,6 +145,10 @@ const RANDOM_ATTACK_RUN_TIME_SECONDS: f32 = 6.0;
 const RANDOM_ATTACK_OVERLAP_SECONDS: f32 = 0.5;
 const RANDOM_ATTACK_START_SECONDS_INIT: f32 = -1.0;
 const RANDOM_ATTACK_MIN_GAMEPLAY_SECONDS: f32 = 1.0;
+const GAMEPLAY_TRACE_SUMMARY_INTERVAL_S: f32 = 1.0;
+const GAMEPLAY_TRACE_SLOW_FRAME_US: u32 = 4_000;
+const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
+const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
 // Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
 const RANDOM_ATTACK_MOD_POOL: [&str; 21] = [
     "0.5x",
@@ -3169,6 +3173,62 @@ pub struct ReplayOffsetSnapshot {
     pub beat0_time_seconds: f32,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct GameplayUpdatePhaseTimings {
+    pre_notes_us: u32,
+    autoplay_us: u32,
+    input_edges_us: u32,
+    held_mines_us: u32,
+    active_holds_us: u32,
+    hold_decay_us: u32,
+    visuals_us: u32,
+    spawn_arrows_us: u32,
+    mine_avoid_us: u32,
+    passive_miss_us: u32,
+    tap_miss_us: u32,
+    cull_us: u32,
+    judged_rows_us: u32,
+    density_us: u32,
+    danger_us: u32,
+}
+
+#[derive(Clone, Debug)]
+struct GameplayUpdateTraceState {
+    frame_counter: u64,
+    summary_elapsed_s: f32,
+    summary_frames: u32,
+    summary_slow_frames: u32,
+    summary_max_total_us: u32,
+    summary_max_phase: GameplayUpdatePhaseTimings,
+    summary_peak_active_arrows: usize,
+    summary_peak_pending_edges: usize,
+    arrow_capacity: [usize; MAX_COLS],
+    pending_edges_capacity: usize,
+    replay_edges_capacity: usize,
+    decaying_hold_capacity: usize,
+    density_life_capacity: [usize; MAX_PLAYERS],
+}
+
+impl Default for GameplayUpdateTraceState {
+    fn default() -> Self {
+        Self {
+            frame_counter: 0,
+            summary_elapsed_s: 0.0,
+            summary_frames: 0,
+            summary_slow_frames: 0,
+            summary_max_total_us: 0,
+            summary_max_phase: GameplayUpdatePhaseTimings::default(),
+            summary_peak_active_arrows: 0,
+            summary_peak_pending_edges: 0,
+            arrow_capacity: [0; MAX_COLS],
+            pending_edges_capacity: 0,
+            replay_edges_capacity: 0,
+            decaying_hold_capacity: 0,
+            density_life_capacity: [0; MAX_PLAYERS],
+        }
+    }
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
@@ -3330,6 +3390,331 @@ pub struct State {
     pub replay_edges: Vec<RecordedLaneEdge>,
 
     log_timer: f32,
+    update_trace: GameplayUpdateTraceState,
+}
+
+impl GameplayUpdateTraceState {
+    #[inline(always)]
+    fn from_state(state: &State) -> Self {
+        let mut trace = Self::default();
+        for col in 0..state.num_cols.min(MAX_COLS) {
+            trace.arrow_capacity[col] = state.arrows[col].capacity();
+        }
+        trace.pending_edges_capacity = state.pending_edges.capacity();
+        trace.replay_edges_capacity = state.replay_edges.capacity();
+        trace.decaying_hold_capacity = state.decaying_hold_indices.capacity();
+        for player in 0..state.num_players.min(MAX_PLAYERS) {
+            trace.density_life_capacity[player] =
+                state.density_graph_life_points[player].capacity();
+        }
+        trace
+    }
+}
+
+#[inline(always)]
+fn elapsed_us_since(started: Instant) -> u32 {
+    let elapsed = started.elapsed().as_micros();
+    if elapsed > u128::from(u32::MAX) {
+        u32::MAX
+    } else {
+        elapsed as u32
+    }
+}
+
+#[inline(always)]
+fn max_phase_name_and_us(phases: &GameplayUpdatePhaseTimings) -> (&'static str, u32) {
+    let mut best = ("pre_notes", phases.pre_notes_us);
+    if phases.autoplay_us > best.1 {
+        best = ("autoplay", phases.autoplay_us);
+    }
+    if phases.input_edges_us > best.1 {
+        best = ("input_edges", phases.input_edges_us);
+    }
+    if phases.held_mines_us > best.1 {
+        best = ("held_mines", phases.held_mines_us);
+    }
+    if phases.active_holds_us > best.1 {
+        best = ("active_holds", phases.active_holds_us);
+    }
+    if phases.hold_decay_us > best.1 {
+        best = ("hold_decay", phases.hold_decay_us);
+    }
+    if phases.visuals_us > best.1 {
+        best = ("visuals", phases.visuals_us);
+    }
+    if phases.spawn_arrows_us > best.1 {
+        best = ("spawn_arrows", phases.spawn_arrows_us);
+    }
+    if phases.mine_avoid_us > best.1 {
+        best = ("mine_avoid", phases.mine_avoid_us);
+    }
+    if phases.passive_miss_us > best.1 {
+        best = ("passive_miss", phases.passive_miss_us);
+    }
+    if phases.tap_miss_us > best.1 {
+        best = ("tap_miss", phases.tap_miss_us);
+    }
+    if phases.cull_us > best.1 {
+        best = ("cull", phases.cull_us);
+    }
+    if phases.judged_rows_us > best.1 {
+        best = ("judged_rows", phases.judged_rows_us);
+    }
+    if phases.density_us > best.1 {
+        best = ("density", phases.density_us);
+    }
+    if phases.danger_us > best.1 {
+        best = ("danger", phases.danger_us);
+    }
+    best
+}
+
+#[inline(always)]
+fn accumulate_phase_max(dst: &mut GameplayUpdatePhaseTimings, src: &GameplayUpdatePhaseTimings) {
+    dst.pre_notes_us = dst.pre_notes_us.max(src.pre_notes_us);
+    dst.autoplay_us = dst.autoplay_us.max(src.autoplay_us);
+    dst.input_edges_us = dst.input_edges_us.max(src.input_edges_us);
+    dst.held_mines_us = dst.held_mines_us.max(src.held_mines_us);
+    dst.active_holds_us = dst.active_holds_us.max(src.active_holds_us);
+    dst.hold_decay_us = dst.hold_decay_us.max(src.hold_decay_us);
+    dst.visuals_us = dst.visuals_us.max(src.visuals_us);
+    dst.spawn_arrows_us = dst.spawn_arrows_us.max(src.spawn_arrows_us);
+    dst.mine_avoid_us = dst.mine_avoid_us.max(src.mine_avoid_us);
+    dst.passive_miss_us = dst.passive_miss_us.max(src.passive_miss_us);
+    dst.tap_miss_us = dst.tap_miss_us.max(src.tap_miss_us);
+    dst.cull_us = dst.cull_us.max(src.cull_us);
+    dst.judged_rows_us = dst.judged_rows_us.max(src.judged_rows_us);
+    dst.density_us = dst.density_us.max(src.density_us);
+    dst.danger_us = dst.danger_us.max(src.danger_us);
+}
+
+fn trace_capacity_growth(state: &mut State) {
+    let num_cols = state.num_cols.min(MAX_COLS);
+    let num_players = state.num_players.min(MAX_PLAYERS);
+    let frame = state.update_trace.frame_counter;
+    for col in 0..num_cols {
+        let new_cap = state.arrows[col].capacity();
+        let old_cap = state.update_trace.arrow_capacity[col];
+        if new_cap > old_cap {
+            debug!(
+                "Gameplay vec growth frame={frame}: arrows[{col}] capacity {old_cap} -> {new_cap} (len={})",
+                state.arrows[col].len()
+            );
+            state.update_trace.arrow_capacity[col] = new_cap;
+        }
+    }
+    let pending_cap = state.pending_edges.capacity();
+    if pending_cap > state.update_trace.pending_edges_capacity {
+        debug!(
+            "Gameplay vec growth frame={frame}: pending_edges capacity {} -> {} (len={})",
+            state.update_trace.pending_edges_capacity,
+            pending_cap,
+            state.pending_edges.len()
+        );
+        state.update_trace.pending_edges_capacity = pending_cap;
+    }
+    let replay_cap = state.replay_edges.capacity();
+    if replay_cap > state.update_trace.replay_edges_capacity {
+        debug!(
+            "Gameplay vec growth frame={frame}: replay_edges capacity {} -> {} (len={})",
+            state.update_trace.replay_edges_capacity,
+            replay_cap,
+            state.replay_edges.len()
+        );
+        state.update_trace.replay_edges_capacity = replay_cap;
+    }
+    let decaying_cap = state.decaying_hold_indices.capacity();
+    if decaying_cap > state.update_trace.decaying_hold_capacity {
+        debug!(
+            "Gameplay vec growth frame={frame}: decaying_hold_indices capacity {} -> {} (len={})",
+            state.update_trace.decaying_hold_capacity,
+            decaying_cap,
+            state.decaying_hold_indices.len()
+        );
+        state.update_trace.decaying_hold_capacity = decaying_cap;
+    }
+    for player in 0..num_players {
+        let new_cap = state.density_graph_life_points[player].capacity();
+        let old_cap = state.update_trace.density_life_capacity[player];
+        if new_cap > old_cap {
+            debug!(
+                "Gameplay vec growth frame={frame}: density_graph_life_points[{player}] capacity {old_cap} -> {new_cap} (len={})",
+                state.density_graph_life_points[player].len()
+            );
+            state.update_trace.density_life_capacity[player] = new_cap;
+        }
+    }
+}
+
+fn trace_gameplay_update(
+    state: &mut State,
+    delta_time: f32,
+    music_time_sec: f32,
+    total_us: u32,
+    phases: GameplayUpdatePhaseTimings,
+) {
+    let active_arrows: usize = state.arrows.iter().map(std::vec::Vec::len).sum();
+    let pending_len = state.pending_edges.len();
+    let replay_edges_len = state.replay_edges.len();
+    let decaying_len = state.decaying_hold_indices.len();
+    let frame_counter = {
+        let trace_state = &mut state.update_trace;
+        trace_state.frame_counter = trace_state.frame_counter.wrapping_add(1);
+        trace_state.summary_elapsed_s += delta_time.max(0.0);
+        trace_state.summary_frames = trace_state.summary_frames.saturating_add(1);
+        trace_state.summary_max_total_us = trace_state.summary_max_total_us.max(total_us);
+        accumulate_phase_max(&mut trace_state.summary_max_phase, &phases);
+        trace_state.summary_peak_active_arrows =
+            trace_state.summary_peak_active_arrows.max(active_arrows);
+        trace_state.summary_peak_pending_edges =
+            trace_state.summary_peak_pending_edges.max(pending_len);
+        trace_state.frame_counter
+    };
+
+    if pending_len >= GAMEPLAY_INPUT_BACKLOG_WARN {
+        debug!(
+            "Gameplay input backlog: frame={}, pending_edges={}, active_arrows={}, replay_edges={}",
+            frame_counter, pending_len, active_arrows, replay_edges_len
+        );
+    }
+
+    let (hot_name, hot_us) = max_phase_name_and_us(&phases);
+    let is_slow =
+        total_us >= GAMEPLAY_TRACE_SLOW_FRAME_US || hot_us >= GAMEPLAY_TRACE_PHASE_SPIKE_US;
+    if is_slow {
+        state.update_trace.summary_slow_frames =
+            state.update_trace.summary_slow_frames.saturating_add(1);
+        debug!(
+            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} arrows={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} pmiss:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3}]",
+            frame_counter,
+            music_time_sec,
+            total_us as f32 / 1000.0,
+            hot_name,
+            hot_us as f32 / 1000.0,
+            pending_len,
+            active_arrows,
+            decaying_len,
+            phases.pre_notes_us as f32 / 1000.0,
+            phases.autoplay_us as f32 / 1000.0,
+            phases.input_edges_us as f32 / 1000.0,
+            phases.held_mines_us as f32 / 1000.0,
+            phases.active_holds_us as f32 / 1000.0,
+            phases.hold_decay_us as f32 / 1000.0,
+            phases.visuals_us as f32 / 1000.0,
+            phases.spawn_arrows_us as f32 / 1000.0,
+            phases.mine_avoid_us as f32 / 1000.0,
+            phases.passive_miss_us as f32 / 1000.0,
+            phases.tap_miss_us as f32 / 1000.0,
+            phases.cull_us as f32 / 1000.0,
+            phases.judged_rows_us as f32 / 1000.0,
+            phases.density_us as f32 / 1000.0,
+            phases.danger_us as f32 / 1000.0
+        );
+    }
+
+    if log::log_enabled!(log::Level::Trace)
+        && state.update_trace.summary_elapsed_s >= GAMEPLAY_TRACE_SUMMARY_INTERVAL_S
+    {
+        let summary_frames = state.update_trace.summary_frames;
+        let summary_slow_frames = state.update_trace.summary_slow_frames;
+        let summary_max_total_us = state.update_trace.summary_max_total_us;
+        let summary_max_phase = state.update_trace.summary_max_phase;
+        let summary_peak_active_arrows = state.update_trace.summary_peak_active_arrows;
+        let summary_peak_pending_edges = state.update_trace.summary_peak_pending_edges;
+        let (summary_hot_name, summary_hot_us) = max_phase_name_and_us(&summary_max_phase);
+        trace!(
+            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={}",
+            summary_frames,
+            summary_slow_frames,
+            summary_max_total_us as f32 / 1000.0,
+            summary_hot_name,
+            summary_hot_us as f32 / 1000.0,
+            summary_peak_active_arrows,
+            summary_peak_pending_edges
+        );
+        state.update_trace.summary_elapsed_s = 0.0;
+        state.update_trace.summary_frames = 0;
+        state.update_trace.summary_slow_frames = 0;
+        state.update_trace.summary_max_total_us = 0;
+        state.update_trace.summary_max_phase = GameplayUpdatePhaseTimings::default();
+        state.update_trace.summary_peak_active_arrows = 0;
+        state.update_trace.summary_peak_pending_edges = 0;
+    }
+
+    trace_capacity_growth(state);
+}
+
+#[cfg(debug_assertions)]
+fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32) {
+    debug_assert!(
+        delta_time.is_finite() && delta_time >= 0.0,
+        "invalid delta_time={delta_time}"
+    );
+    debug_assert!(
+        music_time_sec.is_finite(),
+        "invalid music_time_sec={music_time_sec}"
+    );
+    debug_assert!(
+        state.num_players > 0 && state.num_players <= MAX_PLAYERS,
+        "invalid num_players={}",
+        state.num_players
+    );
+    debug_assert!(
+        state.num_cols > 0 && state.num_cols <= MAX_COLS,
+        "invalid num_cols={}",
+        state.num_cols
+    );
+    debug_assert!(
+        state.cols_per_player > 0 && state.cols_per_player <= MAX_COLS,
+        "invalid cols_per_player={}",
+        state.cols_per_player
+    );
+    debug_assert_eq!(state.notes.len(), state.note_time_cache.len());
+    debug_assert_eq!(state.notes.len(), state.note_display_beat_cache.len());
+    debug_assert_eq!(state.notes.len(), state.hold_end_time_cache.len());
+    debug_assert_eq!(state.notes.len(), state.hold_end_display_beat_cache.len());
+    debug_assert_eq!(state.notes.len(), state.hold_decay_active.len());
+    for player in 0..state.num_players {
+        let (start, end) = state.note_ranges[player];
+        debug_assert!(start <= end && end <= state.notes.len());
+        debug_assert!(
+            state.note_spawn_cursor[player] >= start && state.note_spawn_cursor[player] <= end
+        );
+        debug_assert!(
+            state.next_tap_miss_cursor[player] >= start
+                && state.next_tap_miss_cursor[player] <= end
+        );
+        debug_assert!(
+            state.next_mine_avoid_cursor[player] >= start
+                && state.next_mine_avoid_cursor[player] <= end
+        );
+    }
+    for col in 0..state.num_cols {
+        debug_assert!(state.column_scroll_dirs[col].is_finite());
+        for arrow in &state.arrows[col] {
+            debug_assert!(arrow.note_index < state.notes.len());
+            debug_assert_eq!(state.notes[arrow.note_index].column, col);
+        }
+    }
+}
+
+#[cfg(not(debug_assertions))]
+#[inline(always)]
+fn debug_validate_hot_state(_state: &State, _delta_time: f32, _music_time_sec: f32) {}
+
+#[inline(always)]
+fn finalize_update_trace(
+    state: &mut State,
+    delta_time: f32,
+    music_time_sec: f32,
+    frame_trace_started: Option<Instant>,
+    phase_timings: GameplayUpdatePhaseTimings,
+) {
+    let Some(started) = frame_trace_started else {
+        return;
+    };
+    let total_us = elapsed_us_since(started);
+    trace_gameplay_update(state, delta_time, music_time_sec, total_us, phase_timings);
 }
 
 fn refresh_active_attack_masks(state: &mut State) {
@@ -3968,6 +4353,15 @@ fn push_input_edge(
         source,
         event_music_time,
     });
+    if log::log_enabled!(log::Level::Debug) {
+        let pending_len = state.pending_edges.len();
+        if pending_len >= GAMEPLAY_INPUT_BACKLOG_WARN {
+            debug!(
+                "Gameplay input queue pressure: pending_edges={}, num_cols={}, music_time={:.3}",
+                pending_len, state.num_cols, state.current_music_time
+            );
+        }
+    }
     if !record_replay {
         return;
     }
@@ -4966,7 +5360,9 @@ pub fn init(
         replay_cursor: 0,
         replay_edges: Vec::with_capacity(4096),
         log_timer: 0.0,
+        update_trace: GameplayUpdateTraceState::default(),
     };
+    state.update_trace = GameplayUpdateTraceState::from_state(&state);
     refresh_active_attack_masks(&mut state);
     state
 }
@@ -8151,6 +8547,15 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::None;
     }
 
+    let trace_enabled =
+        log::log_enabled!(log::Level::Debug) || log::log_enabled!(log::Level::Trace);
+    let frame_trace_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    let mut phase_timings = GameplayUpdatePhaseTimings::default();
+
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -8200,95 +8605,145 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
                     begin_exit_transition(state, ExitTransitionKind::Cancel, Screen::SelectMusic);
                 }
             }
+            finalize_update_trace(
+                state,
+                delta_time,
+                music_time_sec,
+                frame_trace_started,
+                phase_timings,
+            );
             return ScreenAction::None;
         }
     }
     state.total_elapsed_in_screen += delta_time;
 
-    let beat_info = state
-        .timing
-        .get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
-    state.current_beat = beat_info.beat;
-    state.is_in_freeze = beat_info.is_in_freeze;
-    state.is_in_delay = beat_info.is_in_delay;
-    let song_row = assist_row_no_offset(state, music_time_sec);
-    run_assist_clap(state, song_row);
+    debug_validate_hot_state(state, delta_time, music_time_sec);
 
-    for player in 0..state.num_players {
-        let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
-        let visible_time = music_time_sec - delay;
-        state.current_music_time_visible[player] = visible_time;
-        state.current_beat_visible[player] =
-            state.timing_players[player].get_beat_for_time(visible_time);
-    }
-    refresh_active_attack_masks(state);
+    let pre_notes_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    {
+        let beat_info = state
+            .timing
+            .get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
+        state.current_beat = beat_info.beat;
+        state.is_in_freeze = beat_info.is_in_freeze;
+        state.is_in_delay = beat_info.is_in_delay;
+        let song_row = assist_row_no_offset(state, music_time_sec);
+        run_assist_clap(state, song_row);
 
-    let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
-    for player in 0..state.num_players {
-        let effective_speed = effective_scroll_speed_for_player(state, player);
-        let mut dynamic_speed = effective_speed.pixels_per_second(
-            current_bpm,
-            state.scroll_reference_bpm,
-            state.music_rate,
-        );
-        if !dynamic_speed.is_finite() || dynamic_speed <= 0.0 {
-            dynamic_speed = ScrollSpeedSetting::default().pixels_per_second(
+        for player in 0..state.num_players {
+            let delay =
+                state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
+            let visible_time = music_time_sec - delay;
+            state.current_music_time_visible[player] = visible_time;
+            state.current_beat_visible[player] =
+                state.timing_players[player].get_beat_for_time(visible_time);
+        }
+        refresh_active_attack_masks(state);
+
+        let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
+        for player in 0..state.num_players {
+            let effective_speed = effective_scroll_speed_for_player(state, player);
+            let mut dynamic_speed = effective_speed.pixels_per_second(
                 current_bpm,
                 state.scroll_reference_bpm,
                 state.music_rate,
             );
+            if !dynamic_speed.is_finite() || dynamic_speed <= 0.0 {
+                dynamic_speed = ScrollSpeedSetting::default().pixels_per_second(
+                    current_bpm,
+                    state.scroll_reference_bpm,
+                    state.music_rate,
+                );
+            }
+            state.scroll_pixels_per_second[player] = dynamic_speed;
         }
-        state.scroll_pixels_per_second[player] = dynamic_speed;
-    }
 
-    for player in 0..state.num_players {
-        let visual_mask = effective_visual_mask_for_player(state, player);
-        let attack_mini_delta = effective_attack_mini_percent_delta_for_player(state, player);
-        let draw_scale = player_draw_scale_with_visual_mask(
-            &state.player_profiles[player],
-            visual_mask,
-            attack_mini_delta,
-        );
-        state.draw_distance_before_targets[player] =
-            screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
-        state.draw_distance_after_targets[player] = if state.player_profiles[player]
-            .scroll_option
-            .contains(profile::ScrollOption::Centered)
-        {
-            screen_height() * 0.6 * draw_scale
-        } else {
-            DRAW_DISTANCE_AFTER_TARGETS * draw_scale
-        };
-    }
-
-    for player in 0..state.num_players {
-        let dynamic_speed = state.scroll_pixels_per_second[player];
-        let effective_speed = effective_scroll_speed_for_player(state, player);
-        let mut travel_time = effective_speed.travel_time_seconds(
-            state.draw_distance_before_targets[player],
-            current_bpm,
-            state.scroll_reference_bpm,
-            state.music_rate,
-        );
-        if !travel_time.is_finite() || travel_time <= 0.0 {
-            travel_time =
-                state.draw_distance_before_targets[player] / dynamic_speed.max(f32::EPSILON);
+        for player in 0..state.num_players {
+            let visual_mask = effective_visual_mask_for_player(state, player);
+            let attack_mini_delta = effective_attack_mini_percent_delta_for_player(state, player);
+            let draw_scale = player_draw_scale_with_visual_mask(
+                &state.player_profiles[player],
+                visual_mask,
+                attack_mini_delta,
+            );
+            state.draw_distance_before_targets[player] =
+                screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
+            state.draw_distance_after_targets[player] = if state.player_profiles[player]
+                .scroll_option
+                .contains(profile::ScrollOption::Centered)
+            {
+                screen_height() * 0.6 * draw_scale
+            } else {
+                DRAW_DISTANCE_AFTER_TARGETS * draw_scale
+            };
         }
-        state.scroll_travel_time[player] = travel_time;
+
+        for player in 0..state.num_players {
+            let dynamic_speed = state.scroll_pixels_per_second[player];
+            let effective_speed = effective_scroll_speed_for_player(state, player);
+            let mut travel_time = effective_speed.travel_time_seconds(
+                state.draw_distance_before_targets[player],
+                current_bpm,
+                state.scroll_reference_bpm,
+                state.music_rate,
+            );
+            if !travel_time.is_finite() || travel_time <= 0.0 {
+                travel_time =
+                    state.draw_distance_before_targets[player] / dynamic_speed.max(f32::EPSILON);
+            }
+            state.scroll_travel_time[player] = travel_time;
+        }
+    }
+    if let Some(started) = pre_notes_started {
+        phase_timings.pre_notes_us = elapsed_us_since(started);
     }
 
     if state.current_music_time >= state.music_end_time {
         debug!("Music end time reached. Transitioning to evaluation.");
         state.song_completed_naturally = true;
+        finalize_update_trace(
+            state,
+            delta_time,
+            music_time_sec,
+            frame_trace_started,
+            phase_timings,
+        );
         return ScreenAction::Navigate(Screen::Evaluation);
     }
 
+    let autoplay_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
     if state.replay_mode {
         run_replay(state, music_time_sec);
     } else {
         run_autoplay(state, music_time_sec);
     }
+    if let Some(started) = autoplay_started {
+        phase_timings.autoplay_us = elapsed_us_since(started);
+    }
+
+    let input_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
     process_input_edges(state);
+    if let Some(started) = input_started {
+        phase_timings.input_edges_us = elapsed_us_since(started);
+    }
+
+    let held_mines_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
     let num_cols = state.num_cols;
     let current_inputs: [bool; MAX_COLS] = std::array::from_fn(|i| {
         if i >= num_cols {
@@ -8304,19 +8759,119 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         }
     }
     state.prev_inputs = current_inputs;
+    if let Some(started) = held_mines_started {
+        phase_timings.held_mines_us = elapsed_us_since(started);
+    }
 
+    let active_holds_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
     update_active_holds(state, &current_inputs, music_time_sec, delta_time);
-    decay_let_go_hold_life(state);
-    tick_visual_effects(state, delta_time);
-    spawn_lookahead_arrows(state, music_time_sec);
-    apply_time_based_mine_avoidance(state, music_time_sec);
-    apply_passive_misses_and_mine_avoidance(state, music_time_sec);
-    apply_time_based_tap_misses(state, music_time_sec);
-    cull_scrolled_out_arrows(state, music_time_sec);
-    update_judged_rows(state);
+    if let Some(started) = active_holds_started {
+        phase_timings.active_holds_us = elapsed_us_since(started);
+    }
 
+    let hold_decay_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    decay_let_go_hold_life(state);
+    if let Some(started) = hold_decay_started {
+        phase_timings.hold_decay_us = elapsed_us_since(started);
+    }
+
+    let visuals_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    tick_visual_effects(state, delta_time);
+    if let Some(started) = visuals_started {
+        phase_timings.visuals_us = elapsed_us_since(started);
+    }
+
+    let spawn_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    spawn_lookahead_arrows(state, music_time_sec);
+    if let Some(started) = spawn_started {
+        phase_timings.spawn_arrows_us = elapsed_us_since(started);
+    }
+
+    let mine_avoid_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    apply_time_based_mine_avoidance(state, music_time_sec);
+    if let Some(started) = mine_avoid_started {
+        phase_timings.mine_avoid_us = elapsed_us_since(started);
+    }
+
+    let passive_miss_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    apply_passive_misses_and_mine_avoidance(state, music_time_sec);
+    if let Some(started) = passive_miss_started {
+        phase_timings.passive_miss_us = elapsed_us_since(started);
+    }
+
+    let tap_miss_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    apply_time_based_tap_misses(state, music_time_sec);
+    if let Some(started) = tap_miss_started {
+        phase_timings.tap_miss_us = elapsed_us_since(started);
+    }
+
+    let cull_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    cull_scrolled_out_arrows(state, music_time_sec);
+    if let Some(started) = cull_started {
+        phase_timings.cull_us = elapsed_us_since(started);
+    }
+
+    let judged_rows_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    update_judged_rows(state);
+    if let Some(started) = judged_rows_started {
+        phase_timings.judged_rows_us = elapsed_us_since(started);
+    }
+
+    let density_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
     update_density_graph(state, music_time_sec);
+    if let Some(started) = density_started {
+        phase_timings.density_us = elapsed_us_since(started);
+    }
+
+    let danger_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
     update_danger_fx(state);
+    if let Some(started) = danger_started {
+        phase_timings.danger_us = elapsed_us_since(started);
+    }
 
     if matches!(
         crate::config::get().default_fail_type,
@@ -8326,6 +8881,13 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         debug!("All joined players failed. Transitioning to evaluation.");
         state.song_completed_naturally = false;
         audio::stop_music();
+        finalize_update_trace(
+            state,
+            delta_time,
+            music_time_sec,
+            frame_trace_started,
+            phase_timings,
+        );
         return ScreenAction::Navigate(Screen::Evaluation);
     }
 
@@ -8342,6 +8904,14 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         );
         state.log_timer -= 1.0;
     }
+    debug_validate_hot_state(state, delta_time, music_time_sec);
+    finalize_update_trace(
+        state,
+        delta_time,
+        music_time_sec,
+        frame_trace_started,
+        phase_timings,
+    );
     ScreenAction::None
 }
 

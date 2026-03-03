@@ -5341,46 +5341,45 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let p1_gs = scores::is_gs_active_for_side(profile::PlayerSide::P1);
         let p2_gs = scores::is_gs_active_for_side(profile::PlayerSide::P2);
         let both_gs_versus = is_versus && p1_gs && p2_gs;
-        let mut push_scorebox =
-            |side: profile::PlayerSide,
-             steps_idx: usize,
-             center_x: f32,
-             center_y: f32,
-             zoom: f32,
-             z_boost: i16| {
-                let chart_hash = if allow_gs_fetch {
-                    match selected_entry {
-                        Some(MusicWheelEntry::Song(song)) => {
-                            chart_for_steps_index(song, target_chart_type, steps_idx)
-                                .map(|c| c.short_hash.as_str())
-                        }
-                        _ => None,
+        let mut push_scorebox = |side: profile::PlayerSide,
+                                 steps_idx: usize,
+                                 center_x: f32,
+                                 center_y: f32,
+                                 zoom: f32,
+                                 z_boost: i16| {
+            let chart_hash = if allow_gs_fetch {
+                match selected_entry {
+                    Some(MusicWheelEntry::Song(song)) => {
+                        chart_for_steps_index(song, target_chart_type, steps_idx)
+                            .map(|c| c.short_hash.as_str())
                     }
-                } else {
-                    None
-                };
-                let scorebox = gs_scorebox::gameplay_scorebox_actors(
-                    side,
-                    chart_hash,
-                    cfg.show_select_music_scorebox,
-                    center_x,
-                    center_y,
-                    zoom,
-                    state.selection_animation_timer,
-                );
-                if z_boost == 0 || scorebox.is_empty() {
-                    actors.extend(scorebox);
-                } else {
-                    actors.push(Actor::Frame {
-                        align: [0.0, 0.0],
-                        offset: [0.0, 0.0],
-                        size: [SizeSpec::Fill, SizeSpec::Fill],
-                        background: None,
-                        z: z_boost,
-                        children: scorebox,
-                    });
+                    _ => None,
                 }
+            } else {
+                None
             };
+            let scorebox = gs_scorebox::gameplay_scorebox_actors(
+                side,
+                chart_hash,
+                cfg.show_select_music_scorebox,
+                center_x,
+                center_y,
+                zoom,
+                state.selection_animation_timer,
+            );
+            if z_boost == 0 || scorebox.is_empty() {
+                actors.extend(scorebox);
+            } else {
+                actors.push(Actor::Frame {
+                    align: [0.0, 0.0],
+                    offset: [0.0, 0.0],
+                    size: [SizeSpec::Fill, SizeSpec::Fill],
+                    background: None,
+                    z: z_boost,
+                    children: scorebox,
+                });
+            }
+        };
 
         if both_gs_versus {
             let pane_scorebox_zoom = widescale(0.60, 0.64);

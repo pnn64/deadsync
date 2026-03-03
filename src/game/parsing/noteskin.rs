@@ -4287,7 +4287,8 @@ fn itg_parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
 }
 
 fn parse_script_state_properties(args: &[String]) -> Option<(usize, Vec<f32>)> {
-    args.first().and_then(|expr| itg_parse_linear_frames_expr(expr))
+    args.first()
+        .and_then(|expr| itg_parse_linear_frames_expr(expr))
 }
 
 fn slot_is_beat_based(slot: &SpriteSlot) -> bool {
@@ -4338,7 +4339,10 @@ fn itg_apply_slot_state_properties(
     let src_y = slot.def.src[1].max(0) as usize;
     let col = (src_x / frame_w.max(1) as usize).min(cols.saturating_sub(1));
     let row = (src_y / frame_h.max(1) as usize).min(rows.saturating_sub(1));
-    let start_idx = row.saturating_mul(cols).saturating_add(col).min(available - 1);
+    let start_idx = row
+        .saturating_mul(cols)
+        .saturating_add(col)
+        .min(available - 1);
 
     let fallback = frame_delays.first().copied().unwrap_or(1.0).max(0.0);
     let mut durations = Vec::with_capacity(anim_frames);
@@ -4365,15 +4369,12 @@ fn itg_apply_slot_state_properties(
     let start_row = start_idx / cols;
     slot.def.src = [start_col as i32 * frame_w, start_row as i32 * frame_h];
     slot.def.size = [frame_w, frame_h];
-    let source_frame = assets::texture_source_frame_dims_from_real(&texture_key, tex_dims.0, tex_dims.1);
+    let source_frame =
+        assets::texture_source_frame_dims_from_real(&texture_key, tex_dims.0, tex_dims.1);
     slot.source_size = [source_frame.0 as i32, source_frame.1 as i32];
 }
 
-fn itg_apply_state_properties_from_script(
-    slot: &mut SpriteSlot,
-    script: &str,
-    beat_based: bool,
-) {
+fn itg_apply_state_properties_from_script(slot: &mut SpriteSlot, script: &str, beat_based: bool) {
     for raw_token in script.split(';') {
         let token = raw_token.trim();
         if token.is_empty() {
@@ -4391,7 +4392,10 @@ fn itg_apply_state_properties_from_script(
     }
 }
 
-fn itg_apply_state_properties_from_commands(slot: &mut SpriteSlot, commands: &HashMap<String, String>) {
+fn itg_apply_state_properties_from_commands(
+    slot: &mut SpriteSlot,
+    commands: &HashMap<String, String>,
+) {
     if commands.is_empty() {
         return;
     }
@@ -6177,8 +6181,7 @@ mod tests {
     use super::{
         AnimationRate, ModelEffectClock, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart,
         NoteColorType, Quantization, SpriteSource, Style, itg_apply_state_properties_from_script,
-        itg_load_lua_behavior,
-        itg_model_draw_program, load_itg_skin, parse_explosion_animation,
+        itg_load_lua_behavior, itg_model_draw_program, load_itg_skin, parse_explosion_animation,
     };
     use crate::game::parsing::noteskin_itg;
     use std::collections::{HashMap, HashSet};
@@ -7167,7 +7170,9 @@ mod tests {
             "expected one delay per mine animation frame"
         );
         assert!(
-            delays.iter().all(|delay| (*delay - (1.0 / 60.0)).abs() < 1e-4),
+            delays
+                .iter()
+                .all(|delay| (*delay - (1.0 / 60.0)).abs() < 1e-4),
             "expected setstateproperties delays to be 1/60s, got {delays:?}"
         );
         match rate {
