@@ -254,6 +254,8 @@ struct GeneratedTexture {
 
 static GENERATED_TEXTURES: std::sync::LazyLock<RwLock<HashMap<String, GeneratedTexture>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+static GENERATED_TEXTURES_PENDING: std::sync::LazyLock<Mutex<HashSet<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     let sheet = parse_sprite_sheet_dims(key);
@@ -286,11 +288,25 @@ pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerD
             sampler,
         },
     );
+    GENERATED_TEXTURES_PENDING
+        .lock()
+        .unwrap()
+        .insert(key.to_string());
     register_texture_dims(key, w, h);
 }
 
 fn generated_texture(key: &str) -> Option<GeneratedTexture> {
     GENERATED_TEXTURES.read().unwrap().get(key).cloned()
+}
+
+fn take_pending_generated_texture_keys() -> Vec<String> {
+    let mut pending = GENERATED_TEXTURES_PENDING.lock().unwrap();
+    if pending.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(pending.len());
+    out.extend(pending.drain());
+    out
 }
 
 pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
@@ -1957,6 +1973,25 @@ impl AssetManager {
             }
             Err(e) => {
                 warn!("Failed to open texture for key '{key}': {e}");
+            }
+        }
+    }
+
+    pub(crate) fn upload_pending_generated_textures(&mut self, backend: &mut Backend) {
+        for key in take_pending_generated_texture_keys() {
+            if self.textures.contains_key(&key) {
+                continue;
+            }
+            let Some(generated) = generated_texture(&key) else {
+                continue;
+            };
+            match backend.create_texture(generated.image.as_ref(), generated.sampler) {
+                Ok(texture) => {
+                    self.textures.insert(key, texture);
+                }
+                Err(e) => {
+                    warn!("Failed to create GPU texture for generated key '{key}': {e}");
+                }
             }
         }
     }

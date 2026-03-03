@@ -2087,6 +2087,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         controller,
                         pane3_player_side,
                         asset_manager,
+                        state.screen_elapsed,
+                        state.active_graph[controller_idx] == EvalGraphPane::Arrow,
                     ));
                 }
                 EvalPane::Standard | EvalPane::FaPlus | EvalPane::HardEx => {

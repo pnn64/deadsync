@@ -5523,6 +5523,10 @@ impl ApplicationHandler<UserEvent> for App {
 
                 let (actors, clear_color) = self.get_current_actors();
                 self.update_fps_title(&window, now);
+                if let Some(backend) = &mut self.backend {
+                    self.asset_manager
+                        .upload_pending_generated_textures(backend);
+                }
                 let fonts = self.asset_manager.fonts();
                 let screen = crate::ui::compose::build_screen(
                     &actors,

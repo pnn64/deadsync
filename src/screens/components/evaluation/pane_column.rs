@@ -1,22 +1,69 @@
 use crate::act;
-use crate::assets::AssetManager;
-use crate::core::gfx::BlendMode;
+use crate::assets::{self, AssetManager};
+use crate::core::gfx::{BlendMode, SamplerDesc};
 use crate::core::space::screen_center_y;
-use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization};
+use crate::game::parsing::noteskin::{Quantization, NUM_QUANTIZATIONS};
 use crate::game::profile;
 use crate::screens::components::notefield::noteskin_model_actor;
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use crate::ui::font;
+use image::{Rgba, RgbaImage};
+use std::hash::Hasher;
+use std::path::Path;
+use twox_hash::XxHash64;
 
 use super::utils::pane_origin_x;
+
+#[inline(always)]
+fn pane3_solid_arrow_mask_key(texture_key: &str) -> String {
+    let mut hasher = XxHash64::default();
+    hasher.write(texture_key.as_bytes());
+    format!("__eval_pane3_arrow_mask_{:016x}", hasher.finish())
+}
+
+fn pane3_solid_arrow_texture(texture_key: &str) -> String {
+    let key = pane3_solid_arrow_mask_key(texture_key);
+    if assets::texture_dims(&key).is_some() {
+        return key;
+    }
+
+    let path = Path::new("assets").join(texture_key);
+    let Ok(src) = assets::open_image_fallback(&path).map(|img| img.to_rgba8()) else {
+        return texture_key.to_string();
+    };
+
+    let (w, h) = (src.width(), src.height());
+    let mut mask = RgbaImage::new(w, h);
+    for (x, y, px) in src.enumerate_pixels() {
+        let a = px[3];
+        let out = if a == 0 {
+            Rgba([0, 0, 0, 0])
+        } else {
+            Rgba([255, 255, 255, a])
+        };
+        mask.put_pixel(x, y, out);
+    }
+    assets::register_generated_texture(&key, mask, SamplerDesc::default());
+    key
+}
+
+#[inline(always)]
+fn pane3_retexture_model_actor(mut actor: Actor, texture: &str) -> Actor {
+    if let Actor::TexturedMesh { texture: mesh_tex, .. } = &mut actor {
+        *mesh_tex = texture.to_string();
+    }
+    actor
+}
 
 pub fn build_column_judgments_pane(
     score_info: &ScoreInfo,
     controller: profile::PlayerSide,
     player_side: profile::PlayerSide,
     asset_manager: &AssetManager,
+    preview_elapsed: f32,
+    arrow_glow_active: bool,
 ) -> Vec<Actor> {
     let num_cols = score_info.column_judgments.len();
     if num_cols == 0 {
@@ -143,6 +190,9 @@ pub fn build_column_judgments_pane(
         };
 
     let mut actors = Vec::new();
+    const PREVIEW_BPM: f32 = 120.0;
+    let preview_time = preview_elapsed.max(0.0);
+    let preview_beat = preview_time * (PREVIEW_BPM / 60.0);
 
     let count_for = |cj: ColumnJudgments, kind: RowKind| -> (u32, Option<u32>) {
         match kind {
@@ -205,6 +255,18 @@ pub fn build_column_judgments_pane(
                     * number_zoom;
                 let right_edge_x = col_center_x - 1.0 - miss_width * 0.5;
 
+                let arrow_color = if arrow_glow_active {
+                    Some(match col_idx {
+                        0 => [1.0, 0.0, 0.0, 1.0],
+                        1 => [0.0, 0.0, 1.0, 1.0],
+                        2 => [0.0, 1.0, 0.0, 1.0],
+                        3 => [1.0, 1.0, 0.0, 1.0],
+                        _ => [1.0, 1.0, 1.0, 1.0],
+                    })
+                } else {
+                    None
+                };
+
                 // Noteskin preview arrow (Tap Note, Q4th) above the column.
                 if let Some(ns) = score_info.noteskin.as_ref() {
                     let note_idx = col_idx
@@ -212,8 +274,8 @@ pub fn build_column_judgments_pane(
                         .saturating_add(Quantization::Q4th as usize);
                     const TARGET_ARROW_PX: f32 = 64.0;
                     const PREVIEW_ZOOM: f32 = 0.4;
-                    let elapsed = 0.0f32;
-                    let beat = 0.0f32;
+                    let elapsed = preview_time;
+                    let beat = preview_beat;
                     let note_uv_phase = ns.tap_note_uv_phase(elapsed, beat, 0.0);
                     if let Some(note_slots) = ns.note_layers.get(note_idx) {
                         let primary_h = note_slots
@@ -225,6 +287,7 @@ pub fn build_column_judgments_pane(
                         } else {
                             PREVIEW_ZOOM
                         };
+                        let mut solid_arrow_drawn = false;
                         for (layer_idx, slot) in note_slots.iter().enumerate() {
                             let draw = slot.model_draw_at(elapsed, beat);
                             if !draw.visible {
@@ -254,13 +317,48 @@ pub fn build_column_judgments_pane(
                             if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
                                 continue;
                             }
+                            let z = 101 + layer_idx as i32;
+                            if let Some(arrow_rgba) = arrow_color {
+                                if solid_arrow_drawn {
+                                    continue;
+                                }
+                                let solid_tex = pane3_solid_arrow_texture(slot.texture_key());
+                                if let Some(model_actor) = noteskin_model_actor(
+                                    slot,
+                                    center,
+                                    size,
+                                    uv,
+                                    -slot.def.rotation_deg as f32,
+                                    elapsed,
+                                    beat,
+                                    arrow_rgba,
+                                    BlendMode::Alpha,
+                                    z as i16,
+                                ) {
+                                    actors
+                                        .push(pane3_retexture_model_actor(model_actor, &solid_tex));
+                                } else {
+                                    actors.push(act!(sprite(solid_tex):
+                                        align(0.5, 0.5):
+                                        xy(center[0], center[1]):
+                                        setsize(size[0], size[1]):
+                                        rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
+                                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                        diffuse(arrow_rgba[0], arrow_rgba[1], arrow_rgba[2], arrow_rgba[3]):
+                                        blend(normal):
+                                        z(z)
+                                    ));
+                                }
+                                solid_arrow_drawn = true;
+                                continue;
+                            }
+
                             let color = draw.tint;
                             let blend = if draw.blend_add {
                                 BlendMode::Add
                             } else {
                                 BlendMode::Alpha
                             };
-                            let z = 101 + layer_idx as i32;
                             if let Some(model_actor) = noteskin_model_actor(
                                 slot,
                                 center,
@@ -299,42 +397,78 @@ pub fn build_column_judgments_pane(
                             }
                         }
                     } else if let Some(slot) = ns.notes.get(note_idx) {
-                        let frame = slot.frame_index(elapsed, beat);
-                        let uv_elapsed = if slot.model.is_some() {
-                            note_uv_phase
-                        } else {
-                            elapsed
-                        };
-                        let uv = slot.uv_for_frame_at(frame, uv_elapsed);
-                        let size = slot.logical_size();
-                        let w = size[0].max(0.0);
-                        let h = size[1].max(0.0);
-                        if w > 0.0 && h > 0.0 {
-                            let scale = (TARGET_ARROW_PX * PREVIEW_ZOOM) / h.max(1.0);
-                            let final_size = [w * scale, h * scale];
-                            let center = [col_center_x, base_y];
-                            if let Some(model_actor) = noteskin_model_actor(
-                                slot,
-                                center,
-                                final_size,
-                                uv,
-                                -slot.def.rotation_deg as f32,
-                                elapsed,
-                                beat,
-                                [1.0, 1.0, 1.0, 1.0],
-                                BlendMode::Alpha,
-                                101,
-                            ) {
-                                actors.push(model_actor);
+                        let draw = slot.model_draw_at(elapsed, beat);
+                        if draw.visible {
+                            let frame = slot.frame_index(elapsed, beat);
+                            let uv_elapsed = if slot.model.is_some() {
+                                note_uv_phase
                             } else {
-                                actors.push(act!(sprite(slot.texture_key().to_string()):
-                                    align(0.5, 0.5):
-                                    xy(center[0], center[1]):
-                                    setsize(final_size[0], final_size[1]):
-                                    rotationz(-slot.def.rotation_deg as f32):
-                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                    z(101)
-                                ));
+                                elapsed
+                            };
+                            let uv = slot.uv_for_frame_at(frame, uv_elapsed);
+                            let size = slot.logical_size();
+                            let w = size[0].max(0.0);
+                            let h = size[1].max(0.0);
+                            if w > 0.0 && h > 0.0 {
+                                let scale = (TARGET_ARROW_PX * PREVIEW_ZOOM) / h.max(1.0);
+                                let final_size = [w * scale, h * scale];
+                                let center = [col_center_x, base_y];
+                                if let Some(arrow_rgba) = arrow_color {
+                                    let solid_tex = pane3_solid_arrow_texture(slot.texture_key());
+                                    if let Some(model_actor) = noteskin_model_actor(
+                                        slot,
+                                        center,
+                                        final_size,
+                                        uv,
+                                        -slot.def.rotation_deg as f32,
+                                        elapsed,
+                                        beat,
+                                        arrow_rgba,
+                                        BlendMode::Alpha,
+                                        101,
+                                    ) {
+                                        actors
+                                            .push(pane3_retexture_model_actor(model_actor, &solid_tex));
+                                    } else {
+                                        actors.push(act!(sprite(solid_tex):
+                                            align(0.5, 0.5):
+                                            xy(center[0], center[1]):
+                                            setsize(final_size[0], final_size[1]):
+                                            rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
+                                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                            diffuse(arrow_rgba[0], arrow_rgba[1], arrow_rgba[2], arrow_rgba[3]):
+                                            blend(normal):
+                                            z(101)
+                                        ));
+                                    }
+                                } else {
+                                    let color = draw.tint;
+                                    if let Some(model_actor) = noteskin_model_actor(
+                                        slot,
+                                        center,
+                                        final_size,
+                                        uv,
+                                        -slot.def.rotation_deg as f32,
+                                        elapsed,
+                                        beat,
+                                        color,
+                                        BlendMode::Alpha,
+                                        101,
+                                    ) {
+                                        actors.push(model_actor);
+                                    } else {
+                                        actors.push(act!(sprite(slot.texture_key().to_string()):
+                                            align(0.5, 0.5):
+                                            xy(center[0], center[1]):
+                                            setsize(final_size[0], final_size[1]):
+                                            rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
+                                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                            diffuse(color[0], color[1], color[2], color[3]):
+                                            blend(normal):
+                                            z(101)
+                                        ));
+                                    }
+                                }
                             }
                         }
                     }
