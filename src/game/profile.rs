@@ -355,8 +355,28 @@ fn arrowcloud_ini_path(id: &str) -> PathBuf {
 }
 
 #[inline(always)]
-fn profile_avatar_path(id: &str) -> PathBuf {
-    local_profile_dir(id).join("profile.png")
+fn find_profile_avatar_path(dir: &Path) -> Option<PathBuf> {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return None;
+    };
+    let mut avatar = None;
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if name.eq_ignore_ascii_case("profile.png") {
+            return Some(path);
+        }
+        if avatar.is_none() && name.eq_ignore_ascii_case("avatar.png") {
+            avatar = Some(path);
+        }
+    }
+    avatar
 }
 
 #[inline(always)]
@@ -2784,12 +2804,7 @@ fn load_for_side(side: PlayerSide) {
             );
         }
 
-        let avatar_path = profile_avatar_path(&profile_id);
-        profile.avatar_path = if avatar_path.exists() {
-            Some(avatar_path)
-        } else {
-            None
-        };
+        profile.avatar_path = find_profile_avatar_path(&local_profile_dir(&profile_id));
         profile.avatar_texture_key = None;
     } // Lock is released here.
 
@@ -2909,8 +2924,7 @@ pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
             display_name = name;
         }
 
-        let avatar_path = entry.path().join("profile.png");
-        let avatar_path = avatar_path.is_file().then_some(avatar_path);
+        let avatar_path = find_profile_avatar_path(&entry.path());
 
         out.push(LocalProfileSummary {
             id,
