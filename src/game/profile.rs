@@ -2872,6 +2872,14 @@ fn is_local_profile_id(s: &str) -> bool {
         && !s.contains(['/', '\\', '\0'])
 }
 
+#[inline(always)]
+fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> std::cmp::Ordering {
+    a.chars()
+        .flat_map(char::to_lowercase)
+        .cmp(b.chars().flat_map(char::to_lowercase))
+        .then_with(|| a.cmp(b))
+}
+
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
     let root = Path::new(PROFILES_ROOT);
     let Ok(read_dir) = fs::read_dir(root) else {
@@ -2921,7 +2929,7 @@ pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
         });
     }
 
-    out.sort_by(|a, b| a.id.to_lowercase().cmp(&b.id.to_lowercase()));
+    out.sort_by(|a, b| cmp_profile_ids_case_insensitive(&a.id, &b.id));
     out
 }
 
