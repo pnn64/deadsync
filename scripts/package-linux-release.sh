@@ -52,17 +52,17 @@ fi
 
 dist_dir="dist"
 pkg_name="deadsync-${tag}-${arch}-linux"
-stage_dir="${dist_dir}/${pkg_name}"
+stage_dir="${dist_dir}/deadsync"
 archive_path="${dist_dir}/${pkg_name}.tar.gz"
 
 rm -rf "${stage_dir}"
 mkdir -p "${stage_dir}"
 
-cp "${bin_path}" "${stage_dir}/binary"
+cp "${bin_path}" "${stage_dir}/deadsync"
 cp -r assets songs courses "${stage_dir}/"
 cp README.md LICENSE "${stage_dir}/"
 
-tar -C "${dist_dir}" -czf "${archive_path}" "${pkg_name}"
+tar -C "${dist_dir}" -czf "${archive_path}" deadsync
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   {
