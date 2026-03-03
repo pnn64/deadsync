@@ -7106,7 +7106,7 @@ fn run_assist_clap(state: &mut State, current_row: i32) {
         && crossed_cursor < state.assist_clap_rows.len()
         && state.assist_clap_rows[crossed_cursor] <= song_row as usize
     {
-        audio::play_sfx(ASSIST_TICK_SFX_PATH);
+        audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
     }
 
     state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);

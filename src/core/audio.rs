@@ -47,9 +47,21 @@ struct OutputDeviceProbe {
     info: OutputDeviceInfo,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum SfxLane {
+    Effect,
+    AssistTick,
+}
+
+#[derive(Clone)]
+struct QueuedSfx {
+    data: Arc<Vec<i16>>,
+    lane: SfxLane,
+}
+
 // Commands to the audio engine
 enum AudioCommand {
-    PlaySfx(Arc<Vec<i16>>),
+    PlaySfx(QueuedSfx),
     // Path, cut, looping, rate (1.0 = normal)
     PlayMusic(PathBuf, Cut, bool, f32),
     StopMusic,
@@ -104,6 +116,15 @@ pub fn startup_output_devices() -> Vec<OutputDeviceInfo> {
 
 /// Plays a sound effect from the given path (cached after first load).
 pub fn play_sfx(path: &str) {
+    play_sfx_on_lane(path, SfxLane::Effect);
+}
+
+/// Plays a gameplay assist tick that uses its own volume lane.
+pub fn play_assist_tick(path: &str) {
+    play_sfx_on_lane(path, SfxLane::AssistTick);
+}
+
+fn play_sfx_on_lane(path: &str, lane: SfxLane) {
     let sound_data = {
         let mut cache = ENGINE.sfx_cache.lock().unwrap();
         if let Some(data) = cache.get(path) {
@@ -122,9 +143,11 @@ pub fn play_sfx(path: &str) {
             }
         }
     };
-    let _ = ENGINE
-        .command_sender
-        .send(AudioCommand::PlaySfx(sound_data));
+    let queued = QueuedSfx {
+        data: sound_data,
+        lane,
+    };
+    let _ = ENGINE.command_sender.send(AudioCommand::PlaySfx(queued));
 }
 
 /// Preloads a sound effect into cache without playing it.
@@ -446,7 +469,7 @@ fn audio_manager_thread(
 ) {
     let mut music_stream: Option<MusicStream> = None;
     let music_ring = internal::ring_new(internal::RING_CAP_SAMPLES);
-    let (sfx_sender, sfx_receiver) = channel::<Arc<Vec<i16>>>();
+    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
 
     // State captured by the audio callback
     let music_ring_for_callback = music_ring.clone();
@@ -456,7 +479,7 @@ fn audio_manager_thread(
     // Reusable buffers captured by the callback to avoid allocations
     let mut mix_i16: Vec<i16> = Vec::new();
     let mut mix_f32: Vec<f32> = Vec::new();
-    let mut active_sfx_for_callback: Vec<(Arc<Vec<i16>>, usize)> = Vec::new();
+    let mut active_sfx_for_callback: Vec<(Arc<Vec<i16>>, usize, SfxLane)> = Vec::new();
 
     // Build the output stream matching chosen sample format (like v1)
     let stream = match sample_format {
@@ -475,8 +498,10 @@ fn audio_manager_thread(
                 let master_vol = f32::from(config.master_volume.clamp(0, 100)) / 100.0;
                 let music_vol = f32::from(config.music_volume.clamp(0, 100)) / 100.0;
                 let sfx_vol = f32::from(config.sfx_volume.clamp(0, 100)) / 100.0;
+                let assist_tick_vol = f32::from(config.assist_tick_volume.clamp(0, 100)) / 100.0;
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
+                let final_assist_tick_vol = master_vol * assist_tick_vol;
 
                 if mix_i16.len() != out.len() {
                     mix_i16.resize(out.len(), 0);
@@ -507,13 +532,17 @@ fn audio_manager_thread(
                 }
 
                 for new_sfx in sfx_receiver.try_iter() {
-                    active_sfx_for_callback.push((new_sfx, 0));
+                    active_sfx_for_callback.push((new_sfx.data, 0, new_sfx.lane));
                 }
 
-                active_sfx_for_callback.retain_mut(|(data, cursor)| {
+                active_sfx_for_callback.retain_mut(|(data, cursor, lane)| {
                     let n = (data.len().saturating_sub(*cursor)).min(mix_f32.len());
+                    let lane_vol = match *lane {
+                        SfxLane::Effect => final_sfx_vol,
+                        SfxLane::AssistTick => final_assist_tick_vol,
+                    };
                     for i in 0..n {
-                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * final_sfx_vol;
+                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * lane_vol;
                         mix_f32[i] = (mix_f32[i] + sfx_sample_f32).clamp(-1.0, 1.0);
                     }
                     *cursor += n;
@@ -556,8 +585,10 @@ fn audio_manager_thread(
                 let master_vol = f32::from(config.master_volume.clamp(0, 100)) / 100.0;
                 let music_vol = f32::from(config.music_volume.clamp(0, 100)) / 100.0;
                 let sfx_vol = f32::from(config.sfx_volume.clamp(0, 100)) / 100.0;
+                let assist_tick_vol = f32::from(config.assist_tick_volume.clamp(0, 100)) / 100.0;
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
+                let final_assist_tick_vol = master_vol * assist_tick_vol;
 
                 if mix_i16.len() != out.len() {
                     mix_i16.resize(out.len(), 0);
@@ -584,13 +615,17 @@ fn audio_manager_thread(
                 }
 
                 for new_sfx in sfx_receiver.try_iter() {
-                    active_sfx_for_callback.push((new_sfx, 0));
+                    active_sfx_for_callback.push((new_sfx.data, 0, new_sfx.lane));
                 }
 
-                active_sfx_for_callback.retain_mut(|(data, cursor)| {
+                active_sfx_for_callback.retain_mut(|(data, cursor, lane)| {
                     let n = (data.len().saturating_sub(*cursor)).min(mix_f32.len());
+                    let lane_vol = match *lane {
+                        SfxLane::Effect => final_sfx_vol,
+                        SfxLane::AssistTick => final_assist_tick_vol,
+                    };
                     for i in 0..n {
-                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * final_sfx_vol;
+                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * lane_vol;
                         mix_f32[i] = (mix_f32[i] + sfx_sample_f32).clamp(-1.0, 1.0);
                     }
                     *cursor += n;
@@ -632,8 +667,10 @@ fn audio_manager_thread(
                 let master_vol = f32::from(config.master_volume.clamp(0, 100)) / 100.0;
                 let music_vol = f32::from(config.music_volume.clamp(0, 100)) / 100.0;
                 let sfx_vol = f32::from(config.sfx_volume.clamp(0, 100)) / 100.0;
+                let assist_tick_vol = f32::from(config.assist_tick_volume.clamp(0, 100)) / 100.0;
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
+                let final_assist_tick_vol = master_vol * assist_tick_vol;
 
                 if mix_i16.len() != out.len() {
                     mix_i16.resize(out.len(), 0);
@@ -657,13 +694,17 @@ fn audio_manager_thread(
                 }
 
                 for new_sfx in sfx_receiver.try_iter() {
-                    active_sfx_for_callback.push((new_sfx, 0));
+                    active_sfx_for_callback.push((new_sfx.data, 0, new_sfx.lane));
                 }
 
-                active_sfx_for_callback.retain_mut(|(data, cursor)| {
+                active_sfx_for_callback.retain_mut(|(data, cursor, lane)| {
                     let n = (data.len().saturating_sub(*cursor)).min(out.len());
+                    let lane_vol = match *lane {
+                        SfxLane::Effect => final_sfx_vol,
+                        SfxLane::AssistTick => final_assist_tick_vol,
+                    };
                     for i in 0..n {
-                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * final_sfx_vol;
+                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * lane_vol;
                         out[i] = (out[i] + sfx_sample_f32).clamp(-1.0, 1.0);
                     }
                     *cursor += n;
@@ -695,8 +736,8 @@ fn audio_manager_thread(
     // Command loop: manage music decoder thread and pass SFX to the callback
     loop {
         match command_receiver.recv() {
-            Ok(AudioCommand::PlaySfx(data)) => {
-                let _ = sfx_sender.send(data);
+            Ok(AudioCommand::PlaySfx(queued)) => {
+                let _ = sfx_sender.send(queued);
             }
             Ok(AudioCommand::PlayMusic(path, cut, looping, rate)) => {
                 if let Some(old) = music_stream.take() {

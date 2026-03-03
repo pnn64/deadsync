@@ -234,6 +234,7 @@ pub const ITEMS: &[Item] = &[
             "Audio Sample Rate",
             "Master Volume",
             "SFX Volume",
+            "Assist Tick Volume",
             "Music Volume",
             "Mine Sounds",
             "Global Offset",
@@ -586,6 +587,7 @@ const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
 const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
 const SOUND_ROW_MASTER_VOLUME: &str = "Master Volume";
 const SOUND_ROW_SFX_VOLUME: &str = "SFX Volume";
+const SOUND_ROW_ASSIST_TICK_VOLUME: &str = "Assist Tick Volume";
 const SOUND_ROW_MUSIC_VOLUME: &str = "Music Volume";
 const SOUND_ROW_DEVICE: &str = "Sound Device";
 const SOUND_ROW_SAMPLE_RATE: &str = "Audio Sample Rate";
@@ -1263,6 +1265,11 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        label: SOUND_ROW_ASSIST_TICK_VOLUME,
+        choices: &["100%"],
+        inline: false,
+    },
+    SubRow {
         label: SOUND_ROW_MUSIC_VOLUME,
         choices: &["100%"],
         inline: false,
@@ -1304,6 +1311,10 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SOUND_ROW_SFX_VOLUME,
         help: &["Set the sound-effect volume before master volume is applied."],
+    },
+    Item {
+        name: SOUND_ROW_ASSIST_TICK_VOLUME,
+        help: &["Set the gameplay Assist Tick volume before master volume is applied."],
     },
     Item {
         name: SOUND_ROW_MUSIC_VOLUME,
@@ -3115,6 +3126,7 @@ pub struct State {
     sound_device_options: Vec<SoundDeviceOption>,
     master_volume_pct: i32,
     sfx_volume_pct: i32,
+    assist_tick_volume_pct: i32,
     music_volume_pct: i32,
     global_offset_ms: i32,
     visual_delay_ms: i32,
@@ -3227,6 +3239,7 @@ pub fn init() -> State {
         sound_device_options,
         master_volume_pct: i32::from(cfg.master_volume.clamp(0, 100)),
         sfx_volume_pct: i32::from(cfg.sfx_volume.clamp(0, 100)),
+        assist_tick_volume_pct: i32::from(cfg.assist_tick_volume.clamp(0, 100)),
         music_volume_pct: i32::from(cfg.music_volume.clamp(0, 100)),
         global_offset_ms: {
             let ms = (cfg.global_offset_seconds * 1000.0).round() as i32;
@@ -3529,6 +3542,12 @@ pub fn init() -> State {
         SOUND_OPTIONS_ROWS,
         SOUND_ROW_SFX_VOLUME,
         master_volume_choice_index(cfg.sfx_volume),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_sound,
+        SOUND_OPTIONS_ROWS,
+        SOUND_ROW_ASSIST_TICK_VOLUME,
+        master_volume_choice_index(cfg.assist_tick_volume),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
@@ -4667,6 +4686,18 @@ fn apply_submenu_choice_delta(
                     }
                     return None;
                 }
+                SOUND_ROW_ASSIST_TICK_VOLUME => {
+                    if adjust_ms_value(
+                        &mut state.assist_tick_volume_pct,
+                        delta,
+                        VOLUME_MIN_PERCENT,
+                        VOLUME_MAX_PERCENT,
+                    ) {
+                        config::update_assist_tick_volume(state.assist_tick_volume_pct as u8);
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                    }
+                    return None;
+                }
                 SOUND_ROW_MUSIC_VOLUME => {
                     if adjust_ms_value(
                         &mut state.music_volume_pct,
@@ -4882,6 +4913,10 @@ fn apply_submenu_choice_delta(
             SOUND_ROW_SFX_VOLUME => {
                 let vol = master_volume_from_choice(new_index);
                 config::update_sfx_volume(vol);
+            }
+            SOUND_ROW_ASSIST_TICK_VOLUME => {
+                let vol = master_volume_from_choice(new_index);
+                config::update_assist_tick_volume(vol);
             }
             SOUND_ROW_MUSIC_VOLUME => {
                 let vol = master_volume_from_choice(new_index);
@@ -5874,13 +5909,15 @@ fn submenu_cursor_dest(
     if choice_texts.is_empty() {
         return None;
     }
-    if row.label == "Global Offset (ms)" {
+    if row.label == SOUND_ROW_GLOBAL_OFFSET {
         choice_texts[0] = Cow::Owned(format_ms(state.global_offset_ms));
-    } else if row.label == "Master Volume" {
+    } else if row.label == SOUND_ROW_MASTER_VOLUME {
         choice_texts[0] = Cow::Owned(format_percent(state.master_volume_pct));
-    } else if row.label == "SFX Volume" {
+    } else if row.label == SOUND_ROW_SFX_VOLUME {
         choice_texts[0] = Cow::Owned(format_percent(state.sfx_volume_pct));
-    } else if row.label == "Music Volume" {
+    } else if row.label == SOUND_ROW_ASSIST_TICK_VOLUME {
+        choice_texts[0] = Cow::Owned(format_percent(state.assist_tick_volume_pct));
+    } else if row.label == SOUND_ROW_MUSIC_VOLUME {
         choice_texts[0] = Cow::Owned(format_percent(state.music_volume_pct));
     } else if row.label == "Visual Delay (ms)" {
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
@@ -6506,16 +6543,20 @@ pub fn get_actors(
                             row_choices(state, kind, rows, actual_row_idx);
                         if !choice_texts.is_empty() {
                             let value_zoom = 0.835_f32;
-                            if row.label == "Global Offset (ms)" {
+                            if row.label == SOUND_ROW_GLOBAL_OFFSET {
                                 let formatted = Cow::Owned(format_ms(state.global_offset_ms));
                                 choice_texts[0] = formatted;
-                            } else if row.label == "Master Volume" {
+                            } else if row.label == SOUND_ROW_MASTER_VOLUME {
                                 let formatted = Cow::Owned(format_percent(state.master_volume_pct));
                                 choice_texts[0] = formatted;
-                            } else if row.label == "SFX Volume" {
+                            } else if row.label == SOUND_ROW_SFX_VOLUME {
                                 let formatted = Cow::Owned(format_percent(state.sfx_volume_pct));
                                 choice_texts[0] = formatted;
-                            } else if row.label == "Music Volume" {
+                            } else if row.label == SOUND_ROW_ASSIST_TICK_VOLUME {
+                                let formatted =
+                                    Cow::Owned(format_percent(state.assist_tick_volume_pct));
+                                choice_texts[0] = formatted;
+                            } else if row.label == SOUND_ROW_MUSIC_VOLUME {
                                 let formatted = Cow::Owned(format_percent(state.music_volume_pct));
                                 choice_texts[0] = formatted;
                             } else if row.label == "Visual Delay (ms)" {

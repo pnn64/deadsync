@@ -475,6 +475,7 @@ pub struct Config {
     pub music_volume: u8,
     // ITGmania PrefsManager "MusicWheelSwitchSpeed" (default 15).
     pub music_wheel_switch_speed: u8,
+    pub assist_tick_volume: u8,
     pub sfx_volume: u8,
     // None = auto (use host default output device); Some(N) = startup CPAL output-device index.
     pub audio_output_device_index: Option<u16>,
@@ -559,6 +560,7 @@ impl Default for Config {
             menu_music: true,
             music_volume: 100,
             music_wheel_switch_speed: 15,
+            assist_tick_volume: 100,
             sfx_volume: 100,
             audio_output_device_index: None,
             audio_sample_rate_hz: None,
@@ -1004,6 +1006,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         default.software_renderer_threads
     ));
     content.push_str(&format!("Theme={}\n", default.theme_flag.as_str()));
+    content.push_str(&format!(
+        "AssistTickVolume={}\n",
+        default.assist_tick_volume
+    ));
     content.push_str(&format!("SFXVolume={}\n", default.sfx_volume));
     content.push_str(&format!(
         "TranslatedTitles={}\n",
@@ -1355,6 +1361,10 @@ pub fn load() {
                     .get("Options", "SFXVolume")
                     .and_then(|v| v.parse().ok())
                     .map_or(default.sfx_volume, |v: u8| v.clamp(0, 100));
+                cfg.assist_tick_volume = conf
+                    .get("Options", "AssistTickVolume")
+                    .and_then(|v| v.parse().ok())
+                    .map_or(default.assist_tick_volume, |v: u8| v.clamp(0, 100));
                 cfg.audio_output_device_index = conf
                     .get("Options", "AudioOutputDevice")
                     .map(|v| v.trim().to_string())
@@ -1794,6 +1804,7 @@ pub fn load() {
                     "SmoothHistogram",
                     "InputDebounceTime",
                     "OnlyDedicatedMenuButtons",
+                    "AssistTickVolume",
                     "SFXVolume",
                     "SoftwareRendererThreads",
                     "Theme",
@@ -2734,6 +2745,7 @@ fn save_without_keymaps() {
         cfg.software_renderer_threads
     ));
     content.push_str(&format!("Theme={}\n", cfg.theme_flag.as_str()));
+    content.push_str(&format!("AssistTickVolume={}\n", cfg.assist_tick_volume));
     content.push_str(&format!("SFXVolume={}\n", cfg.sfx_volume));
     content.push_str(&format!(
         "TranslatedTitles={}\n",
@@ -3194,6 +3206,18 @@ pub fn update_sfx_volume(volume: u8) {
             return;
         }
         cfg.sfx_volume = vol;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_assist_tick_volume(volume: u8) {
+    let vol = volume.clamp(0, 100);
+    {
+        let mut cfg = CONFIG.lock().unwrap();
+        if cfg.assist_tick_volume == vol {
+            return;
+        }
+        cfg.assist_tick_volume = vol;
     }
     save_without_keymaps();
 }
