@@ -2318,7 +2318,7 @@ pub fn build(
                             hold_uv,
                             -final_rotation,
                             glow_color,
-                            BlendMode::Add,
+                            blend,
                             Z_HOLD_EXPLOSION as i16,
                             &mut model_cache,
                         )
@@ -2367,7 +2367,7 @@ pub fn build(
                             rotationz(-final_rotation):
                             customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
                             diffuse(glow_color[0], glow_color[1], glow_color[2], glow_color[3]):
-                            blend(add):
+                            blend(normal):
                             z(Z_HOLD_EXPLOSION)
                         ));
                     }
@@ -2441,36 +2441,68 @@ pub fn build(
                     .get(i)
                     .map(|slot| slot.def.rotation_deg)
                     .unwrap_or(0);
-                actors.push(act!(sprite(slot.texture_key().to_string()):
-                    align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                    setsize(size[0], size[1]):
-                    zoom(visual.zoom):
-                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    diffuse(
-                        visual.diffuse[0],
-                        visual.diffuse[1],
-                        visual.diffuse[2],
-                        visual.diffuse[3]
-                    ):
-                    rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
-                    blend(normal):
-                    z(Z_TAP_EXPLOSION)
-                ));
                 let glow = visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
-                if glow_strength > f32::EPSILON {
+                if explosion.animation.blend_add {
                     actors.push(act!(sprite(slot.texture_key().to_string()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
                         setsize(size[0], size[1]):
                         zoom(visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        diffuse(glow[0], glow[1], glow[2], glow[3]):
+                        diffuse(
+                            visual.diffuse[0],
+                            visual.diffuse[1],
+                            visual.diffuse[2],
+                            visual.diffuse[3]
+                        ):
                         rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                         blend(add):
                         z(Z_TAP_EXPLOSION)
                     ));
+                    if glow_strength > f32::EPSILON {
+                        actors.push(act!(sprite(slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                            setsize(size[0], size[1]):
+                            zoom(visual.zoom):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
+                            blend(add):
+                            z(Z_TAP_EXPLOSION)
+                        ));
+                    }
+                } else {
+                    actors.push(act!(sprite(slot.texture_key().to_string()):
+                        align(0.5, 0.5):
+                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        setsize(size[0], size[1]):
+                        zoom(visual.zoom):
+                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                        diffuse(
+                            visual.diffuse[0],
+                            visual.diffuse[1],
+                            visual.diffuse[2],
+                            visual.diffuse[3]
+                        ):
+                        rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
+                        blend(normal):
+                        z(Z_TAP_EXPLOSION)
+                    ));
+                    if glow_strength > f32::EPSILON {
+                        actors.push(act!(sprite(slot.texture_key().to_string()):
+                            align(0.5, 0.5):
+                            xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                            setsize(size[0], size[1]):
+                            zoom(visual.zoom):
+                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                            diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
+                            blend(normal):
+                            z(Z_TAP_EXPLOSION)
+                        ));
+                    }
                 }
             }
         }
@@ -2493,25 +2525,9 @@ pub fn build(
             let frame = slot.frame_index(active.elapsed, current_beat);
             let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
             let size = scale_explosion(logical_slot_size(slot));
-            actors.push(act!(sprite(slot.texture_key().to_string()):
-                align(0.5, 0.5):
-                xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                setsize(size[0], size[1]):
-                zoom(visual.zoom):
-                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                rotationz(-visual.rotation_z):
-                diffuse(
-                    visual.diffuse[0],
-                    visual.diffuse[1],
-                    visual.diffuse[2],
-                    visual.diffuse[3]
-                ):
-                blend(add):
-                z(Z_MINE_EXPLOSION)
-            ));
             let glow = visual.glow;
             let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
-            if glow_strength > f32::EPSILON {
+            if explosion.animation.blend_add {
                 actors.push(act!(sprite(slot.texture_key().to_string()):
                     align(0.5, 0.5):
                     xy(playfield_center_x + col_x_offset, receptor_y_lane):
@@ -2519,10 +2535,58 @@ pub fn build(
                     zoom(visual.zoom):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                     rotationz(-visual.rotation_z):
-                    diffuse(glow[0], glow[1], glow[2], glow[3]):
+                    diffuse(
+                        visual.diffuse[0],
+                        visual.diffuse[1],
+                        visual.diffuse[2],
+                        visual.diffuse[3]
+                    ):
                     blend(add):
                     z(Z_MINE_EXPLOSION)
                 ));
+                if glow_strength > f32::EPSILON {
+                    actors.push(act!(sprite(slot.texture_key().to_string()):
+                        align(0.5, 0.5):
+                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        setsize(size[0], size[1]):
+                        zoom(visual.zoom):
+                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                        rotationz(-visual.rotation_z):
+                        diffuse(glow[0], glow[1], glow[2], glow[3]):
+                        blend(add):
+                        z(Z_MINE_EXPLOSION)
+                    ));
+                }
+            } else {
+                actors.push(act!(sprite(slot.texture_key().to_string()):
+                    align(0.5, 0.5):
+                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                    setsize(size[0], size[1]):
+                    zoom(visual.zoom):
+                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                    rotationz(-visual.rotation_z):
+                    diffuse(
+                        visual.diffuse[0],
+                        visual.diffuse[1],
+                        visual.diffuse[2],
+                        visual.diffuse[3]
+                    ):
+                    blend(normal):
+                    z(Z_MINE_EXPLOSION)
+                ));
+                if glow_strength > f32::EPSILON {
+                    actors.push(act!(sprite(slot.texture_key().to_string()):
+                        align(0.5, 0.5):
+                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        setsize(size[0], size[1]):
+                        zoom(visual.zoom):
+                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                        rotationz(-visual.rotation_z):
+                        diffuse(glow[0], glow[1], glow[2], glow[3]):
+                        blend(normal):
+                        z(Z_MINE_EXPLOSION)
+                    ));
+                }
             }
         }
         // Only consider notes that are currently in or near the lookahead window.
@@ -4871,9 +4935,9 @@ pub fn build(
 #[cfg(test)]
 mod tests {
     use super::{
-        bottom_cap_uv_window, clipped_hold_body_bounds, hold_head_render_flags, hold_tail_cap_bounds,
-        maybe_mirror_uv_horiz_for_reverse_flipped, note_scale_height, offset_center,
-        top_cap_rotation_deg,
+        bottom_cap_uv_window, clipped_hold_body_bounds, hold_head_render_flags,
+        hold_tail_cap_bounds, maybe_mirror_uv_horiz_for_reverse_flipped, note_scale_height,
+        offset_center, top_cap_rotation_deg,
     };
     use crate::game::gameplay::ActiveHold;
     use crate::game::note::NoteType;
@@ -4909,7 +4973,8 @@ mod tests {
         assert!(use_active);
 
         active.is_pressed = false;
-        let (engaged_released, use_active_released) = hold_head_render_flags(Some(&active), 100.0, 100.0);
+        let (engaged_released, use_active_released) =
+            hold_head_render_flags(Some(&active), 100.0, 100.0);
         assert!(engaged_released);
         assert!(!use_active_released);
     }

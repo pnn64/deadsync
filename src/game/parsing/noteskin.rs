@@ -680,6 +680,16 @@ impl GlowEffect {
     }
 }
 
+#[inline(always)]
+fn clamp_rgba_unit(color: [f32; 4]) -> [f32; 4] {
+    [
+        color[0].clamp(0.0, 1.0),
+        color[1].clamp(0.0, 1.0),
+        color[2].clamp(0.0, 1.0),
+        color[3].clamp(0.0, 1.0),
+    ]
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ExplosionVisualState {
     pub zoom: f32,
@@ -694,6 +704,7 @@ pub struct ExplosionAnimation {
     pub initial: ExplosionState,
     pub segments: Vec<ExplosionSegment>,
     pub glow: Option<GlowEffect>,
+    pub blend_add: bool,
 }
 
 impl Default for ExplosionAnimation {
@@ -720,6 +731,7 @@ impl Default for ExplosionAnimation {
                 end_visible: None,
             }],
             glow: None,
+            blend_add: false,
         }
     }
 }
@@ -807,8 +819,8 @@ impl ExplosionAnimation {
 
             return ExplosionVisualState {
                 zoom,
-                diffuse,
-                glow,
+                diffuse: clamp_rgba_unit(diffuse),
+                glow: clamp_rgba_unit(glow),
                 rotation_z,
                 visible,
             };
@@ -821,8 +833,8 @@ impl ExplosionAnimation {
 
         ExplosionVisualState {
             zoom: current.zoom,
-            diffuse,
-            glow,
+            diffuse: clamp_rgba_unit(diffuse),
+            glow: clamp_rgba_unit(glow),
             rotation_z: current.rotation_z,
             visible: current.visible,
         }
@@ -5907,6 +5919,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
         initial: ExplosionState::default(),
         segments: Vec::new(),
         glow: None,
+        blend_add: false,
     };
 
     let mut current_state = ExplosionState::default();
@@ -5989,7 +6002,7 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             }
             continue;
         }
-        if parse_script_control(command.as_str()).is_some() || command == "blend" {
+        if parse_script_control(command.as_str()).is_some() {
             finish_pending(&mut pending, &mut animation, &mut current_state);
             continue;
         }
@@ -6051,7 +6064,8 @@ fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                         }
                     }
                 }
-                ScriptActorMod::BlendAdd(_) => {
+                ScriptActorMod::BlendAdd(v) => {
+                    animation.blend_add = v;
                     finish_pending(&mut pending, &mut animation, &mut current_state);
                 }
                 _ => {}
@@ -7238,6 +7252,36 @@ mod tests {
     }
 
     #[test]
+    fn explosion_animation_clamps_overbright_color_to_itg_vertex_range() {
+        let anim = parse_explosion_animation(
+            "diffuse,1.5,1.25,1.75,1.2;glowshift;effectperiod,0.05;effectcolor1,1,1,1,1;effectcolor2,1,1,1,1",
+        );
+        let state = anim.state_at(0.0);
+        assert_eq!(
+            state.diffuse,
+            [1.0, 1.0, 1.0, 1.0],
+            "ITG converts Sprite vertex colors to 8-bit and clamps >1.0 channels"
+        );
+        assert!(
+            state.glow.iter().all(|c| *c >= 0.0 && *c <= 1.0),
+            "glow channels should also be clamped to [0,1], got {:?}",
+            state.glow
+        );
+    }
+
+    #[test]
+    fn explosion_animation_tracks_blend_command_for_render_parity() {
+        let add = parse_explosion_animation("blend,'BlendMode_Add';diffusealpha,1");
+        assert!(add.blend_add, "blend,BlendMode_Add should mark explosion as additive");
+
+        let normal = parse_explosion_animation("blend,'BlendMode_Normal';diffusealpha,1");
+        assert!(
+            !normal.blend_add,
+            "non-add blend commands should keep explosion on normal blend"
+        );
+    }
+
+    #[test]
     fn cel_roll_glowshift_keeps_diffuse_and_uses_glow_channel() {
         let style = Style {
             num_cols: 4,
@@ -7308,6 +7352,19 @@ mod tests {
         assert!(
             w1.animation.initial.color[3] > 0.9,
             "cel W1 tap explosion should start from the dim W1 alpha path"
+        );
+        assert!(
+            !w1.animation.blend_add,
+            "cel W1 tap explosion should render with normal blend like ITG GhostArrow sprites"
+        );
+
+        let mine = ns
+            .mine_hit_explosion
+            .as_ref()
+            .expect("cel should define hit-mine explosion");
+        assert!(
+            mine.animation.blend_add,
+            "cel hit-mine explosion should keep additive blend from noteskin commands"
         );
     }
 
