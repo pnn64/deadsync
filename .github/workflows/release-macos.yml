@@ -43,8 +43,10 @@ jobs:
         include:
           - arch: arm64
             runner: macos-15
+            target: aarch64-apple-darwin
           - arch: x86_64
             runner: macos-15
+            target: x86_64-apple-darwin
     runs-on: ${{ matrix.runner }}
     env:
       CARGO_TERM_COLOR: always
@@ -115,15 +117,19 @@ jobs:
         if: steps.select_arch.outputs.enabled == 'true'
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Add macOS Rust target
+        if: steps.select_arch.outputs.enabled == 'true'
+        run: rustup target add ${{ matrix.target }}
+
       - name: Build release
         if: steps.select_arch.outputs.enabled == 'true'
-        run: cargo build --release --locked
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Package macOS release
         id: package
         if: steps.select_arch.outputs.enabled == 'true'
         shell: bash
-        run: bash scripts/package-macos-release.sh "${{ steps.tag.outputs.tag }}"
+        run: bash scripts/package-macos-release.sh "${{ steps.tag.outputs.tag }}" "${{ matrix.arch }}" "${{ matrix.target }}"
 
       - name: Upload workflow artifacts
         if: steps.select_arch.outputs.enabled == 'true'
