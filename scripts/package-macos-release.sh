@@ -3,7 +3,7 @@ set -euo pipefail
 
 tag="${1:-}"
 if [ -z "${tag}" ]; then
-  echo "usage: $0 <tag> [arch] [target]" >&2
+  echo "usage: $0 <tag> [arch]" >&2
   exit 1
 fi
 
@@ -26,12 +26,7 @@ if [ -n "${2:-}" ]; then
 fi
 arch="$(map_arch "${arch_raw}")"
 
-target="${3:-native}"
-if [ "${target}" = "native" ]; then
-  bin_path="target/release/deadsync"
-else
-  bin_path="target/${target}/release/deadsync"
-fi
+bin_path="target/release/deadsync"
 
 if [ ! -x "${bin_path}" ]; then
   echo "missing executable: ${bin_path}" >&2
