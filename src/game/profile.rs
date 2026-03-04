@@ -6,8 +6,8 @@ use log::{debug, info, warn};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -2958,8 +2958,14 @@ pub fn gameplay_hud_snapshot() -> GameplayHudSnapshot {
             session.play_style,
             session.player_side,
             session.joined_mask,
-            matches!(&session.active_profiles[side_ix(PlayerSide::P1)], ActiveProfile::Guest),
-            matches!(&session.active_profiles[side_ix(PlayerSide::P2)], ActiveProfile::Guest),
+            matches!(
+                &session.active_profiles[side_ix(PlayerSide::P1)],
+                ActiveProfile::Guest
+            ),
+            matches!(
+                &session.active_profiles[side_ix(PlayerSide::P2)],
+                ActiveProfile::Guest
+            ),
         )
     };
     let profiles = lock_profiles();

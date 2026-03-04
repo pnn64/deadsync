@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::{self, AssetManager};
 use crate::core::gfx::{BlendMode, SamplerDesc};
 use crate::core::space::screen_center_y;
-use crate::game::parsing::noteskin::{Quantization, NUM_QUANTIZATIONS};
+use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization};
 use crate::game::profile;
 use crate::screens::components::notefield::noteskin_model_actor;
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
@@ -51,7 +51,10 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> String {
 
 #[inline(always)]
 fn pane3_retexture_model_actor(mut actor: Actor, texture: &str) -> Actor {
-    if let Actor::TexturedMesh { texture: mesh_tex, .. } = &mut actor {
+    if let Actor::TexturedMesh {
+        texture: mesh_tex, ..
+    } = &mut actor
+    {
         *mesh_tex = texture.into();
     }
     actor

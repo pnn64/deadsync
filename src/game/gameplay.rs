@@ -3732,7 +3732,10 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             state.next_mine_avoid_cursor[player] >= start
                 && state.next_mine_avoid_cursor[player] <= end
         );
-        debug_assert_eq!(state.mine_note_ix[player].len(), state.mine_note_time[player].len());
+        debug_assert_eq!(
+            state.mine_note_ix[player].len(),
+            state.mine_note_time[player].len()
+        );
         debug_assert!(state.next_mine_ix_cursor[player] <= state.mine_note_ix[player].len());
     }
     for col in 0..state.num_cols {
@@ -4001,22 +4004,44 @@ fn player_note_range(state: &State, player: usize) -> (usize, usize) {
     state.note_ranges[player]
 }
 
-fn push_density_life_point(points: &mut Vec<[f32; 2]>, x: f32, y: f32) {
+#[inline(always)]
+fn push_density_life_point(points: &mut Vec<[f32; 2]>, x: f32, y: f32) -> bool {
+    const EPS: f32 = 0.000_1_f32;
+    const ANGLE_SIN2_MAX: f32 = 0.032_f32; // sin(0.18rad)^2
+
+    if let Some(last) = points.last_mut()
+        && x <= last[0] + EPS
+    {
+        if (y - last[1]).abs() <= EPS {
+            return false;
+        }
+        last[1] = y;
+        return true;
+    }
+
     if points.len() >= 2 {
         let a = points[points.len() - 2];
         let b = points[points.len() - 1];
-        let slope_original = (b[1] - a[1]).atan2(b[0] - a[0]);
-        let slope_new = (y - b[1]).atan2(x - b[0]);
-        let condense = (slope_new - slope_original).abs() < 0.18_f32
-            && slope_original > 0.0_f32
-            && slope_new > 0.0_f32;
-        if condense {
-            let last_ix = points.len() - 1;
-            points[last_ix] = [x, y];
-            return;
+        let abx = b[0] - a[0];
+        let aby = b[1] - a[1];
+        let bcx = x - b[0];
+        let bcy = y - b[1];
+        let ab_len_sq = abx.mul_add(abx, aby * aby);
+        let bc_len_sq = bcx.mul_add(bcx, bcy * bcy);
+        let dot = abx.mul_add(bcx, aby * bcy);
+        if dot > 0.0_f32 && ab_len_sq > EPS && bc_len_sq > EPS {
+            let cross = abx.mul_add(bcy, -(aby * bcx));
+            let cross_sq = cross * cross;
+            if cross_sq <= ANGLE_SIN2_MAX * ab_len_sq * bc_len_sq {
+                let last_ix = points.len() - 1;
+                points[last_ix] = [x, y];
+                return true;
+            }
         }
     }
+
     points.push([x, y]);
+    true
 }
 
 fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
@@ -4136,7 +4161,6 @@ fn update_density_graph(
     let offset_px = offset.floor() as i32;
     let offset_px_f = offset_px as f32;
 
-    let mut updates = 0u32;
     let next_t = state.density_graph_life_next_update_elapsed;
     if state.density_graph_life_update_rate > 0.0_f32 && state.total_elapsed_in_screen >= next_t {
         let sample_started = if trace_enabled {
@@ -4144,31 +4168,29 @@ fn update_density_graph(
         } else {
             None
         };
-        while state.total_elapsed_in_screen >= state.density_graph_life_next_update_elapsed
-            && updates < 64
-        {
-            state.density_graph_life_next_update_elapsed += state.density_graph_life_update_rate;
-            updates += 1;
+        let rate = state.density_graph_life_update_rate;
+        let elapsed = (state.total_elapsed_in_screen - next_t).max(0.0_f32);
+        let mut catch_up_steps = ((elapsed / rate).floor() as u32).saturating_add(1);
+        if catch_up_steps > 64 {
+            catch_up_steps = 64;
+        }
+        state.density_graph_life_next_update_elapsed += rate * catch_up_steps as f32;
 
-            if !(current_music_time > 0.0_f32
-                && current_music_time <= state.density_graph_last_second)
-            {
-                continue;
-            }
-
+        if current_music_time > 0.0_f32 && current_music_time <= state.density_graph_last_second {
             let denom = state.density_graph_duration.max(0.001_f32);
-            let x = ((current_music_time - state.density_graph_first_second) / denom)
-                * state.density_graph_scaled_width;
-            if !x.is_finite() {
-                continue;
-            }
-
-            for player in 0..state.num_players {
-                let life = state.players[player].life;
-                let y = (1.0_f32 - life).clamp(0.0_f32, 1.0_f32) * graph_h;
-                let points = &mut state.density_graph_life_points[player];
-                push_density_life_point(points, x, y);
-                state.density_graph_life_dirty[player] = true;
+            let x = (((current_music_time - state.density_graph_first_second) / denom)
+                * state.density_graph_scaled_width)
+                .round()
+                .clamp(0.0_f32, state.density_graph_scaled_width);
+            if x.is_finite() {
+                for player in 0..state.num_players {
+                    let life = state.players[player].life;
+                    let y = (1.0_f32 - life).clamp(0.0_f32, 1.0_f32) * graph_h;
+                    let points = &mut state.density_graph_life_points[player];
+                    if push_density_life_point(points, x, y) {
+                        state.density_graph_life_dirty[player] = true;
+                    }
+                }
             }
         }
         if let Some(started) = sample_started {
@@ -7605,7 +7627,9 @@ fn apply_autosync_for_row_hits(
         return;
     }
 
-    let row_len = state.row_entries[row_entry_index].nonmine_note_indices.len();
+    let row_len = state.row_entries[row_entry_index]
+        .nonmine_note_indices
+        .len();
     let mut i = 0;
     while i < row_len {
         let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
@@ -7761,7 +7785,9 @@ fn finalize_row_judgment(
     skip_life_change: bool,
 ) {
     let (col_start, col_end) = player_col_range(state, player);
-    let row_len = state.row_entries[row_entry_index].nonmine_note_indices.len();
+    let row_len = state.row_entries[row_entry_index]
+        .nonmine_note_indices
+        .len();
 
     let mut row_has_miss = false;
     let mut row_has_successful_hit = false;
@@ -8419,7 +8445,9 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
             }
             let (row, col, beat) = {
                 let note = &state.notes[cursor];
-                if matches!(note.note_type, NoteType::Mine) || !note.can_be_judged || note.result.is_some()
+                if matches!(note.note_type, NoteType::Mine)
+                    || !note.can_be_judged
+                    || note.result.is_some()
                 {
                     cursor += 1;
                     continue;

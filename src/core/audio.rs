@@ -183,7 +183,10 @@ fn reset_music_stream_clock() {
 
 #[inline(always)]
 fn callback_epoch_nanos() -> u64 {
-    CALLBACK_EPOCH.elapsed().as_nanos().min((u64::MAX - 1) as u128) as u64
+    CALLBACK_EPOCH
+        .elapsed()
+        .as_nanos()
+        .min((u64::MAX - 1) as u128) as u64
 }
 
 /// Plays a music track from a file path.
@@ -489,10 +492,8 @@ fn audio_manager_thread(
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
                 LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
                 LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-                LAST_CALLBACK_ELAPSED_NANOS.store(
-                    callback_epoch_nanos().saturating_add(1),
-                    Ordering::Release,
-                );
+                LAST_CALLBACK_ELAPSED_NANOS
+                    .store(callback_epoch_nanos().saturating_add(1), Ordering::Release);
                 let config = crate::config::audio_mix_levels();
                 let master_vol = f32::from(config.master_volume) * 0.01;
                 let music_vol = f32::from(config.music_volume) * 0.01;
@@ -575,10 +576,8 @@ fn audio_manager_thread(
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
                 LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
                 LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-                LAST_CALLBACK_ELAPSED_NANOS.store(
-                    callback_epoch_nanos().saturating_add(1),
-                    Ordering::Release,
-                );
+                LAST_CALLBACK_ELAPSED_NANOS
+                    .store(callback_epoch_nanos().saturating_add(1), Ordering::Release);
                 let config = crate::config::audio_mix_levels();
                 let master_vol = f32::from(config.master_volume) * 0.01;
                 let music_vol = f32::from(config.music_volume) * 0.01;
@@ -656,10 +655,8 @@ fn audio_manager_thread(
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
                 LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
                 LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-                LAST_CALLBACK_ELAPSED_NANOS.store(
-                    callback_epoch_nanos().saturating_add(1),
-                    Ordering::Release,
-                );
+                LAST_CALLBACK_ELAPSED_NANOS
+                    .store(callback_epoch_nanos().saturating_add(1), Ordering::Release);
                 let config = crate::config::audio_mix_levels();
                 let master_vol = f32::from(config.master_volume) * 0.01;
                 let music_vol = f32::from(config.music_volume) * 0.01;

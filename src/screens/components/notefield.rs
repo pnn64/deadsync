@@ -1760,10 +1760,9 @@ pub fn build(
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
-    let centered_one_side =
-        state.num_players == 1
-            && play_style == profile::PlayStyle::Single
-            && center_1player_notefield;
+    let centered_one_side = state.num_players == 1
+        && play_style == profile::PlayStyle::Single
+        && center_1player_notefield;
     let centered_both_sides = state.num_players == 1 && play_style == profile::PlayStyle::Double;
     let base_playfield_center_x = if state.num_players == 2 {
         match placement {

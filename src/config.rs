@@ -714,12 +714,7 @@ const fn pack_audio_mix_levels(
     sfx_volume: u8,
     assist_tick_volume: u8,
 ) -> u32 {
-    u32::from_le_bytes([
-        master_volume,
-        music_volume,
-        sfx_volume,
-        assist_tick_volume,
-    ])
+    u32::from_le_bytes([master_volume, music_volume, sfx_volume, assist_tick_volume])
 }
 
 #[inline(always)]

@@ -7285,7 +7285,10 @@ mod tests {
     #[test]
     fn explosion_animation_tracks_blend_command_for_render_parity() {
         let add = parse_explosion_animation("blend,'BlendMode_Add';diffusealpha,1");
-        assert!(add.blend_add, "blend,BlendMode_Add should mark explosion as additive");
+        assert!(
+            add.blend_add,
+            "blend,BlendMode_Add should mark explosion as additive"
+        );
 
         let normal = parse_explosion_animation("blend,'BlendMode_Normal';diffusealpha,1");
         assert!(
