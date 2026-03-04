@@ -8642,84 +8642,80 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         let beatmult = beatmod_multiplier[player];
         let cmod_zoomed = cmod_pps_zoomed[player];
         let cmod_raw = cmod_pps_raw[player];
+        let cmp_sign = if dir < 0.0_f32 { -1.0_f32 } else { 1.0_f32 };
 
         let miss_cull_threshold =
             dir.mul_add(-state.draw_distance_after_targets[player], receptor_y);
-        col_arrows.retain(|arrow| {
-            let note = &state.notes[arrow.note_index];
-            if matches!(note.note_type, NoteType::Mine) {
-                if note.is_fake {
-                    let y_pos = match scroll_speed {
-                        ScrollSpeedSetting::CMod(_) => {
-                            let note_time_chart = state.note_time_cache[arrow.note_index];
-                            let time_diff_real = (note_time_chart - cull_time) / rate;
-                            (dir * time_diff_real).mul_add(cmod_raw, receptor_y)
-                        }
-                        ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                            let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
-                            let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                            (dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmult)
-                                .mul_add(state.field_zoom[player], receptor_y)
-                        }
-                    };
-                    return if dir < 0.0 {
-                        y_pos <= miss_cull_threshold
-                    } else {
-                        y_pos >= miss_cull_threshold
-                    };
-                }
-                match note.mine_result {
-                    Some(MineResult::Avoided) => {}
-                    Some(MineResult::Hit) => return false,
-                    None => return true,
-                }
-            } else if note.is_fake {
-                let y_pos = match scroll_speed {
-                    ScrollSpeedSetting::CMod(_) => {
-                        let note_time_chart = state.note_time_cache[arrow.note_index];
-                        let time_diff_real = (note_time_chart - cull_time) / rate;
-                        (dir * time_diff_real).mul_add(cmod_raw, receptor_y)
-                    }
-                    ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                        let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
-                        let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                        (dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmult)
-                            .mul_add(state.field_zoom[player], receptor_y)
-                    }
-                };
-                return if dir < 0.0 {
-                    y_pos <= miss_cull_threshold
-                } else {
-                    y_pos >= miss_cull_threshold
-                };
-            } else {
-                let Some(judgment) = note.result.as_ref() else {
-                    return true;
-                };
-                if judgment.grade != JudgeGrade::Miss {
-                    return false;
-                }
-            }
+        match scroll_speed {
+            ScrollSpeedSetting::CMod(_) => {
+                let cmod_raw_slope = dir * cmod_raw / rate;
+                let cmod_zoomed_slope = dir * cmod_zoomed / rate;
+                let cmod_raw_base = receptor_y - cull_time * cmod_raw_slope;
+                let cmod_zoomed_base = receptor_y - cull_time * cmod_zoomed_slope;
 
-            let y_pos = match scroll_speed {
-                ScrollSpeedSetting::CMod(_) => {
+                col_arrows.retain(|arrow| {
+                    let note = &state.notes[arrow.note_index];
+                    let use_raw_pos = if matches!(note.note_type, NoteType::Mine) {
+                        if note.is_fake {
+                            true
+                        } else {
+                            match note.mine_result {
+                                Some(MineResult::Avoided) => false,
+                                Some(MineResult::Hit) => return false,
+                                None => return true,
+                            }
+                        }
+                    } else if note.is_fake {
+                        true
+                    } else {
+                        let Some(judgment) = note.result.as_ref() else {
+                            return true;
+                        };
+                        if judgment.grade != JudgeGrade::Miss {
+                            return false;
+                        }
+                        false
+                    };
+
                     let note_time_chart = state.note_time_cache[arrow.note_index];
-                    let time_diff_real = (note_time_chart - cull_time) / rate;
-                    (dir * time_diff_real).mul_add(cmod_zoomed, receptor_y)
-                }
-                ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                    let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
-                    let beat_diff_disp = note_disp_beat - curr_disp_beat;
-                    (dir * beat_diff_disp * ScrollSpeedSetting::ARROW_SPACING * beatmult)
-                        .mul_add(state.field_zoom[player], receptor_y)
-                }
-            };
-            if dir < 0.0 {
-                y_pos <= miss_cull_threshold
-            } else {
-                y_pos >= miss_cull_threshold
+                    let y_pos = if use_raw_pos {
+                        note_time_chart.mul_add(cmod_raw_slope, cmod_raw_base)
+                    } else {
+                        note_time_chart.mul_add(cmod_zoomed_slope, cmod_zoomed_base)
+                    };
+                    (y_pos - miss_cull_threshold) * cmp_sign >= 0.0_f32
+                });
             }
-        });
+            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                let beat_slope =
+                    dir * ScrollSpeedSetting::ARROW_SPACING * beatmult * state.field_zoom[player];
+                let beat_base = receptor_y - curr_disp_beat * beat_slope;
+
+                col_arrows.retain(|arrow| {
+                    let note = &state.notes[arrow.note_index];
+                    if matches!(note.note_type, NoteType::Mine) {
+                        if !note.is_fake {
+                            match note.mine_result {
+                                Some(MineResult::Avoided) => {}
+                                Some(MineResult::Hit) => return false,
+                                None => return true,
+                            }
+                        }
+                    } else if !note.is_fake {
+                        let Some(judgment) = note.result.as_ref() else {
+                            return true;
+                        };
+                        if judgment.grade != JudgeGrade::Miss {
+                            return false;
+                        }
+                    }
+
+                    let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
+                    let y_pos = note_disp_beat.mul_add(beat_slope, beat_base);
+                    (y_pos - miss_cull_threshold) * cmp_sign >= 0.0_f32
+                });
+            }
+        }
     }
 
     // ITG parity guard: cap total past-receptor arrows per player.
@@ -8734,8 +8730,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         let mut past_prefix_len = [0usize; MAX_COLS];
         let mut total_past = 0usize;
         for col_idx in start_col..end_col {
-            let len = state.arrows[col_idx]
-                .partition_point(|arrow| state.notes[arrow.note_index].beat <= cull_beat);
+            let len = state.arrows[col_idx].partition_point(|arrow| arrow.beat <= cull_beat);
             past_prefix_len[col_idx] = len;
             total_past += len;
         }
