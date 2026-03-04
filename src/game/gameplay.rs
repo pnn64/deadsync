@@ -4934,6 +4934,17 @@ pub fn init(
 
     let note_range_start: [usize; MAX_PLAYERS] =
         std::array::from_fn(|player| note_ranges[player].0);
+    let mut arrow_capacity = [0usize; MAX_COLS];
+    for note in &notes {
+        let col = note.column;
+        if col < num_cols && col < MAX_COLS {
+            arrow_capacity[col] = arrow_capacity[col].saturating_add(1);
+        }
+    }
+    let pending_edges_capacity = (num_cols * 16).max(32);
+    let decaying_hold_capacity = (0..num_players).fold(0usize, |acc, player| {
+        acc.saturating_add(holds_total[player] as usize + rolls_total[player] as usize)
+    });
 
     let global_visual_delay_seconds = config.visual_delay_seconds;
     let player_visual_delay_seconds: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
@@ -5234,7 +5245,14 @@ pub fn init(
         current_music_time: -start_delay,
         note_spawn_cursor: note_range_start,
         judged_row_cursor: [0; MAX_PLAYERS],
-        arrows: std::array::from_fn(|_| Vec::new()),
+        arrows: std::array::from_fn(|col| {
+            let cap = arrow_capacity[col];
+            if cap == 0 {
+                Vec::new()
+            } else {
+                Vec::with_capacity(cap)
+            }
+        }),
         note_time_cache,
         note_display_beat_cache,
         hold_end_time_cache,
@@ -5266,7 +5284,7 @@ pub fn init(
         mini_indicator_rival_score_percent,
         row_map_cache,
         tap_row_hold_roll_flags,
-        decaying_hold_indices: Vec::new(),
+        decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
         hold_decay_active: vec![false; notes_len],
         players,
         hold_judgments: Default::default(),
@@ -5346,7 +5364,7 @@ pub fn init(
         prev_inputs: [false; MAX_COLS],
         keyboard_lane_state: [false; MAX_COLS],
         gamepad_lane_state: [false; MAX_COLS],
-        pending_edges: VecDeque::new(),
+        pending_edges: VecDeque::with_capacity(pending_edges_capacity),
         autoplay_rng: TurnRng::new(song_seed ^ 0xA0A7_0F8A_1A2B_3C4D),
         autoplay_cursor: note_range_start,
         autoplay_pending_row: [None; MAX_PLAYERS],
