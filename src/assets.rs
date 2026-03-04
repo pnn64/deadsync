@@ -627,6 +627,47 @@ enum DynamicImagePrewarmOutcome {
     Failed { path: PathBuf, msg: String },
 }
 
+#[derive(Clone)]
+struct DynamicImagePrewarmJob {
+    path: PathBuf,
+    opts: BannerCacheOptions,
+    cache_dir: &'static str,
+    label: &'static str,
+}
+
+struct DynamicImagePrewarmResult {
+    label: &'static str,
+    outcome: DynamicImagePrewarmOutcome,
+}
+
+fn push_dynamic_image_prewarm_jobs(
+    jobs: &mut Vec<DynamicImagePrewarmJob>,
+    unique: &mut HashSet<String>,
+    paths: &[PathBuf],
+    opts: BannerCacheOptions,
+    cache_dir: &'static str,
+    label: &'static str,
+) -> usize {
+    if !opts.enabled {
+        return 0;
+    }
+    let mut duplicate = 0usize;
+    for path in paths {
+        let dedupe_key = dynamic_image_prewarm_dedupe_key(path, opts, cache_dir);
+        if unique.insert(dedupe_key) {
+            jobs.push(DynamicImagePrewarmJob {
+                path: path.clone(),
+                opts,
+                cache_dir,
+                label,
+            });
+        } else {
+            duplicate += 1;
+        }
+    }
+    duplicate
+}
+
 #[inline(always)]
 fn prewarm_one_dynamic_image(
     path: PathBuf,
@@ -680,63 +721,27 @@ fn dynamic_image_prewarm_dedupe_key(
     )
 }
 
-fn dynamic_image_prewarm_total_jobs(
-    paths: &[PathBuf],
-    opts: BannerCacheOptions,
-    cache_dir: &'static str,
-) -> usize {
-    if !opts.enabled {
-        return 0;
-    }
-    let mut unique = HashSet::<String>::with_capacity(paths.len());
-    for path in paths {
-        unique.insert(dynamic_image_prewarm_dedupe_key(path, opts, cache_dir));
-    }
-    unique.len()
-}
-
-fn prewarm_dynamic_image_cache_with_progress<F>(
-    paths: &[PathBuf],
-    opts: BannerCacheOptions,
-    cache_dir: &'static str,
+fn prewarm_dynamic_image_jobs_with_progress<F>(
+    input_count: usize,
+    jobs: Vec<DynamicImagePrewarmJob>,
+    duplicate: usize,
     label: &'static str,
     progress: &mut F,
 ) where
     F: FnMut(usize, usize, Option<&Path>),
 {
-    if !opts.enabled {
-        progress(0, 0, None);
-        return;
-    }
-
     let started = Instant::now();
-    let mut unique = HashSet::<String>::with_capacity(paths.len());
-    let mut deduped = Vec::with_capacity(paths.len());
-    let mut duplicate = 0usize;
-    for path in paths {
-        let dedupe_key = dynamic_image_prewarm_dedupe_key(path, opts, cache_dir);
-        if unique.insert(dedupe_key) {
-            deduped.push(path.clone());
-        } else {
-            duplicate += 1;
-        }
-    }
-
-    let worker_count = dynamic_image_prewarm_workers(deduped.len());
-    let total_jobs = deduped.len();
+    let worker_count = dynamic_image_prewarm_workers(jobs.len());
+    let total_jobs = jobs.len();
     progress(0, total_jobs, None);
     debug!(
         "{} cache prewarm start: {} input, {} unique, {} duplicate, {} worker threads.",
-        label,
-        paths.len(),
-        total_jobs,
-        duplicate,
-        worker_count
+        label, input_count, total_jobs, duplicate, worker_count
     );
 
-    let (job_tx, job_rx) = mpsc::channel::<PathBuf>();
+    let (job_tx, job_rx) = mpsc::channel::<DynamicImagePrewarmJob>();
     let job_rx = Arc::new(Mutex::new(job_rx));
-    let (res_tx, res_rx) = mpsc::channel::<DynamicImagePrewarmOutcome>();
+    let (res_tx, res_rx) = mpsc::channel::<DynamicImagePrewarmResult>();
     let mut workers = Vec::with_capacity(worker_count);
     for _ in 0..worker_count {
         let job_rx = Arc::clone(&job_rx);
@@ -747,16 +752,20 @@ fn prewarm_dynamic_image_cache_with_progress<F>(
                     let Ok(rx) = job_rx.lock() else { return };
                     rx.recv()
                 };
-                let Ok(path) = job else {
+                let Ok(job) = job else {
                     return;
                 };
-                let _ = res_tx.send(prewarm_one_dynamic_image(path, opts, cache_dir));
+                let outcome = prewarm_one_dynamic_image(job.path, job.opts, job.cache_dir);
+                let _ = res_tx.send(DynamicImagePrewarmResult {
+                    label: job.label,
+                    outcome,
+                });
             }
         }));
     }
     drop(res_tx);
-    for path in deduped {
-        let _ = job_tx.send(path);
+    for job in jobs {
+        let _ = job_tx.send(job);
     }
     drop(job_tx);
 
@@ -770,7 +779,7 @@ fn prewarm_dynamic_image_cache_with_progress<F>(
     let mut reused_ms = 0.0f64;
     let mut completed = 0usize;
     for result in res_rx {
-        let current_path = match &result {
+        let current_path = match &result.outcome {
             DynamicImagePrewarmOutcome::Built { path, .. }
             | DynamicImagePrewarmOutcome::Reused { path, .. }
             | DynamicImagePrewarmOutcome::SkippedNonFile { path }
@@ -779,7 +788,7 @@ fn prewarm_dynamic_image_cache_with_progress<F>(
         };
         completed = completed.saturating_add(1);
         progress(completed, total_jobs, current_path);
-        match result {
+        match result.outcome {
             DynamicImagePrewarmOutcome::Built { millis, .. } => {
                 prepared += 1;
                 built += 1;
@@ -800,7 +809,7 @@ fn prewarm_dynamic_image_cache_with_progress<F>(
                 failed += 1;
                 warn!(
                     "{} cache prewarm failed for '{}': {}",
-                    label,
+                    result.label,
                     path.display(),
                     msg
                 );
@@ -849,49 +858,94 @@ fn prewarm_dynamic_image_cache_with_progress<F>(
     );
 }
 
-pub fn prewarm_banner_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
-where
+pub fn artwork_cache_jobs(
+    banner_paths: &[PathBuf],
+    cdtitle_paths: &[PathBuf],
+    background_paths: &[PathBuf],
+) -> usize {
+    let cfg = crate::config::get();
+    let banner_opts = BannerCacheOptions::from_banner_config(&cfg);
+    let cdtitle_opts = BannerCacheOptions::from_cdtitle_config(&cfg);
+    let background_opts = BannerCacheOptions::from_background_config(&cfg);
+    let total_paths = banner_paths
+        .len()
+        .saturating_add(cdtitle_paths.len())
+        .saturating_add(background_paths.len());
+    let mut unique = HashSet::<String>::with_capacity(total_paths);
+    if banner_opts.enabled {
+        for path in banner_paths {
+            unique.insert(dynamic_image_prewarm_dedupe_key(
+                path,
+                banner_opts,
+                BANNER_CACHE_DIR,
+            ));
+        }
+    }
+    if cdtitle_opts.enabled {
+        for path in cdtitle_paths {
+            unique.insert(dynamic_image_prewarm_dedupe_key(
+                path,
+                cdtitle_opts,
+                CDTITLE_CACHE_DIR,
+            ));
+        }
+    }
+    if background_opts.enabled {
+        for path in background_paths {
+            unique.insert(dynamic_image_prewarm_dedupe_key(
+                path,
+                background_opts,
+                BACKGROUND_CACHE_DIR,
+            ));
+        }
+    }
+    unique.len()
+}
+
+pub fn prewarm_artwork_cache_with_progress<F>(
+    banner_paths: &[PathBuf],
+    cdtitle_paths: &[PathBuf],
+    background_paths: &[PathBuf],
+    progress: &mut F,
+) where
     F: FnMut(usize, usize, Option<&Path>),
 {
-    let opts = BannerCacheOptions::from_banner_config(&crate::config::get());
-    prewarm_dynamic_image_cache_with_progress(paths, opts, BANNER_CACHE_DIR, "Banner", progress);
-}
-
-pub fn banner_cache_jobs(paths: &[PathBuf]) -> usize {
-    let opts = BannerCacheOptions::from_banner_config(&crate::config::get());
-    dynamic_image_prewarm_total_jobs(paths, opts, BANNER_CACHE_DIR)
-}
-
-pub fn prewarm_cdtitle_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
-where
-    F: FnMut(usize, usize, Option<&Path>),
-{
-    let opts = BannerCacheOptions::from_cdtitle_config(&crate::config::get());
-    prewarm_dynamic_image_cache_with_progress(paths, opts, CDTITLE_CACHE_DIR, "CDTitle", progress);
-}
-
-pub fn cdtitle_cache_jobs(paths: &[PathBuf]) -> usize {
-    let opts = BannerCacheOptions::from_cdtitle_config(&crate::config::get());
-    dynamic_image_prewarm_total_jobs(paths, opts, CDTITLE_CACHE_DIR)
-}
-
-pub fn prewarm_background_cache_with_progress<F>(paths: &[PathBuf], progress: &mut F)
-where
-    F: FnMut(usize, usize, Option<&Path>),
-{
-    let opts = BannerCacheOptions::from_background_config(&crate::config::get());
-    prewarm_dynamic_image_cache_with_progress(
-        paths,
-        opts,
+    let cfg = crate::config::get();
+    let banner_opts = BannerCacheOptions::from_banner_config(&cfg);
+    let cdtitle_opts = BannerCacheOptions::from_cdtitle_config(&cfg);
+    let background_opts = BannerCacheOptions::from_background_config(&cfg);
+    let total_paths = banner_paths
+        .len()
+        .saturating_add(cdtitle_paths.len())
+        .saturating_add(background_paths.len());
+    let mut unique = HashSet::<String>::with_capacity(total_paths);
+    let mut jobs = Vec::<DynamicImagePrewarmJob>::with_capacity(total_paths);
+    let mut duplicate = 0usize;
+    duplicate = duplicate.saturating_add(push_dynamic_image_prewarm_jobs(
+        &mut jobs,
+        &mut unique,
+        banner_paths,
+        banner_opts,
+        BANNER_CACHE_DIR,
+        "Banner",
+    ));
+    duplicate = duplicate.saturating_add(push_dynamic_image_prewarm_jobs(
+        &mut jobs,
+        &mut unique,
+        cdtitle_paths,
+        cdtitle_opts,
+        CDTITLE_CACHE_DIR,
+        "CDTitle",
+    ));
+    duplicate = duplicate.saturating_add(push_dynamic_image_prewarm_jobs(
+        &mut jobs,
+        &mut unique,
+        background_paths,
+        background_opts,
         BACKGROUND_CACHE_DIR,
         "Background",
-        progress,
-    );
-}
-
-pub fn background_cache_jobs(paths: &[PathBuf]) -> usize {
-    let opts = BannerCacheOptions::from_background_config(&crate::config::get());
-    dynamic_image_prewarm_total_jobs(paths, opts, BACKGROUND_CACHE_DIR)
+    ));
+    prewarm_dynamic_image_jobs_with_progress(total_paths, jobs, duplicate, "Artwork", progress);
 }
 
 fn build_cached_banner_rgba(

@@ -148,17 +148,25 @@ pub fn init() -> State {
     }
 }
 
-fn collect_banner_cache_paths() -> Vec<PathBuf> {
-    let mut out = Vec::new();
+fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>) {
+    let mut banner = Vec::new();
+    let mut cdtitle = Vec::new();
+    let mut background = Vec::new();
     {
         let song_cache = crate::game::song::get_song_cache();
         for pack in song_cache.iter() {
             if let Some(path) = pack.banner_path.as_ref() {
-                out.push(path.clone());
+                banner.push(path.clone());
             }
             for song in &pack.songs {
                 if let Some(path) = song.banner_path.as_ref() {
-                    out.push(path.clone());
+                    banner.push(path.clone());
+                }
+                if let Some(path) = song.cdtitle_path.as_ref() {
+                    cdtitle.push(path.clone());
+                }
+                if let Some(path) = song.background_path.as_ref() {
+                    background.push(path.clone());
                 }
             }
         }
@@ -169,37 +177,11 @@ fn collect_banner_cache_paths() -> Vec<PathBuf> {
             if let Some(path) =
                 rssp::course::resolve_course_banner_path(course_path, &course.banner)
             {
-                out.push(path);
+                banner.push(path);
             }
         }
     }
-    out
-}
-
-fn collect_cdtitle_cache_paths() -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let song_cache = crate::game::song::get_song_cache();
-    for pack in song_cache.iter() {
-        for song in &pack.songs {
-            if let Some(path) = song.cdtitle_path.as_ref() {
-                out.push(path.clone());
-            }
-        }
-    }
-    out
-}
-
-fn collect_background_cache_paths() -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let song_cache = crate::game::song::get_song_cache();
-    for pack in song_cache.iter() {
-        for song in &pack.songs {
-            if let Some(path) = song.background_path.as_ref() {
-                out.push(path.clone());
-            }
-        }
-    }
-    out
+    (banner, cdtitle, background)
 }
 
 fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
@@ -280,70 +262,34 @@ fn start_loading_thread(state: &mut State) {
             &mut on_course,
         );
 
-        let banner_paths = collect_banner_cache_paths();
-        let cdtitle_paths = collect_cdtitle_cache_paths();
-        let background_paths = collect_background_cache_paths();
-        let banner_total = crate::assets::banner_cache_jobs(&banner_paths);
-        let cdtitle_total = crate::assets::cdtitle_cache_jobs(&cdtitle_paths);
-        let background_total = crate::assets::background_cache_jobs(&background_paths);
-        let artwork_total = banner_total
-            .saturating_add(cdtitle_total)
-            .saturating_add(background_total);
+        let (banner_paths, cdtitle_paths, background_paths) = collect_artwork_cache_paths();
+        let artwork_total =
+            crate::assets::artwork_cache_jobs(&banner_paths, &cdtitle_paths, &background_paths);
 
         let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Artwork));
-        let mut artwork_base_done = 0usize;
         info!(
-            "Init loading: caching banners ({} textures)...",
-            banner_paths.len()
+            "Init loading: caching artwork in one pass (banner={}, cdtitle={}, background={}, total jobs={})...",
+            banner_paths.len(),
+            cdtitle_paths.len(),
+            background_paths.len(),
+            artwork_total
         );
-        let mut on_banner = |done: usize, _total: usize, path: Option<&Path>| {
+        let mut on_artwork = |done: usize, _total: usize, path: Option<&Path>| {
             let (line2, line3) = cache_progress_lines(path);
             let _ = tx.send(LoadingMsg::Artwork {
-                done: artwork_base_done.saturating_add(done),
+                done,
                 total: artwork_total,
                 line2,
                 line3,
             });
         };
-        crate::assets::prewarm_banner_cache_with_progress(&banner_paths, &mut on_banner);
-        info!("Init loading: banner cache prewarm complete.");
-        artwork_base_done = artwork_base_done.saturating_add(banner_total);
-
-        info!(
-            "Init loading: caching cdtitles ({} textures)...",
-            cdtitle_paths.len()
-        );
-        let mut on_cdtitle = |done: usize, _total: usize, path: Option<&Path>| {
-            let (line2, line3) = cache_progress_lines(path);
-            let _ = tx.send(LoadingMsg::Artwork {
-                done: artwork_base_done.saturating_add(done),
-                total: artwork_total,
-                line2,
-                line3,
-            });
-        };
-        crate::assets::prewarm_cdtitle_cache_with_progress(&cdtitle_paths, &mut on_cdtitle);
-        info!("Init loading: cdtitle cache prewarm complete.");
-        artwork_base_done = artwork_base_done.saturating_add(cdtitle_total);
-
-        info!(
-            "Init loading: caching backgrounds ({} textures)...",
-            background_paths.len()
-        );
-        let mut on_background = |done: usize, _total: usize, path: Option<&Path>| {
-            let (line2, line3) = cache_progress_lines(path);
-            let _ = tx.send(LoadingMsg::Artwork {
-                done: artwork_base_done.saturating_add(done),
-                total: artwork_total,
-                line2,
-                line3,
-            });
-        };
-        crate::assets::prewarm_background_cache_with_progress(
+        crate::assets::prewarm_artwork_cache_with_progress(
+            &banner_paths,
+            &cdtitle_paths,
             &background_paths,
-            &mut on_background,
+            &mut on_artwork,
         );
-        info!("Init loading: background cache prewarm complete.");
+        info!("Init loading: artwork cache prewarm complete.");
         std::thread::spawn(|| {
             if std::panic::catch_unwind(noteskin::prewarm_itg_preview_cache).is_err() {
                 warn!("noteskin prewarm thread panicked; first-use preview hitches may occur");
