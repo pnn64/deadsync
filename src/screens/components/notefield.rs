@@ -65,7 +65,6 @@ const ERROR_BAR_WIDTH_MONOCHROME: f32 = 240.0;
 const ERROR_BAR_TICK_WIDTH: f32 = 2.0;
 const ERROR_BAR_TICK_DUR_COLORFUL: f32 = 0.5;
 const ERROR_BAR_TICK_DUR_MONOCHROME: f32 = 0.75;
-const ERROR_BAR_AVERAGE_Y_OFFSET: f32 = -70.0;
 const ERROR_BAR_AVERAGE_TICK_EXTRA_H: f32 = 75.0;
 const ERROR_BAR_SEG_ALPHA_BASE: f32 = 0.3;
 const ERROR_BAR_MONO_BG_ALPHA: f32 = 0.5;
@@ -4083,6 +4082,13 @@ pub fn build(
     } else {
         (judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
     };
+    let mut average_bar_y = 0.0_f32;
+    for y in column_receptor_ys.iter().take(num_cols) {
+        average_bar_y += *y;
+    }
+    if num_cols > 0 {
+        average_bar_y /= num_cols as f32;
+    }
     let judgment_z = if profile.judgment_back {
         Z_JUDGMENT_BACK
     } else {
@@ -4498,7 +4504,6 @@ pub fn build(
                     } else {
                         0.0
                     };
-                    let avg_y = error_bar_y + ERROR_BAR_AVERAGE_Y_OFFSET;
                     let bar_visible = p
                         .error_bar_avg_bar_started_at
                         .map(|t0| {
@@ -4527,7 +4532,7 @@ pub fn build(
                                 continue;
                             }
                             hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(playfield_center_x + x, avg_y):
+                            align(0.5, 0.5): xy(playfield_center_x + x, average_bar_y):
                             zoomto(ERROR_BAR_TICK_WIDTH, tick_h):
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
                             z(error_bar_line_z)
