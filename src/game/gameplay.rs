@@ -8038,15 +8038,14 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
             if note_time > cutoff_time {
                 break;
             }
-            let should_mark = matches!(state.notes[cursor].note_type, NoteType::Mine)
-                && state.notes[cursor].can_be_judged
-                && state.notes[cursor].mine_result.is_none();
+            let note = &mut state.notes[cursor];
+            let should_mark = matches!(note.note_type, NoteType::Mine)
+                && note.can_be_judged
+                && note.mine_result.is_none();
             if should_mark {
-                let (row_index, column) = {
-                    let note = &state.notes[cursor];
-                    (note.row_index, note.column)
-                };
-                state.notes[cursor].mine_result = Some(MineResult::Avoided);
+                let row_index = note.row_index;
+                let column = note.column;
+                note.mine_result = Some(MineResult::Avoided);
                 state.players[player].mines_avoided =
                     state.players[player].mines_avoided.saturating_add(1);
                 debug!("MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s");
@@ -8154,11 +8153,6 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 Some(MineResult::Avoided) => {}
                 None => {
                     let mine_window = state.timing_profile.mine_window_s;
-                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-                        state.music_rate
-                    } else {
-                        1.0
-                    };
                     if music_time_sec - note_time > mine_window * rate
                         && state.notes[note_index].can_be_judged
                     {
@@ -8226,9 +8220,6 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     } else {
         1.0
     };
-    let song_offset_s = state.song_offset_seconds;
-    let global_offset_s = state.global_offset_seconds;
-    let lead_in_s = state.audio_lead_in_seconds.max(0.0);
     let cutoff_time = way_off_window.mul_add(-rate, music_time_sec);
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
@@ -8238,14 +8229,16 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
             if note_time > cutoff_time {
                 break;
             }
-            let should_miss = !matches!(state.notes[cursor].note_type, NoteType::Mine)
-                && state.notes[cursor].can_be_judged
-                && state.notes[cursor].result.is_none();
-            if should_miss {
-                let (row, col, beat) = {
-                    let note = &state.notes[cursor];
-                    (note.row_index, note.column, note.beat)
-                };
+            let (row, col, beat) = {
+                let note = &state.notes[cursor];
+                if matches!(note.note_type, NoteType::Mine) || !note.can_be_judged || note.result.is_some()
+                {
+                    cursor += 1;
+                    continue;
+                }
+                (note.row_index, note.column, note.beat)
+            };
+            {
                 let time_err_music = music_time_sec - note_time;
                 let time_err_real = time_err_music / rate;
                 let miss_because_held = (col < state.num_cols)
@@ -8257,42 +8250,9 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                     miss_because_held,
                 };
                 let judgment = state.notes[cursor].early_result.clone().unwrap_or(miss);
-                state.notes[cursor].result = Some(judgment.clone());
-
-                let stream_pos_s = audio::get_music_stream_position_seconds();
-                let expected_stream_for_note_s =
-                    note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                let expected_stream_for_miss_s =
-                    music_time_sec / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-                let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
-
-                debug!(
-                    concat!(
-                        "TIMING MISS: row={}, col={}, beat={:.3}, ",
-                        "song_offset_s={:.4}, global_offset_s={:.4}, ",
-                        "note_time_s={:.6}, miss_time_s={:.6}, ",
-                        "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
-                        "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
-                        "stream_miss_s={:.6}, stream_delta_miss_ms={:.2}"
-                    ),
-                    row,
-                    col,
-                    beat,
-                    song_offset_s,
-                    global_offset_s,
-                    note_time,
-                    music_time_sec,
-                    judgment.time_error_ms,
-                    rate,
-                    lead_in_s,
-                    stream_pos_s,
-                    expected_stream_for_note_s,
-                    stream_delta_note_ms,
-                    expected_stream_for_miss_s,
-                    stream_delta_miss_ms,
-                );
-                if judgment.grade == JudgeGrade::Miss
+                let judgment_grade = judgment.grade;
+                let judgment_time_error_ms = judgment.time_error_ms;
+                if judgment_grade == JudgeGrade::Miss
                     && let Some(hold) = state.notes[cursor].hold.as_mut()
                     && hold.result != Some(HoldResult::Held)
                 {
@@ -8307,6 +8267,45 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                             state.decaying_hold_indices.push(cursor);
                         }
                     }
+                }
+                state.notes[cursor].result = Some(judgment);
+                if log::log_enabled!(log::Level::Debug) {
+                    let song_offset_s = state.song_offset_seconds;
+                    let global_offset_s = state.global_offset_seconds;
+                    let lead_in_s = state.audio_lead_in_seconds.max(0.0);
+                    let stream_pos_s = audio::get_music_stream_position_seconds();
+                    let expected_stream_for_note_s =
+                        note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                    let expected_stream_for_miss_s =
+                        music_time_sec / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                    let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+                    let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
+
+                    debug!(
+                        concat!(
+                            "TIMING MISS: row={}, col={}, beat={:.3}, ",
+                            "song_offset_s={:.4}, global_offset_s={:.4}, ",
+                            "note_time_s={:.6}, miss_time_s={:.6}, ",
+                            "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
+                            "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
+                            "stream_miss_s={:.6}, stream_delta_miss_ms={:.2}"
+                        ),
+                        row,
+                        col,
+                        beat,
+                        song_offset_s,
+                        global_offset_s,
+                        note_time,
+                        music_time_sec,
+                        judgment_time_error_ms,
+                        rate,
+                        lead_in_s,
+                        stream_pos_s,
+                        expected_stream_for_note_s,
+                        stream_delta_note_ms,
+                        expected_stream_for_miss_s,
+                        stream_delta_miss_ms,
+                    );
                 }
                 debug!("MISSED (time-based): Row {row}");
             }
