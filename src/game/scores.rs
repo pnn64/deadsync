@@ -1507,7 +1507,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     }
 }
 
-const ARROWCLOUD_BODY_VERSION: &str = "1.3";
+const ARROWCLOUD_BODY_VERSION: &str = "1.4";
 const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
 const ARROWCLOUD_ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 const ARROWCLOUD_SUBMIT_BASE_URL: &str = "https://api.arrowcloud.dance";
@@ -4165,10 +4165,10 @@ mod tests {
         assert_eq!(value["timingData"][0][1], json!("Miss"));
         assert_eq!(value["judgmentCounts"]["miss"], json!(3));
         assert_eq!(value["judgmentCounts"]["wayOff"], json!(60));
-        assert_eq!(value["bodyVersion"], Value::String("1.3".to_string()));
+        assert_eq!(value["bodyVersion"], Value::String("1.4".to_string()));
         assert_eq!(
             value["_arrowCloudBodyVersion"],
-            Value::String("1.3".to_string())
+            Value::String("1.4".to_string())
         );
     }
 }
