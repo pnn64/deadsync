@@ -1463,7 +1463,7 @@ fn push_scroller_frame(
                     ) {
                         out.push(model_actor);
                     } else if draw.blend_add {
-                        out.push(act!(sprite(note_slot.texture_key().to_string()):
+                        out.push(act!(sprite(note_slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(layer_center[0], layer_center[1]):
                             setsize(size[0], size[1]):
@@ -1474,7 +1474,7 @@ fn push_scroller_frame(
                             z(z)
                         ));
                     } else {
-                        out.push(act!(sprite(note_slot.texture_key().to_string()):
+                        out.push(act!(sprite(note_slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(layer_center[0], layer_center[1]):
                             setsize(size[0], size[1]):
@@ -1517,7 +1517,7 @@ fn push_scroller_frame(
                 ) {
                     out.push(model_actor);
                 } else {
-                    out.push(act!(sprite(note_slot.texture_key().to_string()):
+                    out.push(act!(sprite(note_slot.texture_key_shared()):
                         align(0.5, 0.5):
                         xy(center[0], center[1]):
                         setsize(preview_size[0], preview_size[1]):

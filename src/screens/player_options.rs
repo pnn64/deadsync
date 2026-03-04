@@ -6976,7 +6976,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                         ) {
                                             actors.push(model_actor);
                                         } else if draw.blend_add {
-                                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                            actors.push(act!(sprite(note_slot.texture_key_shared()):
                                                 align(0.5, 0.5):
                                                 xy(center[0], center[1]):
                                                 setsize(size[0], size[1]):
@@ -6987,7 +6987,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                                 z(z)
                                             ));
                                         } else {
-                                            actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                            actors.push(act!(sprite(note_slot.texture_key_shared()):
                                                 align(0.5, 0.5):
                                                 xy(center[0], center[1]):
                                                 setsize(size[0], size[1]):
@@ -7041,7 +7041,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 ) {
                                     actors.push(model_actor);
                                 } else {
-                                    actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                    actors.push(act!(sprite(note_slot.texture_key_shared()):
                                         align(0.5, 0.5):
                                         xy(center[0], center[1]):
                                         setsize(size[0], size[1]):

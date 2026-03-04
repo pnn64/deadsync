@@ -280,7 +280,7 @@ fn build_actor_recursive<'a>(
 
             let (is_solid, texture_name) = match source {
                 actors::SpriteSource::Solid => (true, "__white"),
-                actors::SpriteSource::Texture(name) => (false, name.as_str()),
+                actors::SpriteSource::Texture(name) => (false, name.as_ref()),
             };
 
             let mut chosen_cell = *cell;
@@ -461,7 +461,7 @@ fn build_actor_recursive<'a>(
             let before = out.len();
             out.push(renderer::RenderObject {
                 object_type: renderer::ObjectType::TexturedMesh {
-                    texture_id: std::borrow::Cow::Borrowed(texture.as_str()),
+                    texture_id: std::borrow::Cow::Borrowed(texture.as_ref()),
                     vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
                     mode: *mode,
                     uv_scale: *uv_scale,

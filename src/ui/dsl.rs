@@ -2,6 +2,7 @@ use crate::assets;
 use crate::core::gfx::BlendMode;
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::ui::{anim, font, runtime};
+use std::sync::Arc;
 
 // PARITY COMMENT STANDARD:
 // PARITY[<Source>]: <mirrored behavior>. Ref: <file/symbol> when known.
@@ -112,6 +113,45 @@ pub enum Mod<'a> {
     EffectOffset(f32),
     EffectTiming([f32; 5]),
     EffectMagnitude([f32; 3]),
+}
+
+pub trait IntoTextureKey {
+    fn into_texture_key(self) -> Arc<str>;
+}
+
+impl IntoTextureKey for Arc<str> {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        self
+    }
+}
+
+impl IntoTextureKey for &Arc<str> {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        self.clone()
+    }
+}
+
+impl IntoTextureKey for String {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        Arc::<str>::from(self)
+    }
+}
+
+impl IntoTextureKey for &String {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        Arc::<str>::from(self.as_str())
+    }
+}
+
+impl IntoTextureKey for &str {
+    #[inline(always)]
+    fn into_texture_key(self) -> Arc<str> {
+        Arc::<str>::from(self)
+    }
 }
 
 #[doc(hidden)]
@@ -673,8 +713,14 @@ fn build_sprite_like<'a>(
 }
 
 #[inline(always)]
-pub fn sprite<'a>(tex: String, mods: &[Mod<'a>], f: &'static str, l: u32, c: u32) -> Actor {
-    build_sprite_like(SpriteSource::Texture(tex), mods, f, l, c)
+pub fn sprite<'a, T: IntoTextureKey>(
+    tex: T,
+    mods: &[Mod<'a>],
+    f: &'static str,
+    l: u32,
+    c: u32,
+) -> Actor {
+    build_sprite_like(SpriteSource::Texture(tex.into_texture_key()), mods, f, l, c)
 }
 
 #[inline(always)]
@@ -1032,7 +1078,7 @@ macro_rules! act {
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
         if !__tw.is_empty(){ __mods.push($crate::ui::dsl::Mod::Tween(&__tw)); }
-        $crate::ui::dsl::sprite(($tex).to_string(), &__mods, file!(), line!(), column!())
+        $crate::ui::dsl::sprite($tex, &__mods, file!(), line!(), column!())
     }};
     (quad: $($tail:tt)+) => {{
         let mut __mods = ::std::vec::Vec::new();

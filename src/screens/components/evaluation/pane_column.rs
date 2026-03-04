@@ -52,7 +52,7 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> String {
 #[inline(always)]
 fn pane3_retexture_model_actor(mut actor: Actor, texture: &str) -> Actor {
     if let Actor::TexturedMesh { texture: mesh_tex, .. } = &mut actor {
-        *mesh_tex = texture.to_string();
+        *mesh_tex = texture.into();
     }
     actor
 }
@@ -373,7 +373,7 @@ pub fn build_column_judgments_pane(
                             ) {
                                 actors.push(model_actor);
                             } else if draw.blend_add {
-                                actors.push(act!(sprite(slot.texture_key().to_string()):
+                                actors.push(act!(sprite(slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(center[0], center[1]):
                                     setsize(size[0], size[1]):
@@ -384,7 +384,7 @@ pub fn build_column_judgments_pane(
                                     z(z)
                                 ));
                             } else {
-                                actors.push(act!(sprite(slot.texture_key().to_string()):
+                                actors.push(act!(sprite(slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(center[0], center[1]):
                                     setsize(size[0], size[1]):
@@ -457,7 +457,7 @@ pub fn build_column_judgments_pane(
                                     ) {
                                         actors.push(model_actor);
                                     } else {
-                                        actors.push(act!(sprite(slot.texture_key().to_string()):
+                                        actors.push(act!(sprite(slot.texture_key_shared()):
                                             align(0.5, 0.5):
                                             xy(center[0], center[1]):
                                             setsize(final_size[0], final_size[1]):

@@ -50,11 +50,11 @@ pub enum AnimationRate {
 #[derive(Debug)]
 pub enum SpriteSource {
     Atlas {
-        texture_key: String,
+        texture_key: Arc<str>,
         tex_dims: (u32, u32),
     },
     Animated {
-        texture_key: String,
+        texture_key: Arc<str>,
         tex_dims: (u32, u32),
         frame_size: [i32; 2],
         grid: (usize, usize),
@@ -69,6 +69,14 @@ impl SpriteSource {
         match self {
             Self::Atlas { texture_key, .. } => texture_key,
             Self::Animated { texture_key, .. } => texture_key,
+        }
+    }
+
+    #[inline(always)]
+    pub fn texture_key_shared(&self) -> Arc<str> {
+        match self {
+            Self::Atlas { texture_key, .. } => texture_key.clone(),
+            Self::Animated { texture_key, .. } => texture_key.clone(),
         }
     }
 
@@ -245,6 +253,11 @@ impl SpriteSlot {
 
     pub fn texture_key(&self) -> &str {
         self.source.texture_key()
+    }
+
+    #[inline(always)]
+    pub fn texture_key_shared(&self) -> Arc<str> {
+        self.source.texture_key_shared()
     }
 
     pub const fn size(&self) -> [i32; 2] {
@@ -1601,7 +1614,7 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
         MINE_GRADIENT_FRAME_SIZE,
     );
     let source = Arc::new(SpriteSource::Animated {
-        texture_key,
+        texture_key: texture_key.into(),
         tex_dims,
         frame_size: [frame_size, frame_size],
         grid: (frame_count, 1),
@@ -3541,7 +3554,7 @@ fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
     let dims = texture_dimensions(&key)?;
     let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
     let source = Arc::new(SpriteSource::Atlas {
-        texture_key: key,
+        texture_key: key.into(),
         tex_dims: dims,
     });
     Some(SpriteSlot {
@@ -5746,7 +5759,7 @@ fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot
     let frame_h = (dims.1 / rows as u32).max(1);
     let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
     let source = Arc::new(SpriteSource::Atlas {
-        texture_key: key,
+        texture_key: key.into(),
         tex_dims: dims,
     });
     Some(SpriteSlot {
@@ -5815,7 +5828,7 @@ fn itg_slot_from_path_animated(
         })
         .filter(|durations| !durations.is_empty());
     let source = Arc::new(SpriteSource::Animated {
-        texture_key: key,
+        texture_key: key.into(),
         tex_dims: dims,
         frame_size: [frame_w as i32, frame_h as i32],
         grid: (cols, rows),
@@ -7144,7 +7157,7 @@ mod tests {
             .clone();
         let key = "tests/fake/Fallback HitMine Explosion 8x8 (res 1536x1536).png".to_string();
         slot.source = Arc::new(SpriteSource::Atlas {
-            texture_key: key.clone(),
+            texture_key: Arc::<str>::from(key.as_str()),
             tex_dims: (2048, 2048),
         });
         slot.model = None;

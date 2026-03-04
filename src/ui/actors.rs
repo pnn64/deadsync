@@ -30,7 +30,7 @@ pub enum SizeSpec {
 /// For `Solid`, the final color is `tint` (no sampling).
 #[derive(Clone, Debug)]
 pub enum SpriteSource {
-    Texture(String),
+    Texture(Arc<str>),
     Solid,
 }
 
@@ -117,7 +117,7 @@ pub enum Actor {
         align: [f32; 2],
         offset: [f32; 2],
         size: [SizeSpec; 2],
-        texture: String,
+        texture: Arc<str>,
         vertices: Arc<[TexturedMeshVertex]>,
         mode: MeshMode,
         uv_scale: [f32; 2],

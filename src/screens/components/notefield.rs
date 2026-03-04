@@ -603,7 +603,7 @@ fn noteskin_model_actor_from_vertices(
         align: [0.0, 0.0],
         offset: xy,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-        texture: slot.texture_key().to_string(),
+        texture: slot.texture_key_shared(),
         vertices,
         mode: MeshMode::Triangles,
         uv_scale,
@@ -2230,7 +2230,7 @@ pub fn build(
                 // dance/default) instead of being normalized to arrow height.
                 let receptor_size = scale_explosion(logical_slot_size(receptor_slot));
                 let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
-                actors.push(act!(sprite(receptor_slot.texture_key().to_string()):
+                actors.push(act!(sprite(receptor_slot.texture_key_shared()):
                     align(0.5, 0.5):
                     xy(playfield_center_x + col_x_offset, receptor_y_lane):
                     setsize(receptor_size[0], receptor_size[1]):
@@ -2326,7 +2326,7 @@ pub fn build(
                         actors.push(glow_actor);
                     }
                 } else if draw.blend_add {
-                    actors.push(act!(sprite(hold_slot.texture_key().to_string()):
+                    actors.push(act!(sprite(hold_slot.texture_key_shared()):
                         align(0.5, 0.5):
                         xy(center[0], center[1]):
                         setsize(hold_size[0], hold_size[1]):
@@ -2337,7 +2337,7 @@ pub fn build(
                         z(Z_HOLD_EXPLOSION)
                     ));
                     if let Some(glow_color) = glow {
-                        actors.push(act!(sprite(hold_slot.texture_key().to_string()):
+                        actors.push(act!(sprite(hold_slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(center[0], center[1]):
                             setsize(hold_size[0], hold_size[1]):
@@ -2349,7 +2349,7 @@ pub fn build(
                         ));
                     }
                 } else {
-                    actors.push(act!(sprite(hold_slot.texture_key().to_string()):
+                    actors.push(act!(sprite(hold_slot.texture_key_shared()):
                         align(0.5, 0.5):
                         xy(center[0], center[1]):
                         setsize(hold_size[0], hold_size[1]):
@@ -2360,7 +2360,7 @@ pub fn build(
                         z(Z_HOLD_EXPLOSION)
                     ));
                     if let Some(glow_color) = glow {
-                        actors.push(act!(sprite(hold_slot.texture_key().to_string()):
+                        actors.push(act!(sprite(hold_slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(center[0], center[1]):
                             setsize(hold_size[0], hold_size[1]):
@@ -2387,7 +2387,7 @@ pub fn build(
                         let width = glow_size[0] * zoom;
                         let height = glow_size[1] * zoom;
                         if behavior.blend_add {
-                            actors.push(act!(sprite(glow_slot.texture_key().to_string()):
+                            actors.push(act!(sprite(glow_slot.texture_key_shared()):
                                 align(0.5, 0.5):
                                 xy(playfield_center_x + col_x_offset, receptor_y_lane):
                                 setsize(width, height):
@@ -2398,7 +2398,7 @@ pub fn build(
                                 z(Z_HOLD_GLOW)
                             ));
                         } else {
-                            actors.push(act!(sprite(glow_slot.texture_key().to_string()):
+                            actors.push(act!(sprite(glow_slot.texture_key_shared()):
                                 align(0.5, 0.5):
                                 xy(playfield_center_x + col_x_offset, receptor_y_lane):
                                 setsize(width, height):
@@ -2444,7 +2444,7 @@ pub fn build(
                 let glow = visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
                 if explosion.animation.blend_add {
-                    actors.push(act!(sprite(slot.texture_key().to_string()):
+                    actors.push(act!(sprite(slot.texture_key_shared()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
                         setsize(size[0], size[1]):
@@ -2461,7 +2461,7 @@ pub fn build(
                         z(Z_TAP_EXPLOSION)
                     ));
                     if glow_strength > f32::EPSILON {
-                        actors.push(act!(sprite(slot.texture_key().to_string()):
+                        actors.push(act!(sprite(slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset, receptor_y_lane):
                             setsize(size[0], size[1]):
@@ -2474,7 +2474,7 @@ pub fn build(
                         ));
                     }
                 } else {
-                    actors.push(act!(sprite(slot.texture_key().to_string()):
+                    actors.push(act!(sprite(slot.texture_key_shared()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
                         setsize(size[0], size[1]):
@@ -2491,7 +2491,7 @@ pub fn build(
                         z(Z_TAP_EXPLOSION)
                     ));
                     if glow_strength > f32::EPSILON {
-                        actors.push(act!(sprite(slot.texture_key().to_string()):
+                        actors.push(act!(sprite(slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset, receptor_y_lane):
                             setsize(size[0], size[1]):
@@ -2528,7 +2528,7 @@ pub fn build(
             let glow = visual.glow;
             let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
             if explosion.animation.blend_add {
-                actors.push(act!(sprite(slot.texture_key().to_string()):
+                actors.push(act!(sprite(slot.texture_key_shared()):
                     align(0.5, 0.5):
                     xy(playfield_center_x + col_x_offset, receptor_y_lane):
                     setsize(size[0], size[1]):
@@ -2545,7 +2545,7 @@ pub fn build(
                     z(Z_MINE_EXPLOSION)
                 ));
                 if glow_strength > f32::EPSILON {
-                    actors.push(act!(sprite(slot.texture_key().to_string()):
+                    actors.push(act!(sprite(slot.texture_key_shared()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
                         setsize(size[0], size[1]):
@@ -2558,7 +2558,7 @@ pub fn build(
                     ));
                 }
             } else {
-                actors.push(act!(sprite(slot.texture_key().to_string()):
+                actors.push(act!(sprite(slot.texture_key_shared()):
                     align(0.5, 0.5):
                     xy(playfield_center_x + col_x_offset, receptor_y_lane):
                     setsize(size[0], size[1]):
@@ -2575,7 +2575,7 @@ pub fn build(
                     z(Z_MINE_EXPLOSION)
                 ));
                 if glow_strength > f32::EPSILON {
-                    actors.push(act!(sprite(slot.texture_key().to_string()):
+                    actors.push(act!(sprite(slot.texture_key_shared()):
                         align(0.5, 0.5):
                         xy(playfield_center_x + col_x_offset, receptor_y_lane):
                         setsize(size[0], size[1]):
@@ -2964,7 +2964,7 @@ pub fn build(
                                     Some(v) => v.max(seg_bottom_screen),
                                 });
 
-                                actors.push(act!(sprite(body_slot.texture_key().to_string()):
+                                actors.push(act!(sprite(body_slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(playfield_center_x + col_x_offset, segment_center_screen):
                                     setsize(body_width, segment_size_screen):
@@ -3033,7 +3033,7 @@ pub fn build(
                     if cap_height > f32::EPSILON {
                         let cap_center = (cap_top + cap_bottom) * 0.5;
                         let cap_rotation = top_cap_rotation_deg(lane_reverse, body_flipped);
-                        actors.push(act!(sprite(cap_slot.texture_key().to_string()):
+                        actors.push(act!(sprite(cap_slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset, cap_center):
                             setsize(cap_width, cap_height):
@@ -3115,7 +3115,7 @@ pub fn build(
                     let cap_center = (draw_top + draw_bottom) * 0.5;
                     let cap_height = draw_height;
                     if cap_height > f32::EPSILON {
-                        actors.push(act!(sprite(cap_slot.texture_key().to_string()):
+                        actors.push(act!(sprite(cap_slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(playfield_center_x + col_x_offset, cap_center):
                             setsize(cap_width, cap_height):
@@ -3237,7 +3237,7 @@ pub fn build(
                         let sprite_center =
                             offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                         actors.push(
-                            act!(sprite(head_slot.texture_key().to_string()):
+                            act!(sprite(head_slot.texture_key_shared()):
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
@@ -3252,7 +3252,7 @@ pub fn build(
                         let sprite_center =
                             offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                         actors.push(
-                            act!(sprite(head_slot.texture_key().to_string()):
+                            act!(sprite(head_slot.texture_key_shared()):
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
@@ -3336,7 +3336,7 @@ pub fn build(
                             let sprite_center =
                                 offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                             actors.push(
-                                act!(sprite(note_slot.texture_key().to_string()):
+                                act!(sprite(note_slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
@@ -3351,7 +3351,7 @@ pub fn build(
                             let sprite_center =
                                 offset_center(head_center, local_offset, local_offset_rot_sin_cos);
                             actors.push(
-                                act!(sprite(note_slot.texture_key().to_string()):
+                                act!(sprite(note_slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
@@ -3396,7 +3396,7 @@ pub fn build(
                     ) {
                         actors.push(model_actor);
                     } else {
-                        actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                        actors.push(act!(sprite(note_slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(head_center[0], head_center[1]):
                             setsize(size[0], size[1]):
@@ -3481,7 +3481,7 @@ pub fn build(
                                 let fill_phase = current_beat.rem_euclid(1.0);
                                 let frame = gradient_slot.frame_index_from_phase(fill_phase);
                                 let uv = gradient_slot.uv_for_frame_at(frame, phase_time);
-                                actors.push(act!(sprite(gradient_slot.texture_key().to_string()):
+                                actors.push(act!(sprite(gradient_slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(playfield_center_x + col_x_offset, y_pos):
                                     setsize(width, height):
@@ -3537,7 +3537,7 @@ pub fn build(
                                 ) {
                                     actors.push(model_actor);
                                 } else {
-                                    actors.push(act!(sprite(slot.texture_key().to_string()):
+                                    actors.push(act!(sprite(slot.texture_key_shared()):
                                         align(0.5, 0.5):
                                         xy(center[0], center[1]):
                                         setsize(width, height):
@@ -3592,7 +3592,7 @@ pub fn build(
                         ) {
                             actors.push(model_actor);
                         } else {
-                            actors.push(act!(sprite(slot.texture_key().to_string()):
+                            actors.push(act!(sprite(slot.texture_key_shared()):
                                 align(0.5, 0.5):
                                 xy(center[0], center[1]):
                                 setsize(size[0], size[1]):
@@ -3683,7 +3683,7 @@ pub fn build(
                         ) {
                             actors.push(model_actor);
                         } else {
-                            actors.push(act!(sprite(head_slot.texture_key().to_string()):
+                            actors.push(act!(sprite(head_slot.texture_key_shared()):
                                 align(0.5, 0.5):
                                 xy(center[0], center[1]):
                                 setsize(note_size[0], note_size[1]):
@@ -3773,7 +3773,7 @@ pub fn build(
                             let sprite_center =
                                 offset_center(note_center, local_offset, local_offset_rot_sin_cos);
                             if draw.blend_add {
-                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                actors.push(act!(sprite(note_slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(note_size[0], note_size[1]):
@@ -3784,7 +3784,7 @@ pub fn build(
                                     z(layer_z)
                                 ));
                             } else {
-                                actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                                actors.push(act!(sprite(note_slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(note_size[0], note_size[1]):
@@ -3828,7 +3828,7 @@ pub fn build(
                     ) {
                         actors.push(model_actor);
                     } else {
-                        actors.push(act!(sprite(note_slot.texture_key().to_string()):
+                        actors.push(act!(sprite(note_slot.texture_key_shared()):
                             align(0.5, 0.5):
                             xy(center[0], center[1]):
                             setsize(note_size[0], note_size[1]):
