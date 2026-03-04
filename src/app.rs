@@ -172,6 +172,31 @@ enum TransitionState {
 const STUTTER_SAMPLE_COUNT: usize = 5;
 const STUTTER_SAMPLE_LIFETIME: f32 = 3.4;
 
+#[inline(always)]
+fn elapsed_us_since(started: Instant) -> u32 {
+    let elapsed = started.elapsed().as_micros();
+    if elapsed > u128::from(u32::MAX) {
+        u32::MAX
+    } else {
+        elapsed as u32
+    }
+}
+
+#[inline(always)]
+fn stutter_severity(frame_seconds: f32, expected_seconds: f32) -> u8 {
+    if expected_seconds <= 0.0 {
+        return 0;
+    }
+    let thresholds = [expected_seconds * 2.0, expected_seconds * 4.0, 0.1];
+    let mut severity: u8 = 0;
+    while usize::from(severity) < thresholds.len()
+        && frame_seconds > thresholds[usize::from(severity)]
+    {
+        severity = severity.saturating_add(1);
+    }
+    severity
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum OverlayMode {
     Off,
@@ -3448,28 +3473,86 @@ impl App {
     }
 
     #[inline(always)]
+    fn expected_frame_seconds_for_stutter(&self) -> f32 {
+        let fps = self.state.shell.last_fps;
+        if fps > 0.0 {
+            return 1.0 / fps;
+        }
+        if let Some(interval) = self.state.shell.frame_interval {
+            return interval.as_secs_f32();
+        }
+        if self.state.shell.vsync_enabled {
+            return 1.0 / 60.0;
+        }
+        0.0
+    }
+
+    #[inline(always)]
     fn update_stutter_samples(&mut self, frame_seconds: f32, total_elapsed: f32) {
         if !self.state.shell.overlay_mode.shows_stutter() {
             return;
         }
-        let fps = self.state.shell.last_fps;
-        if fps <= 0.0 {
-            return;
-        }
-        let expected = 1.0 / fps;
-        let thresholds = [expected * 2.0, expected * 4.0, 0.1];
-        let mut severity: usize = 0;
-        while severity < thresholds.len() && frame_seconds > thresholds[severity] {
-            severity += 1;
-        }
+        let expected = self.expected_frame_seconds_for_stutter();
+        let severity = stutter_severity(frame_seconds, expected);
         if severity == 0 {
             return;
         }
-        self.state.shell.push_stutter_sample(
+        self.state
+            .shell
+            .push_stutter_sample(total_elapsed, frame_seconds, expected, severity);
+    }
+
+    #[inline(always)]
+    fn trace_frame_stutter_if_needed(
+        &self,
+        frame_seconds: f32,
+        total_elapsed: f32,
+        screen: CurrentScreen,
+        input_us: u32,
+        update_us: u32,
+        compose_us: u32,
+        upload_us: u32,
+        draw_us: u32,
+    ) {
+        if !log::log_enabled!(log::Level::Trace) {
+            return;
+        }
+        let expected = self.expected_frame_seconds_for_stutter();
+        let severity = stutter_severity(frame_seconds, expected);
+        if severity == 0 {
+            return;
+        }
+        let frame_us_f = (frame_seconds * 1_000_000.0).max(0.0);
+        let frame_us = if frame_us_f > u32::MAX as f32 {
+            u32::MAX
+        } else {
+            frame_us_f as u32
+        };
+        let frame_work_us = input_us
+            .saturating_add(update_us)
+            .saturating_add(compose_us)
+            .saturating_add(upload_us)
+            .saturating_add(draw_us);
+        let idle_wait_us = frame_us.saturating_sub(frame_work_us);
+        let multiple = if expected > 0.0 {
+            frame_seconds / expected
+        } else {
+            0.0
+        };
+        log::trace!(
+            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} phases_ms=[input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} idle_wait:{:.3}]",
             total_elapsed,
-            frame_seconds,
-            expected,
-            severity as u8,
+            severity,
+            screen,
+            frame_seconds * 1000.0,
+            expected * 1000.0,
+            multiple,
+            input_us as f32 / 1000.0,
+            update_us as f32 / 1000.0,
+            compose_us as f32 / 1000.0,
+            upload_us as f32 / 1000.0,
+            draw_us as f32 / 1000.0,
+            idle_wait_us as f32 / 1000.0
         );
     }
 
@@ -5315,7 +5398,12 @@ impl ApplicationHandler<UserEvent> for App {
 
                 // --- Manage gamepad overlay lifetime ---
                 self.state.shell.update_gamepad_overlay(now);
-                self.update_stutter_samples(delta_time, total_elapsed);
+                let input_us: u32;
+                let update_us: u32;
+                let compose_us: u32;
+                let mut upload_us: u32 = 0;
+                let mut draw_us: u32 = 0;
+                let input_started = Instant::now();
                 for ev in input::drain_debounced_events() {
                     if let Err(e) = self.route_input_event(event_loop, ev) {
                         error!("Failed to handle debounced input: {e}");
@@ -5323,8 +5411,10 @@ impl ApplicationHandler<UserEvent> for App {
                         return;
                     }
                 }
+                input_us = elapsed_us_since(input_started);
 
                 let mut finished_fading_out_to: Option<CurrentScreen> = None;
+                let update_started = Instant::now();
                 match &mut self.state.shell.transition {
                     TransitionState::FadingOut {
                         elapsed,
@@ -5516,16 +5606,20 @@ impl ApplicationHandler<UserEvent> for App {
                 if let Some(target) = finished_fading_out_to {
                     self.on_fade_complete(target, event_loop);
                 }
+                update_us = elapsed_us_since(update_started);
 
                 if self.window.as_ref().map(|w| w.id()) != Some(window_id) {
                     return;
                 }
 
+                let compose_started = Instant::now();
                 let (actors, clear_color) = self.get_current_actors();
                 self.update_fps_title(&window, now);
                 if let Some(backend) = &mut self.backend {
+                    let upload_started = Instant::now();
                     self.asset_manager
                         .upload_pending_generated_textures(backend);
+                    upload_us = elapsed_us_since(upload_started);
                 }
                 let fonts = self.asset_manager.fonts();
                 let screen = crate::ui::compose::build_screen(
@@ -5535,22 +5629,37 @@ impl ApplicationHandler<UserEvent> for App {
                     fonts,
                     total_elapsed,
                 );
+                compose_us = elapsed_us_since(compose_started).saturating_sub(upload_us);
 
                 if let Some(backend) = &mut self.backend {
                     if self.state.shell.screenshot_pending {
                         backend.request_screenshot();
                     }
+                    let draw_started = Instant::now();
                     match backend.draw(&screen, &self.asset_manager.textures) {
                         Ok(vpf) => {
                             self.state.shell.current_frame_vpf = vpf;
+                            draw_us = elapsed_us_since(draw_started);
                             self.capture_pending_screenshot(now);
                         }
                         Err(e) => {
                             error!("Failed to draw frame: {e}");
                             event_loop.exit();
+                            return;
                         }
                     }
                 }
+                self.update_stutter_samples(delta_time, total_elapsed);
+                self.trace_frame_stutter_if_needed(
+                    delta_time,
+                    total_elapsed,
+                    self.state.screens.current_screen,
+                    input_us,
+                    update_us,
+                    compose_us,
+                    upload_us,
+                    draw_us,
+                );
             }
             _ => {}
         }

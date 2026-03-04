@@ -3216,6 +3216,7 @@ struct GameplayUpdatePhaseTimings {
     density_life_mesh_us: u32,
     density_clip_us: u32,
     danger_us: u32,
+    untracked_us: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -3501,6 +3502,9 @@ fn max_phase_name_and_us(phases: &GameplayUpdatePhaseTimings) -> (&'static str, 
     if phases.danger_us > best.1 {
         best = ("danger", phases.danger_us);
     }
+    if phases.untracked_us > best.1 {
+        best = ("untracked", phases.untracked_us);
+    }
     best
 }
 
@@ -3530,6 +3534,27 @@ fn accumulate_phase_max(dst: &mut GameplayUpdatePhaseTimings, src: &GameplayUpda
     dst.density_life_mesh_us = dst.density_life_mesh_us.max(src.density_life_mesh_us);
     dst.density_clip_us = dst.density_clip_us.max(src.density_clip_us);
     dst.danger_us = dst.danger_us.max(src.danger_us);
+    dst.untracked_us = dst.untracked_us.max(src.untracked_us);
+}
+
+#[inline(always)]
+fn tracked_phase_total_us(phases: &GameplayUpdatePhaseTimings) -> u32 {
+    phases
+        .pre_notes_us
+        .saturating_add(phases.autoplay_us)
+        .saturating_add(phases.input_edges_us)
+        .saturating_add(phases.held_mines_us)
+        .saturating_add(phases.active_holds_us)
+        .saturating_add(phases.hold_decay_us)
+        .saturating_add(phases.visuals_us)
+        .saturating_add(phases.spawn_arrows_us)
+        .saturating_add(phases.mine_avoid_us)
+        .saturating_add(phases.passive_miss_us)
+        .saturating_add(phases.tap_miss_us)
+        .saturating_add(phases.cull_us)
+        .saturating_add(phases.judged_rows_us)
+        .saturating_add(phases.density_us)
+        .saturating_add(phases.danger_us)
 }
 
 fn trace_capacity_growth(state: &mut State) {
@@ -3595,8 +3620,9 @@ fn trace_gameplay_update(
     delta_time: f32,
     music_time_sec: f32,
     total_us: u32,
-    phases: GameplayUpdatePhaseTimings,
+    mut phases: GameplayUpdatePhaseTimings,
 ) {
+    phases.untracked_us = total_us.saturating_sub(tracked_phase_total_us(&phases));
     let active_arrows: usize = state.arrows.iter().map(std::vec::Vec::len).sum();
     let pending_len = state.pending_edges.len();
     let replay_edges_len = state.replay_edges.len();
@@ -3629,7 +3655,7 @@ fn trace_gameplay_update(
         state.update_trace.summary_slow_frames =
             state.update_trace.summary_slow_frames.saturating_add(1);
         debug!(
-            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} arrows={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} pmiss:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3}] input_sub_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}]",
+            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} arrows={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} pmiss:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3} other:{:.3}] input_sub_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}]",
             frame_counter,
             music_time_sec,
             total_us as f32 / 1000.0,
@@ -3653,6 +3679,7 @@ fn trace_gameplay_update(
             phases.judged_rows_us as f32 / 1000.0,
             phases.density_us as f32 / 1000.0,
             phases.danger_us as f32 / 1000.0,
+            phases.untracked_us as f32 / 1000.0,
             phases.input_queue_us as f32 / 1000.0,
             phases.input_state_us as f32 / 1000.0,
             phases.input_glow_us as f32 / 1000.0,
@@ -3676,7 +3703,7 @@ fn trace_gameplay_update(
         let summary_peak_pending_edges = state.update_trace.summary_peak_pending_edges;
         let (summary_hot_name, summary_hot_us) = max_phase_name_and_us(&summary_max_phase);
         trace!(
-            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}]",
+            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}] other_max={:.3}",
             summary_frames,
             summary_slow_frames,
             summary_max_total_us as f32 / 1000.0,
@@ -3692,7 +3719,8 @@ fn trace_gameplay_update(
             summary_max_phase.density_sample_us as f32 / 1000.0,
             summary_max_phase.density_hist_mesh_us as f32 / 1000.0,
             summary_max_phase.density_life_mesh_us as f32 / 1000.0,
-            summary_max_phase.density_clip_us as f32 / 1000.0
+            summary_max_phase.density_clip_us as f32 / 1000.0,
+            summary_max_phase.untracked_us as f32 / 1000.0
         );
         state.update_trace.summary_elapsed_s = 0.0;
         state.update_trace.summary_frames = 0;
