@@ -3974,17 +3974,21 @@ fn push_density_life_point(points: &mut Vec<[f32; 2]>, x: f32, y: f32) {
 }
 
 fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
-    while !points.is_empty() && points[0][0] < offset {
-        if points.len() > 1 && points[1][0] >= offset {
-            let a = points[0];
-            let b = points[1];
-            let dx = (b[0] - a[0]).max(0.000_001_f32);
-            let t = ((offset - a[0]) / dx).clamp(0.0_f32, 1.0_f32);
-            points[0] = [offset, a[1] + (b[1] - a[1]) * t];
-            break;
-        }
-        points.remove(0);
+    let first_visible = points.partition_point(|p| p[0] < offset);
+    if first_visible == 0 {
+        return;
     }
+    if first_visible >= points.len() {
+        points.clear();
+        return;
+    }
+
+    let a = points[first_visible - 1];
+    let b = points[first_visible];
+    let dx = (b[0] - a[0]).max(0.000_001_f32);
+    let t = ((offset - a[0]) / dx).clamp(0.0_f32, 1.0_f32);
+    points[first_visible - 1] = [offset, a[1] + (b[1] - a[1]) * t];
+    points.drain(0..(first_visible - 1));
 }
 
 #[inline(always)]
@@ -4170,7 +4174,6 @@ fn update_density_graph(state: &mut State, current_music_time: f32) {
                 let y = (1.0_f32 - life).clamp(0.0_f32, 1.0_f32) * graph_h;
                 let points = &mut state.density_graph_life_points[player];
                 push_density_life_point(points, x, y);
-                clip_density_life_points(points, offset_px_f);
                 state.density_graph_life_dirty[player] = true;
             }
         }
@@ -7892,18 +7895,31 @@ fn update_judged_rows(state: &mut State) {
 
 #[inline(always)]
 fn process_input_edges(state: &mut State) {
-    while let Some(edge) = state.pending_edges.pop_front() {
+    if state.pending_edges.is_empty() {
+        return;
+    }
+
+    let mut pending = VecDeque::new();
+    std::mem::swap(&mut pending, &mut state.pending_edges);
+
+    while let Some(edge) = pending.pop_front() {
         let lane_idx = edge.lane.index();
         if lane_idx >= state.num_cols {
             continue;
         }
-        let was_down = lane_is_pressed(state, lane_idx);
+
+        let mut keyboard_down = state.keyboard_lane_state[lane_idx];
+        let mut gamepad_down = state.gamepad_lane_state[lane_idx];
+        let was_down = keyboard_down || gamepad_down;
         match edge.source {
-            InputSource::Keyboard => state.keyboard_lane_state[lane_idx] = edge.pressed,
-            InputSource::Gamepad => state.gamepad_lane_state[lane_idx] = edge.pressed,
+            InputSource::Keyboard => keyboard_down = edge.pressed,
+            InputSource::Gamepad => gamepad_down = edge.pressed,
         }
-        let is_down = lane_is_pressed(state, lane_idx);
-        if edge.pressed && is_down && !was_down {
+        state.keyboard_lane_state[lane_idx] = keyboard_down;
+        state.gamepad_lane_state[lane_idx] = gamepad_down;
+        let is_down = keyboard_down || gamepad_down;
+
+        if edge.pressed && !was_down && is_down {
             start_receptor_glow_press(state, lane_idx);
             let event_music_time = edge.event_music_time;
             let hit_note = judge_a_tap(state, lane_idx, event_music_time);
@@ -7915,6 +7931,11 @@ fn process_input_edges(state: &mut State) {
             release_receptor_glow(state, lane_idx);
         }
     }
+
+    if !state.pending_edges.is_empty() {
+        pending.append(&mut state.pending_edges);
+    }
+    state.pending_edges = pending;
 }
 
 #[inline(always)]
