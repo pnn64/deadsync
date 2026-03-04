@@ -8515,45 +8515,46 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         }
 
         let cull_beat = player_cull_beat[player];
-        let mut past_notes: Vec<(usize, usize, usize)> = Vec::new();
+        let mut past_prefix_len = [0usize; MAX_COLS];
+        let mut total_past = 0usize;
         for col_idx in start_col..end_col {
-            for (arrow_idx, arrow) in state.arrows[col_idx].iter().enumerate() {
-                let note = &state.notes[arrow.note_index];
-                if note.beat <= cull_beat {
-                    past_notes.push((note.row_index, col_idx, arrow_idx));
-                }
-            }
+            let len = state.arrows[col_idx]
+                .partition_point(|arrow| state.notes[arrow.note_index].beat <= cull_beat);
+            past_prefix_len[col_idx] = len;
+            total_past += len;
         }
-        if past_notes.len() <= MAX_NOTES_AFTER_TARGETS {
+        if total_past <= MAX_NOTES_AFTER_TARGETS {
             continue;
         }
 
-        past_notes.sort_unstable();
-        let drop_count = past_notes.len() - MAX_NOTES_AFTER_TARGETS;
-        let mut drop_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
-        let mut i = 0usize;
-        while i < drop_count {
-            let (_, col_idx, arrow_idx) = past_notes[i];
-            drop_indices[col_idx].push(arrow_idx);
-            i += 1;
+        let mut drop_prefix = [0usize; MAX_COLS];
+        let mut drop_remaining = total_past - MAX_NOTES_AFTER_TARGETS;
+        while drop_remaining > 0 {
+            let mut best = (usize::MAX, usize::MAX, usize::MAX);
+            for col_idx in start_col..end_col {
+                let arrow_idx = drop_prefix[col_idx];
+                if arrow_idx >= past_prefix_len[col_idx] {
+                    continue;
+                }
+                let note_index = state.arrows[col_idx][arrow_idx].note_index;
+                let row_index = state.notes[note_index].row_index;
+                let candidate = (row_index, col_idx, arrow_idx);
+                if candidate < best {
+                    best = candidate;
+                }
+            }
+            if best.1 == usize::MAX {
+                break;
+            }
+            drop_prefix[best.1] += 1;
+            drop_remaining -= 1;
         }
-
         for col_idx in start_col..end_col {
-            let drops = &mut drop_indices[col_idx];
-            if drops.is_empty() {
+            let drop_count = drop_prefix[col_idx];
+            if drop_count == 0 {
                 continue;
             }
-            drops.sort_unstable();
-            let mut drop_pos = 0usize;
-            let mut arrow_idx = 0usize;
-            state.arrows[col_idx].retain(|_| {
-                let should_drop = drop_pos < drops.len() && arrow_idx == drops[drop_pos];
-                if should_drop {
-                    drop_pos += 1;
-                }
-                arrow_idx += 1;
-                !should_drop
-            });
+            state.arrows[col_idx].drain(..drop_count);
         }
     }
 }
