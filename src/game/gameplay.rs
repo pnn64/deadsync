@@ -29,7 +29,7 @@ use rssp::streams::StreamSegment;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use twox_hash::XxHash64;
 use winit::event::KeyEvent;
@@ -4090,11 +4090,12 @@ fn build_density_life_mesh(
     let mut local: Vec<[f32; 2]> = Vec::with_capacity(slice.len());
     for &p in slice {
         let q = [p[0] - offset, p[1]];
-        if local
-            .last()
-            .is_some_and(|&last| v2_len(v2_sub(q, last)) <= 0.000_1_f32)
-        {
-            continue;
+        if let Some(&last) = local.last() {
+            let dx = q[0] - last[0];
+            let dy = q[1] - last[1];
+            if dx.mul_add(dx, dy * dy) <= 0.000_000_01_f32 {
+                continue;
+            }
         }
         local.push(q);
     }
@@ -4105,19 +4106,21 @@ fn build_density_life_mesh(
     let half = thickness * 0.5_f32;
     let miter_cap = half * 4.0_f32;
     let mut lr: Vec<([f32; 2], [f32; 2])> = Vec::with_capacity(local.len());
+    let mut prev_seg_dir = [0.0_f32, 0.0_f32];
 
     for i in 0..local.len() {
         let p = local[i];
-        let dir_prev = if i > 0 {
-            v2_norm(v2_sub(p, local[i - 1]))
-        } else {
-            v2_norm(v2_sub(local[i + 1], p))
-        };
         let dir_next = if i + 1 < local.len() {
             v2_norm(v2_sub(local[i + 1], p))
         } else {
-            v2_norm(v2_sub(p, local[i - 1]))
+            prev_seg_dir
         };
+        let dir_prev = if i == 0 {
+            dir_next
+        } else {
+            prev_seg_dir
+        };
+        prev_seg_dir = dir_next;
 
         let n0 = v2_perp(dir_prev);
         let n1 = v2_perp(dir_next);
@@ -5974,6 +5977,71 @@ const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
     }
 }
 
+#[inline(always)]
+fn timing_hit_log_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("DEADSYNC_TIMING_HIT_LOG").is_ok_and(|v| {
+            let v = v.trim();
+            v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes")
+        })
+    })
+}
+
+#[inline(always)]
+fn log_timing_hit_detail(
+    enabled: bool,
+    stream_pos_s: f32,
+    grade: JudgeGrade,
+    row_index: usize,
+    col: usize,
+    beat: f32,
+    song_offset_s: f32,
+    global_offset_s: f32,
+    note_time_s: f32,
+    event_time_s: f32,
+    music_now_s: f32,
+    rate: f32,
+    lead_in_s: f32,
+) {
+    if !enabled {
+        return;
+    }
+    let expected_stream_for_note_s =
+        note_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+    let expected_stream_for_hit_s =
+        event_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+    let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+    let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
+    debug!(
+        concat!(
+            "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
+            "song_offset_s={:.4}, global_offset_s={:.4}, ",
+            "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
+            "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
+            "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
+            "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
+        ),
+        grade,
+        row_index,
+        col,
+        beat,
+        song_offset_s,
+        global_offset_s,
+        note_time_s,
+        event_time_s,
+        music_now_s,
+        ((event_time_s - note_time_s) / rate) * 1000.0,
+        rate,
+        lead_in_s,
+        stream_pos_s,
+        expected_stream_for_note_s,
+        stream_delta_note_ms,
+        expected_stream_for_hit_s,
+        stream_delta_hit_ms,
+    );
+}
+
 fn trigger_tap_explosion(state: &mut State, column: usize, grade: JudgeGrade) {
     let Some(window_key) = grade_to_window(grade) else {
         return;
@@ -6771,40 +6839,43 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     } else {
         1.0
     };
-    let song_offset_s = state.song_offset_seconds;
-    let global_offset_s = state.global_offset_seconds;
-    let lead_in_s = state.audio_lead_in_seconds.max(0.0);
+    let timing_hit_log = timing_hit_log_enabled();
     let player = player_for_col(state, column);
     let rescore_early_hits = state.player_profiles[player].rescore_early_hits;
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
     let (col_start, col_end) = player_col_range(state, player);
+    let way_off_window_music = way_off_window * rate;
+    let mine_window_music = mine_window * rate;
+    let search_window_music = way_off_window_music.max(mine_window_music);
+    let search_start_time = current_time - search_window_music;
+    let search_end_time = current_time + search_window_music;
     let mut best: Option<(usize, usize, f32)> = None;
-    for (idx, arrow) in state.arrows[column]
-        .iter()
-        .enumerate()
-        .filter(|(_, a)| state.notes[a.note_index].result.is_none())
-    {
-        let n = &state.notes[arrow.note_index];
-        if !n.can_be_judged {
-            continue;
-        }
-        if n.is_fake {
-            continue;
-        }
+    for (idx, arrow) in state.arrows[column].iter().enumerate() {
         let note_index = arrow.note_index;
+        let n = &state.notes[note_index];
+        if n.result.is_some() || !n.can_be_judged || n.is_fake {
+            continue;
+        }
         let note_time = state.note_time_cache[note_index];
-        let abs_err = ((current_time - note_time) / rate).abs();
-        let window = if matches!(n.note_type, NoteType::Mine) {
-            mine_window
+        if note_time < search_start_time {
+            continue;
+        }
+        if note_time > search_end_time {
+            // Arrows are emitted in chart order, so later entries are even farther ahead.
+            break;
+        }
+        let abs_err_music = (current_time - note_time).abs();
+        let window_music = if matches!(n.note_type, NoteType::Mine) {
+            mine_window_music
         } else {
-            way_off_window
+            way_off_window_music
         };
-        if abs_err <= window {
+        if abs_err_music <= window_music {
             match best {
-                Some((_, _, best_err)) if abs_err >= best_err => {}
-                _ => best = Some((idx, note_index, abs_err)),
+                Some((_, _, best_err)) if abs_err_music >= best_err => {}
+                _ => best = Some((idx, note_index, abs_err_music)),
             }
         }
     }
@@ -6884,11 +6955,16 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             let mut timing_profile = state.timing_profile;
             timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
             let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
-
-            // Capture the current audio stream position (device sample clock) once
-            // per tap window evaluation so we can compare it against both the
-            // intended note time and the inferred hit time.
-            let stream_pos_s = audio::get_music_stream_position_seconds();
+            let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
+                (
+                    state.song_offset_seconds,
+                    state.global_offset_seconds,
+                    state.audio_lead_in_seconds.max(0.0),
+                    audio::get_music_stream_position_seconds(),
+                )
+            } else {
+                (0.0, 0.0, 0.0, 0.0)
+            };
 
             if rescore_early_hits && notes_on_row_len == 1 {
                 let idx = notes_on_row[0];
@@ -6923,24 +6999,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         }
                         // Zmod parity: provisional early W4/W5 (with Rescore Early Hits enabled)
                         // should not add error-bar ticks before the final row judgment is known.
-                        let expected_stream_for_note_s = row_note_time / rate
-                            + lead_in_s
-                            + global_offset_s * (1.0 - rate) / rate;
-                        let expected_stream_for_hit_s =
-                            current_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                        let stream_delta_note_ms =
-                            (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-                        let stream_delta_hit_ms =
-                            (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
-                        debug!(
-                            concat!(
-                                "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
-                                "song_offset_s={:.4}, global_offset_s={:.4}, ",
-                                "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
-                                "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
-                                "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
-                                "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
-                            ),
+                        log_timing_hit_detail(
+                            timing_hit_log,
+                            stream_pos_s,
                             grade,
                             note_row_index,
                             note_col,
@@ -6950,14 +7011,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             row_note_time,
                             current_time,
                             state.current_music_time,
-                            te_real * 1000.0,
                             rate,
                             lead_in_s,
-                            stream_pos_s,
-                            expected_stream_for_note_s,
-                            stream_delta_note_ms,
-                            expected_stream_for_hit_s,
-                            stream_delta_hit_ms,
                         );
 
                         if !hide_early_dw_flash {
@@ -7002,21 +7057,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 error_bar_register_tap(state, player, &judgment, current_time);
                 state.notes[idx].result = Some(judgment);
 
-                let expected_stream_for_note_s =
-                    row_note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                let expected_stream_for_hit_s =
-                    current_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-                let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
-                debug!(
-                    concat!(
-                        "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
-                        "song_offset_s={:.4}, global_offset_s={:.4}, ",
-                        "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
-                        "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
-                        "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
-                        "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
-                    ),
+                log_timing_hit_detail(
+                    timing_hit_log,
+                    stream_pos_s,
                     grade,
                     note_row_index,
                     note_col,
@@ -7026,14 +7069,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     row_note_time,
                     current_time,
                     state.current_music_time,
-                    te_real * 1000.0,
                     rate,
                     lead_in_s,
-                    stream_pos_s,
-                    expected_stream_for_note_s,
-                    stream_delta_note_ms,
-                    expected_stream_for_hit_s,
-                    stream_delta_hit_ms,
                 );
 
                 let col_arrows = &mut state.arrows[note_col];
@@ -7074,32 +7111,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 error_bar_register_tap(state, player, &judgment, current_time);
                 state.notes[idx].result = Some(judgment);
 
-                // Map chart times into the shared audio device clock space to
-                // see how well the atomic sample clock aligns with both the
-                // scheduled note time and the inferred hit time.
-                //
-                // The mapping mirrors gameplay::update, which computes
-                //   music_time = (stream_pos - lead_in) * rate + anchor * (1 - rate)
-                // where anchor = -global_offset_seconds.
-                // Inverting for a given music_time (t_music) gives:
-                //   stream_pos = t_music / rate + lead_in + global_offset * (1 - rate) / rate
-                let expected_stream_for_note_s =
-                    row_note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                let expected_stream_for_hit_s =
-                    current_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-
-                let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-                let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
-
-                debug!(
-                    concat!(
-                        "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
-                        "song_offset_s={:.4}, global_offset_s={:.4}, ",
-                        "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
-                        "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
-                        "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
-                        "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
-                    ),
+                log_timing_hit_detail(
+                    timing_hit_log,
+                    stream_pos_s,
                     grade,
                     note_row_index,
                     note_col,
@@ -7109,14 +7123,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     row_note_time,
                     current_time,
                     state.current_music_time,
-                    te_real * 1000.0,
                     rate,
                     lead_in_s,
-                    stream_pos_s,
-                    expected_stream_for_note_s,
-                    stream_delta_note_ms,
-                    expected_stream_for_hit_s,
-                    stream_delta_hit_ms,
                 );
 
                 let col_arrows = &mut state.arrows[note_col];
