@@ -4,7 +4,7 @@ use crate::ui::font::{self, Font, FontLoadData};
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     error::Error,
     fs,
     hash::Hasher,
@@ -1057,6 +1057,7 @@ pub struct AssetManager {
     fonts: HashMap<&'static str, Font>,
     current_dynamic_banner: Option<DynamicBannerState>,
     dynamic_banner_keys: HashSet<String>,
+    dynamic_banner_lru: VecDeque<String>,
     current_dynamic_cdtitle: Option<(String, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: HashSet<String>,
@@ -1080,12 +1081,64 @@ pub struct DensityGraphSource {
 }
 
 impl AssetManager {
+    const MAX_RESIDENT_DYNAMIC_BANNERS: usize = 128;
+
+    #[inline(always)]
+    fn untrack_dynamic_banner_key(&mut self, key: &str) {
+        self.dynamic_banner_lru.retain(|k| k != key);
+    }
+
+    #[inline(always)]
+    fn touch_dynamic_banner_key(&mut self, key: &str) {
+        self.untrack_dynamic_banner_key(key);
+        self.dynamic_banner_lru.push_back(key.to_owned());
+    }
+
+    fn evict_dynamic_banner_cache_if_needed(&mut self, backend: &mut Backend, keep_key: &str) {
+        if self.dynamic_banner_keys.len() <= Self::MAX_RESIDENT_DYNAMIC_BANNERS {
+            return;
+        }
+        let mut evicted = Vec::<String>::new();
+        let mut scans_left = self.dynamic_banner_lru.len().saturating_add(1);
+        while self.dynamic_banner_keys.len().saturating_sub(evicted.len())
+            > Self::MAX_RESIDENT_DYNAMIC_BANNERS
+            && scans_left > 0
+        {
+            scans_left -= 1;
+            let Some(key) = self.dynamic_banner_lru.pop_front() else {
+                break;
+            };
+            if key == keep_key
+                || self
+                    .current_dynamic_banner
+                    .as_ref()
+                    .is_some_and(|state| state.key == key)
+            {
+                self.dynamic_banner_lru.push_back(key);
+                continue;
+            }
+            if self.dynamic_banner_keys.contains(&key) {
+                evicted.push(key);
+            }
+        }
+        if evicted.is_empty() {
+            return;
+        }
+        backend.wait_for_idle();
+        for key in evicted {
+            self.dynamic_banner_keys.remove(&key);
+            self.textures.remove(&key);
+            self.untrack_dynamic_banner_key(&key);
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             textures: HashMap::new(),
             fonts: HashMap::new(),
             current_dynamic_banner: None,
             dynamic_banner_keys: HashSet::new(),
+            dynamic_banner_lru: VecDeque::new(),
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: HashSet::new(),
@@ -1644,11 +1697,13 @@ impl AssetManager {
             backend.wait_for_idle(); // Wait for GPU to finish using old textures
             if let Some(state) = self.current_dynamic_banner.take() {
                 self.dynamic_banner_keys.remove(&state.key);
+                self.untrack_dynamic_banner_key(&state.key);
                 self.textures.remove(&state.key);
             }
             for key in self.dynamic_banner_keys.drain() {
                 self.textures.remove(&key);
             }
+            self.dynamic_banner_lru.clear();
             if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
                 self.textures.remove(&key);
             }
@@ -1821,12 +1876,17 @@ impl AssetManager {
             }
 
             if banner_cache_opts.enabled && self.dynamic_banner_keys.contains(&key) {
-                self.current_dynamic_banner = Some(DynamicBannerState {
-                    key: key.clone(),
-                    path,
-                    high_res_loaded: true,
-                });
-                return key;
+                if self.textures.contains_key(&key) {
+                    self.touch_dynamic_banner_key(&key);
+                    self.current_dynamic_banner = Some(DynamicBannerState {
+                        key: key.clone(),
+                        path,
+                        high_res_loaded: true,
+                    });
+                    return key;
+                }
+                self.dynamic_banner_keys.remove(&key);
+                self.untrack_dynamic_banner_key(&key);
             }
 
             if banner_cache_opts.enabled {
@@ -1863,6 +1923,8 @@ impl AssetManager {
                     self.textures.insert(key.clone(), texture);
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     self.dynamic_banner_keys.insert(key.clone());
+                    self.touch_dynamic_banner_key(&key);
+                    self.evict_dynamic_banner_cache_if_needed(backend, &key);
                     self.current_dynamic_banner = Some(DynamicBannerState {
                         key: key.clone(),
                         path,
@@ -1983,6 +2045,7 @@ impl AssetManager {
         if let Some(state) = self.current_dynamic_banner.take() {
             backend.wait_for_idle();
             self.dynamic_banner_keys.remove(&state.key);
+            self.untrack_dynamic_banner_key(&state.key);
             self.textures.remove(&state.key);
         }
     }
