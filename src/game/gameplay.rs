@@ -3178,6 +3178,11 @@ struct GameplayUpdatePhaseTimings {
     pre_notes_us: u32,
     autoplay_us: u32,
     input_edges_us: u32,
+    input_queue_us: u32,
+    input_state_us: u32,
+    input_glow_us: u32,
+    input_judge_us: u32,
+    input_roll_us: u32,
     held_mines_us: u32,
     active_holds_us: u32,
     hold_decay_us: u32,
@@ -3189,6 +3194,10 @@ struct GameplayUpdatePhaseTimings {
     cull_us: u32,
     judged_rows_us: u32,
     density_us: u32,
+    density_sample_us: u32,
+    density_hist_mesh_us: u32,
+    density_life_mesh_us: u32,
+    density_clip_us: u32,
     danger_us: u32,
 }
 
@@ -3422,6 +3431,11 @@ fn elapsed_us_since(started: Instant) -> u32 {
 }
 
 #[inline(always)]
+fn add_elapsed_us(dst: &mut u32, started: Instant) {
+    *dst = dst.saturating_add(elapsed_us_since(started));
+}
+
+#[inline(always)]
 fn max_phase_name_and_us(phases: &GameplayUpdatePhaseTimings) -> (&'static str, u32) {
     let mut best = ("pre_notes", phases.pre_notes_us);
     if phases.autoplay_us > best.1 {
@@ -3474,6 +3488,11 @@ fn accumulate_phase_max(dst: &mut GameplayUpdatePhaseTimings, src: &GameplayUpda
     dst.pre_notes_us = dst.pre_notes_us.max(src.pre_notes_us);
     dst.autoplay_us = dst.autoplay_us.max(src.autoplay_us);
     dst.input_edges_us = dst.input_edges_us.max(src.input_edges_us);
+    dst.input_queue_us = dst.input_queue_us.max(src.input_queue_us);
+    dst.input_state_us = dst.input_state_us.max(src.input_state_us);
+    dst.input_glow_us = dst.input_glow_us.max(src.input_glow_us);
+    dst.input_judge_us = dst.input_judge_us.max(src.input_judge_us);
+    dst.input_roll_us = dst.input_roll_us.max(src.input_roll_us);
     dst.held_mines_us = dst.held_mines_us.max(src.held_mines_us);
     dst.active_holds_us = dst.active_holds_us.max(src.active_holds_us);
     dst.hold_decay_us = dst.hold_decay_us.max(src.hold_decay_us);
@@ -3485,6 +3504,10 @@ fn accumulate_phase_max(dst: &mut GameplayUpdatePhaseTimings, src: &GameplayUpda
     dst.cull_us = dst.cull_us.max(src.cull_us);
     dst.judged_rows_us = dst.judged_rows_us.max(src.judged_rows_us);
     dst.density_us = dst.density_us.max(src.density_us);
+    dst.density_sample_us = dst.density_sample_us.max(src.density_sample_us);
+    dst.density_hist_mesh_us = dst.density_hist_mesh_us.max(src.density_hist_mesh_us);
+    dst.density_life_mesh_us = dst.density_life_mesh_us.max(src.density_life_mesh_us);
+    dst.density_clip_us = dst.density_clip_us.max(src.density_clip_us);
     dst.danger_us = dst.danger_us.max(src.danger_us);
 }
 
@@ -3585,7 +3608,7 @@ fn trace_gameplay_update(
         state.update_trace.summary_slow_frames =
             state.update_trace.summary_slow_frames.saturating_add(1);
         debug!(
-            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} arrows={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} pmiss:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3}]",
+            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} arrows={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} pmiss:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3}] input_sub_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}]",
             frame_counter,
             music_time_sec,
             total_us as f32 / 1000.0,
@@ -3608,7 +3631,16 @@ fn trace_gameplay_update(
             phases.cull_us as f32 / 1000.0,
             phases.judged_rows_us as f32 / 1000.0,
             phases.density_us as f32 / 1000.0,
-            phases.danger_us as f32 / 1000.0
+            phases.danger_us as f32 / 1000.0,
+            phases.input_queue_us as f32 / 1000.0,
+            phases.input_state_us as f32 / 1000.0,
+            phases.input_glow_us as f32 / 1000.0,
+            phases.input_judge_us as f32 / 1000.0,
+            phases.input_roll_us as f32 / 1000.0,
+            phases.density_sample_us as f32 / 1000.0,
+            phases.density_hist_mesh_us as f32 / 1000.0,
+            phases.density_life_mesh_us as f32 / 1000.0,
+            phases.density_clip_us as f32 / 1000.0
         );
     }
 
@@ -3623,14 +3655,23 @@ fn trace_gameplay_update(
         let summary_peak_pending_edges = state.update_trace.summary_peak_pending_edges;
         let (summary_hot_name, summary_hot_us) = max_phase_name_and_us(&summary_max_phase);
         trace!(
-            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={}",
+            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}]",
             summary_frames,
             summary_slow_frames,
             summary_max_total_us as f32 / 1000.0,
             summary_hot_name,
             summary_hot_us as f32 / 1000.0,
             summary_peak_active_arrows,
-            summary_peak_pending_edges
+            summary_peak_pending_edges,
+            summary_max_phase.input_queue_us as f32 / 1000.0,
+            summary_max_phase.input_state_us as f32 / 1000.0,
+            summary_max_phase.input_glow_us as f32 / 1000.0,
+            summary_max_phase.input_judge_us as f32 / 1000.0,
+            summary_max_phase.input_roll_us as f32 / 1000.0,
+            summary_max_phase.density_sample_us as f32 / 1000.0,
+            summary_max_phase.density_hist_mesh_us as f32 / 1000.0,
+            summary_max_phase.density_life_mesh_us as f32 / 1000.0,
+            summary_max_phase.density_clip_us as f32 / 1000.0
         );
         state.update_trace.summary_elapsed_s = 0.0;
         state.update_trace.summary_frames = 0;
@@ -4108,7 +4149,12 @@ fn build_density_life_mesh(
     out
 }
 
-fn update_density_graph(state: &mut State, current_music_time: f32) {
+fn update_density_graph(
+    state: &mut State,
+    current_music_time: f32,
+    trace_enabled: bool,
+    phase_timings: &mut GameplayUpdatePhaseTimings,
+) {
     let graph_w = state.density_graph_graph_w;
     let graph_h = state.density_graph_graph_h;
     let scaled_width = state.density_graph_scaled_width;
@@ -4150,6 +4196,11 @@ fn update_density_graph(state: &mut State, current_music_time: f32) {
     let mut updates = 0u32;
     let next_t = state.density_graph_life_next_update_elapsed;
     if state.density_graph_life_update_rate > 0.0_f32 && state.total_elapsed_in_screen >= next_t {
+        let sample_started = if trace_enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
         while state.total_elapsed_in_screen >= state.density_graph_life_next_update_elapsed
             && updates < 64
         {
@@ -4177,21 +4228,38 @@ fn update_density_graph(state: &mut State, current_music_time: f32) {
                 state.density_graph_life_dirty[player] = true;
             }
         }
+        if let Some(started) = sample_started {
+            add_elapsed_us(&mut phase_timings.density_sample_us, started);
+        }
     }
 
     for player in 0..state.num_players {
         if offset_px == state.density_graph_mesh_offset_px[player] {
             continue;
         }
-        state.density_graph_mesh_offset_px[player] = offset_px;
-        let verts = state.density_graph_cache[player]
-            .as_ref()
-            .map_or(Vec::new(), |cache| cache.mesh(offset_px as f32, graph_w));
-        state.density_graph_mesh[player] = if verts.is_empty() {
-            None
+        if trace_enabled {
+            let started = Instant::now();
+            state.density_graph_mesh_offset_px[player] = offset_px;
+            let verts = state.density_graph_cache[player]
+                .as_ref()
+                .map_or(Vec::new(), |cache| cache.mesh(offset_px as f32, graph_w));
+            state.density_graph_mesh[player] = if verts.is_empty() {
+                None
+            } else {
+                Some(Arc::from(verts.into_boxed_slice()))
+            };
+            add_elapsed_us(&mut phase_timings.density_hist_mesh_us, started);
         } else {
-            Some(Arc::from(verts.into_boxed_slice()))
-        };
+            state.density_graph_mesh_offset_px[player] = offset_px;
+            let verts = state.density_graph_cache[player]
+                .as_ref()
+                .map_or(Vec::new(), |cache| cache.mesh(offset_px as f32, graph_w));
+            state.density_graph_mesh[player] = if verts.is_empty() {
+                None
+            } else {
+                Some(Arc::from(verts.into_boxed_slice()))
+            };
+        }
     }
 
     for player in 0..state.num_players {
@@ -4203,19 +4271,40 @@ fn update_density_graph(state: &mut State, current_music_time: f32) {
         state.density_graph_life_mesh_offset_px[player] = offset_px;
         state.density_graph_life_dirty[player] = false;
 
-        clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
-        let verts = build_density_life_mesh(
-            &state.density_graph_life_points[player],
-            offset_px_f,
-            graph_w,
-            2.0_f32,
-            [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
-        );
-        state.density_graph_life_mesh[player] = if verts.is_empty() {
-            None
+        if trace_enabled {
+            let clip_started = Instant::now();
+            clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
+            add_elapsed_us(&mut phase_timings.density_clip_us, clip_started);
+
+            let mesh_started = Instant::now();
+            let verts = build_density_life_mesh(
+                &state.density_graph_life_points[player],
+                offset_px_f,
+                graph_w,
+                2.0_f32,
+                [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
+            );
+            state.density_graph_life_mesh[player] = if verts.is_empty() {
+                None
+            } else {
+                Some(Arc::from(verts.into_boxed_slice()))
+            };
+            add_elapsed_us(&mut phase_timings.density_life_mesh_us, mesh_started);
         } else {
-            Some(Arc::from(verts.into_boxed_slice()))
-        };
+            clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
+            let verts = build_density_life_mesh(
+                &state.density_graph_life_points[player],
+                offset_px_f,
+                graph_w,
+                2.0_f32,
+                [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
+            );
+            state.density_graph_life_mesh[player] = if verts.is_empty() {
+                None
+            } else {
+                Some(Arc::from(verts.into_boxed_slice()))
+            };
+        }
     }
 }
 
@@ -7894,13 +7983,23 @@ fn update_judged_rows(state: &mut State) {
 }
 
 #[inline(always)]
-fn process_input_edges(state: &mut State) {
+fn process_input_edges(
+    state: &mut State,
+    trace_enabled: bool,
+    phase_timings: &mut GameplayUpdatePhaseTimings,
+) {
     if state.pending_edges.is_empty() {
         return;
     }
 
     let mut pending = VecDeque::new();
-    std::mem::swap(&mut pending, &mut state.pending_edges);
+    if trace_enabled {
+        let started = Instant::now();
+        std::mem::swap(&mut pending, &mut state.pending_edges);
+        add_elapsed_us(&mut phase_timings.input_queue_us, started);
+    } else {
+        std::mem::swap(&mut pending, &mut state.pending_edges);
+    }
 
     while let Some(edge) = pending.pop_front() {
         let lane_idx = edge.lane.index();
@@ -7908,6 +8007,11 @@ fn process_input_edges(state: &mut State) {
             continue;
         }
 
+        let state_started = if trace_enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
         let mut keyboard_down = state.keyboard_lane_state[lane_idx];
         let mut gamepad_down = state.gamepad_lane_state[lane_idx];
         let was_down = keyboard_down || gamepad_down;
@@ -7918,24 +8022,64 @@ fn process_input_edges(state: &mut State) {
         state.keyboard_lane_state[lane_idx] = keyboard_down;
         state.gamepad_lane_state[lane_idx] = gamepad_down;
         let is_down = keyboard_down || gamepad_down;
+        if let Some(started) = state_started {
+            add_elapsed_us(&mut phase_timings.input_state_us, started);
+        }
 
         if edge.pressed && !was_down && is_down {
-            start_receptor_glow_press(state, lane_idx);
+            if trace_enabled {
+                let started = Instant::now();
+                start_receptor_glow_press(state, lane_idx);
+                add_elapsed_us(&mut phase_timings.input_glow_us, started);
+            } else {
+                start_receptor_glow_press(state, lane_idx);
+            }
             let event_music_time = edge.event_music_time;
-            let hit_note = judge_a_tap(state, lane_idx, event_music_time);
-            refresh_roll_life_on_step(state, lane_idx);
+            let hit_note = if trace_enabled {
+                let started = Instant::now();
+                let hit_note = judge_a_tap(state, lane_idx, event_music_time);
+                add_elapsed_us(&mut phase_timings.input_judge_us, started);
+                hit_note
+            } else {
+                judge_a_tap(state, lane_idx, event_music_time)
+            };
+            if trace_enabled {
+                let started = Instant::now();
+                refresh_roll_life_on_step(state, lane_idx);
+                add_elapsed_us(&mut phase_timings.input_roll_us, started);
+            } else {
+                refresh_roll_life_on_step(state, lane_idx);
+            }
             if !hit_note {
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
         } else if !edge.pressed && was_down && !is_down {
-            release_receptor_glow(state, lane_idx);
+            if trace_enabled {
+                let started = Instant::now();
+                release_receptor_glow(state, lane_idx);
+                add_elapsed_us(&mut phase_timings.input_glow_us, started);
+            } else {
+                release_receptor_glow(state, lane_idx);
+            }
         }
     }
 
     if !state.pending_edges.is_empty() {
-        pending.append(&mut state.pending_edges);
+        if trace_enabled {
+            let started = Instant::now();
+            pending.append(&mut state.pending_edges);
+            add_elapsed_us(&mut phase_timings.input_queue_us, started);
+        } else {
+            pending.append(&mut state.pending_edges);
+        }
     }
-    state.pending_edges = pending;
+    if trace_enabled {
+        let started = Instant::now();
+        state.pending_edges = pending;
+        add_elapsed_us(&mut phase_timings.input_queue_us, started);
+    } else {
+        state.pending_edges = pending;
+    }
 }
 
 #[inline(always)]
@@ -8795,7 +8939,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     } else {
         None
     };
-    process_input_edges(state);
+    process_input_edges(state, trace_enabled, &mut phase_timings);
     if let Some(started) = input_started {
         phase_timings.input_edges_us = elapsed_us_since(started);
     }
@@ -8919,7 +9063,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     } else {
         None
     };
-    update_density_graph(state, music_time_sec);
+    update_density_graph(state, music_time_sec, trace_enabled, &mut phase_timings);
     if let Some(started) = density_started {
         phase_timings.density_us = elapsed_us_since(started);
     }
