@@ -3284,6 +3284,7 @@ pub struct State {
     pub next_tap_miss_cursor: [usize; MAX_PLAYERS],
     pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
     pub mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+    pub mine_note_time: [Vec<f32>; MAX_PLAYERS],
     pub next_mine_ix_cursor: [usize; MAX_PLAYERS],
     pub row_entries: Vec<RowEntry>,
     pub measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
@@ -3731,6 +3732,7 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             state.next_mine_avoid_cursor[player] >= start
                 && state.next_mine_avoid_cursor[player] <= end
         );
+        debug_assert_eq!(state.mine_note_ix[player].len(), state.mine_note_time[player].len());
         debug_assert!(state.next_mine_ix_cursor[player] <= state.mine_note_ix[player].len());
     }
     for col in 0..state.num_cols {
@@ -4980,19 +4982,21 @@ pub fn init(
 
     let note_range_start: [usize; MAX_PLAYERS] =
         std::array::from_fn(|player| note_ranges[player].0);
-    let mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return Vec::new();
-        }
+    let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+    let mut mine_note_time: [Vec<f32>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+    for player in 0..num_players {
         let (start, end) = note_ranges[player];
         let mut mine_ix = Vec::with_capacity(mines_total[player] as usize);
+        let mut mine_times = Vec::with_capacity(mines_total[player] as usize);
         for note_idx in start..end {
             if matches!(notes[note_idx].note_type, NoteType::Mine) {
                 mine_ix.push(note_idx);
+                mine_times.push(note_time_cache[note_idx]);
             }
         }
-        mine_ix
-    });
+        mine_note_ix[player] = mine_ix;
+        mine_note_time[player] = mine_times;
+    }
     let next_mine_ix_cursor: [usize; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let mut arrow_capacity = [0usize; MAX_COLS];
     for note in &notes {
@@ -5336,6 +5340,7 @@ pub fn init(
         next_tap_miss_cursor: note_range_start,
         next_mine_avoid_cursor: note_range_start,
         mine_note_ix,
+        mine_note_time,
         next_mine_ix_cursor,
         row_entries,
         measure_counter_segments,
@@ -8180,6 +8185,17 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
 }
 
 #[inline(always)]
+fn mine_avoid_log_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        std::env::var("DEADSYNC_MINE_AVOID_LOG").is_ok_and(|v| {
+            let v = v.trim();
+            v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("yes")
+        })
+    })
+}
+
+#[inline(always)]
 fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
     let mine_window = state.timing_profile.mine_window_s;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -8188,30 +8204,37 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
         1.0
     };
     let cutoff_time = mine_window.mul_add(-rate, music_time_sec);
+    let log_mine_avoid = mine_avoid_log_enabled();
     for player in 0..state.num_players {
         let mines_len = state.mine_note_ix[player].len();
-        let mut mine_cursor = state.next_mine_ix_cursor[player].min(mines_len);
-        while mine_cursor < mines_len {
-            let note_idx = state.mine_note_ix[player][mine_cursor];
-            let note_time = state.note_time_cache[note_idx];
-            if note_time > cutoff_time {
-                break;
-            }
+        let mine_cursor = state.next_mine_ix_cursor[player].min(mines_len);
+        let mine_end = mine_cursor
+            + state.mine_note_time[player][mine_cursor..].partition_point(|&t| t <= cutoff_time);
+        let mut avoided_count = 0u32;
+        for cursor in mine_cursor..mine_end {
+            let note_idx = state.mine_note_ix[player][cursor];
             let note = &mut state.notes[note_idx];
             if note.can_be_judged && note.mine_result.is_none() {
                 let row_index = note.row_index;
                 let column = note.column;
                 note.mine_result = Some(MineResult::Avoided);
-                state.players[player].mines_avoided =
-                    state.players[player].mines_avoided.saturating_add(1);
-                trace!("MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s");
+                avoided_count = avoided_count.saturating_add(1);
+                if log_mine_avoid {
+                    trace!(
+                        "MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s"
+                    );
+                }
             }
-            mine_cursor += 1;
         }
-        state.next_mine_ix_cursor[player] = mine_cursor;
+        if avoided_count > 0 {
+            state.players[player].mines_avoided = state.players[player]
+                .mines_avoided
+                .saturating_add(avoided_count);
+        }
+        state.next_mine_ix_cursor[player] = mine_end;
         let (_, note_end) = player_note_range(state, player);
-        state.next_mine_avoid_cursor[player] = if mine_cursor < mines_len {
-            state.mine_note_ix[player][mine_cursor]
+        state.next_mine_avoid_cursor[player] = if mine_end < mines_len {
+            state.mine_note_ix[player][mine_end]
         } else {
             note_end
         };
@@ -8288,6 +8311,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
     let way_off_window = state.timing_profile.windows_s[4];
     let num_players = state.num_players;
     let cols_per_player = state.cols_per_player;
+    let log_mine_avoid = mine_avoid_log_enabled();
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -8326,9 +8350,11 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                         };
                         state.players[player].mines_avoided =
                             state.players[player].mines_avoided.saturating_add(1);
-                        trace!(
-                            "MINE AVOIDED: Row {note_row_index}, Col {col_idx}, Time: {music_time_sec:.2}s"
-                        );
+                        if log_mine_avoid {
+                            trace!(
+                                "MINE AVOIDED: Row {note_row_index}, Col {col_idx}, Time: {music_time_sec:.2}s"
+                            );
+                        }
                     }
                 }
             }
