@@ -7498,7 +7498,12 @@ fn apply_autosync_offset_correction(state: &mut State, note_off_by_seconds: f32)
 }
 
 #[inline(always)]
-fn apply_autosync_for_row_hits(state: &mut State, judgments_in_row: &[Judgment]) {
+fn apply_autosync_for_row_hits(
+    state: &mut State,
+    row_entry_index: usize,
+    col_start: usize,
+    col_end: usize,
+) {
     if state.replay_mode
         || autoplay_blocks_scoring(state)
         || state.autosync_mode == AutosyncMode::Off
@@ -7509,16 +7514,33 @@ fn apply_autosync_for_row_hits(state: &mut State, judgments_in_row: &[Judgment])
     if state.course_display_totals.is_some() {
         return;
     }
-    for judgment in judgments_in_row {
-        if !matches!(
-            judgment.grade,
-            JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-        ) {
-            continue;
+
+    let row_len = state.row_entries[row_entry_index].nonmine_note_indices.len();
+    let mut i = 0;
+    while i < row_len {
+        let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
+        let maybe_note_offset = {
+            let note = &state.notes[note_index];
+            if note.column < col_start || note.column >= col_end {
+                None
+            } else {
+                note.result.as_ref().and_then(|judgment| {
+                    if matches!(
+                        judgment.grade,
+                        JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+                    ) {
+                        // ITG's fNoteOffset is positive when stepping early.
+                        Some(-judgment.time_error_ms * 0.001)
+                    } else {
+                        None
+                    }
+                })
+            }
+        };
+        if let Some(note_off_by_seconds) = maybe_note_offset {
+            apply_autosync_offset_correction(state, note_off_by_seconds);
         }
-        // ITG's fNoteOffset is positive when stepping early.
-        let note_off_by_seconds = -judgment.time_error_ms * 0.001;
-        apply_autosync_offset_correction(state, note_off_by_seconds);
+        i += 1;
     }
 }
 
@@ -7645,30 +7667,67 @@ fn finalize_row_judgment(
     state: &mut State,
     player: usize,
     row_index: usize,
-    judgments_in_row: Vec<Judgment>,
+    row_entry_index: usize,
     skip_life_change: bool,
 ) {
-    if judgments_in_row.is_empty() {
-        return;
-    }
-    let scoring_blocked = autoplay_blocks_scoring(state);
     let (col_start, col_end) = player_col_range(state, player);
-    let row_has_miss = judgments_in_row
-        .iter()
-        .any(|judgment| judgment.grade == JudgeGrade::Miss);
-    let row_has_successful_hit = judgments_in_row.iter().any(|judgment| {
-        matches!(
+    let row_len = state.row_entries[row_entry_index].nonmine_note_indices.len();
+
+    let mut row_has_miss = false;
+    let mut row_has_successful_hit = false;
+    let mut row_has_wayoff = false;
+    let mut has_miss_winner = false;
+    let mut final_judgment: Option<Judgment> = None;
+    let mut i = 0;
+    while i < row_len {
+        let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
+        let note = &state.notes[note_index];
+        if note.column < col_start || note.column >= col_end {
+            i += 1;
+            continue;
+        }
+        let Some(judgment) = note.result.as_ref() else {
+            i += 1;
+            continue;
+        };
+
+        row_has_miss |= judgment.grade == JudgeGrade::Miss;
+        row_has_wayoff |= judgment.grade == JudgeGrade::WayOff;
+        row_has_successful_hit |= matches!(
             judgment.grade,
             JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-        )
-    });
-    let final_judgment = judgment::aggregate_row_final_judgment(judgments_in_row.iter()).cloned();
+        );
+
+        if judgment.grade == JudgeGrade::Miss {
+            if !has_miss_winner {
+                final_judgment = Some(judgment.clone());
+                has_miss_winner = true;
+            }
+            i += 1;
+            continue;
+        }
+        if has_miss_winner {
+            i += 1;
+            continue;
+        }
+
+        let should_replace = match final_judgment.as_ref() {
+            None => true,
+            Some(current) => judgment.time_error_ms.abs() > current.time_error_ms.abs(),
+        };
+        if should_replace {
+            final_judgment = Some(judgment.clone());
+        }
+        i += 1;
+    }
+
     let Some(final_judgment) = final_judgment else {
         return;
     };
-    apply_autosync_for_row_hits(state, &judgments_in_row);
-    record_display_window_counts(state, player, &final_judgment);
+    let scoring_blocked = autoplay_blocks_scoring(state);
+    apply_autosync_for_row_hits(state, row_entry_index, col_start, col_end);
     let final_grade = final_judgment.grade;
+    record_display_window_counts(state, player, &final_judgment);
     if scoring_blocked {
         state.players[player].last_judgment = Some(JudgmentRenderInfo {
             judgment: final_judgment,
@@ -7705,31 +7764,14 @@ fn finalize_row_judgment(
         p.full_combo_grade = None;
         p.current_combo_grade = None;
     } else {
-        let combo_increment: u32 = if let Some(&pos) = state
-            .row_map_cache
-            .get(row_index)
-            .filter(|&&x| x != u32::MAX)
-        {
-            state.row_entries[pos as usize]
-                .nonmine_note_indices
-                .iter()
-                .filter(|&&i| {
-                    let col = state.notes[i].column;
-                    col >= col_start && col < col_end
-                })
-                .count() as u32
-        } else {
-            state
-                .notes
-                .iter()
-                .filter(|n| {
-                    n.row_index == row_index
-                        && n.column >= col_start
-                        && n.column < col_end
-                        && !matches!(n.note_type, NoteType::Mine)
-                })
-                .count() as u32
-        };
+        let combo_increment: u32 = state.row_entries[row_entry_index]
+            .nonmine_note_indices
+            .iter()
+            .filter(|&&i| {
+                let col = state.notes[i].column;
+                col >= col_start && col < col_end
+            })
+            .count() as u32;
         p.combo = p.combo.saturating_add(combo_increment);
         let combo = p.combo;
         if combo > 0 && combo.is_multiple_of(1000) {
@@ -7753,36 +7795,15 @@ fn finalize_row_judgment(
         };
         p.current_combo_grade = Some(current_combo_grade);
     }
-    let row_has_wayoff = judgments_in_row
-        .iter()
-        .any(|judgment| judgment.grade == JudgeGrade::WayOff);
     if !row_has_miss && !row_has_wayoff {
-        let notes_on_row_count: usize = if let Some(&pos) = state
-            .row_map_cache
-            .get(row_index)
-            .filter(|&&x| x != u32::MAX)
-        {
-            state.row_entries[pos as usize]
-                .nonmine_note_indices
-                .iter()
-                .filter(|&&i| {
-                    let col = state.notes[i].column;
-                    col >= col_start && col < col_end
-                })
-                .count()
-        } else {
-            state
-                .notes
-                .iter()
-                .filter(|n| {
-                    n.row_index == row_index
-                        && n.column >= col_start
-                        && n.column < col_end
-                        && !matches!(n.note_type, NoteType::Mine)
-                        && !n.is_fake
-                })
-                .count()
-        };
+        let notes_on_row_count: usize = state.row_entries[row_entry_index]
+            .nonmine_note_indices
+            .iter()
+            .filter(|&&i| {
+                let note = &state.notes[i];
+                note.column >= col_start && note.column < col_end && !note.is_fake
+            })
+            .count();
         let carried_holds_down: usize = state.active_holds[col_start..col_end]
             .iter()
             .filter_map(|a| a.as_ref())
@@ -7815,33 +7836,34 @@ fn update_judged_rows(state: &mut State) {
             }
 
             let row_index = state.row_entries[cursor].row_index;
-            let notes_on_row: Vec<usize> = state.row_entries[cursor]
-                .nonmine_note_indices
-                .iter()
-                .copied()
-                .filter(|&i| {
-                    let col = state.notes[i].column;
-                    col >= col_start && col < col_end
-                })
-                .collect();
+            let row_len = state.row_entries[cursor].nonmine_note_indices.len();
+            let mut has_notes_on_row = false;
+            let mut is_row_complete = true;
+            let mut skip_life_change = false;
+            let mut i = 0;
+            while i < row_len {
+                let note_index = state.row_entries[cursor].nonmine_note_indices[i];
+                let note = &state.notes[note_index];
+                if note.column < col_start || note.column >= col_end {
+                    i += 1;
+                    continue;
+                }
+                has_notes_on_row = true;
+                if note.result.is_none() {
+                    is_row_complete = false;
+                    break;
+                }
+                skip_life_change |= note.early_result.is_some();
+                i += 1;
+            }
 
-            if notes_on_row.is_empty() {
+            if !has_notes_on_row {
                 state.judged_row_cursor[player] += 1;
                 continue;
             }
 
-            let is_row_complete = notes_on_row
-                .iter()
-                .all(|&i| state.notes[i].result.is_some());
             if is_row_complete {
-                let skip_life_change = notes_on_row
-                    .iter()
-                    .any(|&i| state.notes[i].early_result.is_some());
-                let judgments_on_row: Vec<Judgment> = notes_on_row
-                    .iter()
-                    .filter_map(|&i| state.notes[i].result.clone())
-                    .collect();
-                finalize_row_judgment(state, player, row_index, judgments_on_row, skip_life_change);
+                finalize_row_judgment(state, player, row_index, cursor, skip_life_change);
                 state.judged_row_cursor[player] += 1;
             } else {
                 break;
