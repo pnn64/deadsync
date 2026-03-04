@@ -68,10 +68,16 @@ fn open_log_file() -> Option<File> {
 
 pub fn init(file_logging_enabled: bool) {
     FILE_LOGGING_ENABLED.store(file_logging_enabled, Ordering::Relaxed);
-    let _ = env_logger::builder()
+    let mut builder = env_logger::builder();
+    builder
         .filter_level(log::LevelFilter::Trace)
-        .target(env_logger::Target::Pipe(Box::new(TeeWriter::new())))
-        .try_init();
+        // Never emit raw ureq proto dumps; they can include sensitive request headers.
+        .filter_module("ureq_proto::util", log::LevelFilter::Off)
+        // Keep HTTP client internals quiet unless warning/error.
+        .filter_module("ureq_proto", log::LevelFilter::Debug)
+        .filter_module("ureq", log::LevelFilter::Debug)
+        .target(env_logger::Target::Pipe(Box::new(TeeWriter::new())));
+    let _ = builder.try_init();
 }
 
 #[inline(always)]
