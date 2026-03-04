@@ -3283,6 +3283,8 @@ pub struct State {
     pub current_beat_visible: [f32; MAX_PLAYERS],
     pub next_tap_miss_cursor: [usize; MAX_PLAYERS],
     pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
+    pub mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+    pub next_mine_ix_cursor: [usize; MAX_PLAYERS],
     pub row_entries: Vec<RowEntry>,
     pub measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
     pub column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
@@ -3729,6 +3731,7 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             state.next_mine_avoid_cursor[player] >= start
                 && state.next_mine_avoid_cursor[player] <= end
         );
+        debug_assert!(state.next_mine_ix_cursor[player] <= state.mine_note_ix[player].len());
     }
     for col in 0..state.num_cols {
         debug_assert!(state.column_scroll_dirs[col].is_finite());
@@ -4032,42 +4035,6 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
     points.drain(0..(first_visible - 1));
 }
 
-#[inline(always)]
-fn v2_sub(a: [f32; 2], b: [f32; 2]) -> [f32; 2] {
-    [a[0] - b[0], a[1] - b[1]]
-}
-
-#[inline(always)]
-fn v2_add(a: [f32; 2], b: [f32; 2]) -> [f32; 2] {
-    [a[0] + b[0], a[1] + b[1]]
-}
-
-#[inline(always)]
-fn v2_scale(v: [f32; 2], s: f32) -> [f32; 2] {
-    [v[0] * s, v[1] * s]
-}
-
-#[inline(always)]
-fn v2_dot(a: [f32; 2], b: [f32; 2]) -> f32 {
-    a[0].mul_add(b[0], a[1] * b[1])
-}
-
-#[inline(always)]
-fn v2_len(v: [f32; 2]) -> f32 {
-    v[0].hypot(v[1])
-}
-
-#[inline(always)]
-fn v2_norm(v: [f32; 2]) -> [f32; 2] {
-    let len = v2_len(v).max(0.000_001_f32);
-    [v[0] / len, v[1] / len]
-}
-
-#[inline(always)]
-fn v2_perp(v: [f32; 2]) -> [f32; 2] {
-    [-v[1], v[0]]
-}
-
 fn build_density_life_mesh(
     points: &[[f32; 2]],
     offset: f32,
@@ -4082,63 +4049,33 @@ fn build_density_life_mesh(
     let right = offset + width;
     let start = points.partition_point(|p| p[0] < offset);
     let end = points.partition_point(|p| p[0] <= right);
-    let slice = &points[start..end];
-    if slice.len() < 2 {
-        return Vec::new();
-    }
-
-    let mut local: Vec<[f32; 2]> = Vec::with_capacity(slice.len());
-    for &p in slice {
-        let q = [p[0] - offset, p[1]];
-        if let Some(&last) = local.last() {
-            let dx = q[0] - last[0];
-            let dy = q[1] - last[1];
-            if dx.mul_add(dx, dy * dy) <= 0.000_000_01_f32 {
-                continue;
-            }
-        }
-        local.push(q);
-    }
-    if local.len() < 2 {
+    let visible = end.saturating_sub(start);
+    if visible < 2 {
         return Vec::new();
     }
 
     let half = thickness * 0.5_f32;
-    let miter_cap = half * 4.0_f32;
-    let mut lr: Vec<([f32; 2], [f32; 2])> = Vec::with_capacity(local.len());
-    let mut prev_seg_dir = [0.0_f32, 0.0_f32];
-
-    for i in 0..local.len() {
-        let p = local[i];
-        let dir_next = if i + 1 < local.len() {
-            v2_norm(v2_sub(local[i + 1], p))
-        } else {
-            prev_seg_dir
+    let mut out: Vec<MeshVertex> = Vec::with_capacity((visible - 1) * 6);
+    let mut prev: Option<[f32; 2]> = None;
+    for i in start..end {
+        let p = [points[i][0] - offset, points[i][1]];
+        let Some(a) = prev else {
+            prev = Some(p);
+            continue;
         };
-        let dir_prev = if i == 0 {
-            dir_next
-        } else {
-            prev_seg_dir
-        };
-        prev_seg_dir = dir_next;
-
-        let n0 = v2_perp(dir_prev);
-        let n1 = v2_perp(dir_next);
-        let miter = v2_norm(v2_add(n0, n1));
-        let denom = v2_dot(miter, n0);
-        let miter_len = if denom.abs() <= 0.001_f32 {
-            half
-        } else {
-            (half / denom).abs().min(miter_cap)
-        };
-        let off = v2_scale(miter, miter_len);
-        lr.push((v2_add(p, off), v2_add(p, v2_scale(off, -1.0_f32))));
-    }
-
-    let mut out: Vec<MeshVertex> = Vec::with_capacity((local.len() - 1) * 6);
-    for i in 0..(lr.len() - 1) {
-        let (l0, r0) = lr[i];
-        let (l1, r1) = lr[i + 1];
+        let dx = p[0] - a[0];
+        let dy = p[1] - a[1];
+        let len_sq = dx.mul_add(dx, dy * dy);
+        if len_sq <= 0.000_000_01_f32 {
+            continue;
+        }
+        let inv_len = len_sq.sqrt().recip();
+        let nx = -dy * inv_len * half;
+        let ny = dx * inv_len * half;
+        let l0 = [a[0] + nx, a[1] + ny];
+        let r0 = [a[0] - nx, a[1] - ny];
+        let l1 = [p[0] + nx, p[1] + ny];
+        let r1 = [p[0] - nx, p[1] - ny];
 
         out.push(MeshVertex { pos: l0, color });
         out.push(MeshVertex { pos: r0, color });
@@ -4147,6 +4084,7 @@ fn build_density_life_mesh(
         out.push(MeshVertex { pos: r0, color });
         out.push(MeshVertex { pos: r1, color });
         out.push(MeshVertex { pos: l1, color });
+        prev = Some(p);
     }
 
     out
@@ -4266,18 +4204,25 @@ fn update_density_graph(
     }
 
     for player in 0..state.num_players {
-        if offset_px == state.density_graph_life_mesh_offset_px[player]
-            && !state.density_graph_life_dirty[player]
-        {
+        let prev_offset_px = state.density_graph_life_mesh_offset_px[player];
+        let offset_changed = offset_px != prev_offset_px;
+        if !offset_changed && !state.density_graph_life_dirty[player] {
             continue;
         }
         state.density_graph_life_mesh_offset_px[player] = offset_px;
         state.density_graph_life_dirty[player] = false;
+        let should_clip = offset_px > prev_offset_px;
 
         if trace_enabled {
-            let clip_started = Instant::now();
-            clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
-            add_elapsed_us(&mut phase_timings.density_clip_us, clip_started);
+            if should_clip {
+                let clip_started = Instant::now();
+                clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
+                add_elapsed_us(&mut phase_timings.density_clip_us, clip_started);
+            }
+            if state.density_graph_life_points[player].len() < 2 {
+                state.density_graph_life_mesh[player] = None;
+                continue;
+            }
 
             let mesh_started = Instant::now();
             let verts = build_density_life_mesh(
@@ -4294,7 +4239,13 @@ fn update_density_graph(
             };
             add_elapsed_us(&mut phase_timings.density_life_mesh_us, mesh_started);
         } else {
-            clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
+            if should_clip {
+                clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
+            }
+            if state.density_graph_life_points[player].len() < 2 {
+                state.density_graph_life_mesh[player] = None;
+                continue;
+            }
             let verts = build_density_life_mesh(
                 &state.density_graph_life_points[player],
                 offset_px_f,
@@ -5029,6 +4980,20 @@ pub fn init(
 
     let note_range_start: [usize; MAX_PLAYERS] =
         std::array::from_fn(|player| note_ranges[player].0);
+    let mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return Vec::new();
+        }
+        let (start, end) = note_ranges[player];
+        let mut mine_ix = Vec::with_capacity(mines_total[player] as usize);
+        for note_idx in start..end {
+            if matches!(notes[note_idx].note_type, NoteType::Mine) {
+                mine_ix.push(note_idx);
+            }
+        }
+        mine_ix
+    });
+    let next_mine_ix_cursor: [usize; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let mut arrow_capacity = [0usize; MAX_COLS];
     for note in &notes {
         let col = note.column;
@@ -5370,6 +5335,8 @@ pub fn init(
         current_beat_visible,
         next_tap_miss_cursor: note_range_start,
         next_mine_avoid_cursor: note_range_start,
+        mine_note_ix,
+        next_mine_ix_cursor,
         row_entries,
         measure_counter_segments,
         column_cues,
@@ -8222,28 +8189,32 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
     };
     let cutoff_time = mine_window.mul_add(-rate, music_time_sec);
     for player in 0..state.num_players {
-        let (note_start, note_end) = player_note_range(state, player);
-        let mut cursor = state.next_mine_avoid_cursor[player].max(note_start);
-        while cursor < note_end {
-            let note_time = state.note_time_cache[cursor];
+        let mines_len = state.mine_note_ix[player].len();
+        let mut mine_cursor = state.next_mine_ix_cursor[player].min(mines_len);
+        while mine_cursor < mines_len {
+            let note_idx = state.mine_note_ix[player][mine_cursor];
+            let note_time = state.note_time_cache[note_idx];
             if note_time > cutoff_time {
                 break;
             }
-            let note = &mut state.notes[cursor];
-            let should_mark = matches!(note.note_type, NoteType::Mine)
-                && note.can_be_judged
-                && note.mine_result.is_none();
-            if should_mark {
+            let note = &mut state.notes[note_idx];
+            if note.can_be_judged && note.mine_result.is_none() {
                 let row_index = note.row_index;
                 let column = note.column;
                 note.mine_result = Some(MineResult::Avoided);
                 state.players[player].mines_avoided =
                     state.players[player].mines_avoided.saturating_add(1);
-                debug!("MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s");
+                trace!("MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s");
             }
-            cursor += 1;
+            mine_cursor += 1;
         }
-        state.next_mine_avoid_cursor[player] = cursor;
+        state.next_mine_ix_cursor[player] = mine_cursor;
+        let (_, note_end) = player_note_range(state, player);
+        state.next_mine_avoid_cursor[player] = if mine_cursor < mines_len {
+            state.mine_note_ix[player][mine_cursor]
+        } else {
+            note_end
+        };
     }
 }
 
@@ -8355,7 +8326,7 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                         };
                         state.players[player].mines_avoided =
                             state.players[player].mines_avoided.saturating_add(1);
-                        debug!(
+                        trace!(
                             "MINE AVOIDED: Row {note_row_index}, Col {col_idx}, Time: {music_time_sec:.2}s"
                         );
                     }
