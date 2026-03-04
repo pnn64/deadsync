@@ -845,10 +845,10 @@ pub fn build_double_step_stats(
         let frame_cy = pane_cy + (-115.0 * banner_data_zoom);
         let frame_zoom = banner_data_zoom;
         let side = profile::get_session_player_side();
-        let chart_hash = Some(state.charts[0].short_hash.as_str());
-        actors.extend(gs_scorebox::gameplay_scorebox_actors(
+        let snapshot = gameplay::scorebox_snapshot_for_side(state, side);
+        actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
             side,
-            chart_hash,
+            snapshot,
             profile::get_for_side(side).display_scorebox,
             frame_cx,
             frame_cy,
@@ -1544,16 +1544,9 @@ fn build_scorebox_pane(
     let frame_cx = layout.sidepane_center_x + (local_x * layout.banner_data_zoom);
     let frame_cy = layout.sidepane_center_y + (-115.0 * layout.banner_data_zoom);
 
-    let player_idx = if state.num_players >= 2 && player_side == profile::PlayerSide::P2 {
-        1
-    } else {
-        0
-    };
-    let chart_hash = Some(state.charts[player_idx].short_hash.as_str());
-
-    gs_scorebox::gameplay_scorebox_actors(
+    gs_scorebox::gameplay_scorebox_actors_from_snapshot(
         player_side,
-        chart_hash,
+        gameplay::scorebox_snapshot_for_side(state, player_side),
         profile::get_for_side(player_side).display_scorebox,
         frame_cx,
         frame_cy,

@@ -518,7 +518,7 @@ fn gameplay_pane_from_leaderboard(pane: &scores::LeaderboardPane) -> GameplaySco
 }
 
 fn gameplay_panes_from_snapshot(
-    snapshot: scores::CachedPlayerLeaderboardData,
+    snapshot: &scores::CachedPlayerLeaderboardData,
     side: profile::PlayerSide,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
@@ -528,7 +528,7 @@ fn gameplay_panes_from_snapshot(
         let text = error_text(error);
         return vec![gameplay_status_pane(side, &text)];
     }
-    let Some(data) = snapshot.data else {
+    let Some(data) = snapshot.data.as_ref() else {
         return vec![gameplay_status_pane(side, "No Scores")];
     };
     if data.panes.is_empty() {
@@ -1099,7 +1099,36 @@ pub fn gameplay_scorebox_actors(
     else {
         return Vec::new();
     };
+    let panes = gameplay_panes_from_snapshot(&snapshot, side);
+    gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
+}
+
+pub fn gameplay_scorebox_actors_from_snapshot(
+    side: profile::PlayerSide,
+    snapshot: Option<&scores::CachedPlayerLeaderboardData>,
+    show_scorebox: bool,
+    center_x: f32,
+    center_y: f32,
+    zoom: f32,
+    elapsed_seconds: f32,
+) -> Vec<Actor> {
+    if !show_scorebox || !scores::is_gs_active_for_side(side) {
+        return Vec::new();
+    }
+    let Some(snapshot) = snapshot else {
+        return Vec::new();
+    };
     let panes = gameplay_panes_from_snapshot(snapshot, side);
+    gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
+}
+
+fn gameplay_scorebox_actors_from_panes(
+    panes: &[GameplayScoreboxPane],
+    center_x: f32,
+    center_y: f32,
+    zoom: f32,
+    elapsed_seconds: f32,
+) -> Vec<Actor> {
     if panes.is_empty() {
         return Vec::new();
     }

@@ -90,6 +90,7 @@ const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
 const M_MOD_HIGH_CAP: f32 = 600.0;
 const MAX_NOTES_AFTER_TARGETS: usize = 64;
+const SCOREBOX_NUM_ENTRIES: usize = 5;
 const COLUMN_CUE_MIN_SECONDS: f32 = 1.5;
 
 // Timing windows now sourced from game::timing
@@ -2724,6 +2725,22 @@ fn player_side_for_index(
 }
 
 #[inline(always)]
+const fn side_index(side: profile::PlayerSide) -> usize {
+    match side {
+        profile::PlayerSide::P1 => 0,
+        profile::PlayerSide::P2 => 1,
+    }
+}
+
+#[inline(always)]
+pub fn scorebox_snapshot_for_side(
+    state: &State,
+    side: profile::PlayerSide,
+) -> Option<&scores::CachedPlayerLeaderboardData> {
+    state.scorebox_side_snapshot[side_index(side)].as_ref()
+}
+
+#[inline(always)]
 fn target_score_setting_percent(setting: profile::TargetScoreSetting) -> Option<f64> {
     use profile::TargetScoreSetting;
     match setting {
@@ -3320,6 +3337,7 @@ pub struct State {
     pub live_window_counts_display_blue: [crate::game::timing::WindowCounts; MAX_PLAYERS],
 
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
+    pub scorebox_side_snapshot: [Option<scores::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     active_attack_accel_mask: [u8; MAX_PLAYERS],
     active_attack_visual_mask: [u16; MAX_PLAYERS],
@@ -5132,6 +5150,28 @@ pub fn init(
             .max(personal_best.unwrap_or(0.0));
     }
 
+    let mut scorebox_side_snapshot: [Option<scores::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    for p in 0..num_players {
+        if !player_profiles[p].display_scorebox {
+            continue;
+        }
+        let side = player_side_for_index(play_style, player_side, p);
+        if !scores::is_gs_active_for_side(side) {
+            continue;
+        }
+        let chart_hash = charts[p].short_hash.trim();
+        if chart_hash.is_empty() {
+            continue;
+        }
+        scorebox_side_snapshot[side_index(side)] =
+            scores::get_or_fetch_player_leaderboards_for_side(
+                chart_hash,
+                side,
+                SCOREBOX_NUM_ENTRIES,
+            );
+    }
+
     let wants_step_stats = player_profiles
         .iter()
         .take(num_players)
@@ -5391,6 +5431,7 @@ pub fn init(
         live_window_counts_display_blue: [crate::game::timing::WindowCounts::default();
             MAX_PLAYERS],
         player_profiles,
+        scorebox_side_snapshot,
         attack_mask_windows,
         active_attack_accel_mask: [0; MAX_PLAYERS],
         active_attack_visual_mask: [0; MAX_PLAYERS],
