@@ -203,9 +203,10 @@ fn build_background(state: &State, bg_brightness: f32) -> Actor {
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let cfg = crate::config::get();
+    let hud_snapshot = profile::gameplay_hud_snapshot();
     let mut actors = Vec::new();
-    let play_style = profile::get_session_play_style();
-    let player_side = profile::get_session_player_side();
+    let play_style = hud_snapshot.play_style;
+    let player_side = hud_snapshot.player_side;
     let is_p2_single =
         play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2;
     let centered_single_notefield = play_style == profile::PlayStyle::Single
@@ -405,11 +406,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 state,
                 &state.player_profiles[0],
                 notefield::FieldPlacement::P1,
+                play_style,
+                cfg.center_1player_notefield,
             );
             let (p2, p2_x) = notefield::build(
                 state,
                 &state.player_profiles[1],
                 notefield::FieldPlacement::P2,
+                play_style,
+                cfg.center_1player_notefield,
             );
             (p1, Some(p2), p1_x, [(0, p1_x), (1, p2_x)])
         }
@@ -419,7 +424,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 notefield::FieldPlacement::P1
             };
-            let (nf, nf_x) = notefield::build(state, &state.player_profiles[0], placement);
+            let (nf, nf_x) = notefield::build(
+                state,
+                &state.player_profiles[0],
+                placement,
+                play_style,
+                cfg.center_1player_notefield,
+            );
             (nf, None, nf_x, [(0, nf_x), (usize::MAX, 0.0)])
         }
     };
@@ -1173,28 +1184,28 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(110)
         ));
     }
-    let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
-    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
-    let p1_avatar = p1_profile
+    let p1_avatar = hud_snapshot
+        .p1
         .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
-    let p2_avatar = p2_profile
+    let p2_avatar = hud_snapshot
+        .p2
         .avatar_texture_key
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
 
-    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
-    let p1_guest = profile::is_session_side_guest(profile::PlayerSide::P1);
-    let p2_guest = profile::is_session_side_guest(profile::PlayerSide::P2);
+    let p1_joined = hud_snapshot.p1.joined;
+    let p2_joined = hud_snapshot.p2.joined;
+    let p1_guest = hud_snapshot.p1.guest;
+    let p2_guest = hud_snapshot.p2.guest;
 
     let (p1_footer_text, p1_footer_avatar) = if p1_joined {
         (
             Some(if p1_guest {
                 "INSERT CARD"
             } else {
-                p1_profile.display_name.as_str()
+                hud_snapshot.p1.display_name.as_str()
             }),
             if p1_guest { None } else { p1_avatar },
         )
@@ -1206,7 +1217,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             Some(if p2_guest {
                 "INSERT CARD"
             } else {
-                p2_profile.display_name.as_str()
+                hud_snapshot.p2.display_name.as_str()
             }),
             if p2_guest { None } else { p2_avatar },
         )

@@ -3,13 +3,14 @@ use crate::core::input::{
     GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction, WindowsPadBackend,
 };
 use crate::core::logging;
-use log::{info, warn};
+use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, mpsc};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
 
 const CONFIG_PATH: &str = "deadsync.ini";
@@ -591,12 +592,159 @@ impl Config {
 // Global, mutable configuration instance.
 static CONFIG: std::sync::LazyLock<Mutex<Config>> =
     std::sync::LazyLock::new(|| Mutex::new(Config::default()));
+static LOCK_WAIT_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
+static AUDIO_MIX_LEVELS_PACKED: std::sync::LazyLock<AtomicU32> = std::sync::LazyLock::new(|| {
+    let cfg = Config::default();
+    AtomicU32::new(pack_audio_mix_levels(
+        cfg.master_volume,
+        cfg.music_volume,
+        cfg.sfx_volume,
+        cfg.assist_tick_volume,
+    ))
+});
 static MACHINE_DEFAULT_NOTESKIN: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()));
 static ADDITIONAL_SONG_FOLDERS: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(String::new()));
 static SAVE_TX: std::sync::LazyLock<Option<mpsc::Sender<SaveReq>>> =
     std::sync::LazyLock::new(start_save_worker);
+
+const LOCK_WAIT_REPORT_INTERVAL_NS: u64 = 5_000_000_000;
+const LOCK_WAIT_SLOW_NS: u64 = 50_000;
+const LOCK_WAIT_SPIKE_NS: u64 = 2_000_000;
+
+struct LockWaitStats {
+    lock_count: AtomicU64,
+    wait_ns_total: AtomicU64,
+    wait_ns_max: AtomicU64,
+    slow_wait_count: AtomicU64,
+    last_report_ns: AtomicU64,
+}
+
+impl LockWaitStats {
+    const fn new() -> Self {
+        Self {
+            lock_count: AtomicU64::new(0),
+            wait_ns_total: AtomicU64::new(0),
+            wait_ns_max: AtomicU64::new(0),
+            slow_wait_count: AtomicU64::new(0),
+            last_report_ns: AtomicU64::new(0),
+        }
+    }
+}
+
+static CONFIG_LOCK_WAIT_STATS: LockWaitStats = LockWaitStats::new();
+
+#[inline(always)]
+fn lock_wait_stats_enabled() -> bool {
+    log::max_level() >= log::LevelFilter::Debug
+}
+
+#[inline(always)]
+fn lock_wait_now_ns() -> u64 {
+    LOCK_WAIT_EPOCH.elapsed().as_nanos().min(u64::MAX as u128) as u64
+}
+
+#[inline(always)]
+fn record_lock_wait(lock_name: &str, stats: &LockWaitStats, waited_ns: u64) {
+    stats.lock_count.fetch_add(1, Ordering::Relaxed);
+    stats.wait_ns_total.fetch_add(waited_ns, Ordering::Relaxed);
+    stats.wait_ns_max.fetch_max(waited_ns, Ordering::Relaxed);
+    if waited_ns >= LOCK_WAIT_SLOW_NS {
+        stats.slow_wait_count.fetch_add(1, Ordering::Relaxed);
+    }
+    if waited_ns >= LOCK_WAIT_SPIKE_NS {
+        debug!(
+            "lock-wait[{lock_name}] spike={:.3}ms",
+            waited_ns as f64 / 1_000_000.0
+        );
+    }
+    let now_ns = lock_wait_now_ns();
+    let last_ns = stats.last_report_ns.load(Ordering::Relaxed);
+    if now_ns.saturating_sub(last_ns) < LOCK_WAIT_REPORT_INTERVAL_NS {
+        return;
+    }
+    if stats
+        .last_report_ns
+        .compare_exchange(last_ns, now_ns, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+    let lock_count = stats.lock_count.swap(0, Ordering::Relaxed);
+    if lock_count == 0 {
+        return;
+    }
+    let total_ns = stats.wait_ns_total.swap(0, Ordering::Relaxed);
+    let max_ns = stats.wait_ns_max.swap(0, Ordering::Relaxed);
+    let slow_count = stats.slow_wait_count.swap(0, Ordering::Relaxed);
+    let avg_us = (total_ns as f64 / lock_count as f64) / 1_000.0;
+    debug!(
+        "lock-wait[{lock_name}] n={} avg={avg_us:.3}us max={:.3}us slow(>50us)={}",
+        lock_count,
+        max_ns as f64 / 1_000.0,
+        slow_count
+    );
+}
+
+#[inline(always)]
+fn lock_config() -> std::sync::MutexGuard<'static, Config> {
+    if !lock_wait_stats_enabled() {
+        return CONFIG.lock().unwrap();
+    }
+    let start = Instant::now();
+    let guard = CONFIG.lock().unwrap();
+    let waited_ns = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+    record_lock_wait("CONFIG", &CONFIG_LOCK_WAIT_STATS, waited_ns);
+    guard
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioMixLevels {
+    pub master_volume: u8,
+    pub music_volume: u8,
+    pub sfx_volume: u8,
+    pub assist_tick_volume: u8,
+}
+
+#[inline(always)]
+const fn pack_audio_mix_levels(
+    master_volume: u8,
+    music_volume: u8,
+    sfx_volume: u8,
+    assist_tick_volume: u8,
+) -> u32 {
+    u32::from_le_bytes([
+        master_volume,
+        music_volume,
+        sfx_volume,
+        assist_tick_volume,
+    ])
+}
+
+#[inline(always)]
+const fn unpack_audio_mix_levels(packed: u32) -> AudioMixLevels {
+    let [master_volume, music_volume, sfx_volume, assist_tick_volume] = packed.to_le_bytes();
+    AudioMixLevels {
+        master_volume,
+        music_volume,
+        sfx_volume,
+        assist_tick_volume,
+    }
+}
+
+#[inline(always)]
+fn sync_audio_mix_levels_from_config(cfg: &Config) {
+    AUDIO_MIX_LEVELS_PACKED.store(
+        pack_audio_mix_levels(
+            cfg.master_volume,
+            cfg.music_volume,
+            cfg.sfx_volume,
+            cfg.assist_tick_volume,
+        ),
+        Ordering::Release,
+    );
+}
 
 enum SaveReq {
     Write(String),
@@ -1176,7 +1324,7 @@ pub fn load() {
             // This block populates the global CONFIG struct from the file,
             // using default values for any missing keys.
             {
-                let mut cfg = CONFIG.lock().unwrap();
+                let mut cfg = lock_config();
                 let default = Config::default();
 
                 cfg.vsync = conf
@@ -1738,6 +1886,7 @@ pub fn load() {
                     })
                     .unwrap_or(default.show_bpm_decimal);
 
+                sync_audio_mix_levels_from_config(&cfg);
                 logging::set_file_logging_enabled(cfg.log_to_file);
                 info!("Configuration loaded from '{CONFIG_PATH}'.");
             } // Lock on CONFIG is released here.
@@ -2491,7 +2640,7 @@ pub fn update_keymap_binding_unique_gamepad(
 fn save_without_keymaps() {
     // Manual writer that keeps [Options]/[Theme] sorted and emits a stable,
     // CamelCase [Keymaps] section derived from the current in-memory keymap.
-    let cfg = *CONFIG.lock().unwrap();
+    let cfg = *lock_config();
     let keymap = crate::core::input::get_keymap();
     let machine_default_noteskin = MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone();
     let additional_song_folders = ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone();
@@ -2866,7 +3015,11 @@ fn save_without_keymaps() {
 }
 
 pub fn get() -> Config {
-    *CONFIG.lock().unwrap()
+    *lock_config()
+}
+
+pub fn audio_mix_levels() -> AudioMixLevels {
+    unpack_audio_mix_levels(AUDIO_MIX_LEVELS_PACKED.load(Ordering::Acquire))
 }
 
 pub fn machine_default_noteskin() -> String {
@@ -2880,7 +3033,7 @@ pub fn additional_song_folders() -> String {
 pub fn update_display_mode(mode: DisplayMode) {
     let mut dirty = false;
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         match mode {
             DisplayMode::Windowed => {
                 if !cfg.windowed {
@@ -2908,7 +3061,7 @@ pub fn update_display_mode(mode: DisplayMode) {
 pub fn update_display_resolution(width: u32, height: u32) {
     let mut dirty = false;
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.display_width != width {
             cfg.display_width = width;
             dirty = true;
@@ -2925,7 +3078,7 @@ pub fn update_display_resolution(width: u32, height: u32) {
 
 pub fn update_display_monitor(monitor: usize) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.display_monitor == monitor {
             return;
         }
@@ -2936,7 +3089,7 @@ pub fn update_display_monitor(monitor: usize) {
 
 pub fn update_video_renderer(renderer: BackendType) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.video_renderer == renderer {
             return;
         }
@@ -2947,7 +3100,7 @@ pub fn update_video_renderer(renderer: BackendType) {
 
 pub fn update_gfx_debug(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.gfx_debug == enabled {
             return;
         }
@@ -2958,7 +3111,7 @@ pub fn update_gfx_debug(enabled: bool) {
 
 pub fn update_simply_love_color(index: i32) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         // No change, no need to write to disk.
         if cfg.simply_love_color == index {
             return;
@@ -2971,7 +3124,7 @@ pub fn update_simply_love_color(index: i32) {
 #[allow(dead_code)]
 pub fn update_global_offset(offset: f32) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if (cfg.global_offset_seconds - offset).abs() < f32::EPSILON {
             return;
         }
@@ -2984,7 +3137,7 @@ pub fn update_global_offset(offset: f32) {
 pub fn update_visual_delay_seconds(delay: f32) {
     let clamped = delay.clamp(-1.0, 1.0);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if (cfg.visual_delay_seconds - clamped).abs() < f32::EPSILON {
             return;
         }
@@ -2995,7 +3148,7 @@ pub fn update_visual_delay_seconds(delay: f32) {
 
 pub fn update_vsync(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.vsync == enabled {
             return;
         }
@@ -3006,7 +3159,7 @@ pub fn update_vsync(enabled: bool) {
 
 pub fn update_max_fps(max_fps: u16) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.max_fps == max_fps {
             return;
         }
@@ -3018,7 +3171,7 @@ pub fn update_max_fps(max_fps: u16) {
 pub fn update_show_stats_mode(mode: u8) {
     let mode = mode.min(2);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_stats_mode == mode {
             return;
         }
@@ -3030,7 +3183,7 @@ pub fn update_show_stats_mode(mode: u8) {
 pub fn update_log_level(level: LogLevel) {
     log::set_max_level(level.as_level_filter());
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.log_level == level {
             return;
         }
@@ -3042,7 +3195,7 @@ pub fn update_log_level(level: LogLevel) {
 pub fn update_log_to_file(enabled: bool) {
     logging::set_file_logging_enabled(enabled);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.log_to_file == enabled {
             return;
         }
@@ -3054,7 +3207,7 @@ pub fn update_log_to_file(enabled: bool) {
 #[cfg(target_os = "windows")]
 pub fn update_windows_gamepad_backend(backend: WindowsPadBackend) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.windows_gamepad_backend == backend {
             return;
         }
@@ -3066,7 +3219,7 @@ pub fn update_windows_gamepad_backend(backend: WindowsPadBackend) {
 pub fn update_bg_brightness(brightness: f32) {
     let clamped = brightness.clamp(0.0, 1.0);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if (cfg.bg_brightness - clamped).abs() < f32::EPSILON {
             return;
         }
@@ -3077,7 +3230,7 @@ pub fn update_bg_brightness(brightness: f32) {
 
 pub fn update_center_1player_notefield(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.center_1player_notefield == enabled {
             return;
         }
@@ -3088,7 +3241,7 @@ pub fn update_center_1player_notefield(enabled: bool) {
 
 pub fn update_banner_cache(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.banner_cache == enabled {
             return;
         }
@@ -3099,7 +3252,7 @@ pub fn update_banner_cache(enabled: bool) {
 
 pub fn update_cdtitle_cache(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.cdtitle_cache == enabled {
             return;
         }
@@ -3110,7 +3263,7 @@ pub fn update_cdtitle_cache(enabled: bool) {
 
 pub fn update_background_cache(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.background_cache == enabled {
             return;
         }
@@ -3121,7 +3274,7 @@ pub fn update_background_cache(enabled: bool) {
 
 pub fn update_song_parsing_threads(threads: u8) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.song_parsing_threads == threads {
             return;
         }
@@ -3132,7 +3285,7 @@ pub fn update_song_parsing_threads(threads: u8) {
 
 pub fn update_cache_songs(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.cachesongs == enabled {
             return;
         }
@@ -3143,7 +3296,7 @@ pub fn update_cache_songs(enabled: bool) {
 
 pub fn update_fastload(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.fastload == enabled {
             return;
         }
@@ -3155,11 +3308,12 @@ pub fn update_fastload(enabled: bool) {
 pub fn update_master_volume(volume: u8) {
     let vol = volume.clamp(0, 100);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.master_volume == vol {
             return;
         }
         cfg.master_volume = vol;
+        sync_audio_mix_levels_from_config(&cfg);
     }
     save_without_keymaps();
 }
@@ -3167,18 +3321,19 @@ pub fn update_master_volume(volume: u8) {
 pub fn update_music_volume(volume: u8) {
     let vol = volume.clamp(0, 100);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.music_volume == vol {
             return;
         }
         cfg.music_volume = vol;
+        sync_audio_mix_levels_from_config(&cfg);
     }
     save_without_keymaps();
 }
 
 pub fn update_menu_music(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.menu_music == enabled {
             return;
         }
@@ -3189,7 +3344,7 @@ pub fn update_menu_music(enabled: bool) {
 
 pub fn update_software_renderer_threads(threads: u8) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.software_renderer_threads == threads {
             return;
         }
@@ -3201,11 +3356,12 @@ pub fn update_software_renderer_threads(threads: u8) {
 pub fn update_sfx_volume(volume: u8) {
     let vol = volume.clamp(0, 100);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.sfx_volume == vol {
             return;
         }
         cfg.sfx_volume = vol;
+        sync_audio_mix_levels_from_config(&cfg);
     }
     save_without_keymaps();
 }
@@ -3213,18 +3369,19 @@ pub fn update_sfx_volume(volume: u8) {
 pub fn update_assist_tick_volume(volume: u8) {
     let vol = volume.clamp(0, 100);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.assist_tick_volume == vol {
             return;
         }
         cfg.assist_tick_volume = vol;
+        sync_audio_mix_levels_from_config(&cfg);
     }
     save_without_keymaps();
 }
 
 pub fn update_audio_sample_rate(rate: Option<u32>) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.audio_sample_rate_hz == rate {
             return;
         }
@@ -3235,7 +3392,7 @@ pub fn update_audio_sample_rate(rate: Option<u32>) {
 
 pub fn update_audio_output_device(index: Option<u16>) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.audio_output_device_index == index {
             return;
         }
@@ -3246,7 +3403,7 @@ pub fn update_audio_output_device(index: Option<u16>) {
 
 pub fn update_mine_hit_sound(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.mine_hit_sound == enabled {
             return;
         }
@@ -3258,7 +3415,7 @@ pub fn update_mine_hit_sound(enabled: bool) {
 pub fn update_music_wheel_switch_speed(speed: u8) {
     let speed = speed.max(1);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.music_wheel_switch_speed == speed {
             return;
         }
@@ -3269,7 +3426,7 @@ pub fn update_music_wheel_switch_speed(speed: u8) {
 
 pub fn update_translated_titles(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.translated_titles == enabled {
             return;
         }
@@ -3280,7 +3437,7 @@ pub fn update_translated_titles(enabled: bool) {
 
 pub fn update_rate_mod_preserves_pitch(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.rate_mod_preserves_pitch == enabled {
             return;
         }
@@ -3291,7 +3448,7 @@ pub fn update_rate_mod_preserves_pitch(enabled: bool) {
 
 pub fn update_select_music_breakdown_style(style: BreakdownStyle) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.select_music_breakdown_style == style {
             return;
         }
@@ -3302,7 +3459,7 @@ pub fn update_select_music_breakdown_style(style: BreakdownStyle) {
 
 pub fn update_show_select_music_breakdown(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_select_music_breakdown == enabled {
             return;
         }
@@ -3313,7 +3470,7 @@ pub fn update_show_select_music_breakdown(enabled: bool) {
 
 pub fn update_show_select_music_banners(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_select_music_banners == enabled {
             return;
         }
@@ -3324,7 +3481,7 @@ pub fn update_show_select_music_banners(enabled: bool) {
 
 pub fn update_show_select_music_cdtitles(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_select_music_cdtitles == enabled {
             return;
         }
@@ -3335,7 +3492,7 @@ pub fn update_show_select_music_cdtitles(enabled: bool) {
 
 pub fn update_show_music_wheel_grades(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_music_wheel_grades == enabled {
             return;
         }
@@ -3346,7 +3503,7 @@ pub fn update_show_music_wheel_grades(enabled: bool) {
 
 pub fn update_show_music_wheel_lamps(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_music_wheel_lamps == enabled {
             return;
         }
@@ -3357,7 +3514,7 @@ pub fn update_show_music_wheel_lamps(enabled: bool) {
 
 pub fn update_show_select_music_previews(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_select_music_previews == enabled {
             return;
         }
@@ -3368,7 +3525,7 @@ pub fn update_show_select_music_previews(enabled: bool) {
 
 pub fn update_select_music_preview_loop(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.select_music_preview_loop == enabled {
             return;
         }
@@ -3379,7 +3536,7 @@ pub fn update_select_music_preview_loop(enabled: bool) {
 
 pub fn update_select_music_pattern_info_mode(mode: SelectMusicPatternInfoMode) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.select_music_pattern_info_mode == mode {
             return;
         }
@@ -3390,7 +3547,7 @@ pub fn update_select_music_pattern_info_mode(mode: SelectMusicPatternInfoMode) {
 
 pub fn update_show_select_music_gameplay_timer(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_select_music_gameplay_timer == enabled {
             return;
         }
@@ -3401,7 +3558,7 @@ pub fn update_show_select_music_gameplay_timer(enabled: bool) {
 
 pub fn update_show_select_music_scorebox(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_select_music_scorebox == enabled {
             return;
         }
@@ -3412,7 +3569,7 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
 
 pub fn update_show_random_courses(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_random_courses == enabled {
             return;
         }
@@ -3423,7 +3580,7 @@ pub fn update_show_random_courses(enabled: bool) {
 
 pub fn update_show_most_played_courses(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_most_played_courses == enabled {
             return;
         }
@@ -3434,7 +3591,7 @@ pub fn update_show_most_played_courses(enabled: bool) {
 
 pub fn update_show_course_individual_scores(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_course_individual_scores == enabled {
             return;
         }
@@ -3445,7 +3602,7 @@ pub fn update_show_course_individual_scores(enabled: bool) {
 
 pub fn update_autosubmit_course_scores_individually(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.autosubmit_course_scores_individually == enabled {
             return;
         }
@@ -3456,7 +3613,7 @@ pub fn update_autosubmit_course_scores_individually(enabled: bool) {
 
 pub fn update_zmod_rating_box_text(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.zmod_rating_box_text == enabled {
             return;
         }
@@ -3467,7 +3624,7 @@ pub fn update_zmod_rating_box_text(enabled: bool) {
 
 pub fn update_show_bpm_decimal(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.show_bpm_decimal == enabled {
             return;
         }
@@ -3478,7 +3635,7 @@ pub fn update_show_bpm_decimal(enabled: bool) {
 
 pub fn update_default_fail_type(fail_type: DefaultFailType) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.default_fail_type == fail_type {
             return;
         }
@@ -3490,7 +3647,7 @@ pub fn update_default_fail_type(fail_type: DefaultFailType) {
 pub fn update_input_debounce_seconds(seconds: f32) {
     let seconds = seconds.clamp(0.0, 0.2);
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if (cfg.input_debounce_seconds - seconds).abs() <= f32::EPSILON {
             return;
         }
@@ -3502,7 +3659,7 @@ pub fn update_input_debounce_seconds(seconds: f32) {
 
 pub fn update_only_dedicated_menu_buttons(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.only_dedicated_menu_buttons == enabled {
             return;
         }
@@ -3514,7 +3671,7 @@ pub fn update_only_dedicated_menu_buttons(enabled: bool) {
 
 pub fn update_keyboard_features(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.keyboard_features == enabled {
             return;
         }
@@ -3525,7 +3682,7 @@ pub fn update_keyboard_features(enabled: bool) {
 
 pub fn update_machine_show_select_profile(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.machine_show_select_profile == enabled {
             return;
         }
@@ -3536,7 +3693,7 @@ pub fn update_machine_show_select_profile(enabled: bool) {
 
 pub fn update_machine_show_select_color(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.machine_show_select_color == enabled {
             return;
         }
@@ -3547,7 +3704,7 @@ pub fn update_machine_show_select_color(enabled: bool) {
 
 pub fn update_machine_show_select_style(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.machine_show_select_style == enabled {
             return;
         }
@@ -3558,7 +3715,7 @@ pub fn update_machine_show_select_style(enabled: bool) {
 
 pub fn update_machine_show_select_play_mode(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.machine_show_select_play_mode == enabled {
             return;
         }
@@ -3569,7 +3726,7 @@ pub fn update_machine_show_select_play_mode(enabled: bool) {
 
 pub fn update_machine_preferred_style(style: MachinePreferredPlayStyle) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.machine_preferred_style == style {
             return;
         }
@@ -3580,7 +3737,7 @@ pub fn update_machine_preferred_style(style: MachinePreferredPlayStyle) {
 
 pub fn update_machine_preferred_play_mode(mode: MachinePreferredPlayMode) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.machine_preferred_play_mode == mode {
             return;
         }
@@ -3591,7 +3748,7 @@ pub fn update_machine_preferred_play_mode(mode: MachinePreferredPlayMode) {
 
 pub fn update_machine_show_eval_summary(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.machine_show_eval_summary == enabled {
             return;
         }
@@ -3602,7 +3759,7 @@ pub fn update_machine_show_eval_summary(enabled: bool) {
 
 pub fn update_machine_show_name_entry(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.machine_show_name_entry == enabled {
             return;
         }
@@ -3613,7 +3770,7 @@ pub fn update_machine_show_name_entry(enabled: bool) {
 
 pub fn update_machine_show_gameover(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.machine_show_gameover == enabled {
             return;
         }
@@ -3624,7 +3781,7 @@ pub fn update_machine_show_gameover(enabled: bool) {
 
 pub fn update_enable_groovestats(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.enable_groovestats == enabled {
             return;
         }
@@ -3635,7 +3792,7 @@ pub fn update_enable_groovestats(enabled: bool) {
 
 pub fn update_enable_boogiestats(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.enable_boogiestats == enabled {
             return;
         }
@@ -3646,7 +3803,7 @@ pub fn update_enable_boogiestats(enabled: bool) {
 
 pub fn update_enable_arrowcloud(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.enable_arrowcloud == enabled {
             return;
         }
@@ -3657,7 +3814,7 @@ pub fn update_enable_arrowcloud(enabled: bool) {
 
 pub fn update_auto_populate_gs_scores(enabled: bool) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.auto_populate_gs_scores == enabled {
             return;
         }
@@ -3668,7 +3825,7 @@ pub fn update_auto_populate_gs_scores(enabled: bool) {
 
 pub fn update_game_flag(flag: GameFlag) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.game_flag == flag {
             return;
         }
@@ -3679,7 +3836,7 @@ pub fn update_game_flag(flag: GameFlag) {
 
 pub fn update_theme_flag(flag: ThemeFlag) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.theme_flag == flag {
             return;
         }
@@ -3690,7 +3847,7 @@ pub fn update_theme_flag(flag: ThemeFlag) {
 
 pub fn update_language_flag(flag: LanguageFlag) {
     {
-        let mut cfg = CONFIG.lock().unwrap();
+        let mut cfg = lock_config();
         if cfg.language_flag == flag {
             return;
         }

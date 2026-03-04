@@ -1,5 +1,4 @@
 use crate::act;
-use crate::config;
 use crate::core::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::core::space::*;
 use crate::game::gameplay::{
@@ -1708,6 +1707,8 @@ pub fn build(
     state: &State,
     profile: &profile::Profile,
     placement: FieldPlacement,
+    play_style: profile::PlayStyle,
+    center_1player_notefield: bool,
 ) -> (Vec<Actor>, f32) {
     let mut actors = Vec::new();
     let mut hud_actors: Vec<Actor> = Vec::new();
@@ -1759,10 +1760,10 @@ pub fn build(
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
-    let play_style = profile::get_session_play_style();
-    let center_1player = config::get().center_1player_notefield;
     let centered_one_side =
-        state.num_players == 1 && play_style == profile::PlayStyle::Single && center_1player;
+        state.num_players == 1
+            && play_style == profile::PlayStyle::Single
+            && center_1player_notefield;
     let centered_both_sides = state.num_players == 1 && play_style == profile::PlayStyle::Double;
     let base_playfield_center_x = if state.num_players == 2 {
         match placement {

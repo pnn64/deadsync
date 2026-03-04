@@ -2,11 +2,13 @@ pub use super::scroll::ScrollSpeedSetting;
 use crate::config::{self, SimpleIni};
 use bincode::{Decode, Encode};
 use chrono::Local;
-use log::{info, warn};
+use log::{debug, info, warn};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Perspective {
@@ -1464,10 +1466,114 @@ static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::
     })
 });
 
+static LOCK_WAIT_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
+const LOCK_WAIT_REPORT_INTERVAL_NS: u64 = 5_000_000_000;
+const LOCK_WAIT_SLOW_NS: u64 = 50_000;
+const LOCK_WAIT_SPIKE_NS: u64 = 2_000_000;
+
+struct LockWaitStats {
+    lock_count: AtomicU64,
+    wait_ns_total: AtomicU64,
+    wait_ns_max: AtomicU64,
+    slow_wait_count: AtomicU64,
+    last_report_ns: AtomicU64,
+}
+
+impl LockWaitStats {
+    const fn new() -> Self {
+        Self {
+            lock_count: AtomicU64::new(0),
+            wait_ns_total: AtomicU64::new(0),
+            wait_ns_max: AtomicU64::new(0),
+            slow_wait_count: AtomicU64::new(0),
+            last_report_ns: AtomicU64::new(0),
+        }
+    }
+}
+
+static SESSION_LOCK_WAIT_STATS: LockWaitStats = LockWaitStats::new();
+static PROFILES_LOCK_WAIT_STATS: LockWaitStats = LockWaitStats::new();
+
+#[inline(always)]
+fn lock_wait_stats_enabled() -> bool {
+    log::max_level() >= log::LevelFilter::Debug
+}
+
+#[inline(always)]
+fn lock_wait_now_ns() -> u64 {
+    LOCK_WAIT_EPOCH.elapsed().as_nanos().min(u64::MAX as u128) as u64
+}
+
+#[inline(always)]
+fn record_lock_wait(lock_name: &str, stats: &LockWaitStats, waited_ns: u64) {
+    stats.lock_count.fetch_add(1, Ordering::Relaxed);
+    stats.wait_ns_total.fetch_add(waited_ns, Ordering::Relaxed);
+    stats.wait_ns_max.fetch_max(waited_ns, Ordering::Relaxed);
+    if waited_ns >= LOCK_WAIT_SLOW_NS {
+        stats.slow_wait_count.fetch_add(1, Ordering::Relaxed);
+    }
+    if waited_ns >= LOCK_WAIT_SPIKE_NS {
+        debug!(
+            "lock-wait[{lock_name}] spike={:.3}ms",
+            waited_ns as f64 / 1_000_000.0
+        );
+    }
+    let now_ns = lock_wait_now_ns();
+    let last_ns = stats.last_report_ns.load(Ordering::Relaxed);
+    if now_ns.saturating_sub(last_ns) < LOCK_WAIT_REPORT_INTERVAL_NS {
+        return;
+    }
+    if stats
+        .last_report_ns
+        .compare_exchange(last_ns, now_ns, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+    let lock_count = stats.lock_count.swap(0, Ordering::Relaxed);
+    if lock_count == 0 {
+        return;
+    }
+    let total_ns = stats.wait_ns_total.swap(0, Ordering::Relaxed);
+    let max_ns = stats.wait_ns_max.swap(0, Ordering::Relaxed);
+    let slow_count = stats.slow_wait_count.swap(0, Ordering::Relaxed);
+    let avg_us = (total_ns as f64 / lock_count as f64) / 1_000.0;
+    debug!(
+        "lock-wait[{lock_name}] n={} avg={avg_us:.3}us max={:.3}us slow(>50us)={}",
+        lock_count,
+        max_ns as f64 / 1_000.0,
+        slow_count
+    );
+}
+
+#[inline(always)]
+fn lock_session() -> std::sync::MutexGuard<'static, SessionState> {
+    if !lock_wait_stats_enabled() {
+        return SESSION.lock().unwrap();
+    }
+    let start = Instant::now();
+    let guard = SESSION.lock().unwrap();
+    let waited_ns = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+    record_lock_wait("SESSION", &SESSION_LOCK_WAIT_STATS, waited_ns);
+    guard
+}
+
+#[inline(always)]
+fn lock_profiles() -> std::sync::MutexGuard<'static, [Profile; PLAYER_SLOTS]> {
+    if !lock_wait_stats_enabled() {
+        return PROFILES.lock().unwrap();
+    }
+    let start = Instant::now();
+    let guard = PROFILES.lock().unwrap();
+    let waited_ns = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+    record_lock_wait("PROFILES", &PROFILES_LOCK_WAIT_STATS, waited_ns);
+    guard
+}
+
 #[inline(always)]
 fn session_side_is_guest(side: PlayerSide) -> bool {
     matches!(
-        &SESSION.lock().unwrap().active_profiles[side_ix(side)],
+        &lock_session().active_profiles[side_ix(side)],
         ActiveProfile::Guest
     )
 }
@@ -1487,8 +1593,8 @@ pub fn update_machine_default_noteskin(setting: NoteSkin) {
     }
     config::update_machine_default_noteskin(setting.as_str());
     {
-        let session = SESSION.lock().unwrap();
-        let mut profiles = PROFILES.lock().unwrap();
+        let session = lock_session();
+        let mut profiles = lock_profiles();
         for side in [PlayerSide::P1, PlayerSide::P2] {
             if matches!(
                 &session.active_profiles[side_ix(side)],
@@ -1865,7 +1971,7 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
 
 fn save_profile_ini_for_side(side: PlayerSide) {
     let profile_id = {
-        let session = SESSION.lock().unwrap();
+        let session = lock_session();
         match &session.active_profiles[side_ix(side)] {
             ActiveProfile::Local { id } => Some(id.clone()),
             ActiveProfile::Guest => None,
@@ -1875,7 +1981,7 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         return;
     };
 
-    let profile = PROFILES.lock().unwrap()[side_ix(side)].clone();
+    let profile = lock_profiles()[side_ix(side)].clone();
     let mut content = String::new();
 
     content.push_str("[PlayerOptions]\n");
@@ -2168,7 +2274,7 @@ fn load_profile_stats_current_combo(path: &Path) -> Option<u32> {
 
 fn save_profile_stats_for_side(side: PlayerSide) {
     let profile_id = {
-        let session = SESSION.lock().unwrap();
+        let session = lock_session();
         match &session.active_profiles[side_ix(side)] {
             ActiveProfile::Local { id } => Some(id.clone()),
             ActiveProfile::Guest => None,
@@ -2178,7 +2284,7 @@ fn save_profile_stats_for_side(side: PlayerSide) {
         return;
     };
 
-    let current_combo = PROFILES.lock().unwrap()[side_ix(side)].current_combo;
+    let current_combo = lock_profiles()[side_ix(side)].current_combo;
     let payload = ProfileStatsV1 {
         version: PROFILE_STATS_VERSION_V1,
         current_combo,
@@ -2212,7 +2318,7 @@ fn save_profile_stats_for_side(side: PlayerSide) {
 
 fn save_groovestats_ini_for_side(side: PlayerSide) {
     let profile_id = {
-        let session = SESSION.lock().unwrap();
+        let session = lock_session();
         match &session.active_profiles[side_ix(side)] {
             ActiveProfile::Local { id } => Some(id.clone()),
             ActiveProfile::Guest => None,
@@ -2222,7 +2328,7 @@ fn save_groovestats_ini_for_side(side: PlayerSide) {
         return;
     };
 
-    let profile = PROFILES.lock().unwrap()[side_ix(side)].clone();
+    let profile = lock_profiles()[side_ix(side)].clone();
     let mut content = String::new();
 
     content.push_str("[GrooveStats]\n");
@@ -2246,7 +2352,7 @@ fn save_groovestats_ini_for_side(side: PlayerSide) {
 
 fn save_arrowcloud_ini_for_side(side: PlayerSide) {
     let profile_id = {
-        let session = SESSION.lock().unwrap();
+        let session = lock_session();
         match &session.active_profiles[side_ix(side)] {
             ActiveProfile::Local { id } => Some(id.clone()),
             ActiveProfile::Guest => None,
@@ -2256,7 +2362,7 @@ fn save_arrowcloud_ini_for_side(side: PlayerSide) {
         return;
     };
 
-    let profile = PROFILES.lock().unwrap()[side_ix(side)].clone();
+    let profile = lock_profiles()[side_ix(side)].clone();
     let mut content = String::new();
 
     content.push_str("[ArrowCloud]\n");
@@ -2271,7 +2377,7 @@ fn save_arrowcloud_ini_for_side(side: PlayerSide) {
 
 fn load_for_side(side: PlayerSide) {
     let profile_id = {
-        let session = SESSION.lock().unwrap();
+        let session = lock_session();
         match &session.active_profiles[side_ix(side)] {
             ActiveProfile::Local { id } => Some(id.clone()),
             ActiveProfile::Guest => None,
@@ -2286,11 +2392,11 @@ fn load_for_side(side: PlayerSide) {
             let fallback = scan_local_profiles().into_iter().next().map(|p| p.id);
             if let Some(ref fb_id) = fallback {
                 info!("Profile folder '{id}' not found; falling back to '{fb_id}'.");
-                let mut session = SESSION.lock().unwrap();
+                let mut session = lock_session();
                 session.active_profiles[side_ix(side)] = ActiveProfile::Local { id: fb_id.clone() };
             } else {
                 info!("Profile folder '{id}' not found and no other profiles exist; using Guest.");
-                let mut session = SESSION.lock().unwrap();
+                let mut session = lock_session();
                 session.active_profiles[side_ix(side)] = ActiveProfile::Guest;
             }
             fallback
@@ -2299,7 +2405,7 @@ fn load_for_side(side: PlayerSide) {
     };
 
     let Some(profile_id) = profile_id else {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         profiles[side_ix(side)] = make_guest_profile();
         return;
     };
@@ -2315,7 +2421,7 @@ fn load_for_side(side: PlayerSide) {
     }
 
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         let mut default_profile = Profile::default();
         default_profile.noteskin = machine_default_noteskin_value();
@@ -2826,21 +2932,69 @@ pub fn get() -> Profile {
 }
 
 pub fn get_for_side(side: PlayerSide) -> Profile {
-    PROFILES.lock().unwrap()[side_ix(side)].clone()
+    lock_profiles()[side_ix(side)].clone()
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct GameplayHudPlayerSnapshot {
+    pub joined: bool,
+    pub guest: bool,
+    pub display_name: String,
+    pub avatar_texture_key: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GameplayHudSnapshot {
+    pub play_style: PlayStyle,
+    pub player_side: PlayerSide,
+    pub p1: GameplayHudPlayerSnapshot,
+    pub p2: GameplayHudPlayerSnapshot,
+}
+
+pub fn gameplay_hud_snapshot() -> GameplayHudSnapshot {
+    let (play_style, player_side, joined_mask, p1_guest, p2_guest) = {
+        let session = lock_session();
+        (
+            session.play_style,
+            session.player_side,
+            session.joined_mask,
+            matches!(&session.active_profiles[side_ix(PlayerSide::P1)], ActiveProfile::Guest),
+            matches!(&session.active_profiles[side_ix(PlayerSide::P2)], ActiveProfile::Guest),
+        )
+    };
+    let profiles = lock_profiles();
+    let p1_profile = &profiles[side_ix(PlayerSide::P1)];
+    let p2_profile = &profiles[side_ix(PlayerSide::P2)];
+    GameplayHudSnapshot {
+        play_style,
+        player_side,
+        p1: GameplayHudPlayerSnapshot {
+            joined: joined_mask & SESSION_JOINED_MASK_P1 != 0,
+            guest: p1_guest,
+            display_name: p1_profile.display_name.clone(),
+            avatar_texture_key: p1_profile.avatar_texture_key.clone(),
+        },
+        p2: GameplayHudPlayerSnapshot {
+            joined: joined_mask & SESSION_JOINED_MASK_P2 != 0,
+            guest: p2_guest,
+            display_name: p2_profile.display_name.clone(),
+            avatar_texture_key: p2_profile.avatar_texture_key.clone(),
+        },
+    }
 }
 
 pub fn set_avatar_texture_key_for_side(side: PlayerSide, key: Option<String>) {
-    let mut profiles = PROFILES.lock().unwrap();
+    let mut profiles = lock_profiles();
     profiles[side_ix(side)].avatar_texture_key = key;
 }
 
 // --- Session helpers ---
 pub fn get_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
-    SESSION.lock().unwrap().active_profiles[side_ix(side)].clone()
+    lock_session().active_profiles[side_ix(side)].clone()
 }
 
 pub fn active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
-    let session = SESSION.lock().unwrap();
+    let session = lock_session();
     match &session.active_profiles[side_ix(side)] {
         ActiveProfile::Local { id } => Some(id.clone()),
         ActiveProfile::Guest => None,
@@ -2849,7 +3003,7 @@ pub fn active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
 
 pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> Profile {
     {
-        let mut session = SESSION.lock().unwrap();
+        let mut session = lock_session();
         let slot = &mut session.active_profiles[side_ix(side)];
         if *slot == profile {
             return get_for_side(side);
@@ -3191,7 +3345,7 @@ pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io:
         .as_deref()
         .is_some_and(|active_id| active_id == id);
     if p1_active || p2_active {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         if p1_active {
             profiles[side_ix(PlayerSide::P1)].display_name = name.to_string();
         }
@@ -3234,13 +3388,13 @@ pub fn delete_local_profile(id: &str) -> Result<(), std::io::Error> {
 }
 
 pub fn get_session_music_rate() -> f32 {
-    let s = SESSION.lock().unwrap();
+    let s = lock_session();
     let r = s.music_rate;
     if r.is_finite() && r > 0.0 { r } else { 1.0 }
 }
 
 pub fn set_session_music_rate(rate: f32) {
-    let mut s = SESSION.lock().unwrap();
+    let mut s = lock_session();
     s.music_rate = if rate.is_finite() && rate > 0.0 {
         rate.clamp(0.5, 3.0)
     } else {
@@ -3249,31 +3403,31 @@ pub fn set_session_music_rate(rate: f32) {
 }
 
 pub fn get_session_play_style() -> PlayStyle {
-    SESSION.lock().unwrap().play_style
+    lock_session().play_style
 }
 
 pub fn set_session_play_style(style: PlayStyle) {
-    SESSION.lock().unwrap().play_style = style;
+    lock_session().play_style = style;
 }
 
 pub fn get_session_play_mode() -> PlayMode {
-    SESSION.lock().unwrap().play_mode
+    lock_session().play_mode
 }
 
 pub fn set_session_play_mode(mode: PlayMode) {
-    SESSION.lock().unwrap().play_mode = mode;
+    lock_session().play_mode = mode;
 }
 
 pub fn get_session_player_side() -> PlayerSide {
-    SESSION.lock().unwrap().player_side
+    lock_session().player_side
 }
 
 pub fn set_session_player_side(side: PlayerSide) {
-    SESSION.lock().unwrap().player_side = side;
+    lock_session().player_side = side;
 }
 
 pub fn is_session_side_joined(side: PlayerSide) -> bool {
-    let mask = SESSION.lock().unwrap().joined_mask;
+    let mask = lock_session().joined_mask;
     mask & side_joined_mask(side) != 0
 }
 
@@ -3283,25 +3437,19 @@ pub fn is_session_side_guest(side: PlayerSide) -> bool {
 
 pub fn set_session_joined(p1: bool, p2: bool) {
     let mask = (u8::from(p1) * SESSION_JOINED_MASK_P1) | (u8::from(p2) * SESSION_JOINED_MASK_P2);
-    SESSION.lock().unwrap().joined_mask = mask;
+    lock_session().joined_mask = mask;
 }
 
 pub fn set_fast_profile_switch_from_select_music(enabled: bool) {
-    SESSION
-        .lock()
-        .unwrap()
-        .fast_profile_switch_from_select_music = enabled;
+    lock_session().fast_profile_switch_from_select_music = enabled;
 }
 
 pub fn fast_profile_switch_from_select_music() -> bool {
-    SESSION
-        .lock()
-        .unwrap()
-        .fast_profile_switch_from_select_music
+    lock_session().fast_profile_switch_from_select_music
 }
 
 pub fn take_fast_profile_switch_from_select_music() -> bool {
-    let mut session = SESSION.lock().unwrap();
+    let mut session = lock_session();
     let was_set = session.fast_profile_switch_from_select_music;
     session.fast_profile_switch_from_select_music = false;
     was_set
@@ -3319,7 +3467,7 @@ pub fn update_last_played_for_side(
     let new_path = music_path.map(|p| p.to_string_lossy().into_owned());
     let new_hash = chart_hash.map(str::to_string);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         let mut changed = false;
         if profile.last_song_music_path != new_path {
@@ -3348,7 +3496,7 @@ pub fn add_stage_calories_for_side(side: PlayerSide, notes_hit: u32) {
 
     let today = Local::now().date_naive().to_string();
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
 
         if profile.calories_burned_day.trim() != today {
@@ -3374,7 +3522,7 @@ pub fn update_player_initials_for_side(side: PlayerSide, initials: &str) {
     }
     let initials = initials.trim();
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.player_initials == initials {
             return;
@@ -3387,7 +3535,7 @@ pub fn update_player_initials_for_side(side: PlayerSide, initials: &str) {
 pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSetting) {
     // Guest changes should persist for the active session; save_* no-ops for guests.
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.scroll_speed == setting {
             return;
@@ -3399,7 +3547,7 @@ pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSettin
 
 pub fn update_background_filter_for_side(side: PlayerSide, setting: BackgroundFilter) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.background_filter == setting {
             return;
@@ -3411,7 +3559,7 @@ pub fn update_background_filter_for_side(side: PlayerSide, setting: BackgroundFi
 
 pub fn update_hold_judgment_graphic_for_side(side: PlayerSide, setting: HoldJudgmentGraphic) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.hold_judgment_graphic == setting {
             return;
@@ -3423,7 +3571,7 @@ pub fn update_hold_judgment_graphic_for_side(side: PlayerSide, setting: HoldJudg
 
 pub fn update_judgment_graphic_for_side(side: PlayerSide, setting: JudgmentGraphic) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.judgment_graphic == setting {
             return;
@@ -3435,7 +3583,7 @@ pub fn update_judgment_graphic_for_side(side: PlayerSide, setting: JudgmentGraph
 
 pub fn update_combo_font_for_side(side: PlayerSide, setting: ComboFont) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.combo_font == setting {
             return;
@@ -3447,7 +3595,7 @@ pub fn update_combo_font_for_side(side: PlayerSide, setting: ComboFont) {
 
 pub fn update_combo_colors_for_side(side: PlayerSide, setting: ComboColors) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.combo_colors == setting {
             return;
@@ -3459,7 +3607,7 @@ pub fn update_combo_colors_for_side(side: PlayerSide, setting: ComboColors) {
 
 pub fn update_combo_mode_for_side(side: PlayerSide, setting: ComboMode) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.combo_mode == setting {
             return;
@@ -3471,7 +3619,7 @@ pub fn update_combo_mode_for_side(side: PlayerSide, setting: ComboMode) {
 
 pub fn update_carry_combo_between_songs_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.carry_combo_between_songs == enabled {
             return;
@@ -3483,7 +3631,7 @@ pub fn update_carry_combo_between_songs_for_side(side: PlayerSide, enabled: bool
 
 pub fn update_current_combo_for_side(side: PlayerSide, combo: u32) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.current_combo == combo {
             return;
@@ -3495,7 +3643,7 @@ pub fn update_current_combo_for_side(side: PlayerSide, combo: u32) {
 
 pub fn update_scroll_option_for_side(side: PlayerSide, setting: ScrollOption) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         let reverse_enabled = setting.contains(ScrollOption::Reverse);
         if profile.scroll_option == setting && profile.reverse_scroll == reverse_enabled {
@@ -3509,7 +3657,7 @@ pub fn update_scroll_option_for_side(side: PlayerSide, setting: ScrollOption) {
 
 pub fn update_turn_option_for_side(side: PlayerSide, setting: TurnOption) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.turn_option == setting {
             return;
@@ -3522,7 +3670,7 @@ pub fn update_turn_option_for_side(side: PlayerSide, setting: TurnOption) {
 pub fn update_insert_mask_for_side(side: PlayerSide, mask: u8) {
     let mask = normalize_insert_mask(mask);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.insert_active_mask == mask {
             return;
@@ -3535,7 +3683,7 @@ pub fn update_insert_mask_for_side(side: PlayerSide, mask: u8) {
 pub fn update_remove_mask_for_side(side: PlayerSide, mask: u8) {
     let mask = normalize_remove_mask(mask);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.remove_active_mask == mask {
             return;
@@ -3548,7 +3696,7 @@ pub fn update_remove_mask_for_side(side: PlayerSide, mask: u8) {
 pub fn update_holds_mask_for_side(side: PlayerSide, mask: u8) {
     let mask = normalize_holds_mask(mask);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.holds_active_mask == mask {
             return;
@@ -3561,7 +3709,7 @@ pub fn update_holds_mask_for_side(side: PlayerSide, mask: u8) {
 pub fn update_accel_effects_mask_for_side(side: PlayerSide, mask: u8) {
     let mask = normalize_accel_effects_mask(mask);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.accel_effects_active_mask == mask {
             return;
@@ -3574,7 +3722,7 @@ pub fn update_accel_effects_mask_for_side(side: PlayerSide, mask: u8) {
 pub fn update_visual_effects_mask_for_side(side: PlayerSide, mask: u16) {
     let mask = normalize_visual_effects_mask(mask);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.visual_effects_active_mask == mask {
             return;
@@ -3587,7 +3735,7 @@ pub fn update_visual_effects_mask_for_side(side: PlayerSide, mask: u16) {
 pub fn update_appearance_effects_mask_for_side(side: PlayerSide, mask: u8) {
     let mask = normalize_appearance_effects_mask(mask);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.appearance_effects_active_mask == mask {
             return;
@@ -3599,7 +3747,7 @@ pub fn update_appearance_effects_mask_for_side(side: PlayerSide, mask: u8) {
 
 pub fn update_attack_mode_for_side(side: PlayerSide, setting: AttackMode) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.attack_mode == setting {
             return;
@@ -3611,7 +3759,7 @@ pub fn update_attack_mode_for_side(side: PlayerSide, setting: AttackMode) {
 
 pub fn update_hide_light_type_for_side(side: PlayerSide, setting: HideLightType) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.hide_light_type == setting {
             return;
@@ -3623,7 +3771,7 @@ pub fn update_hide_light_type_for_side(side: PlayerSide, setting: HideLightType)
 
 pub fn update_rescore_early_hits_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.rescore_early_hits == enabled {
             return;
@@ -3635,7 +3783,7 @@ pub fn update_rescore_early_hits_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_early_dw_options_for_side(side: PlayerSide, hide_judgments: bool, hide_flash: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.hide_early_dw_judgments == hide_judgments
             && profile.hide_early_dw_flash == hide_flash
@@ -3659,7 +3807,7 @@ pub fn update_hide_options_for_side(
     hide_combo_explosions: bool,
 ) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.hide_targets == hide_targets
             && profile.hide_song_bg == hide_song_bg
@@ -3690,7 +3838,7 @@ pub fn update_gameplay_extras_for_side(
     nps_graph_at_top: bool,
 ) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.column_flash_on_miss == column_flash_on_miss
             && profile.subtractive_scoring == subtractive_scoring
@@ -3719,7 +3867,7 @@ pub fn update_gameplay_extras_for_side(
 
 pub fn update_transparent_density_graph_bg_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.transparent_density_graph_bg == enabled {
             return;
@@ -3731,7 +3879,7 @@ pub fn update_transparent_density_graph_bg_for_side(side: PlayerSide, enabled: b
 
 pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.mini_indicator == setting {
             return;
@@ -3743,7 +3891,7 @@ pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) 
 
 pub fn update_noteskin_for_side(side: PlayerSide, setting: NoteSkin) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.noteskin == setting {
             return;
@@ -3756,7 +3904,7 @@ pub fn update_noteskin_for_side(side: PlayerSide, setting: NoteSkin) {
 pub fn update_notefield_offset_x_for_side(side: PlayerSide, offset: i32) {
     let clamped = offset.clamp(0, 50);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.note_field_offset_x == clamped {
             return;
@@ -3769,7 +3917,7 @@ pub fn update_notefield_offset_x_for_side(side: PlayerSide, offset: i32) {
 pub fn update_notefield_offset_y_for_side(side: PlayerSide, offset: i32) {
     let clamped = offset.clamp(-50, 50);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.note_field_offset_y == clamped {
             return;
@@ -3783,7 +3931,7 @@ pub fn update_mini_percent_for_side(side: PlayerSide, percent: i32) {
     // Mirror Simply Love's range: -100% to +150%.
     let clamped = percent.clamp(-100, 150);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.mini_percent == clamped {
             return;
@@ -3795,7 +3943,7 @@ pub fn update_mini_percent_for_side(side: PlayerSide, percent: i32) {
 
 pub fn update_perspective_for_side(side: PlayerSide, perspective: Perspective) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.perspective == perspective {
             return;
@@ -3809,7 +3957,7 @@ pub fn update_visual_delay_ms_for_side(side: PlayerSide, ms: i32) {
     // Mirror Simply Love's range: -100ms to +100ms.
     let clamped = ms.clamp(-100, 100);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.visual_delay_ms == clamped {
             return;
@@ -3821,7 +3969,7 @@ pub fn update_visual_delay_ms_for_side(side: PlayerSide, ms: i32) {
 
 pub fn update_show_fa_plus_window_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.show_fa_plus_window == enabled {
             return;
@@ -3833,7 +3981,7 @@ pub fn update_show_fa_plus_window_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_show_ex_score_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.show_ex_score == enabled {
             return;
@@ -3845,7 +3993,7 @@ pub fn update_show_ex_score_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_show_hard_ex_score_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.show_hard_ex_score == enabled {
             return;
@@ -3857,7 +4005,7 @@ pub fn update_show_hard_ex_score_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_show_fa_plus_pane_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.show_fa_plus_pane == enabled {
             return;
@@ -3869,7 +4017,7 @@ pub fn update_show_fa_plus_pane_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_fa_plus_10ms_blue_window_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.fa_plus_10ms_blue_window == enabled {
             return;
@@ -3881,7 +4029,7 @@ pub fn update_fa_plus_10ms_blue_window_for_side(side: PlayerSide, enabled: bool)
 
 pub fn update_custom_fantastic_window_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.custom_fantastic_window == enabled {
             return;
@@ -3894,7 +4042,7 @@ pub fn update_custom_fantastic_window_for_side(side: PlayerSide, enabled: bool) 
 pub fn update_custom_fantastic_window_ms_for_side(side: PlayerSide, ms: u8) {
     let clamped = clamp_custom_fantastic_window_ms(ms);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.custom_fantastic_window_ms == clamped {
             return;
@@ -3906,7 +4054,7 @@ pub fn update_custom_fantastic_window_ms_for_side(side: PlayerSide, ms: u8) {
 
 pub fn update_judgment_tilt_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.judgment_tilt == enabled {
             return;
@@ -3918,7 +4066,7 @@ pub fn update_judgment_tilt_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_column_cues_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.column_cues == enabled {
             return;
@@ -3930,7 +4078,7 @@ pub fn update_column_cues_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_judgment_back_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.judgment_back == enabled {
             return;
@@ -3942,7 +4090,7 @@ pub fn update_judgment_back_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_error_ms_display_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.error_ms_display == enabled {
             return;
@@ -3954,7 +4102,7 @@ pub fn update_error_ms_display_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.display_scorebox == enabled {
             return;
@@ -3966,7 +4114,7 @@ pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_rainbow_max_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.rainbow_max == enabled {
             return;
@@ -3978,7 +4126,7 @@ pub fn update_rainbow_max_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_responsive_colors_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.responsive_colors == enabled {
             return;
@@ -3990,7 +4138,7 @@ pub fn update_responsive_colors_for_side(side: PlayerSide, enabled: bool) {
 
 pub fn update_show_life_percent_for_side(side: PlayerSide, enabled: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.show_life_percent == enabled {
             return;
@@ -4005,7 +4153,7 @@ pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
         return;
     }
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if (profile.tilt_multiplier - multiplier).abs() < 1e-6 {
             return;
@@ -4020,7 +4168,7 @@ pub fn update_error_bar_mask_for_side(side: PlayerSide, mask: u8) {
     let style = error_bar_style_from_mask(mask);
     let text = error_bar_text_from_mask(mask);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.error_bar_active_mask == mask {
             return;
@@ -4034,7 +4182,7 @@ pub fn update_error_bar_mask_for_side(side: PlayerSide, mask: u8) {
 
 pub fn update_error_bar_trim_for_side(side: PlayerSide, setting: ErrorBarTrim) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.error_bar_trim == setting {
             return;
@@ -4046,7 +4194,7 @@ pub fn update_error_bar_trim_for_side(side: PlayerSide, setting: ErrorBarTrim) {
 
 pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisualizations) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.data_visualizations == setting {
             return;
@@ -4058,7 +4206,7 @@ pub fn update_data_visualizations_for_side(side: PlayerSide, setting: DataVisual
 
 pub fn update_target_score_for_side(side: PlayerSide, setting: TargetScoreSetting) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.target_score == setting {
             return;
@@ -4070,7 +4218,7 @@ pub fn update_target_score_for_side(side: PlayerSide, setting: TargetScoreSettin
 
 pub fn update_lifemeter_type_for_side(side: PlayerSide, setting: LifeMeterType) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.lifemeter_type == setting {
             return;
@@ -4082,7 +4230,7 @@ pub fn update_lifemeter_type_for_side(side: PlayerSide, setting: LifeMeterType) 
 
 pub fn update_error_bar_options_for_side(side: PlayerSide, up: bool, multi_tick: bool) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.error_bar_up == up && profile.error_bar_multi_tick == multi_tick {
             return;
@@ -4095,7 +4243,7 @@ pub fn update_error_bar_options_for_side(side: PlayerSide, up: bool, multi_tick:
 
 pub fn update_measure_counter_for_side(side: PlayerSide, setting: MeasureCounter) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.measure_counter == setting {
             return;
@@ -4108,7 +4256,7 @@ pub fn update_measure_counter_for_side(side: PlayerSide, setting: MeasureCounter
 pub fn update_measure_counter_lookahead_for_side(side: PlayerSide, lookahead: u8) {
     let lookahead = lookahead.min(4);
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.measure_counter_lookahead == lookahead {
             return;
@@ -4127,7 +4275,7 @@ pub fn update_measure_counter_options_for_side(
     run_timer: bool,
 ) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.measure_counter_left == left
             && profile.measure_counter_up == up
@@ -4148,7 +4296,7 @@ pub fn update_measure_counter_options_for_side(
 
 pub fn update_measure_lines_for_side(side: PlayerSide, setting: MeasureLines) {
     {
-        let mut profiles = PROFILES.lock().unwrap();
+        let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.measure_lines == setting {
             return;

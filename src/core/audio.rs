@@ -97,8 +97,9 @@ static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
 // continuous instead of jumping in whole buffer increments.
-static LAST_CALLBACK_INSTANT: std::sync::LazyLock<Mutex<Option<Instant>>> =
-    std::sync::LazyLock::new(|| Mutex::new(None));
+static CALLBACK_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
+// Stored as elapsed nanos + 1 from CALLBACK_EPOCH; 0 means "no callback yet".
+static LAST_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 
@@ -177,7 +178,12 @@ fn reset_music_stream_clock() {
     MUSIC_TRACK_ACTIVE.store(false, Ordering::Release);
     LAST_CALLBACK_BASE_FRAMES.store(total, Ordering::Release);
     LAST_CALLBACK_FRAMES.store(0, Ordering::Release);
-    *LAST_CALLBACK_INSTANT.lock().unwrap() = None;
+    LAST_CALLBACK_ELAPSED_NANOS.store(0, Ordering::Release);
+}
+
+#[inline(always)]
+fn callback_epoch_nanos() -> u64 {
+    CALLBACK_EPOCH.elapsed().as_nanos().min((u64::MAX - 1) as u128) as u64
 }
 
 /// Plays a music track from a file path.
@@ -225,19 +231,13 @@ pub fn get_music_stream_position_seconds() -> f32 {
 
     let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
 
-    // Snapshot last callback timing under a mutex to avoid tearing.
-    let (cb_instant_opt, base_frames, buf_frames) = {
-        let guard = LAST_CALLBACK_INSTANT.lock().unwrap();
-        (
-            *guard,
-            LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
-            LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
-        )
-    };
-
-    if let Some(cb_instant) = cb_instant_opt {
-        let now = Instant::now();
-        let dt = now.saturating_duration_since(cb_instant).as_secs_f32();
+    let cb_nanos_plus_one = LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Acquire);
+    let base_frames = LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed);
+    let buf_frames = LAST_CALLBACK_FRAMES.load(Ordering::Relaxed);
+    if cb_nanos_plus_one != 0 {
+        let cb_nanos = cb_nanos_plus_one.saturating_sub(1);
+        let now_nanos = callback_epoch_nanos();
+        let dt = (now_nanos.saturating_sub(cb_nanos) as f64 * 1e-9) as f32;
         let frames_since_cb = (dt * sample_rate as f32).clamp(0.0, buf_frames as f32);
         let frames_now = base_frames as f32 + frames_since_cb;
         let frames_from_start = frames_now.max(start as f32) - start as f32;
@@ -487,18 +487,17 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [i16], _| {
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                let cb_instant = Instant::now();
                 LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
                 LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-                {
-                    let mut guard = LAST_CALLBACK_INSTANT.lock().unwrap();
-                    *guard = Some(cb_instant);
-                }
-                let config = crate::config::get();
-                let master_vol = f32::from(config.master_volume.clamp(0, 100)) / 100.0;
-                let music_vol = f32::from(config.music_volume.clamp(0, 100)) / 100.0;
-                let sfx_vol = f32::from(config.sfx_volume.clamp(0, 100)) / 100.0;
-                let assist_tick_vol = f32::from(config.assist_tick_volume.clamp(0, 100)) / 100.0;
+                LAST_CALLBACK_ELAPSED_NANOS.store(
+                    callback_epoch_nanos().saturating_add(1),
+                    Ordering::Release,
+                );
+                let config = crate::config::audio_mix_levels();
+                let master_vol = f32::from(config.master_volume) * 0.01;
+                let music_vol = f32::from(config.music_volume) * 0.01;
+                let sfx_vol = f32::from(config.sfx_volume) * 0.01;
+                let assist_tick_vol = f32::from(config.assist_tick_volume) * 0.01;
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
                 let final_assist_tick_vol = master_vol * assist_tick_vol;
@@ -574,18 +573,17 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [u16], _| {
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                let cb_instant = Instant::now();
                 LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
                 LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-                {
-                    let mut guard = LAST_CALLBACK_INSTANT.lock().unwrap();
-                    *guard = Some(cb_instant);
-                }
-                let config = crate::config::get();
-                let master_vol = f32::from(config.master_volume.clamp(0, 100)) / 100.0;
-                let music_vol = f32::from(config.music_volume.clamp(0, 100)) / 100.0;
-                let sfx_vol = f32::from(config.sfx_volume.clamp(0, 100)) / 100.0;
-                let assist_tick_vol = f32::from(config.assist_tick_volume.clamp(0, 100)) / 100.0;
+                LAST_CALLBACK_ELAPSED_NANOS.store(
+                    callback_epoch_nanos().saturating_add(1),
+                    Ordering::Release,
+                );
+                let config = crate::config::audio_mix_levels();
+                let master_vol = f32::from(config.master_volume) * 0.01;
+                let music_vol = f32::from(config.music_volume) * 0.01;
+                let sfx_vol = f32::from(config.sfx_volume) * 0.01;
+                let assist_tick_vol = f32::from(config.assist_tick_volume) * 0.01;
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
                 let final_assist_tick_vol = master_vol * assist_tick_vol;
@@ -656,18 +654,17 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [f32], _| {
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                let cb_instant = Instant::now();
                 LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
                 LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-                {
-                    let mut guard = LAST_CALLBACK_INSTANT.lock().unwrap();
-                    *guard = Some(cb_instant);
-                }
-                let config = crate::config::get();
-                let master_vol = f32::from(config.master_volume.clamp(0, 100)) / 100.0;
-                let music_vol = f32::from(config.music_volume.clamp(0, 100)) / 100.0;
-                let sfx_vol = f32::from(config.sfx_volume.clamp(0, 100)) / 100.0;
-                let assist_tick_vol = f32::from(config.assist_tick_volume.clamp(0, 100)) / 100.0;
+                LAST_CALLBACK_ELAPSED_NANOS.store(
+                    callback_epoch_nanos().saturating_add(1),
+                    Ordering::Release,
+                );
+                let config = crate::config::audio_mix_levels();
+                let master_vol = f32::from(config.master_volume) * 0.01;
+                let music_vol = f32::from(config.music_volume) * 0.01;
+                let sfx_vol = f32::from(config.sfx_volume) * 0.01;
+                let assist_tick_vol = f32::from(config.assist_tick_volume) * 0.01;
                 let final_music_vol = master_vol * music_vol;
                 let final_sfx_vol = master_vol * sfx_vol;
                 let final_assist_tick_vol = master_vol * assist_tick_vol;
