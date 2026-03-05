@@ -411,6 +411,22 @@ pub fn set_only_dedicated_menu_buttons(enabled: bool) {
     ONLY_DEDICATED_MENU_BUTTONS.store(enabled, Ordering::Relaxed);
 }
 
+/// Returns `true` if at least one player has all four dedicated menu
+/// directional buttons (menu_up, menu_down, menu_left, menu_right) bound.
+pub fn any_player_has_dedicated_menu_buttons() -> bool {
+    with_keymap(|km| {
+        let p1 = km.binding_at(VirtualAction::p1_menu_up, 0).is_some()
+            && km.binding_at(VirtualAction::p1_menu_down, 0).is_some()
+            && km.binding_at(VirtualAction::p1_menu_left, 0).is_some()
+            && km.binding_at(VirtualAction::p1_menu_right, 0).is_some();
+        let p2 = km.binding_at(VirtualAction::p2_menu_up, 0).is_some()
+            && km.binding_at(VirtualAction::p2_menu_down, 0).is_some()
+            && km.binding_at(VirtualAction::p2_menu_left, 0).is_some()
+            && km.binding_at(VirtualAction::p2_menu_right, 0).is_some();
+        p1 || p2
+    })
+}
+
 #[inline(always)]
 pub fn set_input_debounce_seconds(seconds: f32) {
     let clamped = seconds.clamp(0.0, INPUT_DEBOUNCE_MAX_SECONDS);

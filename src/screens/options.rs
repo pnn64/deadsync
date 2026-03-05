@@ -1024,9 +1024,9 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: INPUT_ROW_DEDICATED_MENU_BUTTONS,
         help: &[
-            "Choose whether to allow using gameplay buttons (e.g. directional arrows) for menu navigation. Please ensure your menu buttons are mapped before changing this setting otherwise you might get stuck.",
+            "Choose whether to allow using gameplay buttons (e.g. directional arrows) for menu navigation.",
             "Use Gameplay Buttons - Navigate through the game using your dance pad.",
-            "Only Dedicated Buttons - Navigate through the game using dedicated menu buttons, presumably on an arcade cabinet.",
+            "Only Dedicated Buttons - Navigate through the game using dedicated menu buttons. Requires all four menu directions (MenuUp, MenuDown, MenuLeft, MenuRight) to be mapped for at least one player.",
         ],
     },
     Item {
@@ -1742,6 +1742,18 @@ pub const SCORE_IMPORT_OPTIONS_ITEMS: &[Item] = &[
         help: &["Return to the main Options list."],
     },
 ];
+
+/// Returns `true` when the given submenu row should be treated as disabled
+/// (non-interactive and visually dimmed). Add new cases here for any row
+/// that should be conditionally locked based on runtime state.
+fn is_submenu_row_disabled(kind: SubmenuKind, label: &str) -> bool {
+    match (kind, label) {
+        (SubmenuKind::InputBackend, INPUT_ROW_DEDICATED_MENU_BUTTONS) => {
+            !crate::core::input::any_player_has_dedicated_menu_buttons()
+        }
+        _ => false,
+    }
+}
 
 const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
     match kind {
@@ -3085,6 +3097,7 @@ pub struct State {
     reload_ui: Option<ReloadUiState>,
     score_import_ui: Option<ScoreImportUiState>,
     score_import_confirm: Option<ScoreImportConfirmState>,
+    pending_dedicated_menu_buttons: Option<bool>,
     // Submenu state
     sub_selected: usize,
     sub_prev_selected: usize,
@@ -3198,6 +3211,7 @@ pub fn init() -> State {
         reload_ui: None,
         score_import_ui: None,
         score_import_confirm: None,
+        pending_dedicated_menu_buttons: None,
         view: OptionsView::Main,
         sub_selected: 0,
         sub_prev_selected: 0,
@@ -4279,6 +4293,12 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             state.submenu_fade_t = (state.submenu_fade_t + step).min(1.0);
             state.content_alpha = 1.0 - state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
+                // Apply deferred settings before leaving the submenu.
+                if matches!(state.view, OptionsView::Submenu(SubmenuKind::InputBackend)) {
+                    if let Some(enabled) = state.pending_dedicated_menu_buttons.take() {
+                        config::update_only_dedicated_menu_buttons(enabled);
+                    }
+                }
                 // Switch view to the target submenu, then fade it in.
                 let target_kind = state.pending_submenu_kind.unwrap_or(SubmenuKind::System);
                 state.view = OptionsView::Submenu(target_kind);
@@ -4660,6 +4680,10 @@ fn apply_submenu_choice_delta(
     };
 
     if let Some(row) = rows.get(row_index) {
+        // Block cycling disabled rows (e.g. dedicated menu buttons when unmapped).
+        if is_submenu_row_disabled(kind, row.label) {
+            return None;
+        }
         if matches!(kind, SubmenuKind::Sound) {
             match row.label {
                 SOUND_ROW_MASTER_VOLUME => {
@@ -4837,7 +4861,7 @@ fn apply_submenu_choice_delta(
             }
         }
         if row.label == INPUT_ROW_DEDICATED_MENU_BUTTONS {
-            config::update_only_dedicated_menu_buttons(new_index == 1);
+            state.pending_dedicated_menu_buttons = Some(new_index == 1);
         }
     } else if matches!(kind, SubmenuKind::Machine) {
         let row = &rows[row_index];
@@ -6517,6 +6541,7 @@ pub fn get_actors(
 
                         let row = &rows[actual_row_idx];
                         let label = row.label;
+                        let is_disabled = is_submenu_row_disabled(kind, row.label);
                         let title_color = if is_active {
                             let mut c = col_active_text;
                             c[3] = 1.0;
@@ -6613,8 +6638,15 @@ pub fn get_actors(
                                         selected_left_x = Some(x);
                                     }
 
-                                    let mut choice_color =
-                                        if is_active { col_white } else { sl_gray };
+                                    let mut choice_color = if is_disabled
+                                        && !is_choice_selected
+                                    {
+                                        sl_gray
+                                    } else if is_active {
+                                        col_white
+                                    } else {
+                                        sl_gray
+                                    };
                                     choice_color[3] *= row_alpha;
                                     ui_actors.push(act!(text:
                                     align(0.0, 0.5):
@@ -6627,7 +6659,8 @@ pub fn get_actors(
                                 ));
                                 }
                             } else {
-                                let mut choice_color = if is_active { col_white } else { sl_gray };
+                                let mut choice_color =
+                                    if is_active { col_white } else { sl_gray };
                                 choice_color[3] *= row_alpha;
                                 let choice_center_x = calc_row_center_x(row_idx);
                                 let choice_text = choice_texts
