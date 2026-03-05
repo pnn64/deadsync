@@ -451,6 +451,12 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
                 };
                 crate::config::update_keymap_binding_unique_keyboard(action, index, code);
                 audio::play_sfx("assets/sounds/change_value.ogg");
+
+                if crate::config::get().only_dedicated_menu_buttons
+                    && !crate::core::input::any_player_has_dedicated_menu_buttons()
+                {
+                    crate::config::update_only_dedicated_menu_buttons(false);
+                }
             }
         }
 
@@ -590,6 +596,12 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             };
             crate::config::update_keymap_binding_unique_gamepad(action, index, binding);
             audio::play_sfx("assets/sounds/change_value.ogg");
+
+            if crate::config::get().only_dedicated_menu_buttons
+                && !crate::core::input::any_player_has_dedicated_menu_buttons()
+            {
+                crate::config::update_only_dedicated_menu_buttons(false);
+            }
         }
     }
 
