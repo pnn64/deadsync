@@ -4395,7 +4395,19 @@ impl App {
                 0 // "1 Player"
             };
         } else if target == CurrentScreen::SelectPlayMode {
-            let current_color_index = self.state.screens.select_play_mode_state.active_color_index;
+            let current_color_index = match prev {
+                CurrentScreen::SelectStyle => {
+                    self.state.screens.select_style_state.active_color_index
+                }
+                CurrentScreen::SelectColor => {
+                    self.state.screens.select_color_state.active_color_index
+                }
+                CurrentScreen::SelectProfile => {
+                    self.state.screens.select_profile_state.active_color_index
+                }
+                CurrentScreen::Menu => self.state.screens.menu_state.active_color_index,
+                _ => self.state.screens.select_play_mode_state.active_color_index,
+            };
             self.state.screens.select_play_mode_state = select_mode::init();
             self.state.screens.select_play_mode_state.active_color_index = current_color_index;
             select_mode::on_enter(&mut self.state.screens.select_play_mode_state);
@@ -5532,6 +5544,7 @@ impl ApplicationHandler<UserEvent> for App {
                                 self.state.screens.menu_state.active_color_index = idx;
                                 self.state.screens.select_profile_state.active_color_index = idx;
                                 self.state.screens.select_style_state.active_color_index = idx;
+                                self.state.screens.select_play_mode_state.active_color_index = idx;
                                 self.state.screens.profile_load_state.active_color_index = idx;
                                 self.state.screens.select_music_state.active_color_index = idx;
                                 self.state.screens.select_course_state.active_color_index = idx;

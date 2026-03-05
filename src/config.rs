@@ -2023,7 +2023,9 @@ pub fn load() {
     }
     let mut dedicated = get().only_dedicated_menu_buttons;
     if dedicated && !crate::core::input::any_player_has_dedicated_menu_buttons() {
-        warn!("only_dedicated_menu_buttons is enabled but no player has dedicated menu buttons mapped — disabling.");
+        warn!(
+            "only_dedicated_menu_buttons is enabled but no player has dedicated menu buttons mapped — disabling."
+        );
         dedicated = false;
         lock_config().only_dedicated_menu_buttons = false;
     }

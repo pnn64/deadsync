@@ -6638,9 +6638,7 @@ pub fn get_actors(
                                         selected_left_x = Some(x);
                                     }
 
-                                    let mut choice_color = if is_disabled
-                                        && !is_choice_selected
-                                    {
+                                    let mut choice_color = if is_disabled && !is_choice_selected {
                                         sl_gray
                                     } else if is_active {
                                         col_white
@@ -6659,8 +6657,7 @@ pub fn get_actors(
                                 ));
                                 }
                             } else {
-                                let mut choice_color =
-                                    if is_active { col_white } else { sl_gray };
+                                let mut choice_color = if is_active { col_white } else { sl_gray };
                                 choice_color[3] *= row_alpha;
                                 let choice_center_x = calc_row_center_x(row_idx);
                                 let choice_text = choice_texts
