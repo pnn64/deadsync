@@ -1691,6 +1691,17 @@ impl App {
             ScreenAction::RequestDensityGraph { slot, chart_opt } => {
                 vec![Command::SetDensityGraph { slot, chart_opt }]
             }
+            ScreenAction::ApplySongOffsetSync {
+                simfile_path,
+                delta_seconds,
+            } => {
+                if let Err(e) =
+                    self.save_gameplay_song_offset(simfile_path.as_path(), delta_seconds)
+                {
+                    warn!("Failed to save song offset sync changes: {e}");
+                }
+                Vec::new()
+            }
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
             ScreenAction::ChangeGraphics {
                 renderer,

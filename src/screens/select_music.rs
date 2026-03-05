@@ -22,6 +22,7 @@ use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::font;
 use log::debug;
+use nod::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
 use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
 use std::cmp::Reverse;
@@ -38,6 +39,11 @@ use winit::keyboard::KeyCode;
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
 const RELOAD_BAR_H: f32 = 30.0;
+const SYNC_OVERLAY_Z: i16 = 1495;
+const SYNC_HEAT_CELL_PX: f32 = 5.0;
+const SYNC_HEAT_ALPHA: f32 = 0.92;
+const SYNC_READY_TEXT_ZOOM: f32 = 0.95;
+const SYNC_READY_LINE_STEP: f32 = 24.0 * SYNC_READY_TEXT_ZOOM;
 
 // ITGmania metric: ScreenSelectMusic ShowOptionsMessageSeconds (fallback: 1.5).
 const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
@@ -633,6 +639,50 @@ impl ReloadUiState {
     }
 }
 
+enum SyncWorkerMsg {
+    Event(BiasStreamEvent),
+    Finished(Result<nod::api::SyncChartResult, String>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SyncOverlayPhase {
+    Running,
+    Ready,
+    Failed,
+}
+
+struct SyncOverlayStateData {
+    simfile_path: PathBuf,
+    song_title: String,
+    chart_label: String,
+    song_offset_seconds: f32,
+    kernel_target: KernelTarget,
+    kernel_type: BiasKernel,
+    cols: usize,
+    total_beats: usize,
+    digest_rows: usize,
+    times_ms: Vec<f64>,
+    beat_digest: Vec<f64>,
+    digest_col_sums: Vec<f64>,
+    post_rows: usize,
+    post_kernel: Vec<f64>,
+    convolution: Vec<f64>,
+    edge_discard: usize,
+    beats_processed: usize,
+    preview_bias_ms: Option<f64>,
+    final_bias_ms: Option<f64>,
+    final_confidence: Option<f64>,
+    phase: SyncOverlayPhase,
+    yes_selected: bool,
+    error_text: Option<String>,
+    rx: mpsc::Receiver<SyncWorkerMsg>,
+}
+
+enum SyncOverlayState {
+    Hidden,
+    Visible(SyncOverlayStateData),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WheelSortMode {
     Group,
@@ -696,6 +746,7 @@ pub struct State {
     song_search: sort_menu::SongSearchState,
     song_search_ignore_next_back_select: bool,
     replay_overlay: sort_menu::ReplayOverlayState,
+    sync_overlay: SyncOverlayState,
     pub test_input_overlay_visible: bool,
     test_input_overlay: test_input::State,
     profile_switch_overlay: Option<profile_boxes::State>,
@@ -1792,6 +1843,7 @@ pub fn init() -> State {
         song_search: sort_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
         replay_overlay: sort_menu::ReplayOverlayState::Hidden,
+        sync_overlay: SyncOverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
@@ -1964,6 +2016,7 @@ pub fn init_placeholder() -> State {
         song_search: sort_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
         replay_overlay: sort_menu::ReplayOverlayState::Hidden,
+        sync_overlay: SyncOverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
@@ -2288,6 +2341,7 @@ fn show_test_input_overlay(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
     clear_menu_chord(state);
     state.nav_key_held_direction = None;
@@ -2306,6 +2360,7 @@ fn start_song_search_prompt(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
@@ -2321,6 +2376,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
@@ -2435,6 +2491,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
@@ -2674,6 +2731,571 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
     }
 }
 
+#[inline(always)]
+fn sync_bias_to_graph_x(bias_ms: f64, times_ms: &[f64], graph_w: f32) -> f32 {
+    if times_ms.len() < 2 || graph_w <= 0.0 {
+        return graph_w * 0.5;
+    }
+    let start = times_ms[0];
+    let end = *times_ms.last().unwrap_or(&start);
+    let span = end - start;
+    if !span.is_finite() || span.abs() < f64::EPSILON {
+        return graph_w * 0.5;
+    }
+    let t = ((bias_ms - start) / span).clamp(0.0, 1.0) as f32;
+    t * graph_w
+}
+
+#[inline(always)]
+fn sync_value_to_graph_y(value: f64, min_value: f64, max_value: f64, graph_h: f32) -> f32 {
+    let span = (max_value - min_value).abs().max(1e-9);
+    let t = ((value - min_value) / span).clamp(0.0, 1.0) as f32;
+    graph_h - (t * graph_h)
+}
+
+fn push_line_segment(
+    out: &mut Vec<MeshVertex>,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    thickness: f32,
+    color: [f32; 4],
+) {
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    let len = (dx.mul_add(dx, dy * dy)).sqrt();
+    if len <= 0.000_1 {
+        return;
+    }
+    let half = thickness * 0.5;
+    let nx = -dy / len * half;
+    let ny = dx / len * half;
+
+    let a = [x0 + nx, y0 + ny];
+    let b = [x0 - nx, y0 - ny];
+    let c = [x1 + nx, y1 + ny];
+    let d = [x1 - nx, y1 - ny];
+
+    out.push(MeshVertex { pos: a, color });
+    out.push(MeshVertex { pos: b, color });
+    out.push(MeshVertex { pos: c, color });
+    out.push(MeshVertex { pos: c, color });
+    out.push(MeshVertex { pos: b, color });
+    out.push(MeshVertex { pos: d, color });
+}
+
+fn build_sync_curve_mesh(
+    values: &[f64],
+    graph_w: f32,
+    graph_h: f32,
+    color: [f32; 4],
+) -> Option<Arc<[MeshVertex]>> {
+    if values.len() < 2 || graph_w <= 0.0 || graph_h <= 0.0 {
+        return None;
+    }
+    let mut min_value = f64::INFINITY;
+    let mut max_value = f64::NEG_INFINITY;
+    for &value in values {
+        min_value = min_value.min(value);
+        max_value = max_value.max(value);
+    }
+    let mut out: Vec<MeshVertex> = Vec::with_capacity(values.len().saturating_sub(1) * 6);
+    for i in 0..values.len().saturating_sub(1) {
+        let x0 = (i as f32 / (values.len().saturating_sub(1) as f32)) * graph_w;
+        let x1 = ((i + 1) as f32 / (values.len().saturating_sub(1) as f32)) * graph_w;
+        let y0 = sync_value_to_graph_y(values[i], min_value, max_value, graph_h);
+        let y1 = sync_value_to_graph_y(values[i + 1], min_value, max_value, graph_h);
+        push_line_segment(&mut out, x0, y0, x1, y1, 1.5, color);
+    }
+    if out.is_empty() {
+        None
+    } else {
+        Some(Arc::from(out.into_boxed_slice()))
+    }
+}
+
+#[inline(always)]
+fn sync_push_quad(out: &mut Vec<MeshVertex>, x0: f32, y0: f32, x1: f32, y1: f32, color: [f32; 4]) {
+    out.push(MeshVertex {
+        pos: [x0, y0],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [x0, y1],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [x1, y0],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [x1, y0],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [x0, y1],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [x1, y1],
+        color,
+    });
+}
+
+#[inline(always)]
+fn sync_heat_grid_len(graph_len: f32) -> usize {
+    ((graph_len / SYNC_HEAT_CELL_PX).floor() as usize).max(1)
+}
+
+#[inline(always)]
+fn sync_heat_norm01(v: f64, lo: f64, hi: f64) -> f64 {
+    let span = hi - lo;
+    if !span.is_finite() || span.abs() < f64::EPSILON {
+        0.5
+    } else {
+        ((v - lo) / span).clamp(0.0, 1.0)
+    }
+}
+
+#[inline(always)]
+fn sync_viridis(t: f64) -> [f32; 4] {
+    const STOPS: [[u8; 3]; 5] = [
+        [68, 1, 84],
+        [59, 82, 139],
+        [33, 145, 140],
+        [94, 201, 98],
+        [253, 231, 37],
+    ];
+    let x = t.clamp(0.0, 1.0) * 4.0;
+    let i = x.floor() as usize;
+    let (a, b, frac) = if i >= 4 {
+        (STOPS[4], STOPS[4], 0.0)
+    } else {
+        (STOPS[i], STOPS[i + 1], x - i as f64)
+    };
+    let mix = |aa: u8, bb: u8| ((aa as f64) * (1.0 - frac) + (bb as f64) * frac) as f32 / 255.0;
+    [
+        mix(a[0], b[0]),
+        mix(a[1], b[1]),
+        mix(a[2], b[2]),
+        SYNC_HEAT_ALPHA,
+    ]
+}
+
+fn sync_heat_sample(
+    matrix: &[f64],
+    cols: usize,
+    row0: usize,
+    row1: usize,
+    col0: usize,
+    col1: usize,
+) -> Option<f64> {
+    let mut sum = 0.0;
+    let mut count = 0usize;
+    for row in row0..row1 {
+        let base = row * cols;
+        for col in col0..col1 {
+            sum += matrix[base + col];
+            count += 1;
+        }
+    }
+    (count > 0).then_some(sum / count as f64)
+}
+
+fn build_sync_heat_mesh(
+    matrix: &[f64],
+    total_rows: usize,
+    data_rows: usize,
+    cols: usize,
+    graph_w: f32,
+    graph_h: f32,
+) -> Option<Arc<[MeshVertex]>> {
+    if data_rows == 0 || cols == 0 || graph_w <= 0.0 || graph_h <= 0.0 {
+        return None;
+    }
+    let grid_rows = total_rows.min(sync_heat_grid_len(graph_h)).max(1);
+    let grid_cols = cols.min(sync_heat_grid_len(graph_w)).max(1);
+    let mut samples = vec![None; grid_rows.saturating_mul(grid_cols)];
+    let mut lo = f64::INFINITY;
+    let mut hi = f64::NEG_INFINITY;
+    for gy in 0..grid_rows {
+        let row0 = gy * total_rows / grid_rows;
+        let row1 = ((gy + 1) * total_rows / grid_rows)
+            .max(row0 + 1)
+            .min(total_rows);
+        let row1_data = row1.min(data_rows);
+        if row0 >= row1_data {
+            continue;
+        }
+        for gx in 0..grid_cols {
+            let col0 = gx * cols / grid_cols;
+            let col1 = ((gx + 1) * cols / grid_cols).max(col0 + 1).min(cols);
+            let value = sync_heat_sample(matrix, cols, row0, row1_data, col0, col1)?;
+            lo = lo.min(value);
+            hi = hi.max(value);
+            samples[gy * grid_cols + gx] = Some(value);
+        }
+    }
+    if !lo.is_finite() || !hi.is_finite() {
+        return None;
+    }
+    let hi = if hi > lo { hi } else { lo + 1.0 };
+    let cell_w = graph_w / grid_cols as f32;
+    let cell_h = graph_h / grid_rows as f32;
+    let cells = samples.iter().filter(|v| v.is_some()).count();
+    let mut out = Vec::with_capacity(cells.saturating_mul(6));
+    for gy in 0..grid_rows {
+        let y0 = gy as f32 * cell_h;
+        let y1 = (gy + 1) as f32 * cell_h;
+        for gx in 0..grid_cols {
+            let Some(value) = samples[gy * grid_cols + gx] else {
+                continue;
+            };
+            let x0 = gx as f32 * cell_w;
+            let x1 = (gx + 1) as f32 * cell_w;
+            let color = sync_viridis(sync_heat_norm01(value, lo, hi));
+            sync_push_quad(&mut out, x0, y0, x1, y1, color);
+        }
+    }
+    if out.is_empty() {
+        None
+    } else {
+        Some(Arc::from(out.into_boxed_slice()))
+    }
+}
+
+fn sync_heat_source(overlay: &SyncOverlayStateData) -> Option<(&[f64], usize, usize)> {
+    if overlay.post_rows > 0
+        && overlay.post_kernel.len() == overlay.post_rows.saturating_mul(overlay.cols)
+    {
+        return Some((
+            overlay.post_kernel.as_slice(),
+            overlay.post_rows,
+            overlay.post_rows,
+        ));
+    }
+    if overlay.digest_rows > 0
+        && overlay.beat_digest.len() == overlay.digest_rows.saturating_mul(overlay.cols)
+    {
+        return Some((
+            overlay.beat_digest.as_slice(),
+            overlay.total_beats.max(overlay.digest_rows),
+            overlay.digest_rows,
+        ));
+    }
+    None
+}
+
+fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Option<Vec<Actor>> {
+    let SyncOverlayState::Visible(overlay) = state else {
+        return None;
+    };
+
+    let mut actors = Vec::with_capacity(26);
+    let accent = color::simply_love_rgba(active_color_index);
+    let pane_w = widescale(520.0, 640.0);
+    let pane_h = 430.0;
+    let pane_cx = screen_center_x();
+    let pane_cy = screen_center_y() - 10.0;
+    let pane_left = pane_cx - pane_w * 0.5;
+    let pane_top = pane_cy - pane_h * 0.5;
+    let graph_w = pane_w - 80.0;
+    let graph_h = 132.0;
+    let graph_x = pane_left + 40.0;
+    let graph_y = pane_top + 116.0;
+    let graph_center_y = graph_y + graph_h * 0.5;
+
+    let title = match overlay.phase {
+        SyncOverlayPhase::Running => "Syncing song...",
+        SyncOverlayPhase::Ready => "Sync complete",
+        SyncOverlayPhase::Failed => "Sync failed",
+    };
+    let subtitle = format!("{}  [{}]", overlay.song_title, overlay.chart_label);
+    let ready_prompt_y = pane_top + pane_h - 116.0;
+    let ready_offset_line = if overlay.phase == SyncOverlayPhase::Ready {
+        let delta_seconds = sync_apply_delta_seconds(overlay).unwrap_or(0.0);
+        let new_offset = overlay.song_offset_seconds + delta_seconds;
+        sync_prompt_offset_line(overlay.song_offset_seconds, new_offset)
+    } else {
+        None
+    };
+
+    actors.push(act!(quad:
+        align(0.0, 0.0):
+        xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.85):
+        z(SYNC_OVERLAY_Z)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(pane_cx, pane_cy):
+        zoomto(pane_w + 2.0, pane_h + 2.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(SYNC_OVERLAY_Z + 1)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(pane_cx, pane_cy):
+        zoomto(pane_w, pane_h):
+        diffuse(0.02, 0.02, 0.02, 1.0):
+        z(SYNC_OVERLAY_Z + 2)
+    ));
+    actors.push(act!(text:
+        font("wendy"):
+        settext(title):
+        align(0.5, 0.5):
+        xy(pane_cx, pane_top + 34.0):
+        zoom(0.62):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(SYNC_OVERLAY_Z + 3):
+        horizalign(center)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(subtitle):
+        align(0.5, 0.5):
+        xy(pane_cx, pane_top + 62.0):
+        zoom(0.9):
+        maxwidth(pane_w - 30.0):
+        diffuse(0.82, 0.82, 0.82, 1.0):
+        z(SYNC_OVERLAY_Z + 3):
+        horizalign(center)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(pane_cx, graph_center_y):
+        zoomto(graph_w + 2.0, graph_h + 2.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(SYNC_OVERLAY_Z + 3)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(pane_cx, graph_center_y):
+        zoomto(graph_w, graph_h):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(SYNC_OVERLAY_Z + 4)
+    ));
+    if let Some((matrix, total_rows, data_rows)) = sync_heat_source(overlay)
+        && let Some(mesh) = build_sync_heat_mesh(
+            matrix,
+            total_rows,
+            data_rows,
+            overlay.cols,
+            graph_w,
+            graph_h,
+        )
+    {
+        actors.push(Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [graph_x, graph_y],
+            size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
+            vertices: mesh,
+            mode: MeshMode::Triangles,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: SYNC_OVERLAY_Z + 4,
+        });
+    }
+    let graph_label = if overlay.post_rows > 0 && !overlay.post_kernel.is_empty() {
+        "Post-kernel convolution"
+    } else {
+        "Streaming beat digest"
+    };
+    actors.push(act!(text:
+        font("miso"):
+        settext(graph_label):
+        align(0.5, 0.5):
+        xy(pane_cx, graph_y - 14.0):
+        zoom(0.8):
+        diffuse(0.75, 0.75, 0.75, 1.0):
+        z(SYNC_OVERLAY_Z + 5):
+        horizalign(center)
+    ));
+    actors.push(act!(quad:
+        align(0.0, 0.5):
+        xy(graph_x, graph_center_y):
+        zoomto(graph_w, 1.0):
+        diffuse(0.25, 0.25, 0.25, 1.0):
+        z(SYNC_OVERLAY_Z + 5)
+    ));
+
+    let curve_color = [1.0, 1.0, 1.0, 1.0];
+    if let Some(mesh) = build_sync_curve_mesh(&overlay.convolution, graph_w, graph_h, curve_color) {
+        actors.push(Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [graph_x, graph_y],
+            size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
+            vertices: mesh,
+            mode: MeshMode::Triangles,
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: SYNC_OVERLAY_Z + 6,
+        });
+    } else {
+        actors.push(act!(text:
+            font("miso"):
+            settext("Waiting for streamed analysis data..."):
+            align(0.5, 0.5):
+            xy(pane_cx, graph_center_y):
+            zoom(0.9):
+            diffuse(0.6, 0.6, 0.6, 1.0):
+            z(SYNC_OVERLAY_Z + 6):
+            horizalign(center)
+        ));
+    }
+
+    if let Some(bias_ms) = overlay.final_bias_ms.or(overlay.preview_bias_ms) {
+        let marker_x = graph_x + sync_bias_to_graph_x(bias_ms, &overlay.times_ms, graph_w);
+        actors.push(act!(quad:
+            align(0.5, 0.5):
+            xy(marker_x, graph_center_y):
+            zoomto(2.0, graph_h):
+            diffuse(0.9, 0.1, 0.1, 1.0):
+            z(SYNC_OVERLAY_Z + 7)
+        ));
+    }
+
+    let status_text = match overlay.phase {
+        SyncOverlayPhase::Running => match overlay.total_beats.max(overlay.beats_processed) {
+            0 => "Beat 0".to_string(),
+            total => format!(
+                "Beat {} out of {}",
+                overlay.beats_processed.min(total),
+                total
+            ),
+        },
+        SyncOverlayPhase::Ready => {
+            let bias = overlay
+                .final_bias_ms
+                .or(overlay.preview_bias_ms)
+                .unwrap_or(0.0);
+            let confidence = overlay.final_confidence.unwrap_or(0.0) * 100.0;
+            format!("Suggested sync: {bias:+.2} ms   (confidence {confidence:.0}%)")
+        }
+        SyncOverlayPhase::Failed => overlay
+            .error_text
+            .as_deref()
+            .unwrap_or("Unknown sync analysis error")
+            .to_string(),
+    };
+    let status_y =
+        if matches!(overlay.phase, SyncOverlayPhase::Ready) && ready_offset_line.is_some() {
+            ready_prompt_y - SYNC_READY_LINE_STEP * 1.5
+        } else {
+            graph_y + graph_h + 18.0
+        };
+    actors.push(act!(text:
+        font("miso"):
+        settext(status_text):
+        align(0.5, 0.5):
+        xy(pane_cx, status_y):
+        zoom(SYNC_READY_TEXT_ZOOM):
+        maxwidth(pane_w - 26.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(SYNC_OVERLAY_Z + 4):
+        horizalign(center)
+    ));
+
+    match overlay.phase {
+        SyncOverlayPhase::Ready => {
+            let answer_y = pane_top + pane_h - 48.0;
+            let choice_yes_x = pane_cx - 100.0;
+            let choice_no_x = pane_cx + 100.0;
+            let cursor_x = if overlay.yes_selected {
+                choice_yes_x
+            } else {
+                choice_no_x
+            };
+            let prompt = build_sync_save_prompt_text(overlay);
+            let prompt_y = if ready_offset_line.is_some() {
+                ready_prompt_y + SYNC_READY_LINE_STEP
+            } else {
+                ready_prompt_y
+            };
+
+            actors.push(act!(quad:
+                align(0.5, 0.5):
+                xy(cursor_x, answer_y):
+                zoomto(145.0, 40.0):
+                diffuse(accent[0], accent[1], accent[2], 1.0):
+                z(SYNC_OVERLAY_Z + 4)
+            ));
+            if let Some(line) = ready_offset_line.as_deref() {
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(line):
+                    align(0.5, 0.5):
+                    xy(pane_cx, ready_prompt_y - SYNC_READY_LINE_STEP * 0.5):
+                    zoom(SYNC_READY_TEXT_ZOOM):
+                    maxwidth(pane_w - 90.0):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    z(SYNC_OVERLAY_Z + 4):
+                    horizalign(center)
+                ));
+            }
+            actors.push(act!(text:
+                font("miso"):
+                settext(prompt):
+                align(0.5, 0.5):
+                xy(pane_cx, prompt_y):
+                zoom(SYNC_READY_TEXT_ZOOM):
+                maxwidth(pane_w - 90.0):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(SYNC_OVERLAY_Z + 4):
+                horizalign(center)
+            ));
+            actors.push(act!(text:
+                font("wendy"):
+                settext("YES"):
+                align(0.5, 0.5):
+                xy(choice_yes_x, answer_y):
+                zoom(0.72):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(SYNC_OVERLAY_Z + 4):
+                horizalign(center)
+            ));
+            actors.push(act!(text:
+                font("wendy"):
+                settext("NO"):
+                align(0.5, 0.5):
+                xy(choice_no_x, answer_y):
+                zoom(0.72):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(SYNC_OVERLAY_Z + 4):
+                horizalign(center)
+            ));
+        }
+        SyncOverlayPhase::Running => {
+            actors.push(act!(text:
+                font("miso"):
+                settext("START/BACK/SELECT: CANCEL"):
+                align(0.5, 0.5):
+                xy(pane_cx, pane_top + pane_h - 16.0):
+                zoom(0.82):
+                diffuse(0.85, 0.85, 0.85, 1.0):
+                z(SYNC_OVERLAY_Z + 4):
+                horizalign(center)
+            ));
+        }
+        SyncOverlayPhase::Failed => {
+            actors.push(act!(text:
+                font("miso"):
+                settext("START/BACK/SELECT: CLOSE"):
+                align(0.5, 0.5):
+                xy(pane_cx, pane_top + pane_h - 16.0):
+                zoom(0.82):
+                diffuse(0.85, 0.85, 0.85, 1.0):
+                z(SYNC_OVERLAY_Z + 4):
+                horizalign(center)
+            ));
+        }
+    }
+
+    Some(actors)
+}
+
 fn refresh_after_reload(state: &mut State) {
     let selected_song = selected_song_arc(state);
     let selected_simfile_path = selected_song.as_ref().map(|song| song.simfile_path.clone());
@@ -2872,6 +3494,7 @@ fn show_leaderboard_overlay(state: &mut State) {
     let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
     if let Some(overlay) = sort_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
         state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+        state.sync_overlay = SyncOverlayState::Hidden;
         state.profile_switch_overlay = None;
         hide_test_input_overlay(state);
         state.leaderboard = overlay;
@@ -2892,10 +3515,416 @@ fn show_replay_overlay(state: &mut State) {
         return;
     }
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     state.replay_overlay = overlay;
     clear_preview(state);
+}
+
+#[inline(always)]
+fn hide_sync_overlay(state: &mut State) {
+    state.sync_overlay = SyncOverlayState::Hidden;
+}
+
+#[inline(always)]
+fn selected_steps_index_for_sync(state: &State) -> usize {
+    match (
+        profile::get_session_play_style(),
+        profile::get_session_player_side(),
+    ) {
+        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => state.p2_selected_steps_index,
+        _ => state.selected_steps_index,
+    }
+}
+
+fn selected_chart_ix_for_sync(
+    song: &SongData,
+    chart_type: &str,
+    steps_index: usize,
+) -> Option<usize> {
+    let standard = standard_chart_indices(song, chart_type);
+    let edits = edit_chart_indices_sorted(song, chart_type);
+    chart_ix_for_steps_index(&standard, steps_index, edits.as_slice())
+}
+
+#[inline(always)]
+fn sync_kernel_row(kind: BiasKernel) -> [f64; 5] {
+    if kind == BiasKernel::Loudest {
+        [1.0, 3.0, 10.0, 3.0, 1.0]
+    } else {
+        [1.0, 1.0, 0.0, -1.0, -1.0]
+    }
+}
+
+fn sync_convolution_from_digest_sums(col_sums: &[f64], kind: BiasKernel) -> Vec<f64> {
+    let cols = col_sums.len();
+    if cols == 0 {
+        return Vec::new();
+    }
+    let kernel = sync_kernel_row(kind);
+    let mut out = vec![0.0; cols];
+    for (c, out_val) in out.iter_mut().enumerate() {
+        let mut sum = 0.0;
+        for (k, &weight) in kernel.iter().enumerate() {
+            let cc = (c as isize - k as isize + 2).rem_euclid(cols as isize) as usize;
+            sum += col_sums[cc] * weight;
+        }
+        *out_val = sum * 5.0;
+    }
+    out
+}
+
+fn sync_peak_bias_ms(convolution: &[f64], times_ms: &[f64], edge_discard: usize) -> Option<f64> {
+    if convolution.is_empty() {
+        return None;
+    }
+    let edge = edge_discard.min(convolution.len().saturating_sub(1) / 2);
+    if convolution.len() <= edge.saturating_mul(2) {
+        return None;
+    }
+    let mut peak_ix = edge;
+    let mut peak_val = f64::NEG_INFINITY;
+    for (i, &value) in convolution
+        .iter()
+        .enumerate()
+        .skip(edge)
+        .take(convolution.len().saturating_sub(edge * 2))
+    {
+        if value > peak_val {
+            peak_val = value;
+            peak_ix = i;
+        }
+    }
+    if times_ms.len() == convolution.len() {
+        times_ms.get(peak_ix).copied()
+    } else {
+        let half = (convolution.len() / 2) as isize;
+        Some((peak_ix as isize - half) as f64)
+    }
+}
+
+#[inline(always)]
+fn sync_apply_delta_seconds(overlay: &SyncOverlayStateData) -> Option<f32> {
+    overlay
+        .final_bias_ms
+        .map(|bias_ms| -(bias_ms as f32) * 0.001)
+        .filter(|v| v.is_finite())
+}
+
+#[inline(always)]
+fn sync_quantized_offset(v: f32) -> f32 {
+    (v / 0.001).round() * 0.001
+}
+
+#[inline(always)]
+fn sync_prompt_offset_line(old_offset: f32, new_offset: f32) -> Option<String> {
+    let old_q = sync_quantized_offset(old_offset);
+    let new_q = sync_quantized_offset(new_offset);
+    let delta = new_q - old_q;
+    if delta.abs() < 0.000_1 {
+        return None;
+    }
+    let direction = if delta > 0.0 { "earlier" } else { "later" };
+    Some(format!(
+        "Song offset from {old_q:+.3} to {new_q:+.3} (notes {direction})"
+    ))
+}
+
+fn build_sync_save_prompt_text(_overlay: &SyncOverlayStateData) -> String {
+    "Would you like to save these changes?\nChoosing NO will discard your changes.".to_string()
+}
+
+fn show_sync_overlay(state: &mut State) {
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return;
+    };
+    let song = song.clone();
+    let target_chart_type = profile::get_session_play_style().chart_type();
+    let steps_index = selected_steps_index_for_sync(state);
+    let Some(chart_ix) = selected_chart_ix_for_sync(song.as_ref(), target_chart_type, steps_index)
+    else {
+        return;
+    };
+    let Some(chart) = song.charts.get(chart_ix) else {
+        return;
+    };
+    let chart_label =
+        if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.description.trim().is_empty() {
+            format!("{} ({})", chart.difficulty, chart.description)
+        } else {
+            chart.difficulty.clone()
+        };
+
+    clear_preview(state);
+    state.song_search = sort_menu::SongSearchState::Hidden;
+    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.profile_switch_overlay = None;
+    hide_test_input_overlay(state);
+    clear_menu_chord(state);
+    clear_p1_ud_chord(state);
+    clear_p2_ud_chord(state);
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+    state.last_steps_nav_dir_p1 = None;
+    state.last_steps_nav_time_p1 = None;
+    state.last_steps_nav_dir_p2 = None;
+    state.last_steps_nav_time_p2 = None;
+
+    let cfg = nod::api::default_bias_cfg();
+    let kernel_target = cfg.kernel_target;
+    let kernel_type = cfg.kernel_type;
+    let stream_cfg = BiasStreamCfg {
+        emit_freq_delta: kernel_target == KernelTarget::Accumulator,
+        orientation: GraphOrientation::Horizontal,
+    };
+
+    let simfile_path = song.simfile_path.clone();
+    let simfile_path_thread = simfile_path.clone();
+    let (tx, rx) = mpsc::channel::<SyncWorkerMsg>();
+    std::thread::spawn(move || {
+        let tx_done = tx.clone();
+        let result = nod::api::analyze_chart_stream(
+            simfile_path_thread.as_path(),
+            chart_ix,
+            &cfg,
+            stream_cfg,
+            |event| {
+                let _ = tx.send(SyncWorkerMsg::Event(event));
+            },
+        );
+        let _ = tx_done.send(SyncWorkerMsg::Finished(result));
+    });
+
+    state.sync_overlay = SyncOverlayState::Visible(SyncOverlayStateData {
+        simfile_path,
+        song_title: song.display_full_title(false),
+        chart_label,
+        song_offset_seconds: song.offset,
+        kernel_target,
+        kernel_type,
+        cols: 0,
+        total_beats: 0,
+        digest_rows: 0,
+        times_ms: Vec::new(),
+        beat_digest: Vec::new(),
+        digest_col_sums: Vec::new(),
+        post_rows: 0,
+        post_kernel: Vec::new(),
+        convolution: Vec::new(),
+        edge_discard: 2,
+        beats_processed: 0,
+        preview_bias_ms: None,
+        final_bias_ms: None,
+        final_confidence: None,
+        phase: SyncOverlayPhase::Running,
+        yes_selected: true,
+        error_text: None,
+        rx,
+    });
+}
+
+fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
+    loop {
+        match overlay.rx.try_recv() {
+            Ok(SyncWorkerMsg::Event(event)) => match event {
+                BiasStreamEvent::Init(init) => {
+                    overlay.cols = init.cols;
+                    overlay.total_beats = init.planned_beats;
+                    overlay.digest_rows = 0;
+                    overlay.times_ms = init.times_ms;
+                    overlay.beat_digest.clear();
+                    overlay.kernel_target = init.kernel_target;
+                    overlay.digest_col_sums = vec![0.0; init.cols];
+                    overlay.post_rows = 0;
+                    overlay.post_kernel.clear();
+                    overlay.convolution.clear();
+                    overlay.beats_processed = 0;
+                    overlay.preview_bias_ms = None;
+                }
+                BiasStreamEvent::Beat(beat) => {
+                    if overlay.phase != SyncOverlayPhase::Running
+                        || overlay.kernel_target != KernelTarget::Digest
+                        || overlay.cols == 0
+                        || beat.digest_row.len() != overlay.cols
+                    {
+                        continue;
+                    }
+                    let beat_seq = beat.beat_seq;
+                    let row = beat.digest_row;
+                    overlay.beats_processed = overlay.beats_processed.max(beat_seq + 1);
+                    overlay.digest_rows = overlay.beats_processed;
+                    overlay.beat_digest.extend_from_slice(row.as_slice());
+                    for (sum, value) in overlay.digest_col_sums.iter_mut().zip(row.iter().copied())
+                    {
+                        *sum += value;
+                    }
+                    overlay.convolution = sync_convolution_from_digest_sums(
+                        &overlay.digest_col_sums,
+                        overlay.kernel_type,
+                    );
+                    overlay.preview_bias_ms = sync_peak_bias_ms(
+                        &overlay.convolution,
+                        &overlay.times_ms,
+                        overlay.edge_discard,
+                    );
+                }
+                BiasStreamEvent::Convolution(conv) => {
+                    overlay.post_rows = conv.rows;
+                    overlay.post_kernel = conv.post_kernel;
+                    overlay.convolution = conv.convolution;
+                    overlay.edge_discard = conv.edge_discard;
+                    overlay.preview_bias_ms = sync_peak_bias_ms(
+                        &overlay.convolution,
+                        &overlay.times_ms,
+                        overlay.edge_discard,
+                    );
+                }
+                BiasStreamEvent::Done(estimate) => {
+                    overlay.final_bias_ms = Some(estimate.bias_ms);
+                    overlay.final_confidence = Some(estimate.confidence);
+                }
+            },
+            Ok(SyncWorkerMsg::Finished(result)) => match result {
+                Ok(result) => {
+                    if overlay.times_ms.is_empty() {
+                        overlay.times_ms = result.plot.times_ms.clone();
+                        overlay.cols = result.plot.cols;
+                    }
+                    overlay.total_beats = overlay.total_beats.max(result.plot.digest_rows);
+                    overlay.beats_processed = overlay.beats_processed.max(result.plot.digest_rows);
+                    if overlay.beat_digest.len() != result.plot.beat_digest.len() {
+                        overlay.beat_digest = result.plot.beat_digest.clone();
+                    }
+                    overlay.digest_rows = result.plot.digest_rows;
+                    overlay.post_rows = result.plot.post_rows;
+                    overlay.post_kernel = result.plot.post_kernel.clone();
+                    if overlay.convolution.is_empty() {
+                        overlay.convolution = result.plot.convolution.clone();
+                        overlay.edge_discard = result.plot.edge_discard;
+                    }
+                    overlay.final_bias_ms = Some(result.estimate.bias_ms);
+                    overlay.final_confidence = Some(result.estimate.confidence);
+                    if overlay.preview_bias_ms.is_none() {
+                        overlay.preview_bias_ms = sync_peak_bias_ms(
+                            &overlay.convolution,
+                            &overlay.times_ms,
+                            overlay.edge_discard,
+                        );
+                    }
+                    overlay.phase = SyncOverlayPhase::Ready;
+                    overlay.yes_selected = true;
+                }
+                Err(err) => {
+                    overlay.phase = SyncOverlayPhase::Failed;
+                    overlay.error_text = Some(err);
+                }
+            },
+            Err(mpsc::TryRecvError::Empty) => break,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                if overlay.phase == SyncOverlayPhase::Running {
+                    overlay.phase = SyncOverlayPhase::Failed;
+                    overlay.error_text = Some("sync worker disconnected".to_string());
+                }
+                break;
+            }
+        }
+    }
+}
+
+fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
+
+    let mut close_overlay = false;
+    let mut apply_sync: Option<(PathBuf, f32)> = None;
+    let mut play_change = false;
+    let mut play_start = false;
+
+    {
+        let SyncOverlayState::Visible(overlay) = &mut state.sync_overlay else {
+            return ScreenAction::None;
+        };
+        match overlay.phase {
+            SyncOverlayPhase::Running | SyncOverlayPhase::Failed => match ev.action {
+                VirtualAction::p1_start
+                | VirtualAction::p2_start
+                | VirtualAction::p1_back
+                | VirtualAction::p2_back
+                | VirtualAction::p1_select
+                | VirtualAction::p2_select => {
+                    close_overlay = true;
+                    play_start = true;
+                }
+                _ => {}
+            },
+            SyncOverlayPhase::Ready => match ev.action {
+                VirtualAction::p1_left
+                | VirtualAction::p1_menu_left
+                | VirtualAction::p1_up
+                | VirtualAction::p1_menu_up
+                | VirtualAction::p2_left
+                | VirtualAction::p2_menu_left
+                | VirtualAction::p2_up
+                | VirtualAction::p2_menu_up => {
+                    if !overlay.yes_selected {
+                        overlay.yes_selected = true;
+                        play_change = true;
+                    }
+                }
+                VirtualAction::p1_right
+                | VirtualAction::p1_menu_right
+                | VirtualAction::p1_down
+                | VirtualAction::p1_menu_down
+                | VirtualAction::p2_right
+                | VirtualAction::p2_menu_right
+                | VirtualAction::p2_down
+                | VirtualAction::p2_menu_down => {
+                    if overlay.yes_selected {
+                        overlay.yes_selected = false;
+                        play_change = true;
+                    }
+                }
+                VirtualAction::p1_start | VirtualAction::p2_start => {
+                    if overlay.yes_selected
+                        && let Some(delta_seconds) = sync_apply_delta_seconds(overlay)
+                        && delta_seconds.abs() >= 0.000_001
+                    {
+                        apply_sync = Some((overlay.simfile_path.clone(), delta_seconds));
+                    }
+                    close_overlay = true;
+                    play_start = true;
+                }
+                VirtualAction::p1_back
+                | VirtualAction::p2_back
+                | VirtualAction::p1_select
+                | VirtualAction::p2_select => {
+                    close_overlay = true;
+                    play_start = true;
+                }
+                _ => {}
+            },
+        }
+    }
+
+    if play_change {
+        audio::play_sfx("assets/sounds/change.ogg");
+    }
+    if play_start {
+        audio::play_sfx("assets/sounds/start.ogg");
+    }
+    if close_overlay {
+        hide_sync_overlay(state);
+    }
+    if let Some((simfile_path, delta_seconds)) = apply_sync {
+        return ScreenAction::ApplySongOffsetSync {
+            simfile_path,
+            delta_seconds,
+        };
+    }
+    ScreenAction::None
 }
 
 fn switch_single_player_style(state: &mut State, new_style: profile::PlayStyle) {
@@ -3080,6 +4109,11 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
         sort_menu::Action::ReloadSongsCourses => {
             hide_sort_menu(state);
             start_reload_songs_and_courses(state);
+            ScreenAction::None
+        }
+        sort_menu::Action::SyncSong => {
+            hide_sort_menu(state);
+            show_sync_overlay(state);
             ScreenAction::None
         }
         sort_menu::Action::PlayReplay => {
@@ -3568,6 +4602,19 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
+    if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
+        if key.state == ElementState::Pressed
+            && matches!(
+                key.physical_key,
+                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
+            )
+        {
+            hide_sync_overlay(state);
+            state.song_search_ignore_next_back_select = true;
+        }
+        return ScreenAction::None;
+    }
+
     if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
         if key.state == ElementState::Pressed
             && matches!(
@@ -3691,6 +4738,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if !matches!(state.song_search, sort_menu::SongSearchState::Hidden) {
         return handle_song_search_input(state, ev);
+    }
+
+    if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
+        return handle_sync_overlay_input(state, ev);
     }
 
     if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
@@ -3845,6 +4896,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if sort_menu::update_song_search(&mut state.song_search, dt) {
         return ScreenAction::None;
     }
+    if let SyncOverlayState::Visible(overlay) = &mut state.sync_overlay {
+        poll_sync_overlay(overlay);
+        return ScreenAction::None;
+    }
     if sort_menu::update_replay_overlay(&mut state.replay_overlay, dt) {
         return ScreenAction::None;
     }
@@ -3979,6 +5034,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.leaderboard,
             sort_menu::LeaderboardOverlayState::Hidden
         )
+        || !matches!(state.sync_overlay, SyncOverlayState::Hidden)
         || !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden)
         || state.profile_switch_overlay.is_some()
         || state.test_input_overlay_visible
@@ -5542,6 +6598,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         sort_menu::build_replay_overlay(&state.replay_overlay, state.active_color_index)
     {
         actors.extend(replay_overlay);
+        return actors;
+    }
+    if let Some(sync_overlay) = build_sync_overlay(&state.sync_overlay, state.active_color_index) {
+        actors.extend(sync_overlay);
         return actors;
     }
     if state.test_input_overlay_visible {

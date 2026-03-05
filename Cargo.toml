@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.2.68"
+version = "0.2.69"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -50,6 +50,7 @@ tokio = { version = "1.50.0", features = ["rt"] }
 
 # rssp submodule
 rssp = { path = "src/extern/rssp" }
+nod = { path = "src/extern/nod" }
 
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]

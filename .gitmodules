@@ -1,3 +1,6 @@
 [submodule "src/extern/rssp"]
 	path = src/extern/rssp
 	url = https://github.com/pnn64/rssp.git
+[submodule "src/extern/nod"]
+	path = src/extern/nod
+	url = https://github.com/pnn64/nod.git

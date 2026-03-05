@@ -192,6 +192,7 @@ pub enum Action {
     SongSearch,
     SwitchProfile,
     ReloadSongsCourses,
+    SyncSong,
     PlayReplay,
     ShowLeaderboard,
 }
@@ -278,6 +279,11 @@ const ITEM_RELOAD_SONGS_COURSES: Item = Item {
     bottom_label: "Load New Songs",
     action: Action::ReloadSongsCourses,
 };
+const ITEM_SYNC_SONG: Item = Item {
+    top_label: "Sync",
+    bottom_label: "null-or-die",
+    action: Action::SyncSong,
+};
 const ITEM_PLAY_REPLAY: Item = Item {
     top_label: "Machine Data",
     bottom_label: "Play Replay",
@@ -294,34 +300,37 @@ const ITEM_GO_BACK: Item = Item {
     action: Action::BackToMain,
 };
 
-pub const ITEMS_MAIN: [Item; 7] = [
+pub const ITEMS_MAIN: [Item; 8] = [
     ITEM_CATEGORY_SORTS,
     ITEM_TEST_INPUT,
     ITEM_SONG_SEARCH,
     ITEM_SWITCH_PROFILE,
     ITEM_RELOAD_SONGS_COURSES,
+    ITEM_SYNC_SONG,
     ITEM_PLAY_REPLAY,
     ITEM_SHOW_LEADERBOARD,
 ];
 
-pub const ITEMS_MAIN_WITH_SWITCH_TO_SINGLE: [Item; 8] = [
+pub const ITEMS_MAIN_WITH_SWITCH_TO_SINGLE: [Item; 9] = [
     ITEM_CATEGORY_SORTS,
     ITEM_SWITCH_TO_SINGLE,
     ITEM_TEST_INPUT,
     ITEM_SONG_SEARCH,
     ITEM_SWITCH_PROFILE,
     ITEM_RELOAD_SONGS_COURSES,
+    ITEM_SYNC_SONG,
     ITEM_PLAY_REPLAY,
     ITEM_SHOW_LEADERBOARD,
 ];
 
-pub const ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE: [Item; 8] = [
+pub const ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE: [Item; 9] = [
     ITEM_CATEGORY_SORTS,
     ITEM_SWITCH_TO_DOUBLE,
     ITEM_TEST_INPUT,
     ITEM_SONG_SEARCH,
     ITEM_SWITCH_PROFILE,
     ITEM_RELOAD_SONGS_COURSES,
+    ITEM_SYNC_SONG,
     ITEM_PLAY_REPLAY,
     ITEM_SHOW_LEADERBOARD,
 ];

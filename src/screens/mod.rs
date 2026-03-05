@@ -45,6 +45,10 @@ pub enum ScreenAction {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,
     },
+    ApplySongOffsetSync {
+        simfile_path: PathBuf,
+        delta_seconds: f32,
+    },
     FetchOnlineGrade(String),
     ChangeGraphics {
         renderer: Option<BackendType>,
