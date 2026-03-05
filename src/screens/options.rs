@@ -566,7 +566,9 @@ const SELECT_MUSIC_ROW_PATTERN_INFO: &str = "Show Pattern Info";
 const SELECT_MUSIC_ROW_PREVIEWS: &str = "Music Previews";
 const SELECT_MUSIC_ROW_PREVIEW_LOOP: &str = "Loop Music";
 const SELECT_MUSIC_ROW_GAMEPLAY_TIMER: &str = "Show Gameplay Timer";
-const SELECT_MUSIC_ROW_SHOW_RIVALS: &str = "Show Rivals";
+const SELECT_MUSIC_ROW_SHOW_RIVALS: &str = "Show GS Box";
+const SELECT_MUSIC_ROW_SCOREBOX_CYCLE: &str = "GS Box Leaderboards";
+const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
 const MACHINE_ROW_SELECT_PROFILE: &str = "Select Profile";
 const MACHINE_ROW_SELECT_COLOR: &str = "Select Color";
 const MACHINE_ROW_SELECT_STYLE: &str = "Select Style";
@@ -779,6 +781,8 @@ const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 1;
 const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 2;
 const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 9;
 const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 10;
+const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 12;
+const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 13;
 const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
 const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
 const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
@@ -802,6 +806,8 @@ const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 7] = [
     "Plaid",
 ];
 const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
+const SELECT_MUSIC_SCOREBOX_CYCLE_CHOICES: [&str; SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES] =
+    ["ITG", "EX", "H.EX", "Tournaments"];
 
 const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (1920, 1080),
@@ -1404,6 +1410,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["No", "Yes"],
         inline: true,
     },
+    SubRow {
+        label: SELECT_MUSIC_ROW_SCOREBOX_CYCLE,
+        choices: &SELECT_MUSIC_SCOREBOX_CYCLE_CHOICES,
+        inline: true,
+    },
 ];
 
 pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
@@ -1471,8 +1482,15 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SELECT_MUSIC_ROW_SHOW_RIVALS,
         help: &[
-            "Show rivals in pane/scorebox areas when available.",
-            "When off, selected difficulty remains visible in the pane.",
+            "Show GS box in Select Music pane/scorebox areas when available.",
+            "GS box will not show unless GrooveStats/BoogieStats/ArrowCloud is enabled and connected.",
+        ],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_SCOREBOX_CYCLE,
+        help: &[
+            "Choose which leaderboards the GS box cycles through.",
+            "Use Left/Right to select ITG/EX/H.EX/Tournaments, then Start to toggle each option.",
         ],
     },
     Item {
@@ -1968,12 +1986,20 @@ fn submenu_visible_row_indices(
                 .copied()
                 .unwrap_or_else(|| yes_no_choice_index(true));
             let show_previews = yes_no_from_choice(show_previews);
+            let show_scorebox = state
+                .sub_choice_indices_select_music
+                .get(SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX)
+                .copied()
+                .unwrap_or_else(|| yes_no_choice_index(true));
+            let show_scorebox = yes_no_from_choice(show_scorebox);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, _)| {
                     if idx == SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX && !show_breakdown {
                         None
                     } else if idx == SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX && !show_previews {
+                        None
+                    } else if idx == SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX && !show_scorebox {
                         None
                     } else {
                         Some(idx)
@@ -2966,6 +2992,92 @@ fn music_wheel_scroll_speed_from_choice(idx: usize) -> u8 {
         .unwrap_or(15)
 }
 
+#[inline(always)]
+const fn scorebox_cycle_mask(itg: bool, ex: bool, hard_ex: bool, tournaments: bool) -> u8 {
+    (itg as u8) | ((ex as u8) << 1) | ((hard_ex as u8) << 2) | ((tournaments as u8) << 3)
+}
+
+#[inline(always)]
+const fn scorebox_cycle_cursor_index(
+    itg: bool,
+    ex: bool,
+    hard_ex: bool,
+    tournaments: bool,
+) -> usize {
+    if itg {
+        0
+    } else if ex {
+        1
+    } else if hard_ex {
+        2
+    } else if tournaments {
+        3
+    } else {
+        0
+    }
+}
+
+#[inline(always)]
+const fn scorebox_cycle_bit_from_choice(idx: usize) -> u8 {
+    if idx < SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES {
+        1u8 << (idx as u8)
+    } else {
+        0
+    }
+}
+
+#[inline(always)]
+const fn scorebox_cycle_mask_from_config(cfg: &config::Config) -> u8 {
+    scorebox_cycle_mask(
+        cfg.select_music_scorebox_cycle_itg,
+        cfg.select_music_scorebox_cycle_ex,
+        cfg.select_music_scorebox_cycle_hard_ex,
+        cfg.select_music_scorebox_cycle_tournaments,
+    )
+}
+
+#[inline(always)]
+fn apply_scorebox_cycle_mask(mask: u8) {
+    config::update_select_music_scorebox_cycle_itg((mask & (1u8 << 0)) != 0);
+    config::update_select_music_scorebox_cycle_ex((mask & (1u8 << 1)) != 0);
+    config::update_select_music_scorebox_cycle_hard_ex((mask & (1u8 << 2)) != 0);
+    config::update_select_music_scorebox_cycle_tournaments((mask & (1u8 << 3)) != 0);
+}
+
+fn toggle_select_music_scorebox_cycle_option(state: &mut State, choice_idx: usize) {
+    let bit = scorebox_cycle_bit_from_choice(choice_idx);
+    if bit == 0 {
+        return;
+    }
+    let mut mask = scorebox_cycle_mask_from_config(&config::get());
+    if (mask & bit) != 0 {
+        mask &= !bit;
+    } else {
+        mask |= bit;
+    }
+    apply_scorebox_cycle_mask(mask);
+
+    let clamped = choice_idx.min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
+    if let Some(slot) = state
+        .sub_choice_indices_select_music
+        .get_mut(SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX)
+    {
+        *slot = clamped;
+    }
+    if let Some(slot) = state
+        .sub_cursor_indices_select_music
+        .get_mut(SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX)
+    {
+        *slot = clamped;
+    }
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
+#[inline(always)]
+fn select_music_scorebox_cycle_enabled_mask() -> u8 {
+    scorebox_cycle_mask_from_config(&config::get())
+}
+
 const fn breakdown_style_choice_index(style: BreakdownStyle) -> usize {
     match style {
         BreakdownStyle::Sl => 0,
@@ -3663,6 +3775,17 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_SHOW_RIVALS,
         yes_no_choice_index(cfg.show_select_music_scorebox),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_SCOREBOX_CYCLE,
+        scorebox_cycle_cursor_index(
+            cfg.select_music_scorebox_cycle_itg,
+            cfg.select_music_scorebox_cycle_ex,
+            cfg.select_music_scorebox_cycle_hard_ex,
+            cfg.select_music_scorebox_cycle_tournaments,
+        ),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
@@ -5280,6 +5403,23 @@ pub fn handle_input(
                         return ScreenAction::None;
                     }
                     let selected_row = state.sub_selected.min(total.saturating_sub(1));
+                    if matches!(kind, SubmenuKind::SelectMusic)
+                        && let Some(row_idx) =
+                            submenu_visible_row_to_actual(state, kind, selected_row)
+                    {
+                        let rows = submenu_rows(kind);
+                        if rows.get(row_idx).map(|row| row.label)
+                            == Some(SELECT_MUSIC_ROW_SCOREBOX_CYCLE)
+                        {
+                            let choice_idx = submenu_cursor_indices(state, kind)
+                                .get(row_idx)
+                                .copied()
+                                .unwrap_or(0)
+                                .min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
+                            toggle_select_music_scorebox_cycle_option(state, choice_idx);
+                            return ScreenAction::None;
+                        }
+                    }
                     // Exit row in the submenu: back to the main Options list.
                     if selected_row == total - 1 {
                         audio::play_sfx("assets/sounds/start.ogg");
@@ -5694,6 +5834,7 @@ const fn select_music_parent_row(actual_idx: usize) -> Option<usize> {
     match actual_idx {
         SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX => Some(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX),
         SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX => Some(SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX),
+        SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX => Some(SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX),
         _ => None,
     }
 }
@@ -6616,6 +6757,13 @@ pub fn get_actors(
                                 .copied()
                                 .unwrap_or(0)
                                 .min(choice_texts.len().saturating_sub(1));
+                            let is_scorebox_cycle_row = matches!(kind, SubmenuKind::SelectMusic)
+                                && row.label == SELECT_MUSIC_ROW_SCOREBOX_CYCLE;
+                            let scorebox_enabled_mask = if is_scorebox_cycle_row {
+                                select_music_scorebox_cycle_enabled_mask()
+                            } else {
+                                0
+                            };
                             let mut selected_left_x: Option<f32> = None;
 
                             let choice_inner_left =
@@ -6637,9 +6785,18 @@ pub fn get_actors(
                                     if is_choice_selected {
                                         selected_left_x = Some(x);
                                     }
-
+                                    let is_choice_enabled = is_scorebox_cycle_row
+                                        && (scorebox_enabled_mask
+                                            & scorebox_cycle_bit_from_choice(idx))
+                                            != 0;
                                     let mut choice_color = if is_disabled && !is_choice_selected {
                                         sl_gray
+                                    } else if is_scorebox_cycle_row {
+                                        if is_choice_enabled {
+                                            col_white
+                                        } else {
+                                            sl_gray
+                                        }
                                     } else if is_active {
                                         col_white
                                     } else {
@@ -6676,29 +6833,61 @@ pub fn get_actors(
                             ));
                             }
 
-                            // Underline the selected option when this row is active or inactive,
-                            // matching the inline underline behavior from player_options.rs.
-                            if let Some(sel_left_x) = selected_left_x {
+                            // For normal rows, underline the selected option.
+                            // For GS Box Leaderboards, underline each enabled option (multi-select).
+                            if inline_row && is_scorebox_cycle_row {
+                                asset_manager.with_fonts(|_all_fonts| {
+                                    asset_manager.with_font("miso", |metrics_font| {
+                                        let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                                        let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                                        let offset = widescale(3.0, 4.0);
+                                        let underline_y = row_mid_y + text_h * 0.5 + offset;
+                                        let mut line_color =
+                                            color::decorative_rgba(state.active_color_index);
+                                        line_color[3] *= row_alpha;
+                                        for idx in 0..choice_texts.len() {
+                                            let bit = scorebox_cycle_bit_from_choice(idx);
+                                            if bit == 0 || (scorebox_enabled_mask & bit) == 0 {
+                                                continue;
+                                            }
+                                            let Some(underline_left_x) = x_positions.get(idx).copied()
+                                            else {
+                                                continue;
+                                            };
+                                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                                            let underline_w = draw_w.ceil();
+                                            ui_actors.push(act!(quad:
+                                                align(0.0, 0.5):
+                                                xy(underline_left_x, underline_y):
+                                                zoomto(underline_w, line_thickness):
+                                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                                z(101)
+                                            ));
+                                        }
+                                    });
+                                });
+                            } else if let Some(sel_left_x) = selected_left_x {
                                 let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
                                 asset_manager.with_fonts(|_all_fonts| {
-                                asset_manager.with_font("miso", |metrics_font| {
-                                    let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                                    let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                                    let underline_w = draw_w.ceil();
-                                    let offset = widescale(3.0, 4.0);
-                                    let underline_y = row_mid_y + text_h * 0.5 + offset;
-                                    let mut line_color = color::decorative_rgba(state.active_color_index);
-                                    line_color[3] *= row_alpha;
-                                    let underline_left_x = sel_left_x;
-                                    ui_actors.push(act!(quad:
-                                        align(0.0, 0.5):
-                                        xy(underline_left_x, underline_y):
-                                        zoomto(underline_w, line_thickness):
-                                        diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                        z(101)
-                                    ));
+                                    asset_manager.with_font("miso", |metrics_font| {
+                                        let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+                                        let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                                        let underline_w = draw_w.ceil();
+                                        let offset = widescale(3.0, 4.0);
+                                        let underline_y = row_mid_y + text_h * 0.5 + offset;
+                                        let mut line_color =
+                                            color::decorative_rgba(state.active_color_index);
+                                        line_color[3] *= row_alpha;
+                                        let underline_left_x = sel_left_x;
+                                        ui_actors.push(act!(quad:
+                                            align(0.0, 0.5):
+                                            xy(underline_left_x, underline_y):
+                                            zoomto(underline_w, line_thickness):
+                                            diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                            z(101)
+                                        ));
+                                    });
                                 });
-                            });
                             }
 
                             // Encircling cursor ring around the active option when this row is active.

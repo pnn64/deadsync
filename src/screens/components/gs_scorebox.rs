@@ -120,6 +120,14 @@ enum PaneKind {
     Other,
 }
 
+#[derive(Clone, Copy)]
+struct SelectMusicPaneFilter {
+    itg: bool,
+    ex: bool,
+    hard_ex: bool,
+    tournaments: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct SelectMusicScoreboxView {
     pub mode_text: String,
@@ -140,6 +148,45 @@ fn error_text(error: &str) -> String {
     } else {
         "Failed to Load 😞".to_string()
     }
+}
+
+#[inline(always)]
+fn select_music_pane_filter() -> SelectMusicPaneFilter {
+    let cfg = crate::config::get();
+    SelectMusicPaneFilter {
+        itg: cfg.select_music_scorebox_cycle_itg,
+        ex: cfg.select_music_scorebox_cycle_ex,
+        hard_ex: cfg.select_music_scorebox_cycle_hard_ex,
+        tournaments: cfg.select_music_scorebox_cycle_tournaments,
+    }
+}
+
+#[inline(always)]
+const fn select_music_filter_has_any(filter: SelectMusicPaneFilter) -> bool {
+    filter.itg || filter.ex || filter.hard_ex || filter.tournaments
+}
+
+#[inline(always)]
+const fn select_music_filter_allows_kind(kind: PaneKind, filter: SelectMusicPaneFilter) -> bool {
+    match kind {
+        PaneKind::Gs => filter.itg,
+        PaneKind::Ex => filter.ex,
+        PaneKind::HardEx => filter.hard_ex,
+        PaneKind::Rpg | PaneKind::Itl | PaneKind::Other => filter.tournaments,
+    }
+}
+
+fn select_music_filtered_panes<'a>(
+    panes: &'a [scores::LeaderboardPane],
+    filter: SelectMusicPaneFilter,
+) -> Vec<&'a scores::LeaderboardPane> {
+    let mut out = Vec::with_capacity(panes.len());
+    for pane in panes {
+        if select_music_filter_allows_kind(pane_kind(pane), filter) {
+            out.push(pane);
+        }
+    }
+    out
 }
 
 #[inline(always)]
@@ -234,17 +281,28 @@ fn rank_text(rank: u32) -> Arc<str> {
     cached_text(&RANK_TEXT_CACHE, rank, || format!("{rank}."))
 }
 
-fn preferred_primary_pane(
-    panes: &[scores::LeaderboardPane],
+fn preferred_primary_pane<'a>(
+    panes: &'a [&'a scores::LeaderboardPane],
     show_ex: bool,
-) -> Option<&scores::LeaderboardPane> {
+) -> Option<&'a scores::LeaderboardPane> {
     let want = if show_ex { PaneKind::Ex } else { PaneKind::Gs };
     panes
         .iter()
+        .copied()
         .find(|pane| pane_kind(pane) == want)
-        .or_else(|| panes.iter().find(|pane| pane_kind(pane) == PaneKind::Gs))
-        .or_else(|| panes.iter().find(|pane| pane_kind(pane) == PaneKind::Ex))
-        .or_else(|| panes.first())
+        .or_else(|| {
+            panes
+                .iter()
+                .copied()
+                .find(|pane| pane_kind(pane) == PaneKind::Gs)
+        })
+        .or_else(|| {
+            panes
+                .iter()
+                .copied()
+                .find(|pane| pane_kind(pane) == PaneKind::Ex)
+        })
+        .or_else(|| panes.first().copied())
 }
 
 #[inline(always)]
@@ -276,6 +334,10 @@ pub fn select_music_scorebox_view(
     if !scores::is_gs_active_for_side(side) {
         return view;
     }
+    let filter = select_music_pane_filter();
+    if !select_music_filter_has_any(filter) {
+        return view;
+    }
     view.machine_name = "----".to_string();
     view.machine_score = unknown_score_percent_text();
     view.player_name = "----".to_string();
@@ -304,7 +366,8 @@ pub fn select_music_scorebox_view(
     let Some(data) = snapshot.data else {
         return view;
     };
-    let Some(pane) = preferred_primary_pane(&data.panes, show_ex) else {
+    let filtered_panes = select_music_filtered_panes(data.panes.as_slice(), filter);
+    let Some(pane) = preferred_primary_pane(filtered_panes.as_slice(), show_ex) else {
         view.loading_text = Some("No Scores".to_string());
         return view;
     };
@@ -537,6 +600,36 @@ fn gameplay_panes_from_snapshot(
 
     let mut panes = Vec::with_capacity(data.panes.len());
     for pane in &data.panes {
+        panes.push(gameplay_pane_from_leaderboard(pane));
+    }
+    panes
+}
+
+fn select_music_panes_from_snapshot(
+    snapshot: &scores::CachedPlayerLeaderboardData,
+    side: profile::PlayerSide,
+) -> Vec<GameplayScoreboxPane> {
+    if snapshot.loading {
+        return vec![gameplay_status_pane(side, "Loading ...")];
+    }
+    if let Some(error) = snapshot.error.as_deref() {
+        let text = error_text(error);
+        return vec![gameplay_status_pane(side, &text)];
+    }
+    let Some(data) = snapshot.data.as_ref() else {
+        return vec![gameplay_status_pane(side, "No Scores")];
+    };
+    let filter = select_music_pane_filter();
+    if !select_music_filter_has_any(filter) {
+        return Vec::new();
+    }
+
+    let filtered = select_music_filtered_panes(data.panes.as_slice(), filter);
+    if filtered.is_empty() {
+        return vec![gameplay_status_pane(side, "No Scores")];
+    }
+    let mut panes = Vec::with_capacity(filtered.len());
+    for pane in filtered {
         panes.push(gameplay_pane_from_leaderboard(pane));
     }
     panes
@@ -1079,7 +1172,7 @@ fn push_rows(
     }
 }
 
-pub fn gameplay_scorebox_actors(
+pub fn select_music_scorebox_actors(
     side: profile::PlayerSide,
     chart_hash: Option<&str>,
     show_scorebox: bool,
@@ -1099,7 +1192,7 @@ pub fn gameplay_scorebox_actors(
     else {
         return Vec::new();
     };
-    let panes = gameplay_panes_from_snapshot(&snapshot, side);
+    let panes = select_music_panes_from_snapshot(&snapshot, side);
     gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
 }
 

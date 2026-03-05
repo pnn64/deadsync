@@ -4367,16 +4367,21 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         profile::PlayerSide::P1
     };
-    let mode_chart_hash = if allow_gs_fetch {
-        let mode_chart = if mode_side == profile::PlayerSide::P2 && is_versus {
-            immediate_chart_p2
+    let scorebox_cycle_enabled = cfg.select_music_scorebox_cycle_itg
+        || cfg.select_music_scorebox_cycle_ex
+        || cfg.select_music_scorebox_cycle_hard_ex
+        || cfg.select_music_scorebox_cycle_tournaments;
+    let mode_chart_hash =
+        if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
+            let mode_chart = if mode_side == profile::PlayerSide::P2 && is_versus {
+                immediate_chart_p2
+            } else {
+                immediate_chart_p1
+            };
+            mode_chart.map(|c| c.short_hash.as_str())
         } else {
-            immediate_chart_p1
+            None
         };
-        mode_chart.map(|c| c.short_hash.as_str())
-    } else {
-        None
-    };
     let score_mode_text = gs_scorebox::select_music_mode_text(mode_side, mode_chart_hash);
 
     let preferred_idx_p1 = state
@@ -4795,7 +4800,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                       meter: &str,
                       chart: Option<&ChartData>| {
         let gs_active = scores::is_gs_active_for_side(side);
-        let show_rivals = gs_active && cfg.show_select_music_scorebox;
+        let show_rivals = gs_active && cfg.show_select_music_scorebox && scorebox_cycle_enabled;
         let show_ex_score = profile::get_for_side(side).show_ex_score;
 
         let chart_hash = if allow_gs_fetch && show_rivals {
@@ -4842,13 +4847,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
             }
-            let score_mode_label = gs_view.loading_text.as_deref().unwrap_or(
-                if gs_view.mode_text.eq_ignore_ascii_case("EX") {
-                    "EX Score"
-                } else {
-                    "ITG Score"
-                },
-            );
+            let score_mode_label_storage = format!("{} Score", gs_view.mode_text);
+            let score_mode_label = gs_view
+                .loading_text
+                .as_deref()
+                .unwrap_or(score_mode_label_storage.as_str());
             out.push(act!(text: font("miso"): settext(score_mode_label): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
             if gs_view.show_rivals {
                 for i in 0..3 {
@@ -5347,21 +5350,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                  center_y: f32,
                                  zoom: f32,
                                  z_boost: i16| {
-            let chart_hash = if allow_gs_fetch {
-                match selected_entry {
-                    Some(MusicWheelEntry::Song(song)) => {
-                        chart_for_steps_index(song, target_chart_type, steps_idx)
-                            .map(|c| c.short_hash.as_str())
+            let chart_hash =
+                if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
+                    match selected_entry {
+                        Some(MusicWheelEntry::Song(song)) => {
+                            chart_for_steps_index(song, target_chart_type, steps_idx)
+                                .map(|c| c.short_hash.as_str())
+                        }
+                        _ => None,
                     }
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let scorebox = gs_scorebox::gameplay_scorebox_actors(
+                } else {
+                    None
+                };
+            let scorebox = gs_scorebox::select_music_scorebox_actors(
                 side,
                 chart_hash,
-                cfg.show_select_music_scorebox,
+                cfg.show_select_music_scorebox && scorebox_cycle_enabled,
                 center_x,
                 center_y,
                 zoom,

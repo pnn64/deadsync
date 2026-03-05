@@ -465,6 +465,10 @@ pub struct Config {
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
+    pub select_music_scorebox_cycle_itg: bool,
+    pub select_music_scorebox_cycle_ex: bool,
+    pub select_music_scorebox_cycle_hard_ex: bool,
+    pub select_music_scorebox_cycle_tournaments: bool,
     pub show_random_courses: bool,
     pub show_most_played_courses: bool,
     pub show_course_individual_scores: bool,
@@ -551,6 +555,10 @@ impl Default for Config {
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
+            select_music_scorebox_cycle_itg: true,
+            select_music_scorebox_cycle_ex: true,
+            select_music_scorebox_cycle_hard_ex: true,
+            select_music_scorebox_cycle_tournaments: true,
             show_random_courses: true,
             show_most_played_courses: true,
             show_course_individual_scores: true,
@@ -1113,6 +1121,38 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicScoreboxCycleItg={}\n",
+        if default.select_music_scorebox_cycle_itg {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxCycleEx={}\n",
+        if default.select_music_scorebox_cycle_ex {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxCycleHardEx={}\n",
+        if default.select_music_scorebox_cycle_hard_ex {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxCycleTournaments={}\n",
+        if default.select_music_scorebox_cycle_tournaments {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if default.show_stats_mode != 0 {
             "1"
@@ -1574,6 +1614,22 @@ pub fn load() {
                     .get("Options", "SelectMusicScorebox")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_scorebox, |v| v != 0);
+                cfg.select_music_scorebox_cycle_itg = conf
+                    .get("Options", "SelectMusicScoreboxCycleItg")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.select_music_scorebox_cycle_itg, |v| v != 0);
+                cfg.select_music_scorebox_cycle_ex = conf
+                    .get("Options", "SelectMusicScoreboxCycleEx")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.select_music_scorebox_cycle_ex, |v| v != 0);
+                cfg.select_music_scorebox_cycle_hard_ex = conf
+                    .get("Options", "SelectMusicScoreboxCycleHardEx")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.select_music_scorebox_cycle_hard_ex, |v| v != 0);
+                cfg.select_music_scorebox_cycle_tournaments = conf
+                    .get("Options", "SelectMusicScoreboxCycleTournaments")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.select_music_scorebox_cycle_tournaments, |v| v != 0);
                 cfg.fastload = conf
                     .get("Options", "FastLoad")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1943,6 +1999,10 @@ pub fn load() {
                     "SelectMusicPreviewLoop",
                     "SelectMusicPatternInfo",
                     "SelectMusicScorebox",
+                    "SelectMusicScoreboxCycleItg",
+                    "SelectMusicScoreboxCycleEx",
+                    "SelectMusicScoreboxCycleHardEx",
+                    "SelectMusicScoreboxCycleTournaments",
                     "ShowStats",
                     "ShowStatsMode",
                     "SmoothHistogram",
@@ -2867,6 +2927,38 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicScoreboxCycleItg={}\n",
+        if cfg.select_music_scorebox_cycle_itg {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxCycleEx={}\n",
+        if cfg.select_music_scorebox_cycle_ex {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxCycleHardEx={}\n",
+        if cfg.select_music_scorebox_cycle_hard_ex {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxCycleTournaments={}\n",
+        if cfg.select_music_scorebox_cycle_tournaments {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
@@ -3566,6 +3658,50 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
             return;
         }
         cfg.show_select_music_scorebox = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_scorebox_cycle_itg(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_scorebox_cycle_itg == enabled {
+            return;
+        }
+        cfg.select_music_scorebox_cycle_itg = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_scorebox_cycle_ex(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_scorebox_cycle_ex == enabled {
+            return;
+        }
+        cfg.select_music_scorebox_cycle_ex = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_scorebox_cycle_hard_ex(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_scorebox_cycle_hard_ex == enabled {
+            return;
+        }
+        cfg.select_music_scorebox_cycle_hard_ex = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_scorebox_cycle_tournaments(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_scorebox_cycle_tournaments == enabled {
+            return;
+        }
+        cfg.select_music_scorebox_cycle_tournaments = enabled;
     }
     save_without_keymaps();
 }
