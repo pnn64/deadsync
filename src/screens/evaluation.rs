@@ -936,7 +936,13 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
-                let secondary = EvalPane::Timing;
+                let secondary = score_info[0].as_ref().map_or(EvalPane::Timing, |si| {
+                    if si.show_fa_plus_pane {
+                        EvalPane::TimingEx
+                    } else {
+                        EvalPane::Timing
+                    }
+                });
                 active_pane = match joined {
                     profile::PlayerSide::P1 => [primary, secondary],
                     profile::PlayerSide::P2 => [secondary, primary],
