@@ -19,6 +19,10 @@ rand = "0.10.0"
 chrono = "0.4.43"
 qrcodegen = "1.8.0"
 
+# rssp and nod
+rssp = { git = "https://github.com/pnn64/rssp", rev = "43b3046" }
+nod = { git = "https://github.com/pnn64/nod", rev = "f4c4ccb" }
+
 # Software renderer
 softbuffer = "0.4.8"
 
@@ -47,10 +51,6 @@ ureq = { version = "3.2.0", features = ["json", "rustls"] }
 bincode = "2.0.1"
 twox-hash = "2.1.2"
 tokio = { version = "1.50.0", features = ["rt"] }
-
-# rssp submodule
-rssp = { path = "src/extern/rssp" }
-nod = { path = "src/extern/nod" }
 
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]

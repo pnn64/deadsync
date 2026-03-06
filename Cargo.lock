@@ -2069,7 +2069,8 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nod"
-version = "0.0.21"
+version = "0.0.22"
+source = "git+https://github.com/pnn64/nod?rev=f4c4ccb#f4c4ccbbd5b198c5dc581c6eba30cc09b5371f2f"
 dependencies = [
  "clap",
  "lewton",
@@ -3177,6 +3178,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 [[package]]
 name = "rssp"
 version = "0.3.55"
+source = "git+https://github.com/pnn64/rssp?rev=43b3046#43b30461b4ff0b5065b1d0e7b4564d0c21bb417b"
 dependencies = [
  "png",
  "serde_json",
