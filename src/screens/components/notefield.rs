@@ -4781,13 +4781,26 @@ pub fn build(
                 } * judgment_zoom_mod;
                 let offset_sec = judgment.time_error_ms / 1000.0;
                 let use_fa_plus_window = profile.show_fa_plus_window;
+                let use_split_15_10ms = profile.split_15_10ms;
                 // Map JudgeGrade + TimingWindow to a row index in the 7-row sheet:
                 //  row 0: FA+ Fantastic (W0)
                 //  row 1: regular Fantastic (W1)
                 //  row 2..6: Excellent..Miss, matching our existing layout.
+                //
+                // 15/10ms split: hits between 10ms–15ms display with a fainter
+                // blue (the white row tinted toward blue). Hits ≤10ms are
+                // unchanged from existing FA+/normal behavior.
+                let abs_err = judgment.time_error_ms.abs();
+                let split_faint_blue = use_split_15_10ms
+                    && judgment.grade == JudgeGrade::Fantastic
+                    && abs_err > crate::game::timing::FA_PLUS_W010_MS
+                    && abs_err <= crate::game::timing::FA_PLUS_W0_MS;
                 let frame_row = match judgment.grade {
                     JudgeGrade::Fantastic => {
-                        if use_fa_plus_window {
+                        if split_faint_blue {
+                            // Between 10ms and 15ms: white row with light-blue diffuse tint.
+                            1
+                        } else if use_fa_plus_window {
                             match judgment.window {
                                 Some(TimingWindow::W0) => 0,
                                 _ => 1,
@@ -4853,10 +4866,19 @@ pub fn build(
                 } else {
                     0.0
                 };
-                hud_actors.push(act!(sprite(judgment_texture):
-                    align(0.5, 0.5): xy(playfield_center_x, judgment_y):
-                    z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
-                ));
+                if split_faint_blue {
+                    let c = color::JUDGMENT_SPLIT_10MS_RGBA;
+                    hud_actors.push(act!(sprite(judgment_texture):
+                        align(0.5, 0.5): xy(playfield_center_x, judgment_y):
+                        z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom):
+                        diffuse(c[0], c[1], c[2], c[3])
+                    ));
+                } else {
+                    hud_actors.push(act!(sprite(judgment_texture):
+                        align(0.5, 0.5): xy(playfield_center_x, judgment_y):
+                        z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
+                    ));
+                }
             }
         }
     }
