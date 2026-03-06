@@ -8140,9 +8140,6 @@ fn process_input_edges(
         }
 
         if edge.pressed && !was_down && is_down {
-            if state.hit_tick_enabled {
-                audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
-            }
             if trace_enabled {
                 let started = Instant::now();
                 start_receptor_glow_press(state, lane_idx);
@@ -8166,7 +8163,11 @@ fn process_input_edges(
             } else {
                 refresh_roll_life_on_step(state, lane_idx);
             }
-            if !hit_note {
+            if hit_note {
+                if state.hit_tick_enabled {
+                    audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
+                }
+            } else {
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
         } else if !edge.pressed && was_down && !is_down {
