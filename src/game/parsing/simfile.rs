@@ -28,6 +28,8 @@ use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
+// Bump when the serialized song payload changes or resolved asset semantics change.
+const SONG_CACHE_VERSION: u8 = 1;
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 
@@ -643,6 +645,7 @@ impl From<SerializableSongData> for SongData {
 
 #[derive(Serialize, Deserialize, Encode, Decode)]
 struct CachedSong {
+    cache_version: u8,
     rssp_version: String,
     mono_threshold: usize,
     source_hash: u64,
@@ -708,6 +711,24 @@ fn fmt_scan_time(d: Duration) -> String {
     let m = (total_s / 60.0).floor() as u64;
     let s = (m as f64).mul_add(-60.0, total_s);
     format!("{m}m{s:.1}s")
+}
+
+#[inline(always)]
+fn cached_path_exists(path_opt: Option<&str>) -> bool {
+    match path_opt.map(str::trim) {
+        None => true,
+        Some("") => false,
+        Some(path) => Path::new(path).is_file(),
+    }
+}
+
+#[inline(always)]
+fn cached_song_paths_exist(song: &CachedSong) -> bool {
+    let data = &song.data;
+    cached_path_exists(data.banner_path.as_deref())
+        && cached_path_exists(data.background_path.as_deref())
+        && cached_path_exists(data.cdtitle_path.as_deref())
+        && cached_path_exists(data.music_path.as_deref())
 }
 
 // Mirrors ITGmania's `SongUtil::MakeSortString` behavior for song title sorting.
@@ -1677,9 +1698,20 @@ fn load_song_from_cache(
     let Ok((cached_song, _)) =
         bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard())
     else {
+        debug!(
+            "Cache stale (decode/schema mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
         return None;
     };
 
+    if cached_song.cache_version != SONG_CACHE_VERSION {
+        debug!(
+            "Cache stale (cache version mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+        return None;
+    }
     if cached_song.rssp_version != rssp::RSSP_VERSION {
         debug!(
             "Cache stale (rssp version mismatch) for: {:?}",
@@ -1690,6 +1722,13 @@ fn load_song_from_cache(
     if cached_song.mono_threshold != SONG_ANALYSIS_MONO_THRESHOLD {
         debug!(
             "Cache stale (mono threshold mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+        return None;
+    }
+    if !cached_song_paths_exist(&cached_song) {
+        debug!(
+            "Cache stale (resolved asset path missing) for: {:?}",
             path.file_name().unwrap_or_default()
         );
         return None;
@@ -1742,6 +1781,7 @@ fn parse_song_and_maybe_write_cache(
     if cachesongs && let (Some(cp), Some(ch)) = (cache_keys.cache_path, content_hash) {
         let serializable_data: SerializableSongData = (&song_data).into();
         let cached_song = CachedSong {
+            cache_version: SONG_CACHE_VERSION,
             rssp_version: rssp::RSSP_VERSION.to_string(),
             mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
             source_hash: ch,
