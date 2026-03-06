@@ -27,6 +27,20 @@ pub struct Texture(pub glow::Texture);
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+struct SpriteInstanceRaw {
+    center: [f32; 2],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    tint: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    local_offset: [f32; 2],
+    local_offset_rot_sin_cos: [f32; 2],
+    edge_fade: [f32; 4],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 struct TexturedMeshVertexRaw {
     pos: [f32; 2],
     uv: [f32; 2],
@@ -104,6 +118,15 @@ struct TMeshDebugAccum {
 }
 
 #[derive(Clone, Copy)]
+struct SpriteRun {
+    instance_start: u32,
+    instance_count: u32,
+    blend: BlendMode,
+    texture: glow::Texture,
+    camera: u8,
+}
+
+#[derive(Clone, Copy)]
 struct TexturedMeshRun {
     vertex_start: u32,
     vertex_count: u32,
@@ -120,7 +143,7 @@ struct TexturedMeshRun {
 
 #[derive(Clone, Copy)]
 enum DrawOp {
-    Sprite(usize),
+    Sprite(SpriteRun),
     Mesh(usize),
     TexturedMesh(TexturedMeshRun),
 }
@@ -136,7 +159,6 @@ pub struct State {
     mesh_mvp_location: UniformLocation,
     tmesh_mvp_location: UniformLocation,
     tmesh_texture_location: UniformLocation,
-    color_location: UniformLocation,
     texture_location: UniformLocation,
     projection: Matrix4<f32>,
     window_size: (u32, u32),
@@ -144,12 +166,14 @@ pub struct State {
     shared_vao: glow::VertexArray,
     _shared_vbo: glow::Buffer,
     _shared_ibo: glow::Buffer,
+    shared_instance_vbo: glow::Buffer,
     index_count: i32,
     mesh_vao: glow::VertexArray,
     mesh_vbo: glow::Buffer,
     tmesh_vao: glow::VertexArray,
     tmesh_vbo: glow::Buffer,
     tmesh_instance_vbo: glow::Buffer,
+    scratch_sprite_instances: Vec<SpriteInstanceRaw>,
     scratch_tmesh_vertices: Vec<TexturedMeshVertexRaw>,
     scratch_tmesh_instances: Vec<TexturedMeshInstanceRaw>,
     scratch_ops: Vec<DrawOp>,
@@ -160,12 +184,6 @@ pub struct State {
     next_tmesh_cache_id: u64,
     tmesh_debug_enabled: bool,
     tmesh_debug_accum: TMeshDebugAccum,
-    uv_scale_location: UniformLocation,
-    uv_offset_location: UniformLocation,
-    local_offset_location: UniformLocation,
-    local_offset_rot_location: UniformLocation,
-    edge_fade_location: UniformLocation,
-    instanced_location: UniformLocation,
 }
 
 pub fn init(
@@ -181,23 +199,12 @@ pub fn init(
     let (gl_surface, gl_context, gl) =
         create_opengl_context(&window, vsync_enabled, gfx_debug_enabled)?;
     log_opengl_driver_info(&gl);
-    let (
-        program,
-        mvp_location,
-        color_location,
-        texture_location,
-        uv_scale_location,
-        uv_offset_location,
-        local_offset_location,
-        local_offset_rot_location,
-        edge_fade_location,
-        instanced_location,
-    ) = create_graphics_program(&gl)?;
+    let (program, mvp_location, texture_location) = create_graphics_program(&gl)?;
     let (mesh_program, mesh_mvp_location) = create_mesh_program(&gl)?;
     let (tmesh_program, tmesh_mvp_location, tmesh_texture_location) = create_tmesh_program(&gl)?;
 
     // Create shared static unit quad + index buffer.
-    let (shared_vao, _shared_vbo, _shared_ibo, index_count) = unsafe {
+    let (shared_vao, _shared_vbo, _shared_ibo, shared_instance_vbo, index_count) = unsafe {
         const UNIT_QUAD_VERTICES: [[f32; 4]; 4] = [
             [-0.5, -0.5, 0.0, 1.0],
             [0.5, -0.5, 1.0, 1.0],
@@ -209,6 +216,7 @@ pub fn init(
         let vao = gl.create_vertex_array()?;
         let vbo = gl.create_buffer()?;
         let ibo = gl.create_buffer()?;
+        let instance_vbo = gl.create_buffer()?;
 
         gl.bind_vertex_array(Some(vao));
 
@@ -240,9 +248,78 @@ pub fn init(
             (2 * mem::size_of::<f32>()) as i32,
         );
 
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
+        gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
+
+        let inst_stride = mem::size_of::<SpriteInstanceRaw>() as i32;
+        let vec2_size = (2 * mem::size_of::<f32>()) as i32;
+        let vec4_size = (4 * mem::size_of::<f32>()) as i32;
+        gl.enable_vertex_attrib_array(2);
+        gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false, inst_stride, 0);
+        gl.vertex_attrib_divisor(2, 1);
+        gl.enable_vertex_attrib_array(3);
+        gl.vertex_attrib_pointer_f32(3, 2, glow::FLOAT, false, inst_stride, vec2_size);
+        gl.vertex_attrib_divisor(3, 1);
+        gl.enable_vertex_attrib_array(4);
+        gl.vertex_attrib_pointer_f32(4, 2, glow::FLOAT, false, inst_stride, 2 * vec2_size);
+        gl.vertex_attrib_divisor(4, 1);
+        gl.enable_vertex_attrib_array(5);
+        gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, inst_stride, 3 * vec2_size);
+        gl.vertex_attrib_divisor(5, 1);
+        gl.enable_vertex_attrib_array(6);
+        gl.vertex_attrib_pointer_f32(
+            6,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            3 * vec2_size + vec4_size,
+        );
+        gl.vertex_attrib_divisor(6, 1);
+        gl.enable_vertex_attrib_array(7);
+        gl.vertex_attrib_pointer_f32(
+            7,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            4 * vec2_size + vec4_size,
+        );
+        gl.vertex_attrib_divisor(7, 1);
+        gl.enable_vertex_attrib_array(8);
+        gl.vertex_attrib_pointer_f32(
+            8,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            5 * vec2_size + vec4_size,
+        );
+        gl.vertex_attrib_divisor(8, 1);
+        gl.enable_vertex_attrib_array(9);
+        gl.vertex_attrib_pointer_f32(
+            9,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            6 * vec2_size + vec4_size,
+        );
+        gl.vertex_attrib_divisor(9, 1);
+        gl.enable_vertex_attrib_array(10);
+        gl.vertex_attrib_pointer_f32(
+            10,
+            4,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            7 * vec2_size + vec4_size,
+        );
+        gl.vertex_attrib_divisor(10, 1);
+
         gl.bind_vertex_array(None);
 
-        (vao, vbo, ibo, QUAD_INDICES.len() as i32)
+        (vao, vbo, ibo, instance_vbo, QUAD_INDICES.len() as i32)
     };
 
     let (mesh_vao, mesh_vbo) = unsafe {
@@ -366,14 +443,6 @@ pub fn init(
         gl.use_program(Some(program));
         gl.active_texture(glow::TEXTURE0);
         gl.uniform_1_i32(Some(&texture_location), 0);
-        gl.uniform_1_i32(Some(&instanced_location), 0);
-
-        // Set default values for uniforms
-        gl.uniform_2_f32(Some(&uv_scale_location), 1.0, 1.0);
-        gl.uniform_2_f32(Some(&uv_offset_location), 0.0, 0.0);
-        gl.uniform_2_f32(Some(&local_offset_location), 0.0, 0.0);
-        gl.uniform_2_f32(Some(&local_offset_rot_location), 0.0, 1.0);
-        gl.uniform_4_f32(Some(&edge_fade_location), 0.0, 0.0, 0.0, 0.0);
         gl.use_program(None);
     }
 
@@ -388,19 +457,20 @@ pub fn init(
         mesh_mvp_location,
         tmesh_mvp_location,
         tmesh_texture_location,
-        color_location,
         texture_location,
         projection,
         window_size: (initial_size.width, initial_size.height),
         shared_vao,
         _shared_vbo,
         _shared_ibo,
+        shared_instance_vbo,
         index_count,
         mesh_vao,
         mesh_vbo,
         tmesh_vao,
         tmesh_vbo,
         tmesh_instance_vbo,
+        scratch_sprite_instances: Vec::with_capacity(256),
         scratch_tmesh_vertices: Vec::with_capacity(1024),
         scratch_tmesh_instances: Vec::with_capacity(256),
         scratch_ops: Vec::with_capacity(64),
@@ -411,12 +481,6 @@ pub fn init(
         next_tmesh_cache_id: 1,
         tmesh_debug_enabled: gfx_debug_enabled,
         tmesh_debug_accum: TMeshDebugAccum::default(),
-        uv_scale_location,
-        uv_offset_location,
-        local_offset_location,
-        local_offset_rot_location,
-        edge_fade_location,
-        instanced_location,
     };
 
     info!("OpenGL backend initialized successfully.");
@@ -505,6 +569,18 @@ pub fn create_texture(
 }
 
 #[inline(always)]
+fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+    let center = [m[3][0], m[3][1]];
+    let c0 = [m[0][0], m[0][1]];
+    let c1 = [m[1][0], m[1][1]];
+    let sx = c0[0].hypot(c0[1]).max(1e-12);
+    let sy = c1[0].hypot(c1[1]).max(1e-12);
+    let cos_t = c0[0] / sx;
+    let sin_t = c0[1] / sx;
+    (center, [sx, sy], [sin_t, cos_t])
+}
+
+#[inline(always)]
 pub const fn request_screenshot(_state: &mut State) {}
 
 pub fn draw(
@@ -574,6 +650,12 @@ pub fn draw(
 
     {
         let objects_len = render_list.objects.len();
+        let sprite_instances = &mut state.scratch_sprite_instances;
+        sprite_instances.clear();
+        if sprite_instances.capacity() < objects_len {
+            sprite_instances.reserve(objects_len - sprite_instances.capacity());
+        }
+
         let tmesh_vertices = &mut state.scratch_tmesh_vertices;
         tmesh_vertices.clear();
         let want_tmesh = objects_len.saturating_mul(4);
@@ -603,7 +685,54 @@ pub fn draw(
 
         for (idx, obj) in render_list.objects.iter().enumerate() {
             match &obj.object_type {
-                ObjectType::Sprite { .. } => ops.push(DrawOp::Sprite(idx)),
+                ObjectType::Sprite {
+                    texture_id,
+                    tint,
+                    uv_scale,
+                    uv_offset,
+                    local_offset,
+                    local_offset_rot_sin_cos,
+                    edge_fade,
+                } => {
+                    let Some(RendererTexture::OpenGL(gl_tex)) =
+                        lookup_texture_case_insensitive(textures, texture_id.as_ref())
+                    else {
+                        continue;
+                    };
+
+                    let model: [[f32; 4]; 4] = obj.transform.into();
+                    let (center, size, rot_sin_cos) = decompose_2d(model);
+                    let instance_start = sprite_instances.len() as u32;
+                    sprite_instances.push(SpriteInstanceRaw {
+                        center,
+                        size,
+                        rot_sin_cos,
+                        tint: *tint,
+                        uv_scale: *uv_scale,
+                        uv_offset: *uv_offset,
+                        local_offset: *local_offset,
+                        local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
+                        edge_fade: *edge_fade,
+                    });
+
+                    if let Some(DrawOp::Sprite(last)) = ops.last_mut()
+                        && last.texture == gl_tex.0
+                        && last.blend == obj.blend
+                        && last.camera == obj.camera
+                        && last.instance_start + last.instance_count == instance_start
+                    {
+                        last.instance_count += 1;
+                        continue;
+                    }
+
+                    ops.push(DrawOp::Sprite(SpriteRun {
+                        instance_start,
+                        instance_count: 1,
+                        blend: obj.blend,
+                        texture: gl_tex.0,
+                        camera: obj.camera,
+                    }));
+                }
                 ObjectType::Mesh { vertices, .. } => {
                     if !vertices.is_empty() {
                         ops.push(DrawOp::Mesh(idx));
@@ -751,16 +880,19 @@ pub fn draw(
 
         let mut last_bound_tex: Option<glow::Texture> = None;
         let mut last_blend = Some(BlendMode::Alpha);
-        let mut last_uv_scale: Option<[f32; 2]> = None;
-        let mut last_uv_offset: Option<[f32; 2]> = None;
-        let mut last_local_offset: Option<[f32; 2]> = None;
-        let mut last_local_offset_rot: Option<[f32; 2]> = None;
-        let mut last_color: Option<[f32; 4]> = None;
-        let mut last_edge_fade: Option<[f32; 4]> = None;
         let mut last_prog: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
+        let mut last_sprite_instance_start: Option<u32> = None;
         let mut last_tmesh_instance_start: Option<u32> = None;
         let mut last_tmesh_geom_key: Option<u64> = None;
 
+        if !state.scratch_sprite_instances.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(state.scratch_sprite_instances.as_slice()),
+                glow::DYNAMIC_DRAW,
+            );
+        }
         if !state.scratch_tmesh_vertices.is_empty() {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
             gl.buffer_data_u8_slice(
@@ -780,26 +912,12 @@ pub fn draw(
 
         for op in state.scratch_ops.iter().copied() {
             match op {
-                DrawOp::Sprite(idx) => {
-                    let obj = &render_list.objects[idx];
-                    let ObjectType::Sprite {
-                        texture_id,
-                        tint,
-                        uv_scale,
-                        uv_offset,
-                        local_offset,
-                        local_offset_rot_sin_cos,
-                        edge_fade,
-                    } = &obj.object_type
-                    else {
-                        continue;
-                    };
-
-                    apply_blend(gl, obj.blend, &mut last_blend);
+                DrawOp::Sprite(run) => {
+                    apply_blend(gl, run.blend, &mut last_blend);
 
                     let cam = render_list
                         .cameras
-                        .get(obj.camera as usize)
+                        .get(run.camera as usize)
                         .copied()
                         .unwrap_or(state.projection);
 
@@ -807,73 +925,105 @@ pub fn draw(
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(state.shared_vao));
                         gl.uniform_1_i32(Some(&state.texture_location), 0);
-                        gl.uniform_1_i32(Some(&state.instanced_location), 0);
                         last_prog = Some(0);
+                        last_sprite_instance_start = None;
                         last_tmesh_geom_key = None;
                     }
 
-                    let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
+                    if last_sprite_instance_start != Some(run.instance_start) {
+                        let inst_stride = std::mem::size_of::<SpriteInstanceRaw>() as i32;
+                        let vec2_size = (2 * std::mem::size_of::<f32>()) as i32;
+                        let vec4_size = (4 * std::mem::size_of::<f32>()) as i32;
+                        let base = (run.instance_start as i32) * inst_stride;
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
+                        gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false, inst_stride, base);
+                        gl.vertex_attrib_pointer_f32(
+                            3,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + vec2_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            4,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 2 * vec2_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            5,
+                            4,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 3 * vec2_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            6,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 3 * vec2_size + vec4_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            7,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 4 * vec2_size + vec4_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            8,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 5 * vec2_size + vec4_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            9,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 6 * vec2_size + vec4_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            10,
+                            4,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 7 * vec2_size + vec4_size,
+                        );
+                        last_sprite_instance_start = Some(run.instance_start);
+                    }
+
+                    let mvp_array: [[f32; 4]; 4] = cam.into();
                     gl.uniform_matrix_4_f32_slice(
                         Some(&state.mvp_location),
                         false,
                         bytemuck::cast_slice(&mvp_array),
                     );
 
-                    if let Some(RendererTexture::OpenGL(gl_tex)) =
-                        lookup_texture_case_insensitive(textures, texture_id.as_ref())
-                    {
-                        if last_bound_tex != Some(gl_tex.0) {
-                            gl.bind_texture(glow::TEXTURE_2D, Some(gl_tex.0));
-                            last_bound_tex = Some(gl_tex.0);
-                        }
-                        if last_uv_scale != Some(*uv_scale) {
-                            gl.uniform_2_f32(
-                                Some(&state.uv_scale_location),
-                                uv_scale[0],
-                                uv_scale[1],
-                            );
-                            last_uv_scale = Some(*uv_scale);
-                        }
-                        if last_uv_offset != Some(*uv_offset) {
-                            gl.uniform_2_f32(
-                                Some(&state.uv_offset_location),
-                                uv_offset[0],
-                                uv_offset[1],
-                            );
-                            last_uv_offset = Some(*uv_offset);
-                        }
-                        if last_local_offset != Some(*local_offset) {
-                            gl.uniform_2_f32(
-                                Some(&state.local_offset_location),
-                                local_offset[0],
-                                local_offset[1],
-                            );
-                            last_local_offset = Some(*local_offset);
-                        }
-                        if last_local_offset_rot != Some(*local_offset_rot_sin_cos) {
-                            gl.uniform_2_f32(
-                                Some(&state.local_offset_rot_location),
-                                local_offset_rot_sin_cos[0],
-                                local_offset_rot_sin_cos[1],
-                            );
-                            last_local_offset_rot = Some(*local_offset_rot_sin_cos);
-                        }
-                        if last_color != Some(*tint) {
-                            gl.uniform_4_f32_slice(Some(&state.color_location), tint);
-                            last_color = Some(*tint);
-                        }
-                        if last_edge_fade != Some(*edge_fade) {
-                            gl.uniform_4_f32_slice(Some(&state.edge_fade_location), edge_fade);
-                            last_edge_fade = Some(*edge_fade);
-                        }
-                        gl.draw_elements(
-                            glow::TRIANGLES,
-                            state.index_count,
-                            glow::UNSIGNED_SHORT,
-                            0,
-                        );
-                        vertices += 4;
+                    if last_bound_tex != Some(run.texture) {
+                        gl.bind_texture(glow::TEXTURE_2D, Some(run.texture));
+                        last_bound_tex = Some(run.texture);
                     }
+
+                    gl.draw_elements_instanced(
+                        glow::TRIANGLES,
+                        state.index_count,
+                        glow::UNSIGNED_SHORT,
+                        0,
+                        run.instance_count as i32,
+                    );
+                    vertices = vertices.saturating_add(4 * run.instance_count);
                 }
                 DrawOp::Mesh(idx) => {
                     let obj = &render_list.objects[idx];
@@ -1329,6 +1479,7 @@ pub fn cleanup(state: &mut State) {
         state.gl.delete_vertex_array(state.shared_vao);
         state.gl.delete_buffer(state._shared_vbo);
         state.gl.delete_buffer(state._shared_ibo);
+        state.gl.delete_buffer(state.shared_instance_vbo);
         state.gl.delete_vertex_array(state.mesh_vao);
         state.gl.delete_buffer(state.mesh_vbo);
         state.gl.delete_vertex_array(state.tmesh_vao);
@@ -1464,21 +1615,7 @@ fn create_opengl_context(
 
 fn create_graphics_program(
     gl: &glow::Context,
-) -> Result<
-    (
-        glow::Program,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-    ),
-    String,
-> {
+) -> Result<(glow::Program, UniformLocation, UniformLocation), String> {
     unsafe {
         let program = gl.create_program()?;
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
@@ -1524,27 +1661,9 @@ fn create_graphics_program(
                 .ok_or_else(|| name.to_string())
         };
         let mvp_location = get("u_model_view_proj")?;
-        let color_location = get("u_color")?;
         let texture_location = get("u_texture")?;
-        let uv_scale_location = get("u_uv_scale")?;
-        let uv_offset_location = get("u_uv_offset")?;
-        let local_offset_location = get("u_local_offset")?;
-        let local_offset_rot_location = get("u_local_offset_rot_sin_cos")?;
-        let edge_fade_location = get("u_edge_fade")?;
-        let instanced_location = get("u_instanced")?;
 
-        Ok((
-            program,
-            mvp_location,
-            color_location,
-            texture_location,
-            uv_scale_location,
-            uv_offset_location,
-            local_offset_location,
-            local_offset_rot_location,
-            edge_fade_location,
-            instanced_location,
-        ))
+        Ok((program, mvp_location, texture_location))
     }
 }
 
