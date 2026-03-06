@@ -2439,7 +2439,6 @@ struct PlayerLeaderboardCacheKey {
     arrowcloud_api_key: String,
     include_arrowcloud: bool,
     show_ex_score: bool,
-    max_entries: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -2451,7 +2450,9 @@ enum PlayerLeaderboardCacheValue {
 #[derive(Debug, Clone)]
 struct PlayerLeaderboardCacheEntry {
     value: PlayerLeaderboardCacheValue,
+    max_entries: usize,
     refreshed_at: Instant,
+    retry_after: Option<Instant>,
 }
 
 #[derive(Default)]
@@ -2463,7 +2464,6 @@ struct PlayerLeaderboardCacheState {
 static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCacheState>> =
     std::sync::LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
 
-const PLAYER_LEADERBOARD_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 const ARROWCLOUD_LEADERBOARDS_BASE_URL: &str = "https://api.arrowcloud.dance";
 const ARROWCLOUD_HARD_EX_MIN_PER_PAGE: usize = 16;
@@ -2907,18 +2907,38 @@ fn cache_snapshot_from_entry(entry: &PlayerLeaderboardCacheEntry) -> CachedPlaye
 }
 
 #[inline(always)]
-fn should_refresh_player_leaderboard_entry(entry: &PlayerLeaderboardCacheEntry) -> bool {
-    let age = entry.refreshed_at.elapsed();
+fn should_fetch_player_leaderboard_entry(
+    entry: Option<&PlayerLeaderboardCacheEntry>,
+    max_entries: usize,
+    refresh_cached: bool,
+) -> bool {
+    let Some(entry) = entry else {
+        return true;
+    };
+    let now = Instant::now();
     match entry.value {
-        PlayerLeaderboardCacheValue::Ready(_) => age >= PLAYER_LEADERBOARD_REFRESH_INTERVAL,
-        PlayerLeaderboardCacheValue::Error(_) => age >= PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
+        PlayerLeaderboardCacheValue::Ready(_) => {
+            if refresh_cached {
+                return entry
+                    .retry_after
+                    .is_none_or(|retry_after| now >= retry_after);
+            }
+            entry.max_entries < max_entries
+                && entry
+                    .retry_after
+                    .is_none_or(|retry_after| now >= retry_after)
+        }
+        PlayerLeaderboardCacheValue::Error(_) => entry
+            .retry_after
+            .is_none_or(|retry_after| now >= retry_after),
     }
 }
 
-pub fn get_or_fetch_player_leaderboards_for_side(
+fn get_or_fetch_player_leaderboards_for_side_inner(
     chart_hash: &str,
     side: profile::PlayerSide,
     max_entries: usize,
+    refresh_cached: bool,
 ) -> Option<CachedPlayerLeaderboardData> {
     let cfg = crate::config::get();
     if !cfg.enable_groovestats {
@@ -2960,7 +2980,6 @@ pub fn get_or_fetch_player_leaderboards_for_side(
         arrowcloud_api_key,
         include_arrowcloud,
         show_ex_score: side_profile.show_ex_score,
-        max_entries,
     };
     let cached_snapshot = {
         let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
@@ -2989,19 +3008,21 @@ pub fn get_or_fetch_player_leaderboards_for_side(
     }
 
     let mut should_spawn = false;
+    let mut requested_max_entries = max_entries;
     let snapshot = {
         let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
-        let snapshot = if let Some(entry) = cache.by_key.get(&key) {
+        let entry = cache.by_key.get(&key);
+        if let Some(entry) = entry {
+            requested_max_entries = requested_max_entries.max(entry.max_entries);
+        }
+        let snapshot = if let Some(entry) = entry {
             cache_snapshot_from_entry(entry)
         } else {
             loading_player_leaderboard_snapshot()
         };
 
         if !cache.in_flight.contains(&key)
-            && cache
-                .by_key
-                .get(&key)
-                .is_none_or(should_refresh_player_leaderboard_entry)
+            && should_fetch_player_leaderboard_entry(entry, requested_max_entries, refresh_cached)
         {
             cache.in_flight.insert(key.clone());
             should_spawn = true;
@@ -3020,7 +3041,7 @@ pub fn get_or_fetch_player_leaderboards_for_side(
                     None
                 },
                 key.show_ex_score,
-                key.max_entries,
+                requested_max_entries,
             );
             let refresh_finished_at = Instant::now();
             let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
@@ -3040,7 +3061,9 @@ pub fn get_or_fetch_player_leaderboards_for_side(
                         key,
                         PlayerLeaderboardCacheEntry {
                             value: PlayerLeaderboardCacheValue::Ready(fetched.data),
+                            max_entries: requested_max_entries,
                             refreshed_at: refresh_finished_at,
+                            retry_after: None,
                         },
                     );
                 }
@@ -3050,12 +3073,18 @@ pub fn get_or_fetch_player_leaderboards_for_side(
                     {
                         // Keep stale data visible on refresh failures, but back off retries.
                         entry.refreshed_at = refresh_finished_at;
+                        entry.retry_after =
+                            Some(refresh_finished_at + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL);
                     } else {
                         cache.by_key.insert(
                             key,
                             PlayerLeaderboardCacheEntry {
                                 value: PlayerLeaderboardCacheValue::Error(error.to_string()),
+                                max_entries: requested_max_entries,
                                 refreshed_at: refresh_finished_at,
+                                retry_after: Some(
+                                    refresh_finished_at + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
+                                ),
                             },
                         );
                     }
@@ -3065,6 +3094,22 @@ pub fn get_or_fetch_player_leaderboards_for_side(
     }
 
     Some(snapshot)
+}
+
+pub fn get_or_fetch_player_leaderboards_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    max_entries: usize,
+) -> Option<CachedPlayerLeaderboardData> {
+    get_or_fetch_player_leaderboards_for_side_inner(chart_hash, side, max_entries, false)
+}
+
+pub fn refresh_player_leaderboards_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    max_entries: usize,
+) -> Option<CachedPlayerLeaderboardData> {
+    get_or_fetch_player_leaderboards_for_side_inner(chart_hash, side, max_entries, true)
 }
 #[derive(Debug)]
 struct MachineLeaderboardPlay {
@@ -4170,5 +4215,60 @@ mod tests {
             value["_arrowCloudBodyVersion"],
             Value::String("1.4".to_string())
         );
+    }
+
+    #[test]
+    fn player_leaderboard_cache_reuses_success_until_more_rows_are_needed() {
+        let ready = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData { panes: Vec::new() }),
+            max_entries: 5,
+            refreshed_at: Instant::now(),
+            retry_after: None,
+        };
+        assert!(!should_fetch_player_leaderboard_entry(
+            Some(&ready),
+            5,
+            false
+        ));
+        assert!(!should_fetch_player_leaderboard_entry(
+            Some(&ready),
+            3,
+            false
+        ));
+        assert!(should_fetch_player_leaderboard_entry(
+            Some(&ready),
+            10,
+            false
+        ));
+        assert!(should_fetch_player_leaderboard_entry(Some(&ready), 5, true));
+
+        let cooled_down_ready = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData { panes: Vec::new() }),
+            max_entries: 5,
+            refreshed_at: Instant::now(),
+            retry_after: Some(Instant::now() + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL),
+        };
+        assert!(!should_fetch_player_leaderboard_entry(
+            Some(&cooled_down_ready),
+            10,
+            false
+        ));
+        assert!(!should_fetch_player_leaderboard_entry(
+            Some(&cooled_down_ready),
+            5,
+            true
+        ));
+
+        let stale_error = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Error("boom".to_string()),
+            max_entries: 5,
+            refreshed_at: Instant::now() - PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
+            retry_after: Some(Instant::now() - Duration::from_millis(1)),
+        };
+        assert!(should_fetch_player_leaderboard_entry(
+            Some(&stale_error),
+            5,
+            false
+        ));
     }
 }

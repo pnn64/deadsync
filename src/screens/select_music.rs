@@ -114,6 +114,7 @@ const CHORD_SIMULTANEOUS_WINDOW: Duration = Duration::from_millis(50);
 const PREVIEW_DELAY_SECONDS: f32 = 0.25;
 const PREVIEW_FADE_OUT_SECONDS: f64 = 1.5;
 const DEFAULT_PREVIEW_LENGTH: f64 = 12.0;
+const SELECT_MUSIC_LEADERBOARD_NUM_ENTRIES: usize = 5;
 
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
@@ -772,6 +773,8 @@ pub struct State {
     cdtitle_anim_elapsed: f32,
     last_requested_chart_hash: Option<String>,
     last_requested_chart_hash_p2: Option<String>,
+    last_refreshed_leaderboard_hash: Option<String>,
+    last_refreshed_leaderboard_hash_p2: Option<String>,
     chord_mask_p1: u8,
     chord_mask_p2: u8,
     menu_chord_mask: u8,
@@ -1868,6 +1871,8 @@ pub fn init() -> State {
         displayed_chart_p1: None,
         displayed_chart_p2: None,
         last_requested_chart_hash_p2: None,
+        last_refreshed_leaderboard_hash: None,
+        last_refreshed_leaderboard_hash_p2: None,
         chord_mask_p1: 0,
         chord_mask_p2: 0,
         menu_chord_mask: 0,
@@ -2041,6 +2046,8 @@ pub fn init_placeholder() -> State {
         displayed_chart_p1: None,
         displayed_chart_p2: None,
         last_requested_chart_hash_p2: None,
+        last_refreshed_leaderboard_hash: None,
+        last_refreshed_leaderboard_hash_p2: None,
         chord_mask_p1: 0,
         chord_mask_p2: 0,
         menu_chord_mask: 0,
@@ -5106,6 +5113,11 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if allow_gs_fetch_for_selection(state) {
         let play_style = profile::get_session_play_style();
         let target_chart_type = play_style.chart_type();
+        let show_select_music_leaderboards = cfg.show_select_music_scorebox
+            && (cfg.select_music_scorebox_cycle_itg
+                || cfg.select_music_scorebox_cycle_ex
+                || cfg.select_music_scorebox_cycle_hard_ex
+                || cfg.select_music_scorebox_cycle_tournaments);
 
         if let Some(song) = selected_song.as_ref() {
             let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
@@ -5175,8 +5187,27 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                         }),
                     };
                 }
+                if show_select_music_leaderboards {
+                    maybe_refresh_select_music_leaderboard(
+                        &mut state.last_refreshed_leaderboard_hash_p2,
+                        profile::PlayerSide::P2,
+                        desired_hash_p2,
+                    );
+                }
             } else {
                 state.displayed_chart_p2 = None;
+            }
+            if show_select_music_leaderboards {
+                let primary_side = if is_versus {
+                    profile::PlayerSide::P1
+                } else {
+                    profile::get_session_player_side()
+                };
+                maybe_refresh_select_music_leaderboard(
+                    &mut state.last_refreshed_leaderboard_hash,
+                    primary_side,
+                    desired_hash_p1,
+                );
             }
         } else {
             state.displayed_chart_p1 = None;
@@ -5322,6 +5353,26 @@ fn allow_gs_fetch_for_selection(state: &State) -> bool {
     state.nav_key_held_direction.is_none()
         && state.wheel_offset_from_selection.abs() < 0.0001
         && state.time_since_selection_change >= PREVIEW_DELAY_SECONDS
+}
+
+#[inline(always)]
+fn maybe_refresh_select_music_leaderboard(
+    last_refreshed_hash: &mut Option<String>,
+    side: profile::PlayerSide,
+    chart_hash: Option<&str>,
+) {
+    let Some(chart_hash) = chart_hash else {
+        return;
+    };
+    if last_refreshed_hash.as_deref() == Some(chart_hash) || !scores::is_gs_active_for_side(side) {
+        return;
+    }
+    let _ = scores::refresh_player_leaderboards_for_side(
+        chart_hash,
+        side,
+        SELECT_MUSIC_LEADERBOARD_NUM_ENTRIES,
+    );
+    *last_refreshed_hash = Some(chart_hash.to_string());
 }
 
 fn sl_select_music_bg_flash() -> Actor {

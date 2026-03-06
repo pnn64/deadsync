@@ -2246,17 +2246,12 @@ impl App {
         true
     }
 
-    fn try_gameplay_restart(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        label: &str,
-    ) -> bool {
+    fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
         if self.prepare_player_options_for_gameplay_restart() {
             let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
-            if let Err(e) = self.handle_action(
-                ScreenAction::Navigate(CurrentScreen::Gameplay),
-                event_loop,
-            ) {
+            if let Err(e) =
+                self.handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
+            {
                 log::error!("Failed to restart Gameplay with {label}: {e}");
             } else {
                 self.state.session.gameplay_restart_count = restart_count;
