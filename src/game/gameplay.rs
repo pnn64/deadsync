@@ -30,7 +30,7 @@ use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 use winit::event::KeyEvent;
 use winit::keyboard::KeyCode;
@@ -150,6 +150,7 @@ const GAMEPLAY_TRACE_SUMMARY_INTERVAL_S: f32 = 1.0;
 const GAMEPLAY_TRACE_SLOW_FRAME_US: u32 = 4_000;
 const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
 const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
+const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
 // Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
 const RANDOM_ATTACK_MOD_POOL: [&str; 21] = [
     "0.5x",
@@ -3219,6 +3220,50 @@ struct GameplayUpdatePhaseTimings {
     untracked_us: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct GameplayInputLatencyTrace {
+    samples: u32,
+    capture_to_queue_total_us: u64,
+    capture_to_process_total_us: u64,
+    queue_to_process_total_us: u64,
+    capture_to_queue_max_us: u32,
+    capture_to_process_max_us: u32,
+    queue_to_process_max_us: u32,
+}
+
+impl GameplayInputLatencyTrace {
+    #[inline(always)]
+    fn record(
+        &mut self,
+        capture_to_queue_us: u32,
+        capture_to_process_us: u32,
+        queue_to_process_us: u32,
+    ) {
+        self.samples = self.samples.saturating_add(1);
+        self.capture_to_queue_total_us = self
+            .capture_to_queue_total_us
+            .saturating_add(u64::from(capture_to_queue_us));
+        self.capture_to_process_total_us = self
+            .capture_to_process_total_us
+            .saturating_add(u64::from(capture_to_process_us));
+        self.queue_to_process_total_us = self
+            .queue_to_process_total_us
+            .saturating_add(u64::from(queue_to_process_us));
+        self.capture_to_queue_max_us = self.capture_to_queue_max_us.max(capture_to_queue_us);
+        self.capture_to_process_max_us = self.capture_to_process_max_us.max(capture_to_process_us);
+        self.queue_to_process_max_us = self.queue_to_process_max_us.max(queue_to_process_us);
+    }
+
+    #[inline(always)]
+    fn avg_us(total_us: u64, samples: u32) -> f32 {
+        if samples == 0 {
+            0.0
+        } else {
+            total_us as f32 / samples as f32
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 struct GameplayUpdateTraceState {
     frame_counter: u64,
@@ -3227,6 +3272,7 @@ struct GameplayUpdateTraceState {
     summary_slow_frames: u32,
     summary_max_total_us: u32,
     summary_max_phase: GameplayUpdatePhaseTimings,
+    summary_input_latency: GameplayInputLatencyTrace,
     summary_peak_active_arrows: usize,
     summary_peak_pending_edges: usize,
     arrow_capacity: [usize; MAX_COLS],
@@ -3245,6 +3291,7 @@ impl Default for GameplayUpdateTraceState {
             summary_slow_frames: 0,
             summary_max_total_us: 0,
             summary_max_phase: GameplayUpdatePhaseTimings::default(),
+            summary_input_latency: GameplayInputLatencyTrace::default(),
             summary_peak_active_arrows: 0,
             summary_peak_pending_edges: 0,
             arrow_capacity: [0; MAX_COLS],
@@ -3445,6 +3492,19 @@ impl GameplayUpdateTraceState {
 #[inline(always)]
 fn elapsed_us_since(started: Instant) -> u32 {
     let elapsed = started.elapsed().as_micros();
+    if elapsed > u128::from(u32::MAX) {
+        u32::MAX
+    } else {
+        elapsed as u32
+    }
+}
+
+#[inline(always)]
+fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
+    let elapsed = later
+        .checked_duration_since(earlier)
+        .unwrap_or(Duration::ZERO)
+        .as_micros();
     if elapsed > u128::from(u32::MAX) {
         u32::MAX
     } else {
@@ -3699,11 +3759,12 @@ fn trace_gameplay_update(
         let summary_slow_frames = state.update_trace.summary_slow_frames;
         let summary_max_total_us = state.update_trace.summary_max_total_us;
         let summary_max_phase = state.update_trace.summary_max_phase;
+        let summary_input_latency = state.update_trace.summary_input_latency;
         let summary_peak_active_arrows = state.update_trace.summary_peak_active_arrows;
         let summary_peak_pending_edges = state.update_trace.summary_peak_pending_edges;
         let (summary_hot_name, summary_hot_us) = max_phase_name_and_us(&summary_max_phase);
         trace!(
-            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}] other_max={:.3}",
+            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] input_latency_us=[samples:{} cap_queue_avg:{:.1} cap_queue_max:{} cap_proc_avg:{:.1} cap_proc_max:{} queue_proc_avg:{:.1} queue_proc_max:{}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}] other_max={:.3}",
             summary_frames,
             summary_slow_frames,
             summary_max_total_us as f32 / 1000.0,
@@ -3716,6 +3777,22 @@ fn trace_gameplay_update(
             summary_max_phase.input_glow_us as f32 / 1000.0,
             summary_max_phase.input_judge_us as f32 / 1000.0,
             summary_max_phase.input_roll_us as f32 / 1000.0,
+            summary_input_latency.samples,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.capture_to_queue_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.capture_to_queue_max_us,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.capture_to_process_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.capture_to_process_max_us,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.queue_to_process_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.queue_to_process_max_us,
             summary_max_phase.density_sample_us as f32 / 1000.0,
             summary_max_phase.density_hist_mesh_us as f32 / 1000.0,
             summary_max_phase.density_life_mesh_us as f32 / 1000.0,
@@ -3727,6 +3804,7 @@ fn trace_gameplay_update(
         state.update_trace.summary_slow_frames = 0;
         state.update_trace.summary_max_total_us = 0;
         state.update_trace.summary_max_phase = GameplayUpdatePhaseTimings::default();
+        state.update_trace.summary_input_latency = GameplayInputLatencyTrace::default();
         state.update_trace.summary_peak_active_arrows = 0;
         state.update_trace.summary_peak_pending_edges = 0;
     }
@@ -4402,7 +4480,7 @@ pub fn queue_input_edge(
     source: InputSource,
     lane: Lane,
     pressed: bool,
-    _timestamp: Instant,
+    timestamp: Instant,
 ) {
     if state.autoplay_enabled {
         return;
@@ -4432,14 +4510,35 @@ pub fn queue_input_edge(
         return;
     }
 
-    // Map this input edge directly into the gameplay music time using the
-    // audio device clock, so judgments are not tied to frame timing.
-    let event_music_time = current_music_time_from_stream(state);
-    push_input_edge(state, source, lane, pressed, event_music_time, true);
+    let queued_at = Instant::now();
+    let event_music_time = music_time_from_captured_instant(state, timestamp);
+    push_input_edge_timed(
+        state,
+        source,
+        lane,
+        pressed,
+        timestamp,
+        queued_at,
+        event_music_time,
+        true,
+    );
 }
 
 #[inline(always)]
 fn current_music_time_from_stream(state: &State) -> f32 {
+    stream_pos_to_music_time(state, audio::get_music_stream_position_seconds())
+}
+
+#[inline(always)]
+fn music_time_from_captured_instant(state: &State, captured_at: Instant) -> f32 {
+    stream_pos_to_music_time(
+        state,
+        audio::get_music_stream_position_seconds_at(captured_at),
+    )
+}
+
+#[inline(always)]
+fn stream_pos_to_music_time(state: &State, stream_pos: f32) -> f32 {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -4447,7 +4546,6 @@ fn current_music_time_from_stream(state: &State) -> f32 {
     };
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let anchor = -state.global_offset_seconds;
-    let stream_pos = audio::get_music_stream_position_seconds();
     (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate))
 }
 
@@ -4460,6 +4558,30 @@ fn push_input_edge(
     event_music_time: f32,
     record_replay: bool,
 ) {
+    let now = Instant::now();
+    push_input_edge_timed(
+        state,
+        source,
+        lane,
+        pressed,
+        now,
+        now,
+        event_music_time,
+        record_replay,
+    );
+}
+
+#[inline(always)]
+fn push_input_edge_timed(
+    state: &mut State,
+    source: InputSource,
+    lane: Lane,
+    pressed: bool,
+    captured_at: Instant,
+    queued_at: Instant,
+    event_music_time: f32,
+    record_replay: bool,
+) {
     if lane.index() >= state.num_cols {
         return;
     }
@@ -4467,6 +4589,8 @@ fn push_input_edge(
         lane,
         pressed,
         source,
+        captured_at,
+        queued_at,
         event_music_time,
     });
     if log::log_enabled!(log::Level::Debug) {
@@ -8092,6 +8216,30 @@ fn process_input_edges(
         let lane_idx = edge.lane.index();
         if lane_idx >= state.num_cols {
             continue;
+        }
+        if trace_enabled {
+            let processed_at = Instant::now();
+            let capture_to_queue_us = elapsed_us_between(edge.queued_at, edge.captured_at);
+            let capture_to_process_us = elapsed_us_between(processed_at, edge.captured_at);
+            let queue_to_process_us = elapsed_us_between(processed_at, edge.queued_at);
+            state.update_trace.summary_input_latency.record(
+                capture_to_queue_us,
+                capture_to_process_us,
+                queue_to_process_us,
+            );
+            if capture_to_process_us >= GAMEPLAY_INPUT_LATENCY_WARN_US {
+                debug!(
+                    "Gameplay input latency spike: lane={} pressed={} capture_queue_us={} queue_process_us={} capture_process_us={} pending={} now_t={:.3} edge_t={:.3}",
+                    lane_idx,
+                    edge.pressed,
+                    capture_to_queue_us,
+                    queue_to_process_us,
+                    capture_to_process_us,
+                    pending.len() + state.pending_edges.len() + 1,
+                    state.current_music_time,
+                    edge.event_music_time,
+                );
+            }
         }
 
         let state_started = if trace_enabled {

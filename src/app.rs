@@ -3944,6 +3944,7 @@ impl App {
         event_loop: &ActiveEventLoop,
         key_event: winit::event::KeyEvent,
     ) {
+        let event_timestamp = Instant::now();
         // Track modifier key state for gameplay raw sync combos (F11/F12).
         if let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key {
             use winit::event::ElementState;
@@ -4074,7 +4075,6 @@ impl App {
             }
         }
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
-        let _event_timestamp = Instant::now();
 
         if key_event.state == winit::event::ElementState::Pressed
             && key_event.physical_key
@@ -4092,7 +4092,21 @@ impl App {
             return;
         }
 
-        for ev in input::map_key_event(&key_event) {
+        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        if gameplay_screen {
+            for ev in input::gameplay_arrow_key_events(&key_event, event_timestamp) {
+                if let Err(e) = self.route_input_event(event_loop, ev) {
+                    log::error!("Failed to handle gameplay input: {e}");
+                    event_loop.exit();
+                    return;
+                }
+            }
+        }
+
+        for ev in input::map_key_event(&key_event, event_timestamp) {
+            if gameplay_screen && ev.action.is_gameplay_arrow() {
+                continue;
+            }
             if let Err(e) = self.route_input_event(event_loop, ev) {
                 log::error!("Failed to handle input: {e}");
                 event_loop.exit();
@@ -4110,7 +4124,20 @@ impl App {
             input::clear_debounce_state();
             return;
         }
+        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        if gameplay_screen {
+            for iev in input::gameplay_arrow_pad_events(&ev) {
+                if let Err(e) = self.route_input_event(event_loop, iev) {
+                    error!("Failed to handle immediate pad input: {e}");
+                    event_loop.exit();
+                    return;
+                }
+            }
+        }
         for iev in input::map_pad_event(&ev) {
+            if gameplay_screen && iev.action.is_gameplay_arrow() {
+                continue;
+            }
             if let Err(e) = self.route_input_event(event_loop, iev) {
                 error!("Failed to handle pad input: {e}");
                 event_loop.exit();
@@ -5443,7 +5470,20 @@ impl ApplicationHandler<UserEvent> for App {
                 let mut upload_us: u32 = 0;
                 let mut draw_us: u32 = 0;
                 let input_started = Instant::now();
+                let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+                if gameplay_screen {
+                    for ev in input::drain_gameplay_arrow_events() {
+                        if let Err(e) = self.route_input_event(event_loop, ev) {
+                            error!("Failed to handle gameplay debounced input: {e}");
+                            event_loop.exit();
+                            return;
+                        }
+                    }
+                }
                 for ev in input::drain_debounced_events() {
+                    if gameplay_screen && ev.action.is_gameplay_arrow() {
+                        continue;
+                    }
                     if let Err(e) = self.route_input_event(event_loop, ev) {
                         error!("Failed to handle debounced input: {e}");
                         event_loop.exit();

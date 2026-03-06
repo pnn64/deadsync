@@ -249,6 +249,10 @@ pub struct InputEdge {
     pub lane: Lane,
     pub pressed: bool,
     pub source: InputSource,
+    // Real-time capture and queue timestamps for latency tracing. Filled in
+    // by gameplay when the edge is accepted for lane processing.
+    pub captured_at: Instant,
+    pub queued_at: Instant,
     // Music time (seconds) at which this edge occurred, in the gameplay
     // screen's timebase (includes music rate and global offset). Filled in
     // by the gameplay code using the audio device clock.
@@ -382,6 +386,9 @@ static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
 static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
 static INPUT_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<HashMap<DebounceBinding, DebounceState>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static GAMEPLAY_DEBOUNCE_STATE: std::sync::LazyLock<
+    Mutex<HashMap<DebounceBinding, DebounceState>>,
+> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
@@ -399,11 +406,13 @@ pub fn get_keymap() -> Keymap {
 pub fn set_keymap(new_map: Keymap) {
     *KEYMAP.write().unwrap() = new_map;
     INPUT_DEBOUNCE_STATE.lock().unwrap().clear();
+    GAMEPLAY_DEBOUNCE_STATE.lock().unwrap().clear();
 }
 
 #[inline(always)]
 pub fn clear_debounce_state() {
     INPUT_DEBOUNCE_STATE.lock().unwrap().clear();
+    GAMEPLAY_DEBOUNCE_STATE.lock().unwrap().clear();
 }
 
 #[inline(always)]
@@ -710,6 +719,12 @@ struct DebouncedEdge {
     timestamp: Instant,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct DebounceEdges {
+    first: Option<DebouncedEdge>,
+    second: Option<DebouncedEdge>,
+}
+
 #[inline(always)]
 fn debounce_emit_if_due(
     state: &mut DebounceState,
@@ -723,6 +738,36 @@ fn debounce_emit_if_due(
     state.last_report_time = now;
     state.held_reported = state.held_raw;
     Some((state.held_reported, state.last_raw_change_time))
+}
+
+#[inline(always)]
+fn debounced_edge(binding: DebounceBinding, pressed: bool, timestamp: Instant) -> DebouncedEdge {
+    DebouncedEdge {
+        binding,
+        pressed,
+        source: debounce_binding_source(binding),
+        timestamp,
+    }
+}
+
+#[inline(always)]
+fn debounce_step(
+    state: &mut DebounceState,
+    binding: DebounceBinding,
+    pressed: bool,
+    timestamp: Instant,
+    now: Instant,
+    window: Duration,
+) -> DebounceEdges {
+    let first = debounce_emit_if_due(state, now, window)
+        .map(|(debounced_pressed, ts)| debounced_edge(binding, debounced_pressed, ts));
+    if state.held_raw != pressed {
+        state.held_raw = pressed;
+        state.last_raw_change_time = timestamp;
+    }
+    let second = debounce_emit_if_due(state, now, window)
+        .map(|(debounced_pressed, ts)| debounced_edge(binding, debounced_pressed, ts));
+    DebounceEdges { first, second }
 }
 
 #[inline(always)]
@@ -753,51 +798,42 @@ fn should_prune_debounce_state(state: DebounceState, now: Instant, window: Durat
     !state.held_raw && !state.held_reported && now.duration_since(state.last_report_time) >= window
 }
 
-fn debounce_input_edge(
+fn debounce_input_edge_in_store(
+    states: &Mutex<HashMap<DebounceBinding, DebounceState>>,
     binding: DebounceBinding,
     pressed: bool,
     timestamp: Instant,
-) -> Option<DebouncedEdge> {
+) -> DebounceEdges {
     let now = Instant::now();
     let window = input_debounce_window();
-    let mut states = INPUT_DEBOUNCE_STATE.lock().unwrap();
-    let (edge, prune) = {
+    let mut states = states.lock().unwrap();
+    let (edges, prune) = {
         let state = states.entry(binding).or_insert_with(|| DebounceState {
             held_raw: false,
             held_reported: false,
             last_raw_change_time: timestamp,
             last_report_time: now.checked_sub(window).unwrap_or(now),
         });
-        state.held_raw = pressed;
-        state.last_raw_change_time = timestamp;
-        let edge =
-            debounce_emit_if_due(state, now, window).map(|(debounced_pressed, ts)| DebouncedEdge {
-                binding,
-                pressed: debounced_pressed,
-                source: debounce_binding_source(binding),
-                timestamp: ts,
-            });
-        (edge, should_prune_debounce_state(*state, now, window))
+        let edges = debounce_step(state, binding, pressed, timestamp, now, window);
+        (edges, should_prune_debounce_state(*state, now, window))
     };
     if prune {
         states.remove(&binding);
     }
-    edge
+    edges
 }
 
-fn collect_due_debounce_edges(now: Instant) -> Vec<DebouncedEdge> {
+fn collect_due_debounce_edges_from(
+    states: &Mutex<HashMap<DebounceBinding, DebounceState>>,
+    now: Instant,
+) -> Vec<DebouncedEdge> {
     let window = input_debounce_window();
-    let mut states = INPUT_DEBOUNCE_STATE.lock().unwrap();
+    let mut states = states.lock().unwrap();
     let mut out: Vec<DebouncedEdge> = Vec::with_capacity(states.len().min(8));
     let mut prune: Vec<DebounceBinding> = Vec::new();
     for (&binding, state) in states.iter_mut() {
         if let Some((pressed, timestamp)) = debounce_emit_if_due(state, now, window) {
-            out.push(DebouncedEdge {
-                binding,
-                pressed,
-                source: debounce_binding_source(binding),
-                timestamp,
-            });
+            out.push(debounced_edge(binding, pressed, timestamp));
         }
         if should_prune_debounce_state(*state, now, window) {
             prune.push(binding);
@@ -810,24 +846,60 @@ fn collect_due_debounce_edges(now: Instant) -> Vec<DebouncedEdge> {
 }
 
 #[inline(always)]
-fn input_events_from_debounced_edge(edge: DebouncedEdge) -> Vec<InputEvent> {
-    let mut actions = with_keymap(|km| debounce_binding_actions(km, edge.binding, edge.pressed));
-    append_secondary_menu_actions(&mut actions);
-    dedup_primary_vs_menu_alias(&mut actions);
-    dedup_action_pairs(&mut actions);
+fn input_events_from_actions(
+    actions: Vec<(VirtualAction, bool)>,
+    source: InputSource,
+    timestamp: Instant,
+) -> Vec<InputEvent> {
     actions
         .into_iter()
         .map(|(action, pressed)| InputEvent {
             action,
             pressed,
-            source: edge.source,
-            timestamp: edge.timestamp,
+            source,
+            timestamp,
         })
         .collect()
 }
 
 #[inline(always)]
-pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
+fn normalize_actions(actions: &mut Vec<(VirtualAction, bool)>) {
+    append_secondary_menu_actions(actions);
+    dedup_primary_vs_menu_alias(actions);
+    dedup_action_pairs(actions);
+}
+
+#[inline(always)]
+fn input_events_from_debounced_edge(edge: DebouncedEdge) -> Vec<InputEvent> {
+    let mut actions = with_keymap(|km| debounce_binding_actions(km, edge.binding, edge.pressed));
+    normalize_actions(&mut actions);
+    input_events_from_actions(actions, edge.source, edge.timestamp)
+}
+
+#[inline(always)]
+fn gameplay_events_from_debounced_edge(edge: DebouncedEdge) -> Vec<InputEvent> {
+    let mut actions = with_keymap(|km| debounce_binding_actions(km, edge.binding, edge.pressed));
+    actions.retain(|(action, _)| action.is_gameplay_arrow());
+    dedup_action_pairs(&mut actions);
+    input_events_from_actions(actions, edge.source, edge.timestamp)
+}
+
+#[inline(always)]
+fn push_debounced_input_events(
+    out: &mut Vec<InputEvent>,
+    edges: DebounceEdges,
+    map_edge: impl Fn(DebouncedEdge) -> Vec<InputEvent>,
+) {
+    if let Some(edge) = edges.first {
+        out.extend(map_edge(edge));
+    }
+    if let Some(edge) = edges.second {
+        out.extend(map_edge(edge));
+    }
+}
+
+#[inline(always)]
+pub fn map_key_event(ev: &KeyEvent, timestamp: Instant) -> Vec<InputEvent> {
     // Ignore OS key auto-repeat for pressed events (prevents resetting hold timers)
     if ev.state == ElementState::Pressed && ev.repeat {
         return Vec::new();
@@ -836,23 +908,57 @@ pub fn map_key_event(ev: &KeyEvent) -> Vec<InputEvent> {
         return Vec::new();
     };
     let pressed = ev.state == ElementState::Pressed;
-    if let Some(edge) =
-        debounce_input_edge(DebounceBinding::Keyboard(code), pressed, Instant::now())
-    {
-        return input_events_from_debounced_edge(edge);
+    let mut out = Vec::with_capacity(4);
+    push_debounced_input_events(
+        &mut out,
+        debounce_input_edge_in_store(
+            &INPUT_DEBOUNCE_STATE,
+            DebounceBinding::Keyboard(code),
+            pressed,
+            timestamp,
+        ),
+        input_events_from_debounced_edge,
+    );
+    out
+}
+
+#[inline(always)]
+pub fn gameplay_arrow_key_events(ev: &KeyEvent, timestamp: Instant) -> Vec<InputEvent> {
+    if ev.state == ElementState::Pressed && ev.repeat {
+        return Vec::new();
     }
-    Vec::new()
+    let PhysicalKey::Code(code) = ev.physical_key else {
+        return Vec::new();
+    };
+    let pressed = ev.state == ElementState::Pressed;
+    let mut out = Vec::with_capacity(2);
+    push_debounced_input_events(
+        &mut out,
+        debounce_input_edge_in_store(
+            &GAMEPLAY_DEBOUNCE_STATE,
+            DebounceBinding::Keyboard(code),
+            pressed,
+            timestamp,
+        ),
+        gameplay_events_from_debounced_edge,
+    );
+    out
 }
 
 #[inline(always)]
 pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
-    let edge = match *ev {
+    let edges = match *ev {
         PadEvent::Dir {
             id,
             timestamp,
             dir,
             pressed,
-        } => debounce_input_edge(DebounceBinding::PadDir { id, dir }, pressed, timestamp),
+        } => debounce_input_edge_in_store(
+            &INPUT_DEBOUNCE_STATE,
+            DebounceBinding::PadDir { id, dir },
+            pressed,
+            timestamp,
+        ),
         PadEvent::RawButton {
             id,
             timestamp,
@@ -860,26 +966,68 @@ pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
             uuid,
             pressed,
             ..
-        } => debounce_input_edge(
+        } => debounce_input_edge_in_store(
+            &INPUT_DEBOUNCE_STATE,
             DebounceBinding::PadButton { id, code, uuid },
             pressed,
             timestamp,
         ),
         PadEvent::RawAxis { timestamp, .. } => {
             let _ = timestamp;
-            None
+            return Vec::new();
         }
     };
-    if let Some(edge) = edge {
-        return input_events_from_debounced_edge(edge);
-    }
-    Vec::new()
+    let mut out = Vec::with_capacity(4);
+    push_debounced_input_events(&mut out, edges, input_events_from_debounced_edge);
+    out
+}
+
+#[inline(always)]
+pub fn gameplay_arrow_pad_events(ev: &PadEvent) -> Vec<InputEvent> {
+    let edges = match *ev {
+        PadEvent::Dir {
+            id,
+            dir,
+            pressed,
+            timestamp,
+        } => debounce_input_edge_in_store(
+            &GAMEPLAY_DEBOUNCE_STATE,
+            DebounceBinding::PadDir { id, dir },
+            pressed,
+            timestamp,
+        ),
+        PadEvent::RawButton {
+            id,
+            code,
+            uuid,
+            pressed,
+            timestamp,
+            ..
+        } => debounce_input_edge_in_store(
+            &GAMEPLAY_DEBOUNCE_STATE,
+            DebounceBinding::PadButton { id, code, uuid },
+            pressed,
+            timestamp,
+        ),
+        PadEvent::RawAxis { .. } => return Vec::new(),
+    };
+    let mut out = Vec::with_capacity(2);
+    push_debounced_input_events(&mut out, edges, gameplay_events_from_debounced_edge);
+    out
 }
 
 pub fn drain_debounced_events() -> Vec<InputEvent> {
     let mut out: Vec<InputEvent> = Vec::with_capacity(4);
-    for edge in collect_due_debounce_edges(Instant::now()) {
+    for edge in collect_due_debounce_edges_from(&INPUT_DEBOUNCE_STATE, Instant::now()) {
         out.extend(input_events_from_debounced_edge(edge));
+    }
+    out
+}
+
+pub fn drain_gameplay_arrow_events() -> Vec<InputEvent> {
+    let mut out: Vec<InputEvent> = Vec::with_capacity(2);
+    for edge in collect_due_debounce_edges_from(&GAMEPLAY_DEBOUNCE_STATE, Instant::now()) {
+        out.extend(gameplay_events_from_debounced_edge(edge));
     }
     out
 }
@@ -982,3 +1130,103 @@ mod macos_iohid;
 mod windows_raw_input;
 #[cfg(windows)]
 mod windows_wgi;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_state(now: Instant, window: Duration) -> DebounceState {
+        DebounceState {
+            held_raw: false,
+            held_reported: false,
+            last_raw_change_time: now,
+            last_report_time: now.checked_sub(window).unwrap_or(now),
+        }
+    }
+
+    fn assert_edge(
+        edge: Option<DebouncedEdge>,
+        binding: DebounceBinding,
+        pressed: bool,
+        timestamp: Instant,
+    ) {
+        let edge = edge.expect("expected debounced edge");
+        assert_eq!(edge.binding, binding);
+        assert_eq!(edge.pressed, pressed);
+        assert_eq!(edge.timestamp, timestamp);
+    }
+
+    #[test]
+    fn debounce_keeps_short_tap_and_delays_release() {
+        let window = Duration::from_millis(20);
+        let t0 = Instant::now();
+        let binding = DebounceBinding::Keyboard(KeyCode::KeyA);
+        let mut state = base_state(t0, window);
+
+        let press = debounce_step(&mut state, binding, true, t0, t0, window);
+        assert!(press.first.is_none());
+        assert_edge(press.second, binding, true, t0);
+
+        let release_ts = t0 + Duration::from_millis(1);
+        let release = debounce_step(&mut state, binding, false, release_ts, release_ts, window);
+        assert!(release.first.is_none());
+        assert!(release.second.is_none());
+
+        let delayed = debounce_emit_if_due(&mut state, t0 + Duration::from_millis(21), window);
+        assert_eq!(delayed, Some((false, release_ts)));
+    }
+
+    #[test]
+    fn debounce_cancels_quick_release_repress_chatter() {
+        let window = Duration::from_millis(20);
+        let t0 = Instant::now();
+        let binding = DebounceBinding::Keyboard(KeyCode::KeyA);
+        let mut state = base_state(t0, window);
+
+        let press = debounce_step(&mut state, binding, true, t0, t0, window);
+        assert!(press.first.is_none());
+        assert_edge(press.second, binding, true, t0);
+
+        let release_ts = t0 + Duration::from_millis(1);
+        let release = debounce_step(&mut state, binding, false, release_ts, release_ts, window);
+        assert!(release.first.is_none());
+        assert!(release.second.is_none());
+
+        let repress_ts = t0 + Duration::from_millis(5);
+        let repress = debounce_step(&mut state, binding, true, repress_ts, repress_ts, window);
+        assert!(repress.first.is_none());
+        assert!(repress.second.is_none());
+
+        assert_eq!(
+            debounce_emit_if_due(&mut state, t0 + Duration::from_millis(25), window),
+            None
+        );
+    }
+
+    #[test]
+    fn debounce_flushes_due_release_before_new_press() {
+        let window = Duration::from_millis(20);
+        let t0 = Instant::now();
+        let binding = DebounceBinding::Keyboard(KeyCode::KeyA);
+        let mut state = base_state(t0, window);
+
+        let press = debounce_step(&mut state, binding, true, t0, t0, window);
+        assert!(press.first.is_none());
+        assert_edge(press.second, binding, true, t0);
+
+        let release_ts = t0 + Duration::from_millis(1);
+        let release = debounce_step(&mut state, binding, false, release_ts, release_ts, window);
+        assert!(release.first.is_none());
+        assert!(release.second.is_none());
+
+        let repress_ts = t0 + Duration::from_millis(30);
+        let repress = debounce_step(&mut state, binding, true, repress_ts, repress_ts, window);
+        assert_edge(repress.first, binding, false, release_ts);
+        assert!(repress.second.is_none());
+
+        assert_eq!(
+            debounce_emit_if_due(&mut state, t0 + Duration::from_millis(50), window),
+            Some((true, repress_ts))
+        );
+    }
+}

@@ -102,6 +102,9 @@ static CALLBACK_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(I
 static LAST_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
+static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
+static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
+static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 
 /* ============================ Public functions ============================ */
 
@@ -179,6 +182,9 @@ fn reset_music_stream_clock() {
     LAST_CALLBACK_BASE_FRAMES.store(total, Ordering::Release);
     LAST_CALLBACK_FRAMES.store(0, Ordering::Release);
     LAST_CALLBACK_ELAPSED_NANOS.store(0, Ordering::Release);
+    PREV_CALLBACK_BASE_FRAMES.store(total, Ordering::Release);
+    PREV_CALLBACK_FRAMES.store(0, Ordering::Release);
+    PREV_CALLBACK_ELAPSED_NANOS.store(0, Ordering::Release);
 }
 
 #[inline(always)]
@@ -187,6 +193,36 @@ fn callback_epoch_nanos() -> u64 {
         .elapsed()
         .as_nanos()
         .min((u64::MAX - 1) as u128) as u64
+}
+
+#[inline(always)]
+fn callback_nanos_at(at: Instant) -> u64 {
+    at.checked_duration_since(*CALLBACK_EPOCH)
+        .map(|delta| delta.as_nanos().min((u64::MAX - 1) as u128) as u64)
+        .unwrap_or(0)
+}
+
+#[inline(always)]
+fn stream_position_seconds_from_callback(
+    sample_rate: u32,
+    start_frame: u64,
+    at_nanos: u64,
+    cb_nanos_plus_one: u64,
+    base_frames: u64,
+    buf_frames: u64,
+) -> Option<f32> {
+    if cb_nanos_plus_one == 0 {
+        return None;
+    }
+    let cb_nanos = cb_nanos_plus_one.saturating_sub(1);
+    if at_nanos < cb_nanos {
+        return None;
+    }
+    let dt = (at_nanos.saturating_sub(cb_nanos) as f64 * 1e-9) as f32;
+    let frames_since_cb = (dt * sample_rate as f32).clamp(0.0, buf_frames as f32);
+    let frames_now = base_frames as f32 + frames_since_cb;
+    let frames_from_start = frames_now.max(start_frame as f32) - start_frame as f32;
+    Some(frames_from_start / sample_rate as f32)
 }
 
 /// Plays a music track from a file path.
@@ -225,6 +261,13 @@ pub fn set_music_rate(rate: f32) {
 /// between callbacks using the callback timestamp so it advances
 /// continuously instead of in buffer-sized jumps.
 pub fn get_music_stream_position_seconds() -> f32 {
+    get_music_stream_position_seconds_at(Instant::now())
+}
+
+/// Returns the stream position using the audio callback clock anchored to the
+/// provided `Instant`, so callers can preserve a captured input edge time
+/// instead of re-sampling the music clock later on the main thread.
+pub fn get_music_stream_position_seconds_at(at: Instant) -> f32 {
     let sample_rate = ENGINE.device_sample_rate.max(1);
 
     let has_started = MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire);
@@ -234,26 +277,37 @@ pub fn get_music_stream_position_seconds() -> f32 {
 
     let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
 
-    let cb_nanos_plus_one = LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Acquire);
-    let base_frames = LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed);
-    let buf_frames = LAST_CALLBACK_FRAMES.load(Ordering::Relaxed);
-    if cb_nanos_plus_one != 0 {
-        let cb_nanos = cb_nanos_plus_one.saturating_sub(1);
-        let now_nanos = callback_epoch_nanos();
-        let dt = (now_nanos.saturating_sub(cb_nanos) as f64 * 1e-9) as f32;
-        let frames_since_cb = (dt * sample_rate as f32).clamp(0.0, buf_frames as f32);
-        let frames_now = base_frames as f32 + frames_since_cb;
-        let frames_from_start = frames_now.max(start as f32) - start as f32;
-        frames_from_start / sample_rate as f32
+    let at_nanos = callback_nanos_at(at);
+    let last_nanos = LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Acquire);
+    if let Some(pos) = stream_position_seconds_from_callback(
+        sample_rate,
+        start,
+        at_nanos,
+        last_nanos,
+        LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
+        LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
+    ) {
+        return pos;
+    }
+    let prev_nanos = PREV_CALLBACK_ELAPSED_NANOS.load(Ordering::Acquire);
+    if let Some(pos) = stream_position_seconds_from_callback(
+        sample_rate,
+        start,
+        at_nanos,
+        prev_nanos,
+        PREV_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
+        PREV_CALLBACK_FRAMES.load(Ordering::Relaxed),
+    ) {
+        return pos;
+    }
+
+    // Fallback: no usable callback snapshot yet; use the coarse total counter.
+    let total = MUSIC_TOTAL_FRAMES.load(Ordering::Acquire);
+    if total <= start {
+        0.0
     } else {
-        // Fallback: no callback yet; use the coarse total counter.
-        let total = MUSIC_TOTAL_FRAMES.load(Ordering::Acquire);
-        if total <= start {
-            0.0
-        } else {
-            let frames = total.saturating_sub(start) as f32;
-            frames / sample_rate as f32
-        }
+        let frames = total.saturating_sub(start) as f32;
+        frames / sample_rate as f32
     }
 }
 
@@ -490,6 +544,18 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [i16], _| {
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
+                PREV_CALLBACK_BASE_FRAMES.store(
+                    LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+                PREV_CALLBACK_FRAMES.store(
+                    LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+                PREV_CALLBACK_ELAPSED_NANOS.store(
+                    LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
+                    Ordering::Release,
+                );
                 LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
                 LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
                 LAST_CALLBACK_ELAPSED_NANOS
@@ -574,6 +640,18 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [u16], _| {
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
+                PREV_CALLBACK_BASE_FRAMES.store(
+                    LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+                PREV_CALLBACK_FRAMES.store(
+                    LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+                PREV_CALLBACK_ELAPSED_NANOS.store(
+                    LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
+                    Ordering::Release,
+                );
                 LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
                 LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
                 LAST_CALLBACK_ELAPSED_NANOS
@@ -653,6 +731,18 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [f32], _| {
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
+                PREV_CALLBACK_BASE_FRAMES.store(
+                    LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+                PREV_CALLBACK_FRAMES.store(
+                    LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
+                    Ordering::Relaxed,
+                );
+                PREV_CALLBACK_ELAPSED_NANOS.store(
+                    LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
+                    Ordering::Release,
+                );
                 LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
                 LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
                 LAST_CALLBACK_ELAPSED_NANOS
