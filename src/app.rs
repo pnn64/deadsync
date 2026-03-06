@@ -2246,6 +2246,28 @@ impl App {
         true
     }
 
+    fn try_gameplay_restart(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        label: &str,
+    ) -> bool {
+        if self.prepare_player_options_for_gameplay_restart() {
+            let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
+            if let Err(e) = self.handle_action(
+                ScreenAction::Navigate(CurrentScreen::Gameplay),
+                event_loop,
+            ) {
+                log::error!("Failed to restart Gameplay with {label}: {e}");
+            } else {
+                self.state.session.gameplay_restart_count = restart_count;
+            }
+            true
+        } else {
+            log::warn!("Ignored {label} restart: no active gameplay state.");
+            false
+        }
+    }
+
     fn should_chain_course_to_next_stage(&self) -> bool {
         self.state.screens.current_screen == CurrentScreen::Gameplay
             && !self.current_gameplay_stage_failed()
@@ -2581,6 +2603,18 @@ impl App {
                 input::VirtualAction::p2_select => Some(profile::PlayerSide::P2),
                 _ => None,
             };
+            return Ok(());
+        }
+        if ev.pressed
+            && self.state.screens.current_screen == CurrentScreen::Gameplay
+            && self.state.gameplay_offset_save_prompt.is_none()
+            && self.state.session.course_run.is_none()
+            && matches!(
+                ev.action,
+                input::VirtualAction::p1_restart | input::VirtualAction::p2_restart
+            )
+        {
+            self.try_gameplay_restart(event_loop, "Restart button");
             return Ok(());
         }
         let action = match self.state.screens.current_screen {
@@ -4026,20 +4060,7 @@ impl App {
                     && config::get().keyboard_features
                     && self.state.session.course_run.is_none()
                 {
-                    if self.prepare_player_options_for_gameplay_restart() {
-                        let restart_count =
-                            self.state.session.gameplay_restart_count.saturating_add(1);
-                        if let Err(e) = self.handle_action(
-                            ScreenAction::Navigate(CurrentScreen::Gameplay),
-                            event_loop,
-                        ) {
-                            log::error!("Failed to restart Gameplay with Ctrl+R: {e}");
-                        } else {
-                            self.state.session.gameplay_restart_count = restart_count;
-                        }
-                    } else {
-                        log::warn!("Ignored Ctrl+R restart: no active gameplay state.");
-                    }
+                    self.try_gameplay_restart(event_loop, "Ctrl+R");
                     return;
                 }
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
