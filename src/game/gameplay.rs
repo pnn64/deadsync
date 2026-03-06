@@ -5917,6 +5917,7 @@ pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
 fn ex_score_from_components(
     counts: crate::game::timing::WindowCounts,
     holds_held: u32,
+    rolls_held: u32,
     mines_hit: u32,
     total_steps: u32,
     holds_total: u32,
@@ -5936,6 +5937,7 @@ fn ex_score_from_components(
         + f64::from(counts.w2) * 2.0
         + f64::from(counts.w3)
         + f64::from(holds_held)
+        + f64::from(rolls_held)
         - f64::from(mines_effective);
     ((total_points / total_possible).max(0.0) * 10000.0).floor() / 100.0
 }
@@ -5945,6 +5947,7 @@ fn hard_ex_score_from_components(
     counts: crate::game::timing::WindowCounts,
     counts_10ms: crate::game::timing::WindowCounts,
     holds_held: u32,
+    rolls_held: u32,
     mines_hit: u32,
     total_steps: u32,
     holds_total: u32,
@@ -5966,6 +5969,7 @@ fn hard_ex_score_from_components(
         + f64::from(w110) * 3.0
         + f64::from(counts.w2)
         + f64::from(holds_held)
+        + f64::from(rolls_held)
         - f64::from(mines_effective);
     ((total_points / total_possible).max(0.0) * 10000.0).floor() / 100.0
 }
@@ -5979,6 +5983,9 @@ pub fn display_ex_score_percent(state: &State, player_idx: usize) -> f64 {
     let holds_held = state.players[player_idx]
         .holds_held_for_score
         .saturating_add(carry.holds_held_for_score);
+    let rolls_held = state.players[player_idx]
+        .rolls_held_for_score
+        .saturating_add(carry.rolls_held_for_score);
     let mines_hit = state.players[player_idx]
         .mines_hit_for_score
         .saturating_add(carry.mines_hit_for_score);
@@ -5986,6 +5993,7 @@ pub fn display_ex_score_percent(state: &State, player_idx: usize) -> f64 {
     ex_score_from_components(
         counts,
         holds_held,
+        rolls_held,
         mines_hit,
         totals.total_steps,
         totals.holds_total,
@@ -6004,6 +6012,9 @@ pub fn display_hard_ex_score_percent(state: &State, player_idx: usize) -> f64 {
     let holds_held = state.players[player_idx]
         .holds_held_for_score
         .saturating_add(carry.holds_held_for_score);
+    let rolls_held = state.players[player_idx]
+        .rolls_held_for_score
+        .saturating_add(carry.rolls_held_for_score);
     let mines_hit = state.players[player_idx]
         .mines_hit_for_score
         .saturating_add(carry.mines_hit_for_score);
@@ -6012,6 +6023,7 @@ pub fn display_hard_ex_score_percent(state: &State, player_idx: usize) -> f64 {
         counts,
         counts_10ms,
         holds_held,
+        rolls_held,
         mines_hit,
         totals.total_steps,
         totals.holds_total,

@@ -189,6 +189,7 @@ struct ExScoreCounts {
     windows: WindowCounts,
     w010: u32,
     holds_held: u32,
+    rolls_held: u32,
     mines_hit: u32,
 }
 
@@ -252,6 +253,7 @@ fn compute_ex_score_counts(
     }
 
     let mut holds_held: u32 = 0;
+    let mut rolls_held: u32 = 0;
     let mut mines_hit: u32 = 0;
 
     for (i, note) in notes.iter().enumerate() {
@@ -278,6 +280,13 @@ fn compute_ex_score_counts(
                     holds_held = holds_held.saturating_add(1);
                 }
             }
+            NoteType::Roll => {
+                if let Some(h) = note.hold.as_ref()
+                    && h.result == Some(HoldResult::Held)
+                {
+                    rolls_held = rolls_held.saturating_add(1);
+                }
+            }
             NoteType::Mine => {
                 if note.mine_result == Some(MineResult::Hit) {
                     mines_hit = mines_hit.saturating_add(1);
@@ -291,6 +300,7 @@ fn compute_ex_score_counts(
         windows,
         w010,
         holds_held,
+        rolls_held,
         mines_hit,
     }
 }
@@ -298,12 +308,12 @@ fn compute_ex_score_counts(
 /// Calculates FA+ EX score using the same algebra as SL:
 ///
 ///   `total_possible` = `total_steps` * 3.5 + (`total_holds` + `total_rolls`)
-///   `total_points`   = W0*3.5 + W1*3 + W2*2 + W3 + `holds_held` - `mines_hit`
+///   `total_points`   = W0*3.5 + W1*3 + W2*2 + W3 + `holds_held` + `rolls_held` - `mines_hit`
 ///   `ex_percent`     = `floor(total_points` / `total_possible` * 10000) / 100
 ///
 /// where W0..W3 are taken from the final per-row window counts used by the FA+
-/// pane, `holds_held` counts successful holds only (rolls are reported
-/// separately), and `mines_hit` is the number of mines actually hit.
+/// pane, `holds_held`/`rolls_held` count successful hold-like notes, and
+/// `mines_hit` is the number of mines actually hit.
 ///
 /// This version respects `fail_time` to stop accumulating points if the player
 /// has failed the song.
@@ -336,14 +346,14 @@ pub fn calculate_ex_score_from_notes(
         return 0.0;
     }
 
-    // Spreadsheet-style EX points, ignoring rolls in the numerator:
+    // Spreadsheet-style EX points: tap rows plus successful holds and rolls.
     let mut total_points = 0.0_f64;
     total_points += f64::from(counts.windows.w0) * EX_WEIGHT_W0;
     total_points += f64::from(counts.windows.w1) * EX_WEIGHT_W1;
     total_points += f64::from(counts.windows.w2) * EX_WEIGHT_W2;
     total_points += f64::from(counts.windows.w3) * EX_WEIGHT_W3;
-
     total_points += f64::from(counts.holds_held) * EX_WEIGHT_HELD;
+    total_points += f64::from(counts.rolls_held) * EX_WEIGHT_HELD;
 
     // Mines subtract if hit while alive.
     let mines_effective = counts.mines_hit.min(mines_total);
@@ -390,6 +400,7 @@ pub fn calculate_hard_ex_score_from_notes(
     total_points += f64::from(w110) * HARD_EX_WEIGHT_W110;
     total_points += f64::from(counts.windows.w2) * HARD_EX_WEIGHT_W2;
     total_points += f64::from(counts.holds_held) * HARD_EX_WEIGHT_HELD;
+    total_points += f64::from(counts.rolls_held) * HARD_EX_WEIGHT_HELD;
 
     let mines_effective = counts.mines_hit.min(mines_total);
     total_points += f64::from(mines_effective) * HARD_EX_WEIGHT_HIT_MINE;
@@ -440,12 +451,12 @@ mod tests {
     }
 
     #[inline(always)]
-    fn make_hold(row_index: usize, held: bool) -> Note {
+    fn make_hold_note(row_index: usize, note_type: NoteType, held: bool) -> Note {
         Note {
             beat: row_index as f32,
             quantization_idx: 0,
             column: 0,
-            note_type: NoteType::Hold,
+            note_type,
             row_index,
             result: None,
             early_result: None,
@@ -467,6 +478,16 @@ mod tests {
             is_fake: false,
             can_be_judged: true,
         }
+    }
+
+    #[inline(always)]
+    fn make_hold(row_index: usize, held: bool) -> Note {
+        make_hold_note(row_index, NoteType::Hold, held)
+    }
+
+    #[inline(always)]
+    fn make_roll(row_index: usize, held: bool) -> Note {
+        make_hold_note(row_index, NoteType::Roll, held)
     }
 
     #[inline(always)]
@@ -707,5 +728,74 @@ mod tests {
         );
 
         assert!((ex - 60.14).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn ex_percent_matches_roll_drop_regression_case() {
+        const BLUE_FANTASTIC_3: u32 = 407;
+        const WHITE_FANTASTIC_3: u32 = 14;
+        const EXCELLENT_3: u32 = 2;
+        const HOLDS_HELD_3: u32 = 123;
+        const HOLDS_TOTAL_3: u32 = 123;
+        const ROLLS_HELD_3: u32 = 41;
+        const ROLLS_TOTAL_3: u32 = 42;
+        const MINES_TOTAL_3: u32 = 129;
+
+        let total_steps = BLUE_FANTASTIC_3 + WHITE_FANTASTIC_3 + EXCELLENT_3;
+        let mut notes: Vec<Note> =
+            Vec::with_capacity((total_steps + HOLDS_TOTAL_3 + ROLLS_TOTAL_3) as usize);
+        let mut row_index = 0usize;
+
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            BLUE_FANTASTIC_3,
+            JudgeGrade::Fantastic,
+            0.0,
+        );
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            WHITE_FANTASTIC_3,
+            JudgeGrade::Fantastic,
+            FA_PLUS_W0_MS + 0.001,
+        );
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            EXCELLENT_3,
+            JudgeGrade::Excellent,
+            0.0,
+        );
+
+        for i in 0..HOLDS_TOTAL_3 {
+            notes.push(make_hold(
+                row_index.saturating_add(i as usize),
+                i < HOLDS_HELD_3,
+            ));
+        }
+        row_index = row_index.saturating_add(HOLDS_TOTAL_3 as usize);
+        for i in 0..ROLLS_TOTAL_3 {
+            notes.push(make_roll(
+                row_index.saturating_add(i as usize),
+                i < ROLLS_HELD_3,
+            ));
+        }
+
+        let note_times = vec![0.0_f32; notes.len()];
+        let hold_end_times = vec![None; notes.len()];
+        let ex = calculate_ex_score_from_notes(
+            &notes,
+            &note_times,
+            &hold_end_times,
+            total_steps,
+            HOLDS_TOTAL_3,
+            ROLLS_TOTAL_3,
+            MINES_TOTAL_3,
+            None,
+            false,
+        );
+
+        assert!((ex - 99.33).abs() <= 1e-9);
     }
 }
