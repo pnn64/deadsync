@@ -1,6 +1,7 @@
 use crate::act;
 use crate::core::space::{screen_center_x, screen_width, widescale};
 use crate::game::profile;
+use crate::screens::components::pad_display;
 use crate::screens::components::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -108,4 +109,35 @@ pub fn build_mode_pad_text(text: &str) -> Actor {
         z(121):
         diffuse(1.0, 1.0, 1.0, 1.0)
     )
+}
+
+fn mode_pad_states() -> [bool; 2] {
+    if profile::get_session_play_style() == profile::PlayStyle::Double {
+        return [true, true];
+    }
+    [
+        profile::is_session_side_joined(profile::PlayerSide::P1),
+        profile::is_session_side_joined(profile::PlayerSide::P2),
+    ]
+}
+
+pub fn build_mode_pads() -> [Actor; 2] {
+    let [p1_active, p2_active] = mode_pad_states();
+    let pad_zoom = 0.24 * widescale(0.435, 0.525);
+    [
+        pad_display::build(pad_display::PadDisplayParams {
+            center_x: screen_width() - widescale(35.0, 41.0),
+            center_y: widescale(22.0, 23.5),
+            zoom: pad_zoom,
+            z: 121,
+            is_active: p1_active,
+        }),
+        pad_display::build(pad_display::PadDisplayParams {
+            center_x: screen_width() - widescale(15.0, 17.0),
+            center_y: widescale(22.0, 23.5),
+            zoom: pad_zoom,
+            z: 121,
+            is_active: p2_active,
+        }),
+    ]
 }

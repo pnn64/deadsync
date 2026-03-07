@@ -14,8 +14,8 @@ use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
-    gs_scorebox, heart_bg, music_wheel, pad_display, profile_boxes, select_pane, select_shared,
-    sort_menu, step_artist_bar, test_input,
+    gs_scorebox, heart_bg, music_wheel, profile_boxes, select_pane, select_shared, sort_menu,
+    step_artist_bar, test_input,
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource};
@@ -5651,21 +5651,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Pads
     {
         actors.push(select_shared::build_mode_pad_text(score_mode_text.as_str()));
-        let pad_zoom = 0.24 * widescale(0.435, 0.525);
-        actors.push(pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(35.0, 41.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: pad_zoom,
-            z: 121,
-            is_active: true,
-        }));
-        actors.push(pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(15.0, 17.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: pad_zoom,
-            z: 121,
-            is_active: false,
-        }));
+        actors.extend(select_shared::build_mode_pads());
     }
 
     // Banner

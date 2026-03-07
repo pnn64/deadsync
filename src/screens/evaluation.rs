@@ -7,7 +7,7 @@ use crate::screens::components::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::{
-    eval_grades, evaluation as eval_panes, heart_bg, pad_display, screen_bar, select_shared,
+    eval_grades, evaluation as eval_panes, heart_bg, screen_bar, select_shared,
 };
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -2525,21 +2525,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
         actors.push(act!(text: font("wendy"): settext("ITG"): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
-        let final_pad_zoom = 0.24 * widescale(0.435, 0.525);
-        actors.push(pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(35.0, 41.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: final_pad_zoom,
-            z: 121,
-            is_active: true,
-        }));
-        actors.push(pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(15.0, 17.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: final_pad_zoom,
-            z: 121,
-            is_active: false,
-        }));
+        actors.extend(select_shared::build_mode_pads());
     }
 
     // 3. Bottom Bar
