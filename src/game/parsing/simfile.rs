@@ -10,6 +10,7 @@ use crate::game::{
     },
 };
 use log::{debug, info, warn};
+use rssp::pack::{PackScan, SongScan};
 use rssp::patterns::{PatternVariant, compute_box_counts, count_pattern};
 use rssp::{AnalysisOptions, analyze};
 use std::collections::HashMap;
@@ -969,6 +970,76 @@ fn collect_song_scan_roots(root_path_str: &str) -> Vec<PathBuf> {
     roots
 }
 
+fn ci_key(text: &str) -> String {
+    text.trim().to_ascii_lowercase()
+}
+
+fn song_scan_key(song: &SongScan) -> String {
+    song.dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(ci_key)
+        .filter(|key| !key.is_empty())
+        .unwrap_or_else(|| song.dir.to_string_lossy().to_ascii_lowercase())
+}
+
+fn merge_pack_scan(dst: &mut PackScan, mut src: PackScan) {
+    dst.dir = src.dir.clone();
+    if src.has_pack_ini {
+        dst.display_title = src.display_title.clone();
+        dst.sort_title = src.sort_title.clone();
+        dst.translit_title = src.translit_title.clone();
+        dst.series = src.series.clone();
+        dst.year = src.year;
+        dst.version = src.version;
+        dst.has_pack_ini = true;
+        dst.sync_pref = src.sync_pref;
+    }
+    if src.banner_path.is_some() {
+        dst.banner_path = src.banner_path.clone();
+    }
+    if src.background_path.is_some() {
+        dst.background_path = src.background_path.clone();
+    }
+
+    let mut song_slots = HashMap::with_capacity(dst.songs.len() + src.songs.len());
+    for (idx, song) in dst.songs.iter().enumerate() {
+        song_slots.insert(song_scan_key(song), idx);
+    }
+    for song in src.songs.drain(..) {
+        let key = song_scan_key(&song);
+        if let Some(slot) = song_slots.get(&key).copied() {
+            dst.songs[slot] = song;
+        } else {
+            let slot = dst.songs.len();
+            song_slots.insert(key, slot);
+            dst.songs.push(song);
+        }
+    }
+}
+
+fn merge_pack_scans(mut packs: Vec<PackScan>) -> Vec<PackScan> {
+    let mut merged = Vec::with_capacity(packs.len());
+    let mut pack_slots = HashMap::with_capacity(packs.len());
+
+    for pack in packs.drain(..) {
+        let key = ci_key(&pack.group_name);
+        if key.is_empty() {
+            merged.push(pack);
+            continue;
+        }
+        if let Some(slot) = pack_slots.get(&key).copied() {
+            merge_pack_scan(&mut merged[slot], pack);
+        } else {
+            let slot = merged.len();
+            pack_slots.insert(key, slot);
+            merged.push(pack);
+        }
+    }
+
+    merged
+}
+
 fn scan_and_load_songs_impl<F>(root_path_str: &'static str, mut progress: Option<&mut F>)
 where
     F: FnMut(usize, usize, &str, &str),
@@ -1023,6 +1094,7 @@ where
             Err(e) => warn!("Could not scan songs dir '{}': {e:?}", songs_root.display()),
         }
     }
+    packs = merge_pack_scans(packs);
     let total_songs = packs.iter().map(|pack| pack.songs.len()).sum::<usize>();
     let mut songs_seen = 0usize;
 
@@ -1308,7 +1380,7 @@ fn resolve_song_dir(
         }
         if !group_dirs.contains_key(&key) {
             let mut path = None;
-            for songs_root in song_roots {
+            for songs_root in song_roots.iter().rev() {
                 let direct = songs_root.join(group);
                 path = if direct.is_dir() {
                     Some(direct)
@@ -1340,7 +1412,7 @@ fn resolve_song_dir(
         };
     }
 
-    for songs_root in song_roots {
+    for songs_root in song_roots.iter().rev() {
         let Ok(entries) = fs::read_dir(songs_root) else {
             continue;
         };
@@ -1374,7 +1446,7 @@ fn resolve_course_group_dir(
         return Some(path.clone());
     }
     let mut path = None;
-    for songs_root in song_roots {
+    for songs_root in song_roots.iter().rev() {
         let direct = songs_root.join(group);
         path = if direct.is_dir() {
             Some(direct)
@@ -2225,4 +2297,129 @@ fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {
     }
 
     best_granule.ok_or_else(|| "No valid granule position found".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{merge_pack_scans, resolve_course_group_dir, resolve_song_dir};
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    fn pack_scan(
+        group_name: &str,
+        display_title: &str,
+        has_pack_ini: bool,
+        banner_path: Option<&str>,
+        songs: &[&str],
+        root: &Path,
+    ) -> rssp::pack::PackScan {
+        let dir = root.join(group_name);
+        rssp::pack::PackScan {
+            dir: dir.clone(),
+            group_name: group_name.to_string(),
+            display_title: display_title.to_string(),
+            sort_title: display_title.to_string(),
+            translit_title: display_title.to_string(),
+            series: String::new(),
+            year: 0,
+            version: i32::from(has_pack_ini),
+            has_pack_ini,
+            sync_pref: rssp::pack::SyncPref::Default,
+            banner_path: banner_path.map(PathBuf::from),
+            background_path: None,
+            songs: songs
+                .iter()
+                .map(|song| {
+                    let song_dir = dir.join(song);
+                    rssp::pack::SongScan {
+                        dir: song_dir.clone(),
+                        simfile: song_dir.join("song.sm"),
+                        extension: "sm",
+                    }
+                })
+                .collect(),
+        }
+    }
+
+    fn test_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-simfile-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn merge_pack_scans_collapses_case_insensitive_groups() {
+        let root = test_dir("merge-pack-scans");
+        let base = root.join("base");
+        let extra = root.join("extra");
+        let packs = vec![
+            pack_scan(
+                "Pack",
+                "Fancy Pack",
+                true,
+                Some("base-banner.png"),
+                &["Alpha", "Dupe"],
+                &base,
+            ),
+            pack_scan("pack", "pack", false, None, &["Beta", "dupe"], &extra),
+        ];
+
+        let merged = merge_pack_scans(packs);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].display_title, "Fancy Pack");
+        assert_eq!(
+            merged[0].banner_path,
+            Some(PathBuf::from("base-banner.png"))
+        );
+
+        let mut names = merged[0]
+            .songs
+            .iter()
+            .map(|song| {
+                song.dir
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap()
+                    .to_ascii_lowercase()
+            })
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, vec!["alpha", "beta", "dupe"]);
+        assert!(
+            merged[0]
+                .songs
+                .iter()
+                .any(|song| song.dir.starts_with(&extra))
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolve_song_dir_prefers_later_root() {
+        let root = test_dir("resolve-song-dir");
+        let base = root.join("base");
+        let extra = root.join("extra");
+        let base_song = base.join("Pack").join("Song");
+        let extra_song = extra.join("Pack").join("Song");
+        fs::create_dir_all(&base_song).unwrap();
+        fs::create_dir_all(&extra_song).unwrap();
+
+        let found = resolve_song_dir(
+            &[base.clone(), extra.clone()],
+            &mut HashMap::new(),
+            Some("pack"),
+            "song",
+        );
+        assert_eq!(found, Some(extra_song.clone()));
+
+        let group =
+            resolve_course_group_dir(&[base.clone(), extra.clone()], &mut HashMap::new(), "pack");
+        assert_eq!(group, Some(extra.join("Pack")));
+
+        let _ = fs::remove_dir_all(root);
+    }
 }
