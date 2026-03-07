@@ -1,6 +1,6 @@
 use crate::core::gfx::{
-    BlendMode, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    Texture as RendererTexture,
+    BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
 use cgmath::Matrix4;
@@ -17,6 +17,7 @@ use log::{debug, info, warn};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::{
     collections::HashMap, error::Error, ffi::CStr, hash::Hasher, mem, num::NonZeroU32, sync::Arc,
+    time::Instant,
 };
 use twox_hash::XxHash64;
 use winit::window::Window;
@@ -588,10 +589,20 @@ pub fn draw(
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
     apply_present_back_pressure: bool,
-) -> Result<u32, Box<dyn Error>> {
+) -> Result<DrawStats, Box<dyn Error>> {
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
+    }
+
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
-        return Ok(0);
+        return Ok(DrawStats::default());
     }
 
     #[inline(always)]
@@ -1220,16 +1231,26 @@ pub fn draw(
         gl.use_program(None);
     }
 
+    let present_started = Instant::now();
     state.gl_surface.swap_buffers(&state.gl_context)?;
+    let present_us = elapsed_us_since(present_started);
+    let mut gpu_wait_us = 0;
     if apply_present_back_pressure {
         // Mirror ITGmania's uncapped GL path: block here so the CPU does not
         // run frames far ahead of the GPU when swap interval is disabled.
+        let wait_started = Instant::now();
         unsafe {
             state.gl.finish();
         }
+        gpu_wait_us = elapsed_us_since(wait_started);
     }
     push_tmesh_debug_sample(state, tmesh_debug_frame);
-    Ok(vertices)
+    Ok(DrawStats {
+        vertices,
+        present_us,
+        gpu_wait_us,
+        ..DrawStats::default()
+    })
 }
 
 pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {

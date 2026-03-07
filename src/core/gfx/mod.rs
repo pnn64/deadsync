@@ -129,6 +129,15 @@ pub enum UncappedMode {
     MaxFps,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DrawStats {
+    pub vertices: u32,
+    pub acquire_us: u32,
+    pub submit_us: u32,
+    pub present_us: u32,
+    pub gpu_wait_us: u32,
+}
+
 // --- Public API Facade ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,7 +183,7 @@ impl Backend {
         render_list: &RenderList<'_>,
         textures: &HashMap<String, Texture>,
         apply_present_back_pressure: bool,
-    ) -> Result<u32, Box<dyn Error>> {
+    ) -> Result<DrawStats, Box<dyn Error>> {
         match &mut self.0 {
             BackendImpl::Vulkan(state) => {
                 vulkan::draw(state, render_list, textures, apply_present_back_pressure)

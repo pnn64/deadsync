@@ -184,6 +184,19 @@ fn elapsed_us_since(started: Instant) -> u32 {
 }
 
 #[inline(always)]
+fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
+    let elapsed = later
+        .checked_duration_since(earlier)
+        .unwrap_or(Duration::ZERO)
+        .as_micros();
+    if elapsed > u128::from(u32::MAX) {
+        u32::MAX
+    } else {
+        elapsed as u32
+    }
+}
+
+#[inline(always)]
 fn stutter_severity(frame_seconds: f32, expected_seconds: f32) -> u8 {
     if expected_seconds <= 0.0 {
         return 0;
@@ -278,11 +291,14 @@ pub struct ShellState {
     frame_count: u32,
     last_title_update: Instant,
     last_frame_time: Instant,
+    last_frame_end_time: Instant,
     start_time: Instant,
     vsync_enabled: bool,
     frame_interval: Option<Duration>,
     uncapped_mode: UncappedMode,
     next_redraw_at: Instant,
+    pending_redraw_request_at: Option<Instant>,
+    pending_redraw_request_reason: &'static str,
     display_mode: DisplayMode,
     display_monitor: usize,
     metrics: Metrics,
@@ -422,11 +438,14 @@ impl ShellState {
             frame_count: 0,
             last_title_update: now,
             last_frame_time: now,
+            last_frame_end_time: now,
             start_time: now,
             vsync_enabled: cfg.vsync,
             frame_interval,
             uncapped_mode: cfg.uncapped_mode,
             next_redraw_at: now,
+            pending_redraw_request_at: None,
+            pending_redraw_request_reason: "none",
             display_mode: cfg.display_mode(),
             metrics,
             last_fps: 0.0,
@@ -469,7 +488,35 @@ impl ShellState {
     #[inline(always)]
     fn reset_frame_clock(&mut self, now: Instant) {
         self.last_frame_time = now;
+        self.last_frame_end_time = now;
         self.next_redraw_at = now;
+        self.pending_redraw_request_at = None;
+        self.pending_redraw_request_reason = "none";
+    }
+
+    #[inline(always)]
+    fn note_redraw_requested(&mut self, now: Instant, reason: &'static str) {
+        if self.pending_redraw_request_at.is_none() {
+            self.pending_redraw_request_at = Some(now);
+            self.pending_redraw_request_reason = reason;
+        }
+    }
+
+    #[inline(always)]
+    fn take_redraw_request_timing(&mut self, now: Instant) -> (u32, &'static str) {
+        let requested_at = self.pending_redraw_request_at.take();
+        let reason = if requested_at.is_some() {
+            self.pending_redraw_request_reason
+        } else {
+            "external"
+        };
+        self.pending_redraw_request_reason = "none";
+        (
+            requested_at
+                .map(|at| elapsed_us_between(now, at))
+                .unwrap_or_default(),
+            reason,
+        )
     }
 
     #[inline(always)]
@@ -1617,6 +1664,14 @@ impl App {
         !self.state.shell.vsync_enabled
             && self.state.shell.uncapped_mode == UncappedMode::Balanced
             && self.effective_frame_interval().is_none()
+    }
+
+    #[inline(always)]
+    fn request_redraw(&mut self, window: &Window, reason: &'static str) {
+        self.state
+            .shell
+            .note_redraw_requested(Instant::now(), reason);
+        window.request_redraw();
     }
 
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
@@ -3637,11 +3692,15 @@ impl App {
         frame_seconds: f32,
         total_elapsed: f32,
         screen: CurrentScreen,
+        pre_redraw_gap_us: u32,
+        request_to_redraw_us: u32,
+        redraw_request_reason: &'static str,
         input_us: u32,
         update_us: u32,
         compose_us: u32,
         upload_us: u32,
         draw_us: u32,
+        draw_stats: renderer::DrawStats,
     ) {
         if !log::log_enabled!(log::Level::Trace) {
             return;
@@ -3662,26 +3721,41 @@ impl App {
             .saturating_add(compose_us)
             .saturating_add(upload_us)
             .saturating_add(draw_us);
-        let idle_wait_us = frame_us.saturating_sub(frame_work_us);
+        let accounted_us = pre_redraw_gap_us.saturating_add(frame_work_us);
+        let unaccounted_gap_us = frame_us.saturating_sub(accounted_us);
+        let draw_split_us = draw_stats
+            .acquire_us
+            .saturating_add(draw_stats.submit_us)
+            .saturating_add(draw_stats.present_us)
+            .saturating_add(draw_stats.gpu_wait_us);
+        let draw_other_us = draw_us.saturating_sub(draw_split_us);
         let multiple = if expected > 0.0 {
             frame_seconds / expected
         } else {
             0.0
         };
         log::trace!(
-            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} phases_ms=[input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} idle_wait:{:.3}]",
+            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] redraw_ms=[request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}]",
             total_elapsed,
             severity,
             screen,
             frame_seconds * 1000.0,
             expected * 1000.0,
             multiple,
+            redraw_request_reason,
+            pre_redraw_gap_us as f32 / 1000.0,
             input_us as f32 / 1000.0,
             update_us as f32 / 1000.0,
             compose_us as f32 / 1000.0,
             upload_us as f32 / 1000.0,
             draw_us as f32 / 1000.0,
-            idle_wait_us as f32 / 1000.0
+            unaccounted_gap_us as f32 / 1000.0,
+            request_to_redraw_us as f32 / 1000.0,
+            draw_stats.acquire_us as f32 / 1000.0,
+            draw_stats.submit_us as f32 / 1000.0,
+            draw_stats.present_us as f32 / 1000.0,
+            draw_stats.gpu_wait_us as f32 / 1000.0,
+            draw_other_us as f32 / 1000.0
         );
     }
 
@@ -3781,14 +3855,13 @@ impl App {
 
         let now = Instant::now();
         self.state.shell.start_time = now;
-        self.state.shell.last_frame_time = now;
         self.state.shell.last_title_update = now;
-        self.state.shell.next_redraw_at = now;
+        self.state.shell.reset_frame_clock(now);
         self.state.shell.frame_count = 0;
         self.state.shell.current_frame_vpf = 0;
 
         window.set_visible(true);
-        window.request_redraw();
+        self.request_redraw(&window, "init_graphics");
 
         self.window = Some(window);
         self.backend = Some(backend);
@@ -3842,8 +3915,7 @@ impl App {
         self.state.shell.frame_count = 0;
         let now = Instant::now();
         self.state.shell.last_title_update = now;
-        self.state.shell.last_frame_time = now;
-        self.state.shell.next_redraw_at = now;
+        self.state.shell.reset_frame_clock(now);
 
         match self.init_graphics(event_loop) {
             Ok(()) => {
@@ -3851,8 +3923,8 @@ impl App {
                 options::sync_video_renderer(&mut self.state.screens.options_state, target);
                 crate::ui::runtime::clear_all();
                 self.reset_dynamic_assets_after_renderer_switch();
-                if let Some(window) = &self.window {
-                    window.request_redraw();
+                if let Some(window) = self.window.clone() {
+                    self.request_redraw(&window, "switch_renderer");
                 }
                 info!("Switched renderer to {target:?}");
                 Ok(())
@@ -5540,12 +5612,12 @@ impl ApplicationHandler<UserEvent> for App {
                     }
                 }
                 if became_active && self.state.shell.surface_active {
-                    window.request_redraw();
+                    self.request_redraw(&window, "surface_active");
                 }
             }
             WindowEvent::Focused(focused) => {
                 if self.state.shell.set_window_focus(focused, Instant::now()) && focused {
-                    window.request_redraw();
+                    self.request_redraw(&window, "focus");
                 }
             }
             WindowEvent::Occluded(occluded) => {
@@ -5556,7 +5628,7 @@ impl ApplicationHandler<UserEvent> for App {
                     && !occluded
                     && self.state.shell.surface_active
                 {
-                    window.request_redraw();
+                    self.request_redraw(&window, "occluded");
                 }
             }
             WindowEvent::KeyboardInput {
@@ -5565,23 +5637,28 @@ impl ApplicationHandler<UserEvent> for App {
                 self.handle_key_event(event_loop, key_event);
             }
             WindowEvent::RedrawRequested => {
-                let now = Instant::now();
-                let delta_time = now
+                let redraw_started = Instant::now();
+                let prev_frame_end = self.state.shell.last_frame_end_time;
+                let pre_redraw_gap_us = elapsed_us_between(redraw_started, prev_frame_end);
+                let (request_to_redraw_us, redraw_request_reason) =
+                    self.state.shell.take_redraw_request_timing(redraw_started);
+                let delta_time = redraw_started
                     .duration_since(self.state.shell.last_frame_time)
                     .as_secs_f32();
-                self.state.shell.last_frame_time = now;
-                let total_elapsed = now
+                self.state.shell.last_frame_time = redraw_started;
+                let total_elapsed = redraw_started
                     .duration_since(self.state.shell.start_time)
                     .as_secs_f32();
                 crate::ui::runtime::tick(delta_time);
 
                 // --- Manage gamepad overlay lifetime ---
-                self.state.shell.update_gamepad_overlay(now);
+                self.state.shell.update_gamepad_overlay(redraw_started);
                 let input_us: u32;
                 let update_us: u32;
                 let compose_us: u32;
                 let mut upload_us: u32 = 0;
                 let mut draw_us: u32 = 0;
+                let mut draw_stats = renderer::DrawStats::default();
                 let input_started = Instant::now();
                 let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
                 if gameplay_screen {
@@ -5785,7 +5862,7 @@ impl ApplicationHandler<UserEvent> for App {
                         if !gameplay_prompt_active {
                             if let Some(action) = self.state.screens.step_idle(
                                 delta_time,
-                                now,
+                                redraw_started,
                                 &self.state.session,
                                 &self.asset_manager,
                             ) && !matches!(action, ScreenAction::None)
@@ -5802,16 +5879,18 @@ impl ApplicationHandler<UserEvent> for App {
                 update_us = elapsed_us_since(update_started);
 
                 if self.window.as_ref().map(|w| w.id()) != Some(window_id) {
+                    self.state.shell.last_frame_end_time = Instant::now();
                     return;
                 }
                 if self.state.shell.should_skip_compose_and_draw() {
                     self.state.shell.current_frame_vpf = 0;
+                    self.state.shell.last_frame_end_time = Instant::now();
                     return;
                 }
 
                 let compose_started = Instant::now();
                 let (actors, clear_color) = self.get_current_actors();
-                self.update_fps_title(&window, now);
+                self.update_fps_title(&window, redraw_started);
                 if let Some(backend) = &mut self.backend {
                     let upload_started = Instant::now();
                     self.asset_manager
@@ -5839,10 +5918,11 @@ impl ApplicationHandler<UserEvent> for App {
                         &self.asset_manager.textures,
                         apply_present_back_pressure,
                     ) {
-                        Ok(vpf) => {
-                            self.state.shell.current_frame_vpf = vpf;
+                        Ok(stats) => {
+                            draw_stats = stats;
+                            self.state.shell.current_frame_vpf = stats.vertices;
                             draw_us = elapsed_us_since(draw_started);
-                            self.capture_pending_screenshot(now);
+                            self.capture_pending_screenshot(redraw_started);
                         }
                         Err(e) => {
                             error!("Failed to draw frame: {e}");
@@ -5851,16 +5931,26 @@ impl ApplicationHandler<UserEvent> for App {
                         }
                     }
                 }
-                self.update_stutter_samples(delta_time, total_elapsed);
+                let frame_finished = Instant::now();
+                let frame_seconds = frame_finished.duration_since(prev_frame_end).as_secs_f32();
+                self.state.shell.last_frame_end_time = frame_finished;
+                let total_elapsed_end = frame_finished
+                    .duration_since(self.state.shell.start_time)
+                    .as_secs_f32();
+                self.update_stutter_samples(frame_seconds, total_elapsed_end);
                 self.trace_frame_stutter_if_needed(
-                    delta_time,
-                    total_elapsed,
+                    frame_seconds,
+                    total_elapsed_end,
                     self.state.screens.current_screen,
+                    pre_redraw_gap_us,
+                    request_to_redraw_us,
+                    redraw_request_reason,
                     input_us,
                     update_us,
                     compose_us,
                     upload_us,
                     draw_us,
+                    draw_stats,
                 );
             }
             _ => {}
@@ -5868,20 +5958,20 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        let Some(window) = &self.window else {
+        let Some(window) = self.window.clone() else {
             return;
         };
         if let Some(interval) = self.effective_frame_interval() {
             let now = Instant::now();
             if now >= self.state.shell.next_redraw_at {
-                window.request_redraw();
+                self.request_redraw(&window, "scheduled");
                 self.state.shell.next_redraw_at = now.checked_add(interval).unwrap_or(now);
             }
             event_loop.set_control_flow(ControlFlow::WaitUntil(self.state.shell.next_redraw_at));
             return;
         }
         event_loop.set_control_flow(ControlFlow::Poll);
-        window.request_redraw();
+        self.request_redraw(&window, "poll");
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

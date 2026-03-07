@@ -1,6 +1,6 @@
 use crate::core::gfx::{
-    BlendMode, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    Texture as RendererTexture,
+    BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
@@ -16,6 +16,7 @@ use std::{
     hash::Hasher,
     mem,
     sync::{Arc, mpsc},
+    time::Instant,
 };
 use twox_hash::XxHash64;
 use wgpu::util::DeviceExt;
@@ -817,10 +818,21 @@ pub fn draw(
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
     apply_present_back_pressure: bool,
-) -> Result<u32, Box<dyn Error>> {
+) -> Result<DrawStats, Box<dyn Error>> {
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
+    }
+
+    let mut stats = DrawStats::default();
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
-        return Ok(0);
+        return Ok(stats);
     }
 
     let api = state.api;
@@ -1106,16 +1118,25 @@ pub fn draw(
     }
     upload_projections(state, &render_list.cameras);
 
+    let acquire_started = Instant::now();
     let frame = match state.surface.get_current_texture() {
         Ok(f) => f,
         Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+            stats.acquire_us = elapsed_us_since(acquire_started);
             reconfigure_surface(state);
-            return Ok(0);
+            return Ok(stats);
         }
         Err(wgpu::SurfaceError::OutOfMemory) => return Err("Surface out of memory".into()),
-        Err(wgpu::SurfaceError::Timeout) => return Ok(0),
-        Err(wgpu::SurfaceError::Other) => return Ok(0),
+        Err(wgpu::SurfaceError::Timeout) => {
+            stats.acquire_us = elapsed_us_since(acquire_started);
+            return Ok(stats);
+        }
+        Err(wgpu::SurfaceError::Other) => {
+            stats.acquire_us = elapsed_us_since(acquire_started);
+            return Ok(stats);
+        }
     };
+    stats.acquire_us = elapsed_us_since(acquire_started);
     let view = frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
@@ -1349,15 +1370,23 @@ pub fn draw(
         None
     };
 
+    let submit_started = Instant::now();
     let submission_index = state.queue.submit(Some(encoder.finish()));
+    stats.submit_us = elapsed_us_since(submit_started);
+    let present_started = Instant::now();
     frame.present();
+    stats.present_us = elapsed_us_since(present_started);
     if apply_present_back_pressure && screenshot_readback.is_none() {
         // Uncapped wgpu submission can otherwise keep the CPU hot by queuing
         // work continuously; wait for this frame to retire before proceeding.
+        let wait_started = Instant::now();
         let _ = state.device.poll(wgpu::PollType::Wait {
             submission_index: Some(submission_index),
             timeout: None,
         });
+        stats.gpu_wait_us = stats
+            .gpu_wait_us
+            .saturating_add(elapsed_us_since(wait_started));
     }
     if let Some((readback_buffer, width, height, padded_row_bytes, format)) = screenshot_readback {
         let slice = readback_buffer.slice(..);
@@ -1365,10 +1394,14 @@ pub fn draw(
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = tx.send(res);
         });
+        let wait_started = Instant::now();
         let _ = state.device.poll(wgpu::PollType::Wait {
             submission_index: None,
             timeout: None,
         });
+        stats.gpu_wait_us = stats
+            .gpu_wait_us
+            .saturating_add(elapsed_us_since(wait_started));
         if rx.recv().is_ok_and(|res| res.is_ok()) {
             let data = slice.get_mapped_range();
             let row_bytes = width * 4;
@@ -1416,7 +1449,8 @@ pub fn draw(
             tmesh_vpf = tmesh_vpf.saturating_add(tri_count.saturating_mul(run.instance_count));
         }
     }
-    Ok((instance_len as u32) * 4 + mesh_len as u32 + tmesh_vpf)
+    stats.vertices = (instance_len as u32) * 4 + mesh_len as u32 + tmesh_vpf;
+    Ok(stats)
 }
 
 #[inline(always)]

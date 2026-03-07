@@ -1,6 +1,6 @@
 use crate::core::gfx::{
-    BlendMode, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    Texture as RendererTexture,
+    BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
@@ -15,6 +15,7 @@ use std::{
         atomic::{AtomicU32, Ordering},
     },
     thread,
+    time::Instant,
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -68,7 +69,17 @@ pub fn draw(
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
     _apply_present_back_pressure: bool,
-) -> Result<u32, Box<dyn Error>> {
+) -> Result<DrawStats, Box<dyn Error>> {
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
+    }
+
     #[inline(always)]
     fn lookup_texture_case_insensitive<'a>(
         textures: &'a HashMap<String, RendererTexture>,
@@ -84,13 +95,13 @@ pub fn draw(
 
     let PhysicalSize { width, height } = state.window_size;
     if width == 0 || height == 0 {
-        return Ok(0);
+        return Ok(DrawStats::default());
     }
 
     let w = width as usize;
     let h = height as usize;
     if w == 0 || h == 0 {
-        return Ok(0);
+        return Ok(DrawStats::default());
     }
 
     let resize_w = NonZeroU32::new(width).unwrap();
@@ -334,9 +345,14 @@ pub fn draw(
         }
     }
 
+    let present_started = Instant::now();
     buffer.present()?;
 
-    Ok(vertex_counter.load(Ordering::Relaxed))
+    Ok(DrawStats {
+        vertices: vertex_counter.load(Ordering::Relaxed),
+        present_us: elapsed_us_since(present_started),
+        ..DrawStats::default()
+    })
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {

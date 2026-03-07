@@ -1,5 +1,5 @@
 use crate::core::gfx::{
-    BlendMode, MeshMode, MeshVertex, ObjectType, RenderList, SamplerDesc, SamplerFilter,
+    BlendMode, DrawStats, MeshMode, MeshVertex, ObjectType, RenderList, SamplerDesc, SamplerFilter,
     SamplerWrap, Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
@@ -11,7 +11,7 @@ use ash::{
 use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
 use log::{debug, error, info, warn};
-use std::{collections::HashMap, error::Error, ffi, hash::Hasher, mem, sync::Arc};
+use std::{collections::HashMap, error::Error, ffi, hash::Hasher, mem, sync::Arc, time::Instant};
 use twox_hash::XxHash64;
 use winit::{
     dpi::PhysicalSize,
@@ -1235,11 +1235,22 @@ pub fn draw(
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
     apply_present_back_pressure: bool,
-) -> Result<u32, Box<dyn Error>> {
+) -> Result<DrawStats, Box<dyn Error>> {
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
+    }
+
+    let mut stats = DrawStats::default();
     flush_pending_texture_uploads(state)?;
 
     if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
-        return Ok(0);
+        return Ok(stats);
     }
 
     #[inline(always)]
@@ -1359,11 +1370,16 @@ pub fn draw(
     unsafe {
         let fence = state.in_flight_fences[state.current_frame];
         let device = Arc::clone(state.device.as_ref().unwrap());
+        let wait_started = Instant::now();
         device.wait_for_fences(&[fence], true, u64::MAX)?;
+        stats.gpu_wait_us = stats
+            .gpu_wait_us
+            .saturating_add(elapsed_us_since(wait_started));
         tmesh_debug_frame.cache_evictions = tmesh_debug_frame
             .cache_evictions
             .saturating_add(evict_tmesh_cache_entries(state, state.tmesh_cache_frame) as u64);
 
+        let acquire_started = Instant::now();
         let (image_index, acquired_suboptimal) = match state
             .swapchain_resources
             .swapchain_loader
@@ -1375,15 +1391,21 @@ pub fn draw(
             ) {
             Ok(pair) => pair,
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                stats.acquire_us = elapsed_us_since(acquire_started);
                 recreate_swapchain_and_dependents(state)?;
-                return Ok(0);
+                return Ok(stats);
             }
             Err(e) => return Err(e.into()),
         };
+        stats.acquire_us = elapsed_us_since(acquire_started);
 
         let in_flight = state.images_in_flight[image_index as usize];
         if in_flight != vk::Fence::null() {
+            let wait_started = Instant::now();
             device.wait_for_fences(&[in_flight], true, u64::MAX)?;
+            stats.gpu_wait_us = stats
+                .gpu_wait_us
+                .saturating_add(elapsed_us_since(wait_started));
         }
         state.images_in_flight[image_index as usize] = fence;
 
@@ -1959,12 +1981,15 @@ pub fn draw(
             .wait_dst_stage_mask(&stages)
             .command_buffers(std::slice::from_ref(&cmd))
             .signal_semaphores(&sig);
+        let submit_started = Instant::now();
         device.queue_submit(state.queue, &[submit], fence)?;
+        stats.submit_us = elapsed_us_since(submit_started);
 
         let present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(&sig)
             .swapchains(std::slice::from_ref(&state.swapchain_resources.swapchain))
             .image_indices(std::slice::from_ref(&image_index));
+        let present_started = Instant::now();
         match state
             .swapchain_resources
             .swapchain_loader
@@ -1979,13 +2004,22 @@ pub fn draw(
             Ok(_) => {}
             Err(e) => return Err(e.into()),
         }
+        stats.present_us = elapsed_us_since(present_started);
         if apply_present_back_pressure && screenshot_staging.is_none() {
             // Keep uncapped rendering from stacking multiple frames of GPU work
             // ahead of the app thread, matching ITGmania's explicit blocking.
+            let wait_started = Instant::now();
             device.wait_for_fences(&[fence], true, u64::MAX)?;
+            stats.gpu_wait_us = stats
+                .gpu_wait_us
+                .saturating_add(elapsed_us_since(wait_started));
         }
         if let Some((staging, width, height, format)) = screenshot_staging {
+            let wait_started = Instant::now();
             device.queue_wait_idle(state.queue)?;
+            stats.gpu_wait_us = stats
+                .gpu_wait_us
+                .saturating_add(elapsed_us_since(wait_started));
             let map_size = (width as usize * height as usize * 4) as vk::DeviceSize;
             let mapped =
                 match device.map_memory(staging.memory, 0, map_size, vk::MemoryMapFlags::empty()) {
@@ -2029,7 +2063,8 @@ pub fn draw(
 
         state.current_frame = (state.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
         push_tmesh_debug_sample(state, tmesh_debug_frame);
-        Ok(vertices_drawn)
+        stats.vertices = vertices_drawn;
+        Ok(stats)
     }
 }
 
