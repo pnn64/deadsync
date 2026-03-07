@@ -2039,15 +2039,16 @@ impl AssetManager {
 
     pub(crate) fn upload_pending_generated_textures(&mut self, backend: &mut Backend) {
         for key in take_pending_generated_texture_keys() {
-            if self.textures.contains_key(&key) {
-                continue;
-            }
             let Some(generated) = generated_texture(&key) else {
                 continue;
             };
             match backend.create_texture(generated.image.as_ref(), generated.sampler) {
                 Ok(texture) => {
-                    self.textures.insert(key, texture);
+                    if let Some(old) = self.textures.insert(key.clone(), texture) {
+                        let mut old_map = HashMap::with_capacity(1);
+                        old_map.insert(key, old);
+                        backend.dispose_textures(&mut old_map);
+                    }
                 }
                 Err(e) => {
                     warn!("Failed to create GPU texture for generated key '{key}': {e}");

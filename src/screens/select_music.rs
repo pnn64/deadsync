@@ -1,8 +1,8 @@
 use crate::act;
-use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
+use crate::assets::{self, AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{self, BreakdownStyle, SelectMusicPatternInfoMode, SyncGraphMode};
 use crate::core::audio;
-use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
 use crate::core::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width, widescale,
@@ -18,12 +18,13 @@ use crate::screens::components::{
     sort_menu, step_artist_bar, test_input,
 };
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::actors::{Actor, SizeSpec, SpriteSource};
 use crate::ui::color;
 use crate::ui::font;
 use log::debug;
 use nod::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
 use rssp::bpm::parse_bpm_map;
+use image::{Rgba, RgbaImage};
 use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
@@ -40,8 +41,8 @@ const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
 const RELOAD_BAR_H: f32 = 30.0;
 const SYNC_OVERLAY_Z: i16 = 1495;
-const SYNC_HEAT_CELL_PX: f32 = 5.0;
-const SYNC_HEAT_ALPHA: f32 = 0.92;
+const SYNC_HEAT_TEXTURE_KEY: &str = "__generated/sync-overlay-heat";
+const SYNC_HEAT_ALPHA: f32 = 1.0;
 const SYNC_READY_TEXT_ZOOM: f32 = 0.95;
 const SYNC_READY_LINE_STEP: f32 = 24.0 * SYNC_READY_TEXT_ZOOM;
 
@@ -671,6 +672,7 @@ struct SyncOverlayStateData {
     post_rows: usize,
     post_kernel: Vec<f64>,
     convolution: Vec<f64>,
+    curve_mesh: Option<Arc<[MeshVertex]>>,
     edge_discard: usize,
     beats_processed: usize,
     preview_bias_ms: Option<f64>,
@@ -2753,14 +2755,7 @@ fn sync_bias_to_graph_x(bias_ms: f64, times_ms: &[f64], graph_w: f32) -> f32 {
         return graph_w * 0.5;
     }
     let t = ((bias_ms - start) / span).clamp(0.0, 1.0) as f32;
-    t * graph_w
-}
-
-#[inline(always)]
-fn sync_value_to_graph_y(value: f64, min_value: f64, max_value: f64, graph_h: f32) -> f32 {
-    let span = (max_value - min_value).abs().max(1e-9);
-    let t = ((value - min_value) / span).clamp(0.0, 1.0) as f32;
-    graph_h - (t * graph_h)
+    t * (graph_w - 1.0).max(0.0)
 }
 
 fn push_line_segment(
@@ -2797,6 +2792,7 @@ fn push_line_segment(
 
 fn build_sync_curve_mesh(
     values: &[f64],
+    edge_discard: usize,
     graph_w: f32,
     graph_h: f32,
     color: [f32; 4],
@@ -2804,18 +2800,28 @@ fn build_sync_curve_mesh(
     if values.len() < 2 || graph_w <= 0.0 || graph_h <= 0.0 {
         return None;
     }
+    let edge = edge_discard.min(values.len() / 2);
+    let core = &values[edge..values.len().saturating_sub(edge)];
+    if core.is_empty() {
+        return None;
+    }
     let mut min_value = f64::INFINITY;
     let mut max_value = f64::NEG_INFINITY;
-    for &value in values {
+    for &value in core {
         min_value = min_value.min(value);
         max_value = max_value.max(value);
     }
+    let y_top = graph_h * 0.1;
+    let y_bottom = graph_h * 0.9;
     let mut out: Vec<MeshVertex> = Vec::with_capacity(values.len().saturating_sub(1) * 6);
     for i in 0..values.len().saturating_sub(1) {
-        let x0 = (i as f32 / (values.len().saturating_sub(1) as f32)) * graph_w;
-        let x1 = ((i + 1) as f32 / (values.len().saturating_sub(1) as f32)) * graph_w;
-        let y0 = sync_value_to_graph_y(values[i], min_value, max_value, graph_h);
-        let y1 = sync_value_to_graph_y(values[i + 1], min_value, max_value, graph_h);
+        let denom = values.len().saturating_sub(1) as f32;
+        let x0 = (i as f32 / denom) * (graph_w - 1.0).max(0.0);
+        let x1 = ((i + 1) as f32 / denom) * (graph_w - 1.0).max(0.0);
+        let t0 = sync_heat_norm01(values[i], min_value, max_value) as f32;
+        let t1 = sync_heat_norm01(values[i + 1], min_value, max_value) as f32;
+        let y0 = y_bottom + (y_top - y_bottom) * t0;
+        let y1 = y_bottom + (y_top - y_bottom) * t1;
         push_line_segment(&mut out, x0, y0, x1, y1, 1.5, color);
     }
     if out.is_empty() {
@@ -2826,45 +2832,36 @@ fn build_sync_curve_mesh(
 }
 
 #[inline(always)]
-fn sync_push_quad(out: &mut Vec<MeshVertex>, x0: f32, y0: f32, x1: f32, y1: f32, color: [f32; 4]) {
-    out.push(MeshVertex {
-        pos: [x0, y0],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x0, y1],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x1, y0],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x1, y0],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x0, y1],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x1, y1],
-        color,
-    });
-}
-
-#[inline(always)]
-fn sync_heat_grid_len(graph_len: f32) -> usize {
-    ((graph_len / SYNC_HEAT_CELL_PX).floor() as usize).max(1)
-}
-
-#[inline(always)]
 fn sync_heat_norm01(v: f64, lo: f64, hi: f64) -> f64 {
     let span = hi - lo;
     if !span.is_finite() || span.abs() < f64::EPSILON {
         0.5
     } else {
         ((v - lo) / span).clamp(0.0, 1.0)
+    }
+}
+
+#[inline(always)]
+fn sync_lerp(a: f64, b: f64, t: f64) -> f64 {
+    a * (1.0 - t) + b * t
+}
+
+fn sync_percentile(values: &[f64], pct: f64) -> f64 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    if sorted.len() == 1 {
+        return sorted[0];
+    }
+    let rank = (pct / 100.0) * (sorted.len() - 1) as f64;
+    let lo = rank.floor() as usize;
+    let hi = rank.ceil() as usize;
+    if lo == hi {
+        sorted[lo]
+    } else {
+        sync_lerp(sorted[lo], sorted[hi], rank - lo as f64)
     }
 }
 
@@ -2893,86 +2890,66 @@ fn sync_viridis(t: f64) -> [f32; 4] {
     ]
 }
 
-fn sync_heat_sample(
-    matrix: &[f64],
-    cols: usize,
-    row0: usize,
-    row1: usize,
-    col0: usize,
-    col1: usize,
-) -> Option<f64> {
-    let mut sum = 0.0;
-    let mut count = 0usize;
-    for row in row0..row1 {
-        let base = row * cols;
-        for col in col0..col1 {
-            sum += matrix[base + col];
-            count += 1;
+fn sync_heat_value_range(values: &[f64], clim_pct: Option<(f64, f64)>) -> Option<(f64, f64)> {
+    if values.is_empty() {
+        return None;
+    }
+    if let Some((lo_pct, hi_pct)) = clim_pct {
+        let lo = sync_percentile(values, lo_pct);
+        let hi = sync_percentile(values, hi_pct);
+        if hi > lo {
+            return Some((lo, hi));
         }
     }
-    (count > 0).then_some(sum / count as f64)
+    let lo = values.iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    if !lo.is_finite() || !hi.is_finite() {
+        None
+    } else if hi > lo {
+        Some((lo, hi))
+    } else {
+        Some((lo - 1.0, hi + 1.0))
+    }
 }
 
-fn build_sync_heat_mesh(
+fn build_sync_heat_image(
     matrix: &[f64],
     total_rows: usize,
     data_rows: usize,
     cols: usize,
     graph_w: f32,
     graph_h: f32,
-) -> Option<Arc<[MeshVertex]>> {
+    clim_pct: Option<(f64, f64)>,
+) -> Option<RgbaImage> {
     if data_rows == 0 || cols == 0 || graph_w <= 0.0 || graph_h <= 0.0 {
         return None;
     }
-    let grid_rows = total_rows.min(sync_heat_grid_len(graph_h)).max(1);
-    let grid_cols = cols.min(sync_heat_grid_len(graph_w)).max(1);
-    let mut samples = vec![None; grid_rows.saturating_mul(grid_cols)];
-    let mut lo = f64::INFINITY;
-    let mut hi = f64::NEG_INFINITY;
-    for gy in 0..grid_rows {
-        let row0 = gy * total_rows / grid_rows;
-        let row1 = ((gy + 1) * total_rows / grid_rows)
-            .max(row0 + 1)
-            .min(total_rows);
-        let row1_data = row1.min(data_rows);
-        if row0 >= row1_data {
-            continue;
-        }
-        for gx in 0..grid_cols {
-            let col0 = gx * cols / grid_cols;
-            let col1 = ((gx + 1) * cols / grid_cols).max(col0 + 1).min(cols);
-            let value = sync_heat_sample(matrix, cols, row0, row1_data, col0, col1)?;
-            lo = lo.min(value);
-            hi = hi.max(value);
-            samples[gy * grid_cols + gx] = Some(value);
-        }
-    }
-    if !lo.is_finite() || !hi.is_finite() {
-        return None;
-    }
-    let hi = if hi > lo { hi } else { lo + 1.0 };
-    let cell_w = graph_w / grid_cols as f32;
-    let cell_h = graph_h / grid_rows as f32;
-    let cells = samples.iter().filter(|v| v.is_some()).count();
-    let mut out = Vec::with_capacity(cells.saturating_mul(6));
-    for gy in 0..grid_rows {
-        let y0 = gy as f32 * cell_h;
-        let y1 = (gy + 1) as f32 * cell_h;
-        for gx in 0..grid_cols {
-            let Some(value) = samples[gy * grid_cols + gx] else {
-                continue;
+    let image_h = (graph_h.round() as u32).max(1);
+    let image_w = (graph_w.round() as u32).max(1);
+    let used = data_rows.saturating_mul(cols).min(matrix.len());
+    let (lo, hi) = sync_heat_value_range(&matrix[..used], clim_pct)?;
+    let mut image = RgbaImage::new(image_w, image_h);
+    for py in 0..image_h as usize {
+        let row = (((image_h as usize - 1 - py) * total_rows) / image_h as usize)
+            .min(total_rows.saturating_sub(1));
+        for px in 0..image_w as usize {
+            let rgba = if row < data_rows {
+                let col = (px * cols / image_w as usize).min(cols.saturating_sub(1));
+                let value = matrix[row * cols + col];
+                let color = sync_viridis(sync_heat_norm01(value, lo, hi));
+                Rgba([
+                    (color[0] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[1] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[2] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[3] * 255.0).round().clamp(0.0, 255.0) as u8,
+                ])
+            } else {
+                Rgba([0, 0, 0, 0])
             };
-            let x0 = gx as f32 * cell_w;
-            let x1 = (gx + 1) as f32 * cell_w;
-            let color = sync_viridis(sync_heat_norm01(value, lo, hi));
-            sync_push_quad(&mut out, x0, y0, x1, y1, color);
+            image.put_pixel(px as u32, py as u32, rgba);
         }
     }
-    if out.is_empty() {
-        None
-    } else {
-        Some(Arc::from(out.into_boxed_slice()))
-    }
+    Some(image)
 }
 
 fn sync_heat_source(overlay: &SyncOverlayStateData) -> Option<(&[f64], usize, usize)> {
@@ -3022,6 +2999,64 @@ fn sync_heat_source(overlay: &SyncOverlayStateData) -> Option<(&[f64], usize, us
     }
 }
 
+#[inline(always)]
+fn sync_heat_clim_pct(overlay: &SyncOverlayStateData) -> Option<(f64, f64)> {
+    match overlay.graph_mode {
+        SyncGraphMode::Frequency => None,
+        SyncGraphMode::BeatIndex if overlay.phase == SyncOverlayPhase::Ready => Some((10.0, 90.0)),
+        SyncGraphMode::PostKernelFingerprint => Some((3.0, 97.0)),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn sync_overlay_graph_size() -> (f32, f32) {
+    (widescale(520.0, 640.0) - 80.0, 132.0)
+}
+
+fn refresh_sync_overlay_heat_texture(overlay: &mut SyncOverlayStateData) {
+    let (graph_w, graph_h) = sync_overlay_graph_size();
+    let Some((matrix, total_rows, data_rows)) = sync_heat_source(overlay) else {
+        return;
+    };
+    let clim_pct = sync_heat_clim_pct(overlay);
+    let Some(image) = build_sync_heat_image(
+        matrix,
+        total_rows,
+        data_rows,
+        overlay.cols,
+        graph_w,
+        graph_h,
+        clim_pct,
+    ) else {
+        return;
+    };
+    assets::register_generated_texture(
+        SYNC_HEAT_TEXTURE_KEY,
+        image,
+        SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            ..SamplerDesc::default()
+        },
+    );
+}
+
+fn refresh_sync_overlay_curve_mesh(overlay: &mut SyncOverlayStateData) {
+    let (graph_w, graph_h) = sync_overlay_graph_size();
+    overlay.curve_mesh = build_sync_curve_mesh(
+        &overlay.convolution,
+        overlay.edge_discard,
+        graph_w,
+        graph_h,
+        [1.0, 1.0, 1.0, 1.0],
+    );
+}
+
+fn refresh_sync_overlay_meshes(overlay: &mut SyncOverlayStateData) {
+    refresh_sync_overlay_heat_texture(overlay);
+    refresh_sync_overlay_curve_mesh(overlay);
+}
+
 fn sync_graph_label(overlay: &SyncOverlayStateData) -> &'static str {
     if overlay.graph_mode == SyncGraphMode::PostKernelFingerprint
         && (overlay.post_rows == 0
@@ -3046,8 +3081,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
     let pane_cy = screen_center_y() - 10.0;
     let pane_left = pane_cx - pane_w * 0.5;
     let pane_top = pane_cy - pane_h * 0.5;
-    let graph_w = pane_w - 80.0;
-    let graph_h = 132.0;
+    let (graph_w, graph_h) = sync_overlay_graph_size();
     let graph_x = pane_left + 40.0;
     let graph_y = pane_top + 116.0;
     let graph_center_y = graph_y + graph_h * 0.5;
@@ -3123,25 +3157,42 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(SYNC_OVERLAY_Z + 4)
     ));
-    if let Some((matrix, total_rows, data_rows)) = sync_heat_source(overlay)
-        && let Some(mesh) = build_sync_heat_mesh(
-            matrix,
-            total_rows,
-            data_rows,
-            overlay.cols,
-            graph_w,
-            graph_h,
-        )
-    {
-        actors.push(Actor::Mesh {
+    if sync_heat_source(overlay).is_some() {
+        actors.push(Actor::Sprite {
             align: [0.0, 0.0],
             offset: [graph_x, graph_y],
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
-            vertices: mesh,
-            mode: MeshMode::Triangles,
-            visible: true,
-            blend: BlendMode::Alpha,
+            source: SpriteSource::Texture(Arc::<str>::from(SYNC_HEAT_TEXTURE_KEY)),
+            tint: [1.0, 1.0, 1.0, 1.0],
+            glow: [0.0, 0.0, 0.0, 0.0],
             z: SYNC_OVERLAY_Z + 4,
+            cell: None,
+            grid: None,
+            uv_rect: None,
+            visible: true,
+            flip_x: false,
+            flip_y: false,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: 0.0,
+            faderight: 0.0,
+            fadetop: 0.0,
+            fadebottom: 0.0,
+            blend: BlendMode::Alpha,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.0,
+            scale: [1.0, 1.0],
+            effect: Default::default(),
         });
     }
     actors.push(act!(text:
@@ -3162,8 +3213,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         z(SYNC_OVERLAY_Z + 5)
     ));
 
-    let curve_color = [1.0, 1.0, 1.0, 1.0];
-    if let Some(mesh) = build_sync_curve_mesh(&overlay.convolution, graph_w, graph_h, curve_color) {
+    if let Some(mesh) = overlay.curve_mesh.clone() {
         actors.push(Actor::Mesh {
             align: [0.0, 0.0],
             offset: [graph_x, graph_y],
@@ -3758,6 +3808,7 @@ fn show_sync_overlay(state: &mut State) {
         post_rows: 0,
         post_kernel: Vec::new(),
         convolution: Vec::new(),
+        curve_mesh: None,
         edge_discard: 2,
         beats_processed: 0,
         preview_bias_ms: None,
@@ -3787,6 +3838,7 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
                     overlay.post_rows = 0;
                     overlay.post_kernel.clear();
                     overlay.convolution.clear();
+                    overlay.curve_mesh = None;
                     overlay.beats_processed = 0;
                     overlay.preview_bias_ms = None;
                 }
@@ -3794,6 +3846,7 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
                     let beat_seq = beat.beat_seq;
                     let row = beat.digest_row;
                     let freq_delta = beat.freq_delta;
+                    let mut dirty = false;
                     if let Some(freq_delta) = freq_delta
                         && overlay.phase == SyncOverlayPhase::Running
                         && overlay.cols > 0
@@ -3810,12 +3863,16 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
                         {
                             *sum += value;
                         }
+                        dirty = true;
                     }
                     if overlay.phase != SyncOverlayPhase::Running
                         || overlay.kernel_target != KernelTarget::Digest
                         || overlay.cols == 0
                         || row.len() != overlay.cols
                     {
+                        if dirty {
+                            refresh_sync_overlay_heat_texture(overlay);
+                        }
                         continue;
                     }
                     overlay.beats_processed = overlay.beats_processed.max(beat_seq + 1);
@@ -3834,6 +3891,10 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
                         &overlay.times_ms,
                         overlay.edge_discard,
                     );
+                    dirty = true;
+                    if dirty {
+                        refresh_sync_overlay_meshes(overlay);
+                    }
                 }
                 BiasStreamEvent::Convolution(conv) => {
                     overlay.post_rows = conv.rows;
@@ -3845,6 +3906,7 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
                         &overlay.times_ms,
                         overlay.edge_discard,
                     );
+                    refresh_sync_overlay_meshes(overlay);
                 }
                 BiasStreamEvent::Done(estimate) => {
                     overlay.final_bias_ms = Some(estimate.bias_ms);
@@ -3880,6 +3942,7 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
                             overlay.edge_discard,
                         );
                     }
+                    refresh_sync_overlay_meshes(overlay);
                     overlay.phase = SyncOverlayPhase::Ready;
                     overlay.yes_selected = true;
                 }
