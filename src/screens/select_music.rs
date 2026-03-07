@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
-use crate::config::{self, BreakdownStyle, SelectMusicPatternInfoMode};
+use crate::config::{self, BreakdownStyle, SelectMusicPatternInfoMode, SyncGraphMode};
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
@@ -659,10 +659,13 @@ struct SyncOverlayStateData {
     song_offset_seconds: f32,
     kernel_target: KernelTarget,
     kernel_type: BiasKernel,
+    graph_mode: SyncGraphMode,
     cols: usize,
+    freq_rows: usize,
     total_beats: usize,
     digest_rows: usize,
     times_ms: Vec<f64>,
+    freq_domain: Vec<f64>,
     beat_digest: Vec<f64>,
     digest_col_sums: Vec<f64>,
     post_rows: usize,
@@ -2973,25 +2976,61 @@ fn build_sync_heat_mesh(
 }
 
 fn sync_heat_source(overlay: &SyncOverlayStateData) -> Option<(&[f64], usize, usize)> {
-    if overlay.post_rows > 0
-        && overlay.post_kernel.len() == overlay.post_rows.saturating_mul(overlay.cols)
-    {
-        return Some((
-            overlay.post_kernel.as_slice(),
-            overlay.post_rows,
-            overlay.post_rows,
-        ));
+    match overlay.graph_mode {
+        SyncGraphMode::Frequency
+            if overlay.freq_rows > 0
+                && overlay.freq_domain.len() == overlay.freq_rows.saturating_mul(overlay.cols) =>
+        {
+            Some((
+                overlay.freq_domain.as_slice(),
+                overlay.freq_rows,
+                overlay.freq_rows,
+            ))
+        }
+        SyncGraphMode::BeatIndex
+            if overlay.digest_rows > 0
+                && overlay.beat_digest.len() == overlay.digest_rows.saturating_mul(overlay.cols) =>
+        {
+            Some((
+                overlay.beat_digest.as_slice(),
+                overlay.total_beats.max(overlay.digest_rows),
+                overlay.digest_rows,
+            ))
+        }
+        SyncGraphMode::PostKernelFingerprint
+            if overlay.post_rows > 0
+                && overlay.post_kernel.len() == overlay.post_rows.saturating_mul(overlay.cols) =>
+        {
+            Some((
+                overlay.post_kernel.as_slice(),
+                overlay.post_rows,
+                overlay.post_rows,
+            ))
+        }
+        SyncGraphMode::PostKernelFingerprint
+            if overlay.phase == SyncOverlayPhase::Running
+                && overlay.digest_rows > 0
+                && overlay.beat_digest.len() == overlay.digest_rows.saturating_mul(overlay.cols) =>
+        {
+            Some((
+                overlay.beat_digest.as_slice(),
+                overlay.total_beats.max(overlay.digest_rows),
+                overlay.digest_rows,
+            ))
+        }
+        _ => None,
     }
-    if overlay.digest_rows > 0
-        && overlay.beat_digest.len() == overlay.digest_rows.saturating_mul(overlay.cols)
+}
+
+fn sync_graph_label(overlay: &SyncOverlayStateData) -> &'static str {
+    if overlay.graph_mode == SyncGraphMode::PostKernelFingerprint
+        && (overlay.post_rows == 0
+            || overlay.post_kernel.len() != overlay.post_rows.saturating_mul(overlay.cols))
     {
-        return Some((
-            overlay.beat_digest.as_slice(),
-            overlay.total_beats.max(overlay.digest_rows),
-            overlay.digest_rows,
-        ));
+        "Post-kernel fingerprint (building)"
+    } else {
+        overlay.graph_mode.label()
     }
-    None
 }
 
 fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Option<Vec<Actor>> {
@@ -3105,14 +3144,9 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
             z: SYNC_OVERLAY_Z + 4,
         });
     }
-    let graph_label = if overlay.post_rows > 0 && !overlay.post_kernel.is_empty() {
-        "Post-kernel convolution"
-    } else {
-        "Streaming beat digest"
-    };
     actors.push(act!(text:
         font("miso"):
-        settext(graph_label):
+        settext(sync_graph_label(overlay)):
         align(0.5, 0.5):
         xy(pane_cx, graph_y - 14.0):
         zoom(0.8):
@@ -3682,8 +3716,9 @@ fn show_sync_overlay(state: &mut State) {
     let cfg = nod::api::default_bias_cfg();
     let kernel_target = cfg.kernel_target;
     let kernel_type = cfg.kernel_type;
+    let graph_mode = config::get().null_or_die_sync_graph;
     let stream_cfg = BiasStreamCfg {
-        emit_freq_delta: kernel_target == KernelTarget::Accumulator,
+        emit_freq_delta: matches!(graph_mode, SyncGraphMode::Frequency),
         orientation: GraphOrientation::Horizontal,
     };
 
@@ -3711,10 +3746,13 @@ fn show_sync_overlay(state: &mut State) {
         song_offset_seconds: song.offset,
         kernel_target,
         kernel_type,
+        graph_mode,
         cols: 0,
+        freq_rows: 0,
         total_beats: 0,
         digest_rows: 0,
         times_ms: Vec::new(),
+        freq_domain: Vec::new(),
         beat_digest: Vec::new(),
         digest_col_sums: Vec::new(),
         post_rows: 0,
@@ -3738,9 +3776,11 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
             Ok(SyncWorkerMsg::Event(event)) => match event {
                 BiasStreamEvent::Init(init) => {
                     overlay.cols = init.cols;
+                    overlay.freq_rows = init.freq_rows;
                     overlay.total_beats = init.planned_beats;
                     overlay.digest_rows = 0;
                     overlay.times_ms = init.times_ms;
+                    overlay.freq_domain.clear();
                     overlay.beat_digest.clear();
                     overlay.kernel_target = init.kernel_target;
                     overlay.digest_col_sums = vec![0.0; init.cols];
@@ -3751,15 +3791,33 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
                     overlay.preview_bias_ms = None;
                 }
                 BiasStreamEvent::Beat(beat) => {
+                    let beat_seq = beat.beat_seq;
+                    let row = beat.digest_row;
+                    let freq_delta = beat.freq_delta;
+                    if let Some(freq_delta) = freq_delta
+                        && overlay.phase == SyncOverlayPhase::Running
+                        && overlay.cols > 0
+                        && overlay.freq_rows > 0
+                        && freq_delta.len() == overlay.freq_rows.saturating_mul(overlay.cols)
+                    {
+                        if overlay.freq_domain.len() != freq_delta.len() {
+                            overlay.freq_domain.resize(freq_delta.len(), 0.0);
+                        }
+                        for (sum, value) in overlay
+                            .freq_domain
+                            .iter_mut()
+                            .zip(freq_delta.into_iter())
+                        {
+                            *sum += value;
+                        }
+                    }
                     if overlay.phase != SyncOverlayPhase::Running
                         || overlay.kernel_target != KernelTarget::Digest
                         || overlay.cols == 0
-                        || beat.digest_row.len() != overlay.cols
+                        || row.len() != overlay.cols
                     {
                         continue;
                     }
-                    let beat_seq = beat.beat_seq;
-                    let row = beat.digest_row;
                     overlay.beats_processed = overlay.beats_processed.max(beat_seq + 1);
                     overlay.digest_rows = overlay.beats_processed;
                     overlay.beat_digest.extend_from_slice(row.as_slice());
@@ -3799,6 +3857,8 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
                         overlay.times_ms = result.plot.times_ms.clone();
                         overlay.cols = result.plot.cols;
                     }
+                    overlay.freq_rows = result.plot.freq_rows;
+                    overlay.freq_domain = result.plot.freq_domain.clone();
                     overlay.total_beats = overlay.total_beats.max(result.plot.digest_rows);
                     overlay.beats_processed = overlay.beats_processed.max(result.plot.digest_rows);
                     if overlay.beat_digest.len() != result.plot.beat_digest.len() {

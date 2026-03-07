@@ -188,6 +188,52 @@ impl FromStr for SelectMusicPatternInfoMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncGraphMode {
+    Frequency,
+    BeatIndex,
+    PostKernelFingerprint,
+}
+
+impl SyncGraphMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Frequency => "Frequency",
+            Self::BeatIndex => "BeatIndex",
+            Self::PostKernelFingerprint => "PostKernelFingerprint",
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Frequency => "Frequency",
+            Self::BeatIndex => "Beat index",
+            Self::PostKernelFingerprint => "Post-kernel fingerprint",
+        }
+    }
+}
+
+impl FromStr for SyncGraphMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "frequency" => Ok(Self::Frequency),
+            "beatindex" | "beatdigest" | "digest" => Ok(Self::BeatIndex),
+            "postkernelfingerprint" | "postkernel" | "fingerprint" => {
+                Ok(Self::PostKernelFingerprint)
+            }
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MachinePreferredPlayStyle {
     #[default]
@@ -462,6 +508,8 @@ pub struct Config {
     pub show_bpm_decimal: bool,
     /// Machine default fail behavior (ITGmania DefaultFailType).
     pub default_fail_type: DefaultFailType,
+    /// Choose which null-or-die sync graph the Select Music overlay displays.
+    pub null_or_die_sync_graph: SyncGraphMode,
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
@@ -552,6 +600,7 @@ impl Default for Config {
             zmod_rating_box_text: false,
             show_bpm_decimal: false,
             default_fail_type: DefaultFailType::ImmediateContinue,
+            null_or_die_sync_graph: SyncGraphMode::PostKernelFingerprint,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
@@ -1472,6 +1521,10 @@ pub fn load() {
                     .get("Options", "DefaultFailType")
                     .and_then(|v| DefaultFailType::from_str(&v).ok())
                     .unwrap_or(default.default_fail_type);
+                cfg.null_or_die_sync_graph = conf
+                    .get("Options", "NullOrDieSyncGraph")
+                    .and_then(|v| SyncGraphMode::from_str(&v).ok())
+                    .unwrap_or(default.null_or_die_sync_graph);
                 cfg.banner_cache = conf
                     .get("Options", "BannerCache")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -2792,6 +2845,10 @@ fn save_without_keymaps() {
         "DefaultFailType={}\n",
         cfg.default_fail_type.as_str()
     ));
+    content.push_str(&format!(
+        "NullOrDieSyncGraph={}\n",
+        cfg.null_or_die_sync_graph.as_str()
+    ));
     content.push_str(&format!("DefaultNoteSkin={machine_default_noteskin}\n"));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
@@ -3779,6 +3836,17 @@ pub fn update_default_fail_type(fail_type: DefaultFailType) {
             return;
         }
         cfg.default_fail_type = fail_type;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_sync_graph(mode: SyncGraphMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_sync_graph == mode {
+            return;
+        }
+        cfg.null_or_die_sync_graph = mode;
     }
     save_without_keymaps();
 }

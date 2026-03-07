@@ -7,6 +7,7 @@ use crate::core::space::{is_wide, screen_height, screen_width, widescale};
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, SelectMusicPatternInfoMode, SimpleIni,
+    SyncGraphMode,
 };
 use crate::core::audio;
 #[cfg(target_os = "windows")]
@@ -295,7 +296,7 @@ pub const ITEMS: &[Item] = &[
     Item {
         name: "Advanced Options",
         help: &[
-            "Adjust machine-level fail and cache/parsing behavior.",
+            "Adjust machine-level fail, cache/parsing, and null-or-die behavior.",
             "Default Fail Type",
             "Banner Cache",
             "CDTitle Cache",
@@ -303,6 +304,7 @@ pub const ITEMS: &[Item] = &[
             "Song Parsing Threads",
             "Cache Songs",
             "Fast Load",
+            "Sync Graph",
         ],
     },
     Item {
@@ -587,6 +589,9 @@ const ADVANCED_ROW_BACKGROUND_CACHE: &str = "Background Cache";
 const ADVANCED_ROW_SONG_PARSING_THREADS: &str = "Song Parsing Threads";
 const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
 const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
+const ADVANCED_ROW_SYNC_GRAPH: &str = "Sync Graph";
+const ADVANCED_SYNC_GRAPH_CHOICES: &[&str] =
+    &["Frequency", "Beat index", "Post-kernel fingerprint"];
 const SOUND_ROW_MASTER_VOLUME: &str = "Master Volume";
 const SOUND_ROW_SFX_VOLUME: &str = "SFX Volume";
 const SOUND_ROW_ASSIST_TICK_VOLUME: &str = "Assist Tick Volume";
@@ -1535,6 +1540,11 @@ pub const ADVANCED_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["Off", "On"],
         inline: true,
     },
+    SubRow {
+        label: ADVANCED_ROW_SYNC_GRAPH,
+        choices: ADVANCED_SYNC_GRAPH_CHOICES,
+        inline: false,
+    },
 ];
 
 pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
@@ -1587,6 +1597,15 @@ pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Enable startup shortcuts that reduce blocking load work.",
             "Default: On (FastLoad=1).",
+        ],
+    },
+    Item {
+        name: ADVANCED_ROW_SYNC_GRAPH,
+        help: &[
+            "Choose which null-or-die graph the Select Music sync overlay shows.",
+            "Frequency: weighted spectral accumulator.",
+            "Beat index: per-beat digest over time.",
+            "Post-kernel fingerprint: convolution heatmap with the final kernel response.",
         ],
     },
     Item {
@@ -3106,6 +3125,22 @@ const fn default_fail_type_from_choice(idx: usize) -> DefaultFailType {
     }
 }
 
+const fn sync_graph_mode_choice_index(mode: SyncGraphMode) -> usize {
+    match mode {
+        SyncGraphMode::Frequency => 0,
+        SyncGraphMode::BeatIndex => 1,
+        SyncGraphMode::PostKernelFingerprint => 2,
+    }
+}
+
+const fn sync_graph_mode_from_choice(idx: usize) -> SyncGraphMode {
+    match idx {
+        0 => SyncGraphMode::Frequency,
+        1 => SyncGraphMode::BeatIndex,
+        _ => SyncGraphMode::PostKernelFingerprint,
+    }
+}
+
 const fn yes_no_choice_index(enabled: bool) -> usize {
     if enabled { 1 } else { 0 }
 }
@@ -3607,6 +3642,12 @@ pub fn init() -> State {
         ADVANCED_OPTIONS_ROWS,
         ADVANCED_ROW_FAST_LOAD,
         usize::from(cfg.fastload),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_advanced,
+        ADVANCED_OPTIONS_ROWS,
+        ADVANCED_ROW_SYNC_GRAPH,
+        sync_graph_mode_choice_index(cfg.null_or_die_sync_graph),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_course,
@@ -5024,6 +5065,8 @@ fn apply_submenu_choice_delta(
             config::update_cache_songs(new_index == 1);
         } else if row.label == ADVANCED_ROW_FAST_LOAD {
             config::update_fastload(new_index == 1);
+        } else if row.label == ADVANCED_ROW_SYNC_GRAPH {
+            config::update_null_or_die_sync_graph(sync_graph_mode_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::Course) {
         let row = &rows[row_index];
