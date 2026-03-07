@@ -3463,6 +3463,9 @@ pub struct State {
     assist_clap_rows: Vec<usize>,
     assist_clap_cursor: usize,
     assist_last_crossed_row: i32,
+    hit_tick_enabled: bool,
+    toggle_flash_text: Option<String>,
+    toggle_flash_timer: f32,
     replay_input: Vec<RecordedLaneEdge>,
     replay_cursor: usize,
     pub replay_edges: Vec<RecordedLaneEdge>,
@@ -4003,6 +4006,24 @@ fn all_joined_players_failed(state: &State) -> bool {
 #[inline(always)]
 pub fn assist_clap_is_enabled(state: &State) -> bool {
     state.assist_clap_enabled
+}
+
+const TOGGLE_FLASH_DURATION: f32 = 1.5;
+const TOGGLE_FLASH_FADE_START: f32 = 0.8;
+
+pub fn toggle_flash_text(state: &State) -> Option<(&str, f32)> {
+    if state.toggle_flash_timer > 0.0 {
+        let age = TOGGLE_FLASH_DURATION - state.toggle_flash_timer;
+        let alpha = if age < TOGGLE_FLASH_FADE_START {
+            1.0
+        } else {
+            let fade_len = TOGGLE_FLASH_DURATION - TOGGLE_FLASH_FADE_START;
+            1.0 - ((age - TOGGLE_FLASH_FADE_START) / fade_len).clamp(0.0, 1.0)
+        };
+        state.toggle_flash_text.as_deref().map(|t| (t, alpha))
+    } else {
+        None
+    }
 }
 
 #[inline(always)]
@@ -5656,6 +5677,9 @@ pub fn init(
         assist_clap_rows,
         assist_clap_cursor: 0,
         assist_last_crossed_row: -1,
+        hit_tick_enabled: false,
+        toggle_flash_text: None,
+        toggle_flash_timer: 0.0,
         replay_input,
         replay_cursor: 0,
         replay_edges: Vec::with_capacity(4096),
@@ -7966,6 +7990,20 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
         return ScreenAction::None;
     }
 
+    if code == KeyCode::F9 {
+        if !key.repeat {
+            state.hit_tick_enabled = !state.hit_tick_enabled;
+            let label = if state.hit_tick_enabled { "Hit Tick Enabled" } else { "Hit Tick Disabled" };
+            state.toggle_flash_text = Some(label.to_string());
+            state.toggle_flash_timer = 1.5;
+            debug!(
+                "Hit tick {} (F9).",
+                if state.hit_tick_enabled { "enabled" } else { "disabled" }
+            );
+        }
+        return ScreenAction::None;
+    }
+
     let delta = match code {
         KeyCode::F11 => -0.001_f32,
         KeyCode::F12 => 0.001_f32,
@@ -8285,7 +8323,11 @@ fn process_input_edges(
             } else {
                 refresh_roll_life_on_step(state, lane_idx);
             }
-            if !hit_note {
+            if hit_note {
+                if state.hit_tick_enabled {
+                    audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
+                }
+            } else {
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
         } else if !edge.pressed && was_down && !is_down {
@@ -8379,6 +8421,9 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
     }
     for timer in &mut state.receptor_bop_timers {
         *timer = (*timer - delta_time).max(0.0);
+    }
+    if state.toggle_flash_timer > 0.0 {
+        state.toggle_flash_timer = (state.toggle_flash_timer - delta_time).max(0.0);
     }
     for player in 0..state.num_players {
         state.players[player]

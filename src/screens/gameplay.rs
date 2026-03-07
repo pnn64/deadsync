@@ -20,7 +20,7 @@ const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand 
 pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{
     TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION,
-    TRANSITION_OUT_FADE_DURATION, assist_clap_is_enabled,
+    TRANSITION_OUT_FADE_DURATION, assist_clap_is_enabled, toggle_flash_text,
 };
 
 thread_local! {
@@ -263,6 +263,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 shadowlength(2.0):
                 strokecolor(0.0, 0.0, 0.0, 1.0):
                 diffuse(1.0, 1.0, 1.0, 1.0):
+                z(901)
+            ));
+        }
+
+        if let Some((flash, alpha)) = toggle_flash_text(state) {
+            let y = if status_lines.is_empty() {
+                screen_center_y() + 150.0
+            } else {
+                screen_center_y() + 150.0 + 20.0 * status_lines.len() as f32
+            };
+            actors.push(act!(text:
+                font("miso"):
+                settext(flash):
+                align(0.5, 0.5):
+                xy(screen_center_x(), y):
+                shadowlength(2.0):
+                strokecolor(0.0, 0.0, 0.0, alpha):
+                diffuse(1.0, 1.0, 1.0, alpha):
                 z(901)
             ));
         }
