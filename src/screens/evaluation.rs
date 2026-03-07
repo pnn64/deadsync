@@ -1778,9 +1778,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
 
-            // Step artist / description:
-            // SL-style source list is [AuthorCredit, Description] (if distinct).
-            let mut step_artist_lines: Vec<String> = Vec::with_capacity(2);
+            // Step artist / description / chart name:
+            // SL-style source list is [AuthorCredit, Description, ChartName] (if distinct).
+            let mut step_artist_lines: Vec<String> = Vec::with_capacity(3);
             let author = si.chart.step_artist.trim();
             if !author.is_empty() {
                 step_artist_lines.push(author.to_owned());
@@ -1788,6 +1788,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let description = si.chart.description.trim();
             if !description.is_empty() && step_artist_lines.iter().all(|line| line != description) {
                 step_artist_lines.push(description.to_owned());
+            }
+            let chart_name = si.chart.chart_name.trim();
+            if !chart_name.is_empty() && step_artist_lines.iter().all(|line| line != chart_name) {
+                step_artist_lines.push(chart_name.to_owned());
             }
 
             if cfg.zmod_rating_box_text {

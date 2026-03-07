@@ -46,6 +46,10 @@ const SYNC_HEAT_ALPHA: f32 = 1.0;
 const SYNC_READY_TEXT_ZOOM: f32 = 0.95;
 const SYNC_READY_LINE_STEP: f32 = 24.0 * SYNC_READY_TEXT_ZOOM;
 
+// Simply Love BGAnimations/ScreenSelectMusic overlay/PerPlayer/StepArtist.lua
+// Cycles through AuthorCredit, Description, ChartName every 2 seconds.
+const STEP_ARTIST_CYCLE_SECONDS: f32 = 2.0;
+
 // ITGmania metric: ScreenSelectMusic ShowOptionsMessageSeconds (fallback: 1.5).
 const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
 
@@ -744,6 +748,7 @@ pub struct State {
     pub gameplay_elapsed: f32,
     displayed_chart_p1: Option<DisplayedChart>,
     displayed_chart_p2: Option<DisplayedChart>,
+    step_artist_cycle_base: f32,
 
     // Internal state
     out_prompt: OutPromptState,
@@ -1904,6 +1909,7 @@ pub fn init() -> State {
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
+        step_artist_cycle_base: 0.0,
         cached_song: None,
         cached_chart_type: "",
         cached_steps_index_p1: usize::MAX,
@@ -2079,6 +2085,7 @@ pub fn init_placeholder() -> State {
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
+        step_artist_cycle_base: 0.0,
         cached_song: None,
         cached_chart_type: "",
         cached_steps_index_p1: usize::MAX,
@@ -4468,6 +4475,7 @@ pub fn handle_pad_dir(
 
                         if let Some(new_idx) = new_idx {
                             state.selected_steps_index = new_idx;
+                            state.step_artist_cycle_base = state.session_elapsed;
                             if new_idx < color::FILE_DIFFICULTY_NAMES.len() {
                                 state.preferred_difficulty_index = new_idx;
                             }
@@ -4618,6 +4626,7 @@ fn handle_pad_dir_p2(
 
                 if let Some(new_idx) = new_idx {
                     state.p2_selected_steps_index = new_idx;
+                    state.step_artist_cycle_base = state.session_elapsed;
                     if new_idx < color::FILE_DIFFICULTY_NAMES.len() {
                         state.p2_preferred_difficulty_index = new_idx;
                     }
@@ -5113,6 +5122,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         audio::play_sfx("assets/sounds/change.ogg");
         state.prev_selected_index = state.selected_index;
         state.time_since_selection_change = 0.0;
+        state.step_artist_cycle_base = state.session_elapsed;
         state.cdtitle_spin_elapsed = 0.0;
         state.cdtitle_anim_elapsed = 0.0;
 
@@ -5500,6 +5510,31 @@ fn maybe_refresh_select_music_leaderboard(
     *last_refreshed_hash = Some(chart_hash.to_string());
 }
 
+/// Selects the step artist display text for a chart, cycling through non-empty
+/// values of [step_artist, description, chart_name] every 2 seconds, matching
+/// Simply Love / ITGMania behavior.
+fn step_artist_cycle_text<'a>(chart: &'a ChartData, cycle_elapsed: f32) -> &'a str {
+    let candidates: [&str; 3] = [
+        chart.step_artist.as_str(),
+        chart.description.as_str(),
+        chart.chart_name.as_str(),
+    ];
+    let mut non_empty: Vec<&str> = Vec::with_capacity(3);
+    for &s in &candidates {
+        if !s.trim().is_empty() && !non_empty.iter().any(|&prev| prev == s) {
+            non_empty.push(s);
+        }
+    }
+    match non_empty.len() {
+        0 => "",
+        1 => non_empty[0],
+        n => {
+            let idx = (cycle_elapsed / STEP_ARTIST_CYCLE_SECONDS).floor().max(0.0) as usize % n;
+            non_empty[idx]
+        }
+    }
+}
+
 fn sl_select_music_bg_flash() -> Actor {
     act!(quad:
         align(0.0, 0.0):
@@ -5761,14 +5796,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         .as_ref()
         .and_then(|d| d.song.charts.get(d.chart_ix));
 
+    let cycle_elapsed = state.session_elapsed - state.step_artist_cycle_base;
+
     let (step_artist, steps, jumps, holds, mines, hands, rolls, meter) =
         if let Some(c) = immediate_chart_p1 {
             (
-                if c.difficulty.eq_ignore_ascii_case("edit") && !c.description.trim().is_empty() {
-                    c.description.as_str()
-                } else {
-                    c.step_artist.as_str()
-                },
+                step_artist_cycle_text(c, cycle_elapsed),
                 c.stats.total_steps.to_string(),
                 c.stats.jumps.to_string(),
                 c.stats.holds.to_string(),
@@ -5795,11 +5828,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
     let step_artist_p2 = if let Some(c) = immediate_chart_p2 {
-        if c.difficulty.eq_ignore_ascii_case("edit") && !c.description.trim().is_empty() {
-            c.description.as_str()
-        } else {
-            c.step_artist.as_str()
-        }
+        step_artist_cycle_text(c, cycle_elapsed)
     } else {
         ""
     };
