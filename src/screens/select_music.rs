@@ -5159,7 +5159,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         );
     }
 
-    if state.sort_menu != sort_menu::State::Hidden
+    let overlays_block_delayed_updates = state.sort_menu != sort_menu::State::Hidden
         || !matches!(
             state.leaderboard,
             sort_menu::LeaderboardOverlayState::Hidden
@@ -5167,17 +5167,15 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         || !matches!(state.sync_overlay, SyncOverlayState::Hidden)
         || !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden)
         || state.profile_switch_overlay.is_some()
-        || state.test_input_overlay_visible
-    {
-        if state.currently_playing_preview_path.is_some() {
-            clear_preview(state);
-        }
-        return ScreenAction::None;
+        || state.test_input_overlay_visible;
+    if overlays_block_delayed_updates && state.currently_playing_preview_path.is_some() {
+        clear_preview(state);
     }
 
     let cfg = config::get();
 
-    // --- Immediate Updates ---
+    // Keep banner/CDTitle aligned to the restored wheel selection even while
+    // overlays are visible; only preview/GS fetches are paused under overlays.
     let (selected_song, selected_pack) = match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(s)) => (Some(s.clone()), None),
         Some(MusicWheelEntry::PackHeader {
@@ -5224,6 +5222,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
         state.last_requested_cdtitle_path = new_cdtitle.clone();
         return ScreenAction::RequestCdTitle(new_cdtitle);
+    }
+
+    if overlays_block_delayed_updates {
+        return ScreenAction::None;
     }
 
     // --- Delayed Updates ---
