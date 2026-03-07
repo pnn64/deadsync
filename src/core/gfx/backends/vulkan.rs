@@ -21,6 +21,7 @@ use winit::{
 
 // --- Constants ---
 const MAX_FRAMES_IN_FLIGHT: usize = 3;
+const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
 
 // --- Structs ---
 
@@ -191,7 +192,7 @@ pub struct State {
     vertex_buffer: Option<BufferResource>,
     index_buffer: Option<BufferResource>,
     pub descriptor_set_layout: vk::DescriptorSetLayout,
-    pub descriptor_pool: vk::DescriptorPool,
+    descriptor_pools: Vec<vk::DescriptorPool>,
     sampler_cache: HashMap<SamplerDesc, vk::Sampler>,
     command_buffers: Vec<vk::CommandBuffer>,
     image_available_semaphores: Vec<vk::Semaphore>,
@@ -272,7 +273,7 @@ pub fn init(
     )?;
 
     let descriptor_set_layout = create_descriptor_set_layout(device.as_ref().unwrap())?;
-    let descriptor_pool = create_descriptor_pool(device.as_ref().unwrap())?;
+    let descriptor_pools = vec![create_descriptor_pool(device.as_ref().unwrap())?];
 
     let PipelinePair {
         layout: sprite_pipeline_layout,
@@ -328,7 +329,7 @@ pub fn init(
         vertex_buffer: None,
         index_buffer: None,
         descriptor_set_layout,
-        descriptor_pool,
+        descriptor_pools,
         sampler_cache: HashMap::new(),
         command_buffers,
         image_available_semaphores,
@@ -462,14 +463,25 @@ fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayo
 fn create_descriptor_pool(device: &Device) -> Result<vk::DescriptorPool, vk::Result> {
     let pool_size = vk::DescriptorPoolSize::default()
         .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count(1024);
+        .descriptor_count(DESCRIPTOR_POOL_SET_CAPACITY);
 
     let pool_info = vk::DescriptorPoolCreateInfo::default()
         .pool_sizes(std::slice::from_ref(&pool_size))
-        .max_sets(1024)
+        .max_sets(DESCRIPTOR_POOL_SET_CAPACITY)
         .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET);
 
     unsafe { device.create_descriptor_pool(&pool_info, None) }
+}
+
+fn grow_descriptor_pool(state: &mut State) -> Result<vk::DescriptorPool, vk::Result> {
+    let pool = create_descriptor_pool(state.device.as_ref().unwrap())?;
+    state.descriptor_pools.push(pool);
+    debug!(
+        "Allocated Vulkan descriptor pool #{} ({} sets)",
+        state.descriptor_pools.len(),
+        DESCRIPTOR_POOL_SET_CAPACITY
+    );
+    Ok(pool)
 }
 
 fn create_sprite_pipeline(
@@ -1175,7 +1187,6 @@ pub fn create_texture(
     state.pending_tex_staging.push(staging);
     let view = create_image_view(device, tex_image, fmt)?;
     let sampler_default = get_sampler(state, sampler)?;
-    let set = create_texture_descriptor_set(state, view, sampler_default)?;
     let sampler_repeat = get_sampler(
         state,
         SamplerDesc {
@@ -1183,7 +1194,8 @@ pub fn create_texture(
             ..sampler
         },
     )?;
-    let set_repeat = create_texture_descriptor_set(state, view, sampler_repeat)?;
+    let (set, set_repeat, pool) =
+        create_texture_descriptor_sets(state, view, sampler_default, sampler_repeat)?;
 
     Ok(Texture {
         device: device_arc.clone(),
@@ -1192,7 +1204,7 @@ pub fn create_texture(
         view,
         descriptor_set: set,
         descriptor_set_repeat: set_repeat,
-        pool: state.descriptor_pool,
+        pool,
     })
 }
 
@@ -2286,11 +2298,13 @@ pub fn cleanup(state: &mut State) {
                 .destroy_sampler(*sampler, None);
         }
         state.sampler_cache.clear();
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_descriptor_pool(state.descriptor_pool, None);
+        for pool in state.descriptor_pools.drain(..) {
+            state
+                .device
+                .as_ref()
+                .unwrap()
+                .destroy_descriptor_pool(pool, None);
+        }
         state
             .device
             .as_ref()
@@ -2485,27 +2499,52 @@ fn color_blend_for(mode: BlendMode) -> vk::PipelineColorBlendAttachmentState {
     }
 }
 
-fn create_texture_descriptor_set(
+fn create_texture_descriptor_set_pair(
     state: &State,
-    texture_image_view: vk::ImageView,
-    sampler: vk::Sampler,
-) -> Result<vk::DescriptorSet, vk::Result> {
-    let layouts = [state.descriptor_set_layout];
+    pool: vk::DescriptorPool,
+) -> Result<[vk::DescriptorSet; 2], vk::Result> {
+    let layouts = [state.descriptor_set_layout, state.descriptor_set_layout];
     let alloc_info = vk::DescriptorSetAllocateInfo::default()
-        .descriptor_pool(state.descriptor_pool)
+        .descriptor_pool(pool)
         .set_layouts(&layouts);
-    let descriptor_set = unsafe {
+    unsafe {
         state
             .device
             .as_ref()
             .unwrap()
-            .allocate_descriptor_sets(&alloc_info)?[0]
+            .allocate_descriptor_sets(&alloc_info)
+            .map(|sets| [sets[0], sets[1]])
+    }
+}
+
+fn create_texture_descriptor_sets(
+    state: &mut State,
+    texture_image_view: vk::ImageView,
+    sampler_default: vk::Sampler,
+    sampler_repeat: vk::Sampler,
+) -> Result<(vk::DescriptorSet, vk::DescriptorSet, vk::DescriptorPool), Box<dyn Error>> {
+    let (descriptor_set, descriptor_set_repeat, pool) = loop {
+        let pool = *state
+            .descriptor_pools
+            .last()
+            .ok_or("Vulkan descriptor pool list is empty")?;
+        match create_texture_descriptor_set_pair(state, pool) {
+            Ok([set, set_repeat]) => break (set, set_repeat, pool),
+            Err(vk::Result::ERROR_OUT_OF_POOL_MEMORY | vk::Result::ERROR_FRAGMENTED_POOL) => {
+                grow_descriptor_pool(state)?;
+            }
+            Err(err) => return Err(Box::new(err)),
+        }
     };
 
     let image_info = vk::DescriptorImageInfo::default()
         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
         .image_view(texture_image_view)
-        .sampler(sampler);
+        .sampler(sampler_default);
+    let image_info_repeat = vk::DescriptorImageInfo::default()
+        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+        .image_view(texture_image_view)
+        .sampler(sampler_repeat);
 
     let descriptor_write = vk::WriteDescriptorSet::default()
         .dst_set(descriptor_set)
@@ -2513,15 +2552,21 @@ fn create_texture_descriptor_set(
         .dst_array_element(0)
         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
         .image_info(std::slice::from_ref(&image_info));
+    let descriptor_write_repeat = vk::WriteDescriptorSet::default()
+        .dst_set(descriptor_set_repeat)
+        .dst_binding(0)
+        .dst_array_element(0)
+        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+        .image_info(std::slice::from_ref(&image_info_repeat));
 
     unsafe {
         state
             .device
             .as_ref()
             .unwrap()
-            .update_descriptor_sets(&[descriptor_write], &[]);
+            .update_descriptor_sets(&[descriptor_write, descriptor_write_repeat], &[]);
     }
-    Ok(descriptor_set)
+    Ok((descriptor_set, descriptor_set_repeat, pool))
 }
 
 #[inline(always)]

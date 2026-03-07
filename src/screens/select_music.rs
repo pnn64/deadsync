@@ -21,10 +21,10 @@ use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource};
 use crate::ui::color;
 use crate::ui::font;
+use image::{Rgba, RgbaImage};
 use log::debug;
 use nod::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
 use rssp::bpm::parse_bpm_map;
-use image::{Rgba, RgbaImage};
 use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
@@ -2966,7 +2966,8 @@ fn sync_heat_source(overlay: &SyncOverlayStateData) -> Option<(&[f64], usize, us
         }
         SyncGraphMode::BeatIndex
             if overlay.digest_rows > 0
-                && overlay.beat_digest.len() == overlay.digest_rows.saturating_mul(overlay.cols) =>
+                && overlay.beat_digest.len()
+                    == overlay.digest_rows.saturating_mul(overlay.cols) =>
         {
             Some((
                 overlay.beat_digest.as_slice(),
@@ -2987,7 +2988,8 @@ fn sync_heat_source(overlay: &SyncOverlayStateData) -> Option<(&[f64], usize, us
         SyncGraphMode::PostKernelFingerprint
             if overlay.phase == SyncOverlayPhase::Running
                 && overlay.digest_rows > 0
-                && overlay.beat_digest.len() == overlay.digest_rows.saturating_mul(overlay.cols) =>
+                && overlay.beat_digest.len()
+                    == overlay.digest_rows.saturating_mul(overlay.cols) =>
         {
             Some((
                 overlay.beat_digest.as_slice(),
@@ -3856,10 +3858,8 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
                         if overlay.freq_domain.len() != freq_delta.len() {
                             overlay.freq_domain.resize(freq_delta.len(), 0.0);
                         }
-                        for (sum, value) in overlay
-                            .freq_domain
-                            .iter_mut()
-                            .zip(freq_delta.into_iter())
+                        for (sum, value) in
+                            overlay.freq_domain.iter_mut().zip(freq_delta.into_iter())
                         {
                             *sum += value;
                         }
