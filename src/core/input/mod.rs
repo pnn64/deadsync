@@ -249,9 +249,11 @@ pub struct InputEdge {
     pub lane: Lane,
     pub pressed: bool,
     pub source: InputSource,
-    // Real-time capture and queue timestamps for latency tracing. Filled in
-    // by gameplay when the edge is accepted for lane processing.
+    // Real-time timestamps for latency tracing. Filled in by gameplay when the
+    // edge is accepted for lane processing.
     pub captured_at: Instant,
+    pub stored_at: Instant,
+    pub emitted_at: Instant,
     pub queued_at: Instant,
     // Music time (seconds) at which this edge occurred, in the gameplay
     // screen's timebase (includes music rate and global offset). Filled in
@@ -686,7 +688,12 @@ pub struct InputEvent {
     pub action: VirtualAction,
     pub pressed: bool,
     pub source: InputSource,
+    // Timestamp of the raw input edge before debounce filtering.
     pub timestamp: Instant,
+    // Timestamp at which the edge entered the debounce store on the main input path.
+    pub stored_at: Instant,
+    // Timestamp at which the debounced/normalized input event was emitted.
+    pub emitted_at: Instant,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -708,6 +715,7 @@ struct DebounceState {
     held_raw: bool,
     held_reported: bool,
     last_raw_change_time: Instant,
+    last_raw_store_time: Instant,
     last_report_time: Instant,
 }
 
@@ -717,6 +725,8 @@ struct DebouncedEdge {
     pressed: bool,
     source: InputSource,
     timestamp: Instant,
+    stored_at: Instant,
+    emitted_at: Instant,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -730,23 +740,35 @@ fn debounce_emit_if_due(
     state: &mut DebounceState,
     now: Instant,
     window: Duration,
-) -> Option<(bool, Instant)> {
+) -> Option<(bool, Instant, Instant)> {
     if state.held_raw == state.held_reported || now.duration_since(state.last_report_time) < window
     {
         return None;
     }
     state.last_report_time = now;
     state.held_reported = state.held_raw;
-    Some((state.held_reported, state.last_raw_change_time))
+    Some((
+        state.held_reported,
+        state.last_raw_change_time,
+        state.last_raw_store_time,
+    ))
 }
 
 #[inline(always)]
-fn debounced_edge(binding: DebounceBinding, pressed: bool, timestamp: Instant) -> DebouncedEdge {
+fn debounced_edge(
+    binding: DebounceBinding,
+    pressed: bool,
+    timestamp: Instant,
+    stored_at: Instant,
+    emitted_at: Instant,
+) -> DebouncedEdge {
     DebouncedEdge {
         binding,
         pressed,
         source: debounce_binding_source(binding),
         timestamp,
+        stored_at,
+        emitted_at,
     }
 }
 
@@ -759,14 +781,19 @@ fn debounce_step(
     now: Instant,
     window: Duration,
 ) -> DebounceEdges {
-    let first = debounce_emit_if_due(state, now, window)
-        .map(|(debounced_pressed, ts)| debounced_edge(binding, debounced_pressed, ts));
+    let first =
+        debounce_emit_if_due(state, now, window).map(|(debounced_pressed, ts, stored_at)| {
+            debounced_edge(binding, debounced_pressed, ts, stored_at, now)
+        });
     if state.held_raw != pressed {
         state.held_raw = pressed;
         state.last_raw_change_time = timestamp;
+        state.last_raw_store_time = now;
     }
-    let second = debounce_emit_if_due(state, now, window)
-        .map(|(debounced_pressed, ts)| debounced_edge(binding, debounced_pressed, ts));
+    let second =
+        debounce_emit_if_due(state, now, window).map(|(debounced_pressed, ts, stored_at)| {
+            debounced_edge(binding, debounced_pressed, ts, stored_at, now)
+        });
     DebounceEdges { first, second }
 }
 
@@ -812,6 +839,7 @@ fn debounce_input_edge_in_store(
             held_raw: false,
             held_reported: false,
             last_raw_change_time: timestamp,
+            last_raw_store_time: now,
             last_report_time: now.checked_sub(window).unwrap_or(now),
         });
         let edges = debounce_step(state, binding, pressed, timestamp, now, window);
@@ -832,8 +860,8 @@ fn collect_due_debounce_edges_from(
     let mut out: Vec<DebouncedEdge> = Vec::with_capacity(states.len().min(8));
     let mut prune: Vec<DebounceBinding> = Vec::new();
     for (&binding, state) in states.iter_mut() {
-        if let Some((pressed, timestamp)) = debounce_emit_if_due(state, now, window) {
-            out.push(debounced_edge(binding, pressed, timestamp));
+        if let Some((pressed, timestamp, stored_at)) = debounce_emit_if_due(state, now, window) {
+            out.push(debounced_edge(binding, pressed, timestamp, stored_at, now));
         }
         if should_prune_debounce_state(*state, now, window) {
             prune.push(binding);
@@ -850,6 +878,8 @@ fn input_events_from_actions(
     actions: Vec<(VirtualAction, bool)>,
     source: InputSource,
     timestamp: Instant,
+    stored_at: Instant,
+    emitted_at: Instant,
 ) -> Vec<InputEvent> {
     actions
         .into_iter()
@@ -858,6 +888,8 @@ fn input_events_from_actions(
             pressed,
             source,
             timestamp,
+            stored_at,
+            emitted_at,
         })
         .collect()
 }
@@ -873,7 +905,13 @@ fn normalize_actions(actions: &mut Vec<(VirtualAction, bool)>) {
 fn input_events_from_debounced_edge(edge: DebouncedEdge) -> Vec<InputEvent> {
     let mut actions = with_keymap(|km| debounce_binding_actions(km, edge.binding, edge.pressed));
     normalize_actions(&mut actions);
-    input_events_from_actions(actions, edge.source, edge.timestamp)
+    input_events_from_actions(
+        actions,
+        edge.source,
+        edge.timestamp,
+        edge.stored_at,
+        edge.emitted_at,
+    )
 }
 
 #[inline(always)]
@@ -881,7 +919,13 @@ fn gameplay_events_from_debounced_edge(edge: DebouncedEdge) -> Vec<InputEvent> {
     let mut actions = with_keymap(|km| debounce_binding_actions(km, edge.binding, edge.pressed));
     actions.retain(|(action, _)| action.is_gameplay_arrow());
     dedup_action_pairs(&mut actions);
-    input_events_from_actions(actions, edge.source, edge.timestamp)
+    input_events_from_actions(
+        actions,
+        edge.source,
+        edge.timestamp,
+        edge.stored_at,
+        edge.emitted_at,
+    )
 }
 
 #[inline(always)]
@@ -1140,6 +1184,7 @@ mod tests {
             held_raw: false,
             held_reported: false,
             last_raw_change_time: now,
+            last_raw_store_time: now,
             last_report_time: now.checked_sub(window).unwrap_or(now),
         }
     }
@@ -1149,11 +1194,15 @@ mod tests {
         binding: DebounceBinding,
         pressed: bool,
         timestamp: Instant,
+        stored_at: Instant,
+        emitted_at: Instant,
     ) {
         let edge = edge.expect("expected debounced edge");
         assert_eq!(edge.binding, binding);
         assert_eq!(edge.pressed, pressed);
         assert_eq!(edge.timestamp, timestamp);
+        assert_eq!(edge.stored_at, stored_at);
+        assert_eq!(edge.emitted_at, emitted_at);
     }
 
     #[test]
@@ -1165,7 +1214,7 @@ mod tests {
 
         let press = debounce_step(&mut state, binding, true, t0, t0, window);
         assert!(press.first.is_none());
-        assert_edge(press.second, binding, true, t0);
+        assert_edge(press.second, binding, true, t0, t0, t0);
 
         let release_ts = t0 + Duration::from_millis(1);
         let release = debounce_step(&mut state, binding, false, release_ts, release_ts, window);
@@ -1173,7 +1222,7 @@ mod tests {
         assert!(release.second.is_none());
 
         let delayed = debounce_emit_if_due(&mut state, t0 + Duration::from_millis(21), window);
-        assert_eq!(delayed, Some((false, release_ts)));
+        assert_eq!(delayed, Some((false, release_ts, release_ts)));
     }
 
     #[test]
@@ -1185,7 +1234,7 @@ mod tests {
 
         let press = debounce_step(&mut state, binding, true, t0, t0, window);
         assert!(press.first.is_none());
-        assert_edge(press.second, binding, true, t0);
+        assert_edge(press.second, binding, true, t0, t0, t0);
 
         let release_ts = t0 + Duration::from_millis(1);
         let release = debounce_step(&mut state, binding, false, release_ts, release_ts, window);
@@ -1212,7 +1261,7 @@ mod tests {
 
         let press = debounce_step(&mut state, binding, true, t0, t0, window);
         assert!(press.first.is_none());
-        assert_edge(press.second, binding, true, t0);
+        assert_edge(press.second, binding, true, t0, t0, t0);
 
         let release_ts = t0 + Duration::from_millis(1);
         let release = debounce_step(&mut state, binding, false, release_ts, release_ts, window);
@@ -1221,12 +1270,19 @@ mod tests {
 
         let repress_ts = t0 + Duration::from_millis(30);
         let repress = debounce_step(&mut state, binding, true, repress_ts, repress_ts, window);
-        assert_edge(repress.first, binding, false, release_ts);
+        assert_edge(
+            repress.first,
+            binding,
+            false,
+            release_ts,
+            release_ts,
+            repress_ts,
+        );
         assert!(repress.second.is_none());
 
         assert_eq!(
             debounce_emit_if_due(&mut state, t0 + Duration::from_millis(50), window),
-            Some((true, repress_ts))
+            Some((true, repress_ts, repress_ts))
         );
     }
 }

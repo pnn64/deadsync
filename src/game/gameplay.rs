@@ -3223,10 +3223,14 @@ struct GameplayUpdatePhaseTimings {
 #[derive(Clone, Copy, Debug, Default)]
 struct GameplayInputLatencyTrace {
     samples: u32,
-    capture_to_queue_total_us: u64,
+    capture_to_store_total_us: u64,
+    store_to_emit_total_us: u64,
+    emit_to_queue_total_us: u64,
     capture_to_process_total_us: u64,
     queue_to_process_total_us: u64,
-    capture_to_queue_max_us: u32,
+    capture_to_store_max_us: u32,
+    store_to_emit_max_us: u32,
+    emit_to_queue_max_us: u32,
     capture_to_process_max_us: u32,
     queue_to_process_max_us: u32,
 }
@@ -3235,21 +3239,31 @@ impl GameplayInputLatencyTrace {
     #[inline(always)]
     fn record(
         &mut self,
-        capture_to_queue_us: u32,
+        capture_to_store_us: u32,
+        store_to_emit_us: u32,
+        emit_to_queue_us: u32,
         capture_to_process_us: u32,
         queue_to_process_us: u32,
     ) {
         self.samples = self.samples.saturating_add(1);
-        self.capture_to_queue_total_us = self
-            .capture_to_queue_total_us
-            .saturating_add(u64::from(capture_to_queue_us));
+        self.capture_to_store_total_us = self
+            .capture_to_store_total_us
+            .saturating_add(u64::from(capture_to_store_us));
+        self.store_to_emit_total_us = self
+            .store_to_emit_total_us
+            .saturating_add(u64::from(store_to_emit_us));
+        self.emit_to_queue_total_us = self
+            .emit_to_queue_total_us
+            .saturating_add(u64::from(emit_to_queue_us));
         self.capture_to_process_total_us = self
             .capture_to_process_total_us
             .saturating_add(u64::from(capture_to_process_us));
         self.queue_to_process_total_us = self
             .queue_to_process_total_us
             .saturating_add(u64::from(queue_to_process_us));
-        self.capture_to_queue_max_us = self.capture_to_queue_max_us.max(capture_to_queue_us);
+        self.capture_to_store_max_us = self.capture_to_store_max_us.max(capture_to_store_us);
+        self.store_to_emit_max_us = self.store_to_emit_max_us.max(store_to_emit_us);
+        self.emit_to_queue_max_us = self.emit_to_queue_max_us.max(emit_to_queue_us);
         self.capture_to_process_max_us = self.capture_to_process_max_us.max(capture_to_process_us);
         self.queue_to_process_max_us = self.queue_to_process_max_us.max(queue_to_process_us);
     }
@@ -3767,7 +3781,7 @@ fn trace_gameplay_update(
         let summary_peak_pending_edges = state.update_trace.summary_peak_pending_edges;
         let (summary_hot_name, summary_hot_us) = max_phase_name_and_us(&summary_max_phase);
         trace!(
-            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] input_latency_us=[samples:{} cap_queue_avg:{:.1} cap_queue_max:{} cap_proc_avg:{:.1} cap_proc_max:{} queue_proc_avg:{:.1} queue_proc_max:{}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}] other_max={:.3}",
+            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] input_latency_us=[samples:{} cap_store_avg:{:.1} cap_store_max:{} store_emit_avg:{:.1} store_emit_max:{} emit_queue_avg:{:.1} emit_queue_max:{} queue_proc_avg:{:.1} queue_proc_max:{} cap_proc_avg:{:.1} cap_proc_max:{}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}] other_max={:.3}",
             summary_frames,
             summary_slow_frames,
             summary_max_total_us as f32 / 1000.0,
@@ -3782,20 +3796,30 @@ fn trace_gameplay_update(
             summary_max_phase.input_roll_us as f32 / 1000.0,
             summary_input_latency.samples,
             GameplayInputLatencyTrace::avg_us(
-                summary_input_latency.capture_to_queue_total_us,
+                summary_input_latency.capture_to_store_total_us,
                 summary_input_latency.samples,
             ),
-            summary_input_latency.capture_to_queue_max_us,
+            summary_input_latency.capture_to_store_max_us,
             GameplayInputLatencyTrace::avg_us(
-                summary_input_latency.capture_to_process_total_us,
+                summary_input_latency.store_to_emit_total_us,
                 summary_input_latency.samples,
             ),
-            summary_input_latency.capture_to_process_max_us,
+            summary_input_latency.store_to_emit_max_us,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.emit_to_queue_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.emit_to_queue_max_us,
             GameplayInputLatencyTrace::avg_us(
                 summary_input_latency.queue_to_process_total_us,
                 summary_input_latency.samples,
             ),
             summary_input_latency.queue_to_process_max_us,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.capture_to_process_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.capture_to_process_max_us,
             summary_max_phase.density_sample_us as f32 / 1000.0,
             summary_max_phase.density_hist_mesh_us as f32 / 1000.0,
             summary_max_phase.density_life_mesh_us as f32 / 1000.0,
@@ -4502,6 +4526,8 @@ pub fn queue_input_edge(
     lane: Lane,
     pressed: bool,
     timestamp: Instant,
+    stored_at: Instant,
+    emitted_at: Instant,
 ) {
     if state.autoplay_enabled {
         return;
@@ -4539,6 +4565,8 @@ pub fn queue_input_edge(
         lane,
         pressed,
         timestamp,
+        stored_at,
+        emitted_at,
         queued_at,
         event_music_time,
         true,
@@ -4587,6 +4615,8 @@ fn push_input_edge(
         pressed,
         now,
         now,
+        now,
+        now,
         event_music_time,
         record_replay,
     );
@@ -4599,6 +4629,8 @@ fn push_input_edge_timed(
     lane: Lane,
     pressed: bool,
     captured_at: Instant,
+    stored_at: Instant,
+    emitted_at: Instant,
     queued_at: Instant,
     event_music_time: f32,
     record_replay: bool,
@@ -4611,6 +4643,8 @@ fn push_input_edge_timed(
         pressed,
         source,
         captured_at,
+        stored_at,
+        emitted_at,
         queued_at,
         event_music_time,
     });
@@ -7384,7 +7418,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
     if let Some(lane) = lane_from_action(ev.action) {
-        queue_input_edge(state, ev.source, lane, ev.pressed, ev.timestamp);
+        queue_input_edge(
+            state,
+            ev.source,
+            lane,
+            ev.pressed,
+            ev.timestamp,
+            ev.stored_at,
+            ev.emitted_at,
+        );
         abort_hold_to_exit(state, ev.timestamp);
         return ScreenAction::None;
     }
@@ -7993,12 +8035,20 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
     if code == KeyCode::F9 {
         if !key.repeat {
             state.hit_tick_enabled = !state.hit_tick_enabled;
-            let label = if state.hit_tick_enabled { "Hit Tick Enabled" } else { "Hit Tick Disabled" };
+            let label = if state.hit_tick_enabled {
+                "Hit Tick Enabled"
+            } else {
+                "Hit Tick Disabled"
+            };
             state.toggle_flash_text = Some(label.to_string());
             state.toggle_flash_timer = 1.5;
             debug!(
                 "Hit tick {} (F9).",
-                if state.hit_tick_enabled { "enabled" } else { "disabled" }
+                if state.hit_tick_enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
             );
         }
         return ScreenAction::None;
@@ -8257,21 +8307,30 @@ fn process_input_edges(
         }
         if trace_enabled {
             let processed_at = Instant::now();
+            let capture_to_store_us = elapsed_us_between(edge.stored_at, edge.captured_at);
+            let store_to_emit_us = elapsed_us_between(edge.emitted_at, edge.stored_at);
+            let emit_to_queue_us = elapsed_us_between(edge.queued_at, edge.emitted_at);
             let capture_to_queue_us = elapsed_us_between(edge.queued_at, edge.captured_at);
             let capture_to_process_us = elapsed_us_between(processed_at, edge.captured_at);
             let queue_to_process_us = elapsed_us_between(processed_at, edge.queued_at);
             state.update_trace.summary_input_latency.record(
-                capture_to_queue_us,
+                capture_to_store_us,
+                store_to_emit_us,
+                emit_to_queue_us,
                 capture_to_process_us,
                 queue_to_process_us,
             );
             if capture_to_process_us >= GAMEPLAY_INPUT_LATENCY_WARN_US {
                 debug!(
-                    "Gameplay input latency spike: lane={} pressed={} capture_queue_us={} queue_process_us={} capture_process_us={} pending={} now_t={:.3} edge_t={:.3}",
+                    "Gameplay input latency spike: lane={} pressed={} source={:?} capture_store_us={} store_emit_us={} emit_queue_us={} queue_process_us={} capture_queue_us={} capture_process_us={} pending={} now_t={:.3} edge_t={:.3}",
                     lane_idx,
                     edge.pressed,
-                    capture_to_queue_us,
+                    edge.source,
+                    capture_to_store_us,
+                    store_to_emit_us,
+                    emit_to_queue_us,
                     queue_to_process_us,
+                    capture_to_queue_us,
                     capture_to_process_us,
                     pending.len() + state.pending_edges.len() + 1,
                     state.current_music_time,
