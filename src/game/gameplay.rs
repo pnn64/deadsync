@@ -246,6 +246,13 @@ pub enum AutosyncMode {
     Machine,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TickMode {
+    Off,
+    Assist,
+    Hit,
+}
+
 #[inline(always)]
 fn quantize_offset_seconds(v: f32) -> f32 {
     let step = 0.001_f32;
@@ -3473,12 +3480,11 @@ pub struct State {
     autoplay_pending_row: [Option<(usize, f32)>; MAX_PLAYERS],
     autoplay_lane_state: [bool; MAX_COLS],
     autoplay_hold_release_time: [Option<f32>; MAX_COLS],
-    assist_clap_enabled: bool,
+    tick_mode: TickMode,
     assist_clap_rows: Vec<usize>,
     assist_clap_cursor: usize,
     assist_last_crossed_row: i32,
-    hit_tick_enabled: bool,
-    toggle_flash_text: Option<String>,
+    toggle_flash_text: Option<&'static str>,
     toggle_flash_timer: f32,
     replay_input: Vec<RecordedLaneEdge>,
     replay_cursor: usize,
@@ -4027,15 +4033,15 @@ fn all_joined_players_failed(state: &State) -> bool {
     true
 }
 
-#[inline(always)]
-pub fn assist_clap_is_enabled(state: &State) -> bool {
-    state.assist_clap_enabled
-}
-
 const TOGGLE_FLASH_DURATION: f32 = 1.5;
 const TOGGLE_FLASH_FADE_START: f32 = 0.8;
 
-pub fn toggle_flash_text(state: &State) -> Option<(&str, f32)> {
+#[inline(always)]
+pub fn timing_tick_status_line(state: &State) -> Option<&'static str> {
+    tick_mode_status_line(state.tick_mode)
+}
+
+pub fn toggle_flash_text(state: &State) -> Option<(&'static str, f32)> {
     if state.toggle_flash_timer > 0.0 {
         let age = TOGGLE_FLASH_DURATION - state.toggle_flash_timer;
         let alpha = if age < TOGGLE_FLASH_FADE_START {
@@ -4044,7 +4050,7 @@ pub fn toggle_flash_text(state: &State) -> Option<(&str, f32)> {
             let fade_len = TOGGLE_FLASH_DURATION - TOGGLE_FLASH_FADE_START;
             1.0 - ((age - TOGGLE_FLASH_FADE_START) / fade_len).clamp(0.0, 1.0)
         };
-        state.toggle_flash_text.as_deref().map(|t| (t, alpha))
+        state.toggle_flash_text.map(|t| (t, alpha))
     } else {
         None
     }
@@ -5707,11 +5713,10 @@ pub fn init(
         autoplay_pending_row: [None; MAX_PLAYERS],
         autoplay_lane_state: [false; MAX_COLS],
         autoplay_hold_release_time: [None; MAX_COLS],
-        assist_clap_enabled: false,
+        tick_mode: TickMode::Off,
         assist_clap_rows,
         assist_clap_cursor: 0,
         assist_last_crossed_row: -1,
-        hit_tick_enabled: false,
         toggle_flash_text: None,
         toggle_flash_timer: 0.0,
         replay_input,
@@ -7485,7 +7490,7 @@ fn run_assist_clap(state: &mut State, current_row: i32) {
 
     let crossed_cursor =
         assist_clap_cursor_for_row(&state.assist_clap_rows, state.assist_last_crossed_row);
-    if state.assist_clap_enabled
+    if state.tick_mode == TickMode::Assist
         && crossed_cursor < state.assist_clap_rows.len()
         && state.assist_clap_rows[crossed_cursor] <= song_row as usize
     {
@@ -7496,20 +7501,44 @@ fn run_assist_clap(state: &mut State, current_row: i32) {
     state.assist_last_crossed_row = song_row;
 }
 
-fn set_assist_clap_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
-    if state.assist_clap_enabled == enabled {
+#[inline(always)]
+const fn next_tick_mode(mode: TickMode) -> TickMode {
+    match mode {
+        TickMode::Off => TickMode::Assist,
+        TickMode::Assist => TickMode::Hit,
+        TickMode::Hit => TickMode::Off,
+    }
+}
+
+#[inline(always)]
+const fn tick_mode_status_line(mode: TickMode) -> Option<&'static str> {
+    match mode {
+        TickMode::Off => None,
+        TickMode::Assist => Some("Assist Tick"),
+        TickMode::Hit => Some("Hit Tick"),
+    }
+}
+
+#[inline(always)]
+const fn tick_mode_debug_label(mode: TickMode) -> &'static str {
+    match mode {
+        TickMode::Off => "off",
+        TickMode::Assist => "assist tick",
+        TickMode::Hit => "hit tick",
+    }
+}
+
+fn set_tick_mode(state: &mut State, mode: TickMode, now_music_time: f32) {
+    if state.tick_mode == mode {
         return;
     }
-    state.assist_clap_enabled = enabled;
+    state.tick_mode = mode;
 
     let song_row = assist_row_no_offset(state, now_music_time);
     state.assist_last_crossed_row = song_row;
     state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
 
-    debug!(
-        "Assist clap {} (F7).",
-        if enabled { "enabled" } else { "disabled" }
-    );
+    debug!("Timing ticks set to {} (F7).", tick_mode_debug_label(mode));
 }
 
 fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
@@ -8021,36 +8050,17 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
     }
 
     if code == KeyCode::F7 {
+        if key.repeat {
+            return ScreenAction::None;
+        }
         let now_music_time = current_music_time_from_stream(state);
-        set_assist_clap_enabled(state, !state.assist_clap_enabled, now_music_time);
+        set_tick_mode(state, next_tick_mode(state.tick_mode), now_music_time);
         return ScreenAction::None;
     }
 
     if code == KeyCode::F8 {
         let now_music_time = current_music_time_from_stream(state);
         set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
-        return ScreenAction::None;
-    }
-
-    if code == KeyCode::F9 {
-        if !key.repeat {
-            state.hit_tick_enabled = !state.hit_tick_enabled;
-            let label = if state.hit_tick_enabled {
-                "Hit Tick Enabled"
-            } else {
-                "Hit Tick Disabled"
-            };
-            state.toggle_flash_text = Some(label.to_string());
-            state.toggle_flash_timer = 1.5;
-            debug!(
-                "Hit tick {} (F9).",
-                if state.hit_tick_enabled {
-                    "enabled"
-                } else {
-                    "disabled"
-                }
-            );
-        }
         return ScreenAction::None;
     }
 
@@ -8383,7 +8393,7 @@ fn process_input_edges(
                 refresh_roll_life_on_step(state, lane_idx);
             }
             if hit_note {
-                if state.hit_tick_enabled {
+                if state.tick_mode == TickMode::Hit {
                     audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
                 }
             } else {
@@ -9536,5 +9546,25 @@ fn update_danger_fx(state: &mut State) {
             }
         }
         fx.last_health = health;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TickMode, next_tick_mode, tick_mode_status_line};
+
+    #[test]
+    fn tick_mode_cycles() {
+        let mode = next_tick_mode(TickMode::Off);
+        assert_eq!(mode, TickMode::Assist);
+        assert_eq!(next_tick_mode(mode), TickMode::Hit);
+        assert_eq!(next_tick_mode(TickMode::Hit), TickMode::Off);
+    }
+
+    #[test]
+    fn tick_status_matches_mode() {
+        assert_eq!(tick_mode_status_line(TickMode::Off), None);
+        assert_eq!(tick_mode_status_line(TickMode::Assist), Some("Assist Tick"));
+        assert_eq!(tick_mode_status_line(TickMode::Hit), Some("Hit Tick"));
     }
 }

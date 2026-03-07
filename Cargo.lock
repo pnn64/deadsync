@@ -886,7 +886,7 @@ checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
 
 [[package]]
 name = "deadsync"
-version = "0.2.86"
+version = "0.2.87"
 dependencies = [
  "ash",
  "ash-window",
@@ -910,6 +910,7 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
+ "ogg",
  "pollster",
  "qrcodegen",
  "rand 0.10.0",

@@ -20,7 +20,7 @@ const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand 
 pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{
     TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION,
-    TRANSITION_OUT_FADE_DURATION, assist_clap_is_enabled, toggle_flash_text,
+    TRANSITION_OUT_FADE_DURATION, timing_tick_status_line, toggle_flash_text,
 };
 
 thread_local! {
@@ -244,8 +244,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 status_lines.push("AutoPlay".to_string());
             }
         }
-        if assist_clap_is_enabled(state) {
-            status_lines.push("Assist Clap".to_string());
+        if let Some(line) = timing_tick_status_line(state) {
+            status_lines.push(line.to_string());
         }
         if let Some(line) = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode) {
             status_lines.push(line.to_string());
