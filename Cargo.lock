@@ -914,7 +914,7 @@ dependencies = [
  "qrcodegen",
  "rand 0.10.0",
  "raw-window-handle",
- "rssp",
+ "rssp 0.3.56",
  "rubato",
  "serde",
  "serde_json",
@@ -2076,7 +2076,7 @@ dependencies = [
  "lewton",
  "md5",
  "png",
- "rssp",
+ "rssp 0.3.55",
  "rustfft",
  "serde",
  "serde_json",
@@ -3179,6 +3179,15 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 name = "rssp"
 version = "0.3.55"
 source = "git+https://github.com/pnn64/rssp?rev=43b3046#43b30461b4ff0b5065b1d0e7b4564d0c21bb417b"
+dependencies = [
+ "png",
+ "serde_json",
+]
+
+[[package]]
+name = "rssp"
+version = "0.3.56"
+source = "git+https://github.com/pnn64/rssp?rev=069f5c2#069f5c26bff93917339fe9b5af24151a13647fd4"
 dependencies = [
  "png",
  "serde_json",
