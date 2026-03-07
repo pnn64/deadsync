@@ -67,6 +67,7 @@ pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
+    _apply_present_back_pressure: bool,
 ) -> Result<u32, Box<dyn Error>> {
     #[inline(always)]
     fn lookup_texture_case_insensitive<'a>(

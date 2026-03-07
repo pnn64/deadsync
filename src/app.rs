@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{self, DisplayMode};
 use crate::core::display;
-use crate::core::gfx::{self as renderer, BackendType, create_backend};
+use crate::core::gfx::{self as renderer, BackendType, UncappedMode, create_backend};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
@@ -101,6 +101,7 @@ const SCREENSHOT_PREVIEW_Z: i16 = 32010;
 const GAMEPLAY_OFFSET_PROMPT_Z_BACKDROP: i16 = 31990;
 const GAMEPLAY_OFFSET_PROMPT_Z_CURSOR: i16 = 31991;
 const GAMEPLAY_OFFSET_PROMPT_Z_TEXT: i16 = 31993;
+const BACKGROUND_REDRAW_INTERVAL: Duration = Duration::from_millis(67);
 
 #[derive(Clone, Copy)]
 enum ScreenshotPreviewTarget {
@@ -280,6 +281,7 @@ pub struct ShellState {
     start_time: Instant,
     vsync_enabled: bool,
     frame_interval: Option<Duration>,
+    uncapped_mode: UncappedMode,
     next_redraw_at: Instant,
     display_mode: DisplayMode,
     display_monitor: usize,
@@ -298,6 +300,9 @@ pub struct ShellState {
     pending_exit: bool,
     shift_held: bool,
     ctrl_held: bool,
+    window_focused: bool,
+    window_occluded: bool,
+    surface_active: bool,
     screenshot_pending: bool,
     screenshot_request_side: Option<profile::PlayerSide>,
     screenshot_flash_started_at: Option<Instant>,
@@ -420,6 +425,7 @@ impl ShellState {
             start_time: now,
             vsync_enabled: cfg.vsync,
             frame_interval,
+            uncapped_mode: cfg.uncapped_mode,
             next_redraw_at: now,
             display_mode: cfg.display_mode(),
             metrics,
@@ -438,6 +444,9 @@ impl ShellState {
             pending_exit: false,
             shift_held: false,
             ctrl_held: false,
+            window_focused: true,
+            window_occluded: false,
+            surface_active: cfg.display_width > 0 && cfg.display_height > 0,
             screenshot_pending: false,
             screenshot_request_side: None,
             screenshot_flash_started_at: None,
@@ -449,6 +458,68 @@ impl ShellState {
     fn set_max_fps(&mut self, max_fps: u16) {
         self.frame_interval = frame_interval_for_max_fps(max_fps);
         self.next_redraw_at = Instant::now();
+    }
+
+    #[inline(always)]
+    fn set_uncapped_mode(&mut self, mode: UncappedMode) {
+        self.uncapped_mode = mode;
+        self.next_redraw_at = Instant::now();
+    }
+
+    #[inline(always)]
+    fn reset_frame_clock(&mut self, now: Instant) {
+        self.last_frame_time = now;
+        self.next_redraw_at = now;
+    }
+
+    #[inline(always)]
+    fn set_window_focus(&mut self, focused: bool, now: Instant) -> bool {
+        if self.window_focused == focused {
+            return false;
+        }
+        self.window_focused = focused;
+        self.reset_frame_clock(now);
+        true
+    }
+
+    #[inline(always)]
+    fn set_window_occluded(&mut self, occluded: bool, now: Instant) -> bool {
+        if self.window_occluded == occluded {
+            return false;
+        }
+        self.window_occluded = occluded;
+        self.reset_frame_clock(now);
+        true
+    }
+
+    #[inline(always)]
+    fn set_surface_active(&mut self, active: bool, now: Instant) -> bool {
+        if self.surface_active == active {
+            return false;
+        }
+        self.surface_active = active;
+        self.reset_frame_clock(now);
+        true
+    }
+
+    #[inline(always)]
+    fn background_frame_interval(&self) -> Option<Duration> {
+        let base = (!self.vsync_enabled && self.uncapped_mode == UncappedMode::MaxFps)
+            .then_some(self.frame_interval)
+            .flatten();
+        let background = (!self.window_focused || self.window_occluded || !self.surface_active)
+            .then_some(BACKGROUND_REDRAW_INTERVAL);
+        match (base, background) {
+            (Some(base), Some(background)) => Some(cmp::max(base, background)),
+            (Some(base), None) => Some(base),
+            (None, Some(background)) => Some(background),
+            (None, None) => None,
+        }
+    }
+
+    #[inline(always)]
+    fn should_skip_compose_and_draw(&self) -> bool {
+        self.window_occluded || !self.surface_active
     }
 
     #[inline(always)]
@@ -1536,6 +1607,18 @@ impl App {
         )
     }
 
+    #[inline(always)]
+    fn effective_frame_interval(&self) -> Option<Duration> {
+        self.state.shell.background_frame_interval()
+    }
+
+    #[inline(always)]
+    fn apply_present_back_pressure(&self) -> bool {
+        !self.state.shell.vsync_enabled
+            && self.state.shell.uncapped_mode == UncappedMode::Balanced
+            && self.effective_frame_interval().is_none()
+    }
+
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
         let monitors: Vec<MonitorHandle> = event_loop.available_monitors().collect();
         let specs = display::monitor_specs(&monitors);
@@ -1709,6 +1792,7 @@ impl App {
                 resolution,
                 monitor,
                 max_fps,
+                uncapped_mode,
             } => {
                 // Ensure options menu reflects current hardware state before processing changes
                 self.update_options_monitor_specs(event_loop);
@@ -1717,6 +1801,11 @@ impl App {
                     self.state.shell.set_max_fps(max_fps);
                     config::update_max_fps(max_fps);
                     options::sync_max_fps(&mut self.state.screens.options_state, max_fps);
+                }
+                if let Some(mode) = uncapped_mode {
+                    self.state.shell.set_uncapped_mode(mode);
+                    config::update_uncapped_mode(mode);
+                    options::sync_uncapped_mode(&mut self.state.screens.options_state, mode);
                 }
 
                 let mut pending_resolution = None;
@@ -3518,7 +3607,7 @@ impl App {
         if fps > 0.0 {
             return 1.0 / fps;
         }
-        if let Some(interval) = self.state.shell.frame_interval {
+        if let Some(interval) = self.effective_frame_interval() {
             return interval.as_secs_f32();
         }
         if self.state.shell.vsync_enabled {
@@ -5437,6 +5526,11 @@ impl ApplicationHandler<UserEvent> for App {
                 event_loop.exit();
             }
             WindowEvent::Resized(new_size) => {
+                let now = Instant::now();
+                let became_active = self
+                    .state
+                    .shell
+                    .set_surface_active(new_size.width > 0 && new_size.height > 0, now);
                 if new_size.width > 0 && new_size.height > 0 {
                     self.state.shell.metrics =
                         space::metrics_for_window(new_size.width, new_size.height);
@@ -5444,6 +5538,25 @@ impl ApplicationHandler<UserEvent> for App {
                     if let Some(backend) = &mut self.backend {
                         backend.resize(new_size.width, new_size.height);
                     }
+                }
+                if became_active && self.state.shell.surface_active {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::Focused(focused) => {
+                if self.state.shell.set_window_focus(focused, Instant::now()) && focused {
+                    window.request_redraw();
+                }
+            }
+            WindowEvent::Occluded(occluded) => {
+                if self
+                    .state
+                    .shell
+                    .set_window_occluded(occluded, Instant::now())
+                    && !occluded
+                    && self.state.shell.surface_active
+                {
+                    window.request_redraw();
                 }
             }
             WindowEvent::KeyboardInput {
@@ -5691,6 +5804,10 @@ impl ApplicationHandler<UserEvent> for App {
                 if self.window.as_ref().map(|w| w.id()) != Some(window_id) {
                     return;
                 }
+                if self.state.shell.should_skip_compose_and_draw() {
+                    self.state.shell.current_frame_vpf = 0;
+                    return;
+                }
 
                 let compose_started = Instant::now();
                 let (actors, clear_color) = self.get_current_actors();
@@ -5711,12 +5828,17 @@ impl ApplicationHandler<UserEvent> for App {
                 );
                 compose_us = elapsed_us_since(compose_started).saturating_sub(upload_us);
 
+                let apply_present_back_pressure = self.apply_present_back_pressure();
                 if let Some(backend) = &mut self.backend {
                     if self.state.shell.screenshot_pending {
                         backend.request_screenshot();
                     }
                     let draw_started = Instant::now();
-                    match backend.draw(&screen, &self.asset_manager.textures) {
+                    match backend.draw(
+                        &screen,
+                        &self.asset_manager.textures,
+                        apply_present_back_pressure,
+                    ) {
                         Ok(vpf) => {
                             self.state.shell.current_frame_vpf = vpf;
                             draw_us = elapsed_us_since(draw_started);
@@ -5749,7 +5871,7 @@ impl ApplicationHandler<UserEvent> for App {
         let Some(window) = &self.window else {
             return;
         };
-        if let Some(interval) = self.state.shell.frame_interval {
+        if let Some(interval) = self.effective_frame_interval() {
             let now = Instant::now();
             if now >= self.state.shell.next_redraw_at {
                 window.request_redraw();

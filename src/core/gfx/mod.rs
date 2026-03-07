@@ -122,6 +122,13 @@ pub enum BlendMode {
     Subtract,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UncappedMode {
+    Balanced,
+    Unhinged,
+    MaxFps,
+}
+
 // --- Public API Facade ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,15 +173,28 @@ impl Backend {
         &mut self,
         render_list: &RenderList<'_>,
         textures: &HashMap<String, Texture>,
+        apply_present_back_pressure: bool,
     ) -> Result<u32, Box<dyn Error>> {
         match &mut self.0 {
-            BackendImpl::Vulkan(state) => vulkan::draw(state, render_list, textures),
-            BackendImpl::VulkanWgpu(state) => wgpu_core::draw(state, render_list, textures),
-            BackendImpl::OpenGL(state) => opengl::draw(state, render_list, textures),
-            BackendImpl::OpenGLWgpu(state) => wgpu_core::draw(state, render_list, textures),
-            BackendImpl::Software(state) => software::draw(state, render_list, textures),
+            BackendImpl::Vulkan(state) => {
+                vulkan::draw(state, render_list, textures, apply_present_back_pressure)
+            }
+            BackendImpl::VulkanWgpu(state) => {
+                wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
+            }
+            BackendImpl::OpenGL(state) => {
+                opengl::draw(state, render_list, textures, apply_present_back_pressure)
+            }
+            BackendImpl::OpenGLWgpu(state) => {
+                wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
+            }
+            BackendImpl::Software(state) => {
+                software::draw(state, render_list, textures, apply_present_back_pressure)
+            }
             #[cfg(target_os = "windows")]
-            BackendImpl::DirectX(state) => wgpu_core::draw(state, render_list, textures),
+            BackendImpl::DirectX(state) => {
+                wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
+            }
         }
     }
 
@@ -401,6 +421,36 @@ impl FromStr for BackendType {
             #[cfg(target_os = "windows")]
             "directx" | "dx12" | "directx (wgpu)" => Ok(Self::DirectX),
             _ => Err(format!("'{s}' is not a valid video renderer")),
+        }
+    }
+}
+
+impl UncappedMode {
+    #[inline(always)]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Balanced => "balanced",
+            Self::Unhinged => "unhinged",
+            Self::MaxFps => "maxfps",
+        }
+    }
+}
+
+impl core::fmt::Display for UncappedMode {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for UncappedMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "balanced" => Ok(Self::Balanced),
+            "unhinged" => Ok(Self::Unhinged),
+            "maxfps" | "max_fps" | "max-fps" => Ok(Self::MaxFps),
+            other => Err(format!("'{other}' is not a valid uncapped mode")),
         }
     }
 }

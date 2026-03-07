@@ -24,7 +24,7 @@ use std::path::PathBuf;
 
 use crate::assets::{DensityGraphSlot, DensityGraphSource};
 use crate::config::DisplayMode;
-use crate::core::gfx::BackendType;
+use crate::core::gfx::{BackendType, UncappedMode};
 use crate::game::profile::ActiveProfile;
 #[derive(Debug, Clone)]
 pub enum ScreenAction {
@@ -56,6 +56,7 @@ pub enum ScreenAction {
         monitor: Option<usize>,
         resolution: Option<(u32, u32)>,
         max_fps: Option<u16>,
+        uncapped_mode: Option<UncappedMode>,
     },
     UpdateShowOverlay(u8),
 }

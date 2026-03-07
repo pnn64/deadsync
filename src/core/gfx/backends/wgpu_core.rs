@@ -816,6 +816,7 @@ pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
+    apply_present_back_pressure: bool,
 ) -> Result<u32, Box<dyn Error>> {
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
@@ -1348,8 +1349,16 @@ pub fn draw(
         None
     };
 
-    state.queue.submit(Some(encoder.finish()));
+    let submission_index = state.queue.submit(Some(encoder.finish()));
     frame.present();
+    if apply_present_back_pressure && screenshot_readback.is_none() {
+        // Uncapped wgpu submission can otherwise keep the CPU hot by queuing
+        // work continuously; wait for this frame to retire before proceeding.
+        let _ = state.device.poll(wgpu::PollType::Wait {
+            submission_index: Some(submission_index),
+            timeout: None,
+        });
+    }
     if let Some((readback_buffer, width, height, padded_row_bytes, format)) = screenshot_readback {
         let slice = readback_buffer.slice(..);
         let (tx, rx) = mpsc::channel();

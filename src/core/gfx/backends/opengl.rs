@@ -587,6 +587,7 @@ pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
+    apply_present_back_pressure: bool,
 ) -> Result<u32, Box<dyn Error>> {
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
@@ -1220,6 +1221,13 @@ pub fn draw(
     }
 
     state.gl_surface.swap_buffers(&state.gl_context)?;
+    if apply_present_back_pressure {
+        // Mirror ITGmania's uncapped GL path: block here so the CPU does not
+        // run frames far ahead of the GPU when swap interval is disabled.
+        unsafe {
+            state.gl.finish();
+        }
+    }
     push_tmesh_debug_sample(state, tmesh_debug_frame);
     Ok(vertices)
 }

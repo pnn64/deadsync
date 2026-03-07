@@ -1234,6 +1234,7 @@ pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
     textures: &HashMap<String, RendererTexture>,
+    apply_present_back_pressure: bool,
 ) -> Result<u32, Box<dyn Error>> {
     flush_pending_texture_uploads(state)?;
 
@@ -1977,6 +1978,11 @@ pub fn draw(
             }
             Ok(_) => {}
             Err(e) => return Err(e.into()),
+        }
+        if apply_present_back_pressure && screenshot_staging.is_none() {
+            // Keep uncapped rendering from stacking multiple frames of GPU work
+            // ahead of the app thread, matching ITGmania's explicit blocking.
+            device.wait_for_fences(&[fence], true, u64::MAX)?;
         }
         if let Some((staging, width, height, format)) = screenshot_staging {
             device.queue_wait_idle(state.queue)?;
