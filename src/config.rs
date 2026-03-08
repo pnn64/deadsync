@@ -2335,8 +2335,10 @@ fn binding_to_token(binding: InputBinding) -> String {
     }
 }
 
+/// Parse a `KeyCode::*` token into an `InputBinding::Key`.
 #[inline(always)]
-fn parse_keycode(name: &str) -> Option<KeyCode> {
+fn parse_keycode(t: &str) -> Option<InputBinding> {
+    let name = t.strip_prefix("KeyCode::")?;
     macro_rules! keycode_match {
         ($input:expr, $( $name:ident ),* $(,)?) => {
             match $input {
@@ -2392,166 +2394,142 @@ fn parse_keycode(name: &str) -> Option<KeyCode> {
         F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
         F13, F14, F15, F16, F17, F18, F19, F20, F21, F22, F23, F24,
         F25, F26, F27, F28, F29, F30, F31, F32, F33, F34, F35,
-    )
+    ).map(InputBinding::Key)
+}
+
+/// Parse a direction name into a `PadDir`.
+fn parse_pad_dir(name: &str) -> Option<PadDir> {
+    match name {
+        "Up" => Some(PadDir::Up),
+        "Down" => Some(PadDir::Down),
+        "Left" => Some(PadDir::Left),
+        "Right" => Some(PadDir::Right),
+        _ => None,
+    }
+}
+
+/// Parse a `PadCode[...]` token into an `InputBinding::GamepadCode`.
+///
+/// Accepted formats:
+///   `PadCode[0xDEADBEEF]`
+///   `PadCode[0xDEADBEEF]@0`
+///   `PadCode[0xDEADBEEF]#00112233AABBCCDDEEFF001122334455`
+///   `PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455`
+fn parse_pad_code(t: &str) -> Option<InputBinding> {
+    let rest = t.strip_prefix("PadCode[")?;
+    let end = rest.find(']')?;
+    let code_str = &rest[..end];
+    let mut tail = &rest[end + 1..];
+
+    let code_u32 = if let Some(hex) = code_str
+        .strip_prefix("0x")
+        .or_else(|| code_str.strip_prefix("0X"))
+    {
+        u32::from_str_radix(hex, 16).ok()?
+    } else {
+        u32::from_str(code_str).ok()?
+    };
+
+    let mut device: Option<usize> = None;
+    let mut uuid: Option<[u8; 16]> = None;
+
+    // Parse optional @device and #uuid, in any order.
+    loop {
+        if let Some(rest2) = tail.strip_prefix('@') {
+            let mut digits = String::new();
+            for ch in rest2.chars() {
+                if ch.is_ascii_digit() {
+                    digits.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if digits.is_empty() {
+                break;
+            }
+            if let Ok(dev_idx) = usize::from_str(&digits) {
+                device = Some(dev_idx);
+            }
+            tail = &rest2[digits.len()..];
+            continue;
+        }
+
+        if let Some(rest2) = tail.strip_prefix('#') {
+            let mut hex_digits = String::new();
+            for ch in rest2.chars() {
+                if ch.is_ascii_hexdigit() {
+                    hex_digits.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if hex_digits.len() == 32 {
+                let mut bytes = [0u8; 16];
+                let mut ok = true;
+                for i in 0..16 {
+                    let start = i * 2;
+                    let end = start + 2;
+                    if let Ok(b) = u8::from_str_radix(&hex_digits[start..end], 16) {
+                        bytes[i] = b
+                    } else {
+                        ok = false;
+                        break;
+                    }
+                }
+                if ok {
+                    uuid = Some(bytes);
+                }
+            }
+            tail = &rest2[hex_digits.len()..];
+            continue;
+        }
+
+        break;
+    }
+
+    Some(InputBinding::GamepadCode(GamepadCodeBinding {
+        code_u32,
+        device,
+        uuid,
+    }))
+}
+
+/// Parse any pad-direction binding:
+///   `PadDir::Up`            → `InputBinding::PadDir`
+///   `Pad::Dir::Up`           → `InputBinding::PadDir`  (any-pad)
+///   `Pad0::Dir::Up`          → `InputBinding::PadDirOn` (device-specific)
+fn parse_pad_dir_binding(t: &str) -> Option<InputBinding> {
+    // Short form: PadDir::Up
+    if let Some(dir_name) = t.strip_prefix("PadDir::") {
+        return parse_pad_dir(dir_name).map(InputBinding::PadDir);
+    }
+
+    // Long forms: Pad::Dir::Up  /  Pad0::Dir::Up
+    let parts: Vec<&str> = t.split("::").collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let (pad_part, kind, name) = (parts[0], parts[1], parts[2]);
+    let dev_str = pad_part.strip_prefix("Pad")?;
+
+    if kind != "Dir" {
+        return None;
+    }
+    let dir = parse_pad_dir(name)?;
+
+    if dev_str.is_empty() {
+        // Treat as any-pad.
+        return Some(InputBinding::PadDir(dir));
+    }
+    let device = dev_str.parse::<usize>().ok()?;
+    Some(InputBinding::PadDirOn { device, dir })
 }
 
 fn parse_binding_token(tok: &str) -> Option<InputBinding> {
     let t = tok.trim();
-    // Keyboard
-    if let Some(rest) = t.strip_prefix("KeyCode::") {
-        if let Some(code) = parse_keycode(rest) {
-            return Some(InputBinding::Key(code));
-        }
-    }
-
-    // Gamepad low-level code binding:
-    //   PadCode[0xDEADBEEF]
-    //   PadCode[0xDEADBEEF]@0
-    //   PadCode[0xDEADBEEF]#00112233AABBCCDDEEFF001122334455
-    //   PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455
-    //
-    // where 0x... or decimal is the `PadCode(u32)` shown in the Sandbox/Input screens,
-    // @N restricts to device index N,
-    // and #... restricts to a 16-byte UUID (32 hex chars, no dashes).
-    if let Some(rest) = t.strip_prefix("PadCode[")
-        && let Some(end) = rest.find(']')
-    {
-        let code_str = &rest[..end];
-        let mut tail = &rest[end + 1..];
-
-        let code_u32 = if let Some(hex) = code_str
-            .strip_prefix("0x")
-            .or_else(|| code_str.strip_prefix("0X"))
-        {
-            u32::from_str_radix(hex, 16).ok()?
-        } else {
-            u32::from_str(code_str).ok()?
-        };
-
-        let mut device: Option<usize> = None;
-        let mut uuid: Option<[u8; 16]> = None;
-
-        // Parse optional @device and #uuid, in any order.
-        loop {
-            if let Some(rest2) = tail.strip_prefix('@') {
-                let mut digits = String::new();
-                for ch in rest2.chars() {
-                    if ch.is_ascii_digit() {
-                        digits.push(ch);
-                    } else {
-                        break;
-                    }
-                }
-                if digits.is_empty() {
-                    break;
-                }
-                if let Ok(dev_idx) = usize::from_str(&digits) {
-                    device = Some(dev_idx);
-                }
-                tail = &rest2[digits.len()..];
-                continue;
-            }
-
-            if let Some(rest2) = tail.strip_prefix('#') {
-                let mut hex_digits = String::new();
-                for ch in rest2.chars() {
-                    if ch.is_ascii_hexdigit() {
-                        hex_digits.push(ch);
-                    } else {
-                        break;
-                    }
-                }
-                if hex_digits.len() == 32 {
-                    let mut bytes = [0u8; 16];
-                    let mut ok = true;
-                    for i in 0..16 {
-                        let start = i * 2;
-                        let end = start + 2;
-                        if let Ok(b) = u8::from_str_radix(&hex_digits[start..end], 16) {
-                            bytes[i] = b
-                        } else {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if ok {
-                        uuid = Some(bytes);
-                    }
-                }
-                tail = &rest2[hex_digits.len()..];
-                continue;
-            }
-
-            break;
-        }
-
-        return Some(InputBinding::GamepadCode(GamepadCodeBinding {
-            code_u32,
-            device,
-            uuid,
-        }));
-    }
-
-    // Gamepad (any pad): PadDir::Up
-    if let Some(rest) = t.strip_prefix("PadDir::") {
-        let dir = match rest {
-            "Up" => PadDir::Up,
-            "Down" => PadDir::Down,
-            "Left" => PadDir::Left,
-            "Right" => PadDir::Right,
-            _ => return None,
-        };
-        return Some(InputBinding::PadDir(dir));
-    }
-
-    // Gamepad (device-specific): Pad0::Dir::Up
-    // Split by "::"
-    let parts: Vec<&str> = t.split("::").collect();
-    if parts.len() == 3 {
-        let (pad_part, kind, name) = (parts[0], parts[1], parts[2]);
-        // Parse device index from PadN
-        if let Some(dev_str) = pad_part.strip_prefix("Pad") {
-            if dev_str.is_empty() {
-                // Treat as any-pad; handled at top via PadDir prefix.
-                return match kind {
-                    "Dir" => match name {
-                        "Up" => Some(InputBinding::PadDir(PadDir::Up)),
-                        "Down" => Some(InputBinding::PadDir(PadDir::Down)),
-                        "Left" => Some(InputBinding::PadDir(PadDir::Left)),
-                        "Right" => Some(InputBinding::PadDir(PadDir::Right)),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-            }
-            if let Ok(device) = dev_str.parse::<usize>() {
-                return match kind {
-                    "Dir" => match name {
-                        "Up" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Up,
-                        }),
-                        "Down" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Down,
-                        }),
-                        "Left" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Left,
-                        }),
-                        "Right" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Right,
-                        }),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-            }
-        }
-    }
-
-    None
+    parse_keycode(t)
+        .or_else(|| parse_pad_code(t))
+        .or_else(|| parse_pad_dir_binding(t))
 }
 
 fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
