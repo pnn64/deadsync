@@ -1674,6 +1674,21 @@ impl App {
         window.request_redraw();
     }
 
+    fn flush_due_gameplay_arrow_events(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<bool, Box<dyn Error>> {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay {
+            return Ok(false);
+        }
+        let mut flushed = false;
+        for ev in input::drain_gameplay_arrow_events() {
+            flushed = true;
+            self.route_input_event(event_loop, ev)?;
+        }
+        Ok(flushed)
+    }
+
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
         let monitors: Vec<MonitorHandle> = event_loop.available_monitors().collect();
         let specs = display::monitor_specs(&monitors);
@@ -4255,6 +4270,16 @@ impl App {
 
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
         if gameplay_screen {
+            match self.flush_due_gameplay_arrow_events(event_loop) {
+                Ok(_) => {}
+                Err(e) => {
+                    log::error!("Failed to handle due gameplay input: {e}");
+                    event_loop.exit();
+                    return;
+                }
+            }
+        }
+        if gameplay_screen {
             for ev in input::gameplay_arrow_key_events(&key_event, event_timestamp) {
                 if let Err(e) = self.route_input_event(event_loop, ev) {
                     log::error!("Failed to handle gameplay input: {e}");
@@ -4286,6 +4311,16 @@ impl App {
             return;
         }
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        if gameplay_screen {
+            match self.flush_due_gameplay_arrow_events(event_loop) {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Failed to handle due gameplay pad input: {e}");
+                    event_loop.exit();
+                    return;
+                }
+            }
+        }
         if gameplay_screen {
             for iev in input::gameplay_arrow_pad_events(&ev) {
                 if let Err(e) = self.route_input_event(event_loop, iev) {
@@ -5661,14 +5696,11 @@ impl ApplicationHandler<UserEvent> for App {
                 let mut draw_stats = renderer::DrawStats::default();
                 let input_started = Instant::now();
                 let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
-                if gameplay_screen {
-                    for ev in input::drain_gameplay_arrow_events() {
-                        if let Err(e) = self.route_input_event(event_loop, ev) {
-                            error!("Failed to handle gameplay debounced input: {e}");
-                            event_loop.exit();
-                            return;
-                        }
-                    }
+                if gameplay_screen && let Err(e) = self.flush_due_gameplay_arrow_events(event_loop)
+                {
+                    error!("Failed to handle gameplay debounced input: {e}");
+                    event_loop.exit();
+                    return;
                 }
                 for ev in input::drain_debounced_events() {
                     if gameplay_screen && ev.action.is_gameplay_arrow() {
@@ -5961,6 +5993,15 @@ impl ApplicationHandler<UserEvent> for App {
         let Some(window) = self.window.clone() else {
             return;
         };
+        match self.flush_due_gameplay_arrow_events(event_loop) {
+            Ok(true) => self.request_redraw(&window, "gameplay_debounce"),
+            Ok(false) => {}
+            Err(e) => {
+                error!("Failed to handle gameplay debounced input before wait: {e}");
+                event_loop.exit();
+                return;
+            }
+        }
         if let Some(interval) = self.effective_frame_interval() {
             let now = Instant::now();
             if now >= self.state.shell.next_redraw_at {

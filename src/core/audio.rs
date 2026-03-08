@@ -200,18 +200,22 @@ fn reset_music_stream_clock() {
 }
 
 #[inline(always)]
-fn callback_epoch_nanos() -> u64 {
-    CALLBACK_EPOCH
-        .elapsed()
-        .as_nanos()
-        .min((u64::MAX - 1) as u128) as u64
-}
-
-#[inline(always)]
 fn callback_nanos_at(at: Instant) -> u64 {
     at.checked_duration_since(*CALLBACK_EPOCH)
         .map(|delta| delta.as_nanos().min((u64::MAX - 1) as u128) as u64)
         .unwrap_or(0)
+}
+
+#[inline(always)]
+fn output_playback_anchor(now: Instant, info: &cpal::OutputCallbackInfo) -> Instant {
+    let timestamp = info.timestamp();
+    if let Some(delay) = timestamp.playback.duration_since(&timestamp.callback) {
+        now.checked_add(delay).unwrap_or(now)
+    } else if let Some(lead) = timestamp.callback.duration_since(&timestamp.playback) {
+        now.checked_sub(lead).unwrap_or(now)
+    } else {
+        now
+    }
 }
 
 #[inline(always)]
@@ -248,7 +252,7 @@ fn end_callback_clock_write() {
 }
 
 #[inline(always)]
-fn publish_callback_window_start(total_before: u64) {
+fn publish_callback_window_start(total_before: u64, anchor_at: Instant) {
     begin_callback_clock_write();
     PREV_CALLBACK_BASE_FRAMES.store(
         LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
@@ -264,7 +268,10 @@ fn publish_callback_window_start(total_before: u64) {
     );
     LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
     LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-    LAST_CALLBACK_ELAPSED_NANOS.store(callback_epoch_nanos().saturating_add(1), Ordering::Relaxed);
+    LAST_CALLBACK_ELAPSED_NANOS.store(
+        callback_nanos_at(anchor_at).saturating_add(1),
+        Ordering::Relaxed,
+    );
     end_callback_clock_write();
 }
 
@@ -624,9 +631,10 @@ fn audio_manager_thread(
     let stream = match sample_format {
         SampleFormat::I16 => device.build_output_stream(
             &stream_config,
-            move |out: &mut [i16], _| {
+            move |out: &mut [i16], info| {
+                let anchor_at = output_playback_anchor(Instant::now(), info);
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                publish_callback_window_start(total_before);
+                publish_callback_window_start(total_before, anchor_at);
                 let config = crate::config::audio_mix_levels();
                 let master_vol = f32::from(config.master_volume) * 0.01;
                 let music_vol = f32::from(config.music_volume) * 0.01;
@@ -701,9 +709,10 @@ fn audio_manager_thread(
         ),
         SampleFormat::U16 => device.build_output_stream(
             &stream_config,
-            move |out: &mut [u16], _| {
+            move |out: &mut [u16], info| {
+                let anchor_at = output_playback_anchor(Instant::now(), info);
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                publish_callback_window_start(total_before);
+                publish_callback_window_start(total_before, anchor_at);
                 let config = crate::config::audio_mix_levels();
                 let master_vol = f32::from(config.master_volume) * 0.01;
                 let music_vol = f32::from(config.music_volume) * 0.01;
@@ -773,9 +782,10 @@ fn audio_manager_thread(
         ),
         SampleFormat::F32 => device.build_output_stream(
             &stream_config,
-            move |out: &mut [f32], _| {
+            move |out: &mut [f32], info| {
+                let anchor_at = output_playback_anchor(Instant::now(), info);
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                publish_callback_window_start(total_before);
+                publish_callback_window_start(total_before, anchor_at);
                 let config = crate::config::audio_mix_levels();
                 let master_vol = f32::from(config.master_volume) * 0.01;
                 let music_vol = f32::from(config.music_volume) * 0.01;
