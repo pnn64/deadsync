@@ -249,6 +249,7 @@ pub struct InputEdge {
     pub lane: Lane,
     pub pressed: bool,
     pub source: InputSource,
+    pub record_replay: bool,
     // Real-time timestamps for latency tracing. Filled in by gameplay when the
     // edge is accepted for lane processing.
     pub captured_at: Instant,
@@ -256,8 +257,9 @@ pub struct InputEdge {
     pub emitted_at: Instant,
     pub queued_at: Instant,
     // Music time (seconds) at which this edge occurred, in the gameplay
-    // screen's timebase (includes music rate and global offset). Filled in
-    // by the gameplay code using the audio device clock.
+    // screen's timebase (includes music rate and global offset). Replay edges
+    // carry a concrete value; live gameplay fills this in from the audio clock
+    // snapshot at judgment time.
     pub event_music_time: f32,
 }
 

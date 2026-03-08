@@ -98,6 +98,7 @@ static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
 // between callback invocations so that the reported stream time is
 // continuous instead of jumping in whole buffer increments.
 static CALLBACK_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
+static CALLBACK_CLOCK_SEQ: AtomicU64 = AtomicU64::new(0);
 // Stored as elapsed nanos + 1 from CALLBACK_EPOCH; 0 means "no callback yet".
 static LAST_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
@@ -105,6 +106,23 @@ static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy, Debug)]
+pub struct MusicStreamClockSnapshot {
+    pub stream_seconds: f32,
+    pub valid_at: Instant,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct CallbackClockWindow {
+    total_frames: u64,
+    last_nanos: u64,
+    last_base_frames: u64,
+    last_callback_frames: u64,
+    prev_nanos: u64,
+    prev_base_frames: u64,
+    prev_callback_frames: u64,
+}
 
 /* ============================ Public functions ============================ */
 
@@ -179,12 +197,6 @@ fn reset_music_stream_clock() {
     MUSIC_TRACK_START_FRAME.store(total, Ordering::Release);
     MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Release);
     MUSIC_TRACK_ACTIVE.store(false, Ordering::Release);
-    LAST_CALLBACK_BASE_FRAMES.store(total, Ordering::Release);
-    LAST_CALLBACK_FRAMES.store(0, Ordering::Release);
-    LAST_CALLBACK_ELAPSED_NANOS.store(0, Ordering::Release);
-    PREV_CALLBACK_BASE_FRAMES.store(total, Ordering::Release);
-    PREV_CALLBACK_FRAMES.store(0, Ordering::Release);
-    PREV_CALLBACK_ELAPSED_NANOS.store(0, Ordering::Release);
 }
 
 #[inline(always)]
@@ -225,6 +237,105 @@ fn stream_position_seconds_from_callback(
     Some(frames_from_start / sample_rate as f32)
 }
 
+#[inline(always)]
+fn begin_callback_clock_write() {
+    CALLBACK_CLOCK_SEQ.fetch_add(1, Ordering::AcqRel);
+}
+
+#[inline(always)]
+fn end_callback_clock_write() {
+    CALLBACK_CLOCK_SEQ.fetch_add(1, Ordering::Release);
+}
+
+#[inline(always)]
+fn publish_callback_window_start(total_before: u64) {
+    begin_callback_clock_write();
+    PREV_CALLBACK_BASE_FRAMES.store(
+        LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    PREV_CALLBACK_FRAMES.store(
+        LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    PREV_CALLBACK_ELAPSED_NANOS.store(
+        LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
+    LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
+    LAST_CALLBACK_ELAPSED_NANOS.store(callback_epoch_nanos().saturating_add(1), Ordering::Relaxed);
+    end_callback_clock_write();
+}
+
+#[inline(always)]
+fn publish_callback_window_end(total_before: u64, frames: u64) {
+    begin_callback_clock_write();
+    LAST_CALLBACK_FRAMES.store(frames, Ordering::Relaxed);
+    MUSIC_TOTAL_FRAMES.store(total_before.saturating_add(frames), Ordering::Relaxed);
+    end_callback_clock_write();
+}
+
+fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockWindow) {
+    loop {
+        let seq_start = CALLBACK_CLOCK_SEQ.load(Ordering::Acquire);
+        if seq_start & 1 != 0 {
+            std::hint::spin_loop();
+            continue;
+        }
+        let valid_at = Instant::now();
+        let at_nanos = callback_nanos_at(valid_at);
+        let window = CallbackClockWindow {
+            total_frames: MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed),
+            last_nanos: LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
+            last_base_frames: LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
+            last_callback_frames: LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
+            prev_nanos: PREV_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
+            prev_base_frames: PREV_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
+            prev_callback_frames: PREV_CALLBACK_FRAMES.load(Ordering::Relaxed),
+        };
+        let seq_end = CALLBACK_CLOCK_SEQ.load(Ordering::Acquire);
+        if seq_start == seq_end {
+            return (valid_at, at_nanos, window);
+        }
+    }
+}
+
+#[inline(always)]
+fn stream_position_seconds_from_window(
+    sample_rate: u32,
+    start_frame: u64,
+    at_nanos: u64,
+    window: CallbackClockWindow,
+) -> f32 {
+    if let Some(pos) = stream_position_seconds_from_callback(
+        sample_rate,
+        start_frame,
+        at_nanos,
+        window.last_nanos,
+        window.last_base_frames,
+        window.last_callback_frames,
+    ) {
+        return pos;
+    }
+    if let Some(pos) = stream_position_seconds_from_callback(
+        sample_rate,
+        start_frame,
+        at_nanos,
+        window.prev_nanos,
+        window.prev_base_frames,
+        window.prev_callback_frames,
+    ) {
+        return pos;
+    }
+    if window.total_frames <= start_frame {
+        0.0
+    } else {
+        let frames = window.total_frames.saturating_sub(start_frame) as f32;
+        frames / sample_rate as f32
+    }
+}
+
 /// Plays a music track from a file path.
 pub fn play_music(path: PathBuf, cut: Cut, looping: bool, rate: f32) {
     let rate = if rate.is_finite() && rate > 0.0 {
@@ -261,53 +372,24 @@ pub fn set_music_rate(rate: f32) {
 /// between callbacks using the callback timestamp so it advances
 /// continuously instead of in buffer-sized jumps.
 pub fn get_music_stream_position_seconds() -> f32 {
-    get_music_stream_position_seconds_at(Instant::now())
+    get_music_stream_clock_snapshot().stream_seconds
 }
 
-/// Returns the stream position using the audio callback clock anchored to the
-/// provided `Instant`, so callers can preserve a captured input edge time
-/// instead of re-sampling the music clock later on the main thread.
-pub fn get_music_stream_position_seconds_at(at: Instant) -> f32 {
+/// Returns the current stream position and the `Instant` it is valid for.
+pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
     let sample_rate = ENGINE.device_sample_rate.max(1);
-
     let has_started = MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire);
     if !has_started {
-        return 0.0;
+        return MusicStreamClockSnapshot {
+            stream_seconds: 0.0,
+            valid_at: Instant::now(),
+        };
     }
-
     let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
-
-    let at_nanos = callback_nanos_at(at);
-    let last_nanos = LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Acquire);
-    if let Some(pos) = stream_position_seconds_from_callback(
-        sample_rate,
-        start,
-        at_nanos,
-        last_nanos,
-        LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
-        LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
-    ) {
-        return pos;
-    }
-    let prev_nanos = PREV_CALLBACK_ELAPSED_NANOS.load(Ordering::Acquire);
-    if let Some(pos) = stream_position_seconds_from_callback(
-        sample_rate,
-        start,
-        at_nanos,
-        prev_nanos,
-        PREV_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
-        PREV_CALLBACK_FRAMES.load(Ordering::Relaxed),
-    ) {
-        return pos;
-    }
-
-    // Fallback: no usable callback snapshot yet; use the coarse total counter.
-    let total = MUSIC_TOTAL_FRAMES.load(Ordering::Acquire);
-    if total <= start {
-        0.0
-    } else {
-        let frames = total.saturating_sub(start) as f32;
-        frames / sample_rate as f32
+    let (valid_at, at_nanos, window) = load_callback_clock_snapshot_now();
+    MusicStreamClockSnapshot {
+        stream_seconds: stream_position_seconds_from_window(sample_rate, start, at_nanos, window),
+        valid_at,
     }
 }
 
@@ -544,22 +626,7 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [i16], _| {
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                PREV_CALLBACK_BASE_FRAMES.store(
-                    LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
-                    Ordering::Relaxed,
-                );
-                PREV_CALLBACK_FRAMES.store(
-                    LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
-                    Ordering::Relaxed,
-                );
-                PREV_CALLBACK_ELAPSED_NANOS.store(
-                    LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
-                    Ordering::Release,
-                );
-                LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
-                LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-                LAST_CALLBACK_ELAPSED_NANOS
-                    .store(callback_epoch_nanos().saturating_add(1), Ordering::Release);
+                publish_callback_window_start(total_before);
                 let config = crate::config::audio_mix_levels();
                 let master_vol = f32::from(config.master_volume) * 0.01;
                 let music_vol = f32::from(config.music_volume) * 0.01;
@@ -626,11 +693,7 @@ fn audio_manager_thread(
                     out.len() / device_channels
                 };
                 if frames > 0 {
-                    LAST_CALLBACK_FRAMES.store(frames as u64, Ordering::Relaxed);
-                    MUSIC_TOTAL_FRAMES.store(
-                        total_before.saturating_add(frames as u64),
-                        Ordering::Release,
-                    );
+                    publish_callback_window_end(total_before, frames as u64);
                 }
             },
             |err| error!("Audio stream error: {err}"),
@@ -640,22 +703,7 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [u16], _| {
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                PREV_CALLBACK_BASE_FRAMES.store(
-                    LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
-                    Ordering::Relaxed,
-                );
-                PREV_CALLBACK_FRAMES.store(
-                    LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
-                    Ordering::Relaxed,
-                );
-                PREV_CALLBACK_ELAPSED_NANOS.store(
-                    LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
-                    Ordering::Release,
-                );
-                LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
-                LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-                LAST_CALLBACK_ELAPSED_NANOS
-                    .store(callback_epoch_nanos().saturating_add(1), Ordering::Release);
+                publish_callback_window_start(total_before);
                 let config = crate::config::audio_mix_levels();
                 let master_vol = f32::from(config.master_volume) * 0.01;
                 let music_vol = f32::from(config.music_volume) * 0.01;
@@ -717,11 +765,7 @@ fn audio_manager_thread(
                     out.len() / device_channels
                 };
                 if frames > 0 {
-                    LAST_CALLBACK_FRAMES.store(frames as u64, Ordering::Relaxed);
-                    MUSIC_TOTAL_FRAMES.store(
-                        total_before.saturating_add(frames as u64),
-                        Ordering::Release,
-                    );
+                    publish_callback_window_end(total_before, frames as u64);
                 }
             },
             |err| error!("Audio stream error: {err}"),
@@ -731,22 +775,7 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [f32], _| {
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                PREV_CALLBACK_BASE_FRAMES.store(
-                    LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
-                    Ordering::Relaxed,
-                );
-                PREV_CALLBACK_FRAMES.store(
-                    LAST_CALLBACK_FRAMES.load(Ordering::Relaxed),
-                    Ordering::Relaxed,
-                );
-                PREV_CALLBACK_ELAPSED_NANOS.store(
-                    LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
-                    Ordering::Release,
-                );
-                LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
-                LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-                LAST_CALLBACK_ELAPSED_NANOS
-                    .store(callback_epoch_nanos().saturating_add(1), Ordering::Release);
+                publish_callback_window_start(total_before);
                 let config = crate::config::audio_mix_levels();
                 let master_vol = f32::from(config.master_volume) * 0.01;
                 let music_vol = f32::from(config.music_volume) * 0.01;
@@ -801,11 +830,7 @@ fn audio_manager_thread(
                     out.len() / device_channels
                 };
                 if frames > 0 {
-                    LAST_CALLBACK_FRAMES.store(frames as u64, Ordering::Relaxed);
-                    MUSIC_TOTAL_FRAMES.store(
-                        total_before.saturating_add(frames as u64),
-                        Ordering::Release,
-                    );
+                    publish_callback_window_end(total_before, frames as u64);
                 }
             },
             |err| error!("Audio stream error: {err}"),
