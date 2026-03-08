@@ -456,8 +456,6 @@ pub struct Config {
     pub banner_cache: bool,
     /// Cache Select Music CDTitles as raw RGBA blobs on disk.
     pub cdtitle_cache: bool,
-    /// Cache gameplay/eval backgrounds as raw RGBA blobs on disk.
-    pub background_cache: bool,
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
@@ -572,7 +570,6 @@ impl Default for Config {
             center_1player_notefield: false,
             banner_cache: true,
             cdtitle_cache: true,
-            background_cache: true,
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
@@ -969,10 +966,6 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!("BGBrightness={}\n", default.bg_brightness));
-    content.push_str(&format!(
-        "BackgroundCache={}\n",
-        if default.background_cache { "1" } else { "0" }
-    ));
     content.push_str(&format!(
         "BannerCache={}\n",
         if default.banner_cache { "1" } else { "0" }
@@ -1536,10 +1529,6 @@ pub fn load() {
                     .get("Options", "BannerCache")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.banner_cache, |v| v != 0);
-                cfg.background_cache = conf
-                    .get("Options", "BackgroundCache")
-                    .and_then(|v| v.parse::<u8>().ok())
-                    .map_or(default.background_cache, |v| v != 0);
                 cfg.cdtitle_cache = conf
                     .get("Options", "CDTitleCache")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -2016,7 +2005,6 @@ pub fn load() {
                     "AdditionalSongFolders",
                     "AutoPopulateGrooveStatsScores",
                     "BGBrightness",
-                    "BackgroundCache",
                     "BannerCache",
                     "CacheSongs",
                     "CDTitleCache",
@@ -2797,10 +2785,6 @@ fn save_without_keymaps() {
         cfg.bg_brightness.clamp(0.0, 1.0)
     ));
     content.push_str(&format!(
-        "BackgroundCache={}\n",
-        if cfg.background_cache { "1" } else { "0" }
-    ));
-    content.push_str(&format!(
         "BannerCache={}\n",
         if cfg.banner_cache { "1" } else { "0" }
     ));
@@ -3428,17 +3412,6 @@ pub fn update_cdtitle_cache(enabled: bool) {
             return;
         }
         cfg.cdtitle_cache = enabled;
-    }
-    save_without_keymaps();
-}
-
-pub fn update_background_cache(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.background_cache == enabled {
-            return;
-        }
-        cfg.background_cache = enabled;
     }
     save_without_keymaps();
 }

@@ -355,7 +355,6 @@ fn open_image_fallback_quiet(path: &Path) -> image::ImageResult<image::DynamicIm
 
 const BANNER_CACHE_DIR: &str = "cache/banner";
 const CDTITLE_CACHE_DIR: &str = "cache/cdtitle";
-const BACKGROUND_CACHE_DIR: &str = "cache/background";
 static BANNER_CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug)]
@@ -375,13 +374,6 @@ impl BannerCacheOptions {
     fn from_cdtitle_config(cfg: &crate::config::Config) -> Self {
         Self {
             enabled: cfg.cdtitle_cache,
-        }
-    }
-
-    #[inline(always)]
-    fn from_background_config(cfg: &crate::config::Config) -> Self {
-        Self {
-            enabled: cfg.background_cache,
         }
     }
 }
@@ -563,13 +555,6 @@ fn load_or_build_cached_cdtitle(
     opts: BannerCacheOptions,
 ) -> image::ImageResult<RgbaImage> {
     load_or_build_cached_dynamic_image(path, opts, CDTITLE_CACHE_DIR)
-}
-
-fn load_or_build_cached_background(
-    path: &Path,
-    opts: BannerCacheOptions,
-) -> image::ImageResult<RgbaImage> {
-    load_or_build_cached_dynamic_image(path, opts, BACKGROUND_CACHE_DIR)
 }
 
 fn load_or_build_cached_dynamic_image(
@@ -858,19 +843,11 @@ fn prewarm_dynamic_image_jobs_with_progress<F>(
     );
 }
 
-pub fn artwork_cache_jobs(
-    banner_paths: &[PathBuf],
-    cdtitle_paths: &[PathBuf],
-    background_paths: &[PathBuf],
-) -> usize {
+pub fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[PathBuf]) -> usize {
     let cfg = crate::config::get();
     let banner_opts = BannerCacheOptions::from_banner_config(&cfg);
     let cdtitle_opts = BannerCacheOptions::from_cdtitle_config(&cfg);
-    let background_opts = BannerCacheOptions::from_background_config(&cfg);
-    let total_paths = banner_paths
-        .len()
-        .saturating_add(cdtitle_paths.len())
-        .saturating_add(background_paths.len());
+    let total_paths = banner_paths.len().saturating_add(cdtitle_paths.len());
     let mut unique = HashSet::<String>::with_capacity(total_paths);
     if banner_opts.enabled {
         for path in banner_paths {
@@ -890,22 +867,12 @@ pub fn artwork_cache_jobs(
             ));
         }
     }
-    if background_opts.enabled {
-        for path in background_paths {
-            unique.insert(dynamic_image_prewarm_dedupe_key(
-                path,
-                background_opts,
-                BACKGROUND_CACHE_DIR,
-            ));
-        }
-    }
     unique.len()
 }
 
 pub fn prewarm_artwork_cache_with_progress<F>(
     banner_paths: &[PathBuf],
     cdtitle_paths: &[PathBuf],
-    background_paths: &[PathBuf],
     progress: &mut F,
 ) where
     F: FnMut(usize, usize, Option<&Path>),
@@ -913,11 +880,7 @@ pub fn prewarm_artwork_cache_with_progress<F>(
     let cfg = crate::config::get();
     let banner_opts = BannerCacheOptions::from_banner_config(&cfg);
     let cdtitle_opts = BannerCacheOptions::from_cdtitle_config(&cfg);
-    let background_opts = BannerCacheOptions::from_background_config(&cfg);
-    let total_paths = banner_paths
-        .len()
-        .saturating_add(cdtitle_paths.len())
-        .saturating_add(background_paths.len());
+    let total_paths = banner_paths.len().saturating_add(cdtitle_paths.len());
     let mut unique = HashSet::<String>::with_capacity(total_paths);
     let mut jobs = Vec::<DynamicImagePrewarmJob>::with_capacity(total_paths);
     let mut duplicate = 0usize;
@@ -936,14 +899,6 @@ pub fn prewarm_artwork_cache_with_progress<F>(
         cdtitle_opts,
         CDTITLE_CACHE_DIR,
         "CDTitle",
-    ));
-    duplicate = duplicate.saturating_add(push_dynamic_image_prewarm_jobs(
-        &mut jobs,
-        &mut unique,
-        background_paths,
-        background_opts,
-        BACKGROUND_CACHE_DIR,
-        "Background",
     ));
     prewarm_dynamic_image_jobs_with_progress(total_paths, jobs, duplicate, "Artwork", progress);
 }
@@ -1862,7 +1817,6 @@ impl AssetManager {
         path_opt: Option<PathBuf>,
     ) -> String {
         const FALLBACK_KEY: &str = "__black";
-        let cache_opts = BannerCacheOptions::from_background_config(&crate::config::get());
 
         if let Some(path) = path_opt {
             if self
@@ -1875,24 +1829,11 @@ impl AssetManager {
 
             self.destroy_current_dynamic_background(backend);
 
-            let rgba = if cache_opts.enabled {
-                match load_or_build_cached_background(&path, cache_opts) {
-                    Ok(cached) => cached,
-                    Err(e) => {
-                        warn!(
-                            "Failed to load cached background '{}': {e}. Using fallback.",
-                            path.display()
-                        );
-                        return FALLBACK_KEY.to_string();
-                    }
-                }
-            } else {
-                match open_image_fallback(&path) {
-                    Ok(img) => img.to_rgba8(),
-                    Err(e) => {
-                        warn!("Failed to open background image {path:?}: {e}. Using fallback.");
-                        return FALLBACK_KEY.to_string();
-                    }
+            let rgba = match open_image_fallback(&path) {
+                Ok(img) => img.to_rgba8(),
+                Err(e) => {
+                    warn!("Failed to open background image {path:?}: {e}. Using fallback.");
+                    return FALLBACK_KEY.to_string();
                 }
             };
 

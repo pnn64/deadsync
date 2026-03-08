@@ -148,10 +148,9 @@ pub fn init() -> State {
     }
 }
 
-fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>) {
+fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {
     let mut banner = Vec::new();
     let mut cdtitle = Vec::new();
-    let mut background = Vec::new();
     {
         let song_cache = crate::game::song::get_song_cache();
         for pack in song_cache.iter() {
@@ -164,9 +163,6 @@ fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>) {
                 }
                 if let Some(path) = song.cdtitle_path.as_ref() {
                     cdtitle.push(path.clone());
-                }
-                if let Some(path) = song.background_path.as_ref() {
-                    background.push(path.clone());
                 }
             }
         }
@@ -181,7 +177,7 @@ fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>) {
             }
         }
     }
-    (banner, cdtitle, background)
+    (banner, cdtitle)
 }
 
 fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
@@ -262,16 +258,14 @@ fn start_loading_thread(state: &mut State) {
             &mut on_course,
         );
 
-        let (banner_paths, cdtitle_paths, background_paths) = collect_artwork_cache_paths();
-        let artwork_total =
-            crate::assets::artwork_cache_jobs(&banner_paths, &cdtitle_paths, &background_paths);
+        let (banner_paths, cdtitle_paths) = collect_artwork_cache_paths();
+        let artwork_total = crate::assets::artwork_cache_jobs(&banner_paths, &cdtitle_paths);
 
         let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Artwork));
         info!(
-            "Init loading: caching artwork in one pass (banner={}, cdtitle={}, background={}, total jobs={})...",
+            "Init loading: caching artwork in one pass (banner={}, cdtitle={}, total jobs={})...",
             banner_paths.len(),
             cdtitle_paths.len(),
-            background_paths.len(),
             artwork_total
         );
         let mut on_artwork = |done: usize, _total: usize, path: Option<&Path>| {
@@ -286,7 +280,6 @@ fn start_loading_thread(state: &mut State) {
         crate::assets::prewarm_artwork_cache_with_progress(
             &banner_paths,
             &cdtitle_paths,
-            &background_paths,
             &mut on_artwork,
         );
         info!("Init loading: artwork cache prewarm complete.");
