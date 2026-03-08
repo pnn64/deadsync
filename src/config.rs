@@ -131,6 +131,66 @@ impl FromStr for BreakdownStyle {
     }
 }
 
+bitflags::bitflags! {
+    /// Bit flags for auto-screenshot conditions on the Evaluation screen.
+    /// Multiple flags can be combined (e.g., `PBS | FAILS`).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct AutoScreenshotFlags: u8 {
+        const PBS    = 1 << 0;
+        const FAILS  = 1 << 1;
+        const CLEARS = 1 << 2;
+        const QUADS  = 1 << 3;
+        const QUINTS = 1 << 4;
+    }
+}
+
+pub const AUTO_SS_NUM_FLAGS: usize = 5;
+pub const AUTO_SS_FLAG_NAMES: [&str; AUTO_SS_NUM_FLAGS] = ["PBs", "Fails", "Clears", "Quads", "Quints"];
+pub const AUTO_SS_FLAG_LIST: [AutoScreenshotFlags; AUTO_SS_NUM_FLAGS] = [
+    AutoScreenshotFlags::PBS,
+    AutoScreenshotFlags::FAILS,
+    AutoScreenshotFlags::CLEARS,
+    AutoScreenshotFlags::QUADS,
+    AutoScreenshotFlags::QUINTS,
+];
+
+/// Serialize flags to a pipe-separated string of flag names (e.g. "PBs|Fails|Quads").
+/// Returns "Off" when empty.
+pub fn auto_screenshot_flags_to_str(flags: AutoScreenshotFlags) -> String {
+    if flags.is_empty() {
+        return "Off".to_string();
+    }
+    let mut parts = Vec::new();
+    for (i, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
+        if flags.contains(AUTO_SS_FLAG_LIST[i]) {
+            parts.push(*name);
+        }
+    }
+    parts.join("|")
+}
+
+/// Parse a pipe-separated string of flag names back to flags.
+/// Accepts "Off" or empty string as empty.
+pub fn auto_screenshot_flags_from_str(s: &str) -> AutoScreenshotFlags {
+    let trimmed = s.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+        return AutoScreenshotFlags::empty();
+    }
+    let mut flags = AutoScreenshotFlags::empty();
+    for part in trimmed.split('|') {
+        let token = part.trim().to_ascii_lowercase();
+        match token.as_str() {
+            "pbs" => flags |= AutoScreenshotFlags::PBS,
+            "fails" => flags |= AutoScreenshotFlags::FAILS,
+            "clears" => flags |= AutoScreenshotFlags::CLEARS,
+            "quads" => flags |= AutoScreenshotFlags::QUADS,
+            "quints" => flags |= AutoScreenshotFlags::QUINTS,
+            _ => {}
+        }
+    }
+    flags
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DefaultFailType {
     Immediate,
@@ -549,6 +609,8 @@ pub struct Config {
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
+    /// Conditions for auto-screenshotting the Evaluation screen.
+    pub auto_screenshot_eval: AutoScreenshotFlags,
 }
 
 impl Default for Config {
@@ -634,6 +696,7 @@ impl Default for Config {
             smooth_histogram: true,
             input_debounce_seconds: 0.02,
             only_dedicated_menu_buttons: false,
+            auto_screenshot_eval: AutoScreenshotFlags::empty(),
         }
     }
 }
@@ -967,6 +1030,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_flags_to_str(default.auto_screenshot_eval)
     ));
     content.push_str(&format!("BGBrightness={}\n", default.bg_brightness));
     content.push_str(&format!(
@@ -1446,6 +1513,10 @@ pub fn load() {
                     .get("Options", "AutoPopulateGrooveStatsScores")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.auto_populate_gs_scores, |v| v != 0);
+                cfg.auto_screenshot_eval = conf
+                    .get("Options", "AutoScreenshotEval")
+                    .map(|v| auto_screenshot_flags_from_str(&v))
+                    .unwrap_or(default.auto_screenshot_eval);
                 cfg.enable_groovestats = conf
                     .get("Options", "EnableGrooveStats")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -2015,6 +2086,7 @@ pub fn load() {
                     "AudioSampleRateHz",
                     "AdditionalSongFolders",
                     "AutoPopulateGrooveStatsScores",
+                    "AutoScreenshotEval",
                     "BGBrightness",
                     "BackgroundCache",
                     "BannerCache",
@@ -2791,6 +2863,10 @@ fn save_without_keymaps() {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_flags_to_str(cfg.auto_screenshot_eval)
     ));
     content.push_str(&format!(
         "BGBrightness={}\n",
@@ -4078,6 +4154,17 @@ pub fn update_language_flag(flag: LanguageFlag) {
             return;
         }
         cfg.language_flag = flag;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_auto_screenshot_eval(flags: AutoScreenshotFlags) {
+    {
+        let mut cfg = lock_config();
+        if cfg.auto_screenshot_eval == flags {
+            return;
+        }
+        cfg.auto_screenshot_eval = flags;
     }
     save_without_keymaps();
 }

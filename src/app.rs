@@ -1122,6 +1122,40 @@ fn build_course_summary_eval_state(
     state
 }
 
+/// Check whether any player's score on the Evaluation screen matches the
+/// auto-screenshot flags.
+fn should_auto_screenshot_eval(
+    eval: &evaluation::State,
+    flags: config::AutoScreenshotFlags,
+) -> bool {
+    if flags.is_empty() {
+        return false;
+    }
+    for info in eval.score_info.iter().flatten() {
+        let is_fail = info.fail_time.is_some();
+        let is_pb = info.personal_record_highlight_rank.is_some();
+        let is_quad = matches!(info.grade, scores::Grade::Tier01);
+        let is_quint = matches!(info.grade, scores::Grade::Quint);
+
+        if flags.contains(config::AutoScreenshotFlags::PBS) && is_pb {
+            return true;
+        }
+        if flags.contains(config::AutoScreenshotFlags::FAILS) && is_fail {
+            return true;
+        }
+        if flags.contains(config::AutoScreenshotFlags::CLEARS) && !is_fail && !is_pb {
+            return true;
+        }
+        if flags.contains(config::AutoScreenshotFlags::QUADS) && is_quad {
+            return true;
+        }
+        if flags.contains(config::AutoScreenshotFlags::QUINTS) && is_quint {
+            return true;
+        }
+    }
+    false
+}
+
 fn save_screenshot_image(image: &image::RgbaImage) -> Result<PathBuf, Box<dyn Error>> {
     let dir = PathBuf::from(SCREENSHOT_DIR);
     std::fs::create_dir_all(&dir)?;
@@ -5868,6 +5902,21 @@ impl ApplicationHandler<UserEvent> for App {
                             ) && !matches!(action, ScreenAction::None)
                             {
                                 let _ = self.handle_action(action, event_loop);
+                            }
+                        }
+                        // Auto-screenshot on Evaluation screen after a short delay.
+                        if self.state.screens.current_screen == CurrentScreen::Evaluation
+                            && !self.state.screens.evaluation_state.auto_screenshot_taken
+                            && self.state.screens.evaluation_state.screen_elapsed >= 0.5
+                        {
+                            self.state.screens.evaluation_state.auto_screenshot_taken = true;
+                            let flags = config::get().auto_screenshot_eval;
+                            if should_auto_screenshot_eval(
+                                &self.state.screens.evaluation_state,
+                                flags,
+                            ) {
+                                self.state.shell.screenshot_pending = true;
+                                self.state.shell.screenshot_request_side = None;
                             }
                         }
                     }
