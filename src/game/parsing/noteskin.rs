@@ -1842,14 +1842,15 @@ pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
 
 pub fn load_itg(root: &Path, game: &str, skin: &str, style: &Style) -> Result<Noteskin, String> {
     let data = load_itg_data_cached(root, game, skin)?;
-    load_itg_sprite_noteskin(&data, style)
+    let behavior = ItgLuaBehavior::load(&data);
+    load_itg_sprite_noteskin(&data, style, &behavior)
 }
 
 fn load_itg_sprite_noteskin(
     data: &noteskin_itg::NoteskinData,
     style: &Style,
+    behavior: &ItgLuaBehavior,
 ) -> Result<Noteskin, String> {
-    let behavior = itg_load_lua_behavior(data);
     let note_display_metrics = itg_note_display_metrics(&data.metrics);
     let animation_is_beat_based = itg_animation_is_beat_based(data);
 
@@ -1862,7 +1863,7 @@ fn load_itg_sprite_noteskin(
     let mut hold_columns = Vec::with_capacity(style.num_cols);
     let mut roll_columns = Vec::with_capacity(style.num_cols);
     let resolve_single_slot = |button: &str, element: &str| {
-        itg_resolve_actor_sprites(data, &behavior, button, element)
+        itg_resolve_actor_sprites(data, behavior, button, element)
             .into_iter()
             .next()
             .map(|s| s.slot)
@@ -3583,6 +3584,7 @@ fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
 #[derive(Debug, Default, Clone)]
 struct ItgLuaBehavior {
     redir_table: HashMap<String, String>,
+    element_redir: HashMap<String, String>,
     rotate: HashMap<String, i32>,
     parts_to_rotate: HashSet<String>,
     blank: HashSet<String>,
@@ -3651,75 +3653,102 @@ fn itg_button_for_col(col: usize) -> &'static str {
     }
 }
 
-fn itg_load_lua_behavior(data: &noteskin_itg::NoteskinData) -> ItgLuaBehavior {
-    let mut behavior = ItgLuaBehavior::default();
-    for dir in data.search_dirs.iter().rev() {
-        let path = dir.join("NoteSkin.lua");
-        if !path.is_file() {
-            continue;
+impl ItgLuaBehavior {
+    fn load(data: &noteskin_itg::NoteskinData) -> Self {
+        let mut behavior = Self::default();
+        for dir in data.search_dirs.iter().rev() {
+            let path = dir.join("NoteSkin.lua");
+            if !path.is_file() {
+                continue;
+            }
+            let Ok(content) = fs::read_to_string(&path) else {
+                continue;
+            };
+            behavior.merge_content(&content);
         }
-        let Ok(content) = fs::read_to_string(&path) else {
-            continue;
-        };
-        if itg_extract_lua_table(&content, "ret.RedirTable").is_some() {
-            behavior.redir_table = itg_parse_lua_string_map(&content, "ret.RedirTable")
-                .into_iter()
-                .map(|(k, v)| (k.to_ascii_lowercase(), v))
-                .collect();
-        }
-        if itg_extract_lua_table(&content, "ret.Rotate").is_some() {
-            behavior.rotate = itg_parse_lua_int_map(&content, "ret.Rotate")
-                .into_iter()
-                .map(|(k, v)| (k.to_ascii_lowercase(), v))
-                .collect();
-        }
-        if itg_extract_lua_table(&content, "ret.PartsToRotate").is_some() {
-            behavior.parts_to_rotate = itg_parse_lua_bool_set(&content, "ret.PartsToRotate")
-                .into_iter()
-                .map(|name| name.to_ascii_lowercase())
-                .collect();
-        }
-        if itg_extract_lua_table(&content, "ret.Blank").is_some() {
-            behavior.blank = itg_parse_lua_bool_set(&content, "ret.Blank")
-                .into_iter()
-                .map(|name| name.to_ascii_lowercase())
-                .collect();
-        }
-        let defines_redir =
-            content.contains("ret.Redir = function") || content.contains("ret.Redir=function");
-        if defines_redir {
-            let assigns_tap_note = content.contains("sElement = \"Tap Note\"")
-                || content.contains("sElement='Tap Note'")
-                || content.contains("sElement = 'Tap Note'")
-                || content.contains("sElement=\"Tap Note\"");
-            let remap_head_to_tap = assigns_tap_note
-                && (content.contains("Hold Head")
-                    || content.contains("Roll Head")
-                    || content.contains("string.find(sElement, \"Head\")")
-                    || content.contains("string.find(sElement,'Head')"));
-            let remap_tap_fake_to_tap = assigns_tap_note
-                && (content.contains("Tap Fake")
-                    || content.contains("sElement == \"Tap Fake\"")
-                    || content.contains("sElement=='Tap Fake'"));
-            let keep_hold_non_head_button = (content
-                .contains("if not string.find(sElement, \"Head\")")
-                || content.contains("if not string.find(sElement,'Head')"))
-                && (content.contains("not string.find(sElement, \"Explosion\")")
-                    || content.contains("not string.find(sElement,'Explosion')"))
-                && (content.contains("string.find(sElement, \"Hold\")")
-                    || content.contains("string.find(sElement,'Hold')"))
-                && content.contains("return sButton, sElement");
-            behavior.remap_head_to_tap = remap_head_to_tap;
-            behavior.remap_tap_fake_to_tap = remap_tap_fake_to_tap;
-            behavior.keep_hold_non_head_button = keep_hold_non_head_button;
-        }
+        behavior
     }
-    behavior
+
+    fn merge_content(&mut self, content: &str) {
+        let redir_markers = [
+            "ret.RedirTable",
+            ".RedirTable",
+            ".ButtonRedir",
+            ".ButtonRedirs",
+        ];
+        if itg_extract_lua_table_any(content, &redir_markers).is_some() {
+            self.redir_table = itg_parse_lua_string_map_any(content, &redir_markers)
+                .into_iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v))
+                .collect();
+        }
+        let element_redir_markers = [".ElementRedir", ".ElementRedirs"];
+        if itg_extract_lua_table_any(content, &element_redir_markers).is_some() {
+            self.element_redir = itg_parse_lua_string_map_any(content, &element_redir_markers)
+                .into_iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v))
+                .collect();
+        }
+        let rotate_markers = ["ret.Rotate", ".Rotate"];
+        if itg_extract_lua_table_any(content, &rotate_markers).is_some() {
+            self.rotate = itg_parse_lua_int_map_any(content, &rotate_markers)
+                .into_iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v))
+                .collect();
+        }
+        let parts_to_rotate_markers = ["ret.PartsToRotate", ".PartsToRotate"];
+        if itg_extract_lua_table_any(content, &parts_to_rotate_markers).is_some() {
+            self.parts_to_rotate = itg_parse_lua_bool_set_any(content, &parts_to_rotate_markers)
+                .into_iter()
+                .map(|name| name.to_ascii_lowercase())
+                .collect();
+        }
+        let blank_markers = ["ret.Blank", ".Blank", ".bBlanks"];
+        if itg_extract_lua_table_any(content, &blank_markers).is_some() {
+            self.blank = itg_parse_lua_bool_set_any(content, &blank_markers)
+                .into_iter()
+                .map(|name| name.to_ascii_lowercase())
+                .collect();
+        }
+        let defines_loader = itg_content_has_any(
+            content,
+            &[
+                "ret.Redir = function",
+                "ret.Redir=function",
+                ".Load = func",
+                ".CommonLoad = func",
+                "function ret.Load()",
+                "function USWN.Load()",
+                "function Noteskin.Load()",
+            ],
+        );
+        if !defines_loader {
+            return;
+        }
+        self.remap_head_to_tap = itg_lua_remaps_head_to_tap(content)
+            || self
+                .element_redir
+                .iter()
+                .any(|(key, value)| key.contains("head") && value.eq_ignore_ascii_case("Tap Note"));
+        self.remap_tap_fake_to_tap = itg_lua_remaps_tap_fake_to_tap(content)
+            || self
+                .element_redir
+                .get("tap fake")
+                .is_some_and(|value| value.eq_ignore_ascii_case("Tap Note"));
+        self.keep_hold_non_head_button = (content
+            .contains("if not string.find(sElement, \"Head\")")
+            || content.contains("if not string.find(sElement,'Head')"))
+            && (content.contains("not string.find(sElement, \"Explosion\")")
+                || content.contains("not string.find(sElement,'Explosion')"))
+            && (content.contains("string.find(sElement, \"Hold\")")
+                || content.contains("string.find(sElement,'Hold')"))
+            && content.contains("return sButton, sElement");
+    }
 }
 
-fn itg_parse_lua_string_map(content: &str, marker: &str) -> HashMap<String, String> {
+fn itg_parse_lua_string_map_any(content: &str, markers: &[&str]) -> HashMap<String, String> {
     let mut out = HashMap::new();
-    let Some(table) = itg_extract_lua_table(content, marker) else {
+    let Some(table) = itg_extract_lua_table_any(content, markers) else {
         return out;
     };
     for raw in table.lines() {
@@ -3741,9 +3770,9 @@ fn itg_parse_lua_string_map(content: &str, marker: &str) -> HashMap<String, Stri
     out
 }
 
-fn itg_parse_lua_int_map(content: &str, marker: &str) -> HashMap<String, i32> {
+fn itg_parse_lua_int_map_any(content: &str, markers: &[&str]) -> HashMap<String, i32> {
     let mut out = HashMap::new();
-    let Some(table) = itg_extract_lua_table(content, marker) else {
+    let Some(table) = itg_extract_lua_table_any(content, markers) else {
         return out;
     };
     for raw in table.lines() {
@@ -3765,9 +3794,9 @@ fn itg_parse_lua_int_map(content: &str, marker: &str) -> HashMap<String, i32> {
     out
 }
 
-fn itg_parse_lua_bool_set(content: &str, marker: &str) -> HashSet<String> {
+fn itg_parse_lua_bool_set_any(content: &str, markers: &[&str]) -> HashSet<String> {
     let mut out = HashSet::new();
-    let Some(table) = itg_extract_lua_table(content, marker) else {
+    let Some(table) = itg_extract_lua_table_any(content, markers) else {
         return out;
     };
     for raw in table.lines() {
@@ -3788,8 +3817,38 @@ fn itg_parse_lua_bool_set(content: &str, marker: &str) -> HashSet<String> {
     out
 }
 
-fn itg_extract_lua_table<'a>(content: &'a str, marker: &str) -> Option<&'a str> {
-    let marker_idx = content.find(marker)?;
+fn itg_extract_lua_table_any<'a>(content: &'a str, markers: &[&str]) -> Option<&'a str> {
+    for marker in markers {
+        if let Some(table) = itg_extract_lua_table_by_line_marker(content, marker) {
+            return Some(table);
+        }
+    }
+    None
+}
+
+fn itg_extract_lua_table_by_line_marker<'a>(content: &'a str, marker: &str) -> Option<&'a str> {
+    let mut offset = 0usize;
+    for raw_line in content.split_inclusive('\n') {
+        let trimmed = raw_line.trim_start();
+        if trimmed.starts_with("--") {
+            offset += raw_line.len();
+            continue;
+        }
+        let Some(line_pos) = raw_line.find(marker) else {
+            offset += raw_line.len();
+            continue;
+        };
+        if !raw_line[line_pos + marker.len()..].contains('=') {
+            offset += raw_line.len();
+            continue;
+        }
+        let marker_idx = offset + line_pos;
+        return itg_extract_lua_table_from_offset(content, marker_idx);
+    }
+    None
+}
+
+fn itg_extract_lua_table_from_offset<'a>(content: &'a str, marker_idx: usize) -> Option<&'a str> {
     let rest = &content[marker_idx..];
     let open_rel = rest.find('{')?;
     let open = marker_idx + open_rel;
@@ -3812,6 +3871,71 @@ fn itg_parse_lua_table_key(raw: &str) -> Option<String> {
         return Some(key.to_string());
     }
     None
+}
+
+fn itg_content_has_any(content: &str, patterns: &[&str]) -> bool {
+    patterns.iter().any(|pattern| content.contains(pattern))
+}
+
+fn itg_lua_remaps_head_to_tap(content: &str) -> bool {
+    let mentions_head = itg_content_has_any(
+        content,
+        &[
+            "Hold Head",
+            "Roll Head",
+            "string.find(sElement, \"Head\")",
+            "string.find(sElement,'Head')",
+        ],
+    );
+    mentions_head
+        && itg_content_has_any(
+            content,
+            &[
+                "sElement = \"Tap Note\"",
+                "sElement = 'Tap Note'",
+                "sElement=\"Tap Note\"",
+                "sElement='Tap Note'",
+                "Element = \"Tap Note\"",
+                "Element = 'Tap Note'",
+                "Element=\"Tap Note\"",
+                "Element='Tap Note'",
+                "ElementToLoad = \"Tap Note\"",
+                "ElementToLoad = 'Tap Note'",
+                "ElementToLoad=\"Tap Note\"",
+                "ElementToLoad='Tap Note'",
+            ],
+        )
+}
+
+fn itg_lua_remaps_tap_fake_to_tap(content: &str) -> bool {
+    let mentions_tap_fake = itg_content_has_any(
+        content,
+        &[
+            "Tap Fake",
+            "sElement == \"Tap Fake\"",
+            "sElement == 'Tap Fake'",
+            "sElement=='Tap Fake'",
+            "sElement=='Tap Fake'",
+        ],
+    );
+    mentions_tap_fake
+        && itg_content_has_any(
+            content,
+            &[
+                "sElement = \"Tap Note\"",
+                "sElement = 'Tap Note'",
+                "sElement=\"Tap Note\"",
+                "sElement='Tap Note'",
+                "Element = \"Tap Note\"",
+                "Element = 'Tap Note'",
+                "Element=\"Tap Note\"",
+                "Element='Tap Note'",
+                "ElementToLoad = \"Tap Note\"",
+                "ElementToLoad = 'Tap Note'",
+                "ElementToLoad=\"Tap Note\"",
+                "ElementToLoad='Tap Note'",
+            ],
+        )
 }
 
 fn itg_parse_lua_quoted(raw: &str) -> Option<String> {
@@ -4776,11 +4900,14 @@ fn itg_resolve_actor_sprites_inner(
         return Vec::new();
     }
 
-    let mut resolved_element = element.to_string();
+    let mut resolved_element = behavior
+        .element_redir
+        .get(&element_lower)
+        .cloned()
+        .unwrap_or_else(|| element.to_string());
     if behavior.remap_head_to_tap
-        && (resolved_element.contains("Head")
-            || (behavior.remap_tap_fake_to_tap
-                && resolved_element.eq_ignore_ascii_case("Tap Fake")))
+        && (element_lower.contains("head")
+            || (behavior.remap_tap_fake_to_tap && element.eq_ignore_ascii_case("Tap Fake")))
     {
         resolved_element = "Tap Note".to_string();
     }
@@ -6206,14 +6333,81 @@ fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnimationRate, ModelEffectClock, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart,
-        NoteColorType, Quantization, SpriteSource, Style, itg_apply_state_properties_from_script,
-        itg_load_lua_behavior, itg_model_draw_program, load_itg_skin, parse_explosion_animation,
+        AnimationRate, ItgLuaBehavior, ModelEffectClock, ModelEffectMode, NUM_QUANTIZATIONS,
+        NoteAnimPart, NoteColorType, Quantization, SpriteSource, Style,
+        itg_apply_state_properties_from_script, itg_model_draw_program, load_itg_skin,
+        load_itg_sprite_noteskin, parse_explosion_animation,
     };
     use crate::game::parsing::noteskin_itg;
     use std::collections::{HashMap, HashSet};
     use std::path::Path;
     use std::sync::Arc;
+
+    const SYNTH_USWN_LUA: &str = r#"local USWN = {}
+
+USWN.ButtonRedir = {
+    Up = "Down",
+    Down = "Down",
+    Left = "Down",
+    Right = "Down",
+    UpLeft = "Down",
+    UpRight = "Down",
+}
+
+USWN.Rotate = {
+    Up = 180,
+    Down = 0,
+    Left = 90,
+    Right = -90,
+    UpLeft = 135,
+    UpRight = 225,
+}
+
+USWN.ElementRedir = {
+    ["Tap Fake"] = "Tap Note",
+    ["Roll Explosion"] = "Hold Explosion",
+}
+
+USWN.PartsToRotate = {
+    ["Tap Note"] = true,
+    ["Hold Head Active"] = true,
+    ["Hold Head Inactive"] = true,
+}
+
+USWN.Blank = {
+    ["Hold Topcap Active"] = true,
+    ["Hold Topcap Inactive"] = true,
+    ["Roll Topcap Active"] = true,
+    ["Roll Topcap Inactive"] = true,
+    ["Hold Tail Active"] = true,
+    ["Hold Tail Inactive"] = true,
+    ["Roll Tail Active"] = true,
+    ["Roll Tail Inactive"] = true,
+}
+
+function USWN.Load()
+    local sButton = Var "Button";
+    local sElement = Var "Element";
+    local Button = USWN.ButtonRedir[sButton] or sButton;
+    local Element = USWN.ElementRedir[sElement] or sElement;
+    if string.find(sElement, "Head") then
+        Element = "Tap Note";
+    end
+    local t = LoadActor(NOTESKIN:GetPath(Button,Element));
+    if USWN.Blank[sElement] then
+        t = Def.Actor {};
+        if Var "SpriteOnly" then
+            t = LoadActor(NOTESKIN:GetPath("","_blank"));
+        end
+    end
+    if USWN.PartsToRotate[sElement] then
+        t.BaseRotationZ = USWN.Rotate[sButton] or nil;
+    end
+    return t;
+end
+
+return USWN
+"#;
 
     #[test]
     fn actor_mod_parser_supports_vertalign_and_glow() {
@@ -6869,7 +7063,7 @@ mod tests {
         let data =
             noteskin_itg::load_noteskin_data(Path::new("assets/noteskins"), "dance", "ddr-note")
                 .expect("dance/ddr-note noteskin data should load");
-        let behavior = itg_load_lua_behavior(&data);
+        let behavior = ItgLuaBehavior::load(&data);
         assert!(
             !behavior.remap_head_to_tap,
             "ddr-note should not remap hold heads to tap note via fallback behavior"
@@ -6885,11 +7079,78 @@ mod tests {
         let data =
             noteskin_itg::load_noteskin_data(Path::new("assets/noteskins"), "dance", "default")
                 .expect("dance/default noteskin data should load");
-        let behavior = itg_load_lua_behavior(&data);
+        let behavior = ItgLuaBehavior::load(&data);
         assert!(
             behavior.remap_head_to_tap,
             "default noteskin should keep hold-head-to-tap remap behavior"
         );
+    }
+
+    #[test]
+    fn synthetic_uswn_noteskin_loads_behavior_tables() {
+        let mut behavior = ItgLuaBehavior::default();
+        behavior.merge_content(SYNTH_USWN_LUA);
+        assert_eq!(
+            behavior.redir_table.get("left").map(String::as_str),
+            Some("Down"),
+            "USWN.ButtonRedir should redirect Left to Down"
+        );
+        assert_eq!(
+            behavior
+                .element_redir
+                .get("roll explosion")
+                .map(String::as_str),
+            Some("Hold Explosion"),
+            "USWN.ElementRedir should map roll explosion to hold explosion"
+        );
+        assert!(
+            behavior.blank.contains("hold topcap active")
+                && behavior.blank.contains("hold tail inactive"),
+            "USWN.Blank should blank hold topcaps and tails"
+        );
+        assert!(
+            behavior.remap_head_to_tap,
+            "USWN.Load should remap hold/roll heads to tap note"
+        );
+        assert!(
+            behavior.remap_tap_fake_to_tap,
+            "USWN.ElementRedir should remap Tap Fake to Tap Note"
+        );
+    }
+
+    #[test]
+    fn synthetic_uswn_noteskin_uses_tap_layers_for_heads_and_blanks_topcaps() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let data =
+            noteskin_itg::load_noteskin_data(Path::new("assets/noteskins"), "dance", "metal")
+                .expect("dance/metal noteskin data should load");
+        let mut behavior = ItgLuaBehavior::default();
+        behavior.merge_content(SYNTH_USWN_LUA);
+        let ns = load_itg_sprite_noteskin(&data, &style, &behavior)
+            .expect("synthetic USWN behavior should load against bundled metal assets");
+        for col in 0..style.num_cols {
+            let visuals = ns.hold_visuals_for_col(col, false);
+            assert!(
+                visuals.head_inactive.is_none() && visuals.head_active.is_none(),
+                "synthetic USWN hold heads should fall back to tap-note layers"
+            );
+            assert!(
+                visuals.topcap_inactive.is_none() && visuals.topcap_active.is_none(),
+                "synthetic USWN hold topcaps should stay blank"
+            );
+            let bottom = visuals
+                .bottomcap_inactive
+                .as_ref()
+                .map(|slot| slot.texture_key().to_ascii_lowercase())
+                .expect("synthetic USWN should keep its hold bottom caps");
+            assert!(
+                bottom.contains("noteskins/dance/metal/down hold bottomcap inactive"),
+                "column {col} expected skin-specific hold bottom cap, got '{bottom}'"
+            );
+        }
     }
 
     #[test]
@@ -6950,7 +7211,7 @@ mod tests {
     fn cel_blank_table_does_not_inherit_default_hold_explosion_blank() {
         let data = noteskin_itg::load_noteskin_data(Path::new("assets/noteskins"), "dance", "cel")
             .expect("dance/cel noteskin data should load");
-        let behavior = itg_load_lua_behavior(&data);
+        let behavior = ItgLuaBehavior::load(&data);
         assert!(
             !behavior.blank.contains("hold explosion"),
             "cel should not inherit default hold explosion blank"
