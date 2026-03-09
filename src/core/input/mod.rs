@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
+mod backends;
 mod debounce;
 
 use debounce::{
@@ -49,9 +50,9 @@ pub enum PadBackend {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WindowsPadBackend {
-    /// Choose the default Windows backend (currently WGI).
-    #[default]
+    /// Choose the default Windows backend (currently Raw Input).
     Auto,
+    #[default]
     RawInput,
     Wgi,
 }
@@ -215,13 +216,15 @@ pub fn run_pad_backend(
 
     #[cfg(windows)]
     match win_backend {
-        WindowsPadBackend::RawInput => windows_raw_input::run(emit_pad, emit_sys),
-        WindowsPadBackend::Auto | WindowsPadBackend::Wgi => windows_wgi::run(emit_pad, emit_sys),
+        WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
+            backends::windows_raw_input::run(emit_pad, emit_sys)
+        }
+        WindowsPadBackend::Wgi => backends::windows_wgi::run(emit_pad, emit_sys),
     }
     #[cfg(all(unix, not(target_os = "macos")))]
-    return linux_evdev::run(emit_pad, emit_sys);
+    return backends::linux_evdev::run(emit_pad, emit_sys);
     #[cfg(target_os = "macos")]
-    return macos_iohid::run(emit_pad, emit_sys);
+    return backends::macos_iohid::run(emit_pad, emit_sys);
 
     #[cfg(not(any(windows, unix)))]
     {
@@ -236,19 +239,19 @@ pub fn run_pad_backend(
 #[cfg(windows)]
 #[inline(always)]
 pub fn run_keyboard_backend(emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static) {
-    windows_raw_keyboard::run(emit_key);
+    backends::windows_raw_keyboard::run(emit_key);
 }
 
 #[cfg(windows)]
 #[inline(always)]
 pub fn set_raw_keyboard_window_focused(focused: bool) {
-    windows_raw_keyboard::set_window_focused(focused);
+    backends::windows_raw_keyboard::set_window_focused(focused);
 }
 
 #[cfg(windows)]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
-    windows_raw_keyboard::set_capture_enabled(enabled);
+    backends::windows_raw_keyboard::set_capture_enabled(enabled);
 }
 
 #[cfg(not(windows))]
@@ -1222,16 +1225,3 @@ fn append_secondary_menu_actions(actions: &mut Vec<(VirtualAction, bool)>) {
         }
     }
 }
-
-/* ------------------------ Platform pad backends ------------------------ */
-
-#[cfg(all(unix, not(target_os = "macos")))]
-mod linux_evdev;
-#[cfg(target_os = "macos")]
-mod macos_iohid;
-#[cfg(windows)]
-mod windows_raw_input;
-#[cfg(windows)]
-mod windows_raw_keyboard;
-#[cfg(windows)]
-mod windows_wgi;

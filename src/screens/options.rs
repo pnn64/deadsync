@@ -547,7 +547,7 @@ const INPUT_ROW_BACKEND: &str = "Gamepad Backend";
 const INPUT_ROW_DEDICATED_MENU_BUTTONS: &str = "Menu Buttons";
 const INPUT_ROW_DEBOUNCE: &str = "Debounce (ms)";
 #[cfg(target_os = "windows")]
-const INPUT_BACKEND_CHOICES: &[&str] = &["W32 Raw Input", "WGI"];
+const INPUT_BACKEND_CHOICES: &[&str] = &["W32 Raw Input", "WGI (compat)"];
 #[cfg(target_os = "macos")]
 const INPUT_BACKEND_CHOICES: &[&str] = &["macOS IOHID"];
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -1049,7 +1049,7 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: INPUT_ROW_BACKEND,
         help: &[
-            "Choose gamepad input backend. On Windows this switches between WGI and W32 Raw Input.",
+            "Choose gamepad input backend. On Windows Raw Input is the default path and WGI remains available as a compatibility fallback.",
             "Changing backend requires a restart.",
         ],
     },
@@ -2132,8 +2132,8 @@ fn submenu_visible_row_to_actual(
 #[cfg(target_os = "windows")]
 const fn windows_backend_choice_index(backend: WindowsPadBackend) -> usize {
     match backend {
-        WindowsPadBackend::RawInput => 0,
-        WindowsPadBackend::Auto | WindowsPadBackend::Wgi => 1,
+        WindowsPadBackend::Auto | WindowsPadBackend::RawInput => 0,
+        WindowsPadBackend::Wgi => 1,
     }
 }
 
