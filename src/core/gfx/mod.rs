@@ -136,6 +136,9 @@ pub struct DrawStats {
     pub submit_us: u32,
     pub present_us: u32,
     pub gpu_wait_us: u32,
+    pub backend_setup_us: u32,
+    pub backend_prepare_us: u32,
+    pub backend_record_us: u32,
 }
 
 // --- Public API Facade ---

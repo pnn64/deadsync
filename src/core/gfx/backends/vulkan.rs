@@ -166,6 +166,7 @@ struct SwapchainResources {
     framebuffers: Vec<vk::Framebuffer>,
     extent: vk::Extent2D,
     format: vk::SurfaceFormatKHR,
+    present_mode: vk::PresentModeKHR,
     supports_transfer_src: bool,
 }
 
@@ -225,6 +226,7 @@ pub struct State {
     tmesh_cache_frame: u64,
     tmesh_cache_total_bytes: u64,
     next_tmesh_cache_id: u64,
+    scratch_tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom>,
     tmesh_debug_enabled: bool,
     tmesh_debug_accum: TMeshDebugAccum,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
@@ -362,6 +364,7 @@ pub fn init(
         tmesh_cache_frame: 0,
         tmesh_cache_total_bytes: 0,
         next_tmesh_cache_id: 1,
+        scratch_tmesh_geom: HashMap::new(),
         tmesh_debug_enabled: gfx_debug_enabled,
         tmesh_debug_accum: TMeshDebugAccum::default(),
         pending_tex_upload_cmd: None,
@@ -1409,6 +1412,7 @@ pub fn draw(
         }
         state.images_in_flight[image_index as usize] = fence;
 
+        let backend_setup_started = Instant::now();
         device.reset_fences(&[fence])?;
         let cmd = state.command_buffers[state.current_frame];
         device.reset_command_buffer(cmd, vk::CommandBufferResetFlags::empty())?;
@@ -1417,7 +1421,9 @@ pub fn draw(
             &vk::CommandBufferBeginInfo::default()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
         )?;
+        stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
+        let backend_prepare_started = Instant::now();
         let inst_base_ptr = base_first_instance.map_or(std::ptr::null_mut(), |b| {
             state.instance_ring_ptr.add(b as usize)
         });
@@ -1435,8 +1441,11 @@ pub fn draw(
         let tmesh_cache_seen = &mut state.tmesh_cache_seen;
         let next_tmesh_cache_id = &mut state.next_tmesh_cache_id;
         let tmesh_cache_total_bytes = &mut state.tmesh_cache_total_bytes;
-        let mut tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom> =
-            HashMap::with_capacity(needed_tmesh_instances);
+        let tmesh_geom = &mut state.scratch_tmesh_geom;
+        tmesh_geom.clear();
+        if tmesh_geom.capacity() < needed_tmesh_instances {
+            tmesh_geom.reserve(needed_tmesh_instances - tmesh_geom.capacity());
+        }
 
         for obj in &render_list.objects {
             match &obj.object_type {
@@ -1657,7 +1666,9 @@ pub fn draw(
                 }
             }
         }
+        stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
+        let backend_record_started = Instant::now();
         let c = render_list.clear_color;
         let clear_value = vk::ClearValue {
             color: vk::ClearColorValue {
@@ -1970,6 +1981,7 @@ pub fn draw(
             None
         };
         device.end_command_buffer(cmd)?;
+        stats.backend_record_us = elapsed_us_since(backend_record_started);
 
         let wait = [state.image_available_semaphores[state.current_frame]];
         let sig = [state.render_finished_semaphores[state.current_frame]];
@@ -2003,9 +2015,13 @@ pub fn draw(
             Err(e) => return Err(e.into()),
         }
         stats.present_us = elapsed_us_since(present_started);
-        if apply_present_back_pressure && screenshot_staging.is_none() {
-            // Keep uncapped rendering from stacking multiple frames of GPU work
-            // ahead of the app thread, matching ITGmania's explicit blocking.
+        if apply_present_back_pressure
+            && screenshot_staging.is_none()
+            && state.swapchain_resources.present_mode != vk::PresentModeKHR::MAILBOX
+        {
+            // MAILBOX already bounds the queue and drops stale frames, so an
+            // extra post-present fence wait mostly adds jitter instead of
+            // helping pacing.
             let wait_started = Instant::now();
             device.wait_for_fences(&[fence], true, u64::MAX)?;
             stats.gpu_wait_us = stats
@@ -3305,6 +3321,8 @@ fn create_swapchain(
     let present_mode = if vsync_enabled {
         vk::PresentModeKHR::FIFO
     } else if present_modes.contains(&vk::PresentModeKHR::MAILBOX) {
+        // Prefer tear-free low-latency presentation in uncapped mode; immediate
+        // remains a fallback when mailbox is unavailable.
         vk::PresentModeKHR::MAILBOX
     } else if present_modes.contains(&vk::PresentModeKHR::IMMEDIATE) {
         vk::PresentModeKHR::IMMEDIATE
@@ -3322,6 +3340,16 @@ fn create_swapchain(
         0 => desired_images,
         max => desired_images.min(max),
     };
+    debug!(
+        "Vulkan swapchain config: vsync={} present_mode={:?} images={} surface_min={} surface_max={} extent={}x{}",
+        vsync_enabled,
+        present_mode,
+        image_count,
+        capabilities.min_image_count,
+        capabilities.max_image_count,
+        window_size.width,
+        window_size.height
+    );
 
     // Derive the swapchain extent, making sure we never create a swapchain
     // with a zero-sized surface (which is invalid and triggers validation errors
@@ -3395,6 +3423,7 @@ fn create_swapchain(
         framebuffers: vec![],
         extent,
         format,
+        present_mode,
         supports_transfer_src,
     })
 }

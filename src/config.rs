@@ -544,6 +544,9 @@ pub struct Config {
     pub smooth_histogram: bool,
     /// ITGmania InputFilter parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
+    /// Gameplay-only release debounce window in seconds. A shorter value keeps
+    /// tap releases from lingering as long as the general input debounce.
+    pub gameplay_release_debounce_seconds: f32,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
@@ -630,6 +633,7 @@ impl Default for Config {
             cachesongs: true,
             smooth_histogram: true,
             input_debounce_seconds: 0.02,
+            gameplay_release_debounce_seconds: 0.005,
             only_dedicated_menu_buttons: false,
         }
     }
@@ -1218,6 +1222,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         default.input_debounce_seconds
     ));
     content.push_str(&format!(
+        "GameplayReleaseDebounceTime={:.3}\n",
+        default.gameplay_release_debounce_seconds
+    ));
+    content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
         if default.only_dedicated_menu_buttons {
             "1"
@@ -1723,6 +1731,27 @@ pub fn load() {
                         })
                     })
                     .unwrap_or(default.input_debounce_seconds);
+                cfg.gameplay_release_debounce_seconds = conf
+                    .get("Options", "GameplayReleaseDebounceTime")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            return None;
+                        }
+                        let lower = v.to_ascii_lowercase();
+                        if let Some(ms) = lower.strip_suffix("ms") {
+                            return ms
+                                .trim()
+                                .parse::<f32>()
+                                .ok()
+                                .map(|n| (n / 1000.0).clamp(0.0, 0.2));
+                        }
+                        v.parse::<f32>().ok().map(|n| {
+                            let secs = if n > 1.0 { n / 1000.0 } else { n };
+                            secs.clamp(0.0, 0.2)
+                        })
+                    })
+                    .unwrap_or(default.gameplay_release_debounce_seconds);
                 cfg.only_dedicated_menu_buttons = conf
                     .get("Options", "OnlyDedicatedMenuButtons")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -2055,6 +2084,7 @@ pub fn load() {
                     "ShowStatsMode",
                     "SmoothHistogram",
                     "InputDebounceTime",
+                    "GameplayReleaseDebounceTime",
                     "OnlyDedicatedMenuButtons",
                     "AssistTickVolume",
                     "SFXVolume",
@@ -2139,6 +2169,9 @@ pub fn load() {
     }
     crate::core::input::set_only_dedicated_menu_buttons(dedicated);
     crate::core::input::set_input_debounce_seconds(get().input_debounce_seconds);
+    crate::core::input::set_gameplay_release_debounce_seconds(
+        get().gameplay_release_debounce_seconds,
+    );
 }
 
 // --- Keymap defaults and parsing (kept in config to avoid coupling input.rs to config) ---
@@ -3019,6 +3052,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "InputDebounceTime={:.3}\n",
         cfg.input_debounce_seconds
+    ));
+    content.push_str(&format!(
+        "GameplayReleaseDebounceTime={:.3}\n",
+        cfg.gameplay_release_debounce_seconds
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",

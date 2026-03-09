@@ -47,7 +47,8 @@ pub fn build_screen<'a>(
         );
     }
 
-    objects.sort_by_key(|o| (o.z, o.order));
+    // `order` is already monotonically assigned, so we do not need a stable sort here.
+    objects.sort_unstable_by_key(|o| (o.z, o.order));
 
     RenderList {
         clear_color,
@@ -58,55 +59,36 @@ pub fn build_screen<'a>(
 
 #[inline(always)]
 fn estimate_object_count(actors: &[Actor]) -> usize {
-    let mut stack: Vec<&Actor> = Vec::with_capacity(actors.len());
-    stack.extend(actors.iter());
-    let mut total = 0usize;
-
-    while let Some(a) = stack.pop() {
-        match a {
-            Actor::Sprite { visible, .. } => {
-                if *visible {
-                    total += 1;
-                }
-            }
-            Actor::Text { content, .. } => {
-                // Heuristic: each char is a glyph + potentially stroke.
-                // 2 objects per char is a safe upper bound.
-                total += content.len() * 2;
-            }
+    #[inline(always)]
+    fn count_actor(actor: &Actor) -> usize {
+        match actor {
+            Actor::Sprite { visible, .. } => usize::from(*visible),
+            Actor::Text { content, .. } => content.len() * 2,
             Actor::Mesh {
                 visible, vertices, ..
-            } => {
-                if *visible && !vertices.is_empty() {
-                    total += 1;
-                }
-            }
+            } => usize::from(*visible && !vertices.is_empty()),
             Actor::TexturedMesh {
                 visible, vertices, ..
-            } => {
-                if *visible && !vertices.is_empty() {
-                    total += 1;
-                }
-            }
+            } => usize::from(*visible && !vertices.is_empty()),
             Actor::Frame {
                 children,
                 background,
                 ..
-            } => {
-                if background.is_some() {
-                    total += 1;
-                }
-                stack.extend(children.iter());
-            }
-            Actor::Camera { children, .. } => {
-                stack.extend(children.iter());
-            }
-            Actor::Shadow { child, .. } => {
-                stack.push(child);
-            }
+            } => children
+                .iter()
+                .fold(usize::from(background.is_some()), |sum, child| {
+                    sum.saturating_add(count_actor(child))
+                }),
+            Actor::Camera { children, .. } => children
+                .iter()
+                .fold(0usize, |sum, child| sum.saturating_add(count_actor(child))),
+            Actor::Shadow { child, .. } => count_actor(child),
         }
     }
-    total
+
+    actors
+        .iter()
+        .fold(0usize, |sum, actor| sum.saturating_add(count_actor(actor)))
 }
 
 /* ======================= ACTOR -> OBJECT CONVERSION ======================= */
@@ -618,7 +600,9 @@ fn build_actor_recursive<'a>(
                 let mut effect_color = *color;
                 let mut effect_scale = *scale;
                 apply_effect_to_text(*effect, total_elapsed, &mut effect_color, &mut effect_scale);
-                let mut objects = layout_text(
+                let before = out.len();
+                layout_text(
+                    out,
                     fm,
                     fonts,
                     content.as_str(),
@@ -645,26 +629,31 @@ fn build_actor_recursive<'a>(
                         h,
                     };
                     let clip_world = sm_rect_to_world_edges(clip_sm, m);
-                    clip_objects_to_world_rect(&mut objects, clip_world);
+                    clip_objects_range_to_world_rect(out, before, clip_world);
                 }
+                let end = out.len();
                 let layer = base_z.saturating_add(*z);
                 let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
                 stroke_rgba[3] *= effect_color[3];
                 if stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty() {
-                    for obj in &objects {
-                        let renderer::ObjectType::Sprite { texture_id, .. } = &obj.object_type
-                        else {
+                    out.reserve(end - before);
+                    let mut idx = before;
+                    while idx < end {
+                        let Some(stroke_key) = (match &out[idx].object_type {
+                            renderer::ObjectType::Sprite { texture_id, .. } => {
+                                fm.stroke_texture_map.get(texture_id.as_ref())
+                            }
+                            _ => None,
+                        }) else {
+                            idx += 1;
                             continue;
                         };
-                        let Some(stroke_key) = fm.stroke_texture_map.get(texture_id.as_ref())
-                        else {
-                            continue;
-                        };
-                        let mut stroke_obj = obj.clone();
+                        let mut stroke_obj = out[idx].clone();
                         let renderer::ObjectType::Sprite {
                             texture_id, tint, ..
                         } = &mut stroke_obj.object_type
                         else {
+                            idx += 1;
                             continue;
                         };
                         *texture_id = std::borrow::Cow::Owned(stroke_key.clone());
@@ -678,9 +667,10 @@ fn build_actor_recursive<'a>(
                         stroke_obj.blend = *blend;
                         stroke_obj.camera = camera;
                         out.push(stroke_obj);
+                        idx += 1;
                     }
                 }
-                for obj in &mut objects {
+                for obj in out.iter_mut().take(end).skip(before) {
                     obj.z = layer;
                     obj.order = {
                         let o = *order_counter;
@@ -693,7 +683,6 @@ fn build_actor_recursive<'a>(
                         *tint = effect_color;
                     }
                 }
-                out.extend(objects);
             }
         }
 
@@ -1153,6 +1142,7 @@ const fn quantize_up_even_i32(v: i32) -> i32 {
 }
 
 fn layout_text<'a>(
+    out: &mut Vec<RenderObject<'a>>,
     font: &'a font::Font,
     fonts: &'a std::collections::HashMap<&'static str, font::Font>,
     text: &str,
@@ -1170,9 +1160,9 @@ fn layout_text<'a>(
     offset: [f32; 2],
     text_align: actors::TextAlign,
     m: &Metrics,
-) -> Vec<RenderObject<'a>> {
+) {
     if text.is_empty() {
-        return Vec::new();
+        return;
     }
 
     #[inline(always)]
@@ -1191,7 +1181,7 @@ fn layout_text<'a>(
         max_logical_width_i = max_logical_width_i.max(line_width);
     }
     if num_lines == 0 {
-        return Vec::new();
+        return;
     }
     let block_w_logical_even = quantize_up_even_i32(max_logical_width_i) as f32;
 
@@ -1273,7 +1263,7 @@ fn layout_text<'a>(
     let sx = scale[0] * fit_s * max_s_w;
     let sy = scale[1] * fit_s * max_s_h;
     if sx.abs() < 1e-6 || sy.abs() < 1e-6 {
-        return Vec::new();
+        return;
     }
 
     // 8) Pixel rounding/snapping
@@ -1310,7 +1300,7 @@ fn layout_text<'a>(
 
     let mut dims_cache: [Option<(&str, (f32, f32))>; 8] = [None; 8];
     let mut dims_cache_len = 0usize;
-    let mut objects = Vec::with_capacity(text.len());
+    out.reserve(text.len());
 
     for line in text.lines() {
         pen_y_logical += font.height;
@@ -1386,7 +1376,7 @@ fn layout_text<'a>(
                 ];
                 let uv_offset = [glyph.tex_rect[0] / tex_w, glyph.tex_rect[1] / tex_h];
 
-                objects.push(RenderObject {
+                out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
                         texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
                         tint: [1.0; 4],
@@ -1408,8 +1398,6 @@ fn layout_text<'a>(
         }
         pen_y_logical += line_padding;
     }
-
-    objects
 }
 
 #[inline(always)]
@@ -1526,15 +1514,22 @@ fn clip_object_to_world_masks(obj: &mut RenderObject<'_>, masks: &[WorldRect]) -
     }
 }
 
-fn clip_objects_to_world_rect(objects: &mut Vec<RenderObject<'_>>, clip: WorldRect) {
+fn clip_objects_range_to_world_rect(
+    objects: &mut Vec<RenderObject<'_>>,
+    start: usize,
+    clip: WorldRect,
+) {
+    if start >= objects.len() {
+        return;
+    }
     if clip.left >= clip.right || clip.bottom >= clip.top {
-        objects.clear();
+        objects.truncate(start);
         return;
     }
 
     let len = objects.len();
-    let mut write = 0usize;
-    for read in 0..len {
+    let mut write = start;
+    for read in start..len {
         let keep = {
             let obj = &mut objects[read];
             clip_sprite_object_to_world_rect(obj, clip)

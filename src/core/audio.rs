@@ -5,7 +5,7 @@ use log::{debug, error, info, warn};
 use rubato::{
     Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -93,6 +93,7 @@ static MUSIC_TOTAL_FRAMES: AtomicU64 = AtomicU64::new(0);
 static MUSIC_TRACK_START_FRAME: AtomicU64 = AtomicU64::new(0);
 static MUSIC_TRACK_HAS_STARTED: AtomicBool = AtomicBool::new(false);
 static MUSIC_TRACK_ACTIVE: AtomicBool = AtomicBool::new(false);
+static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
 
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
@@ -107,9 +108,14 @@ static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 
+const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
+
 #[derive(Clone, Copy, Debug)]
 pub struct MusicStreamClockSnapshot {
     pub stream_seconds: f32,
+    pub music_seconds: f32,
+    pub music_seconds_per_second: f32,
+    pub has_music_mapping: bool,
     pub valid_at: Instant,
 }
 
@@ -124,11 +130,110 @@ struct CallbackClockWindow {
     prev_callback_frames: u64,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct MusicMapSeg {
+    stream_frame_start: i64,
+    frames: i64,
+    music_start_sec: f64,
+    music_sec_per_frame: f64,
+}
+
+#[derive(Default)]
+struct PlaybackPosMap {
+    queue: VecDeque<MusicMapSeg>,
+    backlog_frames: i64,
+}
+
+impl PlaybackPosMap {
+    fn clear(&mut self) {
+        self.queue.clear();
+        self.backlog_frames = 0;
+    }
+
+    fn insert(&mut self, seg: MusicMapSeg) {
+        if seg.frames <= 0
+            || !seg.music_start_sec.is_finite()
+            || !seg.music_sec_per_frame.is_finite()
+        {
+            return;
+        }
+        if let Some(last) = self.queue.back_mut() {
+            let contiguous_stream = last.stream_frame_start + last.frames == seg.stream_frame_start;
+            let ratio_match = (last.music_sec_per_frame - seg.music_sec_per_frame).abs() <= 1e-9;
+            let expected_music_start =
+                last.music_start_sec + last.music_sec_per_frame * last.frames as f64;
+            let music_contiguous = (expected_music_start - seg.music_start_sec).abs()
+                <= seg.music_sec_per_frame.abs().max(1e-9);
+            if contiguous_stream && ratio_match && music_contiguous {
+                last.frames += seg.frames;
+                self.backlog_frames = self.backlog_frames.saturating_add(seg.frames);
+                self.cleanup();
+                return;
+            }
+        }
+        self.backlog_frames = self.backlog_frames.saturating_add(seg.frames);
+        self.queue.push_back(seg);
+        self.cleanup();
+    }
+
+    fn cleanup(&mut self) {
+        while self.backlog_frames > MUSIC_POS_MAP_BACKLOG_FRAMES {
+            if let Some(front) = self.queue.pop_front() {
+                self.backlog_frames = self.backlog_frames.saturating_sub(front.frames);
+            } else {
+                self.backlog_frames = 0;
+                break;
+            }
+        }
+    }
+
+    fn search(&self, stream_frame: f64) -> Option<(f64, f64)> {
+        if self.queue.is_empty() || !stream_frame.is_finite() {
+            return None;
+        }
+        let mut closest = None;
+        let mut closest_dist = f64::INFINITY;
+        for seg in &self.queue {
+            let start = seg.stream_frame_start as f64;
+            let end = start + seg.frames as f64;
+            if stream_frame >= start && stream_frame < end {
+                let diff = stream_frame - start;
+                return Some((
+                    seg.music_start_sec + diff * seg.music_sec_per_frame,
+                    seg.music_sec_per_frame,
+                ));
+            }
+            let start_dist = (stream_frame - start).abs();
+            if start_dist < closest_dist {
+                closest_dist = start_dist;
+                closest = Some((seg.music_start_sec, seg.music_sec_per_frame));
+            }
+            let end_music = seg.music_start_sec + seg.music_sec_per_frame * seg.frames as f64;
+            let end_dist = (stream_frame - end).abs();
+            if end_dist < closest_dist {
+                closest_dist = end_dist;
+                closest = Some((end_music, seg.music_sec_per_frame));
+            }
+        }
+        closest
+    }
+}
+
+static QUEUED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
+    std::sync::LazyLock::new(|| internal::music_seg_ring_new(internal::MUSIC_SEG_RING_CAP));
+static PLAYED_MUSIC_MAP_SEGS: std::sync::LazyLock<Arc<internal::SpscRingMusicSeg>> =
+    std::sync::LazyLock::new(|| internal::music_seg_ring_new(internal::MUSIC_SEG_RING_CAP));
+static PLAYBACK_POS_MAP: std::sync::LazyLock<Mutex<PlaybackPosMap>> =
+    std::sync::LazyLock::new(|| Mutex::new(PlaybackPosMap::default()));
+
 /* ============================ Public functions ============================ */
 
 /// Initializes the audio engine. Must be called once at startup.
 pub fn init() -> Result<(), String> {
     std::sync::LazyLock::force(&ENGINE);
+    std::sync::LazyLock::force(&QUEUED_MUSIC_MAP_SEGS);
+    std::sync::LazyLock::force(&PLAYED_MUSIC_MAP_SEGS);
+    std::sync::LazyLock::force(&PLAYBACK_POS_MAP);
     Ok(())
 }
 
@@ -190,6 +295,14 @@ pub fn preload_sfx(path: &str) {
 }
 
 #[inline(always)]
+fn clear_music_pos_map() {
+    internal::music_seg_ring_clear(&QUEUED_MUSIC_MAP_SEGS);
+    internal::music_seg_ring_clear(&PLAYED_MUSIC_MAP_SEGS);
+    PLAYBACK_POS_MAP.lock().unwrap().clear();
+    MUSIC_MAP_GEN.fetch_add(1, Ordering::Release);
+}
+
+#[inline(always)]
 fn reset_music_stream_clock() {
     // Reset immediately on the caller thread so async command handoff can't
     // leak the previous track's stream position into gameplay timing.
@@ -197,6 +310,7 @@ fn reset_music_stream_clock() {
     MUSIC_TRACK_START_FRAME.store(total, Ordering::Release);
     MUSIC_TRACK_HAS_STARTED.store(false, Ordering::Release);
     MUSIC_TRACK_ACTIVE.store(false, Ordering::Release);
+    clear_music_pos_map();
 }
 
 #[inline(always)]
@@ -219,14 +333,14 @@ fn output_playback_anchor(now: Instant, info: &cpal::OutputCallbackInfo) -> Inst
 }
 
 #[inline(always)]
-fn stream_position_seconds_from_callback(
+fn stream_position_frames_from_callback(
     sample_rate: u32,
     start_frame: u64,
     at_nanos: u64,
     cb_nanos_plus_one: u64,
     base_frames: u64,
     buf_frames: u64,
-) -> Option<f32> {
+) -> Option<f64> {
     if cb_nanos_plus_one == 0 {
         return None;
     }
@@ -234,11 +348,10 @@ fn stream_position_seconds_from_callback(
     if at_nanos < cb_nanos {
         return None;
     }
-    let dt = (at_nanos.saturating_sub(cb_nanos) as f64 * 1e-9) as f32;
-    let frames_since_cb = (dt * sample_rate as f32).clamp(0.0, buf_frames as f32);
-    let frames_now = base_frames as f32 + frames_since_cb;
-    let frames_from_start = frames_now.max(start_frame as f32) - start_frame as f32;
-    Some(frames_from_start / sample_rate as f32)
+    let dt = (at_nanos.saturating_sub(cb_nanos) as f64) * 1e-9;
+    let frames_since_cb = (dt * sample_rate as f64).clamp(0.0, buf_frames as f64);
+    let frames_now = base_frames as f64 + frames_since_cb;
+    Some((frames_now.max(start_frame as f64) - start_frame as f64).max(0.0))
 }
 
 #[inline(always)]
@@ -309,13 +422,13 @@ fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockWindow) {
 }
 
 #[inline(always)]
-fn stream_position_seconds_from_window(
+fn stream_position_frames_from_window(
     sample_rate: u32,
     start_frame: u64,
     at_nanos: u64,
     window: CallbackClockWindow,
-) -> f32 {
-    if let Some(pos) = stream_position_seconds_from_callback(
+) -> f64 {
+    if let Some(frames) = stream_position_frames_from_callback(
         sample_rate,
         start_frame,
         at_nanos,
@@ -323,9 +436,9 @@ fn stream_position_seconds_from_window(
         window.last_base_frames,
         window.last_callback_frames,
     ) {
-        return pos;
+        return frames;
     }
-    if let Some(pos) = stream_position_seconds_from_callback(
+    if let Some(frames) = stream_position_frames_from_callback(
         sample_rate,
         start_frame,
         at_nanos,
@@ -333,14 +446,27 @@ fn stream_position_seconds_from_window(
         window.prev_base_frames,
         window.prev_callback_frames,
     ) {
-        return pos;
+        return frames;
     }
-    if window.total_frames <= start_frame {
-        0.0
-    } else {
-        let frames = window.total_frames.saturating_sub(start_frame) as f32;
-        frames / sample_rate as f32
+    window.total_frames.saturating_sub(start_frame) as f64
+}
+
+fn drain_played_music_map_segments() {
+    let mut map = PLAYBACK_POS_MAP.lock().unwrap();
+    while let Some(seg) = internal::music_seg_ring_pop(&PLAYED_MUSIC_MAP_SEGS) {
+        map.insert(seg);
     }
+}
+
+fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f32)> {
+    drain_played_music_map_segments();
+    let map = PLAYBACK_POS_MAP.lock().unwrap();
+    map.search(stream_frames).map(|(music_sec, sec_per_frame)| {
+        (
+            music_sec as f32,
+            (sec_per_frame * sample_rate as f64) as f32,
+        )
+    })
 }
 
 /// Plays a music track from a file path.
@@ -389,18 +515,115 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
     if !has_started {
         return MusicStreamClockSnapshot {
             stream_seconds: 0.0,
+            music_seconds: 0.0,
+            music_seconds_per_second: 1.0,
+            has_music_mapping: false,
             valid_at: Instant::now(),
         };
     }
     let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
     let (valid_at, at_nanos, window) = load_callback_clock_snapshot_now();
+    let stream_frames = stream_position_frames_from_window(sample_rate, start, at_nanos, window);
+    let stream_seconds = (stream_frames / sample_rate as f64) as f32;
+    let (music_seconds, music_seconds_per_second, has_music_mapping) =
+        match lookup_music_position(stream_frames, sample_rate) {
+            Some((music_seconds, slope)) => (music_seconds, slope, true),
+            None => (stream_seconds, 1.0, false),
+        };
     MusicStreamClockSnapshot {
-        stream_seconds: stream_position_seconds_from_window(sample_rate, start, at_nanos, window),
+        stream_seconds,
+        music_seconds,
+        music_seconds_per_second,
+        has_music_mapping,
         valid_at,
     }
 }
 
 /* ============================ Engine internals ============================ */
+
+fn push_music_block_with_map(
+    sample_ring: &internal::SpscRingI16,
+    seg_ring: &internal::SpscRingMusicSeg,
+    block: &[i16],
+    out_channels: usize,
+    music_start_sec: f64,
+    music_sec_per_frame: f64,
+    stop: &AtomicBool,
+) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
+    if block.is_empty() || out_channels == 0 {
+        return Ok(music_start_sec);
+    }
+    let mut sample_offset = 0usize;
+    let mut next_music_sec = music_start_sec;
+    while sample_offset < block.len() {
+        if stop.load(Ordering::Relaxed) {
+            return Ok(next_music_sec);
+        }
+        let free_samples = internal::ring_free_samples(sample_ring);
+        if free_samples < out_channels || !internal::music_seg_ring_has_space(seg_ring) {
+            thread::sleep(std::time::Duration::from_micros(300));
+            continue;
+        }
+        let chunk_samples =
+            (block.len() - sample_offset).min(free_samples - (free_samples % out_channels));
+        if chunk_samples == 0 {
+            thread::sleep(std::time::Duration::from_micros(300));
+            continue;
+        }
+        let chunk_frames = chunk_samples / out_channels;
+        let pushed = internal::ring_push(
+            sample_ring,
+            &block[sample_offset..sample_offset + chunk_samples],
+        );
+        debug_assert_eq!(pushed, chunk_samples);
+        let seg = MusicMapSeg {
+            stream_frame_start: 0,
+            frames: chunk_frames as i64,
+            music_start_sec: next_music_sec,
+            music_sec_per_frame,
+        };
+        let pushed_seg = internal::music_seg_ring_push(seg_ring, seg);
+        debug_assert!(pushed_seg);
+        sample_offset += chunk_samples;
+        next_music_sec += chunk_frames as f64 * music_sec_per_frame;
+    }
+    Ok(next_music_sec)
+}
+
+fn commit_played_music_map(
+    track_frame_start: i64,
+    frames_popped: i64,
+    queued_seg_ring: &internal::SpscRingMusicSeg,
+    played_seg_ring: &internal::SpscRingMusicSeg,
+    current_seg: &mut Option<MusicMapSeg>,
+) {
+    let mut stream_frame = track_frame_start;
+    let mut remaining = frames_popped.max(0);
+    while remaining > 0 {
+        let mut seg = match current_seg.take() {
+            Some(seg) => seg,
+            None => match internal::music_seg_ring_pop(queued_seg_ring) {
+                Some(seg) => seg,
+                None => break,
+            },
+        };
+        let take = remaining.min(seg.frames);
+        let played = MusicMapSeg {
+            stream_frame_start: stream_frame,
+            frames: take,
+            music_start_sec: seg.music_start_sec,
+            music_sec_per_frame: seg.music_sec_per_frame,
+        };
+        let _ = internal::music_seg_ring_push(played_seg_ring, played);
+        seg.frames -= take;
+        seg.music_start_sec += seg.music_sec_per_frame * take as f64;
+        stream_frame += take;
+        remaining -= take;
+        if seg.frames > 0 {
+            *current_seg = Some(seg);
+        }
+    }
+}
 
 fn init_engine_and_thread() -> AudioEngine {
     let (command_sender, command_receiver) = channel();
@@ -626,6 +849,10 @@ fn audio_manager_thread(
     let mut mix_i16: Vec<i16> = Vec::new();
     let mut mix_f32: Vec<f32> = Vec::new();
     let mut active_sfx_for_callback: Vec<(Arc<Vec<i16>>, usize, SfxLane)> = Vec::new();
+    let queued_music_map_for_callback = QUEUED_MUSIC_MAP_SEGS.clone();
+    let played_music_map_for_callback = PLAYED_MUSIC_MAP_SEGS.clone();
+    let mut active_music_map_for_callback: Option<MusicMapSeg> = None;
+    let mut music_map_generation_for_callback = MUSIC_MAP_GEN.load(Ordering::Acquire);
 
     // Build the output stream matching chosen sample format (like v1)
     let stream = match sample_format {
@@ -633,6 +860,14 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [i16], info| {
                 let anchor_at = output_playback_anchor(Instant::now(), info);
+                let map_generation = MUSIC_MAP_GEN.load(Ordering::Acquire);
+                if map_generation != music_map_generation_for_callback {
+                    active_music_map_for_callback = None;
+                    music_map_generation_for_callback = map_generation;
+                }
+                if !MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed) {
+                    active_music_map_for_callback = None;
+                }
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
                 publish_callback_window_start(total_before, anchor_at);
                 let config = crate::config::audio_mix_levels();
@@ -700,6 +935,22 @@ fn audio_manager_thread(
                 } else {
                     out.len() / device_channels
                 };
+                let popped_frames = if device_channels == 0 {
+                    0
+                } else {
+                    popped / device_channels
+                };
+                let track_frames_before =
+                    total_before.saturating_sub(MUSIC_TRACK_START_FRAME.load(Ordering::Acquire));
+                if popped_frames > 0 {
+                    commit_played_music_map(
+                        track_frames_before as i64,
+                        popped_frames as i64,
+                        &queued_music_map_for_callback,
+                        &played_music_map_for_callback,
+                        &mut active_music_map_for_callback,
+                    );
+                }
                 if frames > 0 {
                     publish_callback_window_end(total_before, frames as u64);
                 }
@@ -711,6 +962,14 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [u16], info| {
                 let anchor_at = output_playback_anchor(Instant::now(), info);
+                let map_generation = MUSIC_MAP_GEN.load(Ordering::Acquire);
+                if map_generation != music_map_generation_for_callback {
+                    active_music_map_for_callback = None;
+                    music_map_generation_for_callback = map_generation;
+                }
+                if !MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed) {
+                    active_music_map_for_callback = None;
+                }
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
                 publish_callback_window_start(total_before, anchor_at);
                 let config = crate::config::audio_mix_levels();
@@ -773,6 +1032,22 @@ fn audio_manager_thread(
                 } else {
                     out.len() / device_channels
                 };
+                let popped_frames = if device_channels == 0 {
+                    0
+                } else {
+                    popped / device_channels
+                };
+                let track_frames_before =
+                    total_before.saturating_sub(MUSIC_TRACK_START_FRAME.load(Ordering::Acquire));
+                if popped_frames > 0 {
+                    commit_played_music_map(
+                        track_frames_before as i64,
+                        popped_frames as i64,
+                        &queued_music_map_for_callback,
+                        &played_music_map_for_callback,
+                        &mut active_music_map_for_callback,
+                    );
+                }
                 if frames > 0 {
                     publish_callback_window_end(total_before, frames as u64);
                 }
@@ -784,6 +1059,14 @@ fn audio_manager_thread(
             &stream_config,
             move |out: &mut [f32], info| {
                 let anchor_at = output_playback_anchor(Instant::now(), info);
+                let map_generation = MUSIC_MAP_GEN.load(Ordering::Acquire);
+                if map_generation != music_map_generation_for_callback {
+                    active_music_map_for_callback = None;
+                    music_map_generation_for_callback = map_generation;
+                }
+                if !MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed) {
+                    active_music_map_for_callback = None;
+                }
                 let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
                 publish_callback_window_start(total_before, anchor_at);
                 let config = crate::config::audio_mix_levels();
@@ -839,6 +1122,22 @@ fn audio_manager_thread(
                 } else {
                     out.len() / device_channels
                 };
+                let popped_frames = if device_channels == 0 {
+                    0
+                } else {
+                    popped / device_channels
+                };
+                let track_frames_before =
+                    total_before.saturating_sub(MUSIC_TRACK_START_FRAME.load(Ordering::Acquire));
+                if popped_frames > 0 {
+                    commit_played_music_map(
+                        track_frames_before as i64,
+                        popped_frames as i64,
+                        &queued_music_map_for_callback,
+                        &played_music_map_for_callback,
+                        &mut active_music_map_for_callback,
+                    );
+                }
                 if frames > 0 {
                     publish_callback_window_end(total_before, frames as u64);
                 }
@@ -892,6 +1191,7 @@ fn audio_manager_thread(
                 }
                 // Drop buffered old-rate samples so the change is heard immediately.
                 internal::ring_clear(&music_ring);
+                clear_music_pos_map();
             }
             Err(_) => break, // main dropped; exit thread
         }
@@ -1018,6 +1318,7 @@ fn music_decoder_thread_loop(
 
     let out_ch = ENGINE.device_channels;
     let out_hz = ENGINE.device_sample_rate;
+    let queued_music_map = QUEUED_MUSIC_MAP_SEGS.clone();
 
     debug!(
         "Music decode start: {:?} ({} ch @ {} Hz) -> output {} ch @ {} Hz (rate x{}).",
@@ -1036,18 +1337,15 @@ fn music_decoder_thread_loop(
             (silence_duration_sec * f64::from(out_hz) * out_ch as f64).round() as usize;
         if silence_samples > 0 {
             let silence_buf = vec![0i16; silence_samples];
-            let mut off = 0;
-            while off < silence_buf.len() {
-                if stop.load(std::sync::atomic::Ordering::Relaxed) {
-                    return Ok(());
-                }
-                let pushed = internal::ring_push(&ring, &silence_buf[off..]);
-                if pushed == 0 {
-                    thread::sleep(std::time::Duration::from_micros(300));
-                } else {
-                    off += pushed;
-                }
-            }
+            let _ = push_music_block_with_map(
+                &ring,
+                &queued_music_map,
+                &silence_buf,
+                out_ch,
+                cut.start_sec,
+                1.0 / f64::from(out_hz.max(1)),
+                &stop,
+            )?;
         }
     }
 
@@ -1124,6 +1422,7 @@ fn music_decoder_thread_loop(
         };
 
         let mut frames_emitted_total: u64 = 0;
+        let mut next_music_output_sec = cut.start_sec.max(0.0);
 
         #[inline(always)]
         fn cap_out_frames(
@@ -1169,16 +1468,17 @@ fn music_decoder_thread_loop(
         fn try_produce_blocks(
             resampler: &mut SincFixedOut<f32>,
             in_planar: &mut [Vec<f32>],
+            in_hz: u32,
             out_ch: usize,
             out_tmp: &mut Vec<i16>,
             preroll_out_frames: &mut u64,
             frames_emitted_total: &mut u64,
             fade_spec: Option<(u64, u64)>,
             frames_left_out: &mut Option<u64>,
-            push_block: &mut dyn FnMut(
-                &[i16],
-            )
-                -> Result<(), Box<dyn std::error::Error + Send + Sync>>,
+            next_music_output_sec: &mut f64,
+            ring: &internal::SpscRingI16,
+            seg_ring: &internal::SpscRingMusicSeg,
+            stop: &AtomicBool,
         ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
             let mut produced_any = false;
 
@@ -1206,6 +1506,11 @@ fn music_decoder_thread_loop(
                 }
 
                 let produced_frames = out[0].len();
+                if produced_frames == 0 {
+                    break;
+                }
+                let music_sec_per_frame =
+                    (need as f64 / f64::from(in_hz.max(1))) / produced_frames as f64;
                 out_tmp.clear();
                 out_tmp.reserve(produced_frames * out_ch);
 
@@ -1227,6 +1532,7 @@ fn music_decoder_thread_loop(
                         out_tmp.drain(0..drop_samples);
                         *preroll_out_frames =
                             (*preroll_out_frames).saturating_sub(drop_frames as u64);
+                        *next_music_output_sec += drop_frames as f64 * music_sec_per_frame;
                     }
                 }
 
@@ -1250,7 +1556,15 @@ fn music_decoder_thread_loop(
                     apply_fade_envelope(out_tmp, out_ch, *frames_emitted_total, fade_spec);
                     *frames_emitted_total =
                         (*frames_emitted_total).saturating_add((out_tmp.len() / out_ch) as u64);
-                    push_block(out_tmp)?;
+                    *next_music_output_sec = push_music_block_with_map(
+                        ring,
+                        seg_ring,
+                        out_tmp,
+                        out_ch,
+                        *next_music_output_sec,
+                        music_sec_per_frame,
+                        stop,
+                    )?;
                     produced_any = true;
                 }
 
@@ -1322,27 +1636,17 @@ fn music_decoder_thread_loop(
             let _ = try_produce_blocks(
                 &mut resampler,
                 &mut in_planar,
+                in_hz,
                 out_ch,
                 &mut out_tmp,
                 &mut preroll_out_frames,
                 &mut frames_emitted_total,
                 fade_spec,
                 &mut frames_left_out,
-                &mut |block: &[i16]| {
-                    let mut off = 0;
-                    while off < block.len() {
-                        if stop.load(std::sync::atomic::Ordering::Relaxed) {
-                            return Ok(());
-                        }
-                        let pushed = internal::ring_push(&ring, &block[off..]);
-                        if pushed == 0 {
-                            thread::sleep(std::time::Duration::from_micros(300));
-                        } else {
-                            off += pushed;
-                        }
-                    }
-                    Ok(())
-                },
+                &mut next_music_output_sec,
+                &ring,
+                &queued_music_map,
+                &stop,
             )?;
             let finished = matches!(frames_left_out, Some(0));
             if finished {
@@ -1365,6 +1669,11 @@ fn music_decoder_thread_loop(
 
             if !out.is_empty() {
                 let produced_frames = out[0].len();
+                let music_sec_per_frame = if produced_frames == 0 {
+                    0.0
+                } else {
+                    (remain as f64 / f64::from(in_hz.max(1))) / produced_frames as f64
+                };
                 out_tmp.clear();
                 out_tmp.reserve(produced_frames * out_ch);
 
@@ -1383,25 +1692,23 @@ fn music_decoder_thread_loop(
                     let drop_samples = drop_frames * out_ch;
                     if drop_samples > 0 {
                         out_tmp.drain(0..drop_samples);
-                        // No need to update preroll_out_frames after flush
+                        next_music_output_sec += drop_frames as f64 * music_sec_per_frame;
                     }
                 }
 
                 if !out_tmp.is_empty() {
                     apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
-                    // No need to update frames_emitted_total after flush
-                    let mut off = 0;
-                    while off < out_tmp.len() {
-                        if stop.load(std::sync::atomic::Ordering::Relaxed) {
-                            return Ok(());
-                        }
-                        let pushed = internal::ring_push(&ring, &out_tmp[off..]);
-                        if pushed == 0 {
-                            thread::sleep(std::time::Duration::from_micros(300));
-                        } else {
-                            off += pushed;
-                        }
-                    }
+                    frames_emitted_total =
+                        frames_emitted_total.saturating_add((out_tmp.len() / out_ch) as u64);
+                    next_music_output_sec = push_music_block_with_map(
+                        &ring,
+                        &queued_music_map,
+                        &out_tmp,
+                        out_ch,
+                        next_music_output_sec,
+                        music_sec_per_frame,
+                        &stop,
+                    )?;
                 }
             }
         }
@@ -1410,6 +1717,7 @@ fn music_decoder_thread_loop(
         let out_tail = resampler.process_partial::<&[f32]>(None, None)?;
         if !out_tail.is_empty() {
             let produced_frames = out_tail[0].len();
+            let music_sec_per_frame = f64::from(current_rate_f32) / f64::from(out_hz.max(1));
             out_tmp.clear();
             out_tmp.reserve(produced_frames * out_ch);
 
@@ -1424,18 +1732,16 @@ fn music_decoder_thread_loop(
 
             let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
             if !out_tmp.is_empty() {
-                let mut off = 0;
-                while off < out_tmp.len() {
-                    if stop.load(std::sync::atomic::Ordering::Relaxed) {
-                        return Ok(());
-                    }
-                    let pushed = internal::ring_push(&ring, &out_tmp[off..]);
-                    if pushed == 0 {
-                        thread::sleep(std::time::Duration::from_micros(300));
-                    } else {
-                        off += pushed;
-                    }
-                }
+                apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade_spec);
+                next_music_output_sec = push_music_block_with_map(
+                    &ring,
+                    &queued_music_map,
+                    &out_tmp,
+                    out_ch,
+                    next_music_output_sec,
+                    music_sec_per_frame,
+                    &stop,
+                )?;
             }
         }
 
@@ -1592,13 +1898,14 @@ fn load_and_resample_sfx(path: &str) -> Result<Arc<Vec<i16>>, Box<dyn std::error
 /* =========================== Internal primitives =========================== */
 
 mod internal {
-    use super::Arc;
+    use super::{Arc, MusicMapSeg};
     use std::cell::UnsafeCell;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     // Pre-roll input frames and ring capacity
     pub const PREROLL_IN_FRAMES: u64 = 8;
     pub const RING_CAP_SAMPLES: usize = 1 << 16; // interleaved i16 samples (smaller = snappier)
+    pub const MUSIC_SEG_RING_CAP: usize = 1 << 11;
 
     /* ----------------------------- SPSC ring ----------------------------- */
 
@@ -1624,6 +1931,14 @@ mod internal {
     #[inline(always)]
     fn ring_cap(r: &SpscRingI16) -> usize {
         unsafe { (&*r.buf.get()).len() }
+    }
+
+    #[inline(always)]
+    pub fn ring_free_samples(r: &SpscRingI16) -> usize {
+        let cap = ring_cap(r);
+        let h = r.head.load(Ordering::Relaxed);
+        let t = r.tail.load(Ordering::Acquire);
+        cap.saturating_sub(h.wrapping_sub(t))
     }
 
     pub fn ring_push(r: &SpscRingI16, data: &[i16]) -> usize {
@@ -1695,5 +2010,69 @@ mod internal {
             filled += got;
         }
         filled
+    }
+
+    pub struct SpscRingMusicSeg {
+        buf: UnsafeCell<Box<[MusicMapSeg]>>,
+        mask: usize,
+        head: AtomicUsize,
+        tail: AtomicUsize,
+    }
+    unsafe impl Send for SpscRingMusicSeg {}
+    unsafe impl Sync for SpscRingMusicSeg {}
+
+    pub fn music_seg_ring_new(cap_pow2: usize) -> Arc<SpscRingMusicSeg> {
+        assert!(cap_pow2.is_power_of_two());
+        Arc::new(SpscRingMusicSeg {
+            buf: UnsafeCell::new(vec![MusicMapSeg::default(); cap_pow2].into_boxed_slice()),
+            mask: cap_pow2 - 1,
+            head: AtomicUsize::new(0),
+            tail: AtomicUsize::new(0),
+        })
+    }
+
+    #[inline(always)]
+    fn music_seg_ring_cap(r: &SpscRingMusicSeg) -> usize {
+        unsafe { (&*r.buf.get()).len() }
+    }
+
+    #[inline(always)]
+    pub fn music_seg_ring_has_space(r: &SpscRingMusicSeg) -> bool {
+        let cap = music_seg_ring_cap(r);
+        let h = r.head.load(Ordering::Relaxed);
+        let t = r.tail.load(Ordering::Acquire);
+        h.wrapping_sub(t) < cap
+    }
+
+    pub fn music_seg_ring_push(r: &SpscRingMusicSeg, seg: MusicMapSeg) -> bool {
+        let cap = music_seg_ring_cap(r);
+        let h = r.head.load(Ordering::Relaxed);
+        let t = r.tail.load(Ordering::Acquire);
+        if h.wrapping_sub(t) >= cap {
+            return false;
+        }
+        let idx = h & r.mask;
+        unsafe {
+            (&mut *r.buf.get())[idx] = seg;
+        }
+        r.head.store(h.wrapping_add(1), Ordering::Release);
+        true
+    }
+
+    pub fn music_seg_ring_pop(r: &SpscRingMusicSeg) -> Option<MusicMapSeg> {
+        let h = r.head.load(Ordering::Acquire);
+        let t = r.tail.load(Ordering::Relaxed);
+        if h == t {
+            return None;
+        }
+        let idx = t & r.mask;
+        let seg = unsafe { (&*r.buf.get())[idx] };
+        r.tail.store(t.wrapping_add(1), Ordering::Release);
+        Some(seg)
+    }
+
+    pub fn music_seg_ring_clear(r: &SpscRingMusicSeg) {
+        let tail_pos = r.tail.load(Ordering::Relaxed);
+        r.head.store(tail_pos, Ordering::Release);
     }
 }

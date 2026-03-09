@@ -3201,6 +3201,7 @@ pub struct ReplayOffsetSnapshot {
 #[derive(Clone, Copy, Debug)]
 struct SongClockSnapshot {
     song_time: f32,
+    seconds_per_second: f32,
     valid_at: Instant,
 }
 
@@ -4592,27 +4593,43 @@ fn current_music_time_from_stream(state: &State) -> f32 {
 #[inline(always)]
 fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
     let stream_clock = audio::get_music_stream_clock_snapshot();
-    SongClockSnapshot {
-        song_time: stream_pos_to_music_time(state, stream_clock.stream_seconds),
-        valid_at: stream_clock.valid_at,
+    let fallback_rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    if stream_clock.has_music_mapping {
+        SongClockSnapshot {
+            song_time: stream_clock.music_seconds,
+            seconds_per_second: if stream_clock.music_seconds_per_second.is_finite()
+                && stream_clock.music_seconds_per_second > 0.0
+            {
+                stream_clock.music_seconds_per_second
+            } else {
+                fallback_rate
+            },
+            valid_at: stream_clock.valid_at,
+        }
+    } else {
+        SongClockSnapshot {
+            song_time: stream_pos_to_music_time(state, stream_clock.stream_seconds),
+            seconds_per_second: fallback_rate,
+            valid_at: stream_clock.valid_at,
+        }
     }
 }
 
 #[inline(always)]
-fn music_time_from_song_clock(
-    snapshot: SongClockSnapshot,
-    music_rate: f32,
-    captured_at: Instant,
-) -> f32 {
-    let rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
+fn music_time_from_song_clock(snapshot: SongClockSnapshot, captured_at: Instant) -> f32 {
+    let slope = if snapshot.seconds_per_second.is_finite() && snapshot.seconds_per_second > 0.0 {
+        snapshot.seconds_per_second
     } else {
         1.0
     };
     if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at) {
-        snapshot.song_time - age.as_secs_f32() * rate
+        snapshot.song_time - age.as_secs_f32() * slope
     } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
-        snapshot.song_time + lead.as_secs_f32() * rate
+        snapshot.song_time + lead.as_secs_f32() * slope
     } else {
         snapshot.song_time
     }
@@ -8047,30 +8064,21 @@ fn apply_song_offset_delta(state: &mut State, delta: f32) -> bool {
     true
 }
 
-pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
-    use winit::event::ElementState;
-    use winit::keyboard::PhysicalKey;
-
-    if key.state != ElementState::Pressed {
+pub fn handle_raw_keycode_event(
+    state: &mut State,
+    code: KeyCode,
+    pressed: bool,
+    shift_held: bool,
+) -> ScreenAction {
+    if !pressed {
         return ScreenAction::None;
     }
-
-    let PhysicalKey::Code(code) = key.physical_key else {
-        return ScreenAction::None;
-    };
-
     if code == KeyCode::F6 {
-        if key.repeat {
-            return ScreenAction::None;
-        }
         cycle_autosync_mode(state);
         return ScreenAction::None;
     }
 
     if code == KeyCode::F7 {
-        if key.repeat {
-            return ScreenAction::None;
-        }
         let now_music_time = current_music_time_from_stream(state);
         set_tick_mode(state, next_tick_mode(state.tick_mode), now_music_time);
         return ScreenAction::None;
@@ -8096,6 +8104,25 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
         let _ = apply_song_offset_delta(state, delta);
     }
     ScreenAction::None
+}
+
+pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
+    use winit::event::ElementState;
+    use winit::keyboard::PhysicalKey;
+
+    if key.state != ElementState::Pressed {
+        return ScreenAction::None;
+    }
+
+    let PhysicalKey::Code(code) = key.physical_key else {
+        return ScreenAction::None;
+    };
+
+    if key.repeat && matches!(code, KeyCode::F6 | KeyCode::F7) {
+        return ScreenAction::None;
+    }
+
+    handle_raw_keycode_event(state, code, true, shift_held)
 }
 
 fn finalize_row_judgment(
@@ -8335,8 +8362,7 @@ fn process_input_edges(
             continue;
         }
         if !edge.event_music_time.is_finite() {
-            edge.event_music_time =
-                music_time_from_song_clock(song_clock, state.music_rate, edge.captured_at);
+            edge.event_music_time = music_time_from_song_clock(song_clock, edge.captured_at);
         }
         if edge.record_replay && edge.event_music_time.is_finite() {
             state.replay_edges.push(RecordedLaneEdge {
@@ -9602,9 +9628,10 @@ mod tests {
         let base = Instant::now();
         let snapshot = SongClockSnapshot {
             song_time: 120.0,
+            seconds_per_second: 1.5,
             valid_at: base + Duration::from_millis(24),
         };
-        let edge_time = music_time_from_song_clock(snapshot, 1.5, base);
+        let edge_time = music_time_from_song_clock(snapshot, base);
         assert!((edge_time - 119.964).abs() < 0.000_5);
     }
 
@@ -9613,9 +9640,10 @@ mod tests {
         let base = Instant::now();
         let snapshot = SongClockSnapshot {
             song_time: 64.0,
+            seconds_per_second: 2.0,
             valid_at: base,
         };
-        let edge_time = music_time_from_song_clock(snapshot, 2.0, base + Duration::from_millis(5));
+        let edge_time = music_time_from_song_clock(snapshot, base + Duration::from_millis(5));
         assert!((edge_time - 64.01).abs() < 0.000_5);
     }
 }
