@@ -1559,8 +1559,6 @@ pub fn draw(
                             &state.instance,
                             device.as_ref(),
                             state.pdevice,
-                            state.command_pool,
-                            state.queue,
                             tmesh_cache_entries,
                             tmesh_cache_seen,
                             next_tmesh_cache_id,
@@ -2104,8 +2102,6 @@ fn try_get_or_promote_cached_tmesh_geom(
     instance: &Instance,
     device: &Device,
     pdevice: vk::PhysicalDevice,
-    command_pool: vk::CommandPool,
-    queue: vk::Queue,
     cache_entries: &mut HashMap<TMeshCacheKey, TMeshCacheEntry>,
     cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>,
     next_cache_id: &mut u64,
@@ -2149,15 +2145,12 @@ fn try_get_or_promote_cached_tmesh_geom(
 
     let raw = build_tmesh_vertex_raw(vertices);
     let bytes = (raw.len() * mem::size_of::<TexturedMeshVertexGpu>()) as u64;
-    let buffer = match create_buffer(
+    let buffer = match create_host_visible_buffer(
         instance,
         device,
         pdevice,
-        command_pool,
-        queue,
         vk::BufferUsageFlags::VERTEX_BUFFER,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        Some(raw.as_slice()),
+        raw.as_slice(),
     ) {
         Ok(buffer) => buffer,
         Err(err) => {
@@ -2915,6 +2908,30 @@ fn create_buffer<T: Copy>(
             create_gpu_buffer(instance, device, pdevice, buffer_size, usage, properties)?;
         Ok(BufferResource { buffer, memory })
     }
+}
+
+fn create_host_visible_buffer<T: Copy>(
+    instance: &Instance,
+    device: &Device,
+    pdevice: vk::PhysicalDevice,
+    usage: vk::BufferUsageFlags,
+    data: &[T],
+) -> Result<BufferResource, Box<dyn Error>> {
+    let buffer_size = mem::size_of_val(data) as vk::DeviceSize;
+    let (buffer, memory) = create_gpu_buffer(
+        instance,
+        device,
+        pdevice,
+        buffer_size,
+        usage,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )?;
+    unsafe {
+        let mapped = device.map_memory(memory, 0, buffer_size, vk::MemoryMapFlags::empty())?;
+        std::ptr::copy_nonoverlapping(data.as_ptr(), mapped.cast::<T>(), data.len());
+        device.unmap_memory(memory);
+    }
+    Ok(BufferResource { buffer, memory })
 }
 
 fn copy_buffer(

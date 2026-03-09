@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.2.91"
+version = "0.2.92"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -61,6 +61,8 @@ windows = { version = "0.62.2", features = [
     "Gaming",
     "Gaming_Input",
     "Win32_Foundation",
+    "Win32_Media",
+    "Win32_Media_Multimedia",
     "Win32_Graphics_Gdi",
     "Win32_Devices_HumanInterfaceDevice",
     "Win32_Devices_Display",

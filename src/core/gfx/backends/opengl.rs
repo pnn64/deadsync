@@ -22,6 +22,9 @@ use std::{
 use twox_hash::XxHash64;
 use winit::window::Window;
 
+const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
+const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
+
 // A handle to an OpenGL texture on the GPU.
 #[derive(Debug, Clone, Copy)]
 pub struct Texture(pub glow::Texture);
@@ -1243,6 +1246,18 @@ pub fn draw(
             state.gl.finish();
         }
         gpu_wait_us = elapsed_us_since(wait_started);
+    }
+    if present_us >= OPENGL_PRESENT_SPIKE_US || gpu_wait_us >= OPENGL_GPU_WAIT_SPIKE_US {
+        let (width, height) = state.window_size;
+        debug!(
+            "OpenGL present spike: swap_ms={:.3} gpu_wait_ms={:.3} back_pressure={} vertices={} viewport={}x{}",
+            present_us as f32 / 1000.0,
+            gpu_wait_us as f32 / 1000.0,
+            apply_present_back_pressure,
+            vertices,
+            width,
+            height
+        );
     }
     push_tmesh_debug_sample(state, tmesh_debug_frame);
     Ok(DrawStats {
