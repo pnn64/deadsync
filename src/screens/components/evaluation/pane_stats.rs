@@ -286,7 +286,7 @@ pub fn build_stats_pane(
 
         // --- RADAR LABELS & NUMBERS ---
         let radar_categories = [
-            ("hands", score_info.hands_achieved, score_info.chart.stats.hands),
+            ("hands", score_info.hands_achieved, score_info.hands_total),
             ("holds", score_info.holds_held, score_info.holds_total),
             ("mines", score_info.mines_avoided, score_info.mines_total),
             ("rolls", score_info.rolls_held, score_info.rolls_total),

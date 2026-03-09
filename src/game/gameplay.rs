@@ -2299,15 +2299,27 @@ fn count_total_steps_for_range(notes: &[Note], note_range: (usize, usize)) -> u3
     rows.len() as u32
 }
 
+struct PlayerTotals {
+    steps: u32,
+    holds: u32,
+    rolls: u32,
+    mines: u32,
+    jumps: u32,
+    hands: u32,
+}
+
 #[inline(always)]
-fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> (u32, u32, u32, u32) {
+fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> PlayerTotals {
     let (start, end) = note_range;
     if start >= end {
-        return (0, 0, 0, 0);
+        return PlayerTotals { steps: 0, holds: 0, rolls: 0, mines: 0, jumps: 0, hands: 0 };
     }
     let mut holds = 0u32;
     let mut rolls = 0u32;
     let mut mines = 0u32;
+    // For jumps/hands we need to group judgable non-mine notes by row and
+    // track active holds across rows (matching rssp's count_line logic).
+    let mut row_notes: Vec<(usize, bool)> = Vec::with_capacity(end - start);
     for note in &notes[start..end] {
         if !note.can_be_judged {
             continue;
@@ -2318,13 +2330,57 @@ fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> (u32, 
             NoteType::Mine => mines = mines.saturating_add(1),
             NoteType::Tap | NoteType::Fake => {}
         }
+        if !matches!(note.note_type, NoteType::Mine) {
+            let is_hold_or_roll =
+                matches!(note.note_type, NoteType::Hold | NoteType::Roll);
+            row_notes.push((note.row_index, is_hold_or_roll));
+        }
     }
-    (
-        count_total_steps_for_range(notes, note_range),
+
+    // Count active hold/roll ranges spanning each row for hands detection.
+    // Collect hold/roll spans: (start_row, end_row) for notes in range.
+    let mut hold_spans: Vec<(usize, usize)> = Vec::new();
+    for note in &notes[start..end] {
+        if !note.can_be_judged {
+            continue;
+        }
+        if let Some(hold) = note.hold.as_ref() {
+            hold_spans.push((note.row_index, hold.end_row_index));
+        }
+    }
+
+    // Group tap/hold/roll notes by row_index.
+    row_notes.sort_unstable_by_key(|&(row, _)| row);
+    let mut jumps = 0u32;
+    let mut hands = 0u32;
+    let mut i = 0;
+    while i < row_notes.len() {
+        let row = row_notes[i].0;
+        let mut notes_on_row = 0u32;
+        while i < row_notes.len() && row_notes[i].0 == row {
+            notes_on_row += 1;
+            i += 1;
+        }
+        let carried: u32 = hold_spans
+            .iter()
+            .filter(|&&(s, e)| s < row && e >= row)
+            .count() as u32;
+        let total = notes_on_row + carried;
+        if total >= 3 {
+            hands = hands.saturating_add(1);
+        } else if notes_on_row == 2 {
+            jumps = jumps.saturating_add(1);
+        }
+    }
+
+    PlayerTotals {
+        steps: count_total_steps_for_range(notes, note_range),
         holds,
         rolls,
         mines,
-    )
+        jumps,
+        hands,
+    }
 }
 
 fn compute_end_times(
@@ -3444,6 +3500,9 @@ pub struct State {
     pub rolls_total: [u32; MAX_PLAYERS],
     pub mines_total: [u32; MAX_PLAYERS],
     pub total_steps: [u32; MAX_PLAYERS],
+    #[allow(dead_code)] // Computed for parity with ITGmania RadarCategory_Jumps; no evaluation display yet (Simply Love omits it).
+    pub jumps_total: [u32; MAX_PLAYERS],
+    pub hands_total: [u32; MAX_PLAYERS],
 
     pub total_elapsed_in_screen: f32,
 
@@ -5040,15 +5099,19 @@ pub fn init(
     );
 
     let mut total_steps = [0u32; MAX_PLAYERS];
+    let mut jumps_total = [0u32; MAX_PLAYERS];
+    let mut hands_total = [0u32; MAX_PLAYERS];
     holds_total = [0; MAX_PLAYERS];
     rolls_total = [0; MAX_PLAYERS];
     mines_total = [0; MAX_PLAYERS];
     for player in 0..num_players {
-        let (steps, holds, rolls, mines) = recompute_player_totals(&notes, note_ranges[player]);
-        total_steps[player] = steps;
-        holds_total[player] = holds;
-        rolls_total[player] = rolls;
-        mines_total[player] = mines;
+        let t = recompute_player_totals(&notes, note_ranges[player]);
+        total_steps[player] = t.steps;
+        holds_total[player] = t.holds;
+        rolls_total[player] = t.rolls;
+        mines_total[player] = t.mines;
+        jumps_total[player] = t.jumps;
+        hands_total[player] = t.hands;
     }
 
     let note_player_for_col = |col: usize| -> usize {
@@ -5099,6 +5162,8 @@ pub fn init(
         rolls_total[1] = rolls_total[0];
         mines_total[1] = mines_total[0];
         total_steps[1] = total_steps[0];
+        jumps_total[1] = jumps_total[0];
+        hands_total[1] = hands_total[0];
         note_ranges[1] = note_ranges[0];
     }
 
@@ -5693,6 +5758,8 @@ pub fn init(
         rolls_total,
         mines_total,
         total_steps,
+        jumps_total,
+        hands_total,
         total_elapsed_in_screen: 0.0,
         sync_overlay_message: None,
         replay_status_text,
