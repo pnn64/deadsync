@@ -5249,10 +5249,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         let play_style = profile::get_session_play_style();
         let target_chart_type = play_style.chart_type();
         let show_select_music_leaderboards = cfg.show_select_music_scorebox
-            && (cfg.select_music_scorebox_cycle_itg
-                || cfg.select_music_scorebox_cycle_ex
-                || cfg.select_music_scorebox_cycle_hard_ex
-                || cfg.select_music_scorebox_cycle_tournaments);
+            && !cfg.scorebox_cycle.is_empty();
 
         if let Some(song) = selected_song.as_ref() {
             let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
@@ -5634,10 +5631,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         profile::PlayerSide::P1
     };
-    let scorebox_cycle_enabled = cfg.select_music_scorebox_cycle_itg
-        || cfg.select_music_scorebox_cycle_ex
-        || cfg.select_music_scorebox_cycle_hard_ex
-        || cfg.select_music_scorebox_cycle_tournaments;
+    let scorebox_cycle_enabled = !cfg.scorebox_cycle.is_empty();
     let mode_chart_hash =
         if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
             let mode_chart = if mode_side == profile::PlayerSide::P2 && is_versus {

@@ -51,6 +51,7 @@ ureq = { version = "3.2.0", features = ["json", "rustls"] }
 bincode = "2.0.1"
 twox-hash = "2.1.2"
 tokio = { version = "1.50.0", features = ["rt"] }
+bitflags = "2.11.0"
 
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]

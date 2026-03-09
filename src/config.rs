@@ -131,6 +131,107 @@ impl FromStr for BreakdownStyle {
     }
 }
 
+bitflags::bitflags! {
+    /// Bit flags for which scorebox leaderboard panes are enabled in Select Music.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct ScoreboxCycleFlags: u8 {
+        const ITG         = 1 << 0;
+        const EX          = 1 << 1;
+        const HARD_EX     = 1 << 2;
+        const TOURNAMENTS = 1 << 3;
+    }
+}
+
+pub const SB_CYCLE_NUM_FLAGS: usize = 4;
+pub const SB_CYCLE_FLAG_NAMES: [&str; SB_CYCLE_NUM_FLAGS] = ["ITG", "EX", "Hard EX", "Tournaments"];
+
+/// Serialize scorebox cycle flags to a pipe-separated string.
+pub fn scorebox_cycle_flags_to_str(flags: ScoreboxCycleFlags) -> String {
+    if flags.is_empty() {
+        return "Off".to_string();
+    }
+    let mut parts = Vec::new();
+    for (i, name) in SB_CYCLE_FLAG_NAMES.iter().enumerate() {
+        if flags.contains(ScoreboxCycleFlags::from_bits_truncate(1u8 << i)) {
+            parts.push(*name);
+        }
+    }
+    parts.join("|")
+}
+
+/// Parse a pipe-separated string of scorebox cycle flag names.
+pub fn scorebox_cycle_flags_from_str(s: &str) -> ScoreboxCycleFlags {
+    let trimmed = s.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+        return ScoreboxCycleFlags::empty();
+    }
+    let mut flags = ScoreboxCycleFlags::empty();
+    for part in trimmed.split('|') {
+        let token = part.trim().to_ascii_lowercase();
+        match token.as_str() {
+            "itg" => flags |= ScoreboxCycleFlags::ITG,
+            "ex" => flags |= ScoreboxCycleFlags::EX,
+            "hard ex" | "hardex" | "hard_ex" => flags |= ScoreboxCycleFlags::HARD_EX,
+            "tournaments" => flags |= ScoreboxCycleFlags::TOURNAMENTS,
+            _ => {}
+        }
+    }
+    flags
+}
+
+bitflags::bitflags! {
+    /// Bit flags for auto-screenshot conditions on the Evaluation screen.
+    /// Multiple flags can be combined (e.g., `PBS | FAILS`).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct AutoScreenshotFlags: u8 {
+        const PBS    = 1 << 0;
+        const FAILS  = 1 << 1;
+        const CLEARS = 1 << 2;
+        const QUADS  = 1 << 3;
+        const QUINTS = 1 << 4;
+    }
+}
+
+pub const AUTO_SS_NUM_FLAGS: usize = 5;
+pub const AUTO_SS_FLAG_NAMES: [&str; AUTO_SS_NUM_FLAGS] = ["PBs", "Fails", "Clears", "Quads", "Quints"];
+
+/// Serialize flags to a pipe-separated string of flag names (e.g. "PBs|Fails|Quads").
+/// Returns "Off" when empty.
+pub fn auto_screenshot_flags_to_str(flags: AutoScreenshotFlags) -> String {
+    if flags.is_empty() {
+        return "Off".to_string();
+    }
+    let mut parts = Vec::new();
+    for (i, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
+        if flags.contains(AutoScreenshotFlags::from_bits_truncate(1u8 << i)) {
+            parts.push(*name);
+        }
+    }
+    parts.join("|")
+}
+
+/// Parse a pipe-separated string of flag names back to flags.
+/// Accepts "Off" or empty string as empty.
+pub fn auto_screenshot_flags_from_str(s: &str) -> AutoScreenshotFlags {
+    let trimmed = s.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+        return AutoScreenshotFlags::empty();
+    }
+    let mut flags = AutoScreenshotFlags::empty();
+    for part in trimmed.split('|') {
+        let token = part.trim().to_ascii_lowercase();
+        match token.as_str() {
+            "pbs" => flags |= AutoScreenshotFlags::PBS,
+            "fails" => flags |= AutoScreenshotFlags::FAILS,
+            "clears" => flags |= AutoScreenshotFlags::CLEARS,
+            "quads" => flags |= AutoScreenshotFlags::QUADS,
+            "quints" => flags |= AutoScreenshotFlags::QUINTS,
+            _ => {}
+        }
+    }
+    flags
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DefaultFailType {
     Immediate,
@@ -512,10 +613,8 @@ pub struct Config {
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
-    pub select_music_scorebox_cycle_itg: bool,
-    pub select_music_scorebox_cycle_ex: bool,
-    pub select_music_scorebox_cycle_hard_ex: bool,
-    pub select_music_scorebox_cycle_tournaments: bool,
+    /// Which scorebox leaderboard panes are enabled in Select Music.
+    pub scorebox_cycle: ScoreboxCycleFlags,
     pub show_random_courses: bool,
     pub show_most_played_courses: bool,
     pub show_course_individual_scores: bool,
@@ -547,6 +646,8 @@ pub struct Config {
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
+    /// Conditions for auto-screenshotting the Evaluation screen.
+    pub auto_screenshot_eval: AutoScreenshotFlags,
 }
 
 impl Default for Config {
@@ -603,10 +704,7 @@ impl Default for Config {
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
-            select_music_scorebox_cycle_itg: true,
-            select_music_scorebox_cycle_ex: true,
-            select_music_scorebox_cycle_hard_ex: true,
-            select_music_scorebox_cycle_tournaments: true,
+            scorebox_cycle: ScoreboxCycleFlags::all(),
             show_random_courses: true,
             show_most_played_courses: true,
             show_course_individual_scores: true,
@@ -631,6 +729,7 @@ impl Default for Config {
             smooth_histogram: true,
             input_debounce_seconds: 0.02,
             only_dedicated_menu_buttons: false,
+            auto_screenshot_eval: AutoScreenshotFlags::empty(),
         }
     }
 }
@@ -965,6 +1064,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
             "0"
         }
     ));
+    content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_flags_to_str(default.auto_screenshot_eval)
+    ));
     content.push_str(&format!("BGBrightness={}\n", default.bg_brightness));
     content.push_str(&format!(
         "BannerCache={}\n",
@@ -1166,36 +1269,8 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
-        "SelectMusicScoreboxCycleItg={}\n",
-        if default.select_music_scorebox_cycle_itg {
-            "1"
-        } else {
-            "0"
-        }
-    ));
-    content.push_str(&format!(
-        "SelectMusicScoreboxCycleEx={}\n",
-        if default.select_music_scorebox_cycle_ex {
-            "1"
-        } else {
-            "0"
-        }
-    ));
-    content.push_str(&format!(
-        "SelectMusicScoreboxCycleHardEx={}\n",
-        if default.select_music_scorebox_cycle_hard_ex {
-            "1"
-        } else {
-            "0"
-        }
-    ));
-    content.push_str(&format!(
-        "SelectMusicScoreboxCycleTournaments={}\n",
-        if default.select_music_scorebox_cycle_tournaments {
-            "1"
-        } else {
-            "0"
-        }
+        "SelectMusicScoreboxCycle={}\n",
+        scorebox_cycle_flags_to_str(default.scorebox_cycle)
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
@@ -1439,6 +1514,10 @@ pub fn load() {
                     .get("Options", "AutoPopulateGrooveStatsScores")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.auto_populate_gs_scores, |v| v != 0);
+                cfg.auto_screenshot_eval = conf
+                    .get("Options", "AutoScreenshotEval")
+                    .map(|v| auto_screenshot_flags_from_str(&v))
+                    .unwrap_or(default.auto_screenshot_eval);
                 cfg.enable_groovestats = conf
                     .get("Options", "EnableGrooveStats")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1663,22 +1742,39 @@ pub fn load() {
                     .get("Options", "SelectMusicScorebox")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_scorebox, |v| v != 0);
-                cfg.select_music_scorebox_cycle_itg = conf
-                    .get("Options", "SelectMusicScoreboxCycleItg")
-                    .and_then(|v| v.parse::<u8>().ok())
-                    .map_or(default.select_music_scorebox_cycle_itg, |v| v != 0);
-                cfg.select_music_scorebox_cycle_ex = conf
-                    .get("Options", "SelectMusicScoreboxCycleEx")
-                    .and_then(|v| v.parse::<u8>().ok())
-                    .map_or(default.select_music_scorebox_cycle_ex, |v| v != 0);
-                cfg.select_music_scorebox_cycle_hard_ex = conf
-                    .get("Options", "SelectMusicScoreboxCycleHardEx")
-                    .and_then(|v| v.parse::<u8>().ok())
-                    .map_or(default.select_music_scorebox_cycle_hard_ex, |v| v != 0);
-                cfg.select_music_scorebox_cycle_tournaments = conf
-                    .get("Options", "SelectMusicScoreboxCycleTournaments")
-                    .and_then(|v| v.parse::<u8>().ok())
-                    .map_or(default.select_music_scorebox_cycle_tournaments, |v| v != 0);
+                // New unified key.
+                cfg.scorebox_cycle = conf
+                    .get("Options", "SelectMusicScoreboxCycle")
+                    .map(|v| scorebox_cycle_flags_from_str(&v))
+                    .unwrap_or_else(|| {
+                        // Backward compat: read legacy per-flag keys.
+                        let mut flags = ScoreboxCycleFlags::empty();
+                        if conf.get("Options", "SelectMusicScoreboxCycleItg")
+                            .and_then(|v| v.parse::<u8>().ok())
+                            .map_or(default.scorebox_cycle.contains(ScoreboxCycleFlags::ITG), |v| v != 0)
+                        {
+                            flags |= ScoreboxCycleFlags::ITG;
+                        }
+                        if conf.get("Options", "SelectMusicScoreboxCycleEx")
+                            .and_then(|v| v.parse::<u8>().ok())
+                            .map_or(default.scorebox_cycle.contains(ScoreboxCycleFlags::EX), |v| v != 0)
+                        {
+                            flags |= ScoreboxCycleFlags::EX;
+                        }
+                        if conf.get("Options", "SelectMusicScoreboxCycleHardEx")
+                            .and_then(|v| v.parse::<u8>().ok())
+                            .map_or(default.scorebox_cycle.contains(ScoreboxCycleFlags::HARD_EX), |v| v != 0)
+                        {
+                            flags |= ScoreboxCycleFlags::HARD_EX;
+                        }
+                        if conf.get("Options", "SelectMusicScoreboxCycleTournaments")
+                            .and_then(|v| v.parse::<u8>().ok())
+                            .map_or(default.scorebox_cycle.contains(ScoreboxCycleFlags::TOURNAMENTS), |v| v != 0)
+                        {
+                            flags |= ScoreboxCycleFlags::TOURNAMENTS;
+                        }
+                        flags
+                    });
                 cfg.fastload = conf
                     .get("Options", "FastLoad")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -2004,6 +2100,7 @@ pub fn load() {
                     "AudioSampleRateHz",
                     "AdditionalSongFolders",
                     "AutoPopulateGrooveStatsScores",
+                    "AutoScreenshotEval",
                     "BGBrightness",
                     "BannerCache",
                     "CacheSongs",
@@ -2047,6 +2144,8 @@ pub fn load() {
                     "SelectMusicPreviewLoop",
                     "SelectMusicPatternInfo",
                     "SelectMusicScorebox",
+                    "SelectMusicScoreboxCycle",
+                    // Legacy keys (kept for backward compat detection).
                     "SelectMusicScoreboxCycleItg",
                     "SelectMusicScoreboxCycleEx",
                     "SelectMusicScoreboxCycleHardEx",
@@ -2781,6 +2880,10 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_flags_to_str(cfg.auto_screenshot_eval)
+    ));
+    content.push_str(&format!(
         "BGBrightness={}\n",
         cfg.bg_brightness.clamp(0.0, 1.0)
     ));
@@ -2976,36 +3079,8 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
-        "SelectMusicScoreboxCycleItg={}\n",
-        if cfg.select_music_scorebox_cycle_itg {
-            "1"
-        } else {
-            "0"
-        }
-    ));
-    content.push_str(&format!(
-        "SelectMusicScoreboxCycleEx={}\n",
-        if cfg.select_music_scorebox_cycle_ex {
-            "1"
-        } else {
-            "0"
-        }
-    ));
-    content.push_str(&format!(
-        "SelectMusicScoreboxCycleHardEx={}\n",
-        if cfg.select_music_scorebox_cycle_hard_ex {
-            "1"
-        } else {
-            "0"
-        }
-    ));
-    content.push_str(&format!(
-        "SelectMusicScoreboxCycleTournaments={}\n",
-        if cfg.select_music_scorebox_cycle_tournaments {
-            "1"
-        } else {
-            "0"
-        }
+        "SelectMusicScoreboxCycle={}\n",
+        scorebox_cycle_flags_to_str(cfg.scorebox_cycle)
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
@@ -3711,46 +3786,13 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_select_music_scorebox_cycle_itg(enabled: bool) {
+pub fn update_scorebox_cycle(flags: ScoreboxCycleFlags) {
     {
         let mut cfg = lock_config();
-        if cfg.select_music_scorebox_cycle_itg == enabled {
+        if cfg.scorebox_cycle == flags {
             return;
         }
-        cfg.select_music_scorebox_cycle_itg = enabled;
-    }
-    save_without_keymaps();
-}
-
-pub fn update_select_music_scorebox_cycle_ex(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.select_music_scorebox_cycle_ex == enabled {
-            return;
-        }
-        cfg.select_music_scorebox_cycle_ex = enabled;
-    }
-    save_without_keymaps();
-}
-
-pub fn update_select_music_scorebox_cycle_hard_ex(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.select_music_scorebox_cycle_hard_ex == enabled {
-            return;
-        }
-        cfg.select_music_scorebox_cycle_hard_ex = enabled;
-    }
-    save_without_keymaps();
-}
-
-pub fn update_select_music_scorebox_cycle_tournaments(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.select_music_scorebox_cycle_tournaments == enabled {
-            return;
-        }
-        cfg.select_music_scorebox_cycle_tournaments = enabled;
+        cfg.scorebox_cycle = flags;
     }
     save_without_keymaps();
 }
@@ -4051,6 +4093,17 @@ pub fn update_language_flag(flag: LanguageFlag) {
             return;
         }
         cfg.language_flag = flag;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_auto_screenshot_eval(flags: AutoScreenshotFlags) {
+    {
+        let mut cfg = lock_config();
+        if cfg.auto_screenshot_eval == flags {
+            return;
+        }
+        cfg.auto_screenshot_eval = flags;
     }
     save_without_keymaps();
 }

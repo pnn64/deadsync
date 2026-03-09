@@ -152,12 +152,12 @@ fn error_text(error: &str) -> String {
 
 #[inline(always)]
 fn select_music_pane_filter() -> SelectMusicPaneFilter {
-    let cfg = crate::config::get();
+    let flags = crate::config::get().scorebox_cycle;
     SelectMusicPaneFilter {
-        itg: cfg.select_music_scorebox_cycle_itg,
-        ex: cfg.select_music_scorebox_cycle_ex,
-        hard_ex: cfg.select_music_scorebox_cycle_hard_ex,
-        tournaments: cfg.select_music_scorebox_cycle_tournaments,
+        itg: flags.contains(crate::config::ScoreboxCycleFlags::ITG),
+        ex: flags.contains(crate::config::ScoreboxCycleFlags::EX),
+        hard_ex: flags.contains(crate::config::ScoreboxCycleFlags::HARD_EX),
+        tournaments: flags.contains(crate::config::ScoreboxCycleFlags::TOURNAMENTS),
     }
 }
 

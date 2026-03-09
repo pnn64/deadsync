@@ -517,6 +517,7 @@ pub struct State {
     pub return_to_course: bool,
     pub auto_advance_seconds: Option<f32>,
     pub allow_online_panes: bool,
+    pub auto_screenshot_taken: bool,
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
 }
@@ -972,6 +973,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
+        auto_screenshot_taken: false,
         active_pane,
         active_graph,
     }
@@ -1027,6 +1029,7 @@ pub fn init_from_score_info(
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
+        auto_screenshot_taken: false,
         active_pane,
         active_graph,
     }

@@ -891,6 +891,7 @@ dependencies = [
  "ash",
  "ash-window",
  "bincode",
+ "bitflags 2.11.0",
  "cgmath",
  "chrono",
  "cpal",
