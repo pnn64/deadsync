@@ -651,7 +651,6 @@ fn build_actor_recursive<'a>(
                 let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
                 stroke_rgba[3] *= effect_color[3];
                 if stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty() {
-                    let mut stroke_objects = Vec::with_capacity(objects.len());
                     for obj in &objects {
                         let renderer::ObjectType::Sprite { texture_id, .. } = &obj.object_type
                         else {
@@ -670,19 +669,16 @@ fn build_actor_recursive<'a>(
                         };
                         *texture_id = std::borrow::Cow::Owned(stroke_key.clone());
                         *tint = stroke_rgba;
-                        stroke_objects.push(stroke_obj);
-                    }
-                    for obj in &mut stroke_objects {
-                        obj.z = layer;
-                        obj.order = {
+                        stroke_obj.z = layer;
+                        stroke_obj.order = {
                             let o = *order_counter;
                             *order_counter += 1;
                             o
                         };
-                        obj.blend = *blend;
-                        obj.camera = camera;
+                        stroke_obj.blend = *blend;
+                        stroke_obj.camera = camera;
+                        out.push(stroke_obj);
                     }
-                    out.extend(stroke_objects);
                 }
                 for obj in &mut objects {
                     obj.z = layer;
@@ -1176,12 +1172,7 @@ fn layout_text<'a>(
     m: &Metrics,
 ) -> Vec<RenderObject<'a>> {
     if text.is_empty() {
-        return vec![];
-    }
-    // Optimization: Avoid allocating Vec for lines; iterate twice.
-    let mut line_iter_check = text.lines();
-    if line_iter_check.next().is_none() {
-        return vec![];
+        return Vec::new();
     }
 
     #[inline(always)]
@@ -1189,17 +1180,19 @@ fn layout_text<'a>(
         lrint_ties_even(glyph.advance) as i32
     }
 
-    // 1) Logical (integer) widths like SM: sum integer advances (default glyph if unmapped).
-    let logical_line_widths: Vec<i32> = text
-        .lines()
-        .map(|line| {
-            line.chars()
-                .map(|c| font::find_glyph(font, c, fonts).map_or(0, advance_logical))
-                .sum()
-        })
-        .collect();
-
-    let max_logical_width_i = logical_line_widths.iter().copied().max().unwrap_or(0);
+    let mut max_logical_width_i = 0i32;
+    let mut num_lines = 0usize;
+    for line in text.lines() {
+        num_lines += 1;
+        let mut line_width = 0i32;
+        for ch in line.chars() {
+            line_width += font::find_glyph(font, ch, fonts).map_or(0, advance_logical);
+        }
+        max_logical_width_i = max_logical_width_i.max(line_width);
+    }
+    if num_lines == 0 {
+        return Vec::new();
+    }
     let block_w_logical_even = quantize_up_even_i32(max_logical_width_i) as f32;
 
     // 2) Unscaled block cap height + line spacing in logical units
@@ -1209,7 +1202,6 @@ fn layout_text<'a>(
         font.line_spacing as f32
     };
 
-    let num_lines = text.lines().count();
     let block_h_logical_i = if num_lines > 1 {
         font.height + ((num_lines - 1) as i32 * font.line_spacing)
     } else {
@@ -1281,7 +1273,7 @@ fn layout_text<'a>(
     let sx = scale[0] * fit_s * max_s_w;
     let sy = scale[1] * fit_s * max_s_h;
     if sx.abs() < 1e-6 || sy.abs() < 1e-6 {
-        return vec![];
+        return Vec::new();
     }
 
     // 8) Pixel rounding/snapping
@@ -1316,17 +1308,20 @@ fn layout_text<'a>(
         logical.mul_add(scale, center)
     }
 
-    // Optimization: Use linear scan on simple vec instead of HashMap for texture dims cache
-    let mut dims_cache: Vec<(&str, (f32, f32))> = Vec::with_capacity(4);
+    let mut dims_cache: [Option<(&str, (f32, f32))>; 8] = [None; 8];
+    let mut dims_cache_len = 0usize;
+    let mut objects = Vec::with_capacity(text.len());
 
-    let mut objects = Vec::new();
-
-    for (i, line) in text.lines().enumerate() {
+    for line in text.lines() {
         pen_y_logical += font.height;
         let baseline_local_logical = pen_y_logical as f32;
 
-        let line_w_logical = logical_line_widths[i] as f32;
-        let mut pen_x_logical = start_x_logical(text_align, block_w_logical_even, line_w_logical);
+        let mut line_w_logical = 0i32;
+        for ch in line.chars() {
+            line_w_logical += font::find_glyph(font, ch, fonts).map_or(0, advance_logical);
+        }
+        let mut pen_x_logical =
+            start_x_logical(text_align, block_w_logical_even, line_w_logical as f32);
 
         for ch in line.chars() {
             let glyph = match font::find_glyph(font, ch, fonts) {
@@ -1360,16 +1355,28 @@ fn layout_text<'a>(
 
                 // Inline atlas_dims with linear scan
                 let (tex_w, tex_h) = {
-                    let key = &glyph.texture_key;
-                    if let Some(&(_, d)) = dims_cache.iter().find(|(k, _)| k == key) {
-                        d
-                    } else {
-                        let d = assets::texture_dims(key)
-                            .map_or((1.0_f32, 1.0_f32), |meta| (meta.w as f32, meta.h as f32));
-                        if dims_cache.len() < 8 {
-                            dims_cache.push((key, d));
+                    let key = glyph.texture_key.as_str();
+                    let mut dims = None;
+                    let mut idx = 0usize;
+                    while idx < dims_cache_len {
+                        if let Some((cached_key, cached_dims)) = dims_cache[idx] {
+                            if cached_key == key {
+                                dims = Some(cached_dims);
+                                break;
+                            }
                         }
-                        d
+                        idx += 1;
+                    }
+                    if let Some(dims) = dims {
+                        dims
+                    } else {
+                        let dims = assets::texture_dims(key)
+                            .map_or((1.0_f32, 1.0_f32), |meta| (meta.w as f32, meta.h as f32));
+                        if dims_cache_len < dims_cache.len() {
+                            dims_cache[dims_cache_len] = Some((key, dims));
+                            dims_cache_len += 1;
+                        }
+                        dims
                     }
                 };
 
@@ -1452,13 +1459,21 @@ fn clip_objects_range_to_world_masks(
         objects.truncate(start);
         return;
     }
-    let mut kept = Vec::with_capacity(objects.len() - start);
-    for mut obj in objects.drain(start..) {
-        if clip_object_to_world_masks(&mut obj, masks) {
-            kept.push(obj);
+    let len = objects.len();
+    let mut write = start;
+    for read in start..len {
+        let keep = {
+            let obj = &mut objects[read];
+            clip_object_to_world_masks(obj, masks)
+        };
+        if keep {
+            if write != read {
+                objects.swap(write, read);
+            }
+            write += 1;
         }
     }
-    objects.extend(kept);
+    objects.truncate(write);
 }
 
 #[inline(always)]
@@ -1517,13 +1532,21 @@ fn clip_objects_to_world_rect(objects: &mut Vec<RenderObject<'_>>, clip: WorldRe
         return;
     }
 
-    let mut out = Vec::with_capacity(objects.len());
-    for mut obj in objects.drain(..) {
-        if clip_sprite_object_to_world_rect(&mut obj, clip) {
-            out.push(obj);
+    let len = objects.len();
+    let mut write = 0usize;
+    for read in 0..len {
+        let keep = {
+            let obj = &mut objects[read];
+            clip_sprite_object_to_world_rect(obj, clip)
+        };
+        if keep {
+            if write != read {
+                objects.swap(write, read);
+            }
+            write += 1;
         }
     }
-    *objects = out;
+    objects.truncate(write);
 }
 
 fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
