@@ -1327,8 +1327,9 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SOUND_ROW_DEVICE,
         help: &[
-            "Select an output device detected by CPAL at startup.",
+            "Select an output device detected at startup.",
             "Auto uses the host default output device.",
+            "Windows playback prefers native WASAPI and falls back if needed.",
             "Changing this takes effect on next launch.",
         ],
     },

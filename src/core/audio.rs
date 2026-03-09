@@ -1,3 +1,5 @@
+mod backends;
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat, StreamConfig};
 use lewton::inside_ogg::OggStreamReader;
@@ -13,6 +15,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
+#[cfg(windows)]
+use std::time::Duration;
 use std::time::Instant;
 
 /* ============================== Public API ============================== */
@@ -45,6 +49,8 @@ pub struct OutputDeviceInfo {
 struct OutputDeviceProbe {
     device: cpal::Device,
     info: OutputDeviceInfo,
+    #[cfg(windows)]
+    wasapi_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -78,6 +84,37 @@ struct AudioEngine {
     device_sample_rate: u32,
     device_channels: usize,
     startup_output_devices: Vec<OutputDeviceInfo>,
+}
+
+#[derive(Clone)]
+struct CpalBackendLaunch {
+    device: cpal::Device,
+    device_name: String,
+    sample_format: SampleFormat,
+    stream_config: StreamConfig,
+}
+
+#[cfg(windows)]
+#[derive(Clone)]
+struct WasapiBackendHint {
+    device_id: Option<String>,
+    device_name: String,
+    requested_rate_hz: Option<u32>,
+}
+
+#[derive(Clone)]
+struct AudioThreadLaunch {
+    cpal: CpalBackendLaunch,
+    #[cfg(windows)]
+    wasapi: Option<WasapiBackendHint>,
+}
+
+#[derive(Clone, Debug)]
+struct OutputBackendReady {
+    device_sample_rate: u32,
+    device_channels: usize,
+    device_name: String,
+    backend_name: &'static str,
 }
 
 /// A handle to a streaming music track.
@@ -625,8 +662,177 @@ fn commit_played_music_map(
     }
 }
 
+struct RenderState {
+    music_ring: Arc<internal::SpscRingI16>,
+    sfx_receiver: Receiver<QueuedSfx>,
+    device_channels: usize,
+    mix_i16: Vec<i16>,
+    mix_f32: Vec<f32>,
+    active_sfx: Vec<(Arc<Vec<i16>>, usize, SfxLane)>,
+    queued_music_map: Arc<internal::SpscRingMusicSeg>,
+    played_music_map: Arc<internal::SpscRingMusicSeg>,
+    active_music_map: Option<MusicMapSeg>,
+    music_map_generation: u64,
+}
+
+impl RenderState {
+    fn new(
+        music_ring: Arc<internal::SpscRingI16>,
+        sfx_receiver: Receiver<QueuedSfx>,
+        device_channels: usize,
+    ) -> Self {
+        Self {
+            music_ring,
+            sfx_receiver,
+            device_channels,
+            mix_i16: Vec::new(),
+            mix_f32: Vec::new(),
+            active_sfx: Vec::new(),
+            queued_music_map: QUEUED_MUSIC_MAP_SEGS.clone(),
+            played_music_map: PLAYED_MUSIC_MAP_SEGS.clone(),
+            active_music_map: None,
+            music_map_generation: MUSIC_MAP_GEN.load(Ordering::Acquire),
+        }
+    }
+
+    #[inline(always)]
+    fn begin_callback(&mut self, anchor_at: Instant) -> u64 {
+        let map_generation = MUSIC_MAP_GEN.load(Ordering::Acquire);
+        if map_generation != self.music_map_generation {
+            self.active_music_map = None;
+            self.music_map_generation = map_generation;
+        }
+        if !MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed) {
+            self.active_music_map = None;
+        }
+        let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
+        publish_callback_window_start(total_before, anchor_at);
+        total_before
+    }
+
+    #[inline(always)]
+    fn ensure_mix_buffers(&mut self, len: usize) {
+        if self.mix_i16.len() != len {
+            self.mix_i16.resize(len, 0);
+        }
+        if self.mix_f32.len() != len {
+            self.mix_f32.resize(len, 0.0);
+        }
+    }
+
+    #[inline(always)]
+    fn mix_levels() -> (f32, f32, f32) {
+        let config = crate::config::audio_mix_levels();
+        let master_vol = f32::from(config.master_volume) * 0.01;
+        let music_vol = f32::from(config.music_volume) * 0.01;
+        let sfx_vol = f32::from(config.sfx_volume) * 0.01;
+        let assist_tick_vol = f32::from(config.assist_tick_volume) * 0.01;
+        (
+            master_vol * music_vol,
+            master_vol * sfx_vol,
+            master_vol * assist_tick_vol,
+        )
+    }
+
+    fn mix_f32_buffer(&mut self, total_before: u64, len: usize) -> usize {
+        self.ensure_mix_buffers(len);
+        let popped = internal::callback_fill_from_ring_i16(&self.music_ring, &mut self.mix_i16);
+        if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
+            && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
+            && popped > 0
+        {
+            MUSIC_TRACK_START_FRAME.store(total_before, Ordering::Release);
+            MUSIC_TRACK_HAS_STARTED.store(true, Ordering::Release);
+        }
+
+        let (music_vol, sfx_vol, assist_tick_vol) = Self::mix_levels();
+        for (dst, src) in self.mix_f32.iter_mut().zip(&self.mix_i16) {
+            *dst = src.to_sample::<f32>() * music_vol;
+        }
+
+        for new_sfx in self.sfx_receiver.try_iter() {
+            self.active_sfx.push((new_sfx.data, 0, new_sfx.lane));
+        }
+
+        self.active_sfx.retain_mut(|(data, cursor, lane)| {
+            let n = (data.len().saturating_sub(*cursor)).min(self.mix_f32.len());
+            let lane_vol = match *lane {
+                SfxLane::Effect => sfx_vol,
+                SfxLane::AssistTick => assist_tick_vol,
+            };
+            for i in 0..n {
+                let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * lane_vol;
+                self.mix_f32[i] = (self.mix_f32[i] + sfx_sample_f32).clamp(-1.0, 1.0);
+            }
+            *cursor += n;
+            *cursor < data.len()
+        });
+
+        popped
+    }
+
+    #[inline(always)]
+    fn finish_callback(
+        &mut self,
+        total_before: u64,
+        emitted_samples: usize,
+        popped_samples: usize,
+    ) {
+        let frames = if self.device_channels == 0 {
+            0
+        } else {
+            emitted_samples / self.device_channels
+        };
+        let popped_frames = if self.device_channels == 0 {
+            0
+        } else {
+            popped_samples / self.device_channels
+        };
+        let track_frames_before =
+            total_before.saturating_sub(MUSIC_TRACK_START_FRAME.load(Ordering::Acquire));
+        if popped_frames > 0 {
+            commit_played_music_map(
+                track_frames_before as i64,
+                popped_frames as i64,
+                &self.queued_music_map,
+                &self.played_music_map,
+                &mut self.active_music_map,
+            );
+        }
+        if frames > 0 {
+            publish_callback_window_end(total_before, frames as u64);
+        }
+    }
+
+    fn render_i16(&mut self, out: &mut [i16], anchor_at: Instant) {
+        let total_before = self.begin_callback(anchor_at);
+        let popped = self.mix_f32_buffer(total_before, out.len());
+        for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
+            *dst = i16::from_sample(*src);
+        }
+        self.finish_callback(total_before, out.len(), popped);
+    }
+
+    fn render_u16(&mut self, out: &mut [u16], anchor_at: Instant) {
+        let total_before = self.begin_callback(anchor_at);
+        let popped = self.mix_f32_buffer(total_before, out.len());
+        for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
+            *dst = u16::from_sample(*src);
+        }
+        self.finish_callback(total_before, out.len(), popped);
+    }
+
+    fn render_f32(&mut self, out: &mut [f32], anchor_at: Instant) {
+        let total_before = self.begin_callback(anchor_at);
+        let popped = self.mix_f32_buffer(total_before, out.len());
+        out.copy_from_slice(&self.mix_f32[..out.len()]);
+        self.finish_callback(total_before, out.len(), popped);
+    }
+}
+
 fn init_engine_and_thread() -> AudioEngine {
     let (command_sender, command_receiver) = channel();
+    let (ready_sender, ready_receiver) = channel();
 
     let host = cpal::default_host();
     let default_device = host
@@ -643,16 +849,24 @@ fn init_engine_and_thread() -> AudioEngine {
                 is_default: true,
                 sample_rates_hz: fallback_rates,
             },
+            #[cfg(windows)]
+            wasapi_id: cpal_device_id_string(&default_device),
         });
     }
 
     let cfg = crate::config::get();
     let mut device = default_device;
     let mut device_name = default_device_name;
+    #[cfg(windows)]
+    let mut wasapi_device_id = cpal_device_id_string(&device);
     if let Some(requested_idx) = cfg.audio_output_device_index {
         if let Some(probe) = device_probes.get(requested_idx as usize) {
             device = probe.device.clone();
             device_name = probe.info.name.clone();
+            #[cfg(windows)]
+            {
+                wasapi_device_id = probe.wasapi_id.clone();
+            }
             info!(
                 "Audio output device override selected: index {} '{}'.",
                 requested_idx, device_name
@@ -695,25 +909,40 @@ fn init_engine_and_thread() -> AudioEngine {
         stream_config.sample_rate, stream_config.channels
     );
 
-    let device_sample_rate = stream_config.sample_rate;
-    let device_channels = stream_config.channels as usize;
-
-    // Spawn the audio manager thread (owns the CPAL stream and command loop)
-    thread::spawn(move || {
-        audio_manager_thread(
-            command_receiver,
+    let launch = AudioThreadLaunch {
+        cpal: CpalBackendLaunch {
             device,
-            default_config.sample_format(),
+            device_name: device_name.clone(),
+            sample_format: default_config.sample_format(),
             stream_config,
-        );
+        },
+        #[cfg(windows)]
+        wasapi: Some(WasapiBackendHint {
+            device_id: wasapi_device_id,
+            device_name: device_name.clone(),
+            requested_rate_hz: requested_rate,
+        }),
+    };
+
+    thread::spawn(move || {
+        audio_manager_thread(command_receiver, ready_sender, launch);
     });
 
-    info!("Audio engine initialized ({device_sample_rate} Hz, {device_channels} ch).");
+    let ready = match ready_receiver.recv() {
+        Ok(Ok(ready)) => ready,
+        Ok(Err(err)) => panic!("failed to initialize audio engine: {err}"),
+        Err(_) => panic!("audio manager thread exited before reporting ready"),
+    };
+
+    info!(
+        "Audio engine initialized ({} Hz, {} ch, backend={} device='{}').",
+        ready.device_sample_rate, ready.device_channels, ready.backend_name, ready.device_name
+    );
     AudioEngine {
         command_sender,
         sfx_cache: Mutex::new(HashMap::new()),
-        device_sample_rate,
-        device_channels,
+        device_sample_rate: ready.device_sample_rate,
+        device_channels: ready.device_channels,
         startup_output_devices: device_probes.into_iter().map(|probe| probe.info).collect(),
     }
 }
@@ -724,6 +953,22 @@ fn cpal_device_name(device: &cpal::Device) -> String {
         .description()
         .map(|desc| desc.name().to_string())
         .unwrap_or_else(|_| "<unknown>".to_string())
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn cpal_device_id_string(device: &cpal::Device) -> Option<String> {
+    device.id().ok().map(|id| id.1)
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn playback_anchor_after_frames(now: Instant, sample_rate: u32, frames: u32) -> Instant {
+    if sample_rate == 0 || frames == 0 {
+        return now;
+    }
+    now.checked_add(Duration::from_secs_f64(frames as f64 / sample_rate as f64))
+        .unwrap_or(now)
 }
 
 fn sample_rates_from_ranges(ranges: &[(u32, u32)], default_rate_hz: u32) -> Vec<u32> {
@@ -789,6 +1034,8 @@ fn enumerate_output_device_probes(
                 let name = cpal_device_name(&dev);
                 let is_default = name == default_device_name;
                 let tag = if is_default { " (default)" } else { "" };
+                #[cfg(windows)]
+                let wasapi_id = cpal_device_id_string(&dev);
                 debug!("  Device {idx}: '{name}'{tag}");
                 let sample_rates_hz = match dev.supported_output_configs() {
                     Ok(configs) => {
@@ -819,6 +1066,8 @@ fn enumerate_output_device_probes(
                         is_default,
                         sample_rates_hz,
                     },
+                    #[cfg(windows)]
+                    wasapi_id,
                 });
             }
         }
@@ -829,327 +1078,134 @@ fn enumerate_output_device_probes(
     probes
 }
 
-/// Manager thread: builds the CPAL stream, mixes SFX, and forwards music via ring.
+#[allow(dead_code)]
+enum OutputBackend {
+    Cpal(cpal::Stream),
+    #[cfg(windows)]
+    Wasapi(backends::windows_wasapi::WasapiOutputStream),
+}
+
+fn start_cpal_output(
+    launch: CpalBackendLaunch,
+    music_ring: Arc<internal::SpscRingI16>,
+) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+    let device_channels = launch.stream_config.channels as usize;
+    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let mut render = RenderState::new(music_ring, sfx_receiver, device_channels);
+    let stream = match launch.sample_format {
+        SampleFormat::I16 => launch
+            .device
+            .build_output_stream(
+                &launch.stream_config,
+                move |out: &mut [i16], info| {
+                    render.render_i16(out, output_playback_anchor(Instant::now(), info));
+                },
+                |err| error!("Audio stream error: {err}"),
+                None,
+            )
+            .map_err(|e| format!("failed to build CPAL i16 output stream: {e}"))?,
+        SampleFormat::U16 => launch
+            .device
+            .build_output_stream(
+                &launch.stream_config,
+                move |out: &mut [u16], info| {
+                    render.render_u16(out, output_playback_anchor(Instant::now(), info));
+                },
+                |err| error!("Audio stream error: {err}"),
+                None,
+            )
+            .map_err(|e| format!("failed to build CPAL u16 output stream: {e}"))?,
+        SampleFormat::F32 => launch
+            .device
+            .build_output_stream(
+                &launch.stream_config,
+                move |out: &mut [f32], info| {
+                    render.render_f32(out, output_playback_anchor(Instant::now(), info));
+                },
+                |err| error!("Audio stream error: {err}"),
+                None,
+            )
+            .map_err(|e| format!("failed to build CPAL f32 output stream: {e}"))?,
+        other => return Err(format!("unsupported CPAL sample format: {other:?}")),
+    };
+    stream
+        .play()
+        .map_err(|e| format!("failed to play CPAL output stream: {e}"))?;
+    Ok((
+        OutputBackend::Cpal(stream),
+        OutputBackendReady {
+            device_sample_rate: launch.stream_config.sample_rate,
+            device_channels,
+            device_name: launch.device_name,
+            backend_name: "cpal",
+        },
+        sfx_sender,
+    ))
+}
+
+fn start_output_backend(
+    launch: AudioThreadLaunch,
+    music_ring: Arc<internal::SpscRingI16>,
+) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+    let AudioThreadLaunch {
+        cpal,
+        #[cfg(windows)]
+        wasapi,
+    } = launch;
+
+    #[cfg(windows)]
+    if let Some(wasapi) = wasapi {
+        match backends::windows_wasapi::prepare(
+            wasapi.device_id.clone(),
+            wasapi.device_name.clone(),
+            wasapi.requested_rate_hz,
+        ) {
+            Ok(prep) => {
+                let ready = prep.ready();
+                let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+                match backends::windows_wasapi::start(prep, music_ring.clone(), sfx_receiver) {
+                    Ok(stream) => {
+                        return Ok((OutputBackend::Wasapi(stream), ready, sfx_sender));
+                    }
+                    Err(err) => {
+                        warn!(
+                            "Failed to start native WASAPI output for '{}': {err}. Falling back to CPAL.",
+                            wasapi.device_name
+                        );
+                    }
+                }
+            }
+            Err(err) => {
+                warn!(
+                    "Failed to prepare native WASAPI output for '{}': {err}. Falling back to CPAL.",
+                    wasapi.device_name
+                );
+            }
+        }
+    }
+
+    start_cpal_output(cpal, music_ring)
+}
+
+/// Manager thread: builds the output backend, mixes SFX, and forwards music via ring.
 fn audio_manager_thread(
     command_receiver: Receiver<AudioCommand>,
-    device: cpal::Device,
-    sample_format: SampleFormat,
-    stream_config: StreamConfig,
+    ready_sender: Sender<Result<OutputBackendReady, String>>,
+    launch: AudioThreadLaunch,
 ) {
     let mut music_stream: Option<MusicStream> = None;
     let music_ring = internal::ring_new(internal::RING_CAP_SAMPLES);
-    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
-
-    // State captured by the audio callback
-    let music_ring_for_callback = music_ring.clone();
-
-    let device_channels = stream_config.channels as usize;
-
-    // Reusable buffers captured by the callback to avoid allocations
-    let mut mix_i16: Vec<i16> = Vec::new();
-    let mut mix_f32: Vec<f32> = Vec::new();
-    let mut active_sfx_for_callback: Vec<(Arc<Vec<i16>>, usize, SfxLane)> = Vec::new();
-    let queued_music_map_for_callback = QUEUED_MUSIC_MAP_SEGS.clone();
-    let played_music_map_for_callback = PLAYED_MUSIC_MAP_SEGS.clone();
-    let mut active_music_map_for_callback: Option<MusicMapSeg> = None;
-    let mut music_map_generation_for_callback = MUSIC_MAP_GEN.load(Ordering::Acquire);
-
-    // Build the output stream matching chosen sample format (like v1)
-    let stream = match sample_format {
-        SampleFormat::I16 => device.build_output_stream(
-            &stream_config,
-            move |out: &mut [i16], info| {
-                let anchor_at = output_playback_anchor(Instant::now(), info);
-                let map_generation = MUSIC_MAP_GEN.load(Ordering::Acquire);
-                if map_generation != music_map_generation_for_callback {
-                    active_music_map_for_callback = None;
-                    music_map_generation_for_callback = map_generation;
-                }
-                if !MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed) {
-                    active_music_map_for_callback = None;
-                }
-                let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                publish_callback_window_start(total_before, anchor_at);
-                let config = crate::config::audio_mix_levels();
-                let master_vol = f32::from(config.master_volume) * 0.01;
-                let music_vol = f32::from(config.music_volume) * 0.01;
-                let sfx_vol = f32::from(config.sfx_volume) * 0.01;
-                let assist_tick_vol = f32::from(config.assist_tick_volume) * 0.01;
-                let final_music_vol = master_vol * music_vol;
-                let final_sfx_vol = master_vol * sfx_vol;
-                let final_assist_tick_vol = master_vol * assist_tick_vol;
-
-                if mix_i16.len() != out.len() {
-                    mix_i16.resize(out.len(), 0);
-                }
-                if mix_f32.len() != out.len() {
-                    mix_f32.resize(out.len(), 0.0);
-                }
-
-                // Pull music samples
-                let popped = internal::callback_fill_from_ring_i16(
-                    &music_ring_for_callback,
-                    &mut mix_i16[..],
-                );
-
-                // Detect the first callback that actually consumed music data
-                // for the currently active track and record its starting frame.
-                if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
-                    && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
-                    && popped > 0
-                {
-                    MUSIC_TRACK_START_FRAME.store(total_before, Ordering::Release);
-                    MUSIC_TRACK_HAS_STARTED.store(true, Ordering::Release);
-                }
-
-                // Convert music to f32 with volume
-                for (f, s) in mix_f32.iter_mut().zip(&mix_i16) {
-                    *f = s.to_sample::<f32>() * final_music_vol;
-                }
-
-                for new_sfx in sfx_receiver.try_iter() {
-                    active_sfx_for_callback.push((new_sfx.data, 0, new_sfx.lane));
-                }
-
-                active_sfx_for_callback.retain_mut(|(data, cursor, lane)| {
-                    let n = (data.len().saturating_sub(*cursor)).min(mix_f32.len());
-                    let lane_vol = match *lane {
-                        SfxLane::Effect => final_sfx_vol,
-                        SfxLane::AssistTick => final_assist_tick_vol,
-                    };
-                    for i in 0..n {
-                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * lane_vol;
-                        mix_f32[i] = (mix_f32[i] + sfx_sample_f32).clamp(-1.0, 1.0);
-                    }
-                    *cursor += n;
-                    *cursor < data.len()
-                });
-
-                for (o, f) in out.iter_mut().zip(&mix_f32) {
-                    *o = i16::from_sample(*f);
-                }
-
-                // Advance the global frame counter after emitting this buffer.
-                let frames = if device_channels == 0 {
-                    0
-                } else {
-                    out.len() / device_channels
-                };
-                let popped_frames = if device_channels == 0 {
-                    0
-                } else {
-                    popped / device_channels
-                };
-                let track_frames_before =
-                    total_before.saturating_sub(MUSIC_TRACK_START_FRAME.load(Ordering::Acquire));
-                if popped_frames > 0 {
-                    commit_played_music_map(
-                        track_frames_before as i64,
-                        popped_frames as i64,
-                        &queued_music_map_for_callback,
-                        &played_music_map_for_callback,
-                        &mut active_music_map_for_callback,
-                    );
-                }
-                if frames > 0 {
-                    publish_callback_window_end(total_before, frames as u64);
-                }
-            },
-            |err| error!("Audio stream error: {err}"),
-            None,
-        ),
-        SampleFormat::U16 => device.build_output_stream(
-            &stream_config,
-            move |out: &mut [u16], info| {
-                let anchor_at = output_playback_anchor(Instant::now(), info);
-                let map_generation = MUSIC_MAP_GEN.load(Ordering::Acquire);
-                if map_generation != music_map_generation_for_callback {
-                    active_music_map_for_callback = None;
-                    music_map_generation_for_callback = map_generation;
-                }
-                if !MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed) {
-                    active_music_map_for_callback = None;
-                }
-                let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                publish_callback_window_start(total_before, anchor_at);
-                let config = crate::config::audio_mix_levels();
-                let master_vol = f32::from(config.master_volume) * 0.01;
-                let music_vol = f32::from(config.music_volume) * 0.01;
-                let sfx_vol = f32::from(config.sfx_volume) * 0.01;
-                let assist_tick_vol = f32::from(config.assist_tick_volume) * 0.01;
-                let final_music_vol = master_vol * music_vol;
-                let final_sfx_vol = master_vol * sfx_vol;
-                let final_assist_tick_vol = master_vol * assist_tick_vol;
-
-                if mix_i16.len() != out.len() {
-                    mix_i16.resize(out.len(), 0);
-                }
-                if mix_f32.len() != out.len() {
-                    mix_f32.resize(out.len(), 0.0);
-                }
-
-                let popped = internal::callback_fill_from_ring_i16(
-                    &music_ring_for_callback,
-                    &mut mix_i16[..],
-                );
-
-                if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
-                    && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
-                    && popped > 0
-                {
-                    MUSIC_TRACK_START_FRAME.store(total_before, Ordering::Release);
-                    MUSIC_TRACK_HAS_STARTED.store(true, Ordering::Release);
-                }
-
-                for (f, s) in mix_f32.iter_mut().zip(&mix_i16) {
-                    *f = s.to_sample::<f32>() * final_music_vol;
-                }
-
-                for new_sfx in sfx_receiver.try_iter() {
-                    active_sfx_for_callback.push((new_sfx.data, 0, new_sfx.lane));
-                }
-
-                active_sfx_for_callback.retain_mut(|(data, cursor, lane)| {
-                    let n = (data.len().saturating_sub(*cursor)).min(mix_f32.len());
-                    let lane_vol = match *lane {
-                        SfxLane::Effect => final_sfx_vol,
-                        SfxLane::AssistTick => final_assist_tick_vol,
-                    };
-                    for i in 0..n {
-                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * lane_vol;
-                        mix_f32[i] = (mix_f32[i] + sfx_sample_f32).clamp(-1.0, 1.0);
-                    }
-                    *cursor += n;
-                    *cursor < data.len()
-                });
-
-                for (o, f) in out.iter_mut().zip(&mix_f32) {
-                    *o = u16::from_sample(*f);
-                }
-
-                let frames = if device_channels == 0 {
-                    0
-                } else {
-                    out.len() / device_channels
-                };
-                let popped_frames = if device_channels == 0 {
-                    0
-                } else {
-                    popped / device_channels
-                };
-                let track_frames_before =
-                    total_before.saturating_sub(MUSIC_TRACK_START_FRAME.load(Ordering::Acquire));
-                if popped_frames > 0 {
-                    commit_played_music_map(
-                        track_frames_before as i64,
-                        popped_frames as i64,
-                        &queued_music_map_for_callback,
-                        &played_music_map_for_callback,
-                        &mut active_music_map_for_callback,
-                    );
-                }
-                if frames > 0 {
-                    publish_callback_window_end(total_before, frames as u64);
-                }
-            },
-            |err| error!("Audio stream error: {err}"),
-            None,
-        ),
-        SampleFormat::F32 => device.build_output_stream(
-            &stream_config,
-            move |out: &mut [f32], info| {
-                let anchor_at = output_playback_anchor(Instant::now(), info);
-                let map_generation = MUSIC_MAP_GEN.load(Ordering::Acquire);
-                if map_generation != music_map_generation_for_callback {
-                    active_music_map_for_callback = None;
-                    music_map_generation_for_callback = map_generation;
-                }
-                if !MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed) {
-                    active_music_map_for_callback = None;
-                }
-                let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-                publish_callback_window_start(total_before, anchor_at);
-                let config = crate::config::audio_mix_levels();
-                let master_vol = f32::from(config.master_volume) * 0.01;
-                let music_vol = f32::from(config.music_volume) * 0.01;
-                let sfx_vol = f32::from(config.sfx_volume) * 0.01;
-                let assist_tick_vol = f32::from(config.assist_tick_volume) * 0.01;
-                let final_music_vol = master_vol * music_vol;
-                let final_sfx_vol = master_vol * sfx_vol;
-                let final_assist_tick_vol = master_vol * assist_tick_vol;
-
-                if mix_i16.len() != out.len() {
-                    mix_i16.resize(out.len(), 0);
-                }
-
-                let popped = internal::callback_fill_from_ring_i16(
-                    &music_ring_for_callback,
-                    &mut mix_i16[..],
-                );
-
-                if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
-                    && !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
-                    && popped > 0
-                {
-                    MUSIC_TRACK_START_FRAME.store(total_before, Ordering::Release);
-                    MUSIC_TRACK_HAS_STARTED.store(true, Ordering::Release);
-                }
-
-                for (o, s) in out.iter_mut().zip(&mix_i16) {
-                    *o = s.to_sample::<f32>() * final_music_vol;
-                }
-
-                for new_sfx in sfx_receiver.try_iter() {
-                    active_sfx_for_callback.push((new_sfx.data, 0, new_sfx.lane));
-                }
-
-                active_sfx_for_callback.retain_mut(|(data, cursor, lane)| {
-                    let n = (data.len().saturating_sub(*cursor)).min(out.len());
-                    let lane_vol = match *lane {
-                        SfxLane::Effect => final_sfx_vol,
-                        SfxLane::AssistTick => final_assist_tick_vol,
-                    };
-                    for i in 0..n {
-                        let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * lane_vol;
-                        out[i] = (out[i] + sfx_sample_f32).clamp(-1.0, 1.0);
-                    }
-                    *cursor += n;
-                    *cursor < data.len()
-                });
-
-                let frames = if device_channels == 0 {
-                    0
-                } else {
-                    out.len() / device_channels
-                };
-                let popped_frames = if device_channels == 0 {
-                    0
-                } else {
-                    popped / device_channels
-                };
-                let track_frames_before =
-                    total_before.saturating_sub(MUSIC_TRACK_START_FRAME.load(Ordering::Acquire));
-                if popped_frames > 0 {
-                    commit_played_music_map(
-                        track_frames_before as i64,
-                        popped_frames as i64,
-                        &queued_music_map_for_callback,
-                        &played_music_map_for_callback,
-                        &mut active_music_map_for_callback,
-                    );
-                }
-                if frames > 0 {
-                    publish_callback_window_end(total_before, frames as u64);
-                }
-            },
-            |err| error!("Audio stream error: {err}"),
-            None,
-        ),
-        _ => unreachable!(),
+    let (mut _backend, _ready, sfx_sender) = match start_output_backend(launch, music_ring.clone())
+    {
+        Ok(output) => output,
+        Err(err) => {
+            let _ = ready_sender.send(Err(err));
+            return;
+        }
+    };
+    if ready_sender.send(Ok(_ready)).is_err() {
+        return;
     }
-    .expect("Failed to build audio stream");
-
-    stream.play().expect("Failed to play audio stream");
 
     // Command loop: manage music decoder thread and pass SFX to the callback
     loop {
@@ -1193,8 +1249,14 @@ fn audio_manager_thread(
                 internal::ring_clear(&music_ring);
                 clear_music_pos_map();
             }
-            Err(_) => break, // main dropped; exit thread
+            Err(_) => break,
         }
+    }
+
+    if let Some(old) = music_stream.take() {
+        old.stop_signal
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        let _ = old.thread.join();
     }
 }
 
