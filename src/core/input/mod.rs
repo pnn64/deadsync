@@ -206,6 +206,7 @@ pub enum GpSystemEvent {
 ///
 /// This is intended to be called from a dedicated thread which forwards `PadEvent` and
 /// `GpSystemEvent` into the winit `EventLoopProxy` (see `deadsync/src/app.rs`).
+#[cfg_attr(windows, allow(dead_code))]
 pub fn run_pad_backend(
     win_backend: WindowsPadBackend,
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
@@ -217,7 +218,7 @@ pub fn run_pad_backend(
     #[cfg(windows)]
     match win_backend {
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
-            backends::windows_raw_input::run(emit_pad, emit_sys)
+            backends::windows_raw_input::run(emit_pad, emit_sys, |_| {})
         }
         WindowsPadBackend::Wgi => backends::windows_wgi::run(emit_pad, emit_sys),
     }
@@ -237,21 +238,33 @@ pub fn run_pad_backend(
 }
 
 #[cfg(windows)]
-#[inline(always)]
-pub fn run_keyboard_backend(emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static) {
-    backends::windows_raw_keyboard::run(emit_key);
+pub fn run_windows_backend(
+    win_backend: WindowsPadBackend,
+    emit_pad: impl FnMut(PadEvent) + Send + 'static,
+    emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
+    emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
+) {
+    match win_backend {
+        WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
+            backends::windows_raw_input::run(emit_pad, emit_sys, emit_key);
+        }
+        WindowsPadBackend::Wgi => {
+            std::thread::spawn(move || backends::windows_wgi::run(emit_pad, emit_sys));
+            backends::windows_raw_input::run_keyboard_only(emit_key);
+        }
+    }
 }
 
 #[cfg(windows)]
 #[inline(always)]
 pub fn set_raw_keyboard_window_focused(focused: bool) {
-    backends::windows_raw_keyboard::set_window_focused(focused);
+    backends::windows_raw_input::set_window_focused(focused);
 }
 
 #[cfg(windows)]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
-    backends::windows_raw_keyboard::set_capture_enabled(enabled);
+    backends::windows_raw_input::set_capture_enabled(enabled);
 }
 
 #[cfg(not(windows))]

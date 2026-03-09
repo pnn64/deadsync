@@ -11,6 +11,4 @@ pub(super) mod macos_iohid;
 #[cfg(windows)]
 pub(super) mod windows_raw_input;
 #[cfg(windows)]
-pub(super) mod windows_raw_keyboard;
-#[cfg(windows)]
 pub(super) mod windows_wgi;

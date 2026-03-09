@@ -7184,8 +7184,42 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         profile_data,
     );
 
-    // Spawn background thread to pump pad input and emit user events; decoupled from frame rate.
+    // Spawn background input backend threads; all input stays decoupled from frame rate.
     let proxy: EventLoopProxy<UserEvent> = event_loop.create_proxy();
+    #[cfg(windows)]
+    {
+        input::set_raw_keyboard_window_focused(true);
+        app.sync_raw_keyboard_capture();
+        let ring = app.raw_keyboard_ring.clone();
+        let proxy_pad = proxy.clone();
+        let proxy_sys = proxy.clone();
+        std::thread::spawn(move || {
+            input::run_windows_backend(
+                win_pad_backend,
+                move |pe| {
+                    let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                },
+                move |se| {
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
+                },
+                move |ev| {
+                    if !ring.is_enabled() {
+                        return;
+                    }
+                    input::gameplay_arrow_keycode_events_with(
+                        ev.code,
+                        ev.pressed,
+                        ev.timestamp,
+                        |iev| {
+                            ring.push(RawKeyboardRingItem::Input(iev));
+                        },
+                    );
+                    ring.push(RawKeyboardRingItem::Key(ev));
+                },
+            );
+        });
+    }
+    #[cfg(not(windows))]
     std::thread::spawn(move || {
         let proxy_pad = proxy.clone();
         input::run_pad_backend(
@@ -7198,28 +7232,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             },
         );
     });
-    #[cfg(windows)]
-    {
-        input::set_raw_keyboard_window_focused(true);
-        app.sync_raw_keyboard_capture();
-        let ring = app.raw_keyboard_ring.clone();
-        std::thread::spawn(move || {
-            input::run_keyboard_backend(move |ev| {
-                if !ring.is_enabled() {
-                    return;
-                }
-                input::gameplay_arrow_keycode_events_with(
-                    ev.code,
-                    ev.pressed,
-                    ev.timestamp,
-                    |iev| {
-                        ring.push(RawKeyboardRingItem::Input(iev));
-                    },
-                );
-                ring.push(RawKeyboardRingItem::Key(ev));
-            });
-        });
-    }
     event_loop.run_app(&mut app)?;
     Ok(())
 }

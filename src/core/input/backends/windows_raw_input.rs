@@ -1,8 +1,11 @@
-use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
+use super::{
+    GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent, uuid_from_bytes,
+};
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr;
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::time::Instant;
 
 use windows::Win32::Devices::HumanInterfaceDevice::{
@@ -12,31 +15,48 @@ use windows::Win32::Devices::HumanInterfaceDevice::{
 };
 use windows::Win32::Foundation::{HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    MAPVK_VK_TO_VSC_EX, MapVirtualKeyW, VK_NUMLOCK, VK_SHIFT,
+};
 use windows::Win32::UI::Input::{
     GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList, HRAWINPUT, RAWINPUTDEVICE,
-    RAWINPUTDEVICELIST, RAWINPUTHEADER, RID_DEVICE_INFO, RID_DEVICE_INFO_HID, RID_INPUT,
-    RIDEV_DEVNOTIFY, RIDEV_INPUTSINK, RIDI_DEVICEINFO, RIDI_DEVICENAME, RIDI_PREPARSEDDATA,
-    RIM_TYPEHID, RegisterRawInputDevices,
+    RAWINPUTDEVICELIST, RAWINPUTHEADER, RAWKEYBOARD, RID_DEVICE_INFO, RID_DEVICE_INFO_HID,
+    RID_INPUT, RIDEV_DEVNOTIFY, RIDEV_INPUTSINK, RIDEV_NOLEGACY, RIDI_DEVICEINFO, RIDI_DEVICENAME,
+    RIDI_PREPARSEDDATA, RIM_TYPEHID, RIM_TYPEKEYBOARD, RegisterRawInputDevices,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CREATESTRUCTW, CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
-    GetWindowLongPtrW, HWND_MESSAGE, MSG, PostQuitMessage, RegisterClassExW, SetWindowLongPtrW,
-    TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CREATE, WM_DESTROY, WM_INPUT,
-    WM_INPUT_DEVICE_CHANGE, WNDCLASSEXW,
+    GetWindowLongPtrW, HWND_MESSAGE, MSG, PostQuitMessage, RI_KEY_E0, RI_KEY_E1, RegisterClassExW,
+    SetWindowLongPtrW, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CREATE, WM_DESTROY,
+    WM_INPUT, WM_INPUT_DEVICE_CHANGE, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+    WNDCLASSEXW,
 };
 use windows::core::PCWSTR;
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::platform::scancode::PhysicalKeyExtScancode;
 
-const USAGE_PAGE_GENERIC_DESKTOP: u16 = 0x01;
+const USAGE_PAGE_GENERIC: u16 = 0x01;
 const USAGE_JOYSTICK: u16 = 0x04;
 const USAGE_GAMEPAD: u16 = 0x05;
+const USAGE_GENERIC_KEYBOARD: u16 = 0x06;
 const USAGE_MULTI_AXIS: u16 = 0x08;
 
 const USAGE_PAGE_BUTTON: u16 = 0x09;
 const USAGE_HAT_SWITCH: u16 = 0x39;
 
 const RIM_TYPEHID_U32: u32 = RIM_TYPEHID.0;
+const RIM_TYPEKEYBOARD_U32: u32 = RIM_TYPEKEYBOARD.0;
 const GIDC_ARRIVAL_U32: usize = 1;
 const GIDC_REMOVAL_U32: usize = 2;
+const RAW_KEY_HELD_SLOTS: usize = 3 * 256;
+const WIN_SC_SHIFT: u16 = 0x0010;
+const WIN_SC_NUMLOCK: u16 = 0x0045;
+const WIN_SC_IGNORE_PAUSE_PREFIX: u16 = 0xe11d;
+const WIN_SC_IGNORE_PRTSC_PREFIX: u16 = 0xe02a;
+
+static WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
+static CAPTURE_ENABLED: AtomicBool = AtomicBool::new(false);
+static RAW_INPUT_HWND: AtomicIsize = AtomicIsize::new(0);
 
 struct Dev {
     id: PadId,
@@ -56,11 +76,14 @@ struct Dev {
 struct Ctx {
     emit_pad: Box<dyn FnMut(PadEvent) + Send>,
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
+    emit_key: Box<dyn FnMut(RawKeyboardEvent) + Send>,
     devices: HashMap<isize, Dev>,
     id_by_uuid: HashMap<[u8; 16], PadId>,
     refs_by_uuid: HashMap<[u8; 16], u32>,
     next_id: u32,
     buf: Vec<u8>,
+    held: [bool; RAW_KEY_HELD_SLOTS],
+    enable_pad: bool,
 }
 
 impl Ctx {
@@ -88,8 +111,143 @@ impl Ctx {
 }
 
 #[inline(always)]
+pub fn set_window_focused(focused: bool) {
+    WINDOW_FOCUSED.store(focused, Ordering::Relaxed);
+}
+
+#[inline(always)]
+pub fn set_capture_enabled(enabled: bool) {
+    CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
+    let hwnd = HWND(RAW_INPUT_HWND.load(Ordering::Acquire) as *mut c_void);
+    if !hwnd.0.is_null() {
+        register_keyboard(hwnd, enabled);
+    }
+}
+
+#[inline(always)]
+fn register_keyboard(hwnd: HWND, capture_enabled: bool) {
+    let mut flags = RIDEV_INPUTSINK;
+    if capture_enabled {
+        flags |= RIDEV_NOLEGACY;
+    }
+    let devices = [RAWINPUTDEVICE {
+        usUsagePage: USAGE_PAGE_GENERIC,
+        usUsage: USAGE_GENERIC_KEYBOARD,
+        dwFlags: flags,
+        hwndTarget: hwnd,
+    }];
+    unsafe {
+        let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
+    }
+}
+
+#[inline(always)]
+fn register_controllers(hwnd: HWND) {
+    let devices = [
+        RAWINPUTDEVICE {
+            usUsagePage: USAGE_PAGE_GENERIC,
+            usUsage: USAGE_JOYSTICK,
+            dwFlags: RIDEV_DEVNOTIFY | RIDEV_INPUTSINK,
+            hwndTarget: hwnd,
+        },
+        RAWINPUTDEVICE {
+            usUsagePage: USAGE_PAGE_GENERIC,
+            usUsage: USAGE_GAMEPAD,
+            dwFlags: RIDEV_DEVNOTIFY | RIDEV_INPUTSINK,
+            hwndTarget: hwnd,
+        },
+        RAWINPUTDEVICE {
+            usUsagePage: USAGE_PAGE_GENERIC,
+            usUsage: USAGE_MULTI_AXIS,
+            dwFlags: RIDEV_DEVNOTIFY | RIDEV_INPUTSINK,
+            hwndTarget: hwnd,
+        },
+    ];
+    unsafe {
+        let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
+    }
+}
+
+#[inline(always)]
+const fn scancode_slot(scancode: u16) -> usize {
+    let page = match scancode & 0xff00 {
+        0xe000 => 1,
+        0xe100 => 2,
+        _ => 0,
+    };
+    page * 256 + (scancode as usize & 0x00ff)
+}
+
+#[inline(always)]
+fn keyboard_scancode(keyboard: RAWKEYBOARD) -> u16 {
+    let flags = u32::from(keyboard.Flags);
+    let extension = if flags & RI_KEY_E0 != 0 {
+        0xe000
+    } else if flags & RI_KEY_E1 != 0 {
+        0xe100
+    } else {
+        0x0000
+    };
+    if keyboard.MakeCode == 0 {
+        unsafe { MapVirtualKeyW(u32::from(keyboard.VKey), MAPVK_VK_TO_VSC_EX) as u16 }
+    } else {
+        keyboard.MakeCode | extension
+    }
+}
+
+#[inline(always)]
+fn raw_keyboard_code(keyboard: RAWKEYBOARD) -> Option<(KeyCode, usize)> {
+    let scancode = keyboard_scancode(keyboard);
+    if matches!(
+        scancode,
+        WIN_SC_IGNORE_PAUSE_PREFIX | WIN_SC_IGNORE_PRTSC_PREFIX
+    ) {
+        return None;
+    }
+
+    let physical = if keyboard.VKey == VK_NUMLOCK.0 {
+        PhysicalKey::Code(KeyCode::NumLock)
+    } else {
+        PhysicalKey::from_scancode(u32::from(scancode))
+    };
+
+    if keyboard.VKey == VK_SHIFT.0
+        && matches!(
+            physical,
+            PhysicalKey::Code(
+                KeyCode::NumpadDecimal
+                    | KeyCode::Numpad0
+                    | KeyCode::Numpad1
+                    | KeyCode::Numpad2
+                    | KeyCode::Numpad3
+                    | KeyCode::Numpad4
+                    | KeyCode::Numpad5
+                    | KeyCode::Numpad6
+                    | KeyCode::Numpad7
+                    | KeyCode::Numpad8
+                    | KeyCode::Numpad9
+            )
+        )
+    {
+        return None;
+    }
+
+    let PhysicalKey::Code(code) = physical else {
+        return None;
+    };
+    let slot = scancode_slot(if keyboard.VKey == VK_NUMLOCK.0 {
+        WIN_SC_NUMLOCK
+    } else if keyboard.VKey == VK_SHIFT.0 && scancode == 0 {
+        WIN_SC_SHIFT
+    } else {
+        scancode
+    });
+    Some((code, slot))
+}
+
+#[inline(always)]
 const fn is_controller_usage(usage_page: u16, usage: u16) -> bool {
-    usage_page == USAGE_PAGE_GENERIC_DESKTOP
+    usage_page == USAGE_PAGE_GENERIC
         && matches!(usage, USAGE_JOYSTICK | USAGE_GAMEPAD | USAGE_MULTI_AXIS)
 }
 
@@ -181,7 +339,7 @@ fn hat_logical_range(preparsed: &[u8]) -> Option<(i32, i32)> {
         let mut len: u16 = 1;
         let status = HidP_GetSpecificValueCaps(
             HidP_Input,
-            Some(USAGE_PAGE_GENERIC_DESKTOP),
+            Some(USAGE_PAGE_GENERIC),
             None,
             Some(USAGE_HAT_SWITCH),
             &raw mut cap,
@@ -207,7 +365,7 @@ fn hat_logical_range(preparsed: &[u8]) -> Option<(i32, i32)> {
         }
 
         for cap in value_caps.iter().take(value_len as usize) {
-            if cap.UsagePage != USAGE_PAGE_GENERIC_DESKTOP {
+            if cap.UsagePage != USAGE_PAGE_GENERIC {
                 continue;
             }
             let has_hat = if cap.IsRange {
@@ -230,8 +388,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
         return;
     }
 
-    let info = get_device_info(h);
-    let Some(hid) = info else {
+    let Some(hid) = get_device_info(h) else {
         return;
     };
     if !is_controller_usage(hid.usUsagePage, hid.usUsage) {
@@ -264,6 +421,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
             )
         }
     };
+
     let dev = Dev {
         id,
         name,
@@ -340,7 +498,6 @@ where
             continue;
         }
         if pa < nb {
-            // Released.
             (emit_pad)(PadEvent::RawButton {
                 id: dev.id,
                 timestamp,
@@ -351,7 +508,6 @@ where
             });
             a += 1;
         } else {
-            // Pressed.
             (emit_pad)(PadEvent::RawButton {
                 id: dev.id,
                 timestamp,
@@ -429,12 +585,11 @@ where
     std::mem::swap(&mut dev.buttons_prev, &mut dev.buttons_now);
     dev.buttons_now.clear();
 
-    // D-pad hat switch → PadDir edges (so dance pads / DPAD-only devices can bind directions).
     let mut hat: u32 = 0;
     let status = unsafe {
         HidP_GetUsageValue(
             HidP_Input,
-            USAGE_PAGE_GENERIC_DESKTOP,
+            USAGE_PAGE_GENERIC,
             None,
             USAGE_HAT_SWITCH,
             &raw mut hat,
@@ -446,18 +601,12 @@ where
         return;
     }
 
-    // HID hat switches commonly come in two forms:
-    // - logical 0..=7 with null state 8 (HasNull=true)
-    // - logical 1..=8 with null state 0 (HasNull=true)
-    // We use the descriptor-reported logical range to normalize to 0..=7, and treat values
-    // outside the range as neutral.
     let hat = hat as i32;
     let mut hat0: i32 = -1;
     if hat >= dev.hat_min && hat <= dev.hat_max {
         let span = dev.hat_max - dev.hat_min + 1;
         let idx = hat - dev.hat_min;
         if span == 9 && dev.hat_min == 0 && dev.hat_max == 8 && idx == 8 {
-            // Some devices include neutral as 8 inside the logical range.
             hat0 = -1;
         } else if span == 8 {
             hat0 = idx;
@@ -484,6 +633,43 @@ where
             timestamp,
             dir: dirs[i],
             pressed: want[i],
+        });
+    }
+}
+
+#[inline(always)]
+fn handle_keyboard_input(ctx: &mut Ctx) {
+    if !WINDOW_FOCUSED.load(Ordering::Relaxed) {
+        return;
+    }
+    if ctx.buf.len() < size_of::<RAWINPUTHEADER>() + size_of::<RAWKEYBOARD>() {
+        return;
+    }
+
+    unsafe {
+        let keyboard = ptr::read_unaligned(
+            ctx.buf
+                .as_ptr()
+                .add(size_of::<RAWINPUTHEADER>())
+                .cast::<RAWKEYBOARD>(),
+        );
+        let pressed = matches!(keyboard.Message, WM_KEYDOWN | WM_SYSKEYDOWN);
+        let released = matches!(keyboard.Message, WM_KEYUP | WM_SYSKEYUP);
+        if !pressed && !released {
+            return;
+        }
+
+        let Some((code, slot)) = raw_keyboard_code(keyboard) else {
+            return;
+        };
+        if ctx.held[slot] == pressed {
+            return;
+        }
+        ctx.held[slot] = pressed;
+        (ctx.emit_key)(RawKeyboardEvent {
+            code,
+            pressed,
+            timestamp: Instant::now(),
         });
     }
 }
@@ -515,13 +701,16 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
         if rc == u32::MAX {
             return;
         }
-
-        // Parse header unaligned; buffer alignment is not guaranteed.
         if (size2 as usize) < size_of::<RAWINPUTHEADER>() {
             return;
         }
+
         let header: RAWINPUTHEADER = ptr::read_unaligned(ctx.buf.as_ptr().cast::<RAWINPUTHEADER>());
-        if header.dwType != RIM_TYPEHID_U32 {
+        if header.dwType == RIM_TYPEKEYBOARD_U32 {
+            handle_keyboard_input(ctx);
+            return;
+        }
+        if header.dwType != RIM_TYPEHID_U32 || !ctx.enable_pad {
             return;
         }
 
@@ -533,7 +722,6 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
             return;
         };
 
-        // RAWHID starts immediately after RAWINPUTHEADER.
         let base = ctx.buf.as_mut_ptr().add(size_of::<RAWINPUTHEADER>());
         if (size2 as usize) < size_of::<RAWINPUTHEADER>() + 8 {
             return;
@@ -582,11 +770,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         WM_INPUT_DEVICE_CHANGE => {
             if !ctx_ptr.is_null() {
                 let ctx = unsafe { &mut *ctx_ptr };
-                let h = HANDLE(lparam.0 as *mut c_void);
-                match wparam.0 {
-                    GIDC_ARRIVAL_U32 => add_device(ctx, h, false),
-                    GIDC_REMOVAL_U32 => remove_device(ctx, h),
-                    _ => {}
+                if ctx.enable_pad {
+                    let h = HANDLE(lparam.0 as *mut c_void);
+                    match wparam.0 {
+                        GIDC_ARRIVAL_U32 => add_device(ctx, h, false),
+                        GIDC_REMOVAL_U32 => remove_device(ctx, h),
+                        _ => {}
+                    }
                 }
             }
             LRESULT(0)
@@ -599,10 +789,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     }
 }
 
-pub fn run(
-    emit_pad: impl FnMut(PadEvent) + Send + 'static,
-    emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
-) {
+fn run_inner(mut ctx: Box<Ctx>) {
     unsafe {
         let class_name: Vec<u16> = "deadsync_raw_input\0".encode_utf16().collect();
         let hinst: HINSTANCE = GetModuleHandleW(PCWSTR::null()).unwrap_or_default().into();
@@ -615,16 +802,6 @@ pub fn run(
             ..Default::default()
         };
         RegisterClassExW(&raw const wc);
-
-        let mut ctx = Box::new(Ctx {
-            emit_pad: Box::new(emit_pad),
-            emit_sys: Box::new(emit_sys),
-            devices: HashMap::new(),
-            id_by_uuid: HashMap::new(),
-            refs_by_uuid: HashMap::new(),
-            next_id: 0,
-            buf: Vec::with_capacity(1024),
-        });
 
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
@@ -639,40 +816,22 @@ pub fn run(
             None,
             Some(hinst),
             Some(ptr::addr_of_mut!(*ctx).cast::<c_void>().cast_const()),
-        );
-
-        let hwnd = hwnd.unwrap_or_default();
+        )
+        .unwrap_or_default();
         if hwnd.0.is_null() {
             loop {
                 std::thread::park();
             }
         }
 
-        // Register for HID controllers (joystick/gamepad/multiaxis), plus device notifications.
-        let devices = [
-            RAWINPUTDEVICE {
-                usUsagePage: USAGE_PAGE_GENERIC_DESKTOP,
-                usUsage: USAGE_JOYSTICK,
-                dwFlags: RIDEV_DEVNOTIFY | RIDEV_INPUTSINK,
-                hwndTarget: hwnd,
-            },
-            RAWINPUTDEVICE {
-                usUsagePage: USAGE_PAGE_GENERIC_DESKTOP,
-                usUsage: USAGE_GAMEPAD,
-                dwFlags: RIDEV_DEVNOTIFY | RIDEV_INPUTSINK,
-                hwndTarget: hwnd,
-            },
-            RAWINPUTDEVICE {
-                usUsagePage: USAGE_PAGE_GENERIC_DESKTOP,
-                usUsage: USAGE_MULTI_AXIS,
-                dwFlags: RIDEV_DEVNOTIFY | RIDEV_INPUTSINK,
-                hwndTarget: hwnd,
-            },
-        ];
-        let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
+        RAW_INPUT_HWND.store(hwnd.0 as isize, Ordering::Release);
+        register_keyboard(hwnd, CAPTURE_ENABLED.load(Ordering::Relaxed));
 
-        enumerate_existing(&mut ctx);
-        (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+        if ctx.enable_pad {
+            register_controllers(hwnd);
+            enumerate_existing(&mut ctx);
+            (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+        }
 
         let mut msg = MSG::default();
         loop {
@@ -684,7 +843,41 @@ pub fn run(
             DispatchMessageW(&raw const msg);
         }
 
-        // Keep ctx alive forever (message loop runs until process exit).
+        RAW_INPUT_HWND.store(0, Ordering::Release);
         std::mem::forget(ctx);
     }
+}
+
+pub fn run(
+    emit_pad: impl FnMut(PadEvent) + Send + 'static,
+    emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
+    emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
+) {
+    run_inner(Box::new(Ctx {
+        emit_pad: Box::new(emit_pad),
+        emit_sys: Box::new(emit_sys),
+        emit_key: Box::new(emit_key),
+        devices: HashMap::new(),
+        id_by_uuid: HashMap::new(),
+        refs_by_uuid: HashMap::new(),
+        next_id: 0,
+        buf: Vec::with_capacity(1024),
+        held: [false; RAW_KEY_HELD_SLOTS],
+        enable_pad: true,
+    }));
+}
+
+pub fn run_keyboard_only(emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static) {
+    run_inner(Box::new(Ctx {
+        emit_pad: Box::new(|_| {}),
+        emit_sys: Box::new(|_| {}),
+        emit_key: Box::new(emit_key),
+        devices: HashMap::new(),
+        id_by_uuid: HashMap::new(),
+        refs_by_uuid: HashMap::new(),
+        next_id: 0,
+        buf: Vec::with_capacity(1024),
+        held: [false; RAW_KEY_HELD_SLOTS],
+        enable_pad: false,
+    }));
 }
