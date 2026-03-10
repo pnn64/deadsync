@@ -2323,219 +2323,201 @@ fn binding_to_token(binding: InputBinding) -> String {
     }
 }
 
+/// Parse a `KeyCode::*` token into an `InputBinding::Key`.
 #[inline(always)]
-fn parse_binding_token(tok: &str) -> Option<InputBinding> {
-    let t = tok.trim();
-    // Keyboard
-    if let Some(rest) = t.strip_prefix("KeyCode::") {
-        let code = match rest {
-            // Special keys
-            "Enter" => KeyCode::Enter,
-            "Escape" => KeyCode::Escape,
-            "ArrowUp" => KeyCode::ArrowUp,
-            "ArrowDown" => KeyCode::ArrowDown,
-            "ArrowLeft" => KeyCode::ArrowLeft,
-            "ArrowRight" => KeyCode::ArrowRight,
-            "Slash" => KeyCode::Slash,
-            // Numpad keys
-            "Numpad0" => KeyCode::Numpad0,
-            "Numpad1" => KeyCode::Numpad1,
-            "Numpad2" => KeyCode::Numpad2,
-            "Numpad3" => KeyCode::Numpad3,
-            "Numpad4" => KeyCode::Numpad4,
-            "Numpad5" => KeyCode::Numpad5,
-            "Numpad6" => KeyCode::Numpad6,
-            "Numpad7" => KeyCode::Numpad7,
-            "Numpad8" => KeyCode::Numpad8,
-            "Numpad9" => KeyCode::Numpad9,
-            "NumpadAdd" => KeyCode::NumpadAdd,
-            "NumpadDivide" => KeyCode::NumpadDivide,
-            "NumpadDecimal" => KeyCode::NumpadDecimal,
-            "NumpadComma" => KeyCode::NumpadComma,
-            "NumpadEnter" => KeyCode::NumpadEnter,
-            "NumpadEqual" => KeyCode::NumpadEqual,
-            "NumpadMultiply" => KeyCode::NumpadMultiply,
-            "NumpadSubtract" => KeyCode::NumpadSubtract,
-            // Letter keys A-Z
-            "KeyA" => KeyCode::KeyA,
-            "KeyB" => KeyCode::KeyB,
-            "KeyC" => KeyCode::KeyC,
-            "KeyD" => KeyCode::KeyD,
-            "KeyE" => KeyCode::KeyE,
-            "KeyF" => KeyCode::KeyF,
-            "KeyG" => KeyCode::KeyG,
-            "KeyH" => KeyCode::KeyH,
-            "KeyI" => KeyCode::KeyI,
-            "KeyJ" => KeyCode::KeyJ,
-            "KeyK" => KeyCode::KeyK,
-            "KeyL" => KeyCode::KeyL,
-            "KeyM" => KeyCode::KeyM,
-            "KeyN" => KeyCode::KeyN,
-            "KeyO" => KeyCode::KeyO,
-            "KeyP" => KeyCode::KeyP,
-            "KeyQ" => KeyCode::KeyQ,
-            "KeyR" => KeyCode::KeyR,
-            "KeyS" => KeyCode::KeyS,
-            "KeyT" => KeyCode::KeyT,
-            "KeyU" => KeyCode::KeyU,
-            "KeyV" => KeyCode::KeyV,
-            "KeyW" => KeyCode::KeyW,
-            "KeyX" => KeyCode::KeyX,
-            "KeyY" => KeyCode::KeyY,
-            "KeyZ" => KeyCode::KeyZ,
-            _ => return None,
+fn parse_keycode(t: &str) -> Option<InputBinding> {
+    let name = t.strip_prefix("KeyCode::")?;
+    macro_rules! keycode_match {
+        ($input:expr, $( $name:ident ),* $(,)?) => {
+            match $input {
+                $( stringify!($name) => Some(KeyCode::$name), )*
+                _ => None,
+            }
         };
-        return Some(InputBinding::Key(code));
     }
+    keycode_match!(name,
+        // Writing system keys
+        Backquote, Backslash, BracketLeft, BracketRight, Comma,
+        Digit0, Digit1, Digit2, Digit3, Digit4,
+        Digit5, Digit6, Digit7, Digit8, Digit9,
+        Equal, IntlBackslash, IntlRo, IntlYen,
+        KeyA, KeyB, KeyC, KeyD, KeyE, KeyF, KeyG, KeyH, KeyI,
+        KeyJ, KeyK, KeyL, KeyM, KeyN, KeyO, KeyP, KeyQ, KeyR,
+        KeyS, KeyT, KeyU, KeyV, KeyW, KeyX, KeyY, KeyZ,
+        Minus, Period, Quote, Semicolon, Slash,
+        // Modifier keys
+        AltLeft, AltRight, Backspace, CapsLock, ContextMenu,
+        ControlLeft, ControlRight, Enter, SuperLeft, SuperRight,
+        ShiftLeft, ShiftRight, Space, Tab,
+        // IME keys
+        Convert, KanaMode, Lang1, Lang2, Lang3, Lang4, Lang5, NonConvert,
+        // Navigation keys
+        Delete, End, Help, Home, Insert, PageDown, PageUp,
+        ArrowDown, ArrowLeft, ArrowRight, ArrowUp,
+        // Numpad keys
+        NumLock,
+        Numpad0, Numpad1, Numpad2, Numpad3, Numpad4,
+        Numpad5, Numpad6, Numpad7, Numpad8, Numpad9,
+        NumpadAdd, NumpadBackspace, NumpadClear, NumpadClearEntry,
+        NumpadComma, NumpadDecimal, NumpadDivide, NumpadEnter,
+        NumpadEqual, NumpadHash,
+        NumpadMemoryAdd, NumpadMemoryClear, NumpadMemoryRecall,
+        NumpadMemoryStore, NumpadMemorySubtract,
+        NumpadMultiply, NumpadParenLeft, NumpadParenRight,
+        NumpadStar, NumpadSubtract,
+        // Function keys
+        Escape, Fn, FnLock, PrintScreen, ScrollLock, Pause,
+        // Media / browser keys
+        BrowserBack, BrowserFavorites, BrowserForward, BrowserHome,
+        BrowserRefresh, BrowserSearch, BrowserStop,
+        Eject, LaunchApp1, LaunchApp2, LaunchMail,
+        MediaPlayPause, MediaSelect, MediaStop,
+        MediaTrackNext, MediaTrackPrevious,
+        Power, Sleep, AudioVolumeDown, AudioVolumeMute, AudioVolumeUp, WakeUp,
+        // Misc
+        Meta, Hyper, Turbo, Abort, Resume, Suspend,
+        Again, Copy, Cut, Find, Open, Paste, Props, Select, Undo,
+        Hiragana, Katakana,
+        // F-keys
+        F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
+        F13, F14, F15, F16, F17, F18, F19, F20, F21, F22, F23, F24,
+        F25, F26, F27, F28, F29, F30, F31, F32, F33, F34, F35,
+    ).map(InputBinding::Key)
+}
 
-    // Gamepad low-level code binding:
-    //   PadCode[0xDEADBEEF]
-    //   PadCode[0xDEADBEEF]@0
-    //   PadCode[0xDEADBEEF]#00112233AABBCCDDEEFF001122334455
-    //   PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455
-    //
-    // where 0x... or decimal is the `PadCode(u32)` shown in the Sandbox/Input screens,
-    // @N restricts to device index N,
-    // and #... restricts to a 16-byte UUID (32 hex chars, no dashes).
-    if let Some(rest) = t.strip_prefix("PadCode[")
-        && let Some(end) = rest.find(']')
+/// Parse a direction name into a `PadDir`.
+fn parse_pad_dir(name: &str) -> Option<PadDir> {
+    match name {
+        "Up" => Some(PadDir::Up),
+        "Down" => Some(PadDir::Down),
+        "Left" => Some(PadDir::Left),
+        "Right" => Some(PadDir::Right),
+        _ => None,
+    }
+}
+
+/// Parse a `PadCode[...]` token into an `InputBinding::GamepadCode`.
+///
+/// Accepted formats:
+///   `PadCode[0xDEADBEEF]`
+///   `PadCode[0xDEADBEEF]@0`
+///   `PadCode[0xDEADBEEF]#00112233AABBCCDDEEFF001122334455`
+///   `PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455`
+fn parse_pad_code(t: &str) -> Option<InputBinding> {
+    let rest = t.strip_prefix("PadCode[")?;
+    let end = rest.find(']')?;
+    let code_str = &rest[..end];
+    let mut tail = &rest[end + 1..];
+
+    let code_u32 = if let Some(hex) = code_str
+        .strip_prefix("0x")
+        .or_else(|| code_str.strip_prefix("0X"))
     {
-        let code_str = &rest[..end];
-        let mut tail = &rest[end + 1..];
+        u32::from_str_radix(hex, 16).ok()?
+    } else {
+        u32::from_str(code_str).ok()?
+    };
 
-        let code_u32 = if let Some(hex) = code_str
-            .strip_prefix("0x")
-            .or_else(|| code_str.strip_prefix("0X"))
-        {
-            u32::from_str_radix(hex, 16).ok()?
-        } else {
-            u32::from_str(code_str).ok()?
-        };
+    let mut device: Option<usize> = None;
+    let mut uuid: Option<[u8; 16]> = None;
 
-        let mut device: Option<usize> = None;
-        let mut uuid: Option<[u8; 16]> = None;
-
-        // Parse optional @device and #uuid, in any order.
-        loop {
-            if let Some(rest2) = tail.strip_prefix('@') {
-                let mut digits = String::new();
-                for ch in rest2.chars() {
-                    if ch.is_ascii_digit() {
-                        digits.push(ch);
-                    } else {
-                        break;
-                    }
-                }
-                if digits.is_empty() {
+    // Parse optional @device and #uuid, in any order.
+    loop {
+        if let Some(rest2) = tail.strip_prefix('@') {
+            let mut digits = String::new();
+            for ch in rest2.chars() {
+                if ch.is_ascii_digit() {
+                    digits.push(ch);
+                } else {
                     break;
                 }
-                if let Ok(dev_idx) = usize::from_str(&digits) {
-                    device = Some(dev_idx);
-                }
-                tail = &rest2[digits.len()..];
-                continue;
             }
+            if digits.is_empty() {
+                break;
+            }
+            if let Ok(dev_idx) = usize::from_str(&digits) {
+                device = Some(dev_idx);
+            }
+            tail = &rest2[digits.len()..];
+            continue;
+        }
 
-            if let Some(rest2) = tail.strip_prefix('#') {
-                let mut hex_digits = String::new();
-                for ch in rest2.chars() {
-                    if ch.is_ascii_hexdigit() {
-                        hex_digits.push(ch);
+        if let Some(rest2) = tail.strip_prefix('#') {
+            let mut hex_digits = String::new();
+            for ch in rest2.chars() {
+                if ch.is_ascii_hexdigit() {
+                    hex_digits.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if hex_digits.len() == 32 {
+                let mut bytes = [0u8; 16];
+                let mut ok = true;
+                for i in 0..16 {
+                    let start = i * 2;
+                    let end = start + 2;
+                    if let Ok(b) = u8::from_str_radix(&hex_digits[start..end], 16) {
+                        bytes[i] = b
                     } else {
+                        ok = false;
                         break;
                     }
                 }
-                if hex_digits.len() == 32 {
-                    let mut bytes = [0u8; 16];
-                    let mut ok = true;
-                    for i in 0..16 {
-                        let start = i * 2;
-                        let end = start + 2;
-                        if let Ok(b) = u8::from_str_radix(&hex_digits[start..end], 16) {
-                            bytes[i] = b
-                        } else {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if ok {
-                        uuid = Some(bytes);
-                    }
+                if ok {
+                    uuid = Some(bytes);
                 }
-                tail = &rest2[hex_digits.len()..];
-                continue;
             }
-
-            break;
+            tail = &rest2[hex_digits.len()..];
+            continue;
         }
 
-        return Some(InputBinding::GamepadCode(GamepadCodeBinding {
-            code_u32,
-            device,
-            uuid,
-        }));
+        break;
     }
 
-    // Gamepad (any pad): PadDir::Up
-    if let Some(rest) = t.strip_prefix("PadDir::") {
-        let dir = match rest {
-            "Up" => PadDir::Up,
-            "Down" => PadDir::Down,
-            "Left" => PadDir::Left,
-            "Right" => PadDir::Right,
-            _ => return None,
-        };
+    Some(InputBinding::GamepadCode(GamepadCodeBinding {
+        code_u32,
+        device,
+        uuid,
+    }))
+}
+
+/// Parse any pad-direction binding:
+///   `PadDir::Up`            → `InputBinding::PadDir`
+///   `Pad::Dir::Up`           → `InputBinding::PadDir`  (any-pad)
+///   `Pad0::Dir::Up`          → `InputBinding::PadDirOn` (device-specific)
+fn parse_pad_dir_binding(t: &str) -> Option<InputBinding> {
+    // Short form: PadDir::Up
+    if let Some(dir_name) = t.strip_prefix("PadDir::") {
+        return parse_pad_dir(dir_name).map(InputBinding::PadDir);
+    }
+
+    // Long forms: Pad::Dir::Up  /  Pad0::Dir::Up
+    let parts: Vec<&str> = t.split("::").collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let (pad_part, kind, name) = (parts[0], parts[1], parts[2]);
+    let dev_str = pad_part.strip_prefix("Pad")?;
+
+    if kind != "Dir" {
+        return None;
+    }
+    let dir = parse_pad_dir(name)?;
+
+    if dev_str.is_empty() {
+        // Treat as any-pad.
         return Some(InputBinding::PadDir(dir));
     }
+    let device = dev_str.parse::<usize>().ok()?;
+    Some(InputBinding::PadDirOn { device, dir })
+}
 
-    // Gamepad (device-specific): Pad0::Dir::Up
-    // Split by "::"
-    let parts: Vec<&str> = t.split("::").collect();
-    if parts.len() == 3 {
-        let (pad_part, kind, name) = (parts[0], parts[1], parts[2]);
-        // Parse device index from PadN
-        if let Some(dev_str) = pad_part.strip_prefix("Pad") {
-            if dev_str.is_empty() {
-                // Treat as any-pad; handled at top via PadDir prefix.
-                return match kind {
-                    "Dir" => match name {
-                        "Up" => Some(InputBinding::PadDir(PadDir::Up)),
-                        "Down" => Some(InputBinding::PadDir(PadDir::Down)),
-                        "Left" => Some(InputBinding::PadDir(PadDir::Left)),
-                        "Right" => Some(InputBinding::PadDir(PadDir::Right)),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-            }
-            if let Ok(device) = dev_str.parse::<usize>() {
-                return match kind {
-                    "Dir" => match name {
-                        "Up" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Up,
-                        }),
-                        "Down" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Down,
-                        }),
-                        "Left" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Left,
-                        }),
-                        "Right" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Right,
-                        }),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-            }
-        }
-    }
-
-    None
+fn parse_binding_token(tok: &str) -> Option<InputBinding> {
+    let t = tok.trim();
+    parse_keycode(t)
+        .or_else(|| parse_pad_code(t))
+        .or_else(|| parse_pad_dir_binding(t))
 }
 
 fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
@@ -4065,4 +4047,420 @@ pub fn update_machine_default_noteskin(noteskin: &str) {
         *current = normalized;
     }
     save_without_keymaps();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use winit::keyboard::KeyCode;
+
+    // ---------------------------------------------------------------
+    // parse_keycode
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn parse_keycode_common_keys() {
+        // Keys that were in the original table and must still work.
+        let cases = [
+            ("KeyCode::Enter", KeyCode::Enter),
+            ("KeyCode::Escape", KeyCode::Escape),
+            ("KeyCode::ArrowUp", KeyCode::ArrowUp),
+            ("KeyCode::ArrowDown", KeyCode::ArrowDown),
+            ("KeyCode::ArrowLeft", KeyCode::ArrowLeft),
+            ("KeyCode::ArrowRight", KeyCode::ArrowRight),
+            ("KeyCode::Slash", KeyCode::Slash),
+            ("KeyCode::KeyA", KeyCode::KeyA),
+            ("KeyCode::KeyZ", KeyCode::KeyZ),
+            ("KeyCode::Numpad0", KeyCode::Numpad0),
+            ("KeyCode::Numpad9", KeyCode::Numpad9),
+            ("KeyCode::NumpadEnter", KeyCode::NumpadEnter),
+            ("KeyCode::NumpadDecimal", KeyCode::NumpadDecimal),
+        ];
+        for (token, expected) in cases {
+            assert_eq!(
+                parse_keycode(token),
+                Some(InputBinding::Key(expected)),
+                "failed for {token}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_keycode_previously_missing_keys() {
+        // These keys were the original bug — they serialized fine but
+        // failed to deserialize with the old incomplete match table.
+        let cases = [
+            ("KeyCode::Period", KeyCode::Period),
+            ("KeyCode::AltLeft", KeyCode::AltLeft),
+            ("KeyCode::AltRight", KeyCode::AltRight),
+            ("KeyCode::ControlLeft", KeyCode::ControlLeft),
+            ("KeyCode::ControlRight", KeyCode::ControlRight),
+            ("KeyCode::ShiftLeft", KeyCode::ShiftLeft),
+            ("KeyCode::ShiftRight", KeyCode::ShiftRight),
+            ("KeyCode::Space", KeyCode::Space),
+            ("KeyCode::Tab", KeyCode::Tab),
+            ("KeyCode::Backspace", KeyCode::Backspace),
+            ("KeyCode::CapsLock", KeyCode::CapsLock),
+            ("KeyCode::Delete", KeyCode::Delete),
+            ("KeyCode::Home", KeyCode::Home),
+            ("KeyCode::End", KeyCode::End),
+            ("KeyCode::PageUp", KeyCode::PageUp),
+            ("KeyCode::PageDown", KeyCode::PageDown),
+            ("KeyCode::Insert", KeyCode::Insert),
+            ("KeyCode::F1", KeyCode::F1),
+            ("KeyCode::F12", KeyCode::F12),
+            ("KeyCode::PrintScreen", KeyCode::PrintScreen),
+            ("KeyCode::Comma", KeyCode::Comma),
+            ("KeyCode::Minus", KeyCode::Minus),
+            ("KeyCode::Equal", KeyCode::Equal),
+            ("KeyCode::BracketLeft", KeyCode::BracketLeft),
+            ("KeyCode::Backquote", KeyCode::Backquote),
+            ("KeyCode::Digit0", KeyCode::Digit0),
+            ("KeyCode::Digit9", KeyCode::Digit9),
+            ("KeyCode::NumLock", KeyCode::NumLock),
+            ("KeyCode::ScrollLock", KeyCode::ScrollLock),
+            ("KeyCode::Pause", KeyCode::Pause),
+            ("KeyCode::ContextMenu", KeyCode::ContextMenu),
+            ("KeyCode::SuperLeft", KeyCode::SuperLeft),
+            ("KeyCode::AudioVolumeMute", KeyCode::AudioVolumeMute),
+            ("KeyCode::F35", KeyCode::F35),
+        ];
+        for (token, expected) in cases {
+            assert_eq!(
+                parse_keycode(token),
+                Some(InputBinding::Key(expected)),
+                "failed for {token}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_keycode_rejects_invalid() {
+        assert_eq!(parse_keycode("KeyCode::NotAKey"), None);
+        assert_eq!(parse_keycode("KeyCode::"), None);
+        assert_eq!(parse_keycode("NotKeyCode::Enter"), None);
+        assert_eq!(parse_keycode("Enter"), None);
+        assert_eq!(parse_keycode(""), None);
+    }
+
+    // ---------------------------------------------------------------
+    // parse_pad_dir (internal helper)
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn parse_pad_dir_valid() {
+        assert_eq!(parse_pad_dir("Up"), Some(PadDir::Up));
+        assert_eq!(parse_pad_dir("Down"), Some(PadDir::Down));
+        assert_eq!(parse_pad_dir("Left"), Some(PadDir::Left));
+        assert_eq!(parse_pad_dir("Right"), Some(PadDir::Right));
+    }
+
+    #[test]
+    fn parse_pad_dir_invalid() {
+        assert_eq!(parse_pad_dir("up"), None);
+        assert_eq!(parse_pad_dir(""), None);
+        assert_eq!(parse_pad_dir("UpDown"), None);
+    }
+
+    // ---------------------------------------------------------------
+    // parse_pad_dir_binding
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn parse_pad_dir_binding_short_form() {
+        assert_eq!(
+            parse_pad_dir_binding("PadDir::Up"),
+            Some(InputBinding::PadDir(PadDir::Up))
+        );
+        assert_eq!(
+            parse_pad_dir_binding("PadDir::Right"),
+            Some(InputBinding::PadDir(PadDir::Right))
+        );
+    }
+
+    #[test]
+    fn parse_pad_dir_binding_any_pad_long_form() {
+        assert_eq!(
+            parse_pad_dir_binding("Pad::Dir::Down"),
+            Some(InputBinding::PadDir(PadDir::Down))
+        );
+    }
+
+    #[test]
+    fn parse_pad_dir_binding_device_specific() {
+        assert_eq!(
+            parse_pad_dir_binding("Pad0::Dir::Up"),
+            Some(InputBinding::PadDirOn {
+                device: 0,
+                dir: PadDir::Up
+            })
+        );
+        assert_eq!(
+            parse_pad_dir_binding("Pad3::Dir::Left"),
+            Some(InputBinding::PadDirOn {
+                device: 3,
+                dir: PadDir::Left
+            })
+        );
+    }
+
+    #[test]
+    fn parse_pad_dir_binding_rejects_invalid() {
+        assert_eq!(parse_pad_dir_binding("PadDir::Diagonal"), None);
+        assert_eq!(parse_pad_dir_binding("Pad0::Btn::A"), None);
+        assert_eq!(parse_pad_dir_binding("Pad0::Dir"), None);
+        assert_eq!(parse_pad_dir_binding("NotPad::Dir::Up"), None);
+    }
+
+    // ---------------------------------------------------------------
+    // parse_pad_code
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn parse_pad_code_hex_only() {
+        assert_eq!(
+            parse_pad_code("PadCode[0xDEADBEEF]"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0xDEADBEEF,
+                device: None,
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_decimal() {
+        assert_eq!(
+            parse_pad_code("PadCode[42]"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 42,
+                device: None,
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_with_device() {
+        assert_eq!(
+            parse_pad_code("PadCode[0x00000001]@2"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 1,
+                device: Some(2),
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_with_uuid() {
+        let uuid_hex = "00112233AABBCCDDEEFF001122334455";
+        let token = format!("PadCode[0xFF]#{uuid_hex}");
+        let result = parse_pad_code(&token);
+        let expected_uuid: [u8; 16] = [
+            0x00, 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD,
+            0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        ];
+        assert_eq!(
+            result,
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0xFF,
+                device: None,
+                uuid: Some(expected_uuid),
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_with_device_and_uuid() {
+        let token = "PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455";
+        let result = parse_pad_code(token);
+        assert!(result.is_some());
+        if let Some(InputBinding::GamepadCode(gcb)) = result {
+            assert_eq!(gcb.code_u32, 0xDEADBEEF);
+            assert_eq!(gcb.device, Some(0));
+            assert!(gcb.uuid.is_some());
+        }
+    }
+
+    #[test]
+    fn parse_pad_code_rejects_invalid() {
+        assert_eq!(parse_pad_code("PadCode[]"), None);
+        assert_eq!(parse_pad_code("PadCode[xyz]"), None);
+        assert_eq!(parse_pad_code("NotPadCode[0x01]"), None);
+        assert_eq!(parse_pad_code(""), None);
+    }
+
+    // ---------------------------------------------------------------
+    // parse_binding_token (dispatcher)
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn parse_binding_token_dispatches_keycode() {
+        assert_eq!(
+            parse_binding_token("KeyCode::Period"),
+            Some(InputBinding::Key(KeyCode::Period))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_pad_dir() {
+        assert_eq!(
+            parse_binding_token("PadDir::Up"),
+            Some(InputBinding::PadDir(PadDir::Up))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_pad_device() {
+        assert_eq!(
+            parse_binding_token("Pad0::Dir::Left"),
+            Some(InputBinding::PadDirOn {
+                device: 0,
+                dir: PadDir::Left
+            })
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_pad_code() {
+        let result = parse_binding_token("PadCode[0x42]");
+        assert_eq!(
+            result,
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0x42,
+                device: None,
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_trims_whitespace() {
+        assert_eq!(
+            parse_binding_token("  KeyCode::Enter  "),
+            Some(InputBinding::Key(KeyCode::Enter))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_rejects_garbage() {
+        assert_eq!(parse_binding_token("garbage"), None);
+        assert_eq!(parse_binding_token(""), None);
+    }
+
+    // ---------------------------------------------------------------
+    // Round-trip: binding_to_token → parse_binding_token
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn round_trip_keyboard_bindings() {
+        let keys = [
+            KeyCode::Enter,
+            KeyCode::Escape,
+            KeyCode::Period,
+            KeyCode::AltLeft,
+            KeyCode::AltRight,
+            KeyCode::Space,
+            KeyCode::Tab,
+            KeyCode::Backspace,
+            KeyCode::ArrowUp,
+            KeyCode::KeyA,
+            KeyCode::KeyZ,
+            KeyCode::Digit0,
+            KeyCode::Digit9,
+            KeyCode::Numpad0,
+            KeyCode::Numpad2,
+            KeyCode::NumpadEnter,
+            KeyCode::NumpadDecimal,
+            KeyCode::F1,
+            KeyCode::F12,
+            KeyCode::F35,
+            KeyCode::ControlLeft,
+            KeyCode::ShiftRight,
+            KeyCode::SuperLeft,
+            KeyCode::PrintScreen,
+            KeyCode::Comma,
+            KeyCode::Minus,
+            KeyCode::Slash,
+            KeyCode::Backquote,
+            KeyCode::BracketLeft,
+            KeyCode::AudioVolumeMute,
+        ];
+        for key in keys {
+            let binding = InputBinding::Key(key);
+            let token = binding_to_token(binding);
+            let parsed = parse_binding_token(&token);
+            assert_eq!(
+                parsed,
+                Some(binding),
+                "round-trip failed for {key:?}: token was {token:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn round_trip_pad_dir() {
+        for dir in [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right] {
+            let binding = InputBinding::PadDir(dir);
+            let token = binding_to_token(binding);
+            let parsed = parse_binding_token(&token);
+            assert_eq!(parsed, Some(binding), "round-trip failed for {dir:?}");
+        }
+    }
+
+    #[test]
+    fn round_trip_pad_dir_on() {
+        for device in [0, 1, 5] {
+            for dir in [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right] {
+                let binding = InputBinding::PadDirOn { device, dir };
+                let token = binding_to_token(binding);
+                let parsed = parse_binding_token(&token);
+                assert_eq!(
+                    parsed,
+                    Some(binding),
+                    "round-trip failed for device={device}, dir={dir:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn round_trip_gamepad_code() {
+        let cases = [
+            GamepadCodeBinding {
+                code_u32: 0xDEADBEEF,
+                device: None,
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: 42,
+                device: Some(0),
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: 0xFF,
+                device: None,
+                uuid: Some([
+                    0x00, 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD,
+                    0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+                ]),
+            },
+            GamepadCodeBinding {
+                code_u32: 0x01,
+                device: Some(3),
+                uuid: Some([0xAB; 16]),
+            },
+        ];
+        for gcb in cases {
+            let binding = InputBinding::GamepadCode(gcb);
+            let token = binding_to_token(binding);
+            let parsed = parse_binding_token(&token);
+            assert_eq!(
+                parsed,
+                Some(binding),
+                "round-trip failed for {gcb:?}: token was {token:?}"
+            );
+        }
+    }
 }
