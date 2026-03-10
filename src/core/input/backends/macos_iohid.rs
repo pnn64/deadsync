@@ -1,7 +1,10 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
+use crate::core::host_time::now_nanos;
+use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_void};
 use std::ptr;
+use std::time::Duration;
 use std::time::Instant;
 
 type CFAllocatorRef = *const c_void;
@@ -63,6 +66,7 @@ unsafe extern "C" {
     fn IOHIDDeviceGetProperty(device: IOHIDDeviceRef, key: CFStringRef) -> CFTypeRef;
     fn IOHIDValueGetElement(value: IOHIDValueRef) -> IOHIDElementRef;
     fn IOHIDValueGetIntegerValue(value: IOHIDValueRef) -> CFIndex;
+    fn IOHIDValueGetTimeStamp(value: IOHIDValueRef) -> u64;
     fn IOHIDElementGetDevice(elem: IOHIDElementRef) -> IOHIDDeviceRef;
     fn IOHIDElementGetUsagePage(elem: IOHIDElementRef) -> u32;
     fn IOHIDElementGetUsage(elem: IOHIDElementRef) -> u32;
@@ -92,12 +96,50 @@ struct Dev {
     dir: [bool; 4],
 }
 
+#[derive(Clone, Copy)]
+struct HostClock {
+    numer: u32,
+    denom: u32,
+    offset_nanos: i128,
+}
+
+impl HostClock {
+    fn calibrate() -> Option<Self> {
+        let mut info = mach_timebase_info_data_t { numer: 0, denom: 0 };
+        let status = unsafe { mach_timebase_info(&mut info) };
+        if status != 0 || info.denom == 0 {
+            return None;
+        }
+        let host_before = now_nanos();
+        let mach_now = unsafe { mach_absolute_time() };
+        let host_after = now_nanos();
+        let host_mid =
+            host_before / 2 + host_after / 2 + ((host_before & 1) + (host_after & 1)) / 2;
+        let mach_nanos = scale_mach_time(mach_now, info.numer, info.denom);
+        Some(Self {
+            numer: info.numer,
+            denom: info.denom,
+            offset_nanos: i128::from(mach_nanos) - i128::from(host_mid),
+        })
+    }
+
+    #[inline(always)]
+    fn host_nanos(self, mach_time: u64) -> Option<u64> {
+        if mach_time == 0 {
+            return None;
+        }
+        let mach_nanos = scale_mach_time(mach_time, self.numer, self.denom);
+        Some((i128::from(mach_nanos) - self.offset_nanos).clamp(0, i128::from(u64::MAX)) as u64)
+    }
+}
+
 struct Ctx {
     emit_pad: Box<dyn FnMut(PadEvent) + Send>,
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
     next_id: u32,
     id_by_uuid: HashMap<[u8; 16], PadId>,
     devs: HashMap<usize, Dev>,
+    host_clock: Option<HostClock>,
     startup_complete_sent: bool,
 
     // CF strings (owned; we intentionally leak ctx).
@@ -106,6 +148,40 @@ struct Ctx {
     key_vendor_id: CFStringRef,
     key_product_id: CFStringRef,
     key_location_id: CFStringRef,
+}
+
+#[inline(always)]
+fn timestamp_from_host_sample(
+    target_host_nanos: u64,
+    sample_host_nanos: u64,
+    sample: Instant,
+) -> Instant {
+    if target_host_nanos >= sample_host_nanos {
+        sample
+            .checked_add(Duration::from_nanos(
+                target_host_nanos.saturating_sub(sample_host_nanos),
+            ))
+            .unwrap_or(sample)
+    } else {
+        sample
+            .checked_sub(Duration::from_nanos(
+                sample_host_nanos.saturating_sub(target_host_nanos),
+            ))
+            .unwrap_or(sample)
+    }
+}
+
+#[inline(always)]
+fn event_time(host_clock: Option<HostClock>, value: IOHIDValueRef) -> (Instant, u64) {
+    let sample = Instant::now();
+    let sample_host_nanos = now_nanos();
+    let host_nanos = host_clock
+        .and_then(|clock| clock.host_nanos(unsafe { IOHIDValueGetTimeStamp(value) }))
+        .unwrap_or(sample_host_nanos);
+    (
+        timestamp_from_host_sample(host_nanos, sample_host_nanos, sample),
+        host_nanos,
+    )
 }
 
 extern "C" fn on_match(
@@ -202,7 +278,7 @@ extern "C" fn on_input(
 ) {
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
-        let timestamp = Instant::now();
+        let (timestamp, host_nanos) = event_time(ctx.host_clock, value);
         let elem = IOHIDValueGetElement(value);
         if elem.is_null() {
             return;
@@ -241,7 +317,7 @@ extern "C" fn on_input(
                 (ctx.emit_pad)(PadEvent::Dir {
                     id: dev.id,
                     timestamp,
-                    host_nanos: 0,
+                    host_nanos,
                     dir: dirs[i],
                     pressed: want[i],
                 });
@@ -254,7 +330,7 @@ extern "C" fn on_input(
             (ctx.emit_pad)(PadEvent::RawButton {
                 id: dev.id,
                 timestamp,
-                host_nanos: 0,
+                host_nanos,
                 code: PadCode(code),
                 uuid: dev.uuid,
                 value: if pressed { 1.0 } else { 0.0 },
@@ -264,7 +340,7 @@ extern "C" fn on_input(
             (ctx.emit_pad)(PadEvent::RawAxis {
                 id: dev.id,
                 timestamp,
-                host_nanos: 0,
+                host_nanos,
                 code: PadCode(code),
                 uuid: dev.uuid,
                 value: v as f32,
@@ -291,6 +367,7 @@ pub fn run(
             next_id: 0,
             id_by_uuid: HashMap::new(),
             devs: HashMap::new(),
+            host_clock: HostClock::calibrate(),
             startup_complete_sent: false,
             key_primary_usage_page: cfstr("PrimaryUsagePage"),
             key_primary_usage: cfstr("PrimaryUsage"),
@@ -333,4 +410,10 @@ pub fn run(
         // Keep ctx alive forever (run loop runs until process exit).
         std::mem::forget(ctx);
     }
+}
+
+#[inline(always)]
+fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {
+    ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))
+        as u64
 }
