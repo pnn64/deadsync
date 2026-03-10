@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{self, DisplayMode};
 use crate::core::display;
-use crate::core::gfx::{self as renderer, BackendType, UncappedMode, create_backend};
+use crate::core::gfx::{self as renderer, BackendType, PresentModePolicy, create_backend};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
@@ -715,7 +715,7 @@ pub struct ShellState {
     start_time: Instant,
     vsync_enabled: bool,
     frame_interval: Option<Duration>,
-    uncapped_mode: UncappedMode,
+    present_mode_policy: PresentModePolicy,
     next_redraw_at: Instant,
     pending_redraw_request_at: Option<Instant>,
     pending_redraw_request_reason: &'static str,
@@ -888,7 +888,7 @@ impl ShellState {
             start_time: now,
             vsync_enabled: cfg.vsync,
             frame_interval,
-            uncapped_mode: cfg.uncapped_mode,
+            present_mode_policy: cfg.present_mode_policy,
             next_redraw_at: now,
             pending_redraw_request_at: None,
             pending_redraw_request_reason: "none",
@@ -932,8 +932,8 @@ impl ShellState {
     }
 
     #[inline(always)]
-    fn set_uncapped_mode(&mut self, mode: UncappedMode) {
-        self.uncapped_mode = mode;
+    fn set_present_mode_policy(&mut self, policy: PresentModePolicy) {
+        self.present_mode_policy = policy;
         self.next_redraw_at = Instant::now();
         self.last_logged_frame_loop_mode = None;
     }
@@ -984,7 +984,7 @@ impl ShellState {
 
     #[inline(always)]
     fn frame_interval_state(&self, screen: CurrentScreen) -> FrameIntervalState {
-        let base = (!self.vsync_enabled && self.uncapped_mode == UncappedMode::MaxFps)
+        let base = (!self.vsync_enabled)
             .then_some(self.frame_interval)
             .flatten();
         let background = (self.window_occluded
@@ -2305,7 +2305,7 @@ impl App {
     #[inline(always)]
     fn apply_present_back_pressure(&self) -> bool {
         !self.state.shell.vsync_enabled
-            && self.state.shell.uncapped_mode == UncappedMode::Balanced
+            && self.state.shell.present_mode_policy == PresentModePolicy::Mailbox
             && self.effective_frame_interval().is_none()
     }
 
@@ -2340,13 +2340,6 @@ impl App {
             && !self.state.shell.vsync_enabled
             && self.effective_frame_interval().is_none()
             && !self.state.shell.should_skip_compose_and_draw()
-            && matches!(
-                self.state.shell.uncapped_mode,
-                // ITGmania-style gameplay pacing: run a continuous gameplay
-                // frame loop and rely on the renderer's present back-pressure
-                // to keep the CPU from drifting too far ahead of what is shown.
-                UncappedMode::Balanced | UncappedMode::Unhinged
-            )
     }
 
     fn log_frame_loop_mode(&mut self, mode: FrameLoopMode) {
@@ -2365,23 +2358,23 @@ impl App {
             .unwrap_or(0);
         match mode {
             FrameLoopMode::Poll => debug!(
-                "Frame pacing: poll screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} uncapped={} max_fps={max_fps}",
-                self.state.shell.vsync_enabled, self.state.shell.uncapped_mode
+                "Frame pacing: poll screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
+                self.state.shell.vsync_enabled, self.state.shell.present_mode_policy
             ),
             FrameLoopMode::DirectPoll => debug!(
-                "Frame pacing: direct_poll screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} uncapped={} max_fps={max_fps}",
-                self.state.shell.vsync_enabled, self.state.shell.uncapped_mode
+                "Frame pacing: direct_poll screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
+                self.state.shell.vsync_enabled, self.state.shell.present_mode_policy
             ),
             FrameLoopMode::WaitPending => debug!(
-                "Frame pacing: wait_pending screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} uncapped={} max_fps={max_fps}",
-                self.state.shell.vsync_enabled, self.state.shell.uncapped_mode
+                "Frame pacing: wait_pending screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
+                self.state.shell.vsync_enabled, self.state.shell.present_mode_policy
             ),
             FrameLoopMode::Scheduled(reason, interval) => debug!(
-                "Frame pacing: scheduled reason={} interval_ms={:.3} screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} uncapped={} max_fps={max_fps}",
+                "Frame pacing: scheduled reason={} interval_ms={:.3} screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
                 reason.as_str(),
                 interval.as_secs_f64() * 1000.0,
                 self.state.shell.vsync_enabled,
-                self.state.shell.uncapped_mode
+                self.state.shell.present_mode_policy
             ),
         }
     }
@@ -2918,23 +2911,36 @@ impl App {
                 display_mode,
                 resolution,
                 monitor,
+                vsync,
+                present_mode_policy,
                 max_fps,
-                uncapped_mode,
             } => {
                 // Ensure options menu reflects current hardware state before processing changes
                 self.update_options_monitor_specs(event_loop);
 
+                let mut present_config_changed = false;
+                if let Some(vsync) = vsync {
+                    self.state.shell.vsync_enabled = vsync;
+                    debug!("Graphics setting changed: vsync={vsync}");
+                    config::update_vsync(vsync);
+                    options::sync_vsync(&mut self.state.screens.options_state, vsync);
+                    present_config_changed = true;
+                }
                 if let Some(max_fps) = max_fps {
                     self.state.shell.set_max_fps(max_fps);
                     debug!("Graphics setting changed: max_fps={max_fps}");
                     config::update_max_fps(max_fps);
                     options::sync_max_fps(&mut self.state.screens.options_state, max_fps);
                 }
-                if let Some(mode) = uncapped_mode {
-                    self.state.shell.set_uncapped_mode(mode);
-                    debug!("Graphics setting changed: uncapped_mode={mode}");
-                    config::update_uncapped_mode(mode);
-                    options::sync_uncapped_mode(&mut self.state.screens.options_state, mode);
+                if let Some(policy) = present_mode_policy {
+                    self.state.shell.set_present_mode_policy(policy);
+                    debug!("Graphics setting changed: present_mode_policy={policy}");
+                    config::update_present_mode_policy(policy);
+                    options::sync_present_mode_policy(
+                        &mut self.state.screens.options_state,
+                        policy,
+                    );
+                    present_config_changed = true;
                 }
 
                 let mut pending_resolution = None;
@@ -2949,6 +2955,7 @@ impl App {
                     event_loop,
                     monitor.unwrap_or(self.state.shell.display_monitor),
                 );
+                let recreate_renderer = renderer.is_some();
 
                 match (renderer, display_mode) {
                     (Some(new_backend), Some(mode)) => {
@@ -3015,6 +3022,15 @@ impl App {
                             self.apply_resolution(w, h, event_loop)?;
                         }
                     }
+                }
+                if present_config_changed
+                    && !recreate_renderer
+                    && let Some(backend) = &mut self.backend
+                {
+                    backend.set_present_config(
+                        self.state.shell.vsync_enabled,
+                        self.state.shell.present_mode_policy,
+                    );
                 }
                 Vec::new()
             }
@@ -5174,6 +5190,7 @@ impl App {
             self.backend_type,
             window.clone(),
             self.state.shell.vsync_enabled,
+            self.state.shell.present_mode_policy,
             self.gfx_debug_enabled,
         )?;
 

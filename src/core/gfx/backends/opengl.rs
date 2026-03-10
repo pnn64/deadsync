@@ -10,7 +10,7 @@ use glutin::{
     context::{ContextAttributesBuilder, PossiblyCurrentContext},
     display::{Display, DisplayApiPreference},
     prelude::*,
-    surface::{Surface, SurfaceAttributesBuilder, WindowSurface},
+    surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
 };
 use image::RgbaImage;
 use log::{debug, info, warn};
@@ -188,6 +188,7 @@ pub struct State {
     next_tmesh_cache_id: u64,
     tmesh_debug_enabled: bool,
     tmesh_debug_accum: TMeshDebugAccum,
+    vsync_enabled: bool,
 }
 
 pub fn init(
@@ -485,10 +486,34 @@ pub fn init(
         next_tmesh_cache_id: 1,
         tmesh_debug_enabled: gfx_debug_enabled,
         tmesh_debug_accum: TMeshDebugAccum::default(),
+        vsync_enabled,
     };
 
     info!("OpenGL backend initialized successfully.");
     Ok(state)
+}
+
+pub fn set_vsync_enabled(state: &mut State, enabled: bool) {
+    if state.vsync_enabled == enabled {
+        return;
+    }
+    state.vsync_enabled = enabled;
+    let interval = if enabled {
+        SwapInterval::Wait(std::num::NonZeroU32::new(1).unwrap())
+    } else {
+        SwapInterval::DontWait
+    };
+    if let Err(e) = state
+        .gl_surface
+        .set_swap_interval(&state.gl_context, interval)
+    {
+        warn!("Failed to update OpenGL swap interval (VSync): {:?}", e);
+    } else {
+        debug!(
+            "Updated OpenGL VSync to {}",
+            if enabled { "on" } else { "off" }
+        );
+    }
 }
 
 fn log_opengl_driver_info(gl: &glow::Context) {

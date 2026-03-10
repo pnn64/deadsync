@@ -1,6 +1,6 @@
 use crate::core::gfx::{
-    BlendMode, DrawStats, MeshMode, MeshVertex, ObjectType, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, Texture as RendererTexture,
+    BlendMode, DrawStats, MeshMode, MeshVertex, ObjectType, PresentModePolicy, RenderList,
+    SamplerDesc, SamplerFilter, SamplerWrap, Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
 use ash::{
@@ -204,6 +204,7 @@ pub struct State {
     swapchain_valid: bool,
     window_size: PhysicalSize<u32>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     projection: Matrix4<f32>,
     instance_ring: Option<BufferResource>, // one big VB for all frames
     instance_ring_ptr: *mut InstanceData,  // persistently mapped pointer
@@ -239,6 +240,7 @@ pub struct State {
 pub fn init(
     window: &Window,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
     info!("Initializing Vulkan backend...");
@@ -265,6 +267,7 @@ pub fn init(
         initial_size,
         None,
         vsync_enabled,
+        present_mode_policy,
     )?;
     let render_pass =
         create_render_pass(device.as_ref().unwrap(), swapchain_resources.format.format)?;
@@ -342,6 +345,7 @@ pub fn init(
         swapchain_valid: true,
         window_size: initial_size,
         vsync_enabled,
+        present_mode_policy,
         projection,
         instance_ring: None,
         instance_ring_ptr: std::ptr::null_mut(),
@@ -3305,6 +3309,7 @@ fn create_swapchain(
     window_size: PhysicalSize<u32>,
     old_swapchain: Option<vk::SwapchainKHR>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
 ) -> Result<SwapchainResources, Box<dyn Error>> {
     let capabilities =
         unsafe { surface_loader.get_physical_device_surface_capabilities(pdevice, surface)? };
@@ -3320,9 +3325,15 @@ fn create_swapchain(
 
     let present_mode = if vsync_enabled {
         vk::PresentModeKHR::FIFO
+    } else if present_mode_policy == PresentModePolicy::Immediate {
+        if present_modes.contains(&vk::PresentModeKHR::IMMEDIATE) {
+            vk::PresentModeKHR::IMMEDIATE
+        } else if present_modes.contains(&vk::PresentModeKHR::MAILBOX) {
+            vk::PresentModeKHR::MAILBOX
+        } else {
+            vk::PresentModeKHR::FIFO
+        }
     } else if present_modes.contains(&vk::PresentModeKHR::MAILBOX) {
-        // Prefer tear-free low-latency presentation in uncapped mode; immediate
-        // remains a fallback when mailbox is unavailable.
         vk::PresentModeKHR::MAILBOX
     } else if present_modes.contains(&vk::PresentModeKHR::IMMEDIATE) {
         vk::PresentModeKHR::IMMEDIATE
@@ -3594,6 +3605,7 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
         state.window_size,
         Some(old_swapchain),
         state.vsync_enabled,
+        state.present_mode_policy,
     )?;
 
     let old = std::mem::replace(&mut state.swapchain_resources, new_resources);
@@ -3614,4 +3626,22 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
     state.swapchain_valid = true;
     debug!("Swapchain recreated.");
     Ok(())
+}
+
+pub fn set_present_config(
+    state: &mut State,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+) {
+    if state.vsync_enabled == vsync_enabled && state.present_mode_policy == present_mode_policy {
+        return;
+    }
+    state.vsync_enabled = vsync_enabled;
+    state.present_mode_policy = present_mode_policy;
+    if state.window_size.width > 0
+        && state.window_size.height > 0
+        && let Err(e) = recreate_swapchain_and_dependents(state)
+    {
+        warn!("Failed to apply Vulkan present config update: {e}");
+    }
 }

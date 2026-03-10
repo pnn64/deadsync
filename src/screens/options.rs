@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::display::{self, MonitorSpec};
-use crate::core::gfx::{BackendType, UncappedMode};
+use crate::core::gfx::{BackendType, PresentModePolicy};
 use crate::core::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
@@ -223,7 +223,7 @@ pub const ITEMS: &[Item] = &[
             "RefreshRate",
             "FullscreenType",
             "Wait for VSync",
-            GRAPHICS_ROW_UNCAPPED_MODE,
+            GRAPHICS_ROW_PRESENT_MODE,
             "Max FPS",
             "Show Stats",
             "Visual Delay",
@@ -779,11 +779,11 @@ const DISPLAY_RESOLUTION_ROW_INDEX: usize = 4;
 const REFRESH_RATE_ROW_INDEX: usize = 5;
 const FULLSCREEN_TYPE_ROW_INDEX: usize = 6;
 const VSYNC_ROW_INDEX: usize = 7;
-const UNCAPPED_MODE_ROW_INDEX: usize = 8;
+const PRESENT_MODE_ROW_INDEX: usize = 8;
 const MAX_FPS_ROW_INDEX: usize = 9;
 const GRAPHICS_ROW_VIDEO_RENDERER: &str = "Video Renderer";
 const GRAPHICS_ROW_SOFTWARE_THREADS: &str = "Software Renderer Threads";
-const GRAPHICS_ROW_UNCAPPED_MODE: &str = "Uncapped Mode";
+const GRAPHICS_ROW_PRESENT_MODE: &str = "Present Mode";
 const GRAPHICS_ROW_MAX_FPS: &str = "Max FPS";
 const GRAPHICS_ROW_VALIDATION_LAYERS: &str = "Validation Layers";
 const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 1;
@@ -805,7 +805,7 @@ const MAX_FPS_MIN: u16 = 1;
 const MAX_FPS_MAX: u16 = 1000;
 const MAX_FPS_STEP: u16 = 1;
 const MAX_FPS_DEFAULT: u16 = 240;
-const UNCAPPED_MODE_CHOICES: [&str; 3] = ["Balanced", "Unhinged", "MaxFPS"];
+const PRESENT_MODE_CHOICES: [&str; 2] = ["Mailbox", "Immediate"];
 const CENTERED_P1_NOTEFIELD_CHOICES: [&str; 2] = ["Off", "On"];
 const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 7] = [
     "Slow",
@@ -884,8 +884,8 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        label: GRAPHICS_ROW_UNCAPPED_MODE,
-        choices: &UNCAPPED_MODE_CHOICES,
+        label: GRAPHICS_ROW_PRESENT_MODE,
+        choices: &PRESENT_MODE_CHOICES,
         inline: true,
     },
     SubRow {
@@ -947,20 +947,18 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
         help: &["Enable vertical sync."],
     },
     Item {
-        name: GRAPHICS_ROW_UNCAPPED_MODE,
+        name: GRAPHICS_ROW_PRESENT_MODE,
         help: &[
-            "Choose how deadsync behaves when VSync is off.",
-            "Balanced adds back-pressure so uncapped rendering does not run away.",
-            "Unhinged removes that back-pressure and can run hotter/louder.",
-            "MaxFPS caps redraw scheduling to a specific frame rate.",
-            "NOTE: Recommended: Balanced. Unhinged is for suspicious fan noises and setting your PC on fire.",
+            "Choose the present mode policy used when VSync is off.",
+            "Mailbox prefers tear-free low-latency presentation and keeps present back-pressure on.",
+            "Immediate prefers the lowest-latency uncapped path and may tear.",
         ],
     },
     Item {
         name: GRAPHICS_ROW_MAX_FPS,
         help: &[
-            "Specific frame cap used by MaxFPS mode.",
-            "Caps redraw scheduling in the app loop between 1 and 1000 FPS.",
+            "Optional redraw cap used when VSync is off.",
+            "Off leaves redraw scheduling uncapped; any numeric value caps it between 1 and 1000 FPS.",
         ],
     },
     Item {
@@ -1969,29 +1967,27 @@ fn max_fps_from_choice(values: &[u16], idx: usize) -> u16 {
 }
 
 #[inline(always)]
-const fn uncapped_mode_choice_index(mode: UncappedMode) -> usize {
+const fn present_mode_choice_index(mode: PresentModePolicy) -> usize {
     match mode {
-        UncappedMode::Balanced => 0,
-        UncappedMode::Unhinged => 1,
-        UncappedMode::MaxFps => 2,
+        PresentModePolicy::Mailbox => 0,
+        PresentModePolicy::Immediate => 1,
     }
 }
 
 #[inline(always)]
-const fn uncapped_mode_from_choice(idx: usize) -> UncappedMode {
+const fn present_mode_from_choice(idx: usize) -> PresentModePolicy {
     match idx {
-        1 => UncappedMode::Unhinged,
-        2 => UncappedMode::MaxFps,
-        _ => UncappedMode::Balanced,
+        1 => PresentModePolicy::Immediate,
+        _ => PresentModePolicy::Mailbox,
     }
 }
 
-fn selected_uncapped_mode(state: &State) -> UncappedMode {
+fn selected_present_mode_policy(state: &State) -> PresentModePolicy {
     state
         .sub_choice_indices_graphics
-        .get(UNCAPPED_MODE_ROW_INDEX)
+        .get(PRESENT_MODE_ROW_INDEX)
         .copied()
-        .map_or(state.uncapped_mode_at_load, uncapped_mode_from_choice)
+        .map_or(state.present_mode_policy_at_load, present_mode_from_choice)
 }
 
 #[inline(always)]
@@ -2012,7 +2008,7 @@ fn graphics_show_software_threads(state: &State) -> bool {
 }
 
 #[inline(always)]
-fn graphics_show_uncapped_mode(state: &State) -> bool {
+fn graphics_show_present_mode(state: &State) -> bool {
     state
         .sub_choice_indices_graphics
         .get(VSYNC_ROW_INDEX)
@@ -2022,7 +2018,7 @@ fn graphics_show_uncapped_mode(state: &State) -> bool {
 
 #[inline(always)]
 fn graphics_show_max_fps(state: &State) -> bool {
-    graphics_show_uncapped_mode(state) && selected_uncapped_mode(state) == UncappedMode::MaxFps
+    graphics_show_present_mode(state)
 }
 
 fn submenu_visible_row_indices(
@@ -2033,14 +2029,14 @@ fn submenu_visible_row_indices(
     match kind {
         SubmenuKind::Graphics => {
             let show_sw = graphics_show_software_threads(state);
-            let show_uncapped_mode = graphics_show_uncapped_mode(state);
+            let show_present_mode = graphics_show_present_mode(state);
             let show_max_fps = graphics_show_max_fps(state);
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
                     if row.label == GRAPHICS_ROW_SOFTWARE_THREADS && !show_sw {
                         None
-                    } else if row.label == GRAPHICS_ROW_UNCAPPED_MODE && !show_uncapped_mode {
+                    } else if row.label == GRAPHICS_ROW_PRESENT_MODE && !show_present_mode {
                         None
                     } else if row.label == GRAPHICS_ROW_MAX_FPS && !show_max_fps {
                         None
@@ -3356,7 +3352,8 @@ pub struct State {
     display_width_at_load: u32,
     display_height_at_load: u32,
     max_fps_at_load: u16,
-    uncapped_mode_at_load: UncappedMode,
+    vsync_at_load: bool,
+    present_mode_policy_at_load: PresentModePolicy,
     display_mode_choices: Vec<String>,
     software_thread_choices: Vec<u8>,
     software_thread_labels: Vec<String>,
@@ -3480,7 +3477,8 @@ pub fn init() -> State {
         display_width_at_load: cfg.display_width,
         display_height_at_load: cfg.display_height,
         max_fps_at_load: cfg.max_fps,
-        uncapped_mode_at_load: cfg.uncapped_mode,
+        vsync_at_load: cfg.vsync,
+        present_mode_policy_at_load: cfg.present_mode_policy,
         display_mode_choices: build_display_mode_choices(&[]),
         software_thread_choices,
         software_thread_labels,
@@ -3562,8 +3560,8 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
-        GRAPHICS_ROW_UNCAPPED_MODE,
-        uncapped_mode_choice_index(cfg.uncapped_mode),
+        GRAPHICS_ROW_PRESENT_MODE,
+        present_mode_choice_index(cfg.present_mode_policy),
     );
     let max_fps_idx = max_fps_choice_index(&state.max_fps_choices, cfg.max_fps);
     set_max_fps_choice_index(&mut state, max_fps_idx);
@@ -4096,13 +4094,21 @@ pub fn sync_max_fps(state: &mut State, max_fps: u16) {
     sync_submenu_cursor_indices(state);
 }
 
-pub fn sync_uncapped_mode(state: &mut State, mode: UncappedMode) {
-    state.uncapped_mode_at_load = mode;
+pub fn sync_vsync(state: &mut State, enabled: bool) {
+    state.vsync_at_load = enabled;
+    if let Some(slot) = state.sub_choice_indices_graphics.get_mut(VSYNC_ROW_INDEX) {
+        *slot = yes_no_choice_index(enabled);
+    }
+    sync_submenu_cursor_indices(state);
+}
+
+pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
+    state.present_mode_policy_at_load = mode;
     if let Some(slot) = state
         .sub_choice_indices_graphics
-        .get_mut(UNCAPPED_MODE_ROW_INDEX)
+        .get_mut(PRESENT_MODE_ROW_INDEX)
     {
-        *slot = uncapped_mode_choice_index(mode);
+        *slot = present_mode_choice_index(mode);
     }
     sync_submenu_cursor_indices(state);
 }
@@ -4583,20 +4589,26 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 desired_display_mode,
                 desired_resolution,
                 desired_monitor,
+                desired_vsync,
+                desired_present_mode_policy,
                 desired_max_fps,
-                desired_uncapped_mode,
             ) = if leaving_graphics {
-                let uncapped_mode = selected_uncapped_mode(state);
+                let vsync = state
+                    .sub_choice_indices_graphics
+                    .get(VSYNC_ROW_INDEX)
+                    .copied()
+                    .map_or(true, |idx| yes_no_from_choice(idx));
                 (
                     Some(selected_video_renderer(state)),
                     Some(selected_display_mode(state)),
                     Some(selected_resolution(state)),
                     Some(selected_display_monitor(state)),
-                    (uncapped_mode == UncappedMode::MaxFps).then(|| selected_max_fps(state)),
-                    Some(uncapped_mode),
+                    Some(vsync),
+                    Some(selected_present_mode_policy(state)),
+                    (!vsync).then(|| selected_max_fps(state)),
                 )
             } else {
-                (None, None, None, None, None, None)
+                (None, None, None, None, None, None, None)
             };
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
@@ -4631,8 +4643,9 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 let mut display_mode_change: Option<DisplayMode> = None;
                 let mut resolution_change: Option<(u32, u32)> = None;
                 let mut monitor_change: Option<usize> = None;
+                let mut vsync_change: Option<bool> = None;
+                let mut present_mode_policy_change: Option<PresentModePolicy> = None;
                 let mut max_fps_change: Option<u16> = None;
-                let mut uncapped_mode_change: Option<UncappedMode> = None;
 
                 if let Some(renderer) = desired_renderer
                     && renderer != state.video_renderer_at_load
@@ -4654,31 +4667,38 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                 {
                     resolution_change = Some((w, h));
                 }
+                if let Some(vsync) = desired_vsync
+                    && vsync != state.vsync_at_load
+                {
+                    vsync_change = Some(vsync);
+                }
+                if let Some(policy) = desired_present_mode_policy
+                    && policy != state.present_mode_policy_at_load
+                {
+                    present_mode_policy_change = Some(policy);
+                }
                 if let Some(max_fps) = desired_max_fps
                     && max_fps != state.max_fps_at_load
                 {
                     max_fps_change = Some(max_fps);
-                }
-                if let Some(mode) = desired_uncapped_mode
-                    && mode != state.uncapped_mode_at_load
-                {
-                    uncapped_mode_change = Some(mode);
                 }
 
                 if renderer_change.is_some()
                     || display_mode_change.is_some()
                     || monitor_change.is_some()
                     || resolution_change.is_some()
+                    || vsync_change.is_some()
+                    || present_mode_policy_change.is_some()
                     || max_fps_change.is_some()
-                    || uncapped_mode_change.is_some()
                 {
                     pending_action = Some(ScreenAction::ChangeGraphics {
                         renderer: renderer_change,
                         display_mode: display_mode_change,
                         monitor: monitor_change,
                         resolution: resolution_change,
+                        vsync: vsync_change,
+                        present_mode_policy: present_mode_policy_change,
                         max_fps: max_fps_change,
-                        uncapped_mode: uncapped_mode_change,
                     });
                 }
             }
@@ -5084,9 +5104,6 @@ fn apply_submenu_choice_delta(
         if row.label == "Display Mode" {
             let (cur_w, cur_h) = selected_resolution(state);
             rebuild_resolution_choices(state, cur_w, cur_h);
-        }
-        if row.label == "Wait for VSync" {
-            config::update_vsync(yes_no_from_choice(new_index));
         }
         if row.label == "Show Stats" {
             let mode = new_index.min(2) as u8;

@@ -1,4 +1,4 @@
-use crate::core::gfx::{BackendType, UncappedMode};
+use crate::core::gfx::{BackendType, PresentModePolicy};
 use crate::core::input::{
     GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction, WindowsPadBackend,
 };
@@ -432,9 +432,9 @@ pub enum DisplayMode {
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
-    /// Stored MaxFPS cap value. Used when `uncapped_mode == MaxFps`; 0 means unset/legacy.
+    /// Stored MaxFPS cap value. `0` means "off".
     pub max_fps: u16,
-    pub uncapped_mode: UncappedMode,
+    pub present_mode_policy: PresentModePolicy,
     pub windowed: bool,
     pub fullscreen_type: FullscreenType,
     pub display_monitor: usize,
@@ -557,7 +557,7 @@ impl Default for Config {
         Self {
             vsync: false,
             max_fps: 0,
-            uncapped_mode: UncappedMode::Balanced,
+            present_mode_policy: PresentModePolicy::Immediate,
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
@@ -1070,7 +1070,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         if default.log_to_file { "1" } else { "0" }
     ));
     content.push_str(&format!("MaxFps={}\n", default.max_fps));
-    content.push_str(&format!("UncappedMode={}\n", default.uncapped_mode));
+    content.push_str(&format!(
+        "PresentModePolicy={}\n",
+        default.present_mode_policy
+    ));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         default.visual_delay_seconds
@@ -1423,10 +1426,21 @@ pub fn load() {
                     .get("Options", "MaxFps")
                     .and_then(|v| v.parse::<u16>().ok())
                     .unwrap_or(default.max_fps);
-                cfg.uncapped_mode = conf
-                    .get("Options", "UncappedMode")
-                    .and_then(|s| UncappedMode::from_str(&s).ok())
-                    .unwrap_or(default.uncapped_mode);
+                cfg.present_mode_policy = conf
+                    .get("Options", "PresentModePolicy")
+                    .and_then(|s| PresentModePolicy::from_str(&s).ok())
+                    .or_else(|| {
+                        conf.get("Options", "UncappedMode").and_then(|s| {
+                            match s.trim().to_ascii_lowercase().as_str() {
+                                "balanced" => Some(PresentModePolicy::Mailbox),
+                                "unhinged" | "maxfps" | "max_fps" | "max-fps" => {
+                                    Some(PresentModePolicy::Immediate)
+                                }
+                                _ => None,
+                            }
+                        })
+                    })
+                    .unwrap_or(default.present_mode_policy);
                 cfg.windowed = conf
                     .get("Options", "Windowed")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -2913,7 +2927,7 @@ fn save_without_keymaps() {
         if cfg.log_to_file { "1" } else { "0" }
     ));
     content.push_str(&format!("MaxFps={}\n", cfg.max_fps));
-    content.push_str(&format!("UncappedMode={}\n", cfg.uncapped_mode));
+    content.push_str(&format!("PresentModePolicy={}\n", cfg.present_mode_policy));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         cfg.visual_delay_seconds
@@ -3349,13 +3363,13 @@ pub fn update_max_fps(max_fps: u16) {
     save_without_keymaps();
 }
 
-pub fn update_uncapped_mode(mode: UncappedMode) {
+pub fn update_present_mode_policy(mode: PresentModePolicy) {
     {
         let mut cfg = lock_config();
-        if cfg.uncapped_mode == mode {
+        if cfg.present_mode_policy == mode {
             return;
         }
-        cfg.uncapped_mode = mode;
+        cfg.present_mode_policy = mode;
     }
     save_without_keymaps();
 }

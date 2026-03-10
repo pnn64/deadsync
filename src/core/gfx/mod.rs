@@ -123,10 +123,9 @@ pub enum BlendMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UncappedMode {
-    Balanced,
-    Unhinged,
-    MaxFps,
+pub enum PresentModePolicy {
+    Mailbox,
+    Immediate,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -377,15 +376,20 @@ pub fn create_backend(
     backend_type: BackendType,
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<Backend, Box<dyn Error>> {
     let backend_impl = match backend_type {
-        BackendType::Vulkan => {
-            BackendImpl::Vulkan(vulkan::init(&window, vsync_enabled, gfx_debug_enabled)?)
-        }
+        BackendType::Vulkan => BackendImpl::Vulkan(vulkan::init(
+            &window,
+            vsync_enabled,
+            present_mode_policy,
+            gfx_debug_enabled,
+        )?),
         BackendType::VulkanWgpu => BackendImpl::VulkanWgpu(wgpu_core::init_vulkan(
             window,
             vsync_enabled,
+            present_mode_policy,
             gfx_debug_enabled,
         )?),
         BackendType::OpenGL => {
@@ -394,6 +398,7 @@ pub fn create_backend(
         BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(wgpu_core::init_opengl(
             window,
             vsync_enabled,
+            present_mode_policy,
             gfx_debug_enabled,
         )?),
         BackendType::Software => BackendImpl::Software(software::init(window, vsync_enabled)?),
@@ -401,10 +406,37 @@ pub fn create_backend(
         BackendType::DirectX => BackendImpl::DirectX(wgpu_core::init_dx12(
             window,
             vsync_enabled,
+            present_mode_policy,
             gfx_debug_enabled,
         )?),
     };
     Ok(Backend(backend_impl))
+}
+
+impl Backend {
+    pub fn set_present_config(
+        &mut self,
+        vsync_enabled: bool,
+        present_mode_policy: PresentModePolicy,
+    ) {
+        match &mut self.0 {
+            BackendImpl::Vulkan(state) => {
+                vulkan::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
+            BackendImpl::VulkanWgpu(state) => {
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
+            BackendImpl::OpenGL(state) => opengl::set_vsync_enabled(state, vsync_enabled),
+            BackendImpl::OpenGLWgpu(state) => {
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
+            BackendImpl::Software(_) => {}
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(state) => {
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
+        }
+    }
 }
 
 // -- Boilerplate impls --
@@ -437,32 +469,30 @@ impl FromStr for BackendType {
     }
 }
 
-impl UncappedMode {
+impl PresentModePolicy {
     #[inline(always)]
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Balanced => "balanced",
-            Self::Unhinged => "unhinged",
-            Self::MaxFps => "maxfps",
+            Self::Mailbox => "mailbox",
+            Self::Immediate => "immediate",
         }
     }
 }
 
-impl core::fmt::Display for UncappedMode {
+impl core::fmt::Display for PresentModePolicy {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl FromStr for UncappedMode {
+impl FromStr for PresentModePolicy {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
-            "balanced" => Ok(Self::Balanced),
-            "unhinged" => Ok(Self::Unhinged),
-            "maxfps" | "max_fps" | "max-fps" => Ok(Self::MaxFps),
-            other => Err(format!("'{other}' is not a valid uncapped mode")),
+            "mailbox" | "balanced" => Ok(Self::Mailbox),
+            "immediate" | "unhinged" => Ok(Self::Immediate),
+            other => Err(format!("'{other}' is not a valid present mode policy")),
         }
     }
 }

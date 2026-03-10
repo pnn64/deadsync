@@ -1,6 +1,6 @@
 use crate::core::gfx::{
-    BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, Texture as RendererTexture,
+    BlendMode, DrawStats, MeshMode, ObjectType, PresentModePolicy, RenderList, SamplerDesc,
+    SamplerFilter, SamplerWrap, Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
@@ -304,6 +304,7 @@ pub struct State {
     tmesh_debug_accum: TMeshDebugAccum,
     window_size: (u32, u32),
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     next_texture_id: u64,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
@@ -312,32 +313,54 @@ pub struct State {
 pub fn init_vulkan(
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
-    init(Api::Vulkan, window, vsync_enabled, gfx_debug_enabled)
+    init(
+        Api::Vulkan,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
 }
 
 pub fn init_opengl(
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
-    init(Api::OpenGL, window, vsync_enabled, gfx_debug_enabled)
+    init(
+        Api::OpenGL,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
 }
 
 #[cfg(target_os = "windows")]
 pub fn init_dx12(
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
-    init(Api::DirectX, window, vsync_enabled, gfx_debug_enabled)
+    init(
+        Api::DirectX,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
 }
 
 fn init(
     api: Api,
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
     info!("Initializing {} (wgpu) backend...", api.name());
@@ -403,7 +426,7 @@ fn init(
     let size = window.inner_size();
     let caps = surface.get_capabilities(&adapter);
     let format = pick_format(&caps);
-    let present_mode = pick_present_mode(&caps.present_modes, vsync_enabled);
+    let present_mode = pick_present_mode(&caps.present_modes, vsync_enabled, present_mode_policy);
     let alpha_mode = caps
         .alpha_modes
         .first()
@@ -567,6 +590,7 @@ fn init(
         tmesh_debug_accum: TMeshDebugAccum::default(),
         window_size: (size.width, size.height),
         vsync_enabled,
+        present_mode_policy,
         next_texture_id: 1,
         screenshot_requested: false,
         captured_frame: None,
@@ -1773,7 +1797,11 @@ fn reconfigure_surface(state: &mut State) {
     let new_format = pick_format(&caps);
     let format_changed = new_format != state.config.format;
     state.config.format = new_format;
-    state.config.present_mode = pick_present_mode(&caps.present_modes, state.vsync_enabled);
+    state.config.present_mode = pick_present_mode(
+        &caps.present_modes,
+        state.vsync_enabled,
+        state.present_mode_policy,
+    );
     state.config.alpha_mode = caps
         .alpha_modes
         .first()
@@ -1837,18 +1865,28 @@ fn pick_surface_usage(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureUsages {
     usage
 }
 
-fn pick_present_mode(modes: &[wgpu::PresentMode], vsync: bool) -> wgpu::PresentMode {
+fn pick_present_mode(
+    modes: &[wgpu::PresentMode],
+    vsync: bool,
+    present_mode_policy: PresentModePolicy,
+) -> wgpu::PresentMode {
     let preferred = if vsync {
         [
             wgpu::PresentMode::AutoVsync,
             wgpu::PresentMode::Fifo,
             wgpu::PresentMode::FifoRelaxed,
         ]
+    } else if present_mode_policy == PresentModePolicy::Immediate {
+        [
+            wgpu::PresentMode::Immediate,
+            wgpu::PresentMode::AutoNoVsync,
+            wgpu::PresentMode::Mailbox,
+        ]
     } else {
         [
+            wgpu::PresentMode::Mailbox,
             wgpu::PresentMode::AutoNoVsync,
             wgpu::PresentMode::Immediate,
-            wgpu::PresentMode::Mailbox,
         ]
     };
 
@@ -1857,6 +1895,19 @@ fn pick_present_mode(modes: &[wgpu::PresentMode], vsync: bool) -> wgpu::PresentM
         .copied()
         .find(|p| modes.contains(p))
         .unwrap_or_else(|| modes[0])
+}
+
+pub fn set_present_config(
+    state: &mut State,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+) {
+    if state.vsync_enabled == vsync_enabled && state.present_mode_policy == present_mode_policy {
+        return;
+    }
+    state.vsync_enabled = vsync_enabled;
+    state.present_mode_policy = present_mode_policy;
+    reconfigure_surface(state);
 }
 
 fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
