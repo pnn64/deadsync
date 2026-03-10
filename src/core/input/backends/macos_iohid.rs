@@ -241,6 +241,7 @@ extern "C" fn on_input(
                 (ctx.emit_pad)(PadEvent::Dir {
                     id: dev.id,
                     timestamp,
+                    host_nanos: 0,
                     dir: dirs[i],
                     pressed: want[i],
                 });
@@ -253,6 +254,7 @@ extern "C" fn on_input(
             (ctx.emit_pad)(PadEvent::RawButton {
                 id: dev.id,
                 timestamp,
+                host_nanos: 0,
                 code: PadCode(code),
                 uuid: dev.uuid,
                 value: if pressed { 1.0 } else { 0.0 },
@@ -262,6 +264,7 @@ extern "C" fn on_input(
             (ctx.emit_pad)(PadEvent::RawAxis {
                 id: dev.id,
                 timestamp,
+                host_nanos: 0,
                 code: PadCode(code),
                 uuid: dev.uuid,
                 value: v as f32,

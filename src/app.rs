@@ -5610,10 +5610,11 @@ impl App {
             }
         }
 
-        input::map_keycode_event_with(
+        input::map_keycode_event_with_host(
             key_event.code,
             key_event.pressed,
             key_event.timestamp,
+            key_event.host_nanos,
             |ev| {
                 if !ev.action.is_gameplay_arrow() {
                     self.queue_input_event(ev);
@@ -7332,10 +7333,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     if !ring.is_enabled() {
                         return;
                     }
-                    input::gameplay_arrow_keycode_events_with(
+                    input::gameplay_arrow_keycode_events_with_host(
                         ev.code,
                         ev.pressed,
                         ev.timestamp,
+                        ev.host_nanos,
                         |iev| {
                             ring.push(RawKeyboardRingItem::Input(iev));
                         },

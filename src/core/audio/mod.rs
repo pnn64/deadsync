@@ -1,6 +1,8 @@
 mod backends;
 mod resample;
 
+#[cfg(windows)]
+use crate::core::windows_rt::current_qpc_nanos;
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Sample, StreamConfig};
 use log::{debug, info, warn};
@@ -11,8 +13,6 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-#[cfg(windows)]
-use windows::Win32::System::Performance;
 
 /* ============================== Public API ============================== */
 
@@ -132,8 +132,6 @@ static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
-#[cfg(windows)]
-static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
 const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
 
@@ -144,6 +142,9 @@ pub struct MusicStreamClockSnapshot {
     pub music_seconds_per_second: f32,
     pub has_music_mapping: bool,
     pub valid_at: Instant,
+    // Host/QPC clock for `valid_at` when the backend publishes one; 0 means
+    // the snapshot only has a local `Instant` anchor.
+    pub valid_at_host_nanos: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -366,28 +367,6 @@ fn callback_nanos_at(at: Instant) -> u64 {
         .unwrap_or(0)
 }
 
-#[cfg(windows)]
-fn qpc_freq_hz() -> Option<u64> {
-    let mut hz = 0i64;
-    unsafe {
-        Performance::QueryPerformanceFrequency(&mut hz).ok()?;
-    }
-    (hz > 0).then_some(hz as u64)
-}
-
-#[cfg(windows)]
-#[inline(always)]
-fn current_qpc_nanos() -> Option<u64> {
-    let hz = (*QPC_FREQ_HZ)?;
-    let mut ticks = 0i64;
-    unsafe {
-        Performance::QueryPerformanceCounter(&mut ticks).ok()?;
-    }
-    (ticks >= 0).then(|| {
-        ((ticks as u128) * 1_000_000_000u128 / hz as u128).min((u64::MAX - 1) as u128) as u64
-    })
-}
-
 #[inline(always)]
 fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) -> Option<u64> {
     match source {
@@ -478,7 +457,7 @@ fn publish_callback_window_end(total_before: u64, frames: u64) {
     end_callback_clock_write();
 }
 
-fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockWindow) {
+fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockSource, CallbackClockWindow) {
     loop {
         let seq_start = CALLBACK_CLOCK_SEQ.load(Ordering::Acquire);
         if seq_start & 1 != 0 {
@@ -500,7 +479,7 @@ fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockWindow) {
         let seq_end = CALLBACK_CLOCK_SEQ.load(Ordering::Acquire);
         if seq_start == seq_end {
             let at_nanos = at_nanos.unwrap_or(window.last_nanos.saturating_sub(1));
-            return (valid_at, at_nanos, window);
+            return (valid_at, at_nanos, source, window);
         }
     }
 }
@@ -603,10 +582,11 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
             music_seconds_per_second: 1.0,
             has_music_mapping: false,
             valid_at: Instant::now(),
+            valid_at_host_nanos: 0,
         };
     }
     let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
-    let (valid_at, at_nanos, window) = load_callback_clock_snapshot_now();
+    let (valid_at, at_nanos, source, window) = load_callback_clock_snapshot_now();
     let stream_frames = stream_position_frames_from_window(sample_rate, start, at_nanos, window);
     let stream_seconds = (stream_frames / sample_rate as f64) as f32;
     let (music_seconds, music_seconds_per_second, has_music_mapping) =
@@ -620,6 +600,11 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
         music_seconds_per_second,
         has_music_mapping,
         valid_at,
+        valid_at_host_nanos: match source {
+            #[cfg(windows)]
+            CallbackClockSource::Qpc => at_nanos,
+            _ => 0,
+        },
     }
 }
 

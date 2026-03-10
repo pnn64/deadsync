@@ -3203,6 +3203,7 @@ struct SongClockSnapshot {
     song_time: f32,
     seconds_per_second: f32,
     valid_at: Instant,
+    valid_at_host_nanos: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -4539,6 +4540,7 @@ pub fn queue_input_edge(
     lane: Lane,
     pressed: bool,
     timestamp: Instant,
+    timestamp_host_nanos: u64,
     stored_at: Instant,
     emitted_at: Instant,
 ) {
@@ -4577,6 +4579,7 @@ pub fn queue_input_edge(
         lane,
         pressed,
         timestamp,
+        timestamp_host_nanos,
         stored_at,
         emitted_at,
         queued_at,
@@ -4609,23 +4612,33 @@ fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
                 fallback_rate
             },
             valid_at: stream_clock.valid_at,
+            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
         }
     } else {
         SongClockSnapshot {
             song_time: stream_pos_to_music_time(state, stream_clock.stream_seconds),
             seconds_per_second: fallback_rate,
             valid_at: stream_clock.valid_at,
+            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
         }
     }
 }
 
 #[inline(always)]
-fn music_time_from_song_clock(snapshot: SongClockSnapshot, captured_at: Instant) -> f32 {
+fn music_time_from_song_clock(
+    snapshot: SongClockSnapshot,
+    captured_at: Instant,
+    captured_host_nanos: u64,
+) -> f32 {
     let slope = if snapshot.seconds_per_second.is_finite() && snapshot.seconds_per_second > 0.0 {
         snapshot.seconds_per_second
     } else {
         1.0
     };
+    if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
+        let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
+        return snapshot.song_time + (dt_nanos as f64 * 1e-9 * slope as f64) as f32;
+    }
     if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at) {
         snapshot.song_time - age.as_secs_f32() * slope
     } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
@@ -4663,6 +4676,7 @@ fn push_input_edge(
         lane,
         pressed,
         now,
+        0,
         now,
         now,
         now,
@@ -4678,6 +4692,7 @@ fn push_input_edge_timed(
     lane: Lane,
     pressed: bool,
     captured_at: Instant,
+    captured_host_nanos: u64,
     stored_at: Instant,
     emitted_at: Instant,
     queued_at: Instant,
@@ -4693,6 +4708,7 @@ fn push_input_edge_timed(
         source,
         record_replay,
         captured_at,
+        captured_host_nanos,
         stored_at,
         emitted_at,
         queued_at,
@@ -7464,6 +7480,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             lane,
             ev.pressed,
             ev.timestamp,
+            ev.timestamp_host_nanos,
             ev.stored_at,
             ev.emitted_at,
         );
@@ -8362,7 +8379,8 @@ fn process_input_edges(
             continue;
         }
         if !edge.event_music_time.is_finite() {
-            edge.event_music_time = music_time_from_song_clock(song_clock, edge.captured_at);
+            edge.event_music_time =
+                music_time_from_song_clock(song_clock, edge.captured_at, edge.captured_host_nanos);
         }
         if edge.record_replay && edge.event_music_time.is_finite() {
             state.replay_edges.push(RecordedLaneEdge {
@@ -9630,8 +9648,9 @@ mod tests {
             song_time: 120.0,
             seconds_per_second: 1.5,
             valid_at: base + Duration::from_millis(24),
+            valid_at_host_nanos: 0,
         };
-        let edge_time = music_time_from_song_clock(snapshot, base);
+        let edge_time = music_time_from_song_clock(snapshot, base, 0);
         assert!((edge_time - 119.964).abs() < 0.000_5);
     }
 
@@ -9642,8 +9661,21 @@ mod tests {
             song_time: 64.0,
             seconds_per_second: 2.0,
             valid_at: base,
+            valid_at_host_nanos: 0,
         };
-        let edge_time = music_time_from_song_clock(snapshot, base + Duration::from_millis(5));
+        let edge_time = music_time_from_song_clock(snapshot, base + Duration::from_millis(5), 0);
         assert!((edge_time - 64.01).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn song_clock_prefers_host_clock_when_available() {
+        let snapshot = SongClockSnapshot {
+            song_time: 32.0,
+            seconds_per_second: 1.0,
+            valid_at: Instant::now(),
+            valid_at_host_nanos: 2_000_000_000,
+        };
+        let edge_time = music_time_from_song_clock(snapshot, Instant::now(), 1_997_000_000);
+        assert!((edge_time - 31.997).abs() < 0.000_5);
     }
 }

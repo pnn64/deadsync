@@ -1,5 +1,5 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
-use crate::core::windows_rt::{ThreadRole, boost_current_thread};
+use crate::core::windows_rt::{ThreadRole, boost_current_thread, current_host_nanos};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -308,6 +308,7 @@ fn emit_dir_edges<F>(
     id: PadId,
     dir_state: &mut [bool; 4],
     timestamp: Instant,
+    host_nanos: u64,
     want: [bool; 4],
 ) -> bool
 where
@@ -324,6 +325,7 @@ where
         (emit_pad)(PadEvent::Dir {
             id,
             timestamp,
+            host_nanos,
             dir: dirs[i],
             pressed: want[i],
         });
@@ -339,6 +341,7 @@ where
         return false;
     };
     let timestamp = Instant::now();
+    let host_nanos = current_host_nanos();
 
     let old_lt = st.axes_prev[0];
     let old_rt = st.axes_prev[1];
@@ -369,7 +372,7 @@ where
         dpad[2] || stick[2],
         dpad[3] || stick[3],
     ];
-    changed |= emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, want);
+    changed |= emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
 
     for (mask, code_u32) in BTN_MAP {
         let new_pressed = pressed(reading.Buttons, mask);
@@ -381,6 +384,7 @@ where
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
+            host_nanos,
             code: PadCode(code_u32),
             uuid,
             value: if new_pressed { 1.0 } else { 0.0 },
@@ -406,6 +410,7 @@ where
         (emit_pad)(PadEvent::RawAxis {
             id,
             timestamp,
+            host_nanos,
             code: PadCode(*code_u32),
             uuid,
             value: f32::from(*v),
@@ -423,6 +428,7 @@ where
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
+            host_nanos,
             code: PadCode(CODE_BTN_LT2),
             uuid,
             value: if lt_pressed { 1.0 } else { 0.0 },
@@ -434,6 +440,7 @@ where
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
+            host_nanos,
             code: PadCode(CODE_BTN_RT2),
             uuid,
             value: if rt_pressed { 1.0 } else { 0.0 },
@@ -461,6 +468,7 @@ where
         return false;
     };
     let timestamp = Instant::now();
+    let host_nanos = current_host_nanos();
 
     let mut changed = false;
     let n = st.buttons_now.len().min(st.buttons_prev.len());
@@ -475,6 +483,7 @@ where
         (emit_pad)(PadEvent::RawButton {
             id,
             timestamp,
+            host_nanos,
             code: PadCode(code_u32),
             uuid,
             value: if st.buttons_now[i] { 1.0 } else { 0.0 },
@@ -491,7 +500,7 @@ where
         want[2] |= x < 0;
         want[3] |= x > 0;
     }
-    changed |= emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, want);
+    changed |= emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
 
     let n = st.axes.len().min(st.axes_prev.len());
     for i in 0..n {
@@ -507,6 +516,7 @@ where
         (emit_pad)(PadEvent::RawAxis {
             id,
             timestamp,
+            host_nanos,
             code: PadCode(code_u32),
             uuid,
             value: f32::from(v),

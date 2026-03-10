@@ -1,7 +1,7 @@
 use super::{
     GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent, uuid_from_bytes,
 };
-use crate::core::windows_rt::{ThreadRole, boost_current_thread};
+use crate::core::windows_rt::{ThreadRole, boost_current_thread, current_host_nanos};
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem::size_of;
@@ -484,8 +484,13 @@ fn enumerate_existing(ctx: &mut Ctx) {
 }
 
 #[inline(always)]
-fn emit_button_diff<F>(emit_pad: &mut F, dev: &Dev, timestamp: Instant, now: &[u16])
-where
+fn emit_button_diff<F>(
+    emit_pad: &mut F,
+    dev: &Dev,
+    timestamp: Instant,
+    host_nanos: u64,
+    now: &[u16],
+) where
     F: FnMut(PadEvent),
 {
     let mut a = 0usize;
@@ -502,6 +507,7 @@ where
             (emit_pad)(PadEvent::RawButton {
                 id: dev.id,
                 timestamp,
+                host_nanos,
                 code: PadCode((u32::from(USAGE_PAGE_BUTTON) << 16) | u32::from(pa)),
                 uuid: dev.uuid,
                 value: 0.0,
@@ -512,6 +518,7 @@ where
             (emit_pad)(PadEvent::RawButton {
                 id: dev.id,
                 timestamp,
+                host_nanos,
                 code: PadCode((u32::from(USAGE_PAGE_BUTTON) << 16) | u32::from(nb)),
                 uuid: dev.uuid,
                 value: 1.0,
@@ -525,6 +532,7 @@ where
         (emit_pad)(PadEvent::RawButton {
             id: dev.id,
             timestamp,
+            host_nanos,
             code: PadCode((u32::from(USAGE_PAGE_BUTTON) << 16) | u32::from(u)),
             uuid: dev.uuid,
             value: 0.0,
@@ -537,6 +545,7 @@ where
         (emit_pad)(PadEvent::RawButton {
             id: dev.id,
             timestamp,
+            host_nanos,
             code: PadCode((u32::from(USAGE_PAGE_BUTTON) << 16) | u32::from(u)),
             uuid: dev.uuid,
             value: 1.0,
@@ -546,8 +555,13 @@ where
     }
 }
 
-fn process_hid_report<F>(emit_pad: &mut F, dev: &mut Dev, timestamp: Instant, report: &mut [u8])
-where
+fn process_hid_report<F>(
+    emit_pad: &mut F,
+    dev: &mut Dev,
+    timestamp: Instant,
+    host_nanos: u64,
+    report: &mut [u8],
+) where
     F: FnMut(PadEvent),
 {
     if dev.max_buttons == 0 || dev.preparsed.is_empty() {
@@ -582,7 +596,7 @@ where
     }
     dev.buttons_now.sort_unstable();
 
-    emit_button_diff(emit_pad, dev, timestamp, &dev.buttons_now);
+    emit_button_diff(emit_pad, dev, timestamp, host_nanos, &dev.buttons_now);
     std::mem::swap(&mut dev.buttons_prev, &mut dev.buttons_now);
     dev.buttons_now.clear();
 
@@ -632,6 +646,7 @@ where
         (emit_pad)(PadEvent::Dir {
             id: dev.id,
             timestamp,
+            host_nanos,
             dir: dirs[i],
             pressed: want[i],
         });
@@ -639,7 +654,7 @@ where
 }
 
 #[inline(always)]
-fn handle_keyboard_input(ctx: &mut Ctx) {
+fn handle_keyboard_input(ctx: &mut Ctx, timestamp: Instant, host_nanos: u64) {
     if !WINDOW_FOCUSED.load(Ordering::Relaxed) {
         return;
     }
@@ -670,7 +685,8 @@ fn handle_keyboard_input(ctx: &mut Ctx) {
         (ctx.emit_key)(RawKeyboardEvent {
             code,
             pressed,
-            timestamp: Instant::now(),
+            timestamp,
+            host_nanos,
         });
     }
 }
@@ -707,8 +723,10 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
         }
 
         let header: RAWINPUTHEADER = ptr::read_unaligned(ctx.buf.as_ptr().cast::<RAWINPUTHEADER>());
+        let timestamp = Instant::now();
+        let host_nanos = current_host_nanos();
         if header.dwType == RIM_TYPEKEYBOARD_U32 {
-            handle_keyboard_input(ctx);
+            handle_keyboard_input(ctx, timestamp, host_nanos);
             return;
         }
         if header.dwType != RIM_TYPEHID_U32 || !ctx.enable_pad {
@@ -744,8 +762,7 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
                 break;
             }
             let report = &mut reports[start..end];
-            let timestamp = Instant::now();
-            process_hid_report(&mut ctx.emit_pad, dev, timestamp, report);
+            process_hid_report(&mut ctx.emit_pad, dev, timestamp, host_nanos, report);
             idx += 1;
         }
     }

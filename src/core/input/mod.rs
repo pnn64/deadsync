@@ -149,6 +149,7 @@ pub enum PadEvent {
     Dir {
         id: PadId,
         timestamp: Instant,
+        host_nanos: u64,
         dir: PadDir,
         pressed: bool,
     },
@@ -156,6 +157,7 @@ pub enum PadEvent {
     RawButton {
         id: PadId,
         timestamp: Instant,
+        host_nanos: u64,
         code: PadCode,
         uuid: [u8; 16],
         value: f32,
@@ -166,6 +168,7 @@ pub enum PadEvent {
     RawAxis {
         id: PadId,
         timestamp: Instant,
+        host_nanos: u64,
         code: PadCode,
         uuid: [u8; 16],
         value: f32,
@@ -178,6 +181,7 @@ pub struct RawKeyboardEvent {
     pub code: KeyCode,
     pub pressed: bool,
     pub timestamp: Instant,
+    pub host_nanos: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -315,6 +319,7 @@ pub struct InputEdge {
     // Real-time timestamps for latency tracing. Filled in by gameplay when the
     // edge is accepted for lane processing.
     pub captured_at: Instant,
+    pub captured_host_nanos: u64,
     pub stored_at: Instant,
     pub emitted_at: Instant,
     pub queued_at: Instant,
@@ -776,6 +781,9 @@ pub struct InputEvent {
     pub source: InputSource,
     // Timestamp of the raw input edge before debounce filtering.
     pub timestamp: Instant,
+    // Host/QPC clock for `timestamp` when the backend can provide one; 0 means
+    // the event only has a local `Instant` anchor.
+    pub timestamp_host_nanos: u64,
     // Timestamp at which the edge entered the debounce store on the main input path.
     pub stored_at: Instant,
     // Timestamp at which the debounced/normalized input event was emitted.
@@ -787,6 +795,7 @@ fn input_events_from_actions(
     actions: Vec<(VirtualAction, bool)>,
     source: InputSource,
     timestamp: Instant,
+    timestamp_host_nanos: u64,
     stored_at: Instant,
     emitted_at: Instant,
 ) -> Vec<InputEvent> {
@@ -797,6 +806,7 @@ fn input_events_from_actions(
             pressed,
             source,
             timestamp,
+            timestamp_host_nanos,
             stored_at,
             emitted_at,
         })
@@ -833,6 +843,7 @@ fn emit_gameplay_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(Inpu
                         pressed: edge.pressed,
                         source: edge.source,
                         timestamp: edge.timestamp,
+                        timestamp_host_nanos: edge.timestamp_host_nanos,
                         stored_at: edge.stored_at,
                         emitted_at: edge.emitted_at,
                     });
@@ -856,6 +867,7 @@ fn emit_gameplay_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(Inpu
                         pressed: edge.pressed,
                         source: edge.source,
                         timestamp: edge.timestamp,
+                        timestamp_host_nanos: edge.timestamp_host_nanos,
                         stored_at: edge.stored_at,
                         emitted_at: edge.emitted_at,
                     });
@@ -875,6 +887,7 @@ fn emit_gameplay_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(Inpu
                             pressed: edge.pressed,
                             source: edge.source,
                             timestamp: edge.timestamp,
+                            timestamp_host_nanos: edge.timestamp_host_nanos,
                             stored_at: edge.stored_at,
                             emitted_at: edge.emitted_at,
                         });
@@ -911,6 +924,7 @@ fn emit_gameplay_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(Inpu
                         pressed: edge.pressed,
                         source: edge.source,
                         timestamp: edge.timestamp,
+                        timestamp_host_nanos: edge.timestamp_host_nanos,
                         stored_at: edge.stored_at,
                         emitted_at: edge.emitted_at,
                     });
@@ -945,11 +959,23 @@ pub fn gameplay_arrow_keycode_events_with(
     timestamp: Instant,
     mut emit: impl FnMut(InputEvent),
 ) {
+    gameplay_arrow_keycode_events_with_host(code, pressed, timestamp, 0, &mut emit);
+}
+
+#[inline(always)]
+pub fn gameplay_arrow_keycode_events_with_host(
+    code: KeyCode,
+    pressed: bool,
+    timestamp: Instant,
+    timestamp_host_nanos: u64,
+    mut emit: impl FnMut(InputEvent),
+) {
     let edges = debounce_input_edge_in_store(
         &GAMEPLAY_KEYBOARD_DEBOUNCE_STATE,
         DebounceBinding::Keyboard(code),
         pressed,
         timestamp,
+        timestamp_host_nanos,
         gameplay_keyboard_debounce_windows(),
     );
     if let Some(edge) = edges.first {
@@ -988,6 +1014,17 @@ pub fn map_keycode_event_with(
     timestamp: Instant,
     mut emit: impl FnMut(InputEvent),
 ) {
+    map_keycode_event_with_host(code, pressed, timestamp, 0, &mut emit);
+}
+
+#[inline(always)]
+pub fn map_keycode_event_with_host(
+    code: KeyCode,
+    pressed: bool,
+    timestamp: Instant,
+    timestamp_host_nanos: u64,
+    mut emit: impl FnMut(InputEvent),
+) {
     let mut actions = with_keymap(|km| km.actions_for_key_code(code, pressed));
     normalize_actions(&mut actions);
     for (action, pressed) in actions {
@@ -996,6 +1033,7 @@ pub fn map_keycode_event_with(
             pressed,
             source: InputSource::Keyboard,
             timestamp,
+            timestamp_host_nanos,
             stored_at: timestamp,
             emitted_at: timestamp,
         });
@@ -1059,18 +1097,36 @@ pub fn gameplay_arrow_keycode_events(
 }
 
 #[inline(always)]
+fn pad_event_timestamps(ev: &PadEvent) -> (Instant, u64) {
+    match *ev {
+        PadEvent::Dir {
+            timestamp,
+            host_nanos,
+            ..
+        }
+        | PadEvent::RawButton {
+            timestamp,
+            host_nanos,
+            ..
+        }
+        | PadEvent::RawAxis {
+            timestamp,
+            host_nanos,
+            ..
+        } => (timestamp, host_nanos),
+    }
+}
+
+#[inline(always)]
 pub fn map_pad_event(ev: &PadEvent) -> Vec<InputEvent> {
-    let timestamp = match *ev {
-        PadEvent::Dir { timestamp, .. }
-        | PadEvent::RawButton { timestamp, .. }
-        | PadEvent::RawAxis { timestamp, .. } => timestamp,
-    };
+    let (timestamp, timestamp_host_nanos) = pad_event_timestamps(ev);
     let mut actions = with_keymap(|km| km.actions_for_pad_event(ev));
     normalize_actions(&mut actions);
     input_events_from_actions(
         actions,
         InputSource::Gamepad,
         timestamp,
+        timestamp_host_nanos,
         timestamp,
         timestamp,
     )
@@ -1084,11 +1140,13 @@ pub fn gameplay_arrow_pad_events_with(ev: &PadEvent, emit: impl FnMut(InputEvent
             dir,
             pressed,
             timestamp,
+            host_nanos,
         } => debounce_input_edge_in_store(
             &GAMEPLAY_PAD_DEBOUNCE_STATE,
             DebounceBinding::PadDir { id, dir },
             pressed,
             timestamp,
+            host_nanos,
             gameplay_debounce_windows(),
         ),
         PadEvent::RawButton {
@@ -1097,12 +1155,14 @@ pub fn gameplay_arrow_pad_events_with(ev: &PadEvent, emit: impl FnMut(InputEvent
             uuid,
             pressed,
             timestamp,
+            host_nanos,
             ..
         } => debounce_input_edge_in_store(
             &GAMEPLAY_PAD_DEBOUNCE_STATE,
             DebounceBinding::PadButton { id, code, uuid },
             pressed,
             timestamp,
+            host_nanos,
             gameplay_debounce_windows(),
         ),
         PadEvent::RawAxis { .. } => return,

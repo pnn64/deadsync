@@ -203,6 +203,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
                         timestamp,
+                        host_nanos: 0,
                         code: PadCode(code_u32(ev.type_, ev.code)),
                         uuid: dev.uuid,
                         value: if pressed { 1.0 } else { 0.0 },
@@ -216,6 +217,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                     emit_pad(PadEvent::RawAxis {
                         id: dev.id,
                         timestamp,
+                        host_nanos: 0,
                         code: PadCode(code_u32(ev.type_, ev.code)),
                         uuid: dev.uuid,
                         value: ev.value as f32,
@@ -243,6 +245,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                         emit_pad(PadEvent::Dir {
                             id: dev.id,
                             timestamp,
+                            host_nanos: 0,
                             dir: dirs[k],
                             pressed: want[k],
                         });

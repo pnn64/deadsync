@@ -1,11 +1,14 @@
 use log::{debug, warn};
 use windows::Win32::Foundation::HANDLE;
+use windows::Win32::System::Performance;
 use windows::Win32::System::Threading::{
     self, AVRT_PRIORITY, AVRT_PRIORITY_CRITICAL, AVRT_PRIORITY_HIGH, AVRT_PRIORITY_NORMAL,
     GetCurrentThread, SetThreadPriority, THREAD_PRIORITY, THREAD_PRIORITY_ABOVE_NORMAL,
     THREAD_PRIORITY_HIGHEST,
 };
 use windows::core::w;
+
+static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
 #[derive(Clone, Copy)]
 pub(crate) enum ThreadRole {
@@ -130,4 +133,35 @@ pub(crate) fn boost_current_thread(role: ThreadRole) -> ThreadPolicyGuard {
             ThreadPolicyGuard { mmcss_handle: None }
         }
     }
+}
+
+#[inline(always)]
+fn qpc_freq_hz() -> Option<u64> {
+    unsafe {
+        let mut hz = 0i64;
+        Performance::QueryPerformanceFrequency(&mut hz).ok()?;
+        u64::try_from(hz).ok().filter(|hz| *hz > 0)
+    }
+}
+
+#[inline(always)]
+pub(crate) fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
+    let hz = (*QPC_FREQ_HZ)?;
+    ((u128::from(ticks) * 1_000_000_000u128) / u128::from(hz))
+        .try_into()
+        .ok()
+}
+
+#[inline(always)]
+pub(crate) fn current_qpc_nanos() -> Option<u64> {
+    unsafe {
+        let mut ticks = 0i64;
+        Performance::QueryPerformanceCounter(&mut ticks).ok()?;
+        qpc_ticks_to_nanos(u64::try_from(ticks).ok()?)
+    }
+}
+
+#[inline(always)]
+pub(crate) fn current_host_nanos() -> u64 {
+    current_qpc_nanos().unwrap_or(0)
 }
