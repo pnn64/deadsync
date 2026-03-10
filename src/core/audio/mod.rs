@@ -45,6 +45,8 @@ pub struct OutputDeviceInfo {
 struct OutputDeviceProbe {
     device: cpal::Device,
     info: OutputDeviceInfo,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    alsa_pcm_id: Option<String>,
     #[cfg(windows)]
     wasapi_id: Option<String>,
 }
@@ -91,9 +93,21 @@ struct WasapiBackendHint {
     output_mode: crate::config::AudioOutputMode,
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
+#[derive(Clone)]
+struct AlsaBackendHint {
+    pcm_id: Option<String>,
+    device_name: String,
+    sample_rate_hz: u32,
+    channels: usize,
+    output_mode: crate::config::AudioOutputMode,
+}
+
 #[derive(Clone)]
 struct AudioThreadLaunch {
     cpal: backends::cpal::CpalBackendLaunch,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    alsa: Option<AlsaBackendHint>,
     #[cfg(windows)]
     wasapi: Option<WasapiBackendHint>,
 }
@@ -111,10 +125,14 @@ struct OutputBackendReady {
 pub enum OutputTelemetryBackend {
     Unknown = 0,
     Cpal = 1,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    AlsaShared = 2,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    AlsaExclusive = 3,
     #[cfg(windows)]
-    WasapiShared = 2,
+    WasapiShared = 4,
     #[cfg(windows)]
-    WasapiExclusive = 3,
+    WasapiExclusive = 5,
 }
 
 impl OutputTelemetryBackend {
@@ -122,6 +140,10 @@ impl OutputTelemetryBackend {
     fn from_backend_name(name: &'static str) -> Self {
         match name {
             "cpal" => Self::Cpal,
+            #[cfg(all(unix, not(target_os = "macos")))]
+            "alsa-shared" => Self::AlsaShared,
+            #[cfg(all(unix, not(target_os = "macos")))]
+            "alsa-exclusive" => Self::AlsaExclusive,
             #[cfg(windows)]
             "wasapi-shared" => Self::WasapiShared,
             #[cfg(windows)]
@@ -134,10 +156,14 @@ impl OutputTelemetryBackend {
     fn load() -> Self {
         match OUTPUT_TIMING_BACKEND.load(Ordering::Relaxed) {
             1 => Self::Cpal,
+            #[cfg(all(unix, not(target_os = "macos")))]
+            2 => Self::AlsaShared,
+            #[cfg(all(unix, not(target_os = "macos")))]
+            3 => Self::AlsaExclusive,
             #[cfg(windows)]
-            2 => Self::WasapiShared,
+            4 => Self::WasapiShared,
             #[cfg(windows)]
-            3 => Self::WasapiExclusive,
+            5 => Self::WasapiExclusive,
             _ => Self::Unknown,
         }
     }
@@ -148,6 +174,10 @@ impl std::fmt::Display for OutputTelemetryBackend {
         let label = match self {
             Self::Unknown => "unknown",
             Self::Cpal => "cpal",
+            #[cfg(all(unix, not(target_os = "macos")))]
+            Self::AlsaShared => "alsa",
+            #[cfg(all(unix, not(target_os = "macos")))]
+            Self::AlsaExclusive => "alsa-exclusive",
             #[cfg(windows)]
             Self::WasapiShared => "wasapi",
             #[cfg(windows)]
@@ -728,7 +758,6 @@ fn publish_output_backend_ready(ready: OutputBackendReady) {
     OUTPUT_TIMING_UNDERRUNS.store(0, Ordering::Relaxed);
 }
 
-#[cfg(windows)]
 #[inline(always)]
 pub(crate) fn publish_output_timing(
     sample_rate_hz: u32,
@@ -749,7 +778,7 @@ pub(crate) fn publish_output_timing(
 }
 
 #[inline(always)]
-fn note_output_underrun() {
+pub(crate) fn note_output_underrun() {
     OUTPUT_TIMING_UNDERRUNS.fetch_add(1, Ordering::Relaxed);
 }
 
@@ -1011,6 +1040,8 @@ fn init_engine_and_thread() -> AudioEngine {
                 is_default: true,
                 sample_rates_hz: fallback_rates,
             },
+            #[cfg(all(unix, not(target_os = "macos")))]
+            alsa_pcm_id: backends::cpal::device_id_string(&default_device),
             #[cfg(windows)]
             wasapi_id: backends::cpal::device_id_string(&default_device),
         });
@@ -1019,12 +1050,18 @@ fn init_engine_and_thread() -> AudioEngine {
     let cfg = crate::config::get();
     let mut device = default_device;
     let mut device_name = default_device_name;
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut alsa_pcm_id = backends::cpal::device_id_string(&device);
     #[cfg(windows)]
     let mut wasapi_device_id = backends::cpal::device_id_string(&device);
     if let Some(requested_idx) = cfg.audio_output_device_index {
         if let Some(probe) = device_probes.get(requested_idx as usize) {
             device = probe.device.clone();
             device_name = probe.info.name.clone();
+            #[cfg(all(unix, not(target_os = "macos")))]
+            {
+                alsa_pcm_id = probe.alsa_pcm_id.clone();
+            }
             #[cfg(windows)]
             {
                 wasapi_device_id = probe.wasapi_id.clone();
@@ -1047,7 +1084,7 @@ fn init_engine_and_thread() -> AudioEngine {
     let mut stream_config: StreamConfig = default_config.clone().into();
     let requested_rate = cfg.audio_sample_rate_hz;
     let output_mode = cfg.audio_output_mode;
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     if matches!(output_mode, crate::config::AudioOutputMode::Exclusive) {
         warn!(
             "Audio output mode 'Exclusive' is not implemented on this platform yet; using the default CPAL path."
@@ -1079,6 +1116,10 @@ fn init_engine_and_thread() -> AudioEngine {
         stream_config.channels,
         output_mode.as_str()
     );
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let alsa_sample_rate_hz = stream_config.sample_rate;
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let alsa_channels = stream_config.channels as usize;
 
     let launch = AudioThreadLaunch {
         cpal: backends::cpal::CpalBackendLaunch {
@@ -1087,6 +1128,14 @@ fn init_engine_and_thread() -> AudioEngine {
             sample_format: default_config.sample_format(),
             stream_config,
         },
+        #[cfg(all(unix, not(target_os = "macos")))]
+        alsa: Some(AlsaBackendHint {
+            pcm_id: alsa_pcm_id,
+            device_name: device_name.clone(),
+            sample_rate_hz: alsa_sample_rate_hz,
+            channels: alsa_channels,
+            output_mode,
+        }),
         #[cfg(windows)]
         wasapi: Some(WasapiBackendHint {
             device_id: wasapi_device_id,
@@ -1123,6 +1172,8 @@ fn init_engine_and_thread() -> AudioEngine {
 #[allow(dead_code)]
 enum OutputBackend {
     Cpal(cpal::Stream),
+    #[cfg(all(unix, not(target_os = "macos")))]
+    Alsa(backends::linux_alsa::AlsaOutputStream),
     #[cfg(windows)]
     Wasapi(backends::windows_wasapi::WasapiOutputStream),
 }
@@ -1133,9 +1184,64 @@ fn start_output_backend(
 ) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
     let AudioThreadLaunch {
         cpal,
+        #[cfg(all(unix, not(target_os = "macos")))]
+        alsa,
         #[cfg(windows)]
         wasapi,
     } = launch;
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    if let Some(alsa) = alsa {
+        let access_mode = match alsa.output_mode {
+            crate::config::AudioOutputMode::Exclusive => {
+                backends::linux_alsa::AlsaAccessMode::Exclusive
+            }
+            crate::config::AudioOutputMode::Auto | crate::config::AudioOutputMode::Shared => {
+                backends::linux_alsa::AlsaAccessMode::Shared
+            }
+        };
+        match backends::linux_alsa::prepare(
+            alsa.pcm_id.clone(),
+            alsa.device_name.clone(),
+            alsa.sample_rate_hz,
+            alsa.channels,
+            access_mode,
+        ) {
+            Ok(prep) => {
+                let ready = prep.ready();
+                let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+                match backends::linux_alsa::start(prep, music_ring.clone(), sfx_receiver) {
+                    Ok(stream) => {
+                        return Ok((OutputBackend::Alsa(stream), ready, sfx_sender));
+                    }
+                    Err(err) => {
+                        if matches!(alsa.output_mode, crate::config::AudioOutputMode::Exclusive) {
+                            return Err(format!(
+                                "failed to start native ALSA exclusive output for '{}': {err}",
+                                alsa.device_name
+                            ));
+                        }
+                        warn!(
+                            "Failed to start native ALSA output for '{}': {err}. Falling back to CPAL.",
+                            alsa.device_name
+                        );
+                    }
+                }
+            }
+            Err(err) => {
+                if matches!(alsa.output_mode, crate::config::AudioOutputMode::Exclusive) {
+                    return Err(format!(
+                        "failed to prepare native ALSA exclusive output for '{}': {err}",
+                        alsa.device_name
+                    ));
+                }
+                warn!(
+                    "Failed to prepare native ALSA output for '{}': {err}. Falling back to CPAL.",
+                    alsa.device_name
+                );
+            }
+        }
+    }
 
     #[cfg(windows)]
     if let Some(wasapi) = wasapi {

@@ -25,7 +25,6 @@ pub(crate) fn device_name(device: &cpal::Device) -> String {
         .unwrap_or_else(|_| "<unknown>".to_string())
 }
 
-#[cfg(windows)]
 #[inline(always)]
 pub(crate) fn device_id_string(device: &cpal::Device) -> Option<String> {
     device.id().ok().map(|id| id.1)
@@ -93,6 +92,8 @@ pub(crate) fn enumerate_output_device_probes(
                 let name = device_name(&dev);
                 let is_default = name == default_device_name;
                 let tag = if is_default { " (default)" } else { "" };
+                #[cfg(all(unix, not(target_os = "macos")))]
+                let alsa_pcm_id = device_id_string(&dev);
                 #[cfg(windows)]
                 let wasapi_id = device_id_string(&dev);
                 debug!("  Device {idx}: '{name}'{tag}");
@@ -125,6 +126,8 @@ pub(crate) fn enumerate_output_device_probes(
                         is_default,
                         sample_rates_hz,
                     },
+                    #[cfg(all(unix, not(target_os = "macos")))]
+                    alsa_pcm_id,
                     #[cfg(windows)]
                     wasapi_id,
                 });

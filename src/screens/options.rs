@@ -1336,7 +1336,7 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Select an output device detected at startup.",
             "Auto uses the host default output device.",
-            "Windows playback prefers native WASAPI and falls back if needed.",
+            "Windows playback prefers native WASAPI and Linux playback prefers native ALSA when fallback is allowed.",
             "Changing this takes effect on next launch.",
         ],
     },
