@@ -71,6 +71,12 @@ pub fn init(file_logging_enabled: bool) {
     let mut builder = env_logger::builder();
     builder
         .filter_level(log::LevelFilter::Trace)
+        // Keep GPU stack internals quiet even when the app log level is Trace.
+        .filter_module("wgpu", log::LevelFilter::Warn)
+        .filter_module("wgpu_core", log::LevelFilter::Warn)
+        .filter_module("wgpu_hal", log::LevelFilter::Warn)
+        .filter_module("wgpu_types", log::LevelFilter::Warn)
+        .filter_module("naga", log::LevelFilter::Warn)
         // Never emit raw ureq proto dumps; they can include sensitive request headers.
         .filter_module("ureq_proto::util", log::LevelFilter::Off)
         // Keep HTTP client internals quiet unless warning/error.
