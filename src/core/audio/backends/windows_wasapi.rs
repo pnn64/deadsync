@@ -1,6 +1,6 @@
 use super::super::{
-    OutputBackendReady, OutputTelemetryClock, QueuedSfx, RenderState, internal,
-    publish_output_timing,
+    OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
+    internal, publish_output_timing,
 };
 use crate::core::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
@@ -71,6 +71,7 @@ impl WasapiOutputPrep {
             },
             fallback_from_native: false,
             timing_clock: OutputTelemetryClock::DeviceQpc,
+            timing_quality: OutputTimingQuality::Trusted,
         }
     }
 }

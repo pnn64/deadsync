@@ -44,8 +44,10 @@ unsafe extern "C" {
 struct Dev {
     id: PadId,
     uuid: [u8; 16],
+    path: String,
     file: std::fs::File,
     monotonic_timestamps: bool,
+    clock_health: EvdevClockHealth,
     hat_x: i32,
     hat_y: i32,
     dir: [bool; 4],
@@ -56,6 +58,54 @@ struct ClockSample {
     instant: Instant,
     monotonic_nanos: u64,
 }
+
+struct EvdevClockHealth {
+    kernel_trusted: bool,
+    invalid_samples: u32,
+    last_event_nanos: u64,
+}
+
+impl EvdevClockHealth {
+    #[inline(always)]
+    const fn new(kernel_trusted: bool) -> Self {
+        Self {
+            kernel_trusted,
+            invalid_samples: 0,
+            last_event_nanos: 0,
+        }
+    }
+
+    #[inline(always)]
+    const fn uses_kernel_timestamps(&self) -> bool {
+        self.kernel_trusted
+    }
+
+    #[inline(always)]
+    fn note_success(&mut self, event_nanos: u64) {
+        self.last_event_nanos = event_nanos;
+        self.invalid_samples = self.invalid_samples.saturating_sub(1);
+    }
+
+    #[inline(always)]
+    fn note_failure(&mut self, path: &str, reason: &str, event_nanos: u64, sample_nanos: u64) {
+        self.invalid_samples = self.invalid_samples.saturating_add(1);
+        warn!(
+            "linux evdev '{}' rejected kernel timestamp ({reason}) event={} sample={} failure={}/{}",
+            path, event_nanos, sample_nanos, self.invalid_samples, EVDEV_MAX_INVALID_SAMPLES
+        );
+        if self.invalid_samples >= EVDEV_MAX_INVALID_SAMPLES && self.kernel_trusted {
+            self.kernel_trusted = false;
+            warn!(
+                "linux evdev '{}' disabling kernel timestamp use for the rest of the session; falling back to receipt-time timestamps.",
+                path
+            );
+        }
+    }
+}
+
+const EVDEV_FUTURE_TOLERANCE_NS: u64 = 5_000_000;
+const EVDEV_REGRESSION_TOLERANCE_NS: u64 = 1_000_000;
+const EVDEV_MAX_INVALID_SAMPLES: u32 = 4;
 
 const IOC_NRBITS: u32 = 8;
 const IOC_TYPEBITS: u32 = 8;
@@ -128,12 +178,38 @@ fn instant_from_clock_sample(target_nanos: u64, sample: ClockSample) -> Instant 
 }
 
 #[inline(always)]
-fn event_time(ev: InputEventRaw, sample: Option<ClockSample>) -> (Instant, u64) {
-    if let Some(sample) = sample
+fn event_time(dev: &mut Dev, ev: InputEventRaw, sample: Option<ClockSample>) -> (Instant, u64) {
+    if dev.monotonic_timestamps
+        && dev.clock_health.uses_kernel_timestamps()
+        && let Some(sample) = sample
         && let Some(target_nanos) = evdev_event_nanos(ev)
     {
-        let timestamp = instant_from_clock_sample(target_nanos, sample);
-        return (timestamp, instant_nanos(timestamp));
+        if target_nanos
+            > sample
+                .monotonic_nanos
+                .saturating_add(EVDEV_FUTURE_TOLERANCE_NS)
+        {
+            dev.clock_health.note_failure(
+                &dev.path,
+                "future",
+                target_nanos,
+                sample.monotonic_nanos,
+            );
+        } else if dev.clock_health.last_event_nanos != 0
+            && target_nanos.saturating_add(EVDEV_REGRESSION_TOLERANCE_NS)
+                < dev.clock_health.last_event_nanos
+        {
+            dev.clock_health.note_failure(
+                &dev.path,
+                "regression",
+                target_nanos,
+                sample.monotonic_nanos,
+            );
+        } else {
+            dev.clock_health.note_success(target_nanos);
+            let timestamp = instant_from_clock_sample(target_nanos, sample);
+            return (timestamp, instant_nanos(timestamp));
+        }
     }
     let timestamp = Instant::now();
     (timestamp, now_nanos())
@@ -236,8 +312,10 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
             devs.push(Dev {
                 id,
                 uuid,
+                path: path_s,
                 file,
                 monotonic_timestamps,
+                clock_health: EvdevClockHealth::new(monotonic_timestamps),
                 hat_x: 0,
                 hat_y: 0,
                 dir: [false; 4],
@@ -293,11 +371,12 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
 
             let count = (n as usize) / size_of::<InputEventRaw>();
             let count = count.min(buf.len());
-            let clock_sample = if dev.monotonic_timestamps {
-                sample_monotonic_clock()
-            } else {
-                None
-            };
+            let clock_sample =
+                if dev.monotonic_timestamps && dev.clock_health.uses_kernel_timestamps() {
+                    sample_monotonic_clock()
+                } else {
+                    None
+                };
             for j in 0..count {
                 let ev = unsafe { buf[j].assume_init() };
                 if ev.type_ == EV_SYN {
@@ -309,7 +388,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                     if ev.value == 2 {
                         continue;
                     }
-                    let (timestamp, host_nanos) = event_time(ev, clock_sample);
+                    let (timestamp, host_nanos) = event_time(dev, ev, clock_sample);
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
@@ -324,7 +403,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 }
 
                 if ev.type_ == EV_ABS {
-                    let (timestamp, host_nanos) = event_time(ev, clock_sample);
+                    let (timestamp, host_nanos) = event_time(dev, ev, clock_sample);
                     emit_pad(PadEvent::RawAxis {
                         id: dev.id,
                         timestamp,

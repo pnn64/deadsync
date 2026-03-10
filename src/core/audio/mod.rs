@@ -121,6 +121,7 @@ struct OutputBackendReady {
     requested_output_mode: crate::config::AudioOutputMode,
     fallback_from_native: bool,
     timing_clock: OutputTelemetryClock,
+    timing_quality: OutputTimingQuality,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -235,6 +236,39 @@ impl std::fmt::Display for OutputTelemetryClock {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum OutputTimingQuality {
+    Unknown = 0,
+    Trusted = 1,
+    Degraded = 2,
+    Fallback = 3,
+}
+
+impl OutputTimingQuality {
+    #[inline(always)]
+    fn load() -> Self {
+        match OUTPUT_TIMING_QUALITY.load(Ordering::Relaxed) {
+            1 => Self::Trusted,
+            2 => Self::Degraded,
+            3 => Self::Fallback,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl std::fmt::Display for OutputTimingQuality {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let label = match self {
+            Self::Unknown => "unknown",
+            Self::Trusted => "trusted",
+            Self::Degraded => "degraded",
+            Self::Fallback => "fallback",
+        };
+        f.write_str(label)
+    }
+}
+
 #[inline(always)]
 const fn output_mode_bits(mode: crate::config::AudioOutputMode) -> u8 {
     match mode {
@@ -259,6 +293,7 @@ pub struct OutputTimingSnapshot {
     pub requested_output_mode: crate::config::AudioOutputMode,
     pub fallback_from_native: bool,
     pub timing_clock: OutputTelemetryClock,
+    pub timing_quality: OutputTimingQuality,
     pub sample_rate_hz: u32,
     pub device_period_ns: u64,
     pub stream_latency_ns: u64,
@@ -267,6 +302,7 @@ pub struct OutputTimingSnapshot {
     pub queued_frames: u32,
     pub estimated_output_delay_ns: u64,
     pub clock_fallback_count: u64,
+    pub timing_sanity_failure_count: u64,
     pub underrun_count: u64,
 }
 
@@ -281,6 +317,7 @@ impl OutputTimingSnapshot {
             || self.queued_frames != 0
             || self.estimated_output_delay_ns != 0
             || self.clock_fallback_count != 0
+            || self.timing_sanity_failure_count != 0
             || self.underrun_count != 0
     }
 }
@@ -316,6 +353,7 @@ static OUTPUT_TIMING_BACKEND: AtomicU8 = AtomicU8::new(OutputTelemetryBackend::U
 static OUTPUT_TIMING_REQUESTED_MODE: AtomicU8 = AtomicU8::new(1);
 static OUTPUT_TIMING_NATIVE_FALLBACK: AtomicBool = AtomicBool::new(false);
 static OUTPUT_TIMING_CLOCK: AtomicU8 = AtomicU8::new(OutputTelemetryClock::Unknown as u8);
+static OUTPUT_TIMING_QUALITY: AtomicU8 = AtomicU8::new(OutputTimingQuality::Unknown as u8);
 static OUTPUT_TIMING_SAMPLE_RATE_HZ: AtomicU32 = AtomicU32::new(0);
 static OUTPUT_TIMING_DEVICE_PERIOD_NS: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_STREAM_LATENCY_NS: AtomicU64 = AtomicU64::new(0);
@@ -324,6 +362,7 @@ static OUTPUT_TIMING_PADDING_FRAMES: AtomicU32 = AtomicU32::new(0);
 static OUTPUT_TIMING_QUEUED_FRAMES: AtomicU32 = AtomicU32::new(0);
 static OUTPUT_TIMING_EST_DELAY_NS: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_CLOCK_FALLBACKS: AtomicU64 = AtomicU64::new(0);
+static OUTPUT_TIMING_SANITY_FAILURES: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_UNDERRUNS: AtomicU64 = AtomicU64::new(0);
 
 const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
@@ -810,6 +849,7 @@ pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
         ),
         fallback_from_native: OUTPUT_TIMING_NATIVE_FALLBACK.load(Ordering::Relaxed),
         timing_clock: OutputTelemetryClock::load(),
+        timing_quality: OutputTimingQuality::load(),
         sample_rate_hz: OUTPUT_TIMING_SAMPLE_RATE_HZ.load(Ordering::Relaxed),
         device_period_ns: OUTPUT_TIMING_DEVICE_PERIOD_NS.load(Ordering::Relaxed),
         stream_latency_ns: OUTPUT_TIMING_STREAM_LATENCY_NS.load(Ordering::Relaxed),
@@ -818,6 +858,7 @@ pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
         queued_frames: OUTPUT_TIMING_QUEUED_FRAMES.load(Ordering::Relaxed),
         estimated_output_delay_ns: OUTPUT_TIMING_EST_DELAY_NS.load(Ordering::Relaxed),
         clock_fallback_count: OUTPUT_TIMING_CLOCK_FALLBACKS.load(Ordering::Relaxed),
+        timing_sanity_failure_count: OUTPUT_TIMING_SANITY_FAILURES.load(Ordering::Relaxed),
         underrun_count: OUTPUT_TIMING_UNDERRUNS.load(Ordering::Relaxed),
     }
 }
@@ -836,6 +877,7 @@ fn publish_output_backend_ready(ready: OutputBackendReady) {
     );
     OUTPUT_TIMING_NATIVE_FALLBACK.store(ready.fallback_from_native, Ordering::Relaxed);
     OUTPUT_TIMING_CLOCK.store(ready.timing_clock as u8, Ordering::Relaxed);
+    OUTPUT_TIMING_QUALITY.store(ready.timing_quality as u8, Ordering::Relaxed);
     OUTPUT_TIMING_SAMPLE_RATE_HZ.store(ready.device_sample_rate, Ordering::Relaxed);
     OUTPUT_TIMING_DEVICE_PERIOD_NS.store(0, Ordering::Relaxed);
     OUTPUT_TIMING_STREAM_LATENCY_NS.store(0, Ordering::Relaxed);
@@ -844,6 +886,7 @@ fn publish_output_backend_ready(ready: OutputBackendReady) {
     OUTPUT_TIMING_QUEUED_FRAMES.store(0, Ordering::Relaxed);
     OUTPUT_TIMING_EST_DELAY_NS.store(0, Ordering::Relaxed);
     OUTPUT_TIMING_CLOCK_FALLBACKS.store(0, Ordering::Relaxed);
+    OUTPUT_TIMING_SANITY_FAILURES.store(0, Ordering::Relaxed);
     OUTPUT_TIMING_UNDERRUNS.store(0, Ordering::Relaxed);
 }
 
@@ -873,7 +916,21 @@ pub(crate) fn note_output_underrun() {
 
 #[inline(always)]
 #[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) fn publish_output_timing_quality(quality: OutputTimingQuality) {
+    OUTPUT_TIMING_QUALITY.store(quality as u8, Ordering::Relaxed);
+}
+
+#[inline(always)]
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) fn note_output_timing_sanity_failure(quality: OutputTimingQuality) {
+    OUTPUT_TIMING_QUALITY.store(quality as u8, Ordering::Relaxed);
+    OUTPUT_TIMING_SANITY_FAILURES.fetch_add(1, Ordering::Relaxed);
+}
+
+#[inline(always)]
+#[cfg(all(unix, not(target_os = "macos")))]
 pub(crate) fn note_output_clock_fallback() {
+    note_output_timing_sanity_failure(OutputTimingQuality::Fallback);
     OUTPUT_TIMING_CLOCK_FALLBACKS.fetch_add(1, Ordering::Relaxed);
 }
 
@@ -1262,13 +1319,14 @@ fn init_engine_and_thread() -> AudioEngine {
     };
 
     info!(
-        "Audio engine initialized ({} Hz, {} ch, backend={} req={} fallback={} clock={} device='{}').",
+        "Audio engine initialized ({} Hz, {} ch, backend={} req={} fallback={} clock={} quality={} device='{}').",
         ready.device_sample_rate,
         ready.device_channels,
         ready.backend_name,
         ready.requested_output_mode.as_str(),
         ready.fallback_from_native,
         ready.timing_clock,
+        ready.timing_quality,
         ready.device_name
     );
     publish_output_backend_ready(ready.clone());

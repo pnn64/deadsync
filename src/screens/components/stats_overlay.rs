@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::audio::{OutputTelemetryBackend, OutputTelemetryClock};
+use crate::core::audio::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality};
 use crate::core::gfx::{BackendType, ClockDomainTrace, PresentModeTrace};
 use crate::core::space::{screen_height, screen_width};
 use crate::ui::actors::Actor;
@@ -71,6 +71,7 @@ pub struct AudioHealth {
     pub requested_output_mode: crate::config::AudioOutputMode,
     pub fallback_from_native: bool,
     pub timing_clock: OutputTelemetryClock,
+    pub timing_quality: OutputTimingQuality,
     pub sample_rate_hz: u32,
     pub device_period_ns: u64,
     pub stream_latency_ns: u64,
@@ -79,6 +80,7 @@ pub struct AudioHealth {
     pub queued_frames: u32,
     pub estimated_output_delay_ns: u64,
     pub clock_fallback_count: u64,
+    pub timing_sanity_failure_count: u64,
     pub underrun_count: u64,
 }
 
@@ -152,12 +154,14 @@ fn timing_text(timing: TimingHealth) -> String {
 
         let _ = write!(
             text,
-            "\nAudio {} {}Hz req {} fb:{}\nClk {} cf:{} out {} xr {}\nBuf {} pad {} q {} per {} lat {}",
+            "\nAudio {} {}Hz req {} fb:{}\nClk {} {} sf:{} cf:{} out {} xr {}\nBuf {} pad {} q {} per {} lat {}",
             audio.backend,
             audio.sample_rate_hz,
             audio.requested_output_mode.as_str(),
             flag(audio.fallback_from_native),
             audio.timing_clock,
+            audio.timing_quality,
+            audio.timing_sanity_failure_count,
             audio.clock_fallback_count,
             ms_text(audio.estimated_output_delay_ns),
             audio.underrun_count,

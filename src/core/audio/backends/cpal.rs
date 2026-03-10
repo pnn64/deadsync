@@ -1,6 +1,6 @@
 use super::super::{
     OutputBackend, OutputBackendReady, OutputDeviceInfo, OutputDeviceProbe, OutputTelemetryClock,
-    QueuedSfx, RenderState, internal, output_playback_anchor,
+    OutputTimingQuality, QueuedSfx, RenderState, internal, output_playback_anchor,
 };
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -198,6 +198,7 @@ pub(crate) fn start_output(
             requested_output_mode: launch.output_mode,
             fallback_from_native,
             timing_clock: OutputTelemetryClock::Callback,
+            timing_quality: OutputTimingQuality::Trusted,
         },
         sfx_sender,
     ))

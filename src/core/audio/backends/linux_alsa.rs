@@ -1,12 +1,13 @@
 use super::super::{
-    OutputBackendReady, OutputTelemetryClock, QueuedSfx, RenderState, internal,
-    note_output_clock_fallback, note_output_underrun, publish_output_timing,
+    OutputBackendReady, OutputTelemetryClock, OutputTimingQuality, QueuedSfx, RenderState,
+    internal, note_output_clock_fallback, note_output_underrun, publish_output_timing,
+    publish_output_timing_quality,
 };
 use crate::core::host_time::now_nanos;
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Direction, ValueOr};
 use libc::timespec;
-use log::info;
+use log::{info, warn};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -52,6 +53,7 @@ impl AlsaOutputPrep {
             },
             fallback_from_native: false,
             timing_clock: self.host_clock.telemetry_clock(),
+            timing_quality: OutputTimingQuality::Trusted,
         }
     }
 }
@@ -144,6 +146,54 @@ impl AlsaHostClock {
     }
 }
 
+const ALSA_STATUS_FUTURE_TOLERANCE_NS: u64 = 5_000_000;
+const ALSA_STATUS_STALE_TOLERANCE_NS: u64 = 50_000_000;
+const ALSA_STATUS_REGRESSION_TOLERANCE_NS: u64 = 1_000_000;
+const ALSA_DEGRADED_HOLD_SAMPLES: u32 = 48;
+
+struct AlsaClockHealth {
+    last_status_host_nanos: u64,
+    last_playback_host_nanos: u64,
+    degraded_samples_remaining: u32,
+}
+
+impl AlsaClockHealth {
+    #[inline(always)]
+    const fn new() -> Self {
+        Self {
+            last_status_host_nanos: 0,
+            last_playback_host_nanos: 0,
+            degraded_samples_remaining: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn note_fallback(&mut self) {
+        self.degraded_samples_remaining = ALSA_DEGRADED_HOLD_SAMPLES;
+    }
+
+    #[inline(always)]
+    const fn should_warn_on_failure(&self) -> bool {
+        self.degraded_samples_remaining == 0
+    }
+
+    #[inline(always)]
+    fn note_success(
+        &mut self,
+        status_host_nanos: u64,
+        playback_host_nanos: u64,
+    ) -> OutputTimingQuality {
+        self.last_status_host_nanos = status_host_nanos;
+        self.last_playback_host_nanos = playback_host_nanos;
+        if self.degraded_samples_remaining != 0 {
+            self.degraded_samples_remaining -= 1;
+            OutputTimingQuality::Degraded
+        } else {
+            OutputTimingQuality::Trusted
+        }
+    }
+}
+
 fn render_thread(
     prep: AlsaOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
@@ -201,8 +251,14 @@ fn render_thread_inner(
 
     let mut render = RenderState::new(music_ring, sfx_receiver, actual.channels);
     let mut mix = vec![0i16; actual.period_frames as usize * actual.channels];
+    let mut clock_health = AlsaClockHealth::new();
     while !stop_flag.load(Ordering::Relaxed) {
-        let timing_before = playback_status_timing(&pcm, actual.sample_rate_hz, actual.host_clock);
+        let timing_before = playback_status_timing(
+            &pcm,
+            actual.sample_rate_hz,
+            actual.host_clock,
+            &mut clock_health,
+        );
         render.render_i16_host_nanos(&mut mix, timing_before.playback_host_nanos);
         write_period(
             &pcm,
@@ -212,7 +268,16 @@ fn render_thread_inner(
             stop_flag,
             &prep.device_name,
         )?;
-        let timing_after = playback_status_timing(&pcm, actual.sample_rate_hz, actual.host_clock);
+        let timing_after = playback_status_timing(
+            &pcm,
+            actual.sample_rate_hz,
+            actual.host_clock,
+            &mut clock_health,
+        );
+        publish_output_timing_quality(worst_quality(
+            timing_before.timing_quality,
+            timing_after.timing_quality,
+        ));
         publish_output_timing(
             actual.sample_rate_hz,
             period_ns,
@@ -435,6 +500,7 @@ struct PlaybackStatusTiming {
     playback_host_nanos: u64,
     delay_frames: u32,
     estimated_output_delay_ns: u64,
+    timing_quality: OutputTimingQuality,
 }
 
 #[derive(Clone, Copy)]
@@ -448,41 +514,74 @@ fn playback_status_timing(
     pcm: &PCM,
     sample_rate_hz: u32,
     host_clock: AlsaHostClock,
+    clock_health: &mut AlsaClockHealth,
 ) -> PlaybackStatusTiming {
     let delay_frames_fallback = current_delay_frames_fallback(pcm);
     let delay_ns_fallback = frames_to_nanos(sample_rate_hz, delay_frames_fallback);
     let Some(status) = pcm.status().ok() else {
-        note_output_clock_fallback();
-        return PlaybackStatusTiming {
-            playback_host_nanos: now_nanos().saturating_add(delay_ns_fallback),
-            delay_frames: delay_frames_fallback,
-            estimated_output_delay_ns: delay_ns_fallback,
-        };
+        return fallback_timing(delay_frames_fallback, delay_ns_fallback, clock_health);
     };
     let delay_frames = status.get_delay().max(0) as u32;
     let delay_ns = frames_to_nanos(sample_rate_hz, delay_frames);
     let Some(sample) = sample_host_clock(host_clock) else {
-        note_output_clock_fallback();
-        return PlaybackStatusTiming {
-            playback_host_nanos: now_nanos().saturating_add(delay_ns),
-            delay_frames,
-            estimated_output_delay_ns: delay_ns,
-        };
+        return fallback_timing(delay_frames, delay_ns, clock_health);
     };
     let Some(status_clock_nanos) = timespec_nanos(status.get_htstamp()) else {
-        note_output_clock_fallback();
-        return PlaybackStatusTiming {
-            playback_host_nanos: now_nanos().saturating_add(delay_ns),
-            delay_frames,
-            estimated_output_delay_ns: delay_ns,
-        };
+        return fallback_timing(delay_frames, delay_ns, clock_health);
     };
     let status_host_nanos = host_nanos_from_clock(status_clock_nanos, sample);
+    let playback_host_nanos = status_host_nanos.saturating_add(delay_ns);
+    if status_host_nanos
+        > sample
+            .host_nanos
+            .saturating_add(ALSA_STATUS_FUTURE_TOLERANCE_NS)
+        || sample.host_nanos.saturating_sub(status_host_nanos) > ALSA_STATUS_STALE_TOLERANCE_NS
+        || (clock_health.last_status_host_nanos != 0
+            && status_host_nanos.saturating_add(ALSA_STATUS_REGRESSION_TOLERANCE_NS)
+                < clock_health.last_status_host_nanos)
+        || (clock_health.last_playback_host_nanos != 0
+            && playback_host_nanos.saturating_add(ALSA_STATUS_REGRESSION_TOLERANCE_NS)
+                < clock_health.last_playback_host_nanos)
+    {
+        if clock_health.should_warn_on_failure() {
+            warn!(
+                "ALSA timestamp sanity check failed: status={} sample={} delay={}ns last_status={} last_playback={}; falling back to host-time anchor.",
+                status_host_nanos,
+                sample.host_nanos,
+                delay_ns,
+                clock_health.last_status_host_nanos,
+                clock_health.last_playback_host_nanos
+            );
+        }
+        return fallback_timing(delay_frames, delay_ns, clock_health);
+    }
     PlaybackStatusTiming {
-        playback_host_nanos: status_host_nanos.saturating_add(delay_ns),
+        playback_host_nanos,
         delay_frames,
         estimated_output_delay_ns: delay_ns,
+        timing_quality: clock_health.note_success(status_host_nanos, playback_host_nanos),
     }
+}
+
+#[inline(always)]
+fn fallback_timing(
+    delay_frames: u32,
+    delay_ns: u64,
+    clock_health: &mut AlsaClockHealth,
+) -> PlaybackStatusTiming {
+    note_output_clock_fallback();
+    clock_health.note_fallback();
+    PlaybackStatusTiming {
+        playback_host_nanos: now_nanos().saturating_add(delay_ns),
+        delay_frames,
+        estimated_output_delay_ns: delay_ns,
+        timing_quality: OutputTimingQuality::Fallback,
+    }
+}
+
+#[inline(always)]
+const fn worst_quality(a: OutputTimingQuality, b: OutputTimingQuality) -> OutputTimingQuality {
+    if (a as u8) >= (b as u8) { a } else { b }
 }
 
 #[inline(always)]

@@ -2669,6 +2669,7 @@ impl App {
             requested_output_mode: audio.requested_output_mode,
             fallback_from_native: audio.fallback_from_native,
             timing_clock: audio.timing_clock,
+            timing_quality: audio.timing_quality,
             sample_rate_hz: audio.sample_rate_hz,
             device_period_ns: audio.device_period_ns,
             stream_latency_ns: audio.stream_latency_ns,
@@ -2677,6 +2678,7 @@ impl App {
             queued_frames: audio.queued_frames,
             estimated_output_delay_ns: audio.estimated_output_delay_ns,
             clock_fallback_count: audio.clock_fallback_count,
+            timing_sanity_failure_count: audio.timing_sanity_failure_count,
             underrun_count: audio.underrun_count,
         })
     }
@@ -5510,7 +5512,7 @@ impl App {
         };
         let audio_stats = crate::core::audio::get_output_timing_snapshot();
         log::trace!(
-            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} wake={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] loop_ms=[wake:{:.3} dispatch:{:.3} driver:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3} pred_ms:{:.3} pred_ema_ms:{:.3} pred_fallback_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} cf:{} rate:{} buf:{} pad:{} q:{} per_ms:{:.3} lat_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} wake={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] loop_ms=[wake:{:.3} dispatch:{:.3} driver:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3} pred_ms:{:.3} pred_ema_ms:{:.3} pred_fallback_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} per_ms:{:.3} lat_ms:{:.3} out_ms:{:.3} underruns:{}]",
             total_elapsed,
             severity,
             screen,
@@ -5563,6 +5565,8 @@ impl App {
             audio_stats.requested_output_mode.as_str(),
             audio_stats.fallback_from_native,
             audio_stats.timing_clock,
+            audio_stats.timing_quality,
+            audio_stats.timing_sanity_failure_count,
             audio_stats.clock_fallback_count,
             audio_stats.sample_rate_hz,
             audio_stats.buffer_frames,
@@ -5726,7 +5730,7 @@ impl App {
         let predict_samples = trace.predict_error_samples.max(1);
         let audio_stats = crate::core::audio::get_output_timing_snapshot();
         log::trace!(
-            "Gameplay frame pacing: frames={} req=[chain:{} direct:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] direct_loop_ms=[wake_avg:{:.3} wake_max:{:.3} dispatch_avg:{:.3} dispatch_max:{:.3} driver_avg:{:.3} driver_max:{:.3}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3} pred_ms_avg:{:.3} pred_ms_max:{:.3} pred_ema_ms:{:.3} pred_fallback:{} pred_fallback_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} cf:{} rate:{} buf:{} pad:{} q:{} per_ms:{:.3} lat_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Gameplay frame pacing: frames={} req=[chain:{} direct:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] direct_loop_ms=[wake_avg:{:.3} wake_max:{:.3} dispatch_avg:{:.3} dispatch_max:{:.3} driver_avg:{:.3} driver_max:{:.3}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3} pred_ms_avg:{:.3} pred_ms_max:{:.3} pred_ema_ms:{:.3} pred_fallback:{} pred_fallback_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} per_ms:{:.3} lat_ms:{:.3} out_ms:{:.3} underruns:{}]",
             frames,
             trace.chain_frames,
             trace.direct_frames,
@@ -5779,6 +5783,8 @@ impl App {
             audio_stats.requested_output_mode.as_str(),
             audio_stats.fallback_from_native,
             audio_stats.timing_clock,
+            audio_stats.timing_quality,
+            audio_stats.timing_sanity_failure_count,
             audio_stats.clock_fallback_count,
             audio_stats.sample_rate_hz,
             audio_stats.buffer_frames,
