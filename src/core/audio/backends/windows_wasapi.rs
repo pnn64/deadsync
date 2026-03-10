@@ -1,4 +1,4 @@
-use super::super::{OutputBackendReady, QueuedSfx, RenderState, internal};
+use super::super::{OutputBackendReady, QueuedSfx, RenderState, internal, publish_output_timing};
 use crate::core::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
 use std::mem::size_of;
@@ -11,6 +11,22 @@ use windows::Win32::Media::{Audio, KernelStreaming, Multimedia};
 use windows::Win32::System::Com;
 use windows::Win32::System::Threading;
 use windows::core::PCWSTR;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum WasapiAccessMode {
+    Shared,
+    Exclusive,
+}
+
+impl WasapiAccessMode {
+    #[inline(always)]
+    const fn backend_name(self) -> &'static str {
+        match self {
+            Self::Shared => "wasapi-shared",
+            Self::Exclusive => "wasapi-exclusive",
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 enum WasapiSampleFormat {
@@ -36,6 +52,7 @@ pub(crate) struct WasapiOutputPrep {
     channels: usize,
     bytes_per_frame: u16,
     sample_format: WasapiSampleFormat,
+    mode: WasapiAccessMode,
 }
 
 impl WasapiOutputPrep {
@@ -44,7 +61,7 @@ impl WasapiOutputPrep {
             device_sample_rate: self.sample_rate_hz,
             device_channels: self.channels,
             device_name: self.device_name.clone(),
-            backend_name: "wasapi-shared",
+            backend_name: self.mode.backend_name(),
         }
     }
 }
@@ -72,6 +89,7 @@ pub(crate) fn prepare(
     device_id: Option<String>,
     device_name: String,
     requested_rate_hz: Option<u32>,
+    mode: WasapiAccessMode,
 ) -> Result<WasapiOutputPrep, String> {
     let _com = ComGuard::new()?;
     let device = open_output_device(device_id.as_deref())?;
@@ -80,15 +98,27 @@ pub(crate) fn prepare(
     let mut chosen_format = mix_format.clone();
     if let Some(rate_hz) = requested_rate_hz.filter(|rate| *rate > 0) {
         set_waveformat_sample_rate(&mut chosen_format, rate_hz);
-        if let Err(err) = initialize_shared(&audio_client, &chosen_format) {
-            warn!(
-                "WASAPI shared sample rate override {} Hz rejected for '{}': {err}. Using mix format.",
-                rate_hz, device_name
-            );
-            chosen_format = mix_format;
+        match mode {
+            WasapiAccessMode::Shared => {
+                if let Err(err) = initialize_shared(&audio_client, &chosen_format) {
+                    warn!(
+                        "WASAPI shared sample rate override {} Hz rejected for '{}': {err}. Using mix format.",
+                        rate_hz, device_name
+                    );
+                    chosen_format = mix_format;
+                }
+            }
+            WasapiAccessMode::Exclusive => {
+                validate_exclusive_format(&audio_client, &chosen_format, &device_name)?;
+            }
         }
     } else {
-        initialize_shared(&audio_client, &chosen_format)?;
+        match mode {
+            WasapiAccessMode::Shared => initialize_shared(&audio_client, &chosen_format)?,
+            WasapiAccessMode::Exclusive => {
+                validate_exclusive_format(&audio_client, &chosen_format, &device_name)?
+            }
+        }
     }
 
     let sample_format = sample_format_from_waveformat(&chosen_format)
@@ -104,6 +134,7 @@ pub(crate) fn prepare(
         channels,
         bytes_per_frame,
         sample_format,
+        mode,
     })
 }
 
@@ -180,7 +211,7 @@ fn render_thread_inner(
     let _com = ComGuard::new()?;
     let device = open_output_device(prep.device_id.as_deref())?;
     let audio_client = build_audio_client(&device)?;
-    initialize_shared(&audio_client, &prep.format)?;
+    initialize_client(&audio_client, &prep)?;
     let event = unsafe { Threading::CreateEventW(None, false, false, PCWSTR::null()) }
         .map_err(|e| format!("failed to create WASAPI event handle: {e}"))?;
     unsafe {
@@ -198,6 +229,28 @@ fn render_thread_inner(
             .GetService::<Audio::IAudioClock>()
             .map_err(|e| format!("failed to acquire WASAPI audio clock: {e}"))?
     };
+    let device_period_ns = match query_device_periods_hns(&audio_client) {
+        Ok((default_period_hns, min_period_hns)) => reference_time_to_nanos(
+            selected_device_period_hns(prep.mode, default_period_hns, min_period_hns),
+        ),
+        Err(err) => {
+            warn!(
+                "failed to query WASAPI device period for '{}': {err}",
+                prep.device_name
+            );
+            0
+        }
+    };
+    let stream_latency_ns = match query_stream_latency_ns(&audio_client) {
+        Ok(latency_ns) => latency_ns,
+        Err(err) => {
+            warn!(
+                "failed to query WASAPI stream latency for '{}': {err}",
+                prep.device_name
+            );
+            0
+        }
+    };
     let max_frames_in_buffer = unsafe {
         audio_client
             .GetBufferSize()
@@ -213,6 +266,20 @@ fn render_thread_inner(
         max_frames_in_buffer,
         max_frames_in_buffer,
     )?;
+    publish_output_timing(
+        prep.sample_rate_hz,
+        device_period_ns,
+        stream_latency_ns,
+        max_frames_in_buffer,
+        max_frames_in_buffer,
+        max_frames_in_buffer,
+        estimated_output_delay_ns(
+            prep.sample_rate_hz,
+            max_frames_in_buffer,
+            device_period_ns,
+            stream_latency_ns,
+        ),
+    );
     unsafe {
         audio_client
             .Start()
@@ -245,6 +312,20 @@ fn render_thread_inner(
                 .map_err(|e| format!("failed to query WASAPI padding: {e}"))
         }?;
         let frames_available = max_frames_in_buffer.saturating_sub(padding);
+        publish_output_timing(
+            prep.sample_rate_hz,
+            device_period_ns,
+            stream_latency_ns,
+            max_frames_in_buffer,
+            padding,
+            padding,
+            estimated_output_delay_ns(
+                prep.sample_rate_hz,
+                padding,
+                device_period_ns,
+                stream_latency_ns,
+            ),
+        );
         if frames_available == 0 {
             continue;
         }
@@ -330,6 +411,118 @@ fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
     }
     ((u128::from(frames) * 1_000_000_000u128) / u128::from(sample_rate_hz))
         .min((u64::MAX - 1) as u128) as u64
+}
+
+#[inline(always)]
+fn reference_time_to_nanos(hns: i64) -> u64 {
+    hns.max(0) as u64 * 100
+}
+
+#[inline(always)]
+fn query_stream_latency_ns(audio_client: &Audio::IAudioClient) -> Result<u64, String> {
+    unsafe {
+        audio_client
+            .GetStreamLatency()
+            .map(reference_time_to_nanos)
+            .map_err(|e| format!("GetStreamLatency failed: {e}"))
+    }
+}
+
+#[inline(always)]
+fn estimated_output_delay_ns(
+    sample_rate_hz: u32,
+    queued_frames: u32,
+    device_period_ns: u64,
+    stream_latency_ns: u64,
+) -> u64 {
+    let queue_delay_ns = frames_to_nanos(sample_rate_hz, queued_frames);
+    let downstream_ns = if stream_latency_ns != 0 {
+        stream_latency_ns
+    } else {
+        device_period_ns
+    };
+    queue_delay_ns.saturating_add(downstream_ns)
+}
+
+fn initialize_client(
+    audio_client: &Audio::IAudioClient,
+    prep: &WasapiOutputPrep,
+) -> Result<(), String> {
+    match prep.mode {
+        WasapiAccessMode::Shared => initialize_shared(audio_client, &prep.format),
+        WasapiAccessMode::Exclusive => initialize_exclusive(audio_client, &prep.format),
+    }
+}
+
+fn initialize_exclusive(audio_client: &Audio::IAudioClient, format: &[u8]) -> Result<(), String> {
+    let (default_period_hns, min_period_hns) = query_device_periods_hns(audio_client)?;
+    let period_hns = selected_device_period_hns(
+        WasapiAccessMode::Exclusive,
+        default_period_hns,
+        min_period_hns,
+    );
+    unsafe {
+        audio_client
+            .Initialize(
+                Audio::AUDCLNT_SHAREMODE_EXCLUSIVE,
+                Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                period_hns,
+                period_hns,
+                waveformat(format),
+                None,
+            )
+            .map_err(|e| format!("failed to initialize WASAPI exclusive stream: {e}"))
+    }
+}
+
+fn validate_exclusive_format(
+    audio_client: &Audio::IAudioClient,
+    format: &[u8],
+    device_name: &str,
+) -> Result<(), String> {
+    let status = unsafe {
+        audio_client.IsFormatSupported(Audio::AUDCLNT_SHAREMODE_EXCLUSIVE, waveformat(format), None)
+    };
+    if status.is_ok() {
+        return Ok(());
+    }
+    if status == Audio::AUDCLNT_E_UNSUPPORTED_FORMAT {
+        let wave = waveformat(format);
+        let sample_rate_hz = wave.nSamplesPerSec;
+        let channels = wave.nChannels;
+        let bits_per_sample = wave.wBitsPerSample;
+        return Err(format!(
+            "WASAPI exclusive format not supported for '{}': {} Hz, {} ch, {} bits",
+            device_name, sample_rate_hz, channels, bits_per_sample
+        ));
+    }
+    Err(format!(
+        "WASAPI exclusive IsFormatSupported failed for '{}': {status:?}",
+        device_name
+    ))
+}
+
+#[inline(always)]
+fn query_device_periods_hns(audio_client: &Audio::IAudioClient) -> Result<(i64, i64), String> {
+    let mut default_period = 0i64;
+    let mut min_period = 0i64;
+    unsafe {
+        audio_client
+            .GetDevicePeriod(Some(&mut default_period), Some(&mut min_period))
+            .map_err(|e| format!("GetDevicePeriod failed: {e}"))?;
+    }
+    Ok((default_period, min_period))
+}
+
+#[inline(always)]
+fn selected_device_period_hns(mode: WasapiAccessMode, default_hns: i64, min_hns: i64) -> i64 {
+    match mode {
+        WasapiAccessMode::Shared => default_hns.max(0),
+        WasapiAccessMode::Exclusive => {
+            let preferred = if min_hns > 0 { min_hns } else { default_hns };
+            preferred.max(0)
+        }
+    }
 }
 
 struct ComGuard;

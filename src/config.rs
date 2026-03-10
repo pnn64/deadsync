@@ -429,6 +429,36 @@ pub enum DisplayMode {
     Fullscreen(FullscreenType),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioOutputMode {
+    Auto,
+    Shared,
+    Exclusive,
+}
+
+impl AudioOutputMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Shared => "Shared",
+            Self::Exclusive => "Exclusive",
+        }
+    }
+}
+
+impl FromStr for AudioOutputMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "shared" => Ok(Self::Shared),
+            "exclusive" => Ok(Self::Exclusive),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
@@ -531,6 +561,7 @@ pub struct Config {
     pub sfx_volume: u8,
     // None = auto (use host default output device); Some(N) = startup CPAL output-device index.
     pub audio_output_device_index: Option<u16>,
+    pub audio_output_mode: AudioOutputMode,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
     pub auto_populate_gs_scores: bool,
@@ -623,6 +654,7 @@ impl Default for Config {
             assist_tick_volume: 100,
             sfx_volume: 100,
             audio_output_device_index: None,
+            audio_output_mode: AudioOutputMode::Auto,
             audio_sample_rate_hz: None,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: true,
@@ -959,6 +991,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     // [Options] section - keys in alphabetical order
     content.push_str("[Options]\n");
     content.push_str("AudioOutputDevice=Auto\n");
+    content.push_str("AudioOutputMode=Auto\n");
     content.push_str("AudioSampleRateHz=Auto\n");
     content.push_str("AdditionalSongFolders=\n");
     content.push_str(&format!(
@@ -1630,6 +1663,10 @@ pub fn load() {
                         }
                     })
                     .or(default.audio_output_device_index);
+                cfg.audio_output_mode = conf
+                    .get("Options", "AudioOutputMode")
+                    .and_then(|s| AudioOutputMode::from_str(&s).ok())
+                    .unwrap_or(default.audio_output_mode);
                 cfg.audio_sample_rate_hz = conf
                     .get("Options", "AudioSampleRateHz")
                     .map(|v| v.trim().to_string())
@@ -2044,6 +2081,7 @@ pub fn load() {
                 let mut miss = false;
                 let options_keys = [
                     "AudioOutputDevice",
+                    "AudioOutputMode",
                     "AudioSampleRateHz",
                     "AdditionalSongFolders",
                     "AutoPopulateGrooveStatsScores",
@@ -2811,6 +2849,10 @@ fn save_without_keymaps() {
         .audio_output_device_index
         .map_or_else(|| "Auto".to_string(), |idx| idx.to_string());
     content.push_str(&format!("AudioOutputDevice={audio_output_device}\n"));
+    content.push_str(&format!(
+        "AudioOutputMode={}\n",
+        cfg.audio_output_mode.as_str()
+    ));
     let audio_rate_str = match cfg.audio_sample_rate_hz {
         None => "Auto".to_string(),
         Some(hz) => hz.to_string(),
@@ -3592,6 +3634,17 @@ pub fn update_audio_output_device(index: Option<u16>) {
             return;
         }
         cfg.audio_output_device_index = index;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_audio_output_mode(mode: AudioOutputMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.audio_output_mode == mode {
+            return;
+        }
+        cfg.audio_output_mode = mode;
     }
     save_without_keymaps();
 }

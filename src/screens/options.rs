@@ -598,6 +598,7 @@ const SOUND_ROW_SFX_VOLUME: &str = "SFX Volume";
 const SOUND_ROW_ASSIST_TICK_VOLUME: &str = "Assist Tick Volume";
 const SOUND_ROW_MUSIC_VOLUME: &str = "Music Volume";
 const SOUND_ROW_DEVICE: &str = "Sound Device";
+const SOUND_ROW_OUTPUT_MODE: &str = "Audio Output Mode";
 const SOUND_ROW_SAMPLE_RATE: &str = "Audio Sample Rate";
 const SOUND_ROW_MINE_SOUNDS: &str = "Mine Sounds";
 const SOUND_ROW_GLOBAL_OFFSET: &str = "Global Offset (ms)";
@@ -1283,6 +1284,11 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        label: SOUND_ROW_OUTPUT_MODE,
+        choices: &["Auto", "Shared", "Exclusive"],
+        inline: false,
+    },
+    SubRow {
         label: SOUND_ROW_SAMPLE_RATE,
         choices: &["Auto"],
         inline: false,
@@ -1331,6 +1337,16 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
             "Select an output device detected at startup.",
             "Auto uses the host default output device.",
             "Windows playback prefers native WASAPI and falls back if needed.",
+            "Changing this takes effect on next launch.",
+        ],
+    },
+    Item {
+        name: SOUND_ROW_OUTPUT_MODE,
+        help: &[
+            "Select whether audio output should use Auto, Shared, or Exclusive mode.",
+            "Auto keeps the backend default policy.",
+            "Shared forces shared-mode output where supported.",
+            "Exclusive requests direct/exclusive output where supported and may fail if unavailable.",
             "Changing this takes effect on next launch.",
         ],
     },
@@ -3018,6 +3034,22 @@ fn sound_device_from_choice(state: &State, idx: usize) -> Option<u16> {
         .and_then(|opt| opt.config_index)
 }
 
+fn audio_output_mode_choice_index(mode: config::AudioOutputMode) -> usize {
+    match mode {
+        config::AudioOutputMode::Auto => 0,
+        config::AudioOutputMode::Shared => 1,
+        config::AudioOutputMode::Exclusive => 2,
+    }
+}
+
+fn audio_output_mode_from_choice(idx: usize) -> config::AudioOutputMode {
+    match idx {
+        1 => config::AudioOutputMode::Shared,
+        2 => config::AudioOutputMode::Exclusive,
+        _ => config::AudioOutputMode::Auto,
+    }
+}
+
 fn set_sound_choice_index(state: &mut State, label: &str, idx: usize) {
     let Some(row_idx) = sound_row_index(label) else {
         return;
@@ -3787,6 +3819,11 @@ pub fn init() -> State {
     let sound_device_idx =
         sound_device_choice_index(&state.sound_device_options, cfg.audio_output_device_index);
     set_sound_choice_index(&mut state, SOUND_ROW_DEVICE, sound_device_idx);
+    set_sound_choice_index(
+        &mut state,
+        SOUND_ROW_OUTPUT_MODE,
+        audio_output_mode_choice_index(cfg.audio_output_mode),
+    );
     let sound_rate_idx = sample_rate_choice_index(&state, cfg.audio_sample_rate_hz);
     set_sound_choice_index(&mut state, SOUND_ROW_SAMPLE_RATE, sound_rate_idx);
     set_choice_by_label(
@@ -5222,6 +5259,9 @@ fn apply_submenu_choice_delta(
                     config::update_audio_sample_rate(None);
                 }
                 set_sound_choice_index(state, SOUND_ROW_SAMPLE_RATE, rate_choice);
+            }
+            SOUND_ROW_OUTPUT_MODE => {
+                config::update_audio_output_mode(audio_output_mode_from_choice(new_index));
             }
             SOUND_ROW_SAMPLE_RATE => {
                 let rate = sample_rate_from_choice(state, new_index);

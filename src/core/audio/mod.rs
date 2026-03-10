@@ -88,6 +88,7 @@ struct WasapiBackendHint {
     device_id: Option<String>,
     device_name: String,
     requested_rate_hz: Option<u32>,
+    output_mode: crate::config::AudioOutputMode,
 }
 
 #[derive(Clone)]
@@ -103,6 +104,83 @@ struct OutputBackendReady {
     device_channels: usize,
     device_name: String,
     backend_name: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum OutputTelemetryBackend {
+    Unknown = 0,
+    Cpal = 1,
+    #[cfg(windows)]
+    WasapiShared = 2,
+    #[cfg(windows)]
+    WasapiExclusive = 3,
+}
+
+impl OutputTelemetryBackend {
+    #[inline(always)]
+    fn from_backend_name(name: &'static str) -> Self {
+        match name {
+            "cpal" => Self::Cpal,
+            #[cfg(windows)]
+            "wasapi-shared" => Self::WasapiShared,
+            #[cfg(windows)]
+            "wasapi-exclusive" => Self::WasapiExclusive,
+            _ => Self::Unknown,
+        }
+    }
+
+    #[inline(always)]
+    fn load() -> Self {
+        match OUTPUT_TIMING_BACKEND.load(Ordering::Relaxed) {
+            1 => Self::Cpal,
+            #[cfg(windows)]
+            2 => Self::WasapiShared,
+            #[cfg(windows)]
+            3 => Self::WasapiExclusive,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl std::fmt::Display for OutputTelemetryBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let label = match self {
+            Self::Unknown => "unknown",
+            Self::Cpal => "cpal",
+            #[cfg(windows)]
+            Self::WasapiShared => "wasapi",
+            #[cfg(windows)]
+            Self::WasapiExclusive => "wasapi-exclusive",
+        };
+        f.write_str(label)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct OutputTimingSnapshot {
+    pub backend: OutputTelemetryBackend,
+    pub sample_rate_hz: u32,
+    pub device_period_ns: u64,
+    pub stream_latency_ns: u64,
+    pub buffer_frames: u32,
+    pub padding_frames: u32,
+    pub queued_frames: u32,
+    pub estimated_output_delay_ns: u64,
+    pub underrun_count: u64,
+}
+
+impl OutputTimingSnapshot {
+    #[inline(always)]
+    pub const fn has_measurement(self) -> bool {
+        self.device_period_ns != 0
+            || self.stream_latency_ns != 0
+            || self.buffer_frames != 0
+            || self.padding_frames != 0
+            || self.queued_frames != 0
+            || self.estimated_output_delay_ns != 0
+            || self.underrun_count != 0
+    }
 }
 
 /// A handle to a streaming music track.
@@ -132,6 +210,15 @@ static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
+static OUTPUT_TIMING_BACKEND: AtomicU8 = AtomicU8::new(OutputTelemetryBackend::Unknown as u8);
+static OUTPUT_TIMING_SAMPLE_RATE_HZ: AtomicU32 = AtomicU32::new(0);
+static OUTPUT_TIMING_DEVICE_PERIOD_NS: AtomicU64 = AtomicU64::new(0);
+static OUTPUT_TIMING_STREAM_LATENCY_NS: AtomicU64 = AtomicU64::new(0);
+static OUTPUT_TIMING_BUFFER_FRAMES: AtomicU32 = AtomicU32::new(0);
+static OUTPUT_TIMING_PADDING_FRAMES: AtomicU32 = AtomicU32::new(0);
+static OUTPUT_TIMING_QUEUED_FRAMES: AtomicU32 = AtomicU32::new(0);
+static OUTPUT_TIMING_EST_DELAY_NS: AtomicU64 = AtomicU64::new(0);
+static OUTPUT_TIMING_UNDERRUNS: AtomicU64 = AtomicU64::new(0);
 
 const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
 
@@ -609,7 +696,62 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
     }
 }
 
+pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
+    OutputTimingSnapshot {
+        backend: OutputTelemetryBackend::load(),
+        sample_rate_hz: OUTPUT_TIMING_SAMPLE_RATE_HZ.load(Ordering::Relaxed),
+        device_period_ns: OUTPUT_TIMING_DEVICE_PERIOD_NS.load(Ordering::Relaxed),
+        stream_latency_ns: OUTPUT_TIMING_STREAM_LATENCY_NS.load(Ordering::Relaxed),
+        buffer_frames: OUTPUT_TIMING_BUFFER_FRAMES.load(Ordering::Relaxed),
+        padding_frames: OUTPUT_TIMING_PADDING_FRAMES.load(Ordering::Relaxed),
+        queued_frames: OUTPUT_TIMING_QUEUED_FRAMES.load(Ordering::Relaxed),
+        estimated_output_delay_ns: OUTPUT_TIMING_EST_DELAY_NS.load(Ordering::Relaxed),
+        underrun_count: OUTPUT_TIMING_UNDERRUNS.load(Ordering::Relaxed),
+    }
+}
+
 /* ============================ Engine internals ============================ */
+
+#[inline(always)]
+fn publish_output_backend_ready(ready: OutputBackendReady) {
+    OUTPUT_TIMING_BACKEND.store(
+        OutputTelemetryBackend::from_backend_name(ready.backend_name) as u8,
+        Ordering::Relaxed,
+    );
+    OUTPUT_TIMING_SAMPLE_RATE_HZ.store(ready.device_sample_rate, Ordering::Relaxed);
+    OUTPUT_TIMING_DEVICE_PERIOD_NS.store(0, Ordering::Relaxed);
+    OUTPUT_TIMING_STREAM_LATENCY_NS.store(0, Ordering::Relaxed);
+    OUTPUT_TIMING_BUFFER_FRAMES.store(0, Ordering::Relaxed);
+    OUTPUT_TIMING_PADDING_FRAMES.store(0, Ordering::Relaxed);
+    OUTPUT_TIMING_QUEUED_FRAMES.store(0, Ordering::Relaxed);
+    OUTPUT_TIMING_EST_DELAY_NS.store(0, Ordering::Relaxed);
+    OUTPUT_TIMING_UNDERRUNS.store(0, Ordering::Relaxed);
+}
+
+#[cfg(windows)]
+#[inline(always)]
+pub(crate) fn publish_output_timing(
+    sample_rate_hz: u32,
+    device_period_ns: u64,
+    stream_latency_ns: u64,
+    buffer_frames: u32,
+    padding_frames: u32,
+    queued_frames: u32,
+    estimated_output_delay_ns: u64,
+) {
+    OUTPUT_TIMING_SAMPLE_RATE_HZ.store(sample_rate_hz, Ordering::Relaxed);
+    OUTPUT_TIMING_DEVICE_PERIOD_NS.store(device_period_ns, Ordering::Relaxed);
+    OUTPUT_TIMING_STREAM_LATENCY_NS.store(stream_latency_ns, Ordering::Relaxed);
+    OUTPUT_TIMING_BUFFER_FRAMES.store(buffer_frames, Ordering::Relaxed);
+    OUTPUT_TIMING_PADDING_FRAMES.store(padding_frames, Ordering::Relaxed);
+    OUTPUT_TIMING_QUEUED_FRAMES.store(queued_frames, Ordering::Relaxed);
+    OUTPUT_TIMING_EST_DELAY_NS.store(estimated_output_delay_ns, Ordering::Relaxed);
+}
+
+#[inline(always)]
+fn note_output_underrun() {
+    OUTPUT_TIMING_UNDERRUNS.fetch_add(1, Ordering::Relaxed);
+}
 
 fn commit_played_music_map(
     track_frame_start: i64,
@@ -783,6 +925,12 @@ impl RenderState {
         } else {
             popped_samples / self.device_channels
         };
+        if MUSIC_TRACK_ACTIVE.load(Ordering::Relaxed)
+            && MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire)
+            && popped_frames < frames
+        {
+            note_output_underrun();
+        }
         let track_frames_before =
             total_before.saturating_sub(MUSIC_TRACK_START_FRAME.load(Ordering::Acquire));
         if popped_frames > 0 {
@@ -898,6 +1046,13 @@ fn init_engine_and_thread() -> AudioEngine {
         .expect("no default audio config");
     let mut stream_config: StreamConfig = default_config.clone().into();
     let requested_rate = cfg.audio_sample_rate_hz;
+    let output_mode = cfg.audio_output_mode;
+    #[cfg(not(windows))]
+    if matches!(output_mode, crate::config::AudioOutputMode::Exclusive) {
+        warn!(
+            "Audio output mode 'Exclusive' is not implemented on this platform yet; using the default CPAL path."
+        );
+    }
     if let Some(target_hz) = requested_rate {
         debug!(
             "Audio sample rate override requested: {} Hz (device default {} Hz).",
@@ -919,8 +1074,10 @@ fn init_engine_and_thread() -> AudioEngine {
         default_config.channels()
     );
     debug!(
-        "Audio output stream config: {} Hz, {} ch (may be resampled by OS/driver).",
-        stream_config.sample_rate, stream_config.channels
+        "Audio output stream config: {} Hz, {} ch, mode={} (may be resampled by OS/driver).",
+        stream_config.sample_rate,
+        stream_config.channels,
+        output_mode.as_str()
     );
 
     let launch = AudioThreadLaunch {
@@ -935,6 +1092,7 @@ fn init_engine_and_thread() -> AudioEngine {
             device_id: wasapi_device_id,
             device_name: device_name.clone(),
             requested_rate_hz: requested_rate,
+            output_mode,
         }),
     };
 
@@ -952,6 +1110,7 @@ fn init_engine_and_thread() -> AudioEngine {
         "Audio engine initialized ({} Hz, {} ch, backend={} device='{}').",
         ready.device_sample_rate, ready.device_channels, ready.backend_name, ready.device_name
     );
+    publish_output_backend_ready(ready.clone());
     AudioEngine {
         command_sender,
         sfx_cache: Mutex::new(HashMap::new()),
@@ -980,10 +1139,19 @@ fn start_output_backend(
 
     #[cfg(windows)]
     if let Some(wasapi) = wasapi {
+        let access_mode = match wasapi.output_mode {
+            crate::config::AudioOutputMode::Exclusive => {
+                backends::windows_wasapi::WasapiAccessMode::Exclusive
+            }
+            crate::config::AudioOutputMode::Auto | crate::config::AudioOutputMode::Shared => {
+                backends::windows_wasapi::WasapiAccessMode::Shared
+            }
+        };
         match backends::windows_wasapi::prepare(
             wasapi.device_id.clone(),
             wasapi.device_name.clone(),
             wasapi.requested_rate_hz,
+            access_mode,
         ) {
             Ok(prep) => {
                 let ready = prep.ready();
@@ -993,6 +1161,15 @@ fn start_output_backend(
                         return Ok((OutputBackend::Wasapi(stream), ready, sfx_sender));
                     }
                     Err(err) => {
+                        if matches!(
+                            wasapi.output_mode,
+                            crate::config::AudioOutputMode::Exclusive
+                        ) {
+                            return Err(format!(
+                                "failed to start native WASAPI exclusive output for '{}': {err}",
+                                wasapi.device_name
+                            ));
+                        }
                         warn!(
                             "Failed to start native WASAPI output for '{}': {err}. Falling back to CPAL.",
                             wasapi.device_name
@@ -1001,6 +1178,15 @@ fn start_output_backend(
                 }
             }
             Err(err) => {
+                if matches!(
+                    wasapi.output_mode,
+                    crate::config::AudioOutputMode::Exclusive
+                ) {
+                    return Err(format!(
+                        "failed to prepare native WASAPI exclusive output for '{}': {err}",
+                        wasapi.device_name
+                    ));
+                }
                 warn!(
                     "Failed to prepare native WASAPI output for '{}': {err}. Falling back to CPAL.",
                     wasapi.device_name

@@ -1,4 +1,5 @@
 use crate::act;
+use crate::core::audio::OutputTelemetryBackend;
 use crate::core::gfx::{BackendType, ClockDomainTrace, PresentModeTrace};
 use crate::core::space::{screen_height, screen_width};
 use crate::ui::actors::Actor;
@@ -65,6 +66,18 @@ pub struct StutterEvent {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub struct AudioHealth {
+    pub backend: OutputTelemetryBackend,
+    pub sample_rate_hz: u32,
+    pub device_period_ns: u64,
+    pub buffer_frames: u32,
+    pub padding_frames: u32,
+    pub queued_frames: u32,
+    pub estimated_output_delay_ns: u64,
+    pub underrun_count: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct TimingHealth {
     pub prediction_active: bool,
     pub fallback_active: bool,
@@ -85,6 +98,7 @@ pub struct TimingHealth {
     pub completed_present_id: u32,
     pub calibration_error_ns: u64,
     pub host_mapped: bool,
+    pub audio: Option<AudioHealth>,
 }
 
 #[inline(always)]
@@ -108,7 +122,7 @@ fn timing_text(timing: TimingHealth) -> String {
         "off"
     };
     let fallback_state = if timing.fallback_active { "on" } else { "off" };
-    format!(
+    let mut text = format!(
         "Pred {predict_state} int {} lead {}\nErr {} ema {} fb {} ({fallback_state})\nPresent {} {}->{} map:{}\nQueue {} iw:{} bp:{} qi:{} sub:{}\nIDs {}/{} cal {}",
         ms_text(timing.interval_ns),
         ms_text(timing.lead_ns),
@@ -127,7 +141,24 @@ fn timing_text(timing: TimingHealth) -> String {
         timing.submitted_present_id,
         timing.completed_present_id,
         ms_text(timing.calibration_error_ns),
-    )
+    );
+    if let Some(audio) = timing.audio {
+        use std::fmt::Write;
+
+        let _ = write!(
+            text,
+            "\nAudio {} {}Hz out {} xr {}\nBuf {} pad {} q {} per {}",
+            audio.backend,
+            audio.sample_rate_hz,
+            ms_text(audio.estimated_output_delay_ns),
+            audio.underrun_count,
+            audio.buffer_frames,
+            audio.padding_frames,
+            audio.queued_frames,
+            ms_text(audio.device_period_ns),
+        );
+    }
+    text
 }
 
 /// Stats overlay: base FPS block plus optional timing-health block, top-right, miso, white.
