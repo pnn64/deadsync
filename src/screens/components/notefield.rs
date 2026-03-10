@@ -2424,9 +2424,9 @@ pub fn build(
                 let anim_time = active.elapsed;
                 let slot = &explosion.slot;
                 let beat_for_anim = if slot.source.is_beat_based() {
-                    (state.current_beat - active.start_beat).max(0.0)
+                    (state.current_beat_display - active.start_beat).max(0.0)
                 } else {
-                    state.current_beat
+                    state.current_beat_display
                 };
                 let frame = slot.frame_index(anim_time, beat_for_anim);
                 let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
@@ -4692,11 +4692,11 @@ pub fn build(
             {
                 let seg = segs[stream_index];
                 if !seg.is_break {
-                    let cur_bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+                    let cur_bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
                     let rate = state.music_rate;
                     if cur_bps.is_finite() && cur_bps > 0.0 && rate.is_finite() && rate > 0.0 {
                         let measure_seconds = 4.0 / (cur_bps * rate);
-                        let curr_time = state.current_beat / (cur_bps * rate);
+                        let curr_time = state.current_beat_display / (cur_bps * rate);
 
                         let seg_len_s =
                             (((seg.end - seg.start) as f32) * measure_seconds).ceil() as i32;

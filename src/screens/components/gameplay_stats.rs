@@ -853,7 +853,7 @@ pub fn build_double_step_stats(
             frame_cx,
             frame_cy,
             frame_zoom,
-            state.current_music_time,
+            state.current_music_time_display,
         ));
     }
 
@@ -874,9 +874,9 @@ pub fn build_double_step_stats(
             base_total
         };
         let elapsed_display_seconds = if rate != 0.0 {
-            state.current_music_time.max(0.0) / rate
+            state.current_music_time_display.max(0.0) / rate
         } else {
-            state.current_music_time.max(0.0)
+            state.current_music_time_display.max(0.0)
         };
 
         let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
@@ -1551,7 +1551,7 @@ fn build_scorebox_pane(
         frame_cx,
         frame_cy,
         layout.banner_data_zoom,
-        state.current_music_time,
+        state.current_music_time_display,
     )
 }
 
@@ -1851,9 +1851,9 @@ fn build_side_pane(
                 base_total
             };
             let elapsed_display_seconds = if rate != 0.0 {
-                state.current_music_time.max(0.0) / rate
+                state.current_music_time_display.max(0.0) / rate
             } else {
-                state.current_music_time.max(0.0)
+                state.current_music_time_display.max(0.0)
             };
 
             let total_time_key = game_time_key(total_display_seconds, total_display_seconds);

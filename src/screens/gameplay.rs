@@ -622,9 +622,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         let duration =
             (state.density_graph_last_second - state.density_graph_first_second).max(0.001_f32);
-        let progress_w =
-            (((state.current_music_time - state.density_graph_first_second) / duration) * graph_w)
-                .clamp(0.0, graph_w);
+        let progress_w = (((state.current_music_time_display - state.density_graph_first_second)
+            / duration)
+            * graph_w)
+            .clamp(0.0, graph_w);
         if progress_w > 0.0 {
             actors.push(act!(quad:
                 align(0.0, 0.0): xy(x, y_top):
@@ -757,7 +758,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     // Current BPM Display (1:1 with Simply Love)
     {
-        let base_bpm = state.timing.get_bpm_for_beat(state.current_beat);
+        let base_bpm = state.timing.get_bpm_for_beat(state.current_beat_display);
         let rate = if state.music_rate.is_finite() {
             state.music_rate as f64
         } else {
@@ -819,9 +820,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let mut frame_children = Vec::new();
         frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w, h): diffuse(1.0, 1.0, 1.0, 1.0): z(0) ));
         frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w - 4.0, h - 4.0): diffuse(0.0, 0.0, 0.0, 1.0): z(1) ));
-        if state.song.total_length_seconds > 0 && state.current_music_time >= 0.0 {
-            let progress =
-                (state.current_music_time / state.song.total_length_seconds as f32).clamp(0.0, 1.0);
+        if state.song.total_length_seconds > 0 && state.current_music_time_display >= 0.0 {
+            let progress = (state.current_music_time_display
+                / state.song.total_length_seconds as f32)
+                .clamp(0.0, 1.0);
             frame_children.push(act!(quad:
                 align(0.0, 0.5): xy(2.0, h / 2.0): zoomto((w - 4.0) * progress, h - 4.0):
                 diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(2)
@@ -954,7 +956,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         // Logic Parity:
                         // velocity = -(songposition:GetCurBPS() * 0.5)
                         // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-                        let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+                        let bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
                         let velocity_x = if state.is_in_freeze || state.is_in_delay {
                             0.0
                         } else {
@@ -1137,7 +1139,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                     // MeterSwoosh
                     if filled_h > 0.0 && !dead {
-                        let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+                        let bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
                         let velocity_x = if state.is_in_freeze || state.is_in_delay {
                             0.0
                         } else {

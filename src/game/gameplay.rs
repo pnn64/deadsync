@@ -3352,6 +3352,9 @@ pub struct State {
     pub audio_lead_in_seconds: f32,
     pub current_beat: f32,
     pub current_music_time: f32,
+    pub current_beat_display: f32,
+    pub current_music_time_display: f32,
+    predicted_display_host_nanos: u64,
     pub note_spawn_cursor: [usize; MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     pub arrows: [Vec<Arrow>; MAX_COLS],
@@ -4594,6 +4597,11 @@ fn current_music_time_from_stream(state: &State) -> f32 {
 }
 
 #[inline(always)]
+pub fn set_predicted_display_host_nanos(state: &mut State, host_nanos: u64) {
+    state.predicted_display_host_nanos = host_nanos;
+}
+
+#[inline(always)]
 fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
     let stream_clock = audio::get_music_stream_clock_snapshot();
     let fallback_rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -4646,6 +4654,19 @@ fn music_time_from_song_clock(
     } else {
         snapshot.song_time
     }
+}
+
+#[inline(always)]
+fn display_music_time_from_song_clock(
+    snapshot: SongClockSnapshot,
+    music_time_sec: f32,
+    predicted_host_nanos: u64,
+) -> f32 {
+    if predicted_host_nanos == 0 {
+        return music_time_sec;
+    }
+    music_time_from_song_clock(snapshot, snapshot.valid_at, predicted_host_nanos)
+        .max(music_time_sec)
 }
 
 #[inline(always)]
@@ -5323,6 +5344,7 @@ pub fn init(
         ms as f32 / 1000.0
     });
     let init_music_time = -start_delay;
+    let init_beat = timing.get_beat_for_time(init_music_time);
     let current_music_time_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         init_music_time - global_visual_delay_seconds - player_visual_delay_seconds[player]
     });
@@ -5631,8 +5653,11 @@ pub fn init(
         notes,
         note_ranges,
         audio_lead_in_seconds: start_delay,
-        current_beat: 0.0,
-        current_music_time: -start_delay,
+        current_beat: init_beat,
+        current_music_time: init_music_time,
+        current_beat_display: init_beat,
+        current_music_time_display: init_music_time,
+        predicted_display_host_nanos: 0,
         note_spawn_cursor: note_range_start,
         judged_row_cursor: [0; MAX_PLAYERS],
         arrows: std::array::from_fn(|col| {
@@ -9232,6 +9257,12 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
     song_clock.song_time = music_time_sec;
     state.current_music_time = music_time_sec;
+    let display_music_time_sec = display_music_time_from_song_clock(
+        song_clock,
+        music_time_sec,
+        state.predicted_display_host_nanos,
+    );
+    state.current_music_time_display = display_music_time_sec;
 
     if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
         let hold_s = match key {
@@ -9274,6 +9305,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             .timing
             .get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
         state.current_beat = beat_info.beat;
+        state.current_beat_display = state.timing.get_beat_for_time(display_music_time_sec);
         state.is_in_freeze = beat_info.is_in_freeze;
         state.is_in_delay = beat_info.is_in_delay;
         let song_row = assist_row_no_offset(state, music_time_sec);
@@ -9282,7 +9314,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         for player in 0..state.num_players {
             let delay =
                 state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
-            let visible_time = music_time_sec - delay;
+            let visible_time = display_music_time_sec - delay;
             state.current_music_time_visible[player] = visible_time;
             state.current_beat_visible[player] =
                 state.timing_players[player].get_beat_for_time(visible_time);

@@ -116,6 +116,9 @@ const GAMEPLAY_PRESENT_SPIKE_US: u32 = 3_000;
 const GAMEPLAY_EVENT_TRACE_INTERVAL: Duration = Duration::from_secs(1);
 const GAMEPLAY_EVENT_BATCH_SLOW_US: u32 = 1_000;
 const GAMEPLAY_EVENT_BATCH_BURST_KEYS: u32 = 8;
+const GAMEPLAY_PRESENT_PREDICT_SLACK_NS: u64 = 750_000;
+const GAMEPLAY_PRESENT_PREDICT_MIN_LEAD_NS: u64 = 1_250_000;
+const GAMEPLAY_PRESENT_PREDICT_MAX_STALE_NS: u64 = 100_000_000;
 const PENDING_INPUT_EVENT_CAPACITY: usize = 512;
 #[cfg(windows)]
 const RAW_KEYBOARD_EVENT_CAPACITY: usize = 1024;
@@ -629,8 +632,98 @@ const fn should_background_throttle_unfocused(screen: CurrentScreen) -> bool {
 enum FrameLoopMode {
     Poll,
     DirectPoll,
+    PresentPredicted,
     WaitPending,
     Scheduled(FrameIntervalReason, Duration),
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PresentPhasePredictor {
+    last_completed_host_ns: u64,
+    interval_ns: u64,
+    lead_ns: u64,
+    outstanding_presents: u8,
+    calibration_error_ns: u64,
+}
+
+impl PresentPhasePredictor {
+    #[inline(always)]
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    #[inline(always)]
+    fn ready(self) -> bool {
+        self.last_completed_host_ns != 0 && self.interval_ns != 0
+    }
+
+    #[inline(always)]
+    fn update(&mut self, stats: renderer::PresentStats, frame_lead_us: u32) {
+        let interval_ns = if stats.actual_interval_ns != 0 {
+            stats.actual_interval_ns
+        } else {
+            stats.refresh_ns
+        };
+        if stats.host_present_ns == 0 || interval_ns == 0 {
+            self.reset();
+            return;
+        }
+
+        let outstanding = if stats.submitted_present_id >= stats.completed_present_id
+            && stats.completed_present_id != 0
+        {
+            stats
+                .submitted_present_id
+                .saturating_sub(stats.completed_present_id)
+                .min(u32::from(u8::MAX)) as u8
+        } else {
+            0
+        };
+        let lead_ns = u64::from(frame_lead_us)
+            .saturating_mul(1000)
+            .saturating_add(GAMEPLAY_PRESENT_PREDICT_SLACK_NS)
+            .max(GAMEPLAY_PRESENT_PREDICT_MIN_LEAD_NS);
+        self.last_completed_host_ns = stats.host_present_ns;
+        self.interval_ns = if self.interval_ns == 0 {
+            interval_ns
+        } else {
+            ((self.interval_ns.saturating_mul(3)).saturating_add(interval_ns)) / 4
+        };
+        self.lead_ns = if self.lead_ns == 0 {
+            lead_ns
+        } else {
+            ((self.lead_ns.saturating_mul(3)).saturating_add(lead_ns)) / 4
+        };
+        self.outstanding_presents = outstanding;
+        self.calibration_error_ns = stats.calibration_error_ns;
+    }
+
+    #[inline(always)]
+    fn predicted_present_host_ns(self, now_host_ns: u64) -> Option<u64> {
+        if !self.ready() || now_host_ns == 0 {
+            return None;
+        }
+        let max_age_ns =
+            GAMEPLAY_PRESENT_PREDICT_MAX_STALE_NS.max(self.interval_ns.saturating_mul(6));
+        if now_host_ns.saturating_sub(self.last_completed_host_ns) > max_age_ns {
+            return None;
+        }
+        let present_intervals_ahead = if self.outstanding_presents == 0 {
+            1
+        } else {
+            u64::from(self.outstanding_presents).saturating_add(1)
+        };
+        let target_present_ns = self
+            .last_completed_host_ns
+            .saturating_add(self.interval_ns.saturating_mul(present_intervals_ahead));
+        Some(target_present_ns)
+    }
+
+    #[inline(always)]
+    fn predicted_redraw_host_ns(self, now_host_ns: u64) -> Option<u64> {
+        self.predicted_present_host_ns(now_host_ns)
+            .map(|target_present_ns| target_present_ns.saturating_sub(self.lead_ns))
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -753,6 +846,7 @@ pub struct ShellState {
     frame_interval: Option<Duration>,
     present_mode_policy: PresentModePolicy,
     next_redraw_at: Instant,
+    present_phase_predictor: PresentPhasePredictor,
     pending_redraw_request_at: Option<Instant>,
     pending_redraw_request_reason: &'static str,
     last_logged_frame_loop_mode: Option<FrameLoopMode>,
@@ -813,6 +907,33 @@ fn advance_redraw_deadline(deadline: Instant, now: Instant, interval: Duration) 
         return next;
     }
     now.checked_add(interval).unwrap_or(now)
+}
+
+#[inline(always)]
+fn current_host_nanos() -> u64 {
+    #[cfg(windows)]
+    {
+        crate::core::windows_rt::current_host_nanos()
+    }
+    #[cfg(not(windows))]
+    {
+        0
+    }
+}
+
+#[inline(always)]
+fn host_nanos_deadline_to_instant(target_host_nanos: u64) -> Option<Instant> {
+    let now_host_nanos = current_host_nanos();
+    if now_host_nanos == 0 {
+        return None;
+    }
+    let now = Instant::now();
+    if target_host_nanos <= now_host_nanos {
+        return Some(now);
+    }
+    now.checked_add(Duration::from_nanos(
+        target_host_nanos.saturating_sub(now_host_nanos),
+    ))
 }
 
 fn load_window_icon() -> Option<Icon> {
@@ -926,6 +1047,7 @@ impl ShellState {
             frame_interval,
             present_mode_policy: cfg.present_mode_policy,
             next_redraw_at: now,
+            present_phase_predictor: PresentPhasePredictor::default(),
             pending_redraw_request_at: None,
             pending_redraw_request_reason: "none",
             last_logged_frame_loop_mode: None,
@@ -964,6 +1086,7 @@ impl ShellState {
     fn set_max_fps(&mut self, max_fps: u16) {
         self.frame_interval = frame_interval_for_max_fps(max_fps);
         self.next_redraw_at = Instant::now();
+        self.present_phase_predictor.reset();
         self.last_logged_frame_loop_mode = None;
     }
 
@@ -971,6 +1094,7 @@ impl ShellState {
     fn set_present_mode_policy(&mut self, policy: PresentModePolicy) {
         self.present_mode_policy = policy;
         self.next_redraw_at = Instant::now();
+        self.present_phase_predictor.reset();
         self.last_logged_frame_loop_mode = None;
     }
 
@@ -979,6 +1103,7 @@ impl ShellState {
         self.last_frame_time = now;
         self.last_frame_end_time = now;
         self.next_redraw_at = now;
+        self.present_phase_predictor.reset();
         self.pending_redraw_request_at = None;
         self.pending_redraw_request_reason = "none";
         self.last_logged_frame_loop_mode = None;
@@ -2346,6 +2471,76 @@ impl App {
     }
 
     #[inline(always)]
+    fn gameplay_present_prediction_host_ns(&self) -> Option<u64> {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay
+            || self.state.shell.vsync_enabled
+            || self.effective_frame_interval().is_some()
+            || self.state.shell.should_skip_compose_and_draw()
+        {
+            return None;
+        }
+        self.state
+            .shell
+            .present_phase_predictor
+            .predicted_present_host_ns(current_host_nanos())
+    }
+
+    #[inline(always)]
+    fn gameplay_present_prediction_deadline(&self) -> Option<Instant> {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay
+            || self.state.shell.vsync_enabled
+            || self.effective_frame_interval().is_some()
+            || self.state.shell.should_skip_compose_and_draw()
+        {
+            return None;
+        }
+        let target_host_ns = self
+            .state
+            .shell
+            .present_phase_predictor
+            .predicted_redraw_host_ns(current_host_nanos())?;
+        host_nanos_deadline_to_instant(target_host_ns)
+    }
+
+    #[inline(always)]
+    fn update_gameplay_display_prediction(&mut self) {
+        let predicted_host_ns = self.gameplay_present_prediction_host_ns().unwrap_or(0);
+        if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+            crate::game::gameplay::set_predicted_display_host_nanos(gs, predicted_host_ns);
+        }
+    }
+
+    #[inline(always)]
+    fn update_present_phase_predictor(
+        &mut self,
+        screen: CurrentScreen,
+        input_us: u32,
+        update_us: u32,
+        compose_us: u32,
+        upload_us: u32,
+        draw_us: u32,
+        draw_stats: renderer::DrawStats,
+    ) {
+        if screen != CurrentScreen::Gameplay
+            || self.state.shell.vsync_enabled
+            || self.effective_frame_interval().is_some()
+            || self.state.shell.should_skip_compose_and_draw()
+        {
+            self.state.shell.present_phase_predictor.reset();
+            return;
+        }
+        let frame_lead_us = input_us
+            .saturating_add(update_us)
+            .saturating_add(compose_us)
+            .saturating_add(upload_us)
+            .saturating_add(draw_us.saturating_sub(draw_stats.present_us));
+        self.state
+            .shell
+            .present_phase_predictor
+            .update(draw_stats.present_stats, frame_lead_us);
+    }
+
+    #[inline(always)]
     fn request_redraw(&mut self, window: &Window, reason: &'static str) {
         self.state
             .shell
@@ -2365,6 +2560,7 @@ impl App {
         if self.effective_frame_interval().is_none()
             && !self.state.shell.should_skip_compose_and_draw()
             && !self.should_drive_direct_gameplay_frame()
+            && self.gameplay_present_prediction_deadline().is_none()
         {
             self.request_redraw_if_needed(window, "chain");
         }
@@ -2376,6 +2572,7 @@ impl App {
             && !self.state.shell.vsync_enabled
             && self.effective_frame_interval().is_none()
             && !self.state.shell.should_skip_compose_and_draw()
+            && self.gameplay_present_prediction_deadline().is_none()
     }
 
     fn log_frame_loop_mode(&mut self, mode: FrameLoopMode) {
@@ -2400,6 +2597,18 @@ impl App {
             FrameLoopMode::DirectPoll => debug!(
                 "Frame pacing: direct_poll screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
                 self.state.shell.vsync_enabled, self.state.shell.present_mode_policy
+            ),
+            FrameLoopMode::PresentPredicted => debug!(
+                "Frame pacing: present_predict interval_ms={:.3} lead_ms={:.3} cal_ms={:.3} screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
+                self.state.shell.present_phase_predictor.interval_ns as f64 / 1_000_000.0,
+                self.state.shell.present_phase_predictor.lead_ns as f64 / 1_000_000.0,
+                self.state
+                    .shell
+                    .present_phase_predictor
+                    .calibration_error_ns as f64
+                    / 1_000_000.0,
+                self.state.shell.vsync_enabled,
+                self.state.shell.present_mode_policy
             ),
             FrameLoopMode::WaitPending => debug!(
                 "Frame pacing: wait_pending screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
@@ -2477,6 +2686,7 @@ impl App {
             }
         }
         input_us = elapsed_us_since(input_started);
+        self.update_gameplay_display_prediction();
 
         let mut finished_fading_out_to: Option<CurrentScreen> = None;
         let update_started = Instant::now();
@@ -2714,6 +2924,15 @@ impl App {
                 }
             }
         }
+        self.update_present_phase_predictor(
+            self.state.screens.current_screen,
+            input_us,
+            update_us,
+            compose_us,
+            upload_us,
+            draw_us,
+            draw_stats,
+        );
         let frame_finished = Instant::now();
         let frame_seconds = frame_finished.duration_since(prev_frame_end).as_secs_f32();
         self.state.shell.last_frame_end_time = frame_finished;
@@ -4881,6 +5100,11 @@ impl App {
         }
         if let Some(interval) = self.effective_frame_interval() {
             return interval.as_secs_f32();
+        }
+        if self.state.screens.current_screen == CurrentScreen::Gameplay
+            && self.state.shell.present_phase_predictor.interval_ns != 0
+        {
+            return self.state.shell.present_phase_predictor.interval_ns as f32 / 1_000_000_000.0;
         }
         if self.state.shell.vsync_enabled {
             return 1.0 / 60.0;
@@ -7267,6 +7491,22 @@ impl ApplicationHandler<UserEvent> for App {
                     advance_redraw_deadline(self.state.shell.next_redraw_at, now, interval);
             }
             event_loop.set_control_flow(ControlFlow::WaitUntil(self.state.shell.next_redraw_at));
+            return;
+        }
+        if let Some(deadline) = self.gameplay_present_prediction_deadline() {
+            let now = Instant::now();
+            if self.state.shell.redraw_pending() {
+                self.log_frame_loop_mode(FrameLoopMode::WaitPending);
+                event_loop.set_control_flow(ControlFlow::Wait);
+                return;
+            }
+            self.log_frame_loop_mode(FrameLoopMode::PresentPredicted);
+            if now >= deadline {
+                self.request_redraw(&window, "present_predict");
+                event_loop.set_control_flow(ControlFlow::Wait);
+            } else {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+            }
             return;
         }
         if self.state.shell.redraw_pending() {
