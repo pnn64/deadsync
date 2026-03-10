@@ -237,6 +237,13 @@ struct TMeshDebugAccum {
     dynamic_upload_vertices: u64,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct PresentCompletion {
+    present_id: u32,
+    host_ns: u64,
+    interval_ns: u64,
+}
+
 enum Op {
     Sprite(SpriteRun),
     TexturedMesh(TexturedMeshRun),
@@ -311,6 +318,9 @@ pub struct State {
     present_mode_policy: PresentModePolicy,
     next_texture_id: u64,
     next_present_id: u32,
+    present_done_tx: mpsc::Sender<PresentCompletion>,
+    present_done_rx: mpsc::Receiver<PresentCompletion>,
+    last_completed_present_id: u32,
     last_host_present_ns: u64,
     last_present_interval_ns: u64,
     screenshot_requested: bool,
@@ -548,6 +558,7 @@ fn init(
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    let (present_done_tx, present_done_rx) = mpsc::channel();
 
     info!("{} (wgpu) backend initialized.", api.name());
 
@@ -600,6 +611,9 @@ fn init(
         present_mode_policy,
         next_texture_id: 1,
         next_present_id: 1,
+        present_done_tx,
+        present_done_rx,
+        last_completed_present_id: 0,
         last_host_present_ns: 0,
         last_present_interval_ns: 0,
         screenshot_requested: false,
@@ -651,6 +665,42 @@ fn next_present_id(state: &mut State) -> u32 {
         state.next_present_id = 1;
     }
     id
+}
+
+#[inline(always)]
+fn drain_present_completions(state: &mut State) -> PresentCompletion {
+    let mut latest = PresentCompletion {
+        present_id: state.last_completed_present_id,
+        host_ns: state.last_host_present_ns,
+        interval_ns: 0,
+    };
+    while let Ok(done) = state.present_done_rx.try_recv() {
+        if done.present_id == 0 {
+            continue;
+        }
+        if done.host_ns != 0
+            && state.last_host_present_ns != 0
+            && done.present_id != state.last_completed_present_id
+        {
+            let interval_ns = done.host_ns.saturating_sub(state.last_host_present_ns);
+            latest.interval_ns = interval_ns;
+            if interval_ns != 0 {
+                state.last_present_interval_ns = if state.last_present_interval_ns == 0 {
+                    interval_ns
+                } else {
+                    ((state.last_present_interval_ns.saturating_mul(3)).saturating_add(interval_ns))
+                        / 4
+                };
+            }
+        }
+        state.last_completed_present_id = done.present_id;
+        if done.host_ns != 0 {
+            state.last_host_present_ns = done.host_ns;
+        }
+        latest.present_id = state.last_completed_present_id;
+        latest.host_ns = state.last_host_present_ns;
+    }
+    latest
 }
 
 #[inline(always)]
@@ -1452,30 +1502,21 @@ pub fn draw(
         None
     };
 
+    let submitted_present_id = next_present_id(state);
     let submit_started = Instant::now();
     let submission_index = state.queue.submit(Some(encoder.finish()));
     stats.submit_us = elapsed_us_since(submit_started);
-    let submitted_present_id = next_present_id(state);
+    let present_done_tx = state.present_done_tx.clone();
+    state.queue.on_submitted_work_done(move || {
+        let _ = present_done_tx.send(PresentCompletion {
+            present_id: submitted_present_id,
+            host_ns: current_host_nanos(),
+            interval_ns: 0,
+        });
+    });
     let present_started = Instant::now();
     frame.present();
     stats.present_us = elapsed_us_since(present_started);
-    let host_present_ns = current_host_nanos();
-    let actual_interval_ns = if host_present_ns != 0 && state.last_host_present_ns != 0 {
-        host_present_ns.saturating_sub(state.last_host_present_ns)
-    } else {
-        0
-    };
-    if actual_interval_ns != 0 {
-        state.last_present_interval_ns = if state.last_present_interval_ns == 0 {
-            actual_interval_ns
-        } else {
-            ((state.last_present_interval_ns.saturating_mul(3)).saturating_add(actual_interval_ns))
-                / 4
-        };
-    }
-    if host_present_ns != 0 {
-        state.last_host_present_ns = host_present_ns;
-    }
     let mut back_pressure_waited = false;
     if apply_present_back_pressure && screenshot_readback.is_none() {
         // Uncapped wgpu submission can otherwise keep the CPU hot by queuing
@@ -1542,29 +1583,35 @@ pub fn draw(
             warn!("wgpu screenshot readback failed: map_async returned error");
         }
     }
+    let completion = drain_present_completions(state);
+    let in_flight_images = if completion.present_id == 0 {
+        1
+    } else if submitted_present_id >= completion.present_id {
+        submitted_present_id
+            .saturating_sub(completion.present_id)
+            .min(u32::from(u8::MAX)) as u8
+    } else {
+        0
+    };
     stats.present_stats = PresentStats {
         mode: wgpu_present_mode_trace(state.config.present_mode),
         display_clock: ClockDomainTrace::Unknown,
-        host_clock: if host_present_ns != 0 {
+        host_clock: if completion.host_ns != 0 {
             host_clock_trace()
         } else {
             ClockDomainTrace::Unknown
         },
-        in_flight_images: 0,
+        in_flight_images,
         waited_for_image,
         applied_back_pressure: back_pressure_waited,
         queue_idle_waited,
         suboptimal,
         submitted_present_id,
-        completed_present_id: if host_present_ns != 0 {
-            submitted_present_id
-        } else {
-            0
-        },
+        completed_present_id: completion.present_id,
         refresh_ns: state.last_present_interval_ns,
-        actual_interval_ns,
+        actual_interval_ns: completion.interval_ns,
         present_margin_ns: 0,
-        host_present_ns,
+        host_present_ns: completion.host_ns,
         calibration_error_ns: 0,
     };
     push_tmesh_debug_sample(state, tmesh_debug_frame);
