@@ -2,13 +2,14 @@ use super::super::{
     OutputBackendReady, QueuedSfx, RenderState, internal, note_output_underrun,
     publish_output_timing,
 };
+use crate::core::host_time::now_nanos;
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Direction, ValueOr};
+use libc::timespec;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AlsaAccessMode {
@@ -115,6 +116,13 @@ struct AlsaParams {
     channels: usize,
     period_frames: u32,
     buffer_frames: u32,
+    host_clock: AlsaHostClock,
+}
+
+#[derive(Clone, Copy)]
+enum AlsaHostClock {
+    Monotonic,
+    MonotonicRaw,
 }
 
 fn render_thread(
@@ -169,9 +177,8 @@ fn render_thread_inner(
     let mut render = RenderState::new(music_ring, sfx_receiver, actual.channels);
     let mut mix = vec![0i16; actual.period_frames as usize * actual.channels];
     while !stop_flag.load(Ordering::Relaxed) {
-        let queued_before = current_delay_frames(&pcm);
-        let anchor_at = playback_anchor_after_frames(actual.sample_rate_hz, queued_before);
-        render.render_i16(&mut mix, anchor_at);
+        let timing_before = playback_status_timing(&pcm, actual.sample_rate_hz, actual.host_clock);
+        render.render_i16_host_nanos(&mut mix, timing_before.playback_host_nanos);
         write_period(
             &pcm,
             &io,
@@ -180,15 +187,15 @@ fn render_thread_inner(
             stop_flag,
             &prep.device_name,
         )?;
-        let queued_after = current_delay_frames(&pcm);
+        let timing_after = playback_status_timing(&pcm, actual.sample_rate_hz, actual.host_clock);
         publish_output_timing(
             actual.sample_rate_hz,
             period_ns,
             buffer_ns,
             actual.buffer_frames,
-            queued_after,
-            queued_after,
-            frames_to_nanos(actual.sample_rate_hz, queued_after),
+            timing_after.delay_frames,
+            timing_after.delay_frames,
+            timing_after.estimated_output_delay_ns,
         );
     }
     let _ = pcm.drop();
@@ -323,7 +330,7 @@ fn configure_pcm(
         .get_period_size()
         .map_err(|e| format!("ALSA period size query failed: {e}"))?
         .max(1) as u32;
-    apply_sw_params(&sw, pcm, period_frames, buffer_frames)?;
+    let host_clock = apply_sw_params(&sw, pcm, period_frames, buffer_frames)?;
     Ok(AlsaParams {
         sample_rate_hz: hw_current
             .get_rate()
@@ -332,6 +339,7 @@ fn configure_pcm(
         channels: hw_current.get_channels().unwrap_or(channels as u32).max(1) as usize,
         period_frames,
         buffer_frames,
+        host_clock,
     })
 }
 
@@ -340,7 +348,7 @@ fn apply_sw_params(
     pcm: &PCM,
     period_frames: u32,
     buffer_frames: u32,
-) -> Result<(), String> {
+) -> Result<AlsaHostClock, String> {
     sw.set_start_threshold(period_frames.max(1) as alsa::pcm::Frames)
         .map_err(|e| format!("ALSA start-threshold setup failed: {e}"))?;
     sw.set_avail_min(period_frames.max(1) as alsa::pcm::Frames)
@@ -349,14 +357,14 @@ fn apply_sw_params(
         .map_err(|e| format!("ALSA stop-threshold setup failed: {e}"))?;
     sw.set_tstamp_mode(true)
         .map_err(|e| format!("ALSA timestamp-mode setup failed: {e}"))?;
-    let _ = sw.set_tstamp_type(TstampType::MonotonicRaw);
-    if pcm.sw_params(sw).is_err() {
-        sw.set_tstamp_type(TstampType::Monotonic)
-            .map_err(|e| format!("ALSA monotonic timestamp setup failed: {e}"))?;
-        pcm.sw_params(sw)
-            .map_err(|e| format!("ALSA sw params apply failed: {e}"))?;
+    if sw.set_tstamp_type(TstampType::MonotonicRaw).is_ok() && pcm.sw_params(sw).is_ok() {
+        return Ok(AlsaHostClock::MonotonicRaw);
     }
-    Ok(())
+    sw.set_tstamp_type(TstampType::Monotonic)
+        .map_err(|e| format!("ALSA monotonic timestamp setup failed: {e}"))?;
+    pcm.sw_params(sw)
+        .map_err(|e| format!("ALSA sw params apply failed: {e}"))?;
+    Ok(AlsaHostClock::Monotonic)
 }
 
 fn write_period(
@@ -397,21 +405,107 @@ fn write_period(
     Ok(())
 }
 
-#[inline(always)]
-fn current_delay_frames(pcm: &PCM) -> u32 {
-    pcm.status()
-        .map(|status| status.get_delay().max(0) as u32)
-        .unwrap_or(0)
+#[derive(Clone, Copy)]
+struct PlaybackStatusTiming {
+    playback_host_nanos: u64,
+    delay_frames: u32,
+    estimated_output_delay_ns: u64,
+}
+
+#[derive(Clone, Copy)]
+struct ClockSample {
+    host_nanos: u64,
+    clock_nanos: u64,
 }
 
 #[inline(always)]
-fn playback_anchor_after_frames(sample_rate_hz: u32, frames: u32) -> Instant {
-    Instant::now()
-        .checked_add(Duration::from_nanos(frames_to_nanos(
-            sample_rate_hz,
-            frames,
-        )))
-        .unwrap_or_else(Instant::now)
+fn playback_status_timing(
+    pcm: &PCM,
+    sample_rate_hz: u32,
+    host_clock: AlsaHostClock,
+) -> PlaybackStatusTiming {
+    let delay_frames_fallback = current_delay_frames_fallback(pcm);
+    let delay_ns_fallback = frames_to_nanos(sample_rate_hz, delay_frames_fallback);
+    let Some(status) = pcm.status().ok() else {
+        return PlaybackStatusTiming {
+            playback_host_nanos: now_nanos().saturating_add(delay_ns_fallback),
+            delay_frames: delay_frames_fallback,
+            estimated_output_delay_ns: delay_ns_fallback,
+        };
+    };
+    let delay_frames = status.get_delay().max(0) as u32;
+    let delay_ns = frames_to_nanos(sample_rate_hz, delay_frames);
+    let Some(sample) = sample_host_clock(host_clock) else {
+        return PlaybackStatusTiming {
+            playback_host_nanos: now_nanos().saturating_add(delay_ns),
+            delay_frames,
+            estimated_output_delay_ns: delay_ns,
+        };
+    };
+    let Some(status_clock_nanos) = timespec_nanos(status.get_htstamp()) else {
+        return PlaybackStatusTiming {
+            playback_host_nanos: now_nanos().saturating_add(delay_ns),
+            delay_frames,
+            estimated_output_delay_ns: delay_ns,
+        };
+    };
+    let status_host_nanos = host_nanos_from_clock(status_clock_nanos, sample);
+    PlaybackStatusTiming {
+        playback_host_nanos: status_host_nanos.saturating_add(delay_ns),
+        delay_frames,
+        estimated_output_delay_ns: delay_ns,
+    }
+}
+
+#[inline(always)]
+fn current_delay_frames_fallback(pcm: &PCM) -> u32 {
+    pcm.delay().map(|delay| delay.max(0) as u32).unwrap_or(0)
+}
+
+#[inline(always)]
+fn sample_host_clock(host_clock: AlsaHostClock) -> Option<ClockSample> {
+    Some(ClockSample {
+        host_nanos: now_nanos(),
+        clock_nanos: current_clock_nanos(host_clock)?,
+    })
+}
+
+#[inline(always)]
+fn current_clock_nanos(host_clock: AlsaHostClock) -> Option<u64> {
+    let clock_id = match host_clock {
+        AlsaHostClock::Monotonic => libc::CLOCK_MONOTONIC,
+        AlsaHostClock::MonotonicRaw => libc::CLOCK_MONOTONIC_RAW,
+    };
+    let mut ts = timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    let rc = unsafe { libc::clock_gettime(clock_id, &mut ts) };
+    if rc != 0 {
+        return None;
+    }
+    timespec_nanos(ts)
+}
+
+#[inline(always)]
+fn timespec_nanos(ts: timespec) -> Option<u64> {
+    if ts.tv_sec < 0 || ts.tv_nsec < 0 {
+        return None;
+    }
+    Some((ts.tv_sec as u64).saturating_mul(1_000_000_000) + ts.tv_nsec as u64)
+}
+
+#[inline(always)]
+fn host_nanos_from_clock(target_nanos: u64, sample: ClockSample) -> u64 {
+    if target_nanos >= sample.clock_nanos {
+        sample
+            .host_nanos
+            .saturating_add(target_nanos.saturating_sub(sample.clock_nanos))
+    } else {
+        sample
+            .host_nanos
+            .saturating_sub(sample.clock_nanos.saturating_sub(target_nanos))
+    }
 }
 
 #[inline(always)]

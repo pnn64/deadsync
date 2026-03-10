@@ -995,6 +995,16 @@ impl RenderState {
         self.finish_callback(total_before, out.len(), popped);
     }
 
+    #[cfg(all(unix, not(target_os = "macos")))]
+    fn render_i16_host_nanos(&mut self, out: &mut [i16], anchor_nanos: u64) {
+        let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
+        let popped = self.mix_f32_buffer(total_before, out.len());
+        for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
+            *dst = i16::from_sample(*src);
+        }
+        self.finish_callback(total_before, out.len(), popped);
+    }
+
     fn render_u16(&mut self, out: &mut [u16], anchor_at: Instant) {
         let total_before = self.begin_callback(anchor_at);
         let popped = self.mix_f32_buffer(total_before, out.len());
