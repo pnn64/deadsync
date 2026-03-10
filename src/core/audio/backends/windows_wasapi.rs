@@ -1,6 +1,5 @@
-use super::super::{
-    OutputBackendReady, QueuedSfx, RenderState, internal, playback_anchor_after_frames,
-};
+use super::super::{OutputBackendReady, QueuedSfx, RenderState, internal};
+use crate::core::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
 use std::mem::size_of;
 use std::slice;
@@ -163,6 +162,7 @@ fn render_thread(
     stop_event: HANDLE,
     ready_tx: Sender<Result<(), String>>,
 ) {
+    let _thread_policy = boost_current_thread(ThreadRole::AudioRender);
     if let Err(err) = render_thread_inner(prep, music_ring, sfx_receiver, stop_event, &ready_tx) {
         if ready_tx.send(Err(err.clone())).is_err() {
             error!("WASAPI render thread failed: {err}");
@@ -193,6 +193,11 @@ fn render_thread_inner(
             .GetService::<Audio::IAudioRenderClient>()
             .map_err(|e| format!("failed to acquire WASAPI render client: {e}"))?
     };
+    let audio_clock = unsafe {
+        audio_client
+            .GetService::<Audio::IAudioClock>()
+            .map_err(|e| format!("failed to acquire WASAPI audio clock: {e}"))?
+    };
     let max_frames_in_buffer = unsafe {
         audio_client
             .GetBufferSize()
@@ -201,6 +206,7 @@ fn render_thread_inner(
 
     let mut render = RenderState::new(music_ring, sfx_receiver, prep.channels);
     write_frames(
+        &audio_clock,
         &render_client,
         &mut render,
         &prep,
@@ -243,6 +249,7 @@ fn render_thread_inner(
             continue;
         }
         write_frames(
+            &audio_clock,
             &render_client,
             &mut render,
             &prep,
@@ -259,6 +266,7 @@ fn render_thread_inner(
 }
 
 fn write_frames(
+    audio_clock: &Audio::IAudioClock,
     render_client: &Audio::IAudioRenderClient,
     render: &mut RenderState,
     prep: &WasapiOutputPrep,
@@ -274,19 +282,19 @@ fn write_frames(
             .map_err(|e| format!("failed to get WASAPI output buffer: {e}"))?;
         let samples = frames_available as usize * prep.bytes_per_frame as usize
             / prep.sample_format.sample_size();
-        let anchor_at = playback_anchor_after_frames(
-            std::time::Instant::now(),
+        let anchor_nanos = playback_anchor_nanos_after_frames(
+            audio_clock,
             prep.sample_rate_hz,
             playback_delay_frames,
-        );
+        )?;
         match prep.sample_format {
             WasapiSampleFormat::I16 => {
                 let out = slice::from_raw_parts_mut(buffer as *mut i16, samples);
-                render.render_i16(out, anchor_at);
+                render.render_i16_qpc(out, anchor_nanos);
             }
             WasapiSampleFormat::F32 => {
                 let out = slice::from_raw_parts_mut(buffer as *mut f32, samples);
-                render.render_f32(out, anchor_at);
+                render.render_f32_qpc(out, anchor_nanos);
             }
         }
         render_client
@@ -294,6 +302,34 @@ fn write_frames(
             .map_err(|e| format!("failed to release WASAPI output buffer: {e}"))?;
     }
     Ok(())
+}
+
+#[inline(always)]
+fn playback_anchor_nanos_after_frames(
+    audio_clock: &Audio::IAudioClock,
+    sample_rate_hz: u32,
+    frames: u32,
+) -> Result<u64, String> {
+    let mut _position = 0u64;
+    let mut qpc_position = 0u64;
+    unsafe {
+        audio_clock
+            .GetPosition(&mut _position, Some(&mut qpc_position))
+            .map_err(|e| format!("failed to query WASAPI audio clock position: {e}"))?;
+    }
+    Ok(qpc_position
+        .saturating_mul(100)
+        .saturating_add(frames_to_nanos(sample_rate_hz, frames))
+        .min(u64::MAX - 1))
+}
+
+#[inline(always)]
+fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
+    if sample_rate_hz == 0 || frames == 0 {
+        return 0;
+    }
+    ((u128::from(frames) * 1_000_000_000u128) / u128::from(sample_rate_hz))
+        .min((u64::MAX - 1) as u128) as u64
 }
 
 struct ComGuard;

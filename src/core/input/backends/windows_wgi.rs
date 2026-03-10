@@ -1,4 +1,5 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
+use crate::core::windows_rt::{ThreadRole, boost_current_thread};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -534,6 +535,7 @@ pub fn run(
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
 ) {
+    let _thread_policy = boost_current_thread(ThreadRole::Input);
     let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
 
     let (tx, rx) = mpsc::channel::<Msg>();

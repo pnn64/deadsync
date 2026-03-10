@@ -6,13 +6,13 @@ use cpal::{Sample, StreamConfig};
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
-#[cfg(windows)]
-use std::time::Duration;
 use std::time::Instant;
+#[cfg(windows)]
+use windows::Win32::System::Performance;
 
 /* ============================== Public API ============================== */
 
@@ -124,6 +124,7 @@ static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
 // continuous instead of jumping in whole buffer increments.
 static CALLBACK_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
 static CALLBACK_CLOCK_SEQ: AtomicU64 = AtomicU64::new(0);
+static CALLBACK_CLOCK_SOURCE: AtomicU8 = AtomicU8::new(CallbackClockSource::Instant as u8);
 // Stored as elapsed nanos + 1 from CALLBACK_EPOCH; 0 means "no callback yet".
 static LAST_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
@@ -131,6 +132,8 @@ static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
+#[cfg(windows)]
+static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
 const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
 
@@ -141,6 +144,25 @@ pub struct MusicStreamClockSnapshot {
     pub music_seconds_per_second: f32,
     pub has_music_mapping: bool,
     pub valid_at: Instant,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+enum CallbackClockSource {
+    Instant = 1,
+    #[cfg(windows)]
+    Qpc = 2,
+}
+
+impl CallbackClockSource {
+    #[inline(always)]
+    fn load() -> Self {
+        match CALLBACK_CLOCK_SOURCE.load(Ordering::Relaxed) {
+            #[cfg(windows)]
+            2 => Self::Qpc,
+            _ => Self::Instant,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -344,6 +366,37 @@ fn callback_nanos_at(at: Instant) -> u64 {
         .unwrap_or(0)
 }
 
+#[cfg(windows)]
+fn qpc_freq_hz() -> Option<u64> {
+    let mut hz = 0i64;
+    unsafe {
+        Performance::QueryPerformanceFrequency(&mut hz).ok()?;
+    }
+    (hz > 0).then_some(hz as u64)
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn current_qpc_nanos() -> Option<u64> {
+    let hz = (*QPC_FREQ_HZ)?;
+    let mut ticks = 0i64;
+    unsafe {
+        Performance::QueryPerformanceCounter(&mut ticks).ok()?;
+    }
+    (ticks >= 0).then(|| {
+        ((ticks as u128) * 1_000_000_000u128 / hz as u128).min((u64::MAX - 1) as u128) as u64
+    })
+}
+
+#[inline(always)]
+fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) -> Option<u64> {
+    match source {
+        CallbackClockSource::Instant => Some(callback_nanos_at(valid_at)),
+        #[cfg(windows)]
+        CallbackClockSource::Qpc => current_qpc_nanos(),
+    }
+}
+
 #[inline(always)]
 fn output_playback_anchor(now: Instant, info: &cpal::OutputCallbackInfo) -> Instant {
     let timestamp = info.timestamp();
@@ -389,8 +442,13 @@ fn end_callback_clock_write() {
 }
 
 #[inline(always)]
-fn publish_callback_window_start(total_before: u64, anchor_at: Instant) {
+fn publish_callback_window_start_nanos(
+    total_before: u64,
+    anchor_nanos: u64,
+    source: CallbackClockSource,
+) {
     begin_callback_clock_write();
+    CALLBACK_CLOCK_SOURCE.store(source as u8, Ordering::Relaxed);
     PREV_CALLBACK_BASE_FRAMES.store(
         LAST_CALLBACK_BASE_FRAMES.load(Ordering::Relaxed),
         Ordering::Relaxed,
@@ -406,7 +464,7 @@ fn publish_callback_window_start(total_before: u64, anchor_at: Instant) {
     LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
     LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
     LAST_CALLBACK_ELAPSED_NANOS.store(
-        callback_nanos_at(anchor_at).saturating_add(1),
+        anchor_nanos.min(u64::MAX - 1).saturating_add(1),
         Ordering::Relaxed,
     );
     end_callback_clock_write();
@@ -427,8 +485,9 @@ fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockWindow) {
             std::hint::spin_loop();
             continue;
         }
+        let source = CallbackClockSource::load();
         let valid_at = Instant::now();
-        let at_nanos = callback_nanos_at(valid_at);
+        let at_nanos = current_callback_clock_nanos(valid_at, source);
         let window = CallbackClockWindow {
             total_frames: MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed),
             last_nanos: LAST_CALLBACK_ELAPSED_NANOS.load(Ordering::Relaxed),
@@ -440,6 +499,7 @@ fn load_callback_clock_snapshot_now() -> (Instant, u64, CallbackClockWindow) {
         };
         let seq_end = CALLBACK_CLOCK_SEQ.load(Ordering::Acquire);
         if seq_start == seq_end {
+            let at_nanos = at_nanos.unwrap_or(window.last_nanos.saturating_sub(1));
             return (valid_at, at_nanos, window);
         }
     }
@@ -634,7 +694,7 @@ impl RenderState {
     }
 
     #[inline(always)]
-    fn begin_callback(&mut self, anchor_at: Instant) -> u64 {
+    fn begin_callback_nanos(&mut self, anchor_nanos: u64, source: CallbackClockSource) -> u64 {
         let map_generation = MUSIC_MAP_GEN.load(Ordering::Acquire);
         if map_generation != self.music_map_generation {
             self.active_music_map = None;
@@ -644,8 +704,19 @@ impl RenderState {
             self.active_music_map = None;
         }
         let total_before = MUSIC_TOTAL_FRAMES.load(Ordering::Relaxed);
-        publish_callback_window_start(total_before, anchor_at);
+        publish_callback_window_start_nanos(total_before, anchor_nanos, source);
         total_before
+    }
+
+    #[inline(always)]
+    fn begin_callback(&mut self, anchor_at: Instant) -> u64 {
+        self.begin_callback_nanos(callback_nanos_at(anchor_at), CallbackClockSource::Instant)
+    }
+
+    #[cfg(windows)]
+    #[inline(always)]
+    fn begin_callback_qpc(&mut self, anchor_nanos: u64) -> u64 {
+        self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Qpc)
     }
 
     #[inline(always)]
@@ -751,6 +822,16 @@ impl RenderState {
         self.finish_callback(total_before, out.len(), popped);
     }
 
+    #[cfg(windows)]
+    fn render_i16_qpc(&mut self, out: &mut [i16], anchor_nanos: u64) {
+        let total_before = self.begin_callback_qpc(anchor_nanos);
+        let popped = self.mix_f32_buffer(total_before, out.len());
+        for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
+            *dst = i16::from_sample(*src);
+        }
+        self.finish_callback(total_before, out.len(), popped);
+    }
+
     fn render_u16(&mut self, out: &mut [u16], anchor_at: Instant) {
         let total_before = self.begin_callback(anchor_at);
         let popped = self.mix_f32_buffer(total_before, out.len());
@@ -762,6 +843,14 @@ impl RenderState {
 
     fn render_f32(&mut self, out: &mut [f32], anchor_at: Instant) {
         let total_before = self.begin_callback(anchor_at);
+        let popped = self.mix_f32_buffer(total_before, out.len());
+        out.copy_from_slice(&self.mix_f32[..out.len()]);
+        self.finish_callback(total_before, out.len(), popped);
+    }
+
+    #[cfg(windows)]
+    fn render_f32_qpc(&mut self, out: &mut [f32], anchor_nanos: u64) {
+        let total_before = self.begin_callback_qpc(anchor_nanos);
         let popped = self.mix_f32_buffer(total_before, out.len());
         out.copy_from_slice(&self.mix_f32[..out.len()]);
         self.finish_callback(total_before, out.len(), popped);
@@ -884,16 +973,6 @@ fn init_engine_and_thread() -> AudioEngine {
         device_channels: ready.device_channels,
         startup_output_devices: device_probes.into_iter().map(|probe| probe.info).collect(),
     }
-}
-
-#[cfg(windows)]
-#[inline(always)]
-fn playback_anchor_after_frames(now: Instant, sample_rate: u32, frames: u32) -> Instant {
-    if sample_rate == 0 || frames == 0 {
-        return now;
-    }
-    now.checked_add(Duration::from_secs_f64(frames as f64 / sample_rate as f64))
-        .unwrap_or(now)
 }
 
 #[allow(dead_code)]

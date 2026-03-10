@@ -1,4 +1,6 @@
 use super::{Cut, ENGINE, MusicMapSeg, MusicStream, QUEUED_MUSIC_MAP_SEGS, internal};
+#[cfg(windows)]
+use crate::core::windows_rt::{ThreadRole, boost_current_thread};
 use lewton::inside_ogg::OggStreamReader;
 use log::{debug, error, warn};
 use rubato::{
@@ -72,6 +74,8 @@ pub(super) fn spawn_music_decoder_thread(
     let rate_bits_clone = rate_bits.clone();
 
     let thread = thread::spawn(move || {
+        #[cfg(windows)]
+        let _thread_policy = boost_current_thread(ThreadRole::AudioDecode);
         if let Err(e) =
             music_decoder_thread_loop(path, cut, looping, rate_bits_clone, ring, stop_signal_clone)
         {

@@ -1,6 +1,7 @@
 use super::{
     GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent, uuid_from_bytes,
 };
+use crate::core::windows_rt::{ThreadRole, boost_current_thread};
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem::size_of;
@@ -790,6 +791,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 }
 
 fn run_inner(mut ctx: Box<Ctx>) {
+    let _thread_policy = boost_current_thread(ThreadRole::Input);
     unsafe {
         let class_name: Vec<u16> = "deadsync_raw_input\0".encode_utf16().collect();
         let hinst: HINSTANCE = GetModuleHandleW(PCWSTR::null()).unwrap_or_default().into();

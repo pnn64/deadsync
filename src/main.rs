@@ -9,6 +9,7 @@ mod ui;
 #[cfg(windows)]
 struct WindowsTimingGuard {
     timer_period_ms: u32,
+    _thread_policy: crate::core::windows_rt::ThreadPolicyGuard,
 }
 
 #[cfg(windows)]
@@ -25,9 +26,6 @@ impl Drop for WindowsTimingGuard {
 #[cfg(windows)]
 fn boost_windows_runtime_timing() -> WindowsTimingGuard {
     use windows::Win32::Media::timeBeginPeriod;
-    use windows::Win32::System::Threading::{
-        GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_HIGHEST,
-    };
 
     let timer_period_ms = 1u32;
     unsafe {
@@ -41,15 +39,14 @@ fn boost_windows_runtime_timing() -> WindowsTimingGuard {
                 timer_result
             );
         }
-
-        if let Err(e) = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST) {
-            log::warn!("Failed to raise main thread priority: {e}");
-        } else {
-            log::debug!("Raised main thread priority to HIGHEST");
-        }
     }
 
-    WindowsTimingGuard { timer_period_ms }
+    WindowsTimingGuard {
+        timer_period_ms,
+        _thread_policy: crate::core::windows_rt::boost_current_thread(
+            crate::core::windows_rt::ThreadRole::Main,
+        ),
+    }
 }
 
 #[cfg(debug_assertions)]
