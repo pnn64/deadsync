@@ -1,5 +1,7 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
-use crate::core::windows_rt::{ThreadRole, boost_current_thread, current_host_nanos};
+use crate::core::windows_rt::{
+    ThreadRole, boost_current_thread, current_host_nanos, qpc_ticks_to_nanos,
+};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -43,6 +45,9 @@ const TRIGGER_DIGITAL_THRESH: i16 = 16_000;
 // RawGameController indices (fallback for non-Gamepad devices).
 const RAW_BTN_BASE: u32 = 0x1000;
 const RAW_AXIS_BASE: u32 = 0x2000;
+const WGI_TIMESTAMP_FUTURE_TOLERANCE_NS: u64 = 500_000;
+const WGI_TIMESTAMP_STALE_TOLERANCE_NS: u64 = 250_000_000;
+const WGI_TIMESTAMP_KIND_SWITCH_TOLERANCE_NS: u64 = 250_000;
 
 const BTN_MAP: [(GamepadButtons, u32); 10] = [
     (GamepadButtons::Menu, CODE_BTN_MENU),
@@ -56,6 +61,237 @@ const BTN_MAP: [(GamepadButtons, u32); 10] = [
     (GamepadButtons::X, CODE_BTN_X),
     (GamepadButtons::Y, CODE_BTN_Y),
 ];
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum ReadingClockKind {
+    #[default]
+    Unknown,
+    QpcTicks,
+    HundredNs,
+    Microseconds,
+    Nanoseconds,
+}
+
+impl ReadingClockKind {
+    #[inline(always)]
+    fn to_nanos(self, raw: u64) -> Option<u64> {
+        match self {
+            Self::Unknown => None,
+            Self::QpcTicks => qpc_ticks_to_nanos(raw),
+            Self::HundredNs => raw.checked_mul(100),
+            Self::Microseconds => raw.checked_mul(1000),
+            Self::Nanoseconds => Some(raw),
+        }
+    }
+}
+
+const READING_CLOCK_KINDS: [ReadingClockKind; 4] = [
+    ReadingClockKind::QpcTicks,
+    ReadingClockKind::HundredNs,
+    ReadingClockKind::Microseconds,
+    ReadingClockKind::Nanoseconds,
+];
+
+#[derive(Clone, Copy, Default)]
+struct ReadingClock {
+    kind: ReadingClockKind,
+    offset_ns: i64,
+    last_raw: u64,
+    last_poll_host_nanos: u64,
+}
+
+#[inline(always)]
+fn offset_between(host_ns: u64, reading_ns: u64) -> Option<i64> {
+    (i128::from(host_ns) - i128::from(reading_ns))
+        .try_into()
+        .ok()
+}
+
+#[inline(always)]
+fn apply_offset(reading_ns: u64, offset_ns: i64) -> u64 {
+    if offset_ns >= 0 {
+        reading_ns.saturating_add(offset_ns as u64)
+    } else {
+        reading_ns.saturating_sub(offset_ns.unsigned_abs())
+    }
+}
+
+#[inline(always)]
+fn instant_from_host_sample(
+    target_host_nanos: u64,
+    sample_host_nanos: u64,
+    sample: Instant,
+) -> Instant {
+    if target_host_nanos >= sample_host_nanos {
+        sample
+            .checked_add(Duration::from_nanos(
+                target_host_nanos.saturating_sub(sample_host_nanos),
+            ))
+            .unwrap_or(sample)
+    } else {
+        sample
+            .checked_sub(Duration::from_nanos(
+                sample_host_nanos.saturating_sub(target_host_nanos),
+            ))
+            .unwrap_or(sample)
+    }
+}
+
+impl ReadingClock {
+    #[inline(always)]
+    fn seed(&mut self, raw: u64, poll_host_nanos: u64) {
+        if raw == 0 || poll_host_nanos == 0 {
+            return;
+        }
+        self.last_raw = raw;
+        self.last_poll_host_nanos = poll_host_nanos;
+    }
+
+    #[inline(always)]
+    fn delta_error(
+        kind: ReadingClockKind,
+        prev_raw: u64,
+        raw: u64,
+        prev_host_nanos: u64,
+        poll_host_nanos: u64,
+    ) -> Option<u64> {
+        if prev_raw == 0
+            || raw <= prev_raw
+            || prev_host_nanos == 0
+            || poll_host_nanos <= prev_host_nanos
+        {
+            return None;
+        }
+        let prev_ns = kind.to_nanos(prev_raw)?;
+        let raw_ns = kind.to_nanos(raw)?;
+        if raw_ns <= prev_ns {
+            return None;
+        }
+        Some(
+            raw_ns
+                .saturating_sub(prev_ns)
+                .abs_diff(poll_host_nanos.saturating_sub(prev_host_nanos)),
+        )
+    }
+
+    #[inline(always)]
+    fn pick_kind(
+        prev_raw: u64,
+        raw: u64,
+        prev_host_nanos: u64,
+        poll_host_nanos: u64,
+    ) -> Option<ReadingClockKind> {
+        let host_delta = poll_host_nanos.saturating_sub(prev_host_nanos);
+        let mut best = None;
+        let mut best_error = u64::MAX;
+        for kind in READING_CLOCK_KINDS {
+            let Some(error_ns) =
+                Self::delta_error(kind, prev_raw, raw, prev_host_nanos, poll_host_nanos)
+            else {
+                continue;
+            };
+            if error_ns < best_error {
+                best_error = error_ns;
+                best = Some(kind);
+            }
+        }
+        let threshold_ns = 5_000_000_u64.max(host_delta / 2);
+        if best_error <= threshold_ns {
+            best
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    fn update_kind(&mut self, raw: u64, poll_host_nanos: u64) {
+        let Some(best_kind) = Self::pick_kind(
+            self.last_raw,
+            raw,
+            self.last_poll_host_nanos,
+            poll_host_nanos,
+        ) else {
+            return;
+        };
+        if self.kind == ReadingClockKind::Unknown {
+            self.kind = best_kind;
+            self.offset_ns = 0;
+            return;
+        }
+        let Some(best_error) = Self::delta_error(
+            best_kind,
+            self.last_raw,
+            raw,
+            self.last_poll_host_nanos,
+            poll_host_nanos,
+        ) else {
+            return;
+        };
+        let Some(current_error) = Self::delta_error(
+            self.kind,
+            self.last_raw,
+            raw,
+            self.last_poll_host_nanos,
+            poll_host_nanos,
+        ) else {
+            self.kind = best_kind;
+            self.offset_ns = 0;
+            return;
+        };
+        if best_error.saturating_add(WGI_TIMESTAMP_KIND_SWITCH_TOLERANCE_NS) < current_error {
+            self.kind = best_kind;
+            self.offset_ns = 0;
+        }
+    }
+
+    #[inline(always)]
+    fn host_nanos(&mut self, raw: u64, poll_host_nanos: u64) -> Option<u64> {
+        if raw == 0 || poll_host_nanos == 0 {
+            return None;
+        }
+        if raw != self.last_raw && self.last_raw != 0 && self.last_poll_host_nanos != 0 {
+            self.update_kind(raw, poll_host_nanos);
+        }
+        let reading_ns = self.kind.to_nanos(raw)?;
+        let offset_sample = offset_between(poll_host_nanos, reading_ns)?;
+        self.offset_ns = if self.offset_ns == 0 {
+            offset_sample
+        } else {
+            (((self.offset_ns as i128) * 7 + offset_sample as i128) / 8)
+                .try_into()
+                .ok()?
+        };
+        let mapped = apply_offset(reading_ns, self.offset_ns);
+        if mapped > poll_host_nanos.saturating_add(WGI_TIMESTAMP_FUTURE_TOLERANCE_NS) {
+            return None;
+        }
+        if poll_host_nanos.saturating_sub(mapped) > WGI_TIMESTAMP_STALE_TOLERANCE_NS {
+            return None;
+        }
+        Some(mapped.min(poll_host_nanos))
+    }
+
+    #[inline(always)]
+    fn sample_time(
+        &mut self,
+        raw: u64,
+        polled_at: Instant,
+        poll_host_nanos: u64,
+    ) -> (Instant, u64) {
+        let host_nanos = self
+            .host_nanos(raw, poll_host_nanos)
+            .unwrap_or(poll_host_nanos);
+        self.last_raw = raw;
+        self.last_poll_host_nanos = poll_host_nanos;
+        if host_nanos == 0 {
+            return (polled_at, 0);
+        }
+        (
+            instant_from_host_sample(host_nanos, poll_host_nanos, polled_at),
+            host_nanos,
+        )
+    }
+}
 
 #[inline(always)]
 fn pressed(btns: GamepadButtons, m: GamepadButtons) -> bool {
@@ -107,20 +343,20 @@ enum Msg {
 
 struct GamepadState {
     pad: WgiGamepad,
-    last_time: u64,
     buttons_prev: GamepadButtons,
     axes_prev: [i16; 6],
     dir: [bool; 4],
+    clock: ReadingClock,
 }
 
 struct RawState {
-    last_time: u64,
     buttons_prev: Vec<bool>,
     buttons_now: Vec<bool>,
     switches: Vec<GameControllerSwitchPosition>,
     axes: Vec<f64>,
     axes_prev: Vec<i16>,
     dir: [bool; 4],
+    clock: ReadingClock,
 }
 
 enum Kind {
@@ -217,12 +453,14 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
             } else {
                 (0, GamepadButtons::None, [0i16; 6], [false; 4])
             };
+        let mut clock = ReadingClock::default();
+        clock.seed(last_time, current_host_nanos());
         Kind::Gamepad(GamepadState {
             pad,
-            last_time,
             buttons_prev,
             axes_prev,
             dir: want,
+            clock,
         })
     } else {
         let axis_count = controller.AxisCount().ok().unwrap_or(0) as usize;
@@ -248,14 +486,16 @@ fn add_controller(ctx: &mut Ctx, controller: RawGameController) {
             want[2] |= x < 0;
             want[3] |= x > 0;
         }
+        let mut clock = ReadingClock::default();
+        clock.seed(last_time, current_host_nanos());
         Kind::Raw(RawState {
-            last_time,
             buttons_prev,
             buttons_now,
             switches,
             axes,
             axes_prev,
             dir: want,
+            clock,
         })
     };
 
@@ -340,8 +580,11 @@ where
     let Ok(reading) = st.pad.GetCurrentReading() else {
         return false;
     };
-    let timestamp = Instant::now();
-    let host_nanos = current_host_nanos();
+    let polled_at = Instant::now();
+    let poll_host_nanos = current_host_nanos();
+    let (timestamp, host_nanos) =
+        st.clock
+            .sample_time(reading.Timestamp, polled_at, poll_host_nanos);
 
     let old_lt = st.axes_prev[0];
     let old_rt = st.axes_prev[1];
@@ -447,8 +690,6 @@ where
             pressed: rt_pressed,
         });
     }
-
-    st.last_time = reading.Timestamp;
     changed
 }
 
@@ -467,8 +708,9 @@ where
     else {
         return false;
     };
-    let timestamp = Instant::now();
-    let host_nanos = current_host_nanos();
+    let polled_at = Instant::now();
+    let poll_host_nanos = current_host_nanos();
+    let (timestamp, host_nanos) = st.clock.sample_time(time, polled_at, poll_host_nanos);
 
     let mut changed = false;
     let n = st.buttons_now.len().min(st.buttons_prev.len());
@@ -522,7 +764,6 @@ where
             value: f32::from(v),
         });
     }
-    st.last_time = time;
     changed
 }
 
