@@ -599,6 +599,8 @@ const SOUND_ROW_ASSIST_TICK_VOLUME: &str = "Assist Tick Volume";
 const SOUND_ROW_MUSIC_VOLUME: &str = "Music Volume";
 const SOUND_ROW_DEVICE: &str = "Sound Device";
 const SOUND_ROW_OUTPUT_MODE: &str = "Audio Output Mode";
+#[cfg(all(unix, not(target_os = "macos")))]
+const SOUND_ROW_LINUX_BACKEND: &str = "Linux Audio Backend";
 const SOUND_ROW_SAMPLE_RATE: &str = "Audio Sample Rate";
 const SOUND_ROW_MINE_SOUNDS: &str = "Mine Sounds";
 const SOUND_ROW_GLOBAL_OFFSET: &str = "Global Offset (ms)";
@@ -626,6 +628,11 @@ const SCORE_IMPORT_ROW_ENDPOINT_INDEX: usize = 0;
 const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
 const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;
 const SCORE_IMPORT_ROW_ONLY_MISSING_INDEX: usize = 3;
+
+#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PulseAudio", "ALSA"];
+#[cfg(all(unix, not(target_os = "macos"), not(has_pulse_audio)))]
+const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "ALSA"];
 
 fn discover_system_noteskin_choices() -> Vec<String> {
     let mut names = noteskin_parser::discover_itg_skins("dance");
@@ -1288,6 +1295,12 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["Auto", "Shared", "Exclusive"],
         inline: false,
     },
+    #[cfg(all(unix, not(target_os = "macos")))]
+    SubRow {
+        label: SOUND_ROW_LINUX_BACKEND,
+        choices: SOUND_LINUX_BACKEND_CHOICES,
+        inline: false,
+    },
     SubRow {
         label: SOUND_ROW_SAMPLE_RATE,
         choices: &["Auto"],
@@ -1336,7 +1349,8 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Select an output device detected at startup.",
             "Auto uses the host default output device.",
-            "Windows playback prefers native WASAPI and Linux playback prefers native ALSA when fallback is allowed.",
+            "Windows playback prefers native WASAPI.",
+            "Linux backend routing depends on Linux Audio Backend and Audio Output Mode.",
             "Changing this takes effect on next launch.",
         ],
     },
@@ -1347,6 +1361,27 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
             "Auto keeps the backend default policy.",
             "Shared forces shared-mode output where supported.",
             "Exclusive requests direct/exclusive output where supported and may fail if unavailable.",
+            "Changing this takes effect on next launch.",
+        ],
+    },
+    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+    Item {
+        name: SOUND_ROW_LINUX_BACKEND,
+        help: &[
+            "Select which native Linux backend to prefer.",
+            "Auto prefers PulseAudio for shared output and ALSA for exclusive/direct output.",
+            "PulseAudio usually also works on PipeWire systems through the PulseAudio compatibility server.",
+            "ALSA is the direct Linux backend and remains the exclusive/direct path.",
+            "Changing this takes effect on next launch.",
+        ],
+    },
+    #[cfg(all(unix, not(target_os = "macos"), not(has_pulse_audio)))]
+    Item {
+        name: SOUND_ROW_LINUX_BACKEND,
+        help: &[
+            "Select which Linux backend to prefer.",
+            "This build does not include native PulseAudio support, so Auto behaves like ALSA plus CPAL fallback.",
+            "ALSA is the direct Linux backend and remains the exclusive/direct path.",
             "Changing this takes effect on next launch.",
         ],
     },
@@ -3050,6 +3085,40 @@ fn audio_output_mode_from_choice(idx: usize) -> config::AudioOutputMode {
     }
 }
 
+#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
+    match backend {
+        config::LinuxAudioBackend::Auto => 0,
+        config::LinuxAudioBackend::PulseAudio => 1,
+        config::LinuxAudioBackend::Alsa => 2,
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos"), not(has_pulse_audio)))]
+fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
+    match backend {
+        config::LinuxAudioBackend::Alsa => 1,
+        config::LinuxAudioBackend::Auto | config::LinuxAudioBackend::PulseAudio => 0,
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
+    match idx {
+        1 => config::LinuxAudioBackend::PulseAudio,
+        2 => config::LinuxAudioBackend::Alsa,
+        _ => config::LinuxAudioBackend::Auto,
+    }
+}
+
+#[cfg(all(unix, not(target_os = "macos"), not(has_pulse_audio)))]
+fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
+    match idx {
+        1 => config::LinuxAudioBackend::Alsa,
+        _ => config::LinuxAudioBackend::Auto,
+    }
+}
+
 fn set_sound_choice_index(state: &mut State, label: &str, idx: usize) {
     let Some(row_idx) = sound_row_index(label) else {
         return;
@@ -3823,6 +3892,12 @@ pub fn init() -> State {
         &mut state,
         SOUND_ROW_OUTPUT_MODE,
         audio_output_mode_choice_index(cfg.audio_output_mode),
+    );
+    #[cfg(all(unix, not(target_os = "macos")))]
+    set_sound_choice_index(
+        &mut state,
+        SOUND_ROW_LINUX_BACKEND,
+        linux_audio_backend_choice_index(cfg.linux_audio_backend),
     );
     let sound_rate_idx = sample_rate_choice_index(&state, cfg.audio_sample_rate_hz);
     set_sound_choice_index(&mut state, SOUND_ROW_SAMPLE_RATE, sound_rate_idx);
@@ -5262,6 +5337,10 @@ fn apply_submenu_choice_delta(
             }
             SOUND_ROW_OUTPUT_MODE => {
                 config::update_audio_output_mode(audio_output_mode_from_choice(new_index));
+            }
+            #[cfg(all(unix, not(target_os = "macos")))]
+            SOUND_ROW_LINUX_BACKEND => {
+                config::update_linux_audio_backend(linux_audio_backend_from_choice(new_index));
             }
             SOUND_ROW_SAMPLE_RATE => {
                 let rate = sample_rate_from_choice(state, new_index);

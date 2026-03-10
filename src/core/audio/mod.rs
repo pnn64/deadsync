@@ -103,11 +103,26 @@ struct AlsaBackendHint {
     output_mode: crate::config::AudioOutputMode,
 }
 
+#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+#[derive(Clone)]
+struct PulseBackendHint {
+    requested_device_name: Option<String>,
+    sample_rate_hz: u32,
+    channels: usize,
+    output_mode: crate::config::AudioOutputMode,
+}
+
 #[derive(Clone)]
 struct AudioThreadLaunch {
     cpal: backends::cpal::CpalBackendLaunch,
     #[cfg(all(unix, not(target_os = "macos")))]
+    explicit_device_requested: bool,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    linux_backend: crate::config::LinuxAudioBackend,
+    #[cfg(all(unix, not(target_os = "macos")))]
     alsa: Option<AlsaBackendHint>,
+    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+    pulse: Option<PulseBackendHint>,
     #[cfg(windows)]
     wasapi: Option<WasapiBackendHint>,
 }
@@ -137,6 +152,8 @@ pub enum OutputTelemetryBackend {
     WasapiShared = 4,
     #[cfg(windows)]
     WasapiExclusive = 5,
+    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+    PulseAudioShared = 6,
 }
 
 impl OutputTelemetryBackend {
@@ -152,6 +169,8 @@ impl OutputTelemetryBackend {
             "wasapi-shared" => Self::WasapiShared,
             #[cfg(windows)]
             "wasapi-exclusive" => Self::WasapiExclusive,
+            #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+            "pulse-shared" => Self::PulseAudioShared,
             _ => Self::Unknown,
         }
     }
@@ -168,6 +187,8 @@ impl OutputTelemetryBackend {
             4 => Self::WasapiShared,
             #[cfg(windows)]
             5 => Self::WasapiExclusive,
+            #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+            6 => Self::PulseAudioShared,
             _ => Self::Unknown,
         }
     }
@@ -186,6 +207,8 @@ impl std::fmt::Display for OutputTelemetryBackend {
             Self::WasapiShared => "wasapi-shared",
             #[cfg(windows)]
             Self::WasapiExclusive => "wasapi-exclusive",
+            #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+            Self::PulseAudioShared => "pulse-shared",
         };
         f.write_str(label)
     }
@@ -1213,6 +1236,10 @@ fn init_engine_and_thread() -> AudioEngine {
     let mut device = default_device;
     let mut device_name = default_device_name;
     #[cfg(all(unix, not(target_os = "macos")))]
+    let explicit_device_requested = cfg.audio_output_device_index.is_some();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let linux_backend = cfg.linux_audio_backend;
+    #[cfg(all(unix, not(target_os = "macos")))]
     let mut alsa_pcm_id = backends::cpal::device_id_string(&device);
     #[cfg(windows)]
     let mut wasapi_device_id = backends::cpal::device_id_string(&device);
@@ -1292,9 +1319,20 @@ fn init_engine_and_thread() -> AudioEngine {
             output_mode,
         },
         #[cfg(all(unix, not(target_os = "macos")))]
+        explicit_device_requested,
+        #[cfg(all(unix, not(target_os = "macos")))]
+        linux_backend,
+        #[cfg(all(unix, not(target_os = "macos")))]
         alsa: Some(AlsaBackendHint {
             pcm_id: alsa_pcm_id,
             device_name: device_name.clone(),
+            sample_rate_hz: alsa_sample_rate_hz,
+            channels: alsa_channels,
+            output_mode,
+        }),
+        #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+        pulse: Some(PulseBackendHint {
+            requested_device_name: explicit_device_requested.then_some(device_name.clone()),
             sample_rate_hz: alsa_sample_rate_hz,
             channels: alsa_channels,
             output_mode,
@@ -1344,8 +1382,63 @@ enum OutputBackend {
     Cpal(cpal::Stream),
     #[cfg(all(unix, not(target_os = "macos")))]
     Alsa(backends::linux_alsa::AlsaOutputStream),
+    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+    Pulse(backends::linux_pulse::PulseOutputStream),
     #[cfg(windows)]
     Wasapi(backends::windows_wasapi::WasapiOutputStream),
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn start_linux_alsa_backend(
+    alsa: AlsaBackendHint,
+    music_ring: Arc<internal::SpscRingI16>,
+) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+    let access_mode = match alsa.output_mode {
+        crate::config::AudioOutputMode::Exclusive => {
+            backends::linux_alsa::AlsaAccessMode::Exclusive
+        }
+        crate::config::AudioOutputMode::Auto | crate::config::AudioOutputMode::Shared => {
+            backends::linux_alsa::AlsaAccessMode::Shared
+        }
+    };
+    let prep = backends::linux_alsa::prepare(
+        alsa.pcm_id.clone(),
+        alsa.device_name.clone(),
+        alsa.sample_rate_hz,
+        alsa.channels,
+        access_mode,
+    )?;
+    let mut ready = prep.ready();
+    ready.requested_output_mode = alsa.output_mode;
+    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let stream = backends::linux_alsa::start(prep, music_ring, sfx_receiver)?;
+    Ok((OutputBackend::Alsa(stream), ready, sfx_sender))
+}
+
+#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+fn start_linux_pulse_backend(
+    pulse: PulseBackendHint,
+    music_ring: Arc<internal::SpscRingI16>,
+) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+    if matches!(pulse.output_mode, crate::config::AudioOutputMode::Exclusive) {
+        return Err("PulseAudio does not support exclusive output.".to_string());
+    }
+    if let Some(name) = &pulse.requested_device_name {
+        warn!(
+            "PulseAudio backend ignores explicit Sound Device selection '{}'; using the default PulseAudio sink.",
+            name
+        );
+    }
+    let prep = backends::linux_pulse::prepare(
+        pulse.requested_device_name.clone(),
+        pulse.sample_rate_hz,
+        pulse.channels,
+    )?;
+    let mut ready = prep.ready();
+    ready.requested_output_mode = pulse.output_mode;
+    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let stream = backends::linux_pulse::start(prep, music_ring, sfx_receiver)?;
+    Ok((OutputBackend::Pulse(stream), ready, sfx_sender))
 }
 
 fn start_output_backend(
@@ -1355,7 +1448,13 @@ fn start_output_backend(
     let AudioThreadLaunch {
         cpal,
         #[cfg(all(unix, not(target_os = "macos")))]
+        explicit_device_requested,
+        #[cfg(all(unix, not(target_os = "macos")))]
+        linux_backend,
+        #[cfg(all(unix, not(target_os = "macos")))]
         alsa,
+        #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+        pulse,
         #[cfg(windows)]
         wasapi,
     } = launch;
@@ -1363,6 +1462,16 @@ fn start_output_backend(
     let requested_output_mode = alsa
         .as_ref()
         .map(|hint| hint.output_mode)
+        .or_else(|| {
+            #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+            {
+                pulse.as_ref().map(|hint| hint.output_mode)
+            }
+            #[cfg(not(all(unix, not(target_os = "macos"), has_pulse_audio)))]
+            {
+                None
+            }
+        })
         .unwrap_or(cpal.output_mode);
     #[cfg(windows)]
     let requested_output_mode = wasapi
@@ -1371,63 +1480,82 @@ fn start_output_backend(
         .unwrap_or(cpal.output_mode);
     #[cfg(target_os = "macos")]
     let requested_output_mode = cpal.output_mode;
-    let mut fallback_from_native = false;
-
     #[cfg(all(unix, not(target_os = "macos")))]
-    if let Some(alsa) = alsa {
-        let access_mode = match alsa.output_mode {
-            crate::config::AudioOutputMode::Exclusive => {
-                backends::linux_alsa::AlsaAccessMode::Exclusive
+    let fallback_from_native = {
+        match linux_backend {
+            crate::config::LinuxAudioBackend::Alsa => {
+                let Some(alsa) = alsa else {
+                    return Err("Linux ALSA backend hint unavailable.".to_string());
+                };
+                return start_linux_alsa_backend(alsa, music_ring);
             }
-            crate::config::AudioOutputMode::Auto | crate::config::AudioOutputMode::Shared => {
-                backends::linux_alsa::AlsaAccessMode::Shared
+            crate::config::LinuxAudioBackend::PulseAudio => {
+                #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+                {
+                    let Some(pulse) = pulse else {
+                        return Err("PulseAudio backend hint unavailable.".to_string());
+                    };
+                    return start_linux_pulse_backend(pulse, music_ring);
+                }
+                #[cfg(not(all(unix, not(target_os = "macos"), has_pulse_audio)))]
+                {
+                    return Err(
+                        "PulseAudio backend support was not built into this binary.".to_string()
+                    );
+                }
             }
-        };
-        match backends::linux_alsa::prepare(
-            alsa.pcm_id.clone(),
-            alsa.device_name.clone(),
-            alsa.sample_rate_hz,
-            alsa.channels,
-            access_mode,
-        ) {
-            Ok(prep) => {
-                let mut ready = prep.ready();
-                ready.requested_output_mode = alsa.output_mode;
-                let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
-                match backends::linux_alsa::start(prep, music_ring.clone(), sfx_receiver) {
-                    Ok(stream) => {
-                        return Ok((OutputBackend::Alsa(stream), ready, sfx_sender));
-                    }
-                    Err(err) => {
-                        if matches!(alsa.output_mode, crate::config::AudioOutputMode::Exclusive) {
-                            return Err(format!(
-                                "failed to start native ALSA exclusive output for '{}': {err}",
-                                alsa.device_name
-                            ));
-                        }
-                        warn!(
-                            "Failed to start native ALSA output for '{}': {err}. Falling back to CPAL.",
-                            alsa.device_name
+            crate::config::LinuxAudioBackend::Auto => {
+                if matches!(
+                    requested_output_mode,
+                    crate::config::AudioOutputMode::Exclusive
+                ) {
+                    let Some(alsa) = alsa else {
+                        return Err(
+                            "Linux ALSA backend hint unavailable for exclusive output.".to_string()
                         );
-                        fallback_from_native = true;
+                    };
+                    return start_linux_alsa_backend(alsa, music_ring);
+                }
+                if explicit_device_requested {
+                    if let Some(alsa) = alsa {
+                        match start_linux_alsa_backend(alsa, music_ring.clone()) {
+                            Ok(output) => return Ok(output),
+                            Err(err) => {
+                                warn!(
+                                    "Failed to start native ALSA output for the selected Sound Device: {err}. Falling back to CPAL."
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+                    if let Some(pulse) = pulse {
+                        match start_linux_pulse_backend(pulse, music_ring.clone()) {
+                            Ok(output) => return Ok(output),
+                            Err(err) => {
+                                warn!(
+                                    "Failed to start native PulseAudio output: {err}. Falling back to ALSA/CPAL."
+                                );
+                            }
+                        }
+                    }
+                    if let Some(alsa) = alsa {
+                        match start_linux_alsa_backend(alsa, music_ring.clone()) {
+                            Ok(output) => return Ok(output),
+                            Err(err) => {
+                                warn!(
+                                    "Failed to start native ALSA output: {err}. Falling back to CPAL."
+                                );
+                            }
+                        }
                     }
                 }
-            }
-            Err(err) => {
-                if matches!(alsa.output_mode, crate::config::AudioOutputMode::Exclusive) {
-                    return Err(format!(
-                        "failed to prepare native ALSA exclusive output for '{}': {err}",
-                        alsa.device_name
-                    ));
-                }
-                warn!(
-                    "Failed to prepare native ALSA output for '{}': {err}. Falling back to CPAL.",
-                    alsa.device_name
-                );
-                fallback_from_native = true;
+                true
             }
         }
-    }
+    };
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    let mut fallback_from_native = false;
 
     #[cfg(windows)]
     if let Some(wasapi) = wasapi {

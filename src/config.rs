@@ -459,6 +459,36 @@ impl FromStr for AudioOutputMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinuxAudioBackend {
+    Auto,
+    PulseAudio,
+    Alsa,
+}
+
+impl LinuxAudioBackend {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::PulseAudio => "PulseAudio",
+            Self::Alsa => "ALSA",
+        }
+    }
+}
+
+impl FromStr for LinuxAudioBackend {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "pulseaudio" | "pulse" => Ok(Self::PulseAudio),
+            "alsa" => Ok(Self::Alsa),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
@@ -562,6 +592,7 @@ pub struct Config {
     // None = auto (use host default output device); Some(N) = startup CPAL output-device index.
     pub audio_output_device_index: Option<u16>,
     pub audio_output_mode: AudioOutputMode,
+    pub linux_audio_backend: LinuxAudioBackend,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
     pub auto_populate_gs_scores: bool,
@@ -655,6 +686,7 @@ impl Default for Config {
             sfx_volume: 100,
             audio_output_device_index: None,
             audio_output_mode: AudioOutputMode::Auto,
+            linux_audio_backend: LinuxAudioBackend::Auto,
             audio_sample_rate_hz: None,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: true,
@@ -1101,6 +1133,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "LogToFile={}\n",
         if default.log_to_file { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "LinuxAudioBackend={}\n",
+        default.linux_audio_backend.as_str()
     ));
     content.push_str(&format!("MaxFps={}\n", default.max_fps));
     content.push_str(&format!(
@@ -1624,6 +1660,10 @@ pub fn load() {
                     .get("Options", "LogToFile")
                     .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.log_to_file);
+                cfg.linux_audio_backend = conf
+                    .get("Options", "LinuxAudioBackend")
+                    .and_then(|v| LinuxAudioBackend::from_str(&v).ok())
+                    .unwrap_or(default.linux_audio_backend);
                 cfg.visual_delay_seconds = conf
                     .get("Options", "VisualDelaySeconds")
                     .and_then(|v| v.parse().ok())
@@ -2110,6 +2150,7 @@ pub fn load() {
                     "Language",
                     "LogLevel",
                     "LogToFile",
+                    "LinuxAudioBackend",
                     "MaxFps",
                     "MasterVolume",
                     "MenuMusic",
@@ -2968,6 +3009,10 @@ fn save_without_keymaps() {
         "LogToFile={}\n",
         if cfg.log_to_file { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "LinuxAudioBackend={}\n",
+        cfg.linux_audio_backend.as_str()
+    ));
     content.push_str(&format!("MaxFps={}\n", cfg.max_fps));
     content.push_str(&format!("PresentModePolicy={}\n", cfg.present_mode_policy));
     content.push_str(&format!(
@@ -3645,6 +3690,18 @@ pub fn update_audio_output_mode(mode: AudioOutputMode) {
             return;
         }
         cfg.audio_output_mode = mode;
+    }
+    save_without_keymaps();
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn update_linux_audio_backend(backend: LinuxAudioBackend) {
+    {
+        let mut cfg = lock_config();
+        if cfg.linux_audio_backend == backend {
+            return;
+        }
+        cfg.linux_audio_backend = backend;
     }
     save_without_keymaps();
 }
