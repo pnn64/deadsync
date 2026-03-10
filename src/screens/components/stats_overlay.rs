@@ -175,7 +175,7 @@ fn timing_text(timing: TimingHealth) -> String {
 pub fn build(backend: BackendType, fps: f32, vpf: u32, timing: Option<TimingHealth>) -> Vec<Actor> {
     const MARGIN_X: f32 = -16.0;
     const MARGIN_Y: f32 = 16.0;
-    const TIMING_OFFSET_Y: f32 = 34.0;
+    const TIMING_OFFSET_Y: f32 = 48.0;
 
     let w = screen_width();
 
