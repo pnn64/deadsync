@@ -1,3 +1,4 @@
+pub(crate) mod flac;
 pub(crate) mod mp3;
 pub(crate) mod ogg_vorbis;
 
@@ -13,6 +14,7 @@ pub(crate) struct OpenFile {
 }
 
 pub(crate) enum Reader {
+    Flac(flac::Reader),
     Mp3(mp3::Reader<BufReader<File>>),
     Ogg(OggStreamReader<BufReader<File>>),
 }
@@ -22,6 +24,7 @@ impl Reader {
         &mut self,
     ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
         match self {
+            Self::Flac(reader) => reader.read_dec_packet_itl(),
             Self::Mp3(reader) => reader.read_dec_packet_itl(),
             Self::Ogg(reader) => Ok(reader.read_dec_packet_itl()?),
         }
@@ -32,6 +35,7 @@ impl Reader {
         frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         match self {
+            Self::Flac(reader) => reader.seek_frame(frame),
             Self::Mp3(reader) => reader.seek_frame(frame),
             Self::Ogg(reader) => {
                 reader.seek_absgp_pg(frame)?;
@@ -43,6 +47,14 @@ impl Reader {
 
 #[inline(always)]
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
+    if flac::path_is_flac(path) {
+        let opened = flac::open_file(path)?;
+        return Ok(OpenFile {
+            reader: Reader::Flac(opened.reader),
+            channels: opened.channels,
+            sample_rate_hz: opened.sample_rate_hz,
+        });
+    }
     if mp3::path_is_mp3(path) {
         let opened = mp3::open_file(path)?;
         return Ok(OpenFile {
@@ -64,6 +76,9 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
 
 #[inline(always)]
 pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
+    if flac::path_is_flac(path) {
+        return flac::file_length_seconds(path);
+    }
     if mp3::path_is_mp3(path) {
         return mp3::file_length_seconds(path);
     }
