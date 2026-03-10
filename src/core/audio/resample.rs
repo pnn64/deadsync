@@ -1,5 +1,5 @@
 use super::{Cut, ENGINE, MusicMapSeg, MusicStream, QUEUED_MUSIC_MAP_SEGS, internal};
-use crate::core::audio::decode::ogg_vorbis;
+use crate::core::audio::decode;
 #[cfg(windows)]
 use crate::core::windows_rt::{ThreadRole, boost_current_thread};
 use log::{debug, error, warn};
@@ -162,8 +162,8 @@ fn music_decoder_thread_loop(
     ring: Arc<internal::SpscRingI16>,
     stop: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let opened = ogg_vorbis::open_file(&path)?;
-    let mut ogg = opened.reader;
+    let opened = decode::open_file(&path)?;
+    let mut reader = opened.reader;
     let in_ch = opened.channels;
     let in_hz = opened.sample_rate_hz;
 
@@ -225,7 +225,7 @@ fn music_decoder_thread_loop(
         let mut seek_ok = true;
         if start_floor > 0 {
             let seek_frame = start_floor.saturating_sub(internal::PREROLL_IN_FRAMES);
-            if ogg.seek_absgp_pg(seek_frame).is_err() {
+            if reader.seek_frame(seek_frame).is_err() {
                 seek_ok = false;
             }
         }
@@ -393,7 +393,7 @@ fn music_decoder_thread_loop(
             Ok(produced_any)
         }
 
-        while let Ok(pkt_opt) = ogg.read_dec_packet_itl() {
+        while let Ok(pkt_opt) = reader.read_dec_packet_itl() {
             if stop.load(Ordering::Relaxed) {
                 break 'main_loop;
             }
@@ -541,13 +541,13 @@ fn music_decoder_thread_loop(
         if !looping || stop.load(Ordering::Relaxed) {
             break 'main_loop;
         }
-        match ogg_vorbis::open_file(&path) {
+        match decode::open_file(&path) {
             Ok(reopened) => {
                 debug!("Looping music: restarted {path:?}");
-                ogg = reopened.reader;
+                reader = reopened.reader;
             }
             Err(_) => {
-                warn!("Could not reopen OGG stream for looping: {path:?}");
+                warn!("Could not reopen audio stream for looping: {path:?}");
                 break 'main_loop;
             }
         }
@@ -558,8 +558,8 @@ fn music_decoder_thread_loop(
 pub(super) fn load_and_resample_sfx(
     path: &str,
 ) -> Result<Arc<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
-    let opened = ogg_vorbis::open_file(Path::new(path))?;
-    let mut ogg = opened.reader;
+    let opened = decode::open_file(Path::new(path))?;
+    let mut reader = opened.reader;
     let in_ch = opened.channels;
     let in_hz = opened.sample_rate_hz;
     let out_ch = ENGINE.device_channels;
@@ -579,7 +579,7 @@ pub(super) fn load_and_resample_sfx(
     let mut in_planar: Vec<Vec<f32>> = vec![Vec::with_capacity(4096); in_ch];
     let mut resampled_data: Vec<i16> = Vec::new();
 
-    while let Some(pck_samples) = ogg.read_dec_packet_itl()? {
+    while let Some(pck_samples) = reader.read_dec_packet_itl()? {
         if pck_samples.is_empty() {
             continue;
         }

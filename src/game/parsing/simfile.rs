@@ -1,4 +1,4 @@
-use crate::core::audio::decode::ogg_vorbis;
+use crate::core::audio::decode;
 use crate::game::{
     chart::{ChartData, StaminaCounts},
     course::set_course_cache,
@@ -2151,19 +2151,16 @@ fn parse_and_process_song_file(
     ))
 }
 
-/// Computes the length of the music file in seconds, if it is a readable OGG file.
+/// Computes the length of the music file in seconds when the decode layer supports it.
 /// Returns 0.0 on failure or if no music path is provided.
 fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
     let Some(path) = music_path else {
         return 0.0;
     };
-    if !ogg_vorbis::path_is_ogg_vorbis(path) {
-        return 0.0;
-    }
-    match ogg_vorbis::file_length_seconds(path) {
+    match decode::file_length_seconds(path) {
         Ok(sec) => sec,
         Err(e) => {
-            warn!("Failed to compute OGG length for {path:?}: {e}");
+            warn!("Failed to compute audio length for {path:?}: {e}");
             0.0
         }
     }
