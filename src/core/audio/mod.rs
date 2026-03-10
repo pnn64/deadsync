@@ -118,6 +118,16 @@ struct JackBackendHint {
 }
 
 #[cfg(target_os = "linux")]
+#[cfg(has_pipewire_audio)]
+#[derive(Clone)]
+struct PipeWireBackendHint {
+    requested_device_name: Option<String>,
+    sample_rate_hz: u32,
+    channels: usize,
+    output_mode: crate::config::AudioOutputMode,
+}
+
+#[cfg(target_os = "linux")]
 #[cfg(has_pulse_audio)]
 #[derive(Clone)]
 struct PulseBackendHint {
@@ -159,6 +169,9 @@ struct AudioThreadLaunch {
     #[cfg(target_os = "linux")]
     #[cfg(has_jack_audio)]
     jack: Option<JackBackendHint>,
+    #[cfg(target_os = "linux")]
+    #[cfg(has_pipewire_audio)]
+    pipewire: Option<PipeWireBackendHint>,
     #[cfg(target_os = "linux")]
     #[cfg(has_pulse_audio)]
     pulse: Option<PulseBackendHint>,
@@ -205,6 +218,9 @@ pub enum OutputTelemetryBackend {
     JackShared = 8,
     #[cfg(target_os = "macos")]
     CoreAudioShared = 9,
+    #[cfg(target_os = "linux")]
+    #[cfg(has_pipewire_audio)]
+    PipeWireShared = 10,
 }
 
 impl OutputTelemetryBackend {
@@ -230,6 +246,9 @@ impl OutputTelemetryBackend {
             "jack-shared" => Self::JackShared,
             #[cfg(target_os = "macos")]
             "coreaudio-shared" => Self::CoreAudioShared,
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pipewire_audio)]
+            "pipewire-shared" => Self::PipeWireShared,
             _ => Self::Unknown,
         }
     }
@@ -256,6 +275,9 @@ impl OutputTelemetryBackend {
             8 => Self::JackShared,
             #[cfg(target_os = "macos")]
             9 => Self::CoreAudioShared,
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pipewire_audio)]
+            10 => Self::PipeWireShared,
             _ => Self::Unknown,
         }
     }
@@ -284,6 +306,9 @@ impl std::fmt::Display for OutputTelemetryBackend {
             Self::JackShared => "jack-shared",
             #[cfg(target_os = "macos")]
             Self::CoreAudioShared => "coreaudio-shared",
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pipewire_audio)]
+            Self::PipeWireShared => "pipewire-shared",
         };
         f.write_str(label)
     }
@@ -1277,7 +1302,10 @@ impl RenderState {
         self.finish_callback(total_before, out.len(), popped);
     }
 
-    #[cfg(any(target_os = "macos", all(target_os = "linux", has_jack_audio)))]
+    #[cfg(any(
+        target_os = "macos",
+        all(target_os = "linux", any(has_jack_audio, has_pipewire_audio))
+    ))]
     fn render_f32_host_nanos(&mut self, out: &mut [f32], anchor_nanos: u64) {
         let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
         let popped = self.mix_f32_buffer(total_before, out.len());
@@ -1433,6 +1461,14 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
                 output_mode,
             }),
             #[cfg(target_os = "linux")]
+            #[cfg(has_pipewire_audio)]
+            pipewire: Some(PipeWireBackendHint {
+                requested_device_name: explicit_device_requested.then_some(device_name.clone()),
+                sample_rate_hz: native_sample_rate_hz,
+                channels: native_channels,
+                output_mode,
+            }),
+            #[cfg(target_os = "linux")]
             #[cfg(has_pulse_audio)]
             pulse: Some(PulseBackendHint {
                 requested_device_name: explicit_device_requested.then_some(device_name.clone()),
@@ -1539,6 +1575,9 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             #[cfg(has_jack_audio)]
             jack: None,
             #[cfg(target_os = "linux")]
+            #[cfg(has_pipewire_audio)]
+            pipewire: None,
+            #[cfg(target_os = "linux")]
             #[cfg(has_pulse_audio)]
             pulse: None,
             #[cfg(target_os = "macos")]
@@ -1602,6 +1641,9 @@ enum OutputBackend {
     #[cfg(has_jack_audio)]
     Jack(backends::linux_jack::JackOutputStream),
     #[cfg(target_os = "linux")]
+    #[cfg(has_pipewire_audio)]
+    PipeWire(backends::linux_pipewire::PipeWireOutputStream),
+    #[cfg(target_os = "linux")]
     #[cfg(has_pulse_audio)]
     Pulse(backends::linux_pulse::PulseOutputStream),
     #[cfg(target_os = "macos")]
@@ -1655,6 +1697,36 @@ fn start_linux_jack_backend(
     let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
     let stream = backends::linux_jack::start(prep, music_ring, sfx_receiver)?;
     Ok((OutputBackend::Jack(stream), ready, sfx_sender))
+}
+
+#[cfg(target_os = "linux")]
+#[cfg(has_pipewire_audio)]
+fn start_linux_pipewire_backend(
+    pipewire: PipeWireBackendHint,
+    music_ring: Arc<internal::SpscRingI16>,
+) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+    if matches!(
+        pipewire.output_mode,
+        crate::config::AudioOutputMode::Exclusive
+    ) {
+        return Err("PipeWire does not support a separate exclusive output mode.".to_string());
+    }
+    if let Some(name) = &pipewire.requested_device_name {
+        warn!(
+            "PipeWire backend ignores explicit Sound Device selection '{}'; using the default PipeWire sink.",
+            name
+        );
+    }
+    let prep = backends::linux_pipewire::prepare(
+        pipewire.requested_device_name.clone(),
+        pipewire.sample_rate_hz,
+        pipewire.channels,
+    )?;
+    let mut ready = prep.ready();
+    ready.requested_output_mode = pipewire.output_mode;
+    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let stream = backends::linux_pipewire::start(prep, music_ring, sfx_receiver)?;
+    Ok((OutputBackend::PipeWire(stream), ready, sfx_sender))
 }
 
 #[cfg(target_os = "linux")]
@@ -1745,6 +1817,9 @@ fn start_output_backend(
         #[cfg(has_jack_audio)]
         jack,
         #[cfg(target_os = "linux")]
+        #[cfg(has_pipewire_audio)]
+        pipewire,
+        #[cfg(target_os = "linux")]
         #[cfg(has_pulse_audio)]
         pulse,
         #[cfg(target_os = "macos")]
@@ -1758,6 +1833,17 @@ fn start_output_backend(
     let requested_output_mode = alsa
         .as_ref()
         .map(|hint| hint.output_mode)
+        .or_else(|| {
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pipewire_audio)]
+            {
+                pipewire.as_ref().map(|hint| hint.output_mode)
+            }
+            #[cfg(not(all(target_os = "linux", has_pipewire_audio)))]
+            {
+                None
+            }
+        })
         .or_else(|| {
             #[cfg(target_os = "linux")]
             #[cfg(has_jack_audio)]
@@ -1832,6 +1918,22 @@ fn start_output_backend(
                     return Err("JACK backend support was not built into this binary.".to_string());
                 }
             }
+            crate::config::LinuxAudioBackend::PipeWire => {
+                #[cfg(target_os = "linux")]
+                #[cfg(has_pipewire_audio)]
+                {
+                    let Some(pipewire) = pipewire else {
+                        return Err("PipeWire backend hint unavailable.".to_string());
+                    };
+                    return start_linux_pipewire_backend(pipewire, music_ring);
+                }
+                #[cfg(not(all(target_os = "linux", has_pipewire_audio)))]
+                {
+                    return Err(
+                        "PipeWire backend support was not built into this binary.".to_string()
+                    );
+                }
+            }
             crate::config::LinuxAudioBackend::PulseAudio => {
                 #[cfg(target_os = "linux")]
                 #[cfg(has_pulse_audio)]
@@ -1872,6 +1974,18 @@ fn start_output_backend(
                         }
                     }
                 } else {
+                    #[cfg(target_os = "linux")]
+                    #[cfg(has_pipewire_audio)]
+                    if let Some(pipewire) = pipewire {
+                        match start_linux_pipewire_backend(pipewire, music_ring.clone()) {
+                            Ok(output) => return Ok(output),
+                            Err(err) => {
+                                warn!(
+                                    "Failed to start native PipeWire output: {err}. Falling back to PulseAudio/ALSA/CPAL."
+                                );
+                            }
+                        }
+                    }
                     #[cfg(target_os = "linux")]
                     #[cfg(has_pulse_audio)]
                     if let Some(pulse) = pulse {

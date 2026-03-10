@@ -631,13 +631,61 @@ const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
 const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;
 const SCORE_IMPORT_ROW_ONLY_MISSING_INDEX: usize = 3;
 
-#[cfg(all(target_os = "linux", has_pulse_audio, has_jack_audio))]
+#[cfg(all(
+    target_os = "linux",
+    has_pipewire_audio,
+    has_pulse_audio,
+    has_jack_audio
+))]
+const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "PulseAudio", "JACK", "ALSA"];
+#[cfg(all(
+    target_os = "linux",
+    has_pipewire_audio,
+    has_pulse_audio,
+    not(has_jack_audio)
+))]
+const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "PulseAudio", "ALSA"];
+#[cfg(all(
+    target_os = "linux",
+    has_pipewire_audio,
+    not(has_pulse_audio),
+    has_jack_audio
+))]
+const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "JACK", "ALSA"];
+#[cfg(all(
+    target_os = "linux",
+    has_pipewire_audio,
+    not(has_pulse_audio),
+    not(has_jack_audio)
+))]
+const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "ALSA"];
+#[cfg(all(
+    target_os = "linux",
+    not(has_pipewire_audio),
+    has_pulse_audio,
+    has_jack_audio
+))]
 const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PulseAudio", "JACK", "ALSA"];
-#[cfg(all(target_os = "linux", has_pulse_audio, not(has_jack_audio)))]
+#[cfg(all(
+    target_os = "linux",
+    not(has_pipewire_audio),
+    has_pulse_audio,
+    not(has_jack_audio)
+))]
 const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PulseAudio", "ALSA"];
-#[cfg(all(target_os = "linux", not(has_pulse_audio), has_jack_audio))]
+#[cfg(all(
+    target_os = "linux",
+    not(has_pipewire_audio),
+    not(has_pulse_audio),
+    has_jack_audio
+))]
 const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "JACK", "ALSA"];
-#[cfg(all(target_os = "linux", not(has_pulse_audio), not(has_jack_audio)))]
+#[cfg(all(
+    target_os = "linux",
+    not(has_pipewire_audio),
+    not(has_pulse_audio),
+    not(has_jack_audio)
+))]
 const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "ALSA"];
 
 fn discover_system_noteskin_choices() -> Vec<String> {
@@ -1374,46 +1422,15 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
             "Changing this takes effect on next launch.",
         ],
     },
-    #[cfg(all(target_os = "linux", has_pulse_audio, has_jack_audio))]
-    Item {
-        name: SOUND_ROW_LINUX_BACKEND,
-        help: &[
-            "Select which native Linux backend to prefer.",
-            "Auto prefers PulseAudio for shared output and ALSA for exclusive/direct output.",
-            "PulseAudio usually also works on PipeWire systems through the PulseAudio compatibility server.",
-            "JACK is an explicit low-latency backend and currently ignores Sound Device selection.",
-            "ALSA is the direct Linux backend and remains the exclusive/direct path.",
-            "Changing this takes effect on next launch.",
-        ],
-    },
-    #[cfg(all(target_os = "linux", has_pulse_audio, not(has_jack_audio)))]
-    Item {
-        name: SOUND_ROW_LINUX_BACKEND,
-        help: &[
-            "Select which native Linux backend to prefer.",
-            "Auto prefers PulseAudio for shared output and ALSA for exclusive/direct output.",
-            "PulseAudio usually also works on PipeWire systems through the PulseAudio compatibility server.",
-            "ALSA is the direct Linux backend and remains the exclusive/direct path.",
-            "Changing this takes effect on next launch.",
-        ],
-    },
-    #[cfg(all(target_os = "linux", not(has_pulse_audio), has_jack_audio))]
+    #[cfg(target_os = "linux")]
     Item {
         name: SOUND_ROW_LINUX_BACKEND,
         help: &[
             "Select which Linux backend to prefer.",
-            "This build does not include native PulseAudio support, so Auto behaves like ALSA plus CPAL fallback.",
+            "Backends shown in this menu depend on what this build includes.",
+            "Auto prefers PipeWire first when available, then PulseAudio, and falls back to ALSA or CPAL as needed.",
+            "PipeWire and PulseAudio are shared-output backends and currently ignore explicit Sound Device selection.",
             "JACK is an explicit low-latency backend and currently ignores Sound Device selection.",
-            "ALSA is the direct Linux backend and remains the exclusive/direct path.",
-            "Changing this takes effect on next launch.",
-        ],
-    },
-    #[cfg(all(target_os = "linux", not(has_pulse_audio), not(has_jack_audio)))]
-    Item {
-        name: SOUND_ROW_LINUX_BACKEND,
-        help: &[
-            "Select which Linux backend to prefer.",
-            "This build does not include native PulseAudio or JACK support, so Auto behaves like ALSA plus CPAL fallback.",
             "ALSA is the direct Linux backend and remains the exclusive/direct path.",
             "Changing this takes effect on next launch.",
         ],
@@ -3118,78 +3135,31 @@ fn audio_output_mode_from_choice(idx: usize) -> config::AudioOutputMode {
     }
 }
 
-#[cfg(all(target_os = "linux", has_pulse_audio, has_jack_audio))]
 fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
-    match backend {
-        config::LinuxAudioBackend::Auto => 0,
-        config::LinuxAudioBackend::PulseAudio => 1,
-        config::LinuxAudioBackend::Jack => 2,
-        config::LinuxAudioBackend::Alsa => 3,
-    }
+    let target = match backend {
+        config::LinuxAudioBackend::Auto => "Auto",
+        config::LinuxAudioBackend::PipeWire => "PipeWire",
+        config::LinuxAudioBackend::PulseAudio => "PulseAudio",
+        config::LinuxAudioBackend::Jack => "JACK",
+        config::LinuxAudioBackend::Alsa => "ALSA",
+    };
+    SOUND_LINUX_BACKEND_CHOICES
+        .iter()
+        .position(|&choice| choice == target)
+        .unwrap_or(0)
 }
 
-#[cfg(all(target_os = "linux", has_pulse_audio, not(has_jack_audio)))]
-fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
-    match backend {
-        config::LinuxAudioBackend::Auto => 0,
-        config::LinuxAudioBackend::PulseAudio => 1,
-        config::LinuxAudioBackend::Alsa => 2,
-        config::LinuxAudioBackend::Jack => 0,
-    }
-}
-
-#[cfg(all(target_os = "linux", not(has_pulse_audio), has_jack_audio))]
-fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
-    match backend {
-        config::LinuxAudioBackend::Auto => 0,
-        config::LinuxAudioBackend::Jack => 1,
-        config::LinuxAudioBackend::Alsa => 2,
-        config::LinuxAudioBackend::PulseAudio => 0,
-    }
-}
-
-#[cfg(all(target_os = "linux", not(has_pulse_audio), not(has_jack_audio)))]
-fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
-    match backend {
-        config::LinuxAudioBackend::Alsa => 1,
-        config::LinuxAudioBackend::Auto
-        | config::LinuxAudioBackend::PulseAudio
-        | config::LinuxAudioBackend::Jack => 0,
-    }
-}
-
-#[cfg(all(target_os = "linux", has_pulse_audio, has_jack_audio))]
+#[cfg(target_os = "linux")]
 fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
-    match idx {
-        1 => config::LinuxAudioBackend::PulseAudio,
-        2 => config::LinuxAudioBackend::Jack,
-        3 => config::LinuxAudioBackend::Alsa,
-        _ => config::LinuxAudioBackend::Auto,
-    }
-}
-
-#[cfg(all(target_os = "linux", has_pulse_audio, not(has_jack_audio)))]
-fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
-    match idx {
-        1 => config::LinuxAudioBackend::PulseAudio,
-        2 => config::LinuxAudioBackend::Alsa,
-        _ => config::LinuxAudioBackend::Auto,
-    }
-}
-
-#[cfg(all(target_os = "linux", not(has_pulse_audio), has_jack_audio))]
-fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
-    match idx {
-        1 => config::LinuxAudioBackend::Jack,
-        2 => config::LinuxAudioBackend::Alsa,
-        _ => config::LinuxAudioBackend::Auto,
-    }
-}
-
-#[cfg(all(target_os = "linux", not(has_pulse_audio), not(has_jack_audio)))]
-fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
-    match idx {
-        1 => config::LinuxAudioBackend::Alsa,
+    match SOUND_LINUX_BACKEND_CHOICES
+        .get(idx)
+        .copied()
+        .unwrap_or("Auto")
+    {
+        "PipeWire" => config::LinuxAudioBackend::PipeWire,
+        "PulseAudio" => config::LinuxAudioBackend::PulseAudio,
+        "JACK" => config::LinuxAudioBackend::Jack,
+        "ALSA" => config::LinuxAudioBackend::Alsa,
         _ => config::LinuxAudioBackend::Auto,
     }
 }
