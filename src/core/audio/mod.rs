@@ -1,4 +1,5 @@
 mod backends;
+pub(crate) mod decode;
 mod resample;
 
 use crate::core::host_time::instant_nanos;

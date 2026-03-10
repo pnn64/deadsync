@@ -1,13 +1,11 @@
 use super::{Cut, ENGINE, MusicMapSeg, MusicStream, QUEUED_MUSIC_MAP_SEGS, internal};
+use crate::core::audio::decode::ogg_vorbis;
 #[cfg(windows)]
 use crate::core::windows_rt::{ThreadRole, boost_current_thread};
-use lewton::inside_ogg::OggStreamReader;
 use log::{debug, error, warn};
 use rubato::{
     Resampler, SincFixedOut, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
-use std::fs::File;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -164,10 +162,10 @@ fn music_decoder_thread_loop(
     ring: Arc<internal::SpscRingI16>,
     stop: Arc<AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let file = File::open(&path)?;
-    let mut ogg = OggStreamReader::new(BufReader::new(file))?;
-    let in_ch = ogg.ident_hdr.audio_channels as usize;
-    let in_hz = ogg.ident_hdr.audio_sample_rate;
+    let opened = ogg_vorbis::open_file(&path)?;
+    let mut ogg = opened.reader;
+    let in_ch = opened.channels;
+    let in_hz = opened.sample_rate_hz;
 
     let out_ch = ENGINE.device_channels;
     let out_hz = ENGINE.device_sample_rate;
@@ -543,15 +541,12 @@ fn music_decoder_thread_loop(
         if !looping || stop.load(Ordering::Relaxed) {
             break 'main_loop;
         }
-        match File::open(&path)
-            .ok()
-            .and_then(|f| OggStreamReader::new(BufReader::new(f)).ok())
-        {
-            Some(new_reader) => {
+        match ogg_vorbis::open_file(&path) {
+            Ok(reopened) => {
                 debug!("Looping music: restarted {path:?}");
-                ogg = new_reader;
+                ogg = reopened.reader;
             }
-            None => {
+            Err(_) => {
                 warn!("Could not reopen OGG stream for looping: {path:?}");
                 break 'main_loop;
             }
@@ -562,11 +557,11 @@ fn music_decoder_thread_loop(
 
 pub(super) fn load_and_resample_sfx(
     path: &str,
-) -> Result<Arc<Vec<i16>>, Box<dyn std::error::Error>> {
-    let file = File::open(Path::new(path))?;
-    let mut ogg = OggStreamReader::new(BufReader::new(file))?;
-    let in_ch = ogg.ident_hdr.audio_channels as usize;
-    let in_hz = ogg.ident_hdr.audio_sample_rate;
+) -> Result<Arc<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+    let opened = ogg_vorbis::open_file(Path::new(path))?;
+    let mut ogg = opened.reader;
+    let in_ch = opened.channels;
+    let in_hz = opened.sample_rate_hz;
     let out_ch = ENGINE.device_channels;
     let out_hz = ENGINE.device_sample_rate;
 
