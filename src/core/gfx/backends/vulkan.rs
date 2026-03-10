@@ -1,10 +1,11 @@
 use crate::core::gfx::{
-    BlendMode, DrawStats, MeshMode, MeshVertex, ObjectType, PresentModePolicy, RenderList,
-    SamplerDesc, SamplerFilter, SamplerWrap, Texture as RendererTexture,
+    BlendMode, DrawStats, MeshMode, MeshVertex, ObjectType, PresentModePolicy, PresentModeTrace,
+    PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
 use ash::{
     Device, Entry, Instance,
+    google::display_timing,
     khr::{surface, swapchain},
     vk,
 };
@@ -170,6 +171,41 @@ struct SwapchainResources {
     supports_transfer_src: bool,
 }
 
+#[derive(Clone, Copy, Default)]
+struct DeviceExts {
+    display_timing: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+struct CompletedPresentTiming {
+    present_id: u32,
+    actual_present_time_ns: u64,
+    interval_ns: u64,
+    present_margin_ns: u64,
+}
+
+struct PresentTelemetryState {
+    display_timing: Option<display_timing::Device>,
+    refresh_ns: u64,
+    next_present_id: u32,
+    last_seen_present_id: u32,
+    last_completed: Option<CompletedPresentTiming>,
+    scratch_timings: Vec<vk::PastPresentationTimingGOOGLE>,
+}
+
+impl Default for PresentTelemetryState {
+    fn default() -> Self {
+        Self {
+            display_timing: None,
+            refresh_ns: 0,
+            next_present_id: 1,
+            last_seen_present_id: 0,
+            last_completed: None,
+            scratch_timings: Vec::new(),
+        }
+    }
+}
+
 // The main Vulkan state struct, now simplified.
 pub struct State {
     _entry: Entry,
@@ -232,6 +268,7 @@ pub struct State {
     tmesh_debug_accum: TMeshDebugAccum,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
+    present_telemetry: PresentTelemetryState,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
 }
@@ -252,7 +289,7 @@ pub fn init(
     let surface_loader = surface::Instance::new(&entry, &instance);
     let pdevice = select_physical_device(&instance, &surface_loader, surface)?;
     log_selected_device(&instance, pdevice);
-    let (device, queue, queue_family_index) =
+    let (device, queue, queue_family_index, device_exts) =
         create_logical_device(&instance, pdevice, &surface_loader, surface)?;
     let device = Some(Arc::new(device));
     let command_pool = create_command_pool(device.as_ref().unwrap(), queue_family_index)?;
@@ -311,6 +348,12 @@ pub fn init(
     let images_in_flight = vec![vk::Fence::null(); swapchain_resources._images.len()];
 
     let projection = ortho_for_window(initial_size.width, initial_size.height);
+    let present_telemetry = init_present_telemetry(
+        &instance,
+        device.as_ref().unwrap(),
+        swapchain_resources.swapchain,
+        device_exts,
+    );
 
     let mut state = State {
         _entry: entry,
@@ -373,6 +416,7 @@ pub fn init(
         tmesh_debug_accum: TMeshDebugAccum::default(),
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
+        present_telemetry,
         screenshot_requested: false,
         captured_frame: None,
     };
@@ -1259,6 +1303,8 @@ pub fn draw(
     if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
         return Ok(stats);
     }
+    stats.present_stats.mode = vk_present_mode_trace(state.swapchain_resources.present_mode);
+    stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
     #[inline(always)]
     fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
@@ -1375,6 +1421,9 @@ pub fn draw(
     let mut tmesh_instance_written: u32 = 0;
 
     unsafe {
+        let mut waited_for_image = false;
+        let mut back_pressure_waited = false;
+        let mut queue_idle_waited = false;
         let fence = state.in_flight_fences[state.current_frame];
         let device = Arc::clone(state.device.as_ref().unwrap());
         let wait_started = Instant::now();
@@ -1413,6 +1462,7 @@ pub fn draw(
             stats.gpu_wait_us = stats
                 .gpu_wait_us
                 .saturating_add(elapsed_us_since(wait_started));
+            waited_for_image = true;
         }
         state.images_in_flight[image_index as usize] = fence;
 
@@ -1999,26 +2049,39 @@ pub fn draw(
         device.queue_submit(state.queue, &[submit], fence)?;
         stats.submit_us = elapsed_us_since(submit_started);
 
-        let present_info = vk::PresentInfoKHR::default()
+        let submitted_present_id = next_present_id(state);
+        let present_times = [vk::PresentTimeGOOGLE::default().present_id(submitted_present_id)];
+        let mut present_times_info = vk::PresentTimesInfoGOOGLE::default().times(&present_times);
+        let mut present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(&sig)
             .swapchains(std::slice::from_ref(&state.swapchain_resources.swapchain))
             .image_indices(std::slice::from_ref(&image_index));
+        if submitted_present_id != 0 {
+            present_info = present_info.push_next(&mut present_times_info);
+        }
         let present_started = Instant::now();
-        match state
+        let present_result = state
             .swapchain_resources
             .swapchain_loader
-            .queue_present(state.queue, &present_info)
-        {
-            Ok(suboptimal) if suboptimal || acquired_suboptimal => {
-                recreate_swapchain_and_dependents(state)?;
-            }
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR) => {
-                recreate_swapchain_and_dependents(state)?;
-            }
-            Ok(_) => {}
-            Err(e) => return Err(e.into()),
-        }
+            .queue_present(state.queue, &present_info);
         stats.present_us = elapsed_us_since(present_started);
+        let present_suboptimal = match present_result {
+            Ok(suboptimal) => suboptimal || acquired_suboptimal,
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR) => true,
+            Err(e) => return Err(e.into()),
+        };
+        poll_past_presentation_timing(state);
+        stats.present_stats = snapshot_present_stats(
+            state,
+            waited_for_image,
+            false,
+            false,
+            present_suboptimal,
+            submitted_present_id,
+        );
+        if present_suboptimal {
+            recreate_swapchain_and_dependents(state)?;
+        }
         if apply_present_back_pressure
             && screenshot_staging.is_none()
             && state.swapchain_resources.present_mode != vk::PresentModeKHR::MAILBOX
@@ -2031,6 +2094,7 @@ pub fn draw(
             stats.gpu_wait_us = stats
                 .gpu_wait_us
                 .saturating_add(elapsed_us_since(wait_started));
+            back_pressure_waited = true;
         }
         if let Some((staging, width, height, format)) = screenshot_staging {
             let wait_started = Instant::now();
@@ -2038,6 +2102,7 @@ pub fn draw(
             stats.gpu_wait_us = stats
                 .gpu_wait_us
                 .saturating_add(elapsed_us_since(wait_started));
+            queue_idle_waited = true;
             let map_size = (width as usize * height as usize * 4) as vk::DeviceSize;
             let mapped =
                 match device.map_memory(staging.memory, 0, map_size, vk::MemoryMapFlags::empty()) {
@@ -2079,6 +2144,8 @@ pub fn draw(
             state.captured_frame = RgbaImage::from_raw(width, height, rgba);
         }
 
+        stats.present_stats.applied_back_pressure = back_pressure_waited;
+        stats.present_stats.queue_idle_waited = queue_idle_waited;
         state.current_frame = (state.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
         push_tmesh_debug_sample(state, tmesh_debug_frame);
         stats.vertices = vertices_drawn;
@@ -3245,6 +3312,195 @@ fn log_selected_device(instance: &Instance, pdevice: vk::PhysicalDevice) {
     );
 }
 
+#[inline(always)]
+fn vk_present_mode_trace(mode: vk::PresentModeKHR) -> PresentModeTrace {
+    match mode {
+        vk::PresentModeKHR::FIFO => PresentModeTrace::Fifo,
+        vk::PresentModeKHR::FIFO_RELAXED => PresentModeTrace::FifoRelaxed,
+        vk::PresentModeKHR::MAILBOX => PresentModeTrace::Mailbox,
+        vk::PresentModeKHR::IMMEDIATE => PresentModeTrace::Immediate,
+        _ => PresentModeTrace::Unknown,
+    }
+}
+
+#[inline(always)]
+fn has_device_extension(props: &[vk::ExtensionProperties], name: &ffi::CStr) -> bool {
+    props
+        .iter()
+        .any(|prop| unsafe { ffi::CStr::from_ptr(prop.extension_name.as_ptr()) == name })
+}
+
+fn query_device_exts(
+    instance: &Instance,
+    pdevice: vk::PhysicalDevice,
+) -> Result<DeviceExts, Box<dyn Error>> {
+    let props = unsafe { instance.enumerate_device_extension_properties(pdevice)? };
+    Ok(DeviceExts {
+        display_timing: has_device_extension(&props, display_timing::NAME),
+    })
+}
+
+fn init_present_telemetry(
+    instance: &Instance,
+    device: &Device,
+    swapchain: vk::SwapchainKHR,
+    exts: DeviceExts,
+) -> PresentTelemetryState {
+    let mut telemetry = PresentTelemetryState::default();
+    if !exts.display_timing {
+        info!("Vulkan present telemetry: CPU-only (VK_GOOGLE_display_timing unavailable)");
+        return telemetry;
+    }
+    let loader = display_timing::Device::new(instance, device);
+    telemetry.display_timing = Some(loader);
+    telemetry.refresh_ns = refresh_cycle_duration(&telemetry, swapchain).unwrap_or(0);
+    if telemetry.refresh_ns > 0 {
+        info!(
+            "Vulkan present telemetry: VK_GOOGLE_display_timing enabled refresh_ms={:.3}",
+            telemetry.refresh_ns as f64 / 1_000_000.0
+        );
+    } else {
+        info!("Vulkan present telemetry: VK_GOOGLE_display_timing enabled");
+    }
+    telemetry
+}
+
+fn refresh_cycle_duration(
+    telemetry: &PresentTelemetryState,
+    swapchain: vk::SwapchainKHR,
+) -> Result<u64, vk::Result> {
+    let Some(loader) = telemetry.display_timing.as_ref() else {
+        return Ok(0);
+    };
+    let duration = unsafe { loader.get_refresh_cycle_duration(swapchain)? };
+    Ok(duration.refresh_duration)
+}
+
+fn reset_present_telemetry(state: &mut State) {
+    state.present_telemetry.next_present_id = 1;
+    state.present_telemetry.last_seen_present_id = 0;
+    state.present_telemetry.last_completed = None;
+    state.present_telemetry.scratch_timings.clear();
+    state.present_telemetry.refresh_ns = refresh_cycle_duration(
+        &state.present_telemetry,
+        state.swapchain_resources.swapchain,
+    )
+    .unwrap_or(0);
+}
+
+#[inline(always)]
+fn next_present_id(state: &mut State) -> u32 {
+    if state.present_telemetry.display_timing.is_none() {
+        return 0;
+    }
+    let id = state.present_telemetry.next_present_id.max(1);
+    state.present_telemetry.next_present_id = id.wrapping_add(1).max(1);
+    id
+}
+
+fn poll_past_presentation_timing(state: &mut State) {
+    let Some(loader) = state.present_telemetry.display_timing.as_ref() else {
+        return;
+    };
+    let mut count: u32 = 0;
+    let first = unsafe {
+        (loader.fp().get_past_presentation_timing_google)(
+            loader.device(),
+            state.swapchain_resources.swapchain,
+            &mut count,
+            std::ptr::null_mut(),
+        )
+    };
+    match first {
+        vk::Result::SUCCESS | vk::Result::INCOMPLETE => {}
+        vk::Result::ERROR_OUT_OF_DATE_KHR => return,
+        other => {
+            debug!("Vulkan present telemetry: timing query failed: {other:?}");
+            return;
+        }
+    }
+    if count == 0 {
+        return;
+    }
+    let timings = &mut state.present_telemetry.scratch_timings;
+    timings.clear();
+    if timings.capacity() < count as usize {
+        timings.reserve(count as usize - timings.capacity());
+    }
+    let second = unsafe {
+        (loader.fp().get_past_presentation_timing_google)(
+            loader.device(),
+            state.swapchain_resources.swapchain,
+            &mut count,
+            timings.as_mut_ptr(),
+        )
+    };
+    match second {
+        vk::Result::SUCCESS | vk::Result::INCOMPLETE => unsafe {
+            timings.set_len(count as usize);
+        },
+        vk::Result::ERROR_OUT_OF_DATE_KHR => return,
+        other => {
+            debug!("Vulkan present telemetry: timing fetch failed: {other:?}");
+            return;
+        }
+    }
+    let mut prev_actual_ns = state
+        .present_telemetry
+        .last_completed
+        .map_or(0, |timing| timing.actual_present_time_ns);
+    for timing in timings.iter() {
+        if timing.present_id <= state.present_telemetry.last_seen_present_id {
+            continue;
+        }
+        let interval_ns = if prev_actual_ns == 0 {
+            0
+        } else {
+            timing.actual_present_time.saturating_sub(prev_actual_ns)
+        };
+        prev_actual_ns = timing.actual_present_time;
+        state.present_telemetry.last_seen_present_id = timing.present_id;
+        state.present_telemetry.last_completed = Some(CompletedPresentTiming {
+            present_id: timing.present_id,
+            actual_present_time_ns: timing.actual_present_time,
+            interval_ns,
+            present_margin_ns: timing.present_margin,
+        });
+    }
+}
+
+fn snapshot_present_stats(
+    state: &State,
+    image_waited: bool,
+    back_pressure_waited: bool,
+    queue_idle_waited: bool,
+    suboptimal: bool,
+    submitted_present_id: u32,
+) -> PresentStats {
+    let mut stats = PresentStats {
+        mode: vk_present_mode_trace(state.swapchain_resources.present_mode),
+        in_flight_images: state
+            .images_in_flight
+            .iter()
+            .filter(|&&fence| fence != vk::Fence::null())
+            .count()
+            .min(usize::from(u8::MAX)) as u8,
+        waited_for_image: image_waited,
+        applied_back_pressure: back_pressure_waited,
+        queue_idle_waited,
+        suboptimal,
+        submitted_present_id,
+        refresh_ns: state.present_telemetry.refresh_ns,
+        ..PresentStats::default()
+    };
+    if let Some(completed) = state.present_telemetry.last_completed {
+        stats.completed_present_id = completed.present_id;
+        stats.actual_interval_ns = completed.interval_ns;
+        stats.present_margin_ns = completed.present_margin_ns;
+    }
+    stats
+}
+
 fn is_device_suitable(
     instance: &Instance,
     pdevice: vk::PhysicalDevice,
@@ -3281,14 +3537,19 @@ fn create_logical_device(
     pdevice: vk::PhysicalDevice,
     surface_loader: &surface::Instance,
     surface: vk::SurfaceKHR,
-) -> Result<(Device, vk::Queue, u32), Box<dyn Error>> {
+) -> Result<(Device, vk::Queue, u32, DeviceExts), Box<dyn Error>> {
     let queue_family_index = find_queue_family(instance, pdevice, surface_loader, surface)
         .ok_or("No suitable queue family found")?;
+    let device_exts = query_device_exts(instance, pdevice)?;
     let queue_priorities = [1.0];
     let queue_create_info = vk::DeviceQueueCreateInfo::default()
         .queue_family_index(queue_family_index)
         .queue_priorities(&queue_priorities);
-    let device_extensions = [swapchain::NAME.as_ptr()];
+    let mut device_extensions = Vec::with_capacity(2);
+    device_extensions.push(swapchain::NAME.as_ptr());
+    if device_exts.display_timing {
+        device_extensions.push(display_timing::NAME.as_ptr());
+    }
     let features = vk::PhysicalDeviceFeatures::default();
     let create_info = vk::DeviceCreateInfo::default()
         .queue_create_infos(std::slice::from_ref(&queue_create_info))
@@ -3297,7 +3558,7 @@ fn create_logical_device(
 
     let device = unsafe { instance.create_device(pdevice, &create_info, None)? };
     let queue = unsafe { device.get_device_queue(queue_family_index, 0) };
-    Ok((device, queue, queue_family_index))
+    Ok((device, queue, queue_family_index, device_exts))
 }
 
 fn create_swapchain(
@@ -3623,6 +3884,7 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
     }
 
     state.images_in_flight = vec![vk::Fence::null(); state.swapchain_resources._images.len()];
+    reset_present_telemetry(state);
     state.swapchain_valid = true;
     debug!("Swapchain recreated.");
     Ok(())

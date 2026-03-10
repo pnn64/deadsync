@@ -128,12 +128,57 @@ pub enum PresentModePolicy {
     Immediate,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum PresentModeTrace {
+    #[default]
+    Unknown,
+    Fifo,
+    FifoRelaxed,
+    Mailbox,
+    Immediate,
+}
+
+impl PresentModeTrace {
+    #[inline(always)]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Fifo => "fifo",
+            Self::FifoRelaxed => "fifo_relaxed",
+            Self::Mailbox => "mailbox",
+            Self::Immediate => "immediate",
+        }
+    }
+}
+
+impl core::fmt::Display for PresentModeTrace {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PresentStats {
+    pub mode: PresentModeTrace,
+    pub in_flight_images: u8,
+    pub waited_for_image: bool,
+    pub applied_back_pressure: bool,
+    pub queue_idle_waited: bool,
+    pub suboptimal: bool,
+    pub submitted_present_id: u32,
+    pub completed_present_id: u32,
+    pub refresh_ns: u64,
+    pub actual_interval_ns: u64,
+    pub present_margin_ns: u64,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DrawStats {
     pub vertices: u32,
     pub acquire_us: u32,
     pub submit_us: u32,
     pub present_us: u32,
+    pub present_stats: PresentStats,
     pub gpu_wait_us: u32,
     pub backend_setup_us: u32,
     pub backend_prepare_us: u32,
