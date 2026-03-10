@@ -895,7 +895,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: "Show Stats",
-        choices: &["Off", "FPS", "FPS+Stutter"],
+        choices: &["Off", "FPS", "FPS+Stutter", "FPS+Stutter+Timing"],
         inline: true,
     },
     SubRow {
@@ -963,7 +963,10 @@ pub const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         name: "Show Stats",
-        help: &["Choose performance overlay mode: Off, FPS only, or FPS with stutter list."],
+        help: &[
+            "Choose performance overlay mode: Off, FPS only, FPS with stutter list, or FPS+Stutter+Timing.",
+            "The timing mode adds present prediction, fallback, queue-pressure, and clock-domain details.",
+        ],
     },
     Item {
         name: GRAPHICS_ROW_VALIDATION_LAYERS,
@@ -3569,7 +3572,7 @@ pub fn init() -> State {
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
         "Show Stats",
-        cfg.show_stats_mode.min(2) as usize,
+        cfg.show_stats_mode.min(3) as usize,
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_graphics,
@@ -4082,7 +4085,7 @@ pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
         &mut state.sub_choice_indices_graphics,
         GRAPHICS_OPTIONS_ROWS,
         "Show Stats",
-        mode.min(2) as usize,
+        mode.min(3) as usize,
     );
     sync_submenu_cursor_indices(state);
 }
@@ -5106,7 +5109,7 @@ fn apply_submenu_choice_delta(
             rebuild_resolution_choices(state, cur_w, cur_h);
         }
         if row.label == "Show Stats" {
-            let mode = new_index.min(2) as u8;
+            let mode = new_index.min(3) as u8;
             action = Some(ScreenAction::UpdateShowOverlay(mode));
         }
         if row.label == GRAPHICS_ROW_VALIDATION_LAYERS {

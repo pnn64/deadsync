@@ -521,6 +521,7 @@ enum OverlayMode {
     Off,
     Fps,
     FpsAndStutter,
+    FpsStutterTiming,
 }
 
 impl OverlayMode {
@@ -529,6 +530,7 @@ impl OverlayMode {
         match mode {
             1 => Self::Fps,
             2 => Self::FpsAndStutter,
+            3 => Self::FpsStutterTiming,
             _ => Self::Off,
         }
     }
@@ -538,7 +540,8 @@ impl OverlayMode {
         match self {
             Self::Off => Self::Fps,
             Self::Fps => Self::FpsAndStutter,
-            Self::FpsAndStutter => Self::Off,
+            Self::FpsAndStutter => Self::FpsStutterTiming,
+            Self::FpsStutterTiming => Self::Off,
         }
     }
 
@@ -549,7 +552,12 @@ impl OverlayMode {
 
     #[inline(always)]
     const fn shows_stutter(self) -> bool {
-        matches!(self, Self::FpsAndStutter)
+        matches!(self, Self::FpsAndStutter | Self::FpsStutterTiming)
+    }
+
+    #[inline(always)]
+    const fn shows_timing(self) -> bool {
+        matches!(self, Self::FpsStutterTiming)
     }
 
     #[inline(always)]
@@ -558,6 +566,7 @@ impl OverlayMode {
             Self::Off => "OFF",
             Self::Fps => "FPS",
             Self::FpsAndStutter => "FPS+STUTTER",
+            Self::FpsStutterTiming => "FPS+STUTTER+TIMING",
         }
     }
 
@@ -567,6 +576,7 @@ impl OverlayMode {
             Self::Off => 0,
             Self::Fps => 1,
             Self::FpsAndStutter => 2,
+            Self::FpsStutterTiming => 3,
         }
     }
 }
@@ -992,6 +1002,7 @@ pub struct ShellState {
     metrics: Metrics,
     last_fps: f32,
     last_vpf: u32,
+    last_present_stats: renderer::PresentStats,
     current_frame_vpf: u32,
     overlay_mode: OverlayMode,
     stutter_samples: [StutterSample; STUTTER_SAMPLE_COUNT],
@@ -1192,6 +1203,7 @@ impl ShellState {
             metrics,
             last_fps: 0.0,
             last_vpf: 0,
+            last_present_stats: renderer::PresentStats::default(),
             current_frame_vpf: 0,
             overlay_mode: OverlayMode::from_code(overlay_mode),
             stutter_samples: [StutterSample::empty(); STUTTER_SAMPLE_COUNT],
@@ -2645,6 +2657,47 @@ impl App {
     }
 
     #[inline(always)]
+    fn stats_overlay_timing(
+        &self,
+    ) -> Option<crate::screens::components::stats_overlay::TimingHealth> {
+        if !self.state.shell.overlay_mode.shows_timing() {
+            return None;
+        }
+        let now_host_ns = current_host_nanos();
+        let predictor = self.state.shell.present_phase_predictor;
+        let present = self.state.shell.last_present_stats;
+        let fallback_ns = predictor.fallback_remaining_ns(now_host_ns);
+        let interval_ns = if predictor.interval_ns != 0 {
+            predictor.interval_ns
+        } else if present.actual_interval_ns != 0 {
+            present.actual_interval_ns
+        } else {
+            present.refresh_ns
+        };
+        Some(crate::screens::components::stats_overlay::TimingHealth {
+            prediction_active: predictor.predicted_present_host_ns(now_host_ns).is_some(),
+            fallback_active: fallback_ns != 0,
+            interval_ns,
+            lead_ns: predictor.lead_ns,
+            prediction_error_ns: predictor.last_prediction_error_ns,
+            prediction_error_ema_ns: predictor.prediction_error_ema_ns,
+            fallback_ns,
+            present_mode: present.mode,
+            display_clock: present.display_clock,
+            host_clock: present.host_clock,
+            in_flight_images: present.in_flight_images,
+            waited_for_image: present.waited_for_image,
+            applied_back_pressure: present.applied_back_pressure,
+            queue_idle_waited: present.queue_idle_waited,
+            suboptimal: present.suboptimal,
+            submitted_present_id: present.submitted_present_id,
+            completed_present_id: present.completed_present_id,
+            calibration_error_ns: present.calibration_error_ns,
+            host_mapped: present.host_present_ns != 0,
+        })
+    }
+
+    #[inline(always)]
     fn update_present_phase_predictor(
         &mut self,
         screen: CurrentScreen,
@@ -3115,6 +3168,7 @@ impl App {
                 Ok(stats) => {
                     draw_stats = stats;
                     self.state.shell.current_frame_vpf = stats.vertices;
+                    self.state.shell.last_present_stats = stats.present_stats;
                     draw_us = elapsed_us_since(draw_started);
                     self.capture_pending_screenshot(redraw_started);
                 }
@@ -5156,6 +5210,7 @@ impl App {
                 self.backend_type,
                 self.state.shell.last_fps,
                 self.state.shell.last_vpf,
+                self.stats_overlay_timing(),
             );
             actors.extend(overlay);
             if self.state.shell.overlay_mode.shows_stutter() {

@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::gfx::BackendType;
+use crate::core::gfx::{BackendType, ClockDomainTrace, PresentModeTrace};
 use crate::core::space::{screen_height, screen_width};
 use crate::ui::actors::Actor;
 use std::cell::RefCell;
@@ -64,19 +64,83 @@ pub struct StutterEvent {
     pub age_seconds: f32,
 }
 
-/// Three-line stats: FPS, VPF, Backend — top-right, miso, white.
-pub fn build(backend: BackendType, fps: f32, vpf: u32) -> Vec<Actor> {
+#[derive(Clone, Copy, Debug)]
+pub struct TimingHealth {
+    pub prediction_active: bool,
+    pub fallback_active: bool,
+    pub interval_ns: u64,
+    pub lead_ns: u64,
+    pub prediction_error_ns: u64,
+    pub prediction_error_ema_ns: u64,
+    pub fallback_ns: u64,
+    pub present_mode: PresentModeTrace,
+    pub display_clock: ClockDomainTrace,
+    pub host_clock: ClockDomainTrace,
+    pub in_flight_images: u8,
+    pub waited_for_image: bool,
+    pub applied_back_pressure: bool,
+    pub queue_idle_waited: bool,
+    pub suboptimal: bool,
+    pub submitted_present_id: u32,
+    pub completed_present_id: u32,
+    pub calibration_error_ns: u64,
+    pub host_mapped: bool,
+}
+
+#[inline(always)]
+const fn flag(value: bool) -> u8 {
+    if value { 1 } else { 0 }
+}
+
+#[inline(always)]
+fn ms_text(ns: u64) -> String {
+    if ns == 0 {
+        "n/a".to_string()
+    } else {
+        format!("{:.2}ms", ns as f64 / 1_000_000.0)
+    }
+}
+
+fn timing_text(timing: TimingHealth) -> String {
+    let predict_state = if timing.prediction_active {
+        "on"
+    } else {
+        "off"
+    };
+    let fallback_state = if timing.fallback_active { "on" } else { "off" };
+    format!(
+        "Pred {predict_state} int {} lead {}\nErr {} ema {} fb {} ({fallback_state})\nPresent {} {}->{} map:{}\nQueue {} iw:{} bp:{} qi:{} sub:{}\nIDs {}/{} cal {}",
+        ms_text(timing.interval_ns),
+        ms_text(timing.lead_ns),
+        ms_text(timing.prediction_error_ns),
+        ms_text(timing.prediction_error_ema_ns),
+        ms_text(timing.fallback_ns),
+        timing.present_mode,
+        timing.display_clock,
+        timing.host_clock,
+        flag(timing.host_mapped),
+        timing.in_flight_images,
+        flag(timing.waited_for_image),
+        flag(timing.applied_back_pressure),
+        flag(timing.queue_idle_waited),
+        flag(timing.suboptimal),
+        timing.submitted_present_id,
+        timing.completed_present_id,
+        ms_text(timing.calibration_error_ns),
+    )
+}
+
+/// Stats overlay: base FPS block plus optional timing-health block, top-right, miso, white.
+pub fn build(backend: BackendType, fps: f32, vpf: u32, timing: Option<TimingHealth>) -> Vec<Actor> {
     const MARGIN_X: f32 = -16.0;
     const MARGIN_Y: f32 = 16.0;
+    const TIMING_OFFSET_Y: f32 = 34.0;
 
     let w = screen_width();
 
-    // 1. Combine all stat lines into a single string with newlines.
     let stats_text = cached_stats_text(backend, fps, vpf);
-
-    // 2. Create a single text actor for the entire block.
-    // The layout engine will handle the line breaks automatically.
-    let overlay_actor = act!(text:
+    let mut actors = Vec::with_capacity(2);
+    actors.push(act!(text:
         align(1.0, 0.0): // Align the whole text block to its top-right corner
         xy(w + MARGIN_X, MARGIN_Y): // Position the block's top-right corner
         zoom(0.65):
@@ -85,9 +149,21 @@ pub fn build(backend: BackendType, fps: f32, vpf: u32) -> Vec<Actor> {
         settext(stats_text): // Use the new multi-line string
         horizalign(right):   // Align each line of text to the right within the block
         z(200)
-    );
-
-    vec![overlay_actor]
+    ));
+    if let Some(timing) = timing {
+        let timing_text = timing_text(timing);
+        actors.push(act!(text:
+            align(1.0, 0.0):
+            xy(w + MARGIN_X, MARGIN_Y + TIMING_OFFSET_Y):
+            zoom(0.5):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            font("miso"):
+            settext(timing_text):
+            horizalign(right):
+            z(200)
+        ));
+    }
+    actors
 }
 
 fn format_stutter_time(seconds: f32) -> Arc<str> {

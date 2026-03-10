@@ -1214,7 +1214,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     ));
     content.push_str(&format!(
         "ShowStatsMode={}\n",
-        default.show_stats_mode.min(2)
+        default.show_stats_mode.min(3)
     ));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
@@ -1480,7 +1480,7 @@ pub fn load() {
                 cfg.show_stats_mode = conf
                     .get("Options", "ShowStatsMode")
                     .and_then(|v| v.parse::<u8>().ok())
-                    .map(|v| v.min(2))
+                    .map(|v| v.min(3))
                     .or_else(|| {
                         conf.get("Options", "ShowStats")
                             .and_then(|v| v.parse::<u8>().ok())
@@ -3058,7 +3058,7 @@ fn save_without_keymaps() {
         "ShowStats={}\n",
         if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
-    content.push_str(&format!("ShowStatsMode={}\n", cfg.show_stats_mode.min(2)));
+    content.push_str(&format!("ShowStatsMode={}\n", cfg.show_stats_mode.min(3)));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
         if cfg.smooth_histogram { "1" } else { "0" }
@@ -3375,7 +3375,7 @@ pub fn update_present_mode_policy(mode: PresentModePolicy) {
 }
 
 pub fn update_show_stats_mode(mode: u8) {
-    let mode = mode.min(2);
+    let mode = mode.min(3);
     {
         let mut cfg = lock_config();
         if cfg.show_stats_mode == mode {
