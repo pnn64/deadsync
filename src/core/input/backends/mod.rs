@@ -4,6 +4,8 @@ pub(super) use super::{
     GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes,
 };
 
+#[cfg(target_os = "freebsd")]
+pub(super) mod freebsd_evdev;
 #[cfg(target_os = "linux")]
 pub(super) mod linux_evdev;
 #[cfg(target_os = "macos")]

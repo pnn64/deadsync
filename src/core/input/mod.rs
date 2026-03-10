@@ -44,6 +44,8 @@ pub enum PadBackend {
     WindowsWgi,
     #[cfg(target_os = "linux")]
     LinuxEvdev,
+    #[cfg(target_os = "freebsd")]
+    FreeBsdEvdev,
     #[cfg(target_os = "macos")]
     MacOsIohid,
 }
@@ -228,10 +230,17 @@ pub fn run_pad_backend(
     }
     #[cfg(target_os = "linux")]
     return backends::linux_evdev::run(emit_pad, emit_sys);
+    #[cfg(target_os = "freebsd")]
+    return backends::freebsd_evdev::run(emit_pad, emit_sys);
     #[cfg(target_os = "macos")]
     return backends::macos_iohid::run(emit_pad, emit_sys);
 
-    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    #[cfg(not(any(
+        windows,
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "macos"
+    )))]
     {
         let _ = emit_pad;
         let _ = emit_sys;
