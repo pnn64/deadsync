@@ -664,12 +664,17 @@ struct GameplayPacingTrace {
     direct_driver_sum_us: u64,
     direct_driver_max_us: u32,
     present_last_mode: renderer::PresentModeTrace,
+    present_display_clock_last: renderer::ClockDomainTrace,
+    present_host_clock_last: renderer::ClockDomainTrace,
     present_inflight_sum: u64,
     present_inflight_max: u8,
     present_image_wait_frames: u32,
     present_back_pressure_frames: u32,
     present_queue_idle_frames: u32,
     present_suboptimal_frames: u32,
+    present_host_mapped_frames: u32,
+    present_calibration_error_sum_ns: u64,
+    present_calibration_error_max_ns: u64,
     present_interval_sum_ns: u64,
     present_interval_max_ns: u64,
     present_interval_samples: u32,
@@ -711,12 +716,17 @@ impl GameplayPacingTrace {
             direct_driver_sum_us: 0,
             direct_driver_max_us: 0,
             present_last_mode: renderer::PresentModeTrace::Unknown,
+            present_display_clock_last: renderer::ClockDomainTrace::Unknown,
+            present_host_clock_last: renderer::ClockDomainTrace::Unknown,
             present_inflight_sum: 0,
             present_inflight_max: 0,
             present_image_wait_frames: 0,
             present_back_pressure_frames: 0,
             present_queue_idle_frames: 0,
             present_suboptimal_frames: 0,
+            present_host_mapped_frames: 0,
+            present_calibration_error_sum_ns: 0,
+            present_calibration_error_max_ns: 0,
             present_interval_sum_ns: 0,
             present_interval_max_ns: 0,
             present_interval_samples: 0,
@@ -4980,7 +4990,7 @@ impl App {
             0.0
         };
         log::trace!(
-            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} wake={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] loop_ms=[wake:{:.3} dispatch:{:.3} driver:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] present_dbg=[mode:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3}]",
+            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} wake={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] loop_ms=[wake:{:.3} dispatch:{:.3} driver:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}]",
             total_elapsed,
             severity,
             screen,
@@ -5012,6 +5022,9 @@ impl App {
             draw_stats.backend_prepare_us as f32 / 1000.0,
             draw_stats.backend_record_us as f32 / 1000.0,
             present_stats.mode,
+            present_stats.display_clock,
+            present_stats.host_clock,
+            present_stats.host_present_ns != 0,
             present_stats.in_flight_images,
             present_stats.waited_for_image,
             present_stats.applied_back_pressure,
@@ -5021,7 +5034,8 @@ impl App {
             present_stats.completed_present_id,
             present_stats.refresh_ns as f32 / 1_000_000.0,
             present_stats.actual_interval_ns as f32 / 1_000_000.0,
-            present_stats.present_margin_ns as f32 / 1_000_000.0
+            present_stats.present_margin_ns as f32 / 1_000_000.0,
+            present_stats.calibration_error_ns as f32 / 1_000_000.0
         );
     }
 
@@ -5109,6 +5123,8 @@ impl App {
             .saturating_add(u64::from(draw_stats.backend_record_us));
         let present_stats = draw_stats.present_stats;
         trace.present_last_mode = present_stats.mode;
+        trace.present_display_clock_last = present_stats.display_clock;
+        trace.present_host_clock_last = present_stats.host_clock;
         trace.present_inflight_sum = trace
             .present_inflight_sum
             .saturating_add(u64::from(present_stats.in_flight_images));
@@ -5119,6 +5135,13 @@ impl App {
         trace.present_back_pressure_frames += u32::from(present_stats.applied_back_pressure);
         trace.present_queue_idle_frames += u32::from(present_stats.queue_idle_waited);
         trace.present_suboptimal_frames += u32::from(present_stats.suboptimal);
+        trace.present_host_mapped_frames += u32::from(present_stats.host_present_ns != 0);
+        trace.present_calibration_error_sum_ns = trace
+            .present_calibration_error_sum_ns
+            .saturating_add(present_stats.calibration_error_ns);
+        trace.present_calibration_error_max_ns = trace
+            .present_calibration_error_max_ns
+            .max(present_stats.calibration_error_ns);
         if present_stats.actual_interval_ns > 0 {
             trace.present_interval_sum_ns = trace
                 .present_interval_sum_ns
@@ -5147,7 +5170,7 @@ impl App {
         let interval_samples = trace.present_interval_samples.max(1);
         let margin_samples = trace.present_margin_samples.max(1);
         log::trace!(
-            "Gameplay frame pacing: frames={} req=[chain:{} direct:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] direct_loop_ms=[wake_avg:{:.3} wake_max:{:.3} dispatch_avg:{:.3} dispatch_max:{:.3} driver_avg:{:.3} driver_max:{:.3}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] present_dbg=[mode:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3}]",
+            "Gameplay frame pacing: frames={} req=[chain:{} direct:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] direct_loop_ms=[wake_avg:{:.3} wake_max:{:.3} dispatch_avg:{:.3} dispatch_max:{:.3} driver_avg:{:.3} driver_max:{:.3}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}]",
             frames,
             trace.chain_frames,
             trace.direct_frames,
@@ -5176,6 +5199,9 @@ impl App {
             ms(trace.draw_prepare_sum_us),
             ms(trace.draw_record_sum_us),
             trace.present_last_mode,
+            trace.present_display_clock_last,
+            trace.present_host_clock_last,
+            trace.present_host_mapped_frames,
             trace.present_inflight_sum as f64 / frames as f64,
             trace.present_inflight_max,
             trace.present_image_wait_frames,
@@ -5185,7 +5211,9 @@ impl App {
             trace.present_interval_sum_ns as f64 / interval_samples as f64 / 1_000_000.0,
             trace.present_interval_max_ns as f64 / 1_000_000.0,
             trace.present_margin_sum_ns as f64 / margin_samples as f64 / 1_000_000.0,
-            trace.present_margin_max_ns as f64 / 1_000_000.0
+            trace.present_margin_max_ns as f64 / 1_000_000.0,
+            trace.present_calibration_error_sum_ns as f64 / frames as f64 / 1_000_000.0,
+            trace.present_calibration_error_max_ns as f64 / 1_000_000.0
         );
         trace.reset(now);
     }

@@ -1,12 +1,13 @@
 use crate::core::gfx::{
-    BlendMode, DrawStats, MeshMode, MeshVertex, ObjectType, PresentModePolicy, PresentModeTrace,
-    PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, Texture as RendererTexture,
+    BlendMode, ClockDomainTrace, DrawStats, MeshMode, MeshVertex, ObjectType, PresentModePolicy,
+    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
 use ash::{
     Device, Entry, Instance,
     google::display_timing,
-    khr::{surface, swapchain},
+    khr::{calibrated_timestamps, surface, swapchain},
     vk,
 };
 use cgmath::{Matrix4, Vector4};
@@ -14,6 +15,8 @@ use image::RgbaImage;
 use log::{debug, error, info, warn};
 use std::{collections::HashMap, error::Error, ffi, hash::Hasher, mem, sync::Arc, time::Instant};
 use twox_hash::XxHash64;
+#[cfg(windows)]
+use windows::Win32::System::Performance;
 use winit::{
     dpi::PhysicalSize,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
@@ -23,6 +26,8 @@ use winit::{
 // --- Constants ---
 const MAX_FRAMES_IN_FLIGHT: usize = 3;
 const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
+#[cfg(windows)]
+static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
 // --- Structs ---
 
@@ -174,6 +179,7 @@ struct SwapchainResources {
 #[derive(Clone, Copy, Default)]
 struct DeviceExts {
     display_timing: bool,
+    calibrated_timestamps: bool,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -182,11 +188,17 @@ struct CompletedPresentTiming {
     actual_present_time_ns: u64,
     interval_ns: u64,
     present_margin_ns: u64,
+    host_present_time_ns: u64,
 }
 
 struct PresentTelemetryState {
     display_timing: Option<display_timing::Device>,
+    calibrated_timestamps: Option<calibrated_timestamps::Device>,
+    display_clock: Option<vk::TimeDomainKHR>,
+    host_clock: Option<vk::TimeDomainKHR>,
     refresh_ns: u64,
+    host_minus_display_ns: i64,
+    calibration_error_ns: u64,
     next_present_id: u32,
     last_seen_present_id: u32,
     last_completed: Option<CompletedPresentTiming>,
@@ -197,7 +209,12 @@ impl Default for PresentTelemetryState {
     fn default() -> Self {
         Self {
             display_timing: None,
+            calibrated_timestamps: None,
+            display_clock: None,
+            host_clock: None,
             refresh_ns: 0,
+            host_minus_display_ns: 0,
+            calibration_error_ns: 0,
             next_present_id: 1,
             last_seen_present_id: 0,
             last_completed: None,
@@ -349,8 +366,10 @@ pub fn init(
 
     let projection = ortho_for_window(initial_size.width, initial_size.height);
     let present_telemetry = init_present_telemetry(
+        &entry,
         &instance,
         device.as_ref().unwrap(),
+        pdevice,
         swapchain_resources.swapchain,
         device_exts,
     );
@@ -2070,6 +2089,7 @@ pub fn draw(
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR) => true,
             Err(e) => return Err(e.into()),
         };
+        calibrate_present_clock(state);
         poll_past_presentation_timing(state);
         stats.present_stats = snapshot_present_stats(
             state,
@@ -3312,6 +3332,22 @@ fn log_selected_device(instance: &Instance, pdevice: vk::PhysicalDevice) {
     );
 }
 
+#[cfg(windows)]
+fn qpc_freq_hz() -> Option<u64> {
+    let mut hz = 0i64;
+    unsafe {
+        Performance::QueryPerformanceFrequency(&mut hz).ok()?;
+    }
+    (hz > 0).then_some(hz as u64)
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
+    let hz = (*QPC_FREQ_HZ)?;
+    Some(((ticks as u128) * 1_000_000_000u128 / hz as u128).min(u128::from(u64::MAX)) as u64)
+}
+
 #[inline(always)]
 fn vk_present_mode_trace(mode: vk::PresentModeKHR) -> PresentModeTrace {
     match mode {
@@ -3321,6 +3357,79 @@ fn vk_present_mode_trace(mode: vk::PresentModeKHR) -> PresentModeTrace {
         vk::PresentModeKHR::IMMEDIATE => PresentModeTrace::Immediate,
         _ => PresentModeTrace::Unknown,
     }
+}
+
+#[inline(always)]
+fn vk_clock_domain_trace(domain: Option<vk::TimeDomainKHR>) -> ClockDomainTrace {
+    match domain {
+        Some(vk::TimeDomainKHR::DEVICE) => ClockDomainTrace::Device,
+        Some(vk::TimeDomainKHR::CLOCK_MONOTONIC) => ClockDomainTrace::Monotonic,
+        Some(vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW) => ClockDomainTrace::MonotonicRaw,
+        Some(vk::TimeDomainKHR::QUERY_PERFORMANCE_COUNTER) => ClockDomainTrace::Qpc,
+        _ => ClockDomainTrace::Unknown,
+    }
+}
+
+#[inline(always)]
+fn time_domain_to_nanos(domain: vk::TimeDomainKHR, raw: u64) -> Option<u64> {
+    match domain {
+        vk::TimeDomainKHR::CLOCK_MONOTONIC | vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW => Some(raw),
+        vk::TimeDomainKHR::QUERY_PERFORMANCE_COUNTER => {
+            #[cfg(windows)]
+            {
+                qpc_ticks_to_nanos(raw)
+            }
+            #[cfg(not(windows))]
+            {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn has_time_domain(domains: &[vk::TimeDomainKHR], want: vk::TimeDomainKHR) -> bool {
+    domains.contains(&want)
+}
+
+fn pick_host_clock(domains: &[vk::TimeDomainKHR]) -> Option<vk::TimeDomainKHR> {
+    #[cfg(windows)]
+    if has_time_domain(domains, vk::TimeDomainKHR::QUERY_PERFORMANCE_COUNTER) {
+        return Some(vk::TimeDomainKHR::QUERY_PERFORMANCE_COUNTER);
+    }
+    if has_time_domain(domains, vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW) {
+        return Some(vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW);
+    }
+    if has_time_domain(domains, vk::TimeDomainKHR::CLOCK_MONOTONIC) {
+        return Some(vk::TimeDomainKHR::CLOCK_MONOTONIC);
+    }
+    None
+}
+
+fn pick_display_clock(
+    domains: &[vk::TimeDomainKHR],
+    host_clock: Option<vk::TimeDomainKHR>,
+) -> Option<vk::TimeDomainKHR> {
+    if has_time_domain(domains, vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW) {
+        return Some(vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW);
+    }
+    if has_time_domain(domains, vk::TimeDomainKHR::CLOCK_MONOTONIC) {
+        return Some(vk::TimeDomainKHR::CLOCK_MONOTONIC);
+    }
+    host_clock.filter(|domain| *domain != vk::TimeDomainKHR::DEVICE)
+}
+
+#[inline(always)]
+fn calibrate_offset_ns(host_ns: u64, display_ns: u64) -> i64 {
+    let diff = i128::from(host_ns) - i128::from(display_ns);
+    diff.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64
+}
+
+#[inline(always)]
+fn apply_display_to_host_offset(display_ns: u64, offset_ns: i64) -> u64 {
+    let host = i128::from(display_ns) + i128::from(offset_ns);
+    host.clamp(0, i128::from(u64::MAX)) as u64
 }
 
 #[inline(always)]
@@ -3337,12 +3446,15 @@ fn query_device_exts(
     let props = unsafe { instance.enumerate_device_extension_properties(pdevice)? };
     Ok(DeviceExts {
         display_timing: has_device_extension(&props, display_timing::NAME),
+        calibrated_timestamps: has_device_extension(&props, calibrated_timestamps::NAME),
     })
 }
 
 fn init_present_telemetry(
+    entry: &Entry,
     instance: &Instance,
     device: &Device,
+    pdevice: vk::PhysicalDevice,
     swapchain: vk::SwapchainKHR,
     exts: DeviceExts,
 ) -> PresentTelemetryState {
@@ -3362,6 +3474,25 @@ fn init_present_telemetry(
     } else {
         info!("Vulkan present telemetry: VK_GOOGLE_display_timing enabled");
     }
+    if exts.calibrated_timestamps {
+        let calib_instance = calibrated_timestamps::Instance::new(entry, instance);
+        match unsafe { calib_instance.get_physical_device_calibrateable_time_domains(pdevice) } {
+            Ok(domains) => {
+                telemetry.host_clock = pick_host_clock(&domains);
+                telemetry.display_clock = pick_display_clock(&domains, telemetry.host_clock);
+                telemetry.calibrated_timestamps =
+                    Some(calibrated_timestamps::Device::new(instance, device));
+                info!(
+                    "Vulkan present clock calibration: display={} host={}",
+                    vk_clock_domain_trace(telemetry.display_clock),
+                    vk_clock_domain_trace(telemetry.host_clock)
+                );
+            }
+            Err(e) => {
+                debug!("Vulkan present clock calibration unavailable: {e:?}");
+            }
+        }
+    }
     telemetry
 }
 
@@ -3380,6 +3511,8 @@ fn reset_present_telemetry(state: &mut State) {
     state.present_telemetry.next_present_id = 1;
     state.present_telemetry.last_seen_present_id = 0;
     state.present_telemetry.last_completed = None;
+    state.present_telemetry.host_minus_display_ns = 0;
+    state.present_telemetry.calibration_error_ns = 0;
     state.present_telemetry.scratch_timings.clear();
     state.present_telemetry.refresh_ns = refresh_cycle_duration(
         &state.present_telemetry,
@@ -3396,6 +3529,47 @@ fn next_present_id(state: &mut State) -> u32 {
     let id = state.present_telemetry.next_present_id.max(1);
     state.present_telemetry.next_present_id = id.wrapping_add(1).max(1);
     id
+}
+
+fn calibrate_present_clock(state: &mut State) {
+    let Some(loader) = state.present_telemetry.calibrated_timestamps.as_ref() else {
+        return;
+    };
+    let Some(host_clock) = state.present_telemetry.host_clock else {
+        return;
+    };
+    let display_clock = state.present_telemetry.display_clock.unwrap_or(host_clock);
+    let host_info = vk::CalibratedTimestampInfoKHR::default().time_domain(host_clock);
+    let display_info = vk::CalibratedTimestampInfoKHR::default().time_domain(display_clock);
+    let (timestamps, max_deviation) = if display_clock == host_clock {
+        match unsafe { loader.get_calibrated_timestamps(&[host_info]) } {
+            Ok(pair) => pair,
+            Err(e) => {
+                debug!("Vulkan present clock calibration failed: {e:?}");
+                return;
+            }
+        }
+    } else {
+        match unsafe { loader.get_calibrated_timestamps(&[host_info, display_info]) } {
+            Ok(pair) => pair,
+            Err(e) => {
+                debug!("Vulkan present clock calibration failed: {e:?}");
+                return;
+            }
+        }
+    };
+    let Some(host_ns) = time_domain_to_nanos(host_clock, timestamps[0]) else {
+        return;
+    };
+    let display_ns = if display_clock == host_clock {
+        host_ns
+    } else if let Some(display_ns) = time_domain_to_nanos(display_clock, timestamps[1]) {
+        display_ns
+    } else {
+        return;
+    };
+    state.present_telemetry.host_minus_display_ns = calibrate_offset_ns(host_ns, display_ns);
+    state.present_telemetry.calibration_error_ns = max_deviation;
 }
 
 fn poll_past_presentation_timing(state: &mut State) {
@@ -3422,6 +3596,9 @@ fn poll_past_presentation_timing(state: &mut State) {
     if count == 0 {
         return;
     }
+    let host_map_ready = state.present_telemetry.host_clock.is_some()
+        && state.present_telemetry.display_clock.is_some();
+    let host_minus_display_ns = state.present_telemetry.host_minus_display_ns;
     let timings = &mut state.present_telemetry.scratch_timings;
     timings.clear();
     if timings.capacity() < count as usize {
@@ -3465,6 +3642,11 @@ fn poll_past_presentation_timing(state: &mut State) {
             actual_present_time_ns: timing.actual_present_time,
             interval_ns,
             present_margin_ns: timing.present_margin,
+            host_present_time_ns: if host_map_ready {
+                apply_display_to_host_offset(timing.actual_present_time, host_minus_display_ns)
+            } else {
+                0
+            },
         });
     }
 }
@@ -3479,6 +3661,8 @@ fn snapshot_present_stats(
 ) -> PresentStats {
     let mut stats = PresentStats {
         mode: vk_present_mode_trace(state.swapchain_resources.present_mode),
+        display_clock: vk_clock_domain_trace(state.present_telemetry.display_clock),
+        host_clock: vk_clock_domain_trace(state.present_telemetry.host_clock),
         in_flight_images: state
             .images_in_flight
             .iter()
@@ -3491,12 +3675,14 @@ fn snapshot_present_stats(
         suboptimal,
         submitted_present_id,
         refresh_ns: state.present_telemetry.refresh_ns,
+        calibration_error_ns: state.present_telemetry.calibration_error_ns,
         ..PresentStats::default()
     };
     if let Some(completed) = state.present_telemetry.last_completed {
         stats.completed_present_id = completed.present_id;
         stats.actual_interval_ns = completed.interval_ns;
         stats.present_margin_ns = completed.present_margin_ns;
+        stats.host_present_ns = completed.host_present_time_ns;
     }
     stats
 }
@@ -3549,6 +3735,9 @@ fn create_logical_device(
     device_extensions.push(swapchain::NAME.as_ptr());
     if device_exts.display_timing {
         device_extensions.push(display_timing::NAME.as_ptr());
+    }
+    if device_exts.calibrated_timestamps {
+        device_extensions.push(calibrated_timestamps::NAME.as_ptr());
     }
     let features = vk::PhysicalDeviceFeatures::default();
     let create_info = vk::DeviceCreateInfo::default()

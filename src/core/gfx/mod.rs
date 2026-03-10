@@ -157,9 +157,40 @@ impl core::fmt::Display for PresentModeTrace {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ClockDomainTrace {
+    #[default]
+    Unknown,
+    Device,
+    Monotonic,
+    MonotonicRaw,
+    Qpc,
+}
+
+impl ClockDomainTrace {
+    #[inline(always)]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Device => "device",
+            Self::Monotonic => "monotonic",
+            Self::MonotonicRaw => "monotonic_raw",
+            Self::Qpc => "qpc",
+        }
+    }
+}
+
+impl core::fmt::Display for ClockDomainTrace {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PresentStats {
     pub mode: PresentModeTrace,
+    pub display_clock: ClockDomainTrace,
+    pub host_clock: ClockDomainTrace,
     pub in_flight_images: u8,
     pub waited_for_image: bool,
     pub applied_back_pressure: bool,
@@ -170,6 +201,8 @@ pub struct PresentStats {
     pub refresh_ns: u64,
     pub actual_interval_ns: u64,
     pub present_margin_ns: u64,
+    pub host_present_ns: u64,
+    pub calibration_error_ns: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
