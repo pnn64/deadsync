@@ -2693,7 +2693,9 @@ impl App {
             submitted_present_id: present.submitted_present_id,
             completed_present_id: present.completed_present_id,
             calibration_error_ns: present.calibration_error_ns,
-            host_mapped: present.host_present_ns != 0,
+            host_mapped: present.host_present_ns != 0
+                && present.display_clock != renderer::ClockDomainTrace::Unknown
+                && present.host_clock != renderer::ClockDomainTrace::Unknown,
         })
     }
 

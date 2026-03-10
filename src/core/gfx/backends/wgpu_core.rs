@@ -1,6 +1,7 @@
 use crate::core::gfx::{
-    BlendMode, DrawStats, MeshMode, ObjectType, PresentModePolicy, RenderList, SamplerDesc,
-    SamplerFilter, SamplerWrap, Texture as RendererTexture,
+    BlendMode, ClockDomainTrace, DrawStats, MeshMode, ObjectType, PresentModePolicy,
+    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    Texture as RendererTexture,
 };
 use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
@@ -21,6 +22,9 @@ use std::{
 use twox_hash::XxHash64;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
+
+const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
+const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Api {
@@ -306,6 +310,9 @@ pub struct State {
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     next_texture_id: u64,
+    next_present_id: u32,
+    last_host_present_ns: u64,
+    last_present_interval_ns: u64,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
 }
@@ -592,9 +599,58 @@ fn init(
         vsync_enabled,
         present_mode_policy,
         next_texture_id: 1,
+        next_present_id: 1,
+        last_host_present_ns: 0,
+        last_present_interval_ns: 0,
         screenshot_requested: false,
         captured_frame: None,
     })
+}
+
+#[cfg(target_os = "windows")]
+#[inline(always)]
+fn current_host_nanos() -> u64 {
+    crate::core::windows_rt::current_host_nanos()
+}
+
+#[cfg(not(target_os = "windows"))]
+#[inline(always)]
+const fn current_host_nanos() -> u64 {
+    0
+}
+
+#[cfg(target_os = "windows")]
+#[inline(always)]
+const fn host_clock_trace() -> ClockDomainTrace {
+    ClockDomainTrace::Qpc
+}
+
+#[cfg(not(target_os = "windows"))]
+#[inline(always)]
+const fn host_clock_trace() -> ClockDomainTrace {
+    ClockDomainTrace::Unknown
+}
+
+#[inline(always)]
+const fn wgpu_present_mode_trace(mode: wgpu::PresentMode) -> PresentModeTrace {
+    match mode {
+        wgpu::PresentMode::Fifo | wgpu::PresentMode::AutoVsync => PresentModeTrace::Fifo,
+        wgpu::PresentMode::FifoRelaxed => PresentModeTrace::FifoRelaxed,
+        wgpu::PresentMode::Mailbox => PresentModeTrace::Mailbox,
+        wgpu::PresentMode::Immediate | wgpu::PresentMode::AutoNoVsync => {
+            PresentModeTrace::Immediate
+        }
+    }
+}
+
+#[inline(always)]
+fn next_present_id(state: &mut State) -> u32 {
+    let id = state.next_present_id.max(1);
+    state.next_present_id = state.next_present_id.wrapping_add(1);
+    if state.next_present_id == 0 {
+        state.next_present_id = 1;
+    }
+    id
 }
 
 #[inline(always)]
@@ -1161,6 +1217,8 @@ pub fn draw(
         }
     };
     stats.acquire_us = elapsed_us_since(acquire_started);
+    let waited_for_image = stats.acquire_us >= WGPU_IMAGE_WAIT_THRESHOLD_US;
+    let suboptimal = frame.suboptimal;
     let view = frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
@@ -1397,9 +1455,28 @@ pub fn draw(
     let submit_started = Instant::now();
     let submission_index = state.queue.submit(Some(encoder.finish()));
     stats.submit_us = elapsed_us_since(submit_started);
+    let submitted_present_id = next_present_id(state);
     let present_started = Instant::now();
     frame.present();
     stats.present_us = elapsed_us_since(present_started);
+    let host_present_ns = current_host_nanos();
+    let actual_interval_ns = if host_present_ns != 0 && state.last_host_present_ns != 0 {
+        host_present_ns.saturating_sub(state.last_host_present_ns)
+    } else {
+        0
+    };
+    if actual_interval_ns != 0 {
+        state.last_present_interval_ns = if state.last_present_interval_ns == 0 {
+            actual_interval_ns
+        } else {
+            ((state.last_present_interval_ns.saturating_mul(3)).saturating_add(actual_interval_ns))
+                / 4
+        };
+    }
+    if host_present_ns != 0 {
+        state.last_host_present_ns = host_present_ns;
+    }
+    let mut back_pressure_waited = false;
     if apply_present_back_pressure && screenshot_readback.is_none() {
         // Uncapped wgpu submission can otherwise keep the CPU hot by queuing
         // work continuously; wait for this frame to retire before proceeding.
@@ -1408,10 +1485,11 @@ pub fn draw(
             submission_index: Some(submission_index),
             timeout: None,
         });
-        stats.gpu_wait_us = stats
-            .gpu_wait_us
-            .saturating_add(elapsed_us_since(wait_started));
+        let wait_us = elapsed_us_since(wait_started);
+        stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+        back_pressure_waited = wait_us >= WGPU_BACK_PRESSURE_THRESHOLD_US;
     }
+    let mut queue_idle_waited = false;
     if let Some((readback_buffer, width, height, padded_row_bytes, format)) = screenshot_readback {
         let slice = readback_buffer.slice(..);
         let (tx, rx) = mpsc::channel();
@@ -1423,9 +1501,9 @@ pub fn draw(
             submission_index: None,
             timeout: None,
         });
-        stats.gpu_wait_us = stats
-            .gpu_wait_us
-            .saturating_add(elapsed_us_since(wait_started));
+        let wait_us = elapsed_us_since(wait_started);
+        stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+        queue_idle_waited = wait_us != 0;
         if rx.recv().is_ok_and(|res| res.is_ok()) {
             let data = slice.get_mapped_range();
             let row_bytes = width * 4;
@@ -1464,6 +1542,31 @@ pub fn draw(
             warn!("wgpu screenshot readback failed: map_async returned error");
         }
     }
+    stats.present_stats = PresentStats {
+        mode: wgpu_present_mode_trace(state.config.present_mode),
+        display_clock: ClockDomainTrace::Unknown,
+        host_clock: if host_present_ns != 0 {
+            host_clock_trace()
+        } else {
+            ClockDomainTrace::Unknown
+        },
+        in_flight_images: 0,
+        waited_for_image,
+        applied_back_pressure: back_pressure_waited,
+        queue_idle_waited,
+        suboptimal,
+        submitted_present_id,
+        completed_present_id: if host_present_ns != 0 {
+            submitted_present_id
+        } else {
+            0
+        },
+        refresh_ns: state.last_present_interval_ns,
+        actual_interval_ns,
+        present_margin_ns: 0,
+        host_present_ns,
+        calibration_error_ns: 0,
+    };
     push_tmesh_debug_sample(state, tmesh_debug_frame);
 
     let mut tmesh_vpf = 0u32;
