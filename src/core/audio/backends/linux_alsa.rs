@@ -1,11 +1,12 @@
 use super::super::{
-    OutputBackendReady, QueuedSfx, RenderState, internal, note_output_underrun,
-    publish_output_timing,
+    OutputBackendReady, OutputTelemetryClock, QueuedSfx, RenderState, internal,
+    note_output_clock_fallback, note_output_underrun, publish_output_timing,
 };
 use crate::core::host_time::now_nanos;
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Direction, ValueOr};
 use libc::timespec;
+use log::info;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -34,6 +35,7 @@ pub(crate) struct AlsaOutputPrep {
     channels: usize,
     period_frames: u32,
     buffer_frames: u32,
+    host_clock: AlsaHostClock,
     mode: AlsaAccessMode,
 }
 
@@ -44,6 +46,12 @@ impl AlsaOutputPrep {
             device_channels: self.channels,
             device_name: self.device_name.clone(),
             backend_name: self.mode.backend_name(),
+            requested_output_mode: match self.mode {
+                AlsaAccessMode::Shared => crate::config::AudioOutputMode::Shared,
+                AlsaAccessMode::Exclusive => crate::config::AudioOutputMode::Exclusive,
+            },
+            fallback_from_native: false,
+            timing_clock: self.host_clock.telemetry_clock(),
         }
     }
 }
@@ -79,6 +87,7 @@ pub(crate) fn prepare(
         channels: actual.channels,
         period_frames: actual.period_frames,
         buffer_frames: actual.buffer_frames,
+        host_clock: actual.host_clock,
         mode,
     })
 }
@@ -125,6 +134,16 @@ enum AlsaHostClock {
     MonotonicRaw,
 }
 
+impl AlsaHostClock {
+    #[inline(always)]
+    const fn telemetry_clock(self) -> OutputTelemetryClock {
+        match self {
+            Self::Monotonic => OutputTelemetryClock::Monotonic,
+            Self::MonotonicRaw => OutputTelemetryClock::MonotonicRaw,
+        }
+    }
+}
+
 fn render_thread(
     prep: AlsaOutputPrep,
     music_ring: Arc<internal::SpscRingI16>,
@@ -161,6 +180,12 @@ fn render_thread_inner(
     })?;
     let period_ns = frames_to_nanos(actual.sample_rate_hz, actual.period_frames);
     let buffer_ns = frames_to_nanos(actual.sample_rate_hz, actual.buffer_frames);
+    info!(
+        "ALSA '{}' using {} output with {} timing.",
+        prep.device_name,
+        prep.mode.backend_name(),
+        actual.host_clock.telemetry_clock()
+    );
     publish_output_timing(
         actual.sample_rate_hz,
         period_ns,
@@ -427,6 +452,7 @@ fn playback_status_timing(
     let delay_frames_fallback = current_delay_frames_fallback(pcm);
     let delay_ns_fallback = frames_to_nanos(sample_rate_hz, delay_frames_fallback);
     let Some(status) = pcm.status().ok() else {
+        note_output_clock_fallback();
         return PlaybackStatusTiming {
             playback_host_nanos: now_nanos().saturating_add(delay_ns_fallback),
             delay_frames: delay_frames_fallback,
@@ -436,6 +462,7 @@ fn playback_status_timing(
     let delay_frames = status.get_delay().max(0) as u32;
     let delay_ns = frames_to_nanos(sample_rate_hz, delay_frames);
     let Some(sample) = sample_host_clock(host_clock) else {
+        note_output_clock_fallback();
         return PlaybackStatusTiming {
             playback_host_nanos: now_nanos().saturating_add(delay_ns),
             delay_frames,
@@ -443,6 +470,7 @@ fn playback_status_timing(
         };
     };
     let Some(status_clock_nanos) = timespec_nanos(status.get_htstamp()) else {
+        note_output_clock_fallback();
         return PlaybackStatusTiming {
             playback_host_nanos: now_nanos().saturating_add(delay_ns),
             delay_frames,

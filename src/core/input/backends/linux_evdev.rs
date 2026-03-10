@@ -1,5 +1,6 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
 use crate::core::host_time::{instant_nanos, now_nanos};
+use log::{debug, warn};
 use std::collections::HashSet;
 use std::ffi::c_void;
 use std::fs;
@@ -212,6 +213,13 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
             };
             let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
             let path_s = path.to_string_lossy().to_string();
+            if monotonic_timestamps {
+                debug!("linux evdev '{path_s}' enabled CLOCK_MONOTONIC event timestamps");
+            } else {
+                warn!(
+                    "linux evdev '{path_s}' could not enable CLOCK_MONOTONIC event timestamps; using receipt-time fallback"
+                );
+            }
             let uuid = uuid_from_bytes(path_s.as_bytes());
             let id = PadId(devs.len() as u32);
             let dev_name = format!("evdev:{path_s}");

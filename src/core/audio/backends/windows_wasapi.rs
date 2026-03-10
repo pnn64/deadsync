@@ -1,4 +1,7 @@
-use super::super::{OutputBackendReady, QueuedSfx, RenderState, internal, publish_output_timing};
+use super::super::{
+    OutputBackendReady, OutputTelemetryClock, QueuedSfx, RenderState, internal,
+    publish_output_timing,
+};
 use crate::core::windows_rt::{ThreadRole, boost_current_thread};
 use log::{error, warn};
 use std::mem::size_of;
@@ -62,6 +65,12 @@ impl WasapiOutputPrep {
             device_channels: self.channels,
             device_name: self.device_name.clone(),
             backend_name: self.mode.backend_name(),
+            requested_output_mode: match self.mode {
+                WasapiAccessMode::Shared => crate::config::AudioOutputMode::Shared,
+                WasapiAccessMode::Exclusive => crate::config::AudioOutputMode::Exclusive,
+            },
+            fallback_from_native: false,
+            timing_clock: OutputTelemetryClock::DeviceQpc,
         }
     }
 }

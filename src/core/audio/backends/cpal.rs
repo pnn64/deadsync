@@ -1,6 +1,6 @@
 use super::super::{
-    OutputBackend, OutputBackendReady, OutputDeviceInfo, OutputDeviceProbe, QueuedSfx, RenderState,
-    internal, output_playback_anchor,
+    OutputBackend, OutputBackendReady, OutputDeviceInfo, OutputDeviceProbe, OutputTelemetryClock,
+    QueuedSfx, RenderState, internal, output_playback_anchor,
 };
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -15,6 +15,7 @@ pub(crate) struct CpalBackendLaunch {
     pub device_name: String,
     pub sample_format: SampleFormat,
     pub stream_config: cpal::StreamConfig,
+    pub output_mode: crate::config::AudioOutputMode,
 }
 
 #[inline(always)]
@@ -143,6 +144,7 @@ pub(crate) fn enumerate_output_device_probes(
 pub(crate) fn start_output(
     launch: CpalBackendLaunch,
     music_ring: Arc<internal::SpscRingI16>,
+    fallback_from_native: bool,
 ) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
     let device_channels = launch.stream_config.channels as usize;
     let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
@@ -193,6 +195,9 @@ pub(crate) fn start_output(
             device_channels,
             device_name: launch.device_name,
             backend_name: "cpal",
+            requested_output_mode: launch.output_mode,
+            fallback_from_native,
+            timing_clock: OutputTelemetryClock::Callback,
         },
         sfx_sender,
     ))

@@ -118,6 +118,9 @@ struct OutputBackendReady {
     device_channels: usize,
     device_name: String,
     backend_name: &'static str,
+    requested_output_mode: crate::config::AudioOutputMode,
+    fallback_from_native: bool,
+    timing_clock: OutputTelemetryClock,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,11 +178,11 @@ impl std::fmt::Display for OutputTelemetryBackend {
             Self::Unknown => "unknown",
             Self::Cpal => "cpal",
             #[cfg(all(unix, not(target_os = "macos")))]
-            Self::AlsaShared => "alsa",
+            Self::AlsaShared => "alsa-shared",
             #[cfg(all(unix, not(target_os = "macos")))]
             Self::AlsaExclusive => "alsa-exclusive",
             #[cfg(windows)]
-            Self::WasapiShared => "wasapi",
+            Self::WasapiShared => "wasapi-shared",
             #[cfg(windows)]
             Self::WasapiExclusive => "wasapi-exclusive",
         };
@@ -187,9 +190,75 @@ impl std::fmt::Display for OutputTelemetryBackend {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum OutputTelemetryClock {
+    Unknown = 0,
+    Callback = 1,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    Monotonic = 2,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    MonotonicRaw = 3,
+    #[cfg(windows)]
+    DeviceQpc = 4,
+}
+
+impl OutputTelemetryClock {
+    #[inline(always)]
+    fn load() -> Self {
+        match OUTPUT_TIMING_CLOCK.load(Ordering::Relaxed) {
+            1 => Self::Callback,
+            #[cfg(all(unix, not(target_os = "macos")))]
+            2 => Self::Monotonic,
+            #[cfg(all(unix, not(target_os = "macos")))]
+            3 => Self::MonotonicRaw,
+            #[cfg(windows)]
+            4 => Self::DeviceQpc,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl std::fmt::Display for OutputTelemetryClock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let label = match self {
+            Self::Unknown => "unknown",
+            Self::Callback => "callback",
+            #[cfg(all(unix, not(target_os = "macos")))]
+            Self::Monotonic => "monotonic",
+            #[cfg(all(unix, not(target_os = "macos")))]
+            Self::MonotonicRaw => "monotonic_raw",
+            #[cfg(windows)]
+            Self::DeviceQpc => "device+qpc",
+        };
+        f.write_str(label)
+    }
+}
+
+#[inline(always)]
+const fn output_mode_bits(mode: crate::config::AudioOutputMode) -> u8 {
+    match mode {
+        crate::config::AudioOutputMode::Auto => 1,
+        crate::config::AudioOutputMode::Shared => 2,
+        crate::config::AudioOutputMode::Exclusive => 3,
+    }
+}
+
+#[inline(always)]
+const fn output_mode_from_bits(bits: u8) -> crate::config::AudioOutputMode {
+    match bits {
+        2 => crate::config::AudioOutputMode::Shared,
+        3 => crate::config::AudioOutputMode::Exclusive,
+        _ => crate::config::AudioOutputMode::Auto,
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct OutputTimingSnapshot {
     pub backend: OutputTelemetryBackend,
+    pub requested_output_mode: crate::config::AudioOutputMode,
+    pub fallback_from_native: bool,
+    pub timing_clock: OutputTelemetryClock,
     pub sample_rate_hz: u32,
     pub device_period_ns: u64,
     pub stream_latency_ns: u64,
@@ -197,18 +266,21 @@ pub struct OutputTimingSnapshot {
     pub padding_frames: u32,
     pub queued_frames: u32,
     pub estimated_output_delay_ns: u64,
+    pub clock_fallback_count: u64,
     pub underrun_count: u64,
 }
 
 impl OutputTimingSnapshot {
     #[inline(always)]
     pub const fn has_measurement(self) -> bool {
-        self.device_period_ns != 0
+        !matches!(self.backend, OutputTelemetryBackend::Unknown)
+            || self.device_period_ns != 0
             || self.stream_latency_ns != 0
             || self.buffer_frames != 0
             || self.padding_frames != 0
             || self.queued_frames != 0
             || self.estimated_output_delay_ns != 0
+            || self.clock_fallback_count != 0
             || self.underrun_count != 0
     }
 }
@@ -241,6 +313,9 @@ static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_BACKEND: AtomicU8 = AtomicU8::new(OutputTelemetryBackend::Unknown as u8);
+static OUTPUT_TIMING_REQUESTED_MODE: AtomicU8 = AtomicU8::new(1);
+static OUTPUT_TIMING_NATIVE_FALLBACK: AtomicBool = AtomicBool::new(false);
+static OUTPUT_TIMING_CLOCK: AtomicU8 = AtomicU8::new(OutputTelemetryClock::Unknown as u8);
 static OUTPUT_TIMING_SAMPLE_RATE_HZ: AtomicU32 = AtomicU32::new(0);
 static OUTPUT_TIMING_DEVICE_PERIOD_NS: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_STREAM_LATENCY_NS: AtomicU64 = AtomicU64::new(0);
@@ -248,6 +323,7 @@ static OUTPUT_TIMING_BUFFER_FRAMES: AtomicU32 = AtomicU32::new(0);
 static OUTPUT_TIMING_PADDING_FRAMES: AtomicU32 = AtomicU32::new(0);
 static OUTPUT_TIMING_QUEUED_FRAMES: AtomicU32 = AtomicU32::new(0);
 static OUTPUT_TIMING_EST_DELAY_NS: AtomicU64 = AtomicU64::new(0);
+static OUTPUT_TIMING_CLOCK_FALLBACKS: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_UNDERRUNS: AtomicU64 = AtomicU64::new(0);
 
 const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
@@ -729,6 +805,11 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
     OutputTimingSnapshot {
         backend: OutputTelemetryBackend::load(),
+        requested_output_mode: output_mode_from_bits(
+            OUTPUT_TIMING_REQUESTED_MODE.load(Ordering::Relaxed),
+        ),
+        fallback_from_native: OUTPUT_TIMING_NATIVE_FALLBACK.load(Ordering::Relaxed),
+        timing_clock: OutputTelemetryClock::load(),
         sample_rate_hz: OUTPUT_TIMING_SAMPLE_RATE_HZ.load(Ordering::Relaxed),
         device_period_ns: OUTPUT_TIMING_DEVICE_PERIOD_NS.load(Ordering::Relaxed),
         stream_latency_ns: OUTPUT_TIMING_STREAM_LATENCY_NS.load(Ordering::Relaxed),
@@ -736,6 +817,7 @@ pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
         padding_frames: OUTPUT_TIMING_PADDING_FRAMES.load(Ordering::Relaxed),
         queued_frames: OUTPUT_TIMING_QUEUED_FRAMES.load(Ordering::Relaxed),
         estimated_output_delay_ns: OUTPUT_TIMING_EST_DELAY_NS.load(Ordering::Relaxed),
+        clock_fallback_count: OUTPUT_TIMING_CLOCK_FALLBACKS.load(Ordering::Relaxed),
         underrun_count: OUTPUT_TIMING_UNDERRUNS.load(Ordering::Relaxed),
     }
 }
@@ -748,6 +830,12 @@ fn publish_output_backend_ready(ready: OutputBackendReady) {
         OutputTelemetryBackend::from_backend_name(ready.backend_name) as u8,
         Ordering::Relaxed,
     );
+    OUTPUT_TIMING_REQUESTED_MODE.store(
+        output_mode_bits(ready.requested_output_mode),
+        Ordering::Relaxed,
+    );
+    OUTPUT_TIMING_NATIVE_FALLBACK.store(ready.fallback_from_native, Ordering::Relaxed);
+    OUTPUT_TIMING_CLOCK.store(ready.timing_clock as u8, Ordering::Relaxed);
     OUTPUT_TIMING_SAMPLE_RATE_HZ.store(ready.device_sample_rate, Ordering::Relaxed);
     OUTPUT_TIMING_DEVICE_PERIOD_NS.store(0, Ordering::Relaxed);
     OUTPUT_TIMING_STREAM_LATENCY_NS.store(0, Ordering::Relaxed);
@@ -755,6 +843,7 @@ fn publish_output_backend_ready(ready: OutputBackendReady) {
     OUTPUT_TIMING_PADDING_FRAMES.store(0, Ordering::Relaxed);
     OUTPUT_TIMING_QUEUED_FRAMES.store(0, Ordering::Relaxed);
     OUTPUT_TIMING_EST_DELAY_NS.store(0, Ordering::Relaxed);
+    OUTPUT_TIMING_CLOCK_FALLBACKS.store(0, Ordering::Relaxed);
     OUTPUT_TIMING_UNDERRUNS.store(0, Ordering::Relaxed);
 }
 
@@ -780,6 +869,12 @@ pub(crate) fn publish_output_timing(
 #[inline(always)]
 pub(crate) fn note_output_underrun() {
     OUTPUT_TIMING_UNDERRUNS.fetch_add(1, Ordering::Relaxed);
+}
+
+#[inline(always)]
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) fn note_output_clock_fallback() {
+    OUTPUT_TIMING_CLOCK_FALLBACKS.fetch_add(1, Ordering::Relaxed);
 }
 
 fn commit_played_music_map(
@@ -1137,6 +1232,7 @@ fn init_engine_and_thread() -> AudioEngine {
             device_name: device_name.clone(),
             sample_format: default_config.sample_format(),
             stream_config,
+            output_mode,
         },
         #[cfg(all(unix, not(target_os = "macos")))]
         alsa: Some(AlsaBackendHint {
@@ -1166,8 +1262,14 @@ fn init_engine_and_thread() -> AudioEngine {
     };
 
     info!(
-        "Audio engine initialized ({} Hz, {} ch, backend={} device='{}').",
-        ready.device_sample_rate, ready.device_channels, ready.backend_name, ready.device_name
+        "Audio engine initialized ({} Hz, {} ch, backend={} req={} fallback={} clock={} device='{}').",
+        ready.device_sample_rate,
+        ready.device_channels,
+        ready.backend_name,
+        ready.requested_output_mode.as_str(),
+        ready.fallback_from_native,
+        ready.timing_clock,
+        ready.device_name
     );
     publish_output_backend_ready(ready.clone());
     AudioEngine {
@@ -1199,6 +1301,19 @@ fn start_output_backend(
         #[cfg(windows)]
         wasapi,
     } = launch;
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let requested_output_mode = alsa
+        .as_ref()
+        .map(|hint| hint.output_mode)
+        .unwrap_or(cpal.output_mode);
+    #[cfg(windows)]
+    let requested_output_mode = wasapi
+        .as_ref()
+        .map(|hint| hint.output_mode)
+        .unwrap_or(cpal.output_mode);
+    #[cfg(target_os = "macos")]
+    let requested_output_mode = cpal.output_mode;
+    let mut fallback_from_native = false;
 
     #[cfg(all(unix, not(target_os = "macos")))]
     if let Some(alsa) = alsa {
@@ -1218,7 +1333,8 @@ fn start_output_backend(
             access_mode,
         ) {
             Ok(prep) => {
-                let ready = prep.ready();
+                let mut ready = prep.ready();
+                ready.requested_output_mode = alsa.output_mode;
                 let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
                 match backends::linux_alsa::start(prep, music_ring.clone(), sfx_receiver) {
                     Ok(stream) => {
@@ -1235,6 +1351,7 @@ fn start_output_backend(
                             "Failed to start native ALSA output for '{}': {err}. Falling back to CPAL.",
                             alsa.device_name
                         );
+                        fallback_from_native = true;
                     }
                 }
             }
@@ -1249,6 +1366,7 @@ fn start_output_backend(
                     "Failed to prepare native ALSA output for '{}': {err}. Falling back to CPAL.",
                     alsa.device_name
                 );
+                fallback_from_native = true;
             }
         }
     }
@@ -1270,7 +1388,8 @@ fn start_output_backend(
             access_mode,
         ) {
             Ok(prep) => {
-                let ready = prep.ready();
+                let mut ready = prep.ready();
+                ready.requested_output_mode = wasapi.output_mode;
                 let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
                 match backends::windows_wasapi::start(prep, music_ring.clone(), sfx_receiver) {
                     Ok(stream) => {
@@ -1290,6 +1409,7 @@ fn start_output_backend(
                             "Failed to start native WASAPI output for '{}': {err}. Falling back to CPAL.",
                             wasapi.device_name
                         );
+                        fallback_from_native = true;
                     }
                 }
             }
@@ -1307,11 +1427,17 @@ fn start_output_backend(
                     "Failed to prepare native WASAPI output for '{}': {err}. Falling back to CPAL.",
                     wasapi.device_name
                 );
+                fallback_from_native = true;
             }
         }
     }
 
-    backends::cpal::start_output(cpal, music_ring)
+    backends::cpal::start_output(cpal, music_ring, fallback_from_native).map(
+        |(backend, mut ready, sfx_sender)| {
+            ready.requested_output_mode = requested_output_mode;
+            (backend, ready, sfx_sender)
+        },
+    )
 }
 
 /// Manager thread: builds the output backend, mixes SFX, and forwards music via ring.
