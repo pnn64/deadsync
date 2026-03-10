@@ -91,6 +91,7 @@ fn set_runtime_dir() -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     set_runtime_dir()?;
+    core::host_time::init();
 
     // Install logger immediately, then set runtime max level from config after loading it.
     core::logging::init(config::bootstrap_log_to_file());

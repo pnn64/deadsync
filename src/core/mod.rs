@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod display;
 pub mod gfx;
+pub(crate) mod host_time;
 pub mod input;
 pub mod logging;
 pub mod network;

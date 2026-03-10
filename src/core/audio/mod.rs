@@ -1,6 +1,7 @@
 mod backends;
 mod resample;
 
+use crate::core::host_time::instant_nanos;
 #[cfg(windows)]
 use crate::core::windows_rt::current_qpc_nanos;
 use cpal::traits::{DeviceTrait, HostTrait};
@@ -122,10 +123,9 @@ static MUSIC_MAP_GEN: AtomicU64 = AtomicU64::new(1);
 // Last audio callback timing, used to interpolate the playback position
 // between callback invocations so that the reported stream time is
 // continuous instead of jumping in whole buffer increments.
-static CALLBACK_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
 static CALLBACK_CLOCK_SEQ: AtomicU64 = AtomicU64::new(0);
 static CALLBACK_CLOCK_SOURCE: AtomicU8 = AtomicU8::new(CallbackClockSource::Instant as u8);
-// Stored as elapsed nanos + 1 from CALLBACK_EPOCH; 0 means "no callback yet".
+// Stored as elapsed nanos + 1 from the shared process host-clock epoch; 0 means "no callback yet".
 static LAST_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
@@ -362,9 +362,7 @@ fn reset_music_stream_clock() {
 
 #[inline(always)]
 fn callback_nanos_at(at: Instant) -> u64 {
-    at.checked_duration_since(*CALLBACK_EPOCH)
-        .map(|delta| delta.as_nanos().min((u64::MAX - 1) as u128) as u64)
-        .unwrap_or(0)
+    instant_nanos(at)
 }
 
 #[inline(always)]
@@ -603,7 +601,10 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
         valid_at_host_nanos: match source {
             #[cfg(windows)]
             CallbackClockSource::Qpc => at_nanos,
-            _ => 0,
+            #[cfg(windows)]
+            CallbackClockSource::Instant => 0,
+            #[cfg(not(windows))]
+            CallbackClockSource::Instant => at_nanos,
         },
     }
 }

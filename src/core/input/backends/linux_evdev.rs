@@ -1,10 +1,11 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
+use crate::core::host_time::{instant_nanos, now_nanos};
 use std::collections::HashSet;
 use std::ffi::c_void;
 use std::fs;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 const POLLIN: i16 = 0x0001;
 
@@ -43,9 +44,104 @@ struct Dev {
     id: PadId,
     uuid: [u8; 16],
     file: std::fs::File,
+    monotonic_timestamps: bool,
     hat_x: i32,
     hat_y: i32,
     dir: [bool; 4],
+}
+
+#[derive(Clone, Copy)]
+struct ClockSample {
+    instant: Instant,
+    monotonic_nanos: u64,
+}
+
+const IOC_NRBITS: u32 = 8;
+const IOC_TYPEBITS: u32 = 8;
+const IOC_SIZEBITS: u32 = 14;
+const IOC_NRSHIFT: u32 = 0;
+const IOC_TYPESHIFT: u32 = IOC_NRSHIFT + IOC_NRBITS;
+const IOC_SIZESHIFT: u32 = IOC_TYPESHIFT + IOC_TYPEBITS;
+const IOC_DIRSHIFT: u32 = IOC_SIZESHIFT + IOC_SIZEBITS;
+const IOC_WRITE: u32 = 1;
+const fn ioc(dir: u32, type_: u32, nr: u32, size: u32) -> libc::c_ulong {
+    ((dir << IOC_DIRSHIFT)
+        | (type_ << IOC_TYPESHIFT)
+        | (nr << IOC_NRSHIFT)
+        | (size << IOC_SIZESHIFT)) as libc::c_ulong
+}
+const fn iow(type_: u8, nr: u8, size: usize) -> libc::c_ulong {
+    ioc(IOC_WRITE, type_ as u32, nr as u32, size as u32)
+}
+const EVIOCSCLOCKID: libc::c_ulong = iow(b'E', 0xA0, size_of::<libc::c_int>());
+
+#[inline(always)]
+fn current_monotonic_nanos() -> Option<u64> {
+    let mut ts = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    let rc = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
+    if rc != 0 || ts.tv_sec < 0 || ts.tv_nsec < 0 {
+        return None;
+    }
+    Some((ts.tv_sec as u64).saturating_mul(1_000_000_000) + ts.tv_nsec as u64)
+}
+
+#[inline(always)]
+fn evdev_event_nanos(ev: InputEventRaw) -> Option<u64> {
+    if ev.tv_sec < 0 || ev.tv_usec < 0 {
+        return None;
+    }
+    Some(
+        (ev.tv_sec as u64).saturating_mul(1_000_000_000)
+            + (ev.tv_usec as u64).saturating_mul(1_000),
+    )
+}
+
+#[inline(always)]
+fn sample_monotonic_clock() -> Option<ClockSample> {
+    Some(ClockSample {
+        instant: Instant::now(),
+        monotonic_nanos: current_monotonic_nanos()?,
+    })
+}
+
+#[inline(always)]
+fn instant_from_clock_sample(target_nanos: u64, sample: ClockSample) -> Instant {
+    if target_nanos >= sample.monotonic_nanos {
+        sample
+            .instant
+            .checked_add(Duration::from_nanos(
+                target_nanos.saturating_sub(sample.monotonic_nanos),
+            ))
+            .unwrap_or(sample.instant)
+    } else {
+        sample
+            .instant
+            .checked_sub(Duration::from_nanos(
+                sample.monotonic_nanos.saturating_sub(target_nanos),
+            ))
+            .unwrap_or(sample.instant)
+    }
+}
+
+#[inline(always)]
+fn event_time(ev: InputEventRaw, sample: Option<ClockSample>) -> (Instant, u64) {
+    if let Some(sample) = sample
+        && let Some(target_nanos) = evdev_event_nanos(ev)
+    {
+        let timestamp = instant_from_clock_sample(target_nanos, sample);
+        return (timestamp, instant_nanos(timestamp));
+    }
+    let timestamp = Instant::now();
+    (timestamp, now_nanos())
+}
+
+#[inline(always)]
+fn enable_monotonic_timestamps(fd: i32) -> bool {
+    let mut clock_id = libc::CLOCK_MONOTONIC;
+    unsafe { libc::ioctl(fd, EVIOCSCLOCKID, &mut clock_id) == 0 }
 }
 
 #[inline(always)]
@@ -114,6 +210,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
             let Ok(file) = std::fs::File::open(&path) else {
                 continue;
             };
+            let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
             let path_s = path.to_string_lossy().to_string();
             let uuid = uuid_from_bytes(path_s.as_bytes());
             let id = PadId(devs.len() as u32);
@@ -132,6 +229,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 id,
                 uuid,
                 file,
+                monotonic_timestamps,
                 hat_x: 0,
                 hat_y: 0,
                 dir: [false; 4],
@@ -187,6 +285,11 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
 
             let count = (n as usize) / size_of::<InputEventRaw>();
             let count = count.min(buf.len());
+            let clock_sample = if dev.monotonic_timestamps {
+                sample_monotonic_clock()
+            } else {
+                None
+            };
             for j in 0..count {
                 let ev = unsafe { buf[j].assume_init() };
                 if ev.type_ == EV_SYN {
@@ -198,12 +301,12 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                     if ev.value == 2 {
                         continue;
                     }
-                    let timestamp = Instant::now();
+                    let (timestamp, host_nanos) = event_time(ev, clock_sample);
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
                         timestamp,
-                        host_nanos: 0,
+                        host_nanos,
                         code: PadCode(code_u32(ev.type_, ev.code)),
                         uuid: dev.uuid,
                         value: if pressed { 1.0 } else { 0.0 },
@@ -213,11 +316,11 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 }
 
                 if ev.type_ == EV_ABS {
-                    let timestamp = Instant::now();
+                    let (timestamp, host_nanos) = event_time(ev, clock_sample);
                     emit_pad(PadEvent::RawAxis {
                         id: dev.id,
                         timestamp,
-                        host_nanos: 0,
+                        host_nanos,
                         code: PadCode(code_u32(ev.type_, ev.code)),
                         uuid: dev.uuid,
                         value: ev.value as f32,
@@ -245,7 +348,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                         emit_pad(PadEvent::Dir {
                             id: dev.id,
                             timestamp,
-                            host_nanos: 0,
+                            host_nanos,
                             dir: dirs[k],
                             pressed: want[k],
                         });
