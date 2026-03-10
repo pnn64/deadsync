@@ -550,8 +550,10 @@ const INPUT_ROW_DEBOUNCE: &str = "Debounce (ms)";
 const INPUT_BACKEND_CHOICES: &[&str] = &["W32 Raw Input", "WGI (compat)"];
 #[cfg(target_os = "macos")]
 const INPUT_BACKEND_CHOICES: &[&str] = &["macOS IOHID"];
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(target_os = "linux")]
 const INPUT_BACKEND_CHOICES: &[&str] = &["Linux evdev"];
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
+const INPUT_BACKEND_CHOICES: &[&str] = &["Platform Default"];
 #[cfg(not(any(target_os = "windows", unix)))]
 const INPUT_BACKEND_CHOICES: &[&str] = &["Platform Default"];
 #[cfg(target_os = "windows")]
@@ -599,7 +601,7 @@ const SOUND_ROW_ASSIST_TICK_VOLUME: &str = "Assist Tick Volume";
 const SOUND_ROW_MUSIC_VOLUME: &str = "Music Volume";
 const SOUND_ROW_DEVICE: &str = "Sound Device";
 const SOUND_ROW_OUTPUT_MODE: &str = "Audio Output Mode";
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(target_os = "linux")]
 const SOUND_ROW_LINUX_BACKEND: &str = "Linux Audio Backend";
 const SOUND_ROW_SAMPLE_RATE: &str = "Audio Sample Rate";
 const SOUND_ROW_MINE_SOUNDS: &str = "Mine Sounds";
@@ -629,9 +631,9 @@ const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
 const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;
 const SCORE_IMPORT_ROW_ONLY_MISSING_INDEX: usize = 3;
 
-#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+#[cfg(all(target_os = "linux", has_pulse_audio))]
 const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PulseAudio", "ALSA"];
-#[cfg(all(unix, not(target_os = "macos"), not(has_pulse_audio)))]
+#[cfg(all(target_os = "linux", not(has_pulse_audio)))]
 const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "ALSA"];
 
 fn discover_system_noteskin_choices() -> Vec<String> {
@@ -1295,7 +1297,7 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["Auto", "Shared", "Exclusive"],
         inline: false,
     },
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     SubRow {
         label: SOUND_ROW_LINUX_BACKEND,
         choices: SOUND_LINUX_BACKEND_CHOICES,
@@ -1350,6 +1352,7 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
             "Select an output device detected at startup.",
             "Auto uses the host default output device.",
             "Windows playback prefers native WASAPI.",
+            "FreeBSD playback prefers native PCM/OSS.",
             "Linux backend routing depends on Linux Audio Backend and Audio Output Mode.",
             "Changing this takes effect on next launch.",
         ],
@@ -1361,10 +1364,11 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
             "Auto keeps the backend default policy.",
             "Shared forces shared-mode output where supported.",
             "Exclusive requests direct/exclusive output where supported and may fail if unavailable.",
+            "FreeBSD PCM currently supports Auto/Shared; Exclusive is not implemented yet.",
             "Changing this takes effect on next launch.",
         ],
     },
-    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+    #[cfg(all(target_os = "linux", has_pulse_audio))]
     Item {
         name: SOUND_ROW_LINUX_BACKEND,
         help: &[
@@ -1375,7 +1379,7 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
             "Changing this takes effect on next launch.",
         ],
     },
-    #[cfg(all(unix, not(target_os = "macos"), not(has_pulse_audio)))]
+    #[cfg(all(target_os = "linux", not(has_pulse_audio)))]
     Item {
         name: SOUND_ROW_LINUX_BACKEND,
         help: &[
@@ -3085,7 +3089,7 @@ fn audio_output_mode_from_choice(idx: usize) -> config::AudioOutputMode {
     }
 }
 
-#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+#[cfg(all(target_os = "linux", has_pulse_audio))]
 fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
     match backend {
         config::LinuxAudioBackend::Auto => 0,
@@ -3094,7 +3098,7 @@ fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize
     }
 }
 
-#[cfg(all(unix, not(target_os = "macos"), not(has_pulse_audio)))]
+#[cfg(all(target_os = "linux", not(has_pulse_audio)))]
 fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
     match backend {
         config::LinuxAudioBackend::Alsa => 1,
@@ -3102,7 +3106,7 @@ fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize
     }
 }
 
-#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+#[cfg(all(target_os = "linux", has_pulse_audio))]
 fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
     match idx {
         1 => config::LinuxAudioBackend::PulseAudio,
@@ -3111,7 +3115,7 @@ fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
     }
 }
 
-#[cfg(all(unix, not(target_os = "macos"), not(has_pulse_audio)))]
+#[cfg(all(target_os = "linux", not(has_pulse_audio)))]
 fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
     match idx {
         1 => config::LinuxAudioBackend::Alsa,
@@ -3893,7 +3897,7 @@ pub fn init() -> State {
         SOUND_ROW_OUTPUT_MODE,
         audio_output_mode_choice_index(cfg.audio_output_mode),
     );
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     set_sound_choice_index(
         &mut state,
         SOUND_ROW_LINUX_BACKEND,
@@ -5338,7 +5342,7 @@ fn apply_submenu_choice_delta(
             SOUND_ROW_OUTPUT_MODE => {
                 config::update_audio_output_mode(audio_output_mode_from_choice(new_index));
             }
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(target_os = "linux")]
             SOUND_ROW_LINUX_BACKEND => {
                 config::update_linux_audio_backend(linux_audio_backend_from_choice(new_index));
             }

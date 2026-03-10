@@ -1,7 +1,10 @@
 pub mod cpal;
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(target_os = "freebsd")]
+pub mod freebsd_pcm;
+#[cfg(target_os = "linux")]
 pub mod linux_alsa;
-#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+#[cfg(target_os = "linux")]
+#[cfg(has_pulse_audio)]
 pub mod linux_pulse;
 #[cfg(windows)]
 pub mod windows_wasapi;

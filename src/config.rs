@@ -3694,7 +3694,7 @@ pub fn update_audio_output_mode(mode: AudioOutputMode) {
     save_without_keymaps();
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(target_os = "linux")]
 pub fn update_linux_audio_backend(backend: LinuxAudioBackend) {
     {
         let mut cfg = lock_config();

@@ -4,7 +4,7 @@ pub(super) use super::{
     GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes,
 };
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(target_os = "linux")]
 pub(super) mod linux_evdev;
 #[cfg(target_os = "macos")]
 pub(super) mod macos_iohid;

@@ -93,7 +93,7 @@ pub(crate) fn enumerate_output_device_probes(
                 let name = device_name(&dev);
                 let is_default = name == default_device_name;
                 let tag = if is_default { " (default)" } else { "" };
-                #[cfg(all(unix, not(target_os = "macos")))]
+                #[cfg(target_os = "linux")]
                 let alsa_pcm_id = device_id_string(&dev);
                 #[cfg(windows)]
                 let wasapi_id = device_id_string(&dev);
@@ -121,14 +121,16 @@ pub(crate) fn enumerate_output_device_probes(
                     }
                 };
                 probes.push(OutputDeviceProbe {
-                    device: dev,
+                    cpal_device: Some(dev),
                     info: OutputDeviceInfo {
                         name,
                         is_default,
                         sample_rates_hz,
                     },
-                    #[cfg(all(unix, not(target_os = "macos")))]
+                    #[cfg(target_os = "linux")]
                     alsa_pcm_id,
+                    #[cfg(target_os = "freebsd")]
+                    freebsd_dsp_path: None,
                     #[cfg(windows)]
                     wasapi_id,
                 });

@@ -44,10 +44,12 @@ pub struct OutputDeviceInfo {
 }
 
 struct OutputDeviceProbe {
-    device: cpal::Device,
+    cpal_device: Option<cpal::Device>,
     info: OutputDeviceInfo,
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     alsa_pcm_id: Option<String>,
+    #[cfg(target_os = "freebsd")]
+    freebsd_dsp_path: Option<String>,
     #[cfg(windows)]
     wasapi_id: Option<String>,
 }
@@ -94,7 +96,7 @@ struct WasapiBackendHint {
     output_mode: crate::config::AudioOutputMode,
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(target_os = "linux")]
 #[derive(Clone)]
 struct AlsaBackendHint {
     pcm_id: Option<String>,
@@ -104,7 +106,8 @@ struct AlsaBackendHint {
     output_mode: crate::config::AudioOutputMode,
 }
 
-#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+#[cfg(target_os = "linux")]
+#[cfg(has_pulse_audio)]
 #[derive(Clone)]
 struct PulseBackendHint {
     requested_device_name: Option<String>,
@@ -113,17 +116,30 @@ struct PulseBackendHint {
     output_mode: crate::config::AudioOutputMode,
 }
 
+#[cfg(target_os = "freebsd")]
+#[derive(Clone)]
+struct FreeBsdPcmBackendHint {
+    dsp_path: Option<String>,
+    device_name: String,
+    sample_rate_hz: u32,
+    channels: usize,
+    output_mode: crate::config::AudioOutputMode,
+}
+
 #[derive(Clone)]
 struct AudioThreadLaunch {
-    cpal: backends::cpal::CpalBackendLaunch,
-    #[cfg(all(unix, not(target_os = "macos")))]
+    cpal: Option<backends::cpal::CpalBackendLaunch>,
+    #[cfg(target_os = "linux")]
     explicit_device_requested: bool,
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     linux_backend: crate::config::LinuxAudioBackend,
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     alsa: Option<AlsaBackendHint>,
-    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+    #[cfg(target_os = "linux")]
+    #[cfg(has_pulse_audio)]
     pulse: Option<PulseBackendHint>,
+    #[cfg(target_os = "freebsd")]
+    freebsd_pcm: Option<FreeBsdPcmBackendHint>,
     #[cfg(windows)]
     wasapi: Option<WasapiBackendHint>,
 }
@@ -145,16 +161,19 @@ struct OutputBackendReady {
 pub enum OutputTelemetryBackend {
     Unknown = 0,
     Cpal = 1,
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     AlsaShared = 2,
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     AlsaExclusive = 3,
     #[cfg(windows)]
     WasapiShared = 4,
     #[cfg(windows)]
     WasapiExclusive = 5,
-    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+    #[cfg(target_os = "linux")]
+    #[cfg(has_pulse_audio)]
     PulseAudioShared = 6,
+    #[cfg(target_os = "freebsd")]
+    FreeBsdPcm = 7,
 }
 
 impl OutputTelemetryBackend {
@@ -162,16 +181,19 @@ impl OutputTelemetryBackend {
     fn from_backend_name(name: &'static str) -> Self {
         match name {
             "cpal" => Self::Cpal,
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(target_os = "linux")]
             "alsa-shared" => Self::AlsaShared,
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(target_os = "linux")]
             "alsa-exclusive" => Self::AlsaExclusive,
             #[cfg(windows)]
             "wasapi-shared" => Self::WasapiShared,
             #[cfg(windows)]
             "wasapi-exclusive" => Self::WasapiExclusive,
-            #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pulse_audio)]
             "pulse-shared" => Self::PulseAudioShared,
+            #[cfg(target_os = "freebsd")]
+            "freebsd-pcm" => Self::FreeBsdPcm,
             _ => Self::Unknown,
         }
     }
@@ -180,16 +202,19 @@ impl OutputTelemetryBackend {
     fn load() -> Self {
         match OUTPUT_TIMING_BACKEND.load(Ordering::Relaxed) {
             1 => Self::Cpal,
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(target_os = "linux")]
             2 => Self::AlsaShared,
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(target_os = "linux")]
             3 => Self::AlsaExclusive,
             #[cfg(windows)]
             4 => Self::WasapiShared,
             #[cfg(windows)]
             5 => Self::WasapiExclusive,
-            #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pulse_audio)]
             6 => Self::PulseAudioShared,
+            #[cfg(target_os = "freebsd")]
+            7 => Self::FreeBsdPcm,
             _ => Self::Unknown,
         }
     }
@@ -200,16 +225,19 @@ impl std::fmt::Display for OutputTelemetryBackend {
         let label = match self {
             Self::Unknown => "unknown",
             Self::Cpal => "cpal",
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(target_os = "linux")]
             Self::AlsaShared => "alsa-shared",
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(target_os = "linux")]
             Self::AlsaExclusive => "alsa-exclusive",
             #[cfg(windows)]
             Self::WasapiShared => "wasapi-shared",
             #[cfg(windows)]
             Self::WasapiExclusive => "wasapi-exclusive",
-            #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pulse_audio)]
             Self::PulseAudioShared => "pulse-shared",
+            #[cfg(target_os = "freebsd")]
+            Self::FreeBsdPcm => "freebsd-pcm",
         };
         f.write_str(label)
     }
@@ -1206,10 +1234,8 @@ impl RenderState {
     }
 }
 
-fn init_engine_and_thread() -> AudioEngine {
-    let (command_sender, command_receiver) = channel();
-    let (ready_sender, ready_receiver) = channel();
-
+#[cfg(not(target_os = "freebsd"))]
+fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
     let host = cpal::default_host();
     let default_device = host
         .default_output_device()
@@ -1220,35 +1246,36 @@ fn init_engine_and_thread() -> AudioEngine {
     if device_probes.is_empty() {
         let fallback_rates = backends::cpal::collect_supported_sample_rates(&default_device);
         device_probes.push(OutputDeviceProbe {
-            device: default_device.clone(),
+            cpal_device: Some(default_device.clone()),
             info: OutputDeviceInfo {
                 name: default_device_name.clone(),
                 is_default: true,
                 sample_rates_hz: fallback_rates,
             },
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(target_os = "linux")]
             alsa_pcm_id: backends::cpal::device_id_string(&default_device),
             #[cfg(windows)]
             wasapi_id: backends::cpal::device_id_string(&default_device),
         });
     }
 
-    let cfg = crate::config::get();
     let mut device = default_device;
     let mut device_name = default_device_name;
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     let explicit_device_requested = cfg.audio_output_device_index.is_some();
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     let linux_backend = cfg.linux_audio_backend;
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     let mut alsa_pcm_id = backends::cpal::device_id_string(&device);
     #[cfg(windows)]
     let mut wasapi_device_id = backends::cpal::device_id_string(&device);
     if let Some(requested_idx) = cfg.audio_output_device_index {
         if let Some(probe) = device_probes.get(requested_idx as usize) {
-            device = probe.device.clone();
+            if let Some(cpal_device) = &probe.cpal_device {
+                device = cpal_device.clone();
+            }
             device_name = probe.info.name.clone();
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(target_os = "linux")]
             {
                 alsa_pcm_id = probe.alsa_pcm_id.clone();
             }
@@ -1292,7 +1319,6 @@ fn init_engine_and_thread() -> AudioEngine {
             stream_config.sample_rate
         );
     }
-
     debug!(
         "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}).",
         device_name,
@@ -1306,46 +1332,149 @@ fn init_engine_and_thread() -> AudioEngine {
         stream_config.channels,
         output_mode.as_str()
     );
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let alsa_sample_rate_hz = stream_config.sample_rate;
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let alsa_channels = stream_config.channels as usize;
+    #[cfg(target_os = "linux")]
+    let native_sample_rate_hz = stream_config.sample_rate;
+    #[cfg(target_os = "linux")]
+    let native_channels = stream_config.channels as usize;
 
-    let launch = AudioThreadLaunch {
-        cpal: backends::cpal::CpalBackendLaunch {
-            device,
-            device_name: device_name.clone(),
-            sample_format: default_config.sample_format(),
-            stream_config,
-            output_mode,
+    (
+        device_probes,
+        AudioThreadLaunch {
+            cpal: Some(backends::cpal::CpalBackendLaunch {
+                device,
+                device_name: device_name.clone(),
+                sample_format: default_config.sample_format(),
+                stream_config,
+                output_mode,
+            }),
+            #[cfg(target_os = "linux")]
+            explicit_device_requested,
+            #[cfg(target_os = "linux")]
+            linux_backend,
+            #[cfg(target_os = "linux")]
+            alsa: Some(AlsaBackendHint {
+                pcm_id: alsa_pcm_id,
+                device_name: device_name.clone(),
+                sample_rate_hz: native_sample_rate_hz,
+                channels: native_channels,
+                output_mode,
+            }),
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pulse_audio)]
+            pulse: Some(PulseBackendHint {
+                requested_device_name: explicit_device_requested.then_some(device_name.clone()),
+                sample_rate_hz: native_sample_rate_hz,
+                channels: native_channels,
+                output_mode,
+            }),
+            #[cfg(target_os = "freebsd")]
+            freebsd_pcm: None,
+            #[cfg(windows)]
+            wasapi: Some(WasapiBackendHint {
+                device_id: wasapi_device_id,
+                device_name: device_name.clone(),
+                requested_rate_hz: requested_rate,
+                output_mode,
+            }),
         },
-        #[cfg(all(unix, not(target_os = "macos")))]
-        explicit_device_requested,
-        #[cfg(all(unix, not(target_os = "macos")))]
-        linux_backend,
-        #[cfg(all(unix, not(target_os = "macos")))]
-        alsa: Some(AlsaBackendHint {
-            pcm_id: alsa_pcm_id,
-            device_name: device_name.clone(),
-            sample_rate_hz: alsa_sample_rate_hz,
-            channels: alsa_channels,
-            output_mode,
-        }),
-        #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
-        pulse: Some(PulseBackendHint {
-            requested_device_name: explicit_device_requested.then_some(device_name.clone()),
-            sample_rate_hz: alsa_sample_rate_hz,
-            channels: alsa_channels,
-            output_mode,
-        }),
-        #[cfg(windows)]
-        wasapi: Some(WasapiBackendHint {
-            device_id: wasapi_device_id,
-            device_name: device_name.clone(),
-            requested_rate_hz: requested_rate,
-            output_mode,
-        }),
-    };
+    )
+}
+
+#[cfg(target_os = "freebsd")]
+fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+    let mut device_probes: Vec<_> = backends::freebsd_pcm::enumerate_output_devices()
+        .into_iter()
+        .map(|dev| OutputDeviceProbe {
+            cpal_device: None,
+            info: OutputDeviceInfo {
+                name: dev.name,
+                is_default: dev.is_default,
+                sample_rates_hz: Vec::new(),
+            },
+            freebsd_dsp_path: Some(dev.path),
+        })
+        .collect();
+    let output_mode = cfg.audio_output_mode;
+    let mut device_name = device_probes
+        .iter()
+        .find(|probe| probe.info.is_default)
+        .map(|probe| probe.info.name.clone())
+        .unwrap_or_else(|| "FreeBSD PCM default".to_string());
+    let mut dsp_path = device_probes
+        .iter()
+        .find(|probe| probe.info.is_default)
+        .and_then(|probe| probe.freebsd_dsp_path.clone());
+    if let Some(requested_idx) = cfg.audio_output_device_index {
+        if let Some(probe) = device_probes.get(requested_idx as usize) {
+            device_name = probe.info.name.clone();
+            dsp_path = probe.freebsd_dsp_path.clone();
+            info!(
+                "Audio output device override selected: index {} '{}'.",
+                requested_idx, device_name
+            );
+        } else {
+            warn!(
+                "Audio output device override index {} not found; using default device.",
+                requested_idx
+            );
+        }
+    }
+    if device_probes.is_empty() {
+        warn!(
+            "No FreeBSD PCM devices were enumerated at startup; native audio will still try /dev/dsp."
+        );
+        device_probes.push(OutputDeviceProbe {
+            cpal_device: None,
+            info: OutputDeviceInfo {
+                name: "FreeBSD PCM (/dev/dsp)".to_string(),
+                is_default: true,
+                sample_rates_hz: Vec::new(),
+            },
+            freebsd_dsp_path: Some("/dev/dsp".to_string()),
+        });
+        if dsp_path.is_none() {
+            dsp_path = Some("/dev/dsp".to_string());
+            device_name = "FreeBSD PCM (/dev/dsp)".to_string();
+        }
+    }
+    let sample_rate_hz = cfg.audio_sample_rate_hz.unwrap_or(48_000).max(1);
+    debug!(
+        "FreeBSD PCM device '{}' selected at {} Hz, 2 ch, mode={}.",
+        device_name,
+        sample_rate_hz,
+        output_mode.as_str()
+    );
+    (
+        device_probes,
+        AudioThreadLaunch {
+            cpal: None,
+            #[cfg(target_os = "linux")]
+            explicit_device_requested: false,
+            #[cfg(target_os = "linux")]
+            linux_backend: cfg.linux_audio_backend,
+            #[cfg(target_os = "linux")]
+            alsa: None,
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pulse_audio)]
+            pulse: None,
+            freebsd_pcm: Some(FreeBsdPcmBackendHint {
+                dsp_path,
+                device_name,
+                sample_rate_hz,
+                channels: 2,
+                output_mode,
+            }),
+            #[cfg(windows)]
+            wasapi: None,
+        },
+    )
+}
+
+fn init_engine_and_thread() -> AudioEngine {
+    let (command_sender, command_receiver) = channel();
+    let (ready_sender, ready_receiver) = channel();
+    let cfg = crate::config::get();
+    let (device_probes, launch) = build_audio_launch(&cfg);
 
     thread::spawn(move || {
         audio_manager_thread(command_receiver, ready_sender, launch);
@@ -1381,15 +1510,18 @@ fn init_engine_and_thread() -> AudioEngine {
 #[allow(dead_code)]
 enum OutputBackend {
     Cpal(cpal::Stream),
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     Alsa(backends::linux_alsa::AlsaOutputStream),
-    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+    #[cfg(target_os = "linux")]
+    #[cfg(has_pulse_audio)]
     Pulse(backends::linux_pulse::PulseOutputStream),
+    #[cfg(target_os = "freebsd")]
+    FreeBsdPcm(backends::freebsd_pcm::FreeBsdPcmOutputStream),
     #[cfg(windows)]
     Wasapi(backends::windows_wasapi::WasapiOutputStream),
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(target_os = "linux")]
 fn start_linux_alsa_backend(
     alsa: AlsaBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
@@ -1416,7 +1548,8 @@ fn start_linux_alsa_backend(
     Ok((OutputBackend::Alsa(stream), ready, sfx_sender))
 }
 
-#[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+#[cfg(target_os = "linux")]
+#[cfg(has_pulse_audio)]
 fn start_linux_pulse_backend(
     pulse: PulseBackendHint,
     music_ring: Arc<internal::SpscRingI16>,
@@ -1442,46 +1575,91 @@ fn start_linux_pulse_backend(
     Ok((OutputBackend::Pulse(stream), ready, sfx_sender))
 }
 
+#[cfg(target_os = "freebsd")]
+fn start_freebsd_pcm_backend(
+    pcm: FreeBsdPcmBackendHint,
+    music_ring: Arc<internal::SpscRingI16>,
+) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+    if matches!(pcm.output_mode, crate::config::AudioOutputMode::Exclusive) {
+        return Err("FreeBSD PCM exclusive output is not implemented yet.".to_string());
+    }
+    let prep = backends::freebsd_pcm::prepare(
+        pcm.dsp_path.clone(),
+        pcm.device_name.clone(),
+        pcm.sample_rate_hz,
+        pcm.channels,
+    )?;
+    let mut ready = prep.ready();
+    ready.requested_output_mode = pcm.output_mode;
+    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let stream = backends::freebsd_pcm::start(prep, music_ring, sfx_receiver)?;
+    Ok((OutputBackend::FreeBsdPcm(stream), ready, sfx_sender))
+}
+
 fn start_output_backend(
     launch: AudioThreadLaunch,
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
     let AudioThreadLaunch {
         cpal,
-        #[cfg(all(unix, not(target_os = "macos")))]
+        #[cfg(target_os = "linux")]
         explicit_device_requested,
-        #[cfg(all(unix, not(target_os = "macos")))]
+        #[cfg(target_os = "linux")]
         linux_backend,
-        #[cfg(all(unix, not(target_os = "macos")))]
+        #[cfg(target_os = "linux")]
         alsa,
-        #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+        #[cfg(target_os = "linux")]
+        #[cfg(has_pulse_audio)]
         pulse,
+        #[cfg(target_os = "freebsd")]
+        freebsd_pcm,
         #[cfg(windows)]
         wasapi,
     } = launch;
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(target_os = "linux")]
     let requested_output_mode = alsa
         .as_ref()
         .map(|hint| hint.output_mode)
         .or_else(|| {
-            #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+            #[cfg(target_os = "linux")]
+            #[cfg(has_pulse_audio)]
             {
                 pulse.as_ref().map(|hint| hint.output_mode)
             }
-            #[cfg(not(all(unix, not(target_os = "macos"), has_pulse_audio)))]
+            #[cfg(not(all(target_os = "linux", has_pulse_audio)))]
             {
                 None
             }
         })
-        .unwrap_or(cpal.output_mode);
+        .unwrap_or_else(|| {
+            cpal.as_ref()
+                .map(|launch| launch.output_mode)
+                .unwrap_or(crate::config::AudioOutputMode::Auto)
+        });
+    #[cfg(target_os = "freebsd")]
+    let requested_output_mode = freebsd_pcm
+        .as_ref()
+        .map(|hint| hint.output_mode)
+        .unwrap_or_else(|| {
+            cpal.as_ref()
+                .map(|launch| launch.output_mode)
+                .unwrap_or(crate::config::AudioOutputMode::Auto)
+        });
     #[cfg(windows)]
     let requested_output_mode = wasapi
         .as_ref()
         .map(|hint| hint.output_mode)
-        .unwrap_or(cpal.output_mode);
+        .unwrap_or_else(|| {
+            cpal.as_ref()
+                .map(|launch| launch.output_mode)
+                .unwrap_or(crate::config::AudioOutputMode::Auto)
+        });
     #[cfg(target_os = "macos")]
-    let requested_output_mode = cpal.output_mode;
-    #[cfg(all(unix, not(target_os = "macos")))]
+    let requested_output_mode = cpal
+        .as_ref()
+        .map(|launch| launch.output_mode)
+        .unwrap_or(crate::config::AudioOutputMode::Auto);
+    #[cfg(target_os = "linux")]
     let fallback_from_native = {
         match linux_backend {
             crate::config::LinuxAudioBackend::Alsa => {
@@ -1491,14 +1669,15 @@ fn start_output_backend(
                 return start_linux_alsa_backend(alsa, music_ring);
             }
             crate::config::LinuxAudioBackend::PulseAudio => {
-                #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+                #[cfg(target_os = "linux")]
+                #[cfg(has_pulse_audio)]
                 {
                     let Some(pulse) = pulse else {
                         return Err("PulseAudio backend hint unavailable.".to_string());
                     };
                     return start_linux_pulse_backend(pulse, music_ring);
                 }
-                #[cfg(not(all(unix, not(target_os = "macos"), has_pulse_audio)))]
+                #[cfg(not(all(target_os = "linux", has_pulse_audio)))]
                 {
                     return Err(
                         "PulseAudio backend support was not built into this binary.".to_string()
@@ -1529,7 +1708,8 @@ fn start_output_backend(
                         }
                     }
                 } else {
-                    #[cfg(all(unix, not(target_os = "macos"), has_pulse_audio))]
+                    #[cfg(target_os = "linux")]
+                    #[cfg(has_pulse_audio)]
                     if let Some(pulse) = pulse {
                         match start_linux_pulse_backend(pulse, music_ring.clone()) {
                             Ok(output) => return Ok(output),
@@ -1555,7 +1735,22 @@ fn start_output_backend(
             }
         }
     };
-    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    #[cfg(target_os = "freebsd")]
+    let mut fallback_from_native = false;
+    #[cfg(target_os = "freebsd")]
+    if let Some(pcm) = freebsd_pcm {
+        match start_freebsd_pcm_backend(pcm.clone(), music_ring.clone()) {
+            Ok(output) => return Ok(output),
+            Err(err) => {
+                if matches!(pcm.output_mode, crate::config::AudioOutputMode::Exclusive) {
+                    return Err(err);
+                }
+                warn!("Failed to start native FreeBSD PCM output: {err}. Falling back to CPAL.");
+                fallback_from_native = true;
+            }
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
     let mut fallback_from_native = false;
 
     #[cfg(windows)]
@@ -1619,6 +1814,9 @@ fn start_output_backend(
         }
     }
 
+    let Some(cpal) = cpal else {
+        return Err("no CPAL fallback backend is available on this platform build.".to_string());
+    };
     backends::cpal::start_output(cpal, music_ring, fallback_from_native).map(
         |(backend, mut ready, sfx_sender)| {
             ready.requested_output_mode = requested_output_mode;
