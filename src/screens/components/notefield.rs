@@ -1295,6 +1295,132 @@ fn scoring_count(p: &PlayerRuntime, grade: JudgeGrade) -> u32 {
     p.scoring_counts[crate::game::judgment::judge_grade_ix(grade)]
 }
 
+#[inline(always)]
+fn add_window_counts(
+    lhs: crate::game::timing::WindowCounts,
+    rhs: crate::game::timing::WindowCounts,
+) -> crate::game::timing::WindowCounts {
+    crate::game::timing::WindowCounts {
+        w0: lhs.w0.saturating_add(rhs.w0),
+        w1: lhs.w1.saturating_add(rhs.w1),
+        w2: lhs.w2.saturating_add(rhs.w2),
+        w3: lhs.w3.saturating_add(rhs.w3),
+        w4: lhs.w4.saturating_add(rhs.w4),
+        w5: lhs.w5.saturating_add(rhs.w5),
+        miss: lhs.miss.saturating_add(rhs.miss),
+    }
+}
+
+#[inline(always)]
+fn window_counts_total_taps(wc: &crate::game::timing::WindowCounts) -> u32 {
+    wc.w0
+        .saturating_add(wc.w1)
+        .saturating_add(wc.w2)
+        .saturating_add(wc.w3)
+        .saturating_add(wc.w4)
+        .saturating_add(wc.w5)
+        .saturating_add(wc.miss)
+}
+
+/// Compute predictive kept/lost/pace percentages for ITG Money scoring.
+fn predictive_money_percents(
+    current_possible_dp: i32,
+    possible_dp: i32,
+    actual_dp: i32,
+) -> (f64, f64, f64) {
+    let dp_lost = current_possible_dp.saturating_sub(actual_dp);
+    let kept_dp = possible_dp.saturating_sub(dp_lost).max(0);
+    let kept = ((f64::from(kept_dp) / f64::from(possible_dp)) * 10000.0).floor() / 100.0;
+    let lost = (100.0 - kept).max(0.0);
+    let pace = if current_possible_dp > 0 {
+        ((f64::from(actual_dp) / f64::from(current_possible_dp)) * 10000.0).floor() / 100.0
+    } else {
+        0.0
+    };
+    (kept, lost, pace)
+}
+
+/// Compute predictive kept/lost/pace percentages for EX scoring.
+/// EX weights: W0×3.5 + W1×3 + W2×2 + W3×1 + holds + rolls − mines.
+/// Total possible: total_steps×3.5 + holds_total + rolls_total.
+fn predictive_ex_percents(
+    wc: &crate::game::timing::WindowCounts,
+    holds_held: u32,
+    rolls_held: u32,
+    mines_hit: u32,
+    totals: &crate::game::gameplay::CourseDisplayTotals,
+    resolved_holds_rolls: u32,
+) -> (f64, f64, f64) {
+    let total_possible = f64::from(totals.total_steps).mul_add(
+        3.5,
+        f64::from(totals.holds_total) + f64::from(totals.rolls_total),
+    );
+    if total_possible <= 0.0 {
+        return (0.0, 0.0, 0.0);
+    }
+    let actual = f64::from(wc.w0) * 3.5
+        + f64::from(wc.w1) * 3.0
+        + f64::from(wc.w2) * 2.0
+        + f64::from(wc.w3)
+        + f64::from(holds_held)
+        + f64::from(rolls_held)
+        - f64::from(mines_hit.min(totals.mines_total));
+    let current_possible = f64::from(window_counts_total_taps(wc))
+        .mul_add(3.5, f64::from(resolved_holds_rolls));
+    let lost = (current_possible - actual).max(0.0);
+    let kept = (total_possible - lost).max(0.0);
+    let kept_pct = ((kept / total_possible) * 10000.0).floor() / 100.0;
+    let lost_pct = (100.0 - kept_pct).max(0.0);
+    let pace_pct = if current_possible > 0.0 {
+        ((actual / current_possible).max(0.0) * 10000.0).floor() / 100.0
+    } else {
+        0.0
+    };
+    (kept_pct, lost_pct, pace_pct)
+}
+
+/// Compute predictive kept/lost/pace percentages for H.EX (Hard EX) scoring.
+/// H.EX weights: W0-10ms×3.5 + W1-10ms×3 + W2×1 + holds + rolls − mines.
+/// Total possible: total_steps×3.5 + holds_total + rolls_total.
+fn predictive_hex_percents(
+    wc: &crate::game::timing::WindowCounts,
+    wc10: &crate::game::timing::WindowCounts,
+    holds_held: u32,
+    rolls_held: u32,
+    mines_hit: u32,
+    totals: &crate::game::gameplay::CourseDisplayTotals,
+    resolved_holds_rolls: u32,
+) -> (f64, f64, f64) {
+    let total_possible = f64::from(totals.total_steps).mul_add(
+        3.5,
+        f64::from(totals.holds_total) + f64::from(totals.rolls_total),
+    );
+    if total_possible <= 0.0 {
+        return (0.0, 0.0, 0.0);
+    }
+    let fantastic_total = wc.w0.saturating_add(wc.w1);
+    let w010 = wc10.w0;
+    let w110 = fantastic_total.saturating_sub(w010);
+    let actual = f64::from(w010) * 3.5
+        + f64::from(w110) * 3.0
+        + f64::from(wc.w2)
+        + f64::from(holds_held)
+        + f64::from(rolls_held)
+        - f64::from(mines_hit.min(totals.mines_total));
+    let current_possible = f64::from(window_counts_total_taps(wc))
+        .mul_add(3.5, f64::from(resolved_holds_rolls));
+    let lost = (current_possible - actual).max(0.0);
+    let kept = (total_possible - lost).max(0.0);
+    let kept_pct = ((kept / total_possible) * 10000.0).floor() / 100.0;
+    let lost_pct = (100.0 - kept_pct).max(0.0);
+    let pace_pct = if current_possible > 0.0 {
+        ((actual / current_possible).max(0.0) * 10000.0).floor() / 100.0
+    } else {
+        0.0
+    };
+    (kept_pct, lost_pct, pace_pct)
+}
+
 #[derive(Clone, Copy, Debug)]
 struct MiniIndicatorProgress {
     kept_percent: f64,
@@ -1317,6 +1443,7 @@ fn zmod_mini_indicator_progress(
     state: &State,
     p: &PlayerRuntime,
     player_idx: usize,
+    score_type: profile::MiniIndicatorScoreType,
 ) -> MiniIndicatorProgress {
     let w1 = scoring_count(p, JudgeGrade::Fantastic);
     let w2 = scoring_count(p, JudgeGrade::Excellent);
@@ -1348,15 +1475,55 @@ fn zmod_mini_indicator_progress(
 
     let possible_dp = state.possible_grade_points[player_idx].max(1);
     let actual_dp = p.earned_grade_points.max(0);
-    let dp_lost = current_possible_dp.saturating_sub(actual_dp);
-    let kept_dp = possible_dp.saturating_sub(dp_lost).max(0);
-    let kept_percent = ((f64::from(kept_dp) / f64::from(possible_dp)) * 10000.0).floor() / 100.0;
-    let lost_percent = (100.0 - kept_percent).max(0.0);
-    let pace_percent = if current_possible_dp > 0 {
-        ((f64::from(actual_dp) / f64::from(current_possible_dp)) * 10000.0).floor() / 100.0
-    } else {
-        0.0
+
+    // Compute predictive percents for the active score type.
+    let (kept_percent, lost_percent, pace_percent) = match score_type {
+        profile::MiniIndicatorScoreType::Money => {
+            predictive_money_percents(current_possible_dp, possible_dp, actual_dp)
+        }
+        profile::MiniIndicatorScoreType::Ex | profile::MiniIndicatorScoreType::HardEx => {
+            let carry = crate::game::gameplay::display_carry_for_player(state, player_idx);
+            let wc =
+                add_window_counts(state.live_window_counts[player_idx], carry.window_counts);
+            let holds_held_total = p
+                .holds_held_for_score
+                .saturating_add(carry.holds_held_for_score);
+            let rolls_held_total = p
+                .rolls_held_for_score
+                .saturating_add(carry.rolls_held_for_score);
+            let mines_hit_total = p
+                .mines_hit_for_score
+                .saturating_add(carry.mines_hit_for_score);
+            let totals = crate::game::gameplay::display_totals_for_player(state, player_idx);
+            let resolved_holds_rolls = resolved_holds + resolved_rolls;
+
+            if score_type == profile::MiniIndicatorScoreType::Ex {
+                predictive_ex_percents(
+                    &wc,
+                    holds_held_total,
+                    rolls_held_total,
+                    mines_hit_total,
+                    &totals,
+                    resolved_holds_rolls,
+                )
+            } else {
+                let wc10 = add_window_counts(
+                    state.live_window_counts_10ms_blue[player_idx],
+                    carry.window_counts_10ms_blue,
+                );
+                predictive_hex_percents(
+                    &wc,
+                    &wc10,
+                    holds_held_total,
+                    rolls_held_total,
+                    mines_hit_total,
+                    &totals,
+                    resolved_holds_rolls,
+                )
+            }
+        }
     };
+
     let judged_any = tap_rows > 0 || let_go > 0 || mines_hit > 0 || p.is_failing || p.life <= 0.0;
     MiniIndicatorProgress {
         kept_percent,
@@ -1393,15 +1560,15 @@ fn zmod_indicator_mode(profile: &profile::Profile) -> profile::MiniIndicator {
 #[inline(always)]
 fn zmod_indicator_default_color(score_percent: f64) -> [f32; 4] {
     if score_percent >= 96.0 {
-        color::rgba_hex("#21CCE8")
+        color::JUDGMENT_RGBA[0] // Fantastic
     } else if score_percent >= 89.0 {
-        color::rgba_hex("#e29c18")
+        color::JUDGMENT_RGBA[1] // Excellent
     } else if score_percent >= 80.0 {
-        color::rgba_hex("#66c955")
+        color::JUDGMENT_RGBA[2] // Great
     } else if score_percent >= 68.0 {
-        color::rgba_hex("#b45cff")
+        color::JUDGMENT_RGBA[3] // Decent
     } else {
-        [1.0, 0.0, 0.0, 1.0]
+        color::JUDGMENT_RGBA[5] // Miss
     }
 }
 
@@ -1470,7 +1637,7 @@ fn zmod_mini_indicator_text(
         return None;
     }
 
-    let progress = zmod_mini_indicator_progress(state, p, player_idx);
+    let progress = zmod_mini_indicator_progress(state, p, player_idx, profile.mini_indicator_score_type);
     if !progress.judged_any {
         return None;
     }
@@ -1490,9 +1657,10 @@ fn zmod_mini_indicator_text(
                 return Some((cached_neg_int_u32(progress.w2), color::rgba_hex("#ff55cc")));
             }
 
-            let score = progress.kept_percent.clamp(0.0, 100.0);
+            let pcts = &progress;
+            let score = pcts.kept_percent.clamp(0.0, 100.0);
             Some((
-                cached_signed_percent2_f64(progress.lost_percent.clamp(0.0, 100.0), true),
+                cached_signed_percent2_f64(pcts.lost_percent.clamp(0.0, 100.0), true),
                 zmod_indicator_default_color(score),
             ))
         }

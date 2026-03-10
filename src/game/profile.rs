@@ -1083,6 +1083,43 @@ impl core::fmt::Display for MiniIndicator {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MiniIndicatorScoreType {
+    #[default]
+    Money,
+    Ex,
+    HardEx,
+}
+
+impl FromStr for MiniIndicatorScoreType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "money" | "itg" => Ok(Self::Money),
+            "ex" => Ok(Self::Ex),
+            "hardex" | "hex" => Ok(Self::HardEx),
+            other => Err(format!("'{other}' is not a valid MiniIndicatorScoreType setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for MiniIndicatorScoreType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Money => write!(f, "Money"),
+            Self::Ex => write!(f, "Ex"),
+            Self::HardEx => write!(f, "HardEx"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TargetScoreSetting {
     CMinus,
     C,
@@ -1254,6 +1291,7 @@ pub struct Profile {
     pub nps_graph_at_top: bool,
     pub transparent_density_graph_bg: bool,
     pub mini_indicator: MiniIndicator,
+    pub mini_indicator_score_type: MiniIndicatorScoreType,
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
@@ -1360,6 +1398,7 @@ impl Default for Profile {
             nps_graph_at_top: false,
             transparent_density_graph_bg: false,
             mini_indicator: MiniIndicator::None,
+            mini_indicator_score_type: MiniIndicatorScoreType::Money,
             mini_percent: 0,
             perspective: Perspective::default(),
             note_field_offset_x: 0,
@@ -1736,6 +1775,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             default_profile.mini_indicator
         ));
         content.push_str(&format!(
+            "MiniIndicatorScoreType = {}\n",
+            default_profile.mini_indicator_score_type
+        ));
+        content.push_str(&format!(
             "ReverseScroll = {}\n",
             i32::from(default_profile.reverse_scroll)
         ));
@@ -2052,6 +2095,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         i32::from(profile.transparent_density_graph_bg)
     ));
     content.push_str(&format!("MiniIndicator={}\n", profile.mini_indicator));
+    content.push_str(&format!(
+        "MiniIndicatorScoreType={}\n",
+        profile.mini_indicator_score_type
+    ));
     content.push_str(&format!(
         "ReverseScroll={}\n",
         i32::from(profile.reverse_scroll)
@@ -2801,6 +2848,10 @@ fn load_for_side(side: PlayerSide) {
             if profile.mini_indicator == MiniIndicator::Pacemaker {
                 profile.pacemaker = true;
             }
+            profile.mini_indicator_score_type = profile_conf
+                .get("PlayerOptions", "MiniIndicatorScoreType")
+                .and_then(|s| MiniIndicatorScoreType::from_str(&s).ok())
+                .unwrap_or(default_profile.mini_indicator_score_type);
             profile.scroll_option = profile_conf
                 .get("PlayerOptions", "Scroll")
                 .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -3891,6 +3942,21 @@ pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) 
             return;
         }
         profile.mini_indicator = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_mini_indicator_score_type_for_side(
+    side: PlayerSide,
+    setting: MiniIndicatorScoreType,
+) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.mini_indicator_score_type == setting {
+            return;
+        }
+        profile.mini_indicator_score_type = setting;
     }
     save_profile_ini_for_side(side);
 }
