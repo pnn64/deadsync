@@ -463,6 +463,7 @@ impl FromStr for AudioOutputMode {
 pub enum LinuxAudioBackend {
     Auto,
     PulseAudio,
+    Jack,
     Alsa,
 }
 
@@ -471,6 +472,7 @@ impl LinuxAudioBackend {
         match self {
             Self::Auto => "Auto",
             Self::PulseAudio => "PulseAudio",
+            Self::Jack => "JACK",
             Self::Alsa => "ALSA",
         }
     }
@@ -483,6 +485,7 @@ impl FromStr for LinuxAudioBackend {
         match s.trim().to_ascii_lowercase().as_str() {
             "auto" => Ok(Self::Auto),
             "pulseaudio" | "pulse" => Ok(Self::PulseAudio),
+            "jack" => Ok(Self::Jack),
             "alsa" => Ok(Self::Alsa),
             _ => Err(()),
         }

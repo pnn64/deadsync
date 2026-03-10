@@ -48,6 +48,8 @@ struct OutputDeviceProbe {
     info: OutputDeviceInfo,
     #[cfg(target_os = "linux")]
     alsa_pcm_id: Option<String>,
+    #[cfg(target_os = "macos")]
+    coreaudio_uid: Option<String>,
     #[cfg(target_os = "freebsd")]
     freebsd_dsp_path: Option<String>,
     #[cfg(windows)]
@@ -107,10 +109,29 @@ struct AlsaBackendHint {
 }
 
 #[cfg(target_os = "linux")]
+#[cfg(has_jack_audio)]
+#[derive(Clone)]
+struct JackBackendHint {
+    requested_device_name: Option<String>,
+    requested_rate_hz: Option<u32>,
+    output_mode: crate::config::AudioOutputMode,
+}
+
+#[cfg(target_os = "linux")]
 #[cfg(has_pulse_audio)]
 #[derive(Clone)]
 struct PulseBackendHint {
     requested_device_name: Option<String>,
+    sample_rate_hz: u32,
+    channels: usize,
+    output_mode: crate::config::AudioOutputMode,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Clone)]
+struct CoreAudioBackendHint {
+    device_uid: Option<String>,
+    device_name: String,
     sample_rate_hz: u32,
     channels: usize,
     output_mode: crate::config::AudioOutputMode,
@@ -136,8 +157,13 @@ struct AudioThreadLaunch {
     #[cfg(target_os = "linux")]
     alsa: Option<AlsaBackendHint>,
     #[cfg(target_os = "linux")]
+    #[cfg(has_jack_audio)]
+    jack: Option<JackBackendHint>,
+    #[cfg(target_os = "linux")]
     #[cfg(has_pulse_audio)]
     pulse: Option<PulseBackendHint>,
+    #[cfg(target_os = "macos")]
+    coreaudio: Option<CoreAudioBackendHint>,
     #[cfg(target_os = "freebsd")]
     freebsd_pcm: Option<FreeBsdPcmBackendHint>,
     #[cfg(windows)]
@@ -174,6 +200,11 @@ pub enum OutputTelemetryBackend {
     PulseAudioShared = 6,
     #[cfg(target_os = "freebsd")]
     FreeBsdPcm = 7,
+    #[cfg(target_os = "linux")]
+    #[cfg(has_jack_audio)]
+    JackShared = 8,
+    #[cfg(target_os = "macos")]
+    CoreAudioShared = 9,
 }
 
 impl OutputTelemetryBackend {
@@ -194,6 +225,11 @@ impl OutputTelemetryBackend {
             "pulse-shared" => Self::PulseAudioShared,
             #[cfg(target_os = "freebsd")]
             "freebsd-pcm" => Self::FreeBsdPcm,
+            #[cfg(target_os = "linux")]
+            #[cfg(has_jack_audio)]
+            "jack-shared" => Self::JackShared,
+            #[cfg(target_os = "macos")]
+            "coreaudio-shared" => Self::CoreAudioShared,
             _ => Self::Unknown,
         }
     }
@@ -215,6 +251,11 @@ impl OutputTelemetryBackend {
             6 => Self::PulseAudioShared,
             #[cfg(target_os = "freebsd")]
             7 => Self::FreeBsdPcm,
+            #[cfg(target_os = "linux")]
+            #[cfg(has_jack_audio)]
+            8 => Self::JackShared,
+            #[cfg(target_os = "macos")]
+            9 => Self::CoreAudioShared,
             _ => Self::Unknown,
         }
     }
@@ -238,6 +279,11 @@ impl std::fmt::Display for OutputTelemetryBackend {
             Self::PulseAudioShared => "pulse-shared",
             #[cfg(target_os = "freebsd")]
             Self::FreeBsdPcm => "freebsd-pcm",
+            #[cfg(target_os = "linux")]
+            #[cfg(has_jack_audio)]
+            Self::JackShared => "jack-shared",
+            #[cfg(target_os = "macos")]
+            Self::CoreAudioShared => "coreaudio-shared",
         };
         f.write_str(label)
     }
@@ -248,6 +294,8 @@ impl std::fmt::Display for OutputTelemetryBackend {
 pub enum OutputTelemetryClock {
     Unknown = 0,
     Callback = 1,
+    #[cfg(target_os = "macos")]
+    HostTime = 2,
     #[cfg(all(unix, not(target_os = "macos")))]
     Monotonic = 2,
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -261,6 +309,8 @@ impl OutputTelemetryClock {
     fn load() -> Self {
         match OUTPUT_TIMING_CLOCK.load(Ordering::Relaxed) {
             1 => Self::Callback,
+            #[cfg(target_os = "macos")]
+            2 => Self::HostTime,
             #[cfg(all(unix, not(target_os = "macos")))]
             2 => Self::Monotonic,
             #[cfg(all(unix, not(target_os = "macos")))]
@@ -277,6 +327,8 @@ impl std::fmt::Display for OutputTelemetryClock {
         let label = match self {
             Self::Unknown => "unknown",
             Self::Callback => "callback",
+            #[cfg(target_os = "macos")]
+            Self::HostTime => "host_time",
             #[cfg(all(unix, not(target_os = "macos")))]
             Self::Monotonic => "monotonic",
             #[cfg(all(unix, not(target_os = "macos")))]
@@ -967,20 +1019,20 @@ pub(crate) fn note_output_underrun() {
 }
 
 #[inline(always)]
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(unix)]
 pub(crate) fn publish_output_timing_quality(quality: OutputTimingQuality) {
     OUTPUT_TIMING_QUALITY.store(quality as u8, Ordering::Relaxed);
 }
 
 #[inline(always)]
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(unix)]
 pub(crate) fn note_output_timing_sanity_failure(quality: OutputTimingQuality) {
     OUTPUT_TIMING_QUALITY.store(quality as u8, Ordering::Relaxed);
     OUTPUT_TIMING_SANITY_FAILURES.fetch_add(1, Ordering::Relaxed);
 }
 
 #[inline(always)]
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(unix)]
 pub(crate) fn note_output_clock_fallback() {
     note_output_timing_sanity_failure(OutputTimingQuality::Fallback);
     OUTPUT_TIMING_CLOCK_FALLBACKS.fetch_add(1, Ordering::Relaxed);
@@ -1199,7 +1251,7 @@ impl RenderState {
         self.finish_callback(total_before, out.len(), popped);
     }
 
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(unix)]
     fn render_i16_host_nanos(&mut self, out: &mut [i16], anchor_nanos: u64) {
         let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
         let popped = self.mix_f32_buffer(total_before, out.len());
@@ -1220,6 +1272,14 @@ impl RenderState {
 
     fn render_f32(&mut self, out: &mut [f32], anchor_at: Instant) {
         let total_before = self.begin_callback(anchor_at);
+        let popped = self.mix_f32_buffer(total_before, out.len());
+        out.copy_from_slice(&self.mix_f32[..out.len()]);
+        self.finish_callback(total_before, out.len(), popped);
+    }
+
+    #[cfg(any(target_os = "macos", all(target_os = "linux", has_jack_audio)))]
+    fn render_f32_host_nanos(&mut self, out: &mut [f32], anchor_nanos: u64) {
+        let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
         let popped = self.mix_f32_buffer(total_before, out.len());
         out.copy_from_slice(&self.mix_f32[..out.len()]);
         self.finish_callback(total_before, out.len(), popped);
@@ -1254,6 +1314,8 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             },
             #[cfg(target_os = "linux")]
             alsa_pcm_id: backends::cpal::device_id_string(&default_device),
+            #[cfg(target_os = "macos")]
+            coreaudio_uid: backends::cpal::device_id_string(&default_device),
             #[cfg(windows)]
             wasapi_id: backends::cpal::device_id_string(&default_device),
         });
@@ -1267,6 +1329,8 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
     let linux_backend = cfg.linux_audio_backend;
     #[cfg(target_os = "linux")]
     let mut alsa_pcm_id = backends::cpal::device_id_string(&device);
+    #[cfg(target_os = "macos")]
+    let mut coreaudio_device_uid = backends::cpal::device_id_string(&device);
     #[cfg(windows)]
     let mut wasapi_device_id = backends::cpal::device_id_string(&device);
     if let Some(requested_idx) = cfg.audio_output_device_index {
@@ -1278,6 +1342,10 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             #[cfg(target_os = "linux")]
             {
                 alsa_pcm_id = probe.alsa_pcm_id.clone();
+            }
+            #[cfg(target_os = "macos")]
+            {
+                coreaudio_device_uid = probe.coreaudio_uid.clone();
             }
             #[cfg(windows)]
             {
@@ -1301,12 +1369,6 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
     let mut stream_config: StreamConfig = default_config.clone().into();
     let requested_rate = cfg.audio_sample_rate_hz;
     let output_mode = cfg.audio_output_mode;
-    #[cfg(target_os = "macos")]
-    if matches!(output_mode, crate::config::AudioOutputMode::Exclusive) {
-        warn!(
-            "Audio output mode 'Exclusive' is not implemented on this platform yet; using the default CPAL path."
-        );
-    }
     if let Some(target_hz) = requested_rate {
         debug!(
             "Audio sample rate override requested: {} Hz (device default {} Hz).",
@@ -1336,6 +1398,10 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
     let native_sample_rate_hz = stream_config.sample_rate;
     #[cfg(target_os = "linux")]
     let native_channels = stream_config.channels as usize;
+    #[cfg(target_os = "macos")]
+    let native_sample_rate_hz = stream_config.sample_rate;
+    #[cfg(target_os = "macos")]
+    let native_channels = stream_config.channels as usize;
 
     (
         device_probes,
@@ -1360,9 +1426,24 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
                 output_mode,
             }),
             #[cfg(target_os = "linux")]
+            #[cfg(has_jack_audio)]
+            jack: Some(JackBackendHint {
+                requested_device_name: explicit_device_requested.then_some(device_name.clone()),
+                requested_rate_hz: requested_rate,
+                output_mode,
+            }),
+            #[cfg(target_os = "linux")]
             #[cfg(has_pulse_audio)]
             pulse: Some(PulseBackendHint {
                 requested_device_name: explicit_device_requested.then_some(device_name.clone()),
+                sample_rate_hz: native_sample_rate_hz,
+                channels: native_channels,
+                output_mode,
+            }),
+            #[cfg(target_os = "macos")]
+            coreaudio: Some(CoreAudioBackendHint {
+                device_uid: coreaudio_device_uid,
+                device_name: device_name.clone(),
                 sample_rate_hz: native_sample_rate_hz,
                 channels: native_channels,
                 output_mode,
@@ -1455,8 +1536,13 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             #[cfg(target_os = "linux")]
             alsa: None,
             #[cfg(target_os = "linux")]
+            #[cfg(has_jack_audio)]
+            jack: None,
+            #[cfg(target_os = "linux")]
             #[cfg(has_pulse_audio)]
             pulse: None,
+            #[cfg(target_os = "macos")]
+            coreaudio: None,
             freebsd_pcm: Some(FreeBsdPcmBackendHint {
                 dsp_path,
                 device_name,
@@ -1513,8 +1599,13 @@ enum OutputBackend {
     #[cfg(target_os = "linux")]
     Alsa(backends::linux_alsa::AlsaOutputStream),
     #[cfg(target_os = "linux")]
+    #[cfg(has_jack_audio)]
+    Jack(backends::linux_jack::JackOutputStream),
+    #[cfg(target_os = "linux")]
     #[cfg(has_pulse_audio)]
     Pulse(backends::linux_pulse::PulseOutputStream),
+    #[cfg(target_os = "macos")]
+    CoreAudio(backends::macos_coreaudio::CoreAudioOutputStream),
     #[cfg(target_os = "freebsd")]
     FreeBsdPcm(backends::freebsd_pcm::FreeBsdPcmOutputStream),
     #[cfg(windows)]
@@ -1546,6 +1637,24 @@ fn start_linux_alsa_backend(
     let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
     let stream = backends::linux_alsa::start(prep, music_ring, sfx_receiver)?;
     Ok((OutputBackend::Alsa(stream), ready, sfx_sender))
+}
+
+#[cfg(target_os = "linux")]
+#[cfg(has_jack_audio)]
+fn start_linux_jack_backend(
+    jack: JackBackendHint,
+    music_ring: Arc<internal::SpscRingI16>,
+) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+    if matches!(jack.output_mode, crate::config::AudioOutputMode::Exclusive) {
+        return Err("JACK does not expose a separate exclusive output mode.".to_string());
+    }
+    let prep =
+        backends::linux_jack::prepare(jack.requested_device_name.clone(), jack.requested_rate_hz)?;
+    let mut ready = prep.ready();
+    ready.requested_output_mode = jack.output_mode;
+    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let stream = backends::linux_jack::start(prep, music_ring, sfx_receiver)?;
+    Ok((OutputBackend::Jack(stream), ready, sfx_sender))
 }
 
 #[cfg(target_os = "linux")]
@@ -1596,6 +1705,30 @@ fn start_freebsd_pcm_backend(
     Ok((OutputBackend::FreeBsdPcm(stream), ready, sfx_sender))
 }
 
+#[cfg(target_os = "macos")]
+fn start_macos_coreaudio_backend(
+    coreaudio: CoreAudioBackendHint,
+    music_ring: Arc<internal::SpscRingI16>,
+) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
+    if matches!(
+        coreaudio.output_mode,
+        crate::config::AudioOutputMode::Exclusive
+    ) {
+        return Err("CoreAudio exclusive output is not implemented yet.".to_string());
+    }
+    let prep = backends::macos_coreaudio::prepare(
+        coreaudio.device_uid.clone(),
+        coreaudio.device_name.clone(),
+        coreaudio.sample_rate_hz,
+        coreaudio.channels,
+    )?;
+    let mut ready = prep.ready();
+    ready.requested_output_mode = coreaudio.output_mode;
+    let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+    let stream = backends::macos_coreaudio::start(prep, music_ring, sfx_receiver)?;
+    Ok((OutputBackend::CoreAudio(stream), ready, sfx_sender))
+}
+
 fn start_output_backend(
     launch: AudioThreadLaunch,
     music_ring: Arc<internal::SpscRingI16>,
@@ -1609,8 +1742,13 @@ fn start_output_backend(
         #[cfg(target_os = "linux")]
         alsa,
         #[cfg(target_os = "linux")]
+        #[cfg(has_jack_audio)]
+        jack,
+        #[cfg(target_os = "linux")]
         #[cfg(has_pulse_audio)]
         pulse,
+        #[cfg(target_os = "macos")]
+        coreaudio,
         #[cfg(target_os = "freebsd")]
         freebsd_pcm,
         #[cfg(windows)]
@@ -1620,6 +1758,17 @@ fn start_output_backend(
     let requested_output_mode = alsa
         .as_ref()
         .map(|hint| hint.output_mode)
+        .or_else(|| {
+            #[cfg(target_os = "linux")]
+            #[cfg(has_jack_audio)]
+            {
+                jack.as_ref().map(|hint| hint.output_mode)
+            }
+            #[cfg(not(all(target_os = "linux", has_jack_audio)))]
+            {
+                None
+            }
+        })
         .or_else(|| {
             #[cfg(target_os = "linux")]
             #[cfg(has_pulse_audio)]
@@ -1655,9 +1804,10 @@ fn start_output_backend(
                 .unwrap_or(crate::config::AudioOutputMode::Auto)
         });
     #[cfg(target_os = "macos")]
-    let requested_output_mode = cpal
+    let requested_output_mode = coreaudio
         .as_ref()
-        .map(|launch| launch.output_mode)
+        .map(|hint| hint.output_mode)
+        .or_else(|| cpal.as_ref().map(|launch| launch.output_mode))
         .unwrap_or(crate::config::AudioOutputMode::Auto);
     #[cfg(target_os = "linux")]
     let fallback_from_native = {
@@ -1667,6 +1817,20 @@ fn start_output_backend(
                     return Err("Linux ALSA backend hint unavailable.".to_string());
                 };
                 return start_linux_alsa_backend(alsa, music_ring);
+            }
+            crate::config::LinuxAudioBackend::Jack => {
+                #[cfg(target_os = "linux")]
+                #[cfg(has_jack_audio)]
+                {
+                    let Some(jack) = jack else {
+                        return Err("JACK backend hint unavailable.".to_string());
+                    };
+                    return start_linux_jack_backend(jack, music_ring);
+                }
+                #[cfg(not(all(target_os = "linux", has_jack_audio)))]
+                {
+                    return Err("JACK backend support was not built into this binary.".to_string());
+                }
             }
             crate::config::LinuxAudioBackend::PulseAudio => {
                 #[cfg(target_os = "linux")]
@@ -1752,6 +1916,26 @@ fn start_output_backend(
     }
     #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
     let mut fallback_from_native = false;
+
+    #[cfg(target_os = "macos")]
+    if let Some(coreaudio) = coreaudio {
+        match start_macos_coreaudio_backend(coreaudio.clone(), music_ring.clone()) {
+            Ok(output) => return Ok(output),
+            Err(err) => {
+                if matches!(
+                    coreaudio.output_mode,
+                    crate::config::AudioOutputMode::Exclusive
+                ) {
+                    return Err(err);
+                }
+                warn!(
+                    "Failed to start native CoreAudio output for '{}': {err}. Falling back to CPAL.",
+                    coreaudio.device_name
+                );
+                fallback_from_native = true;
+            }
+        }
+    }
 
     #[cfg(windows)]
     if let Some(wasapi) = wasapi {

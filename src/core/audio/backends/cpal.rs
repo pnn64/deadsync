@@ -129,6 +129,8 @@ pub(crate) fn enumerate_output_device_probes(
                     },
                     #[cfg(target_os = "linux")]
                     alsa_pcm_id,
+                    #[cfg(target_os = "macos")]
+                    coreaudio_uid: device_id_string(&dev),
                     #[cfg(target_os = "freebsd")]
                     freebsd_dsp_path: None,
                     #[cfg(windows)]

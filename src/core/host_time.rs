@@ -15,7 +15,7 @@ pub(crate) fn instant_nanos(at: Instant) -> u64 {
         .unwrap_or(0)
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(unix)]
 #[inline(always)]
 pub(crate) fn now_nanos() -> u64 {
     instant_nanos(Instant::now())
