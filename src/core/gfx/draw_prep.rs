@@ -1,4 +1,5 @@
 use crate::core::gfx::{BlendMode, MeshMode, ObjectType, RenderList, TexturedMeshVertex};
+use cgmath::Matrix4;
 use std::collections::HashMap;
 
 #[repr(C)]
@@ -122,10 +123,10 @@ impl<Tex, Buffer> GlScratch<Tex, Buffer> {
 }
 
 #[inline(always)]
-pub fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-    let center = [m[3][0], m[3][1]];
-    let c0 = [m[0][0], m[0][1]];
-    let c1 = [m[1][0], m[1][1]];
+pub fn decompose_2d(m: &Matrix4<f32>) -> ([f32; 2], [f32; 2], [f32; 2]) {
+    let center = [m.w.x, m.w.y];
+    let c0 = [m.x.x, m.x.y];
+    let c1 = [m.y.x, m.y.y];
     let sx = c0[0].hypot(c0[1]).max(1e-12);
     let sy = c1[0].hypot(c1[1]).max(1e-12);
     let cos_t = c0[0] / sx;
@@ -156,6 +157,34 @@ where
     texture
 }
 
+#[inline(always)]
+fn textured_instance_raw(
+    m: &Matrix4<f32>,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+) -> TexturedMeshInstanceRaw {
+    TexturedMeshInstanceRaw {
+        model_col0: [m.x.x, m.x.y, m.x.z, m.x.w],
+        model_col1: [m.y.x, m.y.y, m.y.z, m.y.w],
+        model_col2: [m.z.x, m.z.y, m.z.z, m.z.w],
+        model_col3: [m.w.x, m.w.y, m.w.z, m.w.w],
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+    }
+}
+
+#[inline(always)]
+fn flush_sprite_run<Tex, Buffer>(
+    sprite_run: &mut Option<SpriteRun<Tex>>,
+    ops: &mut Vec<DrawOp<Tex, Buffer>>,
+) {
+    if let Some(run) = sprite_run.take() {
+        ops.push(DrawOp::Sprite(run));
+    }
+}
+
 pub fn prepare_gl<Tex, Buffer, ResolveTexture, ResolveCachedGeom>(
     render_list: &RenderList<'_>,
     scratch: &mut GlScratch<Tex, Buffer>,
@@ -172,6 +201,7 @@ where
     let mut last_texture_ptr = std::ptr::null();
     let mut last_texture_len = 0usize;
     let mut last_texture = None;
+    let mut sprite_run: Option<SpriteRun<Tex>> = None;
 
     scratch.sprite_instances.clear();
     if scratch.sprite_instances.capacity() < objects_len {
@@ -230,8 +260,7 @@ where
                     continue;
                 };
 
-                let model: [[f32; 4]; 4] = obj.transform.into();
-                let (center, size, rot_sin_cos) = decompose_2d(model);
+                let (center, size, rot_sin_cos) = decompose_2d(&obj.transform);
                 let instance_start = scratch.sprite_instances.len() as u32;
                 scratch.sprite_instances.push(SpriteInstanceRaw {
                     center,
@@ -245,7 +274,7 @@ where
                     edge_fade: *edge_fade,
                 });
 
-                if let Some(DrawOp::Sprite(last)) = scratch.ops.last_mut()
+                if let Some(last) = sprite_run.as_mut()
                     && last.texture == texture
                     && last.blend == obj.blend
                     && last.camera == obj.camera
@@ -255,15 +284,17 @@ where
                     continue;
                 }
 
-                scratch.ops.push(DrawOp::Sprite(SpriteRun {
+                flush_sprite_run(&mut sprite_run, &mut scratch.ops);
+                sprite_run = Some(SpriteRun {
                     instance_start,
                     instance_count: 1,
                     blend: obj.blend,
                     texture,
                     camera: obj.camera,
-                }));
+                });
             }
             ObjectType::Mesh { vertices, .. } => {
+                flush_sprite_run(&mut sprite_run, &mut scratch.ops);
                 if !vertices.is_empty() {
                     scratch.ops.push(DrawOp::Mesh(idx));
                 }
@@ -276,6 +307,7 @@ where
                 uv_offset,
                 uv_tex_shift,
             } => {
+                flush_sprite_run(&mut sprite_run, &mut scratch.ops);
                 if *mode != MeshMode::Triangles || vertices.is_empty() {
                     continue;
                 }
@@ -344,16 +376,12 @@ where
                     };
 
                 let instance_start = scratch.tmesh_instances.len() as u32;
-                let model: [[f32; 4]; 4] = obj.transform.into();
-                scratch.tmesh_instances.push(TexturedMeshInstanceRaw {
-                    model_col0: model[0],
-                    model_col1: model[1],
-                    model_col2: model[2],
-                    model_col3: model[3],
-                    uv_scale: *uv_scale,
-                    uv_offset: *uv_offset,
-                    uv_tex_shift: *uv_tex_shift,
-                });
+                scratch.tmesh_instances.push(textured_instance_raw(
+                    &obj.transform,
+                    *uv_scale,
+                    *uv_offset,
+                    *uv_tex_shift,
+                ));
 
                 if let Some(DrawOp::TexturedMesh(last)) = scratch.ops.last_mut()
                     && last.texture == texture
@@ -384,6 +412,8 @@ where
             }
         }
     }
+
+    flush_sprite_run(&mut sprite_run, &mut scratch.ops);
 
     stats
 }
