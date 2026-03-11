@@ -86,13 +86,7 @@ pub struct AudioHealth {
 
 #[derive(Clone, Copy, Debug)]
 pub struct TimingHealth {
-    pub prediction_active: bool,
-    pub fallback_active: bool,
     pub interval_ns: u64,
-    pub lead_ns: u64,
-    pub prediction_error_ns: u64,
-    pub prediction_error_ema_ns: u64,
-    pub fallback_ns: u64,
     pub present_mode: PresentModeTrace,
     pub display_clock: ClockDomainTrace,
     pub host_clock: ClockDomainTrace,
@@ -123,19 +117,9 @@ fn ms_text(ns: u64) -> String {
 }
 
 fn timing_text(timing: TimingHealth) -> String {
-    let predict_state = if timing.prediction_active {
-        "on"
-    } else {
-        "off"
-    };
-    let fallback_state = if timing.fallback_active { "on" } else { "off" };
     let mut text = format!(
-        "Pred {predict_state} int {} lead {}\nErr {} ema {} fb {} ({fallback_state})\nPresent {} {}->{} map:{}\nQueue {} iw:{} bp:{} qi:{} sub:{}\nIDs {}/{} cal {}",
+        "Present int {}\nMode {} {}->{} map:{}\nQueue {} iw:{} bp:{} qi:{} sub:{}\nIDs {}/{} cal {}",
         ms_text(timing.interval_ns),
-        ms_text(timing.lead_ns),
-        ms_text(timing.prediction_error_ns),
-        ms_text(timing.prediction_error_ema_ns),
-        ms_text(timing.fallback_ns),
         timing.present_mode,
         timing.display_clock,
         timing.host_clock,
