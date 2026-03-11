@@ -1206,18 +1206,33 @@ fn layout_text<'a>(
         lrint_ties_even(glyph.advance) as i32
     }
 
+    let single_line = !text.as_bytes().contains(&b'\n');
     let mut max_logical_width_i = 0i32;
-    let mut num_lines = 0usize;
-    for line in text.lines() {
-        num_lines += 1;
+    let num_lines: usize;
+    let single_line_width: i32;
+    if single_line {
+        num_lines = 1;
         let mut line_width = 0i32;
-        for ch in line.chars() {
+        for ch in text.chars() {
             line_width += font::find_glyph(font, ch, fonts).map_or(0, advance_logical);
         }
-        max_logical_width_i = max_logical_width_i.max(line_width);
-    }
-    if num_lines == 0 {
-        return;
+        max_logical_width_i = line_width;
+        single_line_width = line_width;
+    } else {
+        let mut counted_lines = 0usize;
+        for line in text.lines() {
+            counted_lines += 1;
+            let mut line_width = 0i32;
+            for ch in line.chars() {
+                line_width += font::find_glyph(font, ch, fonts).map_or(0, advance_logical);
+            }
+            max_logical_width_i = max_logical_width_i.max(line_width);
+        }
+        if counted_lines == 0 {
+            return;
+        }
+        num_lines = counted_lines;
+        single_line_width = 0;
     }
     let block_w_logical_even = quantize_up_even_i32(max_logical_width_i) as f32;
 
@@ -1338,6 +1353,92 @@ fn layout_text<'a>(
     let mut dims_cache: [Option<(&str, (f32, f32))>; 8] = [None; 8];
     let mut dims_cache_len = 0usize;
     out.reserve(text.len());
+
+    if single_line {
+        pen_y_logical += font.height;
+        let baseline_local_logical = pen_y_logical as f32;
+        let mut pen_x_logical =
+            start_x_logical(text_align, block_w_logical_even, single_line_width as f32);
+
+        for ch in text.chars() {
+            let glyph = match font::find_glyph(font, ch, fonts) {
+                Some(g) => g,
+                None => continue,
+            };
+
+            let quad_w = glyph.size[0] * sx;
+            let quad_h = glyph.size[1] * sy;
+
+            let draw_quad = ch != ' ' || draws_space;
+            if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
+                let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
+                let quad_y_logical = baseline_local_logical + glyph.offset[1];
+
+                let quad_x_sm = logical_to_world(block_center_x, quad_x_logical, sx);
+                let quad_y_sm = logical_to_world(block_center_y, quad_y_logical, sy);
+
+                let center_x = m.left + quad_x_sm + quad_w * 0.5;
+                let center_y = m.top - (quad_y_sm + quad_h * 0.5);
+
+                let transform = Matrix4::new(
+                    quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
+                    center_y, 0.0, 1.0,
+                );
+
+                let (tex_w, tex_h) = {
+                    let key = glyph.texture_key.as_str();
+                    let mut dims = None;
+                    let mut idx = 0usize;
+                    while idx < dims_cache_len {
+                        if let Some((cached_key, cached_dims)) = dims_cache[idx] {
+                            if cached_key == key {
+                                dims = Some(cached_dims);
+                                break;
+                            }
+                        }
+                        idx += 1;
+                    }
+                    if let Some(dims) = dims {
+                        dims
+                    } else {
+                        let dims = assets::texture_dims(key)
+                            .map_or((1.0_f32, 1.0_f32), |meta| (meta.w as f32, meta.h as f32));
+                        if dims_cache_len < dims_cache.len() {
+                            dims_cache[dims_cache_len] = Some((key, dims));
+                            dims_cache_len += 1;
+                        }
+                        dims
+                    }
+                };
+
+                let uv_scale = [
+                    (glyph.tex_rect[2] - glyph.tex_rect[0]) / tex_w,
+                    (glyph.tex_rect[3] - glyph.tex_rect[1]) / tex_h,
+                ];
+                let uv_offset = [glyph.tex_rect[0] / tex_w, glyph.tex_rect[1] / tex_h];
+
+                out.push(RenderObject {
+                    object_type: renderer::ObjectType::Sprite {
+                        texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
+                        tint: [1.0; 4],
+                        uv_scale,
+                        uv_offset,
+                        local_offset: [0.0, 0.0],
+                        local_offset_rot_sin_cos: [0.0, 1.0],
+                        edge_fade: [0.0; 4],
+                    },
+                    transform,
+                    blend: BlendMode::Alpha,
+                    z: 0,
+                    order: 0,
+                    camera: 0,
+                });
+            }
+
+            pen_x_logical += advance_logical(glyph);
+        }
+        return;
+    }
 
     for line in text.lines() {
         pen_y_logical += font.height;
