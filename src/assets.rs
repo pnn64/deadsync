@@ -1,4 +1,7 @@
-use crate::core::gfx::{Backend, SamplerDesc, SamplerFilter, SamplerWrap, Texture as GfxTexture};
+use crate::core::gfx::{
+    Backend, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, Texture as GfxTexture, TextureHandle,
+};
 use crate::game::profile;
 use crate::ui::font::{self, Font, FontLoadData};
 use image::{ImageFormat, ImageReader, RgbaImage};
@@ -1008,7 +1011,9 @@ struct DynamicBannerState {
 }
 
 pub struct AssetManager {
-    pub textures: HashMap<String, GfxTexture>,
+    textures: HashMap<TextureHandle, GfxTexture>,
+    texture_handles: HashMap<String, TextureHandle>,
+    next_texture_handle: TextureHandle,
     fonts: HashMap<&'static str, Font>,
     current_dynamic_banner: Option<DynamicBannerState>,
     current_dynamic_cdtitle: Option<(String, PathBuf)>,
@@ -1037,6 +1042,8 @@ impl AssetManager {
     pub fn new() -> Self {
         Self {
             textures: HashMap::new(),
+            texture_handles: HashMap::new(),
+            next_texture_handle: 1,
             fonts: HashMap::new(),
             current_dynamic_banner: None,
             current_dynamic_cdtitle: None,
@@ -1057,6 +1064,44 @@ impl AssetManager {
         &self.fonts
     }
 
+    #[inline(always)]
+    pub fn textures(&self) -> &HashMap<TextureHandle, GfxTexture> {
+        &self.textures
+    }
+
+    #[inline(always)]
+    pub fn has_texture_key(&self, key: &str) -> bool {
+        self.texture_handles.contains_key(key)
+    }
+
+    pub fn take_textures(&mut self) -> HashMap<TextureHandle, GfxTexture> {
+        self.texture_handles.clear();
+        std::mem::take(&mut self.textures)
+    }
+
+    #[inline(always)]
+    pub fn texture_handle_for_key(&self, key: &str) -> TextureHandle {
+        if let Some(handle) = self.texture_handles.get(key) {
+            return *handle;
+        }
+        self.texture_handles
+            .iter()
+            .find_map(|(candidate, handle)| candidate.eq_ignore_ascii_case(key).then_some(*handle))
+            .unwrap_or(INVALID_TEXTURE_HANDLE)
+    }
+
+    pub fn resolve_render_textures(&self, render: &mut RenderList<'_>) {
+        for obj in &mut render.objects {
+            obj.texture_handle = match &obj.object_type {
+                ObjectType::Sprite { texture_id, .. }
+                | ObjectType::TexturedMesh { texture_id, .. } => {
+                    self.texture_handle_for_key(texture_id.as_ref())
+                }
+                ObjectType::Mesh { .. } => INVALID_TEXTURE_HANDLE,
+            };
+        }
+    }
+
     pub fn with_fonts<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&HashMap<&'static str, Font>) -> R,
@@ -1069,6 +1114,36 @@ impl AssetManager {
         F: FnOnce(&Font) -> R,
     {
         self.fonts.get(name).map(f)
+    }
+
+    #[inline(always)]
+    fn alloc_texture_handle(&mut self) -> TextureHandle {
+        let handle = self.next_texture_handle;
+        self.next_texture_handle = self.next_texture_handle.wrapping_add(1).max(1);
+        handle
+    }
+
+    pub(crate) fn insert_texture(
+        &mut self,
+        key: String,
+        texture: GfxTexture,
+    ) -> Option<GfxTexture> {
+        let handle = match self.texture_handles.get(&key).copied() {
+            Some(handle) => handle,
+            None => {
+                let handle = self.alloc_texture_handle();
+                self.texture_handles.insert(key, handle);
+                handle
+            }
+        };
+        self.textures.insert(handle, texture)
+    }
+
+    pub(crate) fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, GfxTexture)> {
+        let handle = self.texture_handles.remove(key)?;
+        self.textures
+            .remove(&handle)
+            .map(|texture| (handle, texture))
     }
 
     // --- Loading Logic ---
@@ -1093,14 +1168,14 @@ impl AssetManager {
         // Load __white texture
         let white_img = RgbaImage::from_raw(1, 1, vec![255, 255, 255, 255]).unwrap();
         let white_tex = backend.create_texture(&white_img, SamplerDesc::default())?;
-        self.textures.insert("__white".to_string(), white_tex);
+        self.insert_texture("__white".to_string(), white_tex);
         register_texture_dims("__white", 1, 1);
         debug!("Loaded built-in texture: __white");
 
         // Load __black texture for missing/background-off fallbacks.
         let black_img = RgbaImage::from_raw(1, 1, vec![0, 0, 0, 255]).unwrap();
         let black_tex = backend.create_texture(&black_img, SamplerDesc::default())?;
-        self.textures.insert("__black".to_string(), black_tex);
+        self.insert_texture("__black".to_string(), black_tex);
         register_texture_dims("__black", 1, 1);
         debug!("Loaded built-in texture: __black");
 
@@ -1465,7 +1540,7 @@ impl AssetManager {
                     let texture = backend.create_texture(&rgba, sampler)?;
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     debug!("Loaded texture: {key}");
-                    self.textures.insert(key, texture);
+                    self.insert_texture(key, texture);
                 }
                 Err((key, msg)) => {
                     warn!("Failed to load texture for key '{key}': {msg}. Using fallback.");
@@ -1481,7 +1556,7 @@ impl AssetManager {
                     };
                     let texture = backend.create_texture(&fallback_image, sampler)?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
-                    self.textures.insert(key, texture);
+                    self.insert_texture(key, texture);
                 }
             }
         }
@@ -1562,7 +1637,7 @@ impl AssetManager {
 
             for tex_path in &required_textures {
                 let key = canonical_texture_key(tex_path);
-                if !self.textures.contains_key(&key) {
+                if !self.has_texture_key(&key) {
                     let hints = font
                         .texture_hints_map
                         .get(&key)
@@ -1574,7 +1649,7 @@ impl AssetManager {
                     }
                     let texture = backend.create_texture(&image_data, hints.sampler_desc())?;
                     register_texture_dims(&key, image_data.width(), image_data.height());
-                    self.textures.insert(key.clone(), texture);
+                    self.insert_texture(key.clone(), texture);
                     debug!("Loaded font texture: {key}");
                 }
             }
@@ -1595,20 +1670,21 @@ impl AssetManager {
         {
             backend.wait_for_idle(); // Wait for GPU to finish using old textures
             if let Some(state) = self.current_dynamic_banner.take() {
-                self.textures.remove(&state.key);
+                let _ = self.remove_texture(&state.key);
             }
             if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
-                self.textures.remove(&key);
+                let _ = self.remove_texture(&key);
             }
             if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
                 self.dynamic_pack_banner_keys.remove(&key);
-                self.textures.remove(&key);
+                let _ = self.remove_texture(&key);
             }
-            for key in self.dynamic_pack_banner_keys.drain() {
-                self.textures.remove(&key);
+            let drained_pack_keys: Vec<_> = self.dynamic_pack_banner_keys.drain().collect();
+            for key in drained_pack_keys {
+                let _ = self.remove_texture(&key);
             }
             if let Some((key, _)) = self.current_dynamic_background.take() {
-                self.textures.remove(&key);
+                let _ = self.remove_texture(&key);
             }
         }
     }
@@ -1656,7 +1732,7 @@ impl AssetManager {
                 Ok(texture) => {
                     let path_key = path.to_string_lossy();
                     let key = format!("__cdtitle::{path_key}");
-                    self.textures.insert(key.clone(), texture);
+                    self.insert_texture(key.clone(), texture);
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     self.current_dynamic_cdtitle = Some((key.clone(), path));
                     Some(key)
@@ -1697,7 +1773,7 @@ impl AssetManager {
                 backend.wait_for_idle();
                 if let Some((old_key, _)) = self.current_dynamic_pack_banner.take() {
                     self.dynamic_pack_banner_keys.remove(&old_key);
-                    self.textures.remove(&old_key);
+                    let _ = self.remove_texture(&old_key);
                 }
             }
 
@@ -1724,7 +1800,7 @@ impl AssetManager {
 
             match backend.create_texture(&rgba, SamplerDesc::default()) {
                 Ok(texture) => {
-                    self.textures.insert(key.clone(), texture);
+                    self.insert_texture(key.clone(), texture);
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     if banner_cache_opts.enabled {
                         self.dynamic_pack_banner_keys.insert(key.clone());
@@ -1742,7 +1818,7 @@ impl AssetManager {
                 backend.wait_for_idle();
                 if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
                     self.dynamic_pack_banner_keys.remove(&key);
-                    self.textures.remove(&key);
+                    let _ = self.remove_texture(&key);
                 }
             }
         }
@@ -1788,7 +1864,7 @@ impl AssetManager {
 
             match backend.create_texture(&rgba, SamplerDesc::default()) {
                 Ok(texture) => {
-                    self.textures.insert(key.clone(), texture);
+                    self.insert_texture(key.clone(), texture);
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     self.current_dynamic_banner = Some(DynamicBannerState {
                         key: key.clone(),
@@ -1840,7 +1916,7 @@ impl AssetManager {
             match backend.create_texture(&rgba, SamplerDesc::default()) {
                 Ok(texture) => {
                     let key = path.to_string_lossy().into_owned();
-                    self.textures.insert(key.clone(), texture);
+                    self.insert_texture(key.clone(), texture);
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     self.current_dynamic_background = Some((key.clone(), path));
                     key
@@ -1878,7 +1954,7 @@ impl AssetManager {
             let key = path.to_string_lossy().into_owned();
             self.ensure_texture_from_path(backend, &path);
             self.current_profile_avatars[ix] = Some((key.clone(), path));
-            if self.textures.contains_key(&key) {
+            if self.has_texture_key(&key) {
                 profile::set_avatar_texture_key_for_side(side, Some(key));
             } else {
                 profile::set_avatar_texture_key_for_side(side, None);
@@ -1891,21 +1967,21 @@ impl AssetManager {
     fn destroy_current_dynamic_banner(&mut self, backend: &mut Backend) {
         if let Some(state) = self.current_dynamic_banner.take() {
             backend.wait_for_idle();
-            self.textures.remove(&state.key);
+            let _ = self.remove_texture(&state.key);
         }
     }
 
     fn destroy_current_dynamic_cdtitle(&mut self, backend: &mut Backend) {
         if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
             backend.wait_for_idle();
-            self.textures.remove(&key);
+            let _ = self.remove_texture(&key);
         }
     }
 
     fn destroy_current_dynamic_background(&mut self, backend: &mut Backend) {
         if let Some((key, _)) = self.current_dynamic_background.take() {
             backend.wait_for_idle();
-            self.textures.remove(&key);
+            let _ = self.remove_texture(&key);
         }
     }
 
@@ -1928,13 +2004,13 @@ impl AssetManager {
             return;
         }
         let key = canonical_texture_key(texture_key);
-        if self.textures.contains_key(&key) {
+        if self.has_texture_key(&key) {
             return;
         }
         if let Some(generated) = generated_texture(&key) {
             match backend.create_texture(generated.image.as_ref(), generated.sampler) {
                 Ok(texture) => {
-                    self.textures.insert(key, texture);
+                    self.insert_texture(key, texture);
                 }
                 Err(e) => {
                     warn!("Failed to create GPU texture for generated key '{texture_key}': {e}");
@@ -1964,7 +2040,7 @@ impl AssetManager {
                 }
                 match backend.create_texture(&rgba, hints.sampler_desc()) {
                     Ok(texture) => {
-                        self.textures.insert(key.clone(), texture);
+                        self.insert_texture(key.clone(), texture);
                         register_texture_dims(&key, rgba.width(), rgba.height());
                     }
                     Err(e) => {
@@ -1985,9 +2061,10 @@ impl AssetManager {
             };
             match backend.create_texture(generated.image.as_ref(), generated.sampler) {
                 Ok(texture) => {
-                    if let Some(old) = self.textures.insert(key.clone(), texture) {
+                    if let Some(old) = self.insert_texture(key.clone(), texture) {
                         let mut old_map = HashMap::with_capacity(1);
-                        old_map.insert(key, old);
+                        let handle = self.texture_handle_for_key(&key);
+                        old_map.insert(handle, old);
                         backend.dispose_textures(&mut old_map);
                     }
                 }
@@ -2000,7 +2077,7 @@ impl AssetManager {
 
     pub(crate) fn ensure_texture_from_path(&mut self, backend: &mut Backend, path: &Path) {
         let key = path.to_string_lossy().into_owned();
-        let has_existing = self.textures.contains_key(&key);
+        let has_existing = self.has_texture_key(&key);
         let needs_high_res_upgrade = self
             .current_dynamic_banner
             .as_ref()
@@ -2018,7 +2095,7 @@ impl AssetManager {
                         if has_existing {
                             backend.wait_for_idle();
                         }
-                        self.textures.insert(key.clone(), texture);
+                        self.insert_texture(key.clone(), texture);
                         register_texture_dims(&key, rgba.width(), rgba.height());
                         if needs_high_res_upgrade
                             && let Some(state) = self.current_dynamic_banner.as_mut()

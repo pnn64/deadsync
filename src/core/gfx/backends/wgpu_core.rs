@@ -1,7 +1,7 @@
 use crate::core::gfx::{
     BlendMode, ClockDomainTrace, DrawStats, MeshMode, ObjectType, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    Texture as RendererTexture,
+    Texture as RendererTexture, TextureHandle,
 };
 use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
@@ -919,19 +919,6 @@ fn pick_tex<'a>(api: Api, tex: &'a RendererTexture) -> Option<&'a Texture> {
 }
 
 #[inline(always)]
-fn lookup_texture_case_insensitive<'a>(
-    textures: &'a HashMap<String, RendererTexture>,
-    key: &str,
-) -> Option<&'a RendererTexture> {
-    if let Some(tex) = textures.get(key) {
-        return Some(tex);
-    }
-    textures
-        .iter()
-        .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
-}
-
-#[inline(always)]
 pub fn request_screenshot(state: &mut State) {
     state.screenshot_requested = true;
 }
@@ -946,7 +933,7 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<String, RendererTexture>,
+    textures: &HashMap<TextureHandle, RendererTexture>,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]
@@ -1015,15 +1002,16 @@ pub fn draw(
         for obj in &render_list.objects {
             match &obj.object_type {
                 ObjectType::Sprite {
-                    texture_id,
                     tint,
                     uv_scale,
                     uv_offset,
                     local_offset,
                     local_offset_rot_sin_cos,
                     edge_fade,
+                    ..
                 } => {
-                    let tex = lookup_texture_case_insensitive(textures, texture_id.as_ref())
+                    let tex = textures
+                        .get(&obj.texture_handle)
                         .and_then(|t| pick_tex(api, t));
                     let Some(tex) = tex else {
                         continue;
@@ -1085,17 +1073,18 @@ pub fn draw(
                     });
                 }
                 ObjectType::TexturedMesh {
-                    texture_id,
                     vertices,
                     mode,
                     uv_scale,
                     uv_offset,
                     uv_tex_shift,
+                    ..
                 } => {
                     if vertices.is_empty() {
                         continue;
                     }
-                    let tex = lookup_texture_case_insensitive(textures, texture_id.as_ref())
+                    let tex = textures
+                        .get(&obj.texture_handle)
                         .and_then(|t| pick_tex(api, t));
                     let Some(tex) = tex else {
                         continue;

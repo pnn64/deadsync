@@ -1,7 +1,7 @@
 use crate::core::gfx::{
     BlendMode, ClockDomainTrace, DrawStats, MeshMode, MeshVertex, ObjectType, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    Texture as RendererTexture,
+    Texture as RendererTexture, TextureHandle,
 };
 use crate::core::space::ortho_for_window;
 use ash::{
@@ -1311,7 +1311,7 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<String, RendererTexture>,
+    textures: &HashMap<TextureHandle, RendererTexture>,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]
@@ -1343,19 +1343,6 @@ pub fn draw(
         let cos_t = c0[0] / sx;
         let sin_t = c0[1] / sx;
         (center, [sx, sy], [sin_t, cos_t])
-    }
-
-    #[inline(always)]
-    fn lookup_texture_case_insensitive<'a>(
-        textures: &'a HashMap<String, RendererTexture>,
-        key: &str,
-    ) -> Option<&'a RendererTexture> {
-        if let Some(tex) = textures.get(key) {
-            return Some(tex);
-        }
-        textures
-            .iter()
-            .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
     }
 
     state.tmesh_cache_frame = state.tmesh_cache_frame.wrapping_add(1);
@@ -1531,22 +1518,21 @@ pub fn draw(
         for obj in &render_list.objects {
             match &obj.object_type {
                 ObjectType::Sprite {
-                    texture_id,
                     tint,
                     uv_scale,
                     uv_offset,
                     local_offset,
                     local_offset_rot_sin_cos,
                     edge_fade,
+                    ..
                 } => {
-                    let set_opt = lookup_texture_case_insensitive(textures, texture_id.as_ref())
-                        .and_then(|t| {
-                            if let RendererTexture::Vulkan(tex) = t {
-                                Some(tex.descriptor_set)
-                            } else {
-                                None
-                            }
-                        });
+                    let set_opt = textures.get(&obj.texture_handle).and_then(|t| {
+                        if let RendererTexture::Vulkan(tex) = t {
+                            Some(tex.descriptor_set)
+                        } else {
+                            None
+                        }
+                    });
                     let Some(set) = set_opt else {
                         continue;
                     };
@@ -1612,24 +1598,23 @@ pub fn draw(
                     }));
                 }
                 ObjectType::TexturedMesh {
-                    texture_id,
                     vertices,
                     mode,
                     uv_scale,
                     uv_offset,
                     uv_tex_shift,
+                    ..
                 } => {
                     if *mode != MeshMode::Triangles || vertices.is_empty() {
                         continue;
                     }
-                    let set_opt = lookup_texture_case_insensitive(textures, texture_id.as_ref())
-                        .and_then(|t| {
-                            if let RendererTexture::Vulkan(tex) = t {
-                                Some(tex.descriptor_set_repeat)
-                            } else {
-                                None
-                            }
-                        });
+                    let set_opt = textures.get(&obj.texture_handle).and_then(|t| {
+                        if let RendererTexture::Vulkan(tex) = t {
+                            Some(tex.descriptor_set_repeat)
+                        } else {
+                            None
+                        }
+                    });
                     let Some(set) = set_opt else {
                         continue;
                     };

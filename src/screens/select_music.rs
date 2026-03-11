@@ -5703,7 +5703,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.push(act!(sprite(banner_key): align(0.5, 0.5): xy(banner_cx, banner_cy): setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT): zoom(banner_zoom): z(51)));
     if cfg.show_select_music_cdtitles
         && let Some(cdtitle_key) = state.current_cdtitle_key.as_ref()
-        && asset_manager.textures.contains_key(cdtitle_key)
+        && asset_manager.has_texture_key(cdtitle_key)
         && let Some(tex) = crate::assets::texture_dims(cdtitle_key)
     {
         let (cols, rows) = crate::assets::sprite_sheet_dims(cdtitle_key);

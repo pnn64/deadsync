@@ -10,6 +10,9 @@ use std::{borrow::Cow, collections::HashMap, error::Error, str::FromStr, sync::A
 use winit::window::Window;
 
 // --- Public Data Contract ---
+pub type TextureHandle = u64;
+pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
+
 #[derive(Clone)]
 pub struct RenderList<'a> {
     pub clear_color: [f32; 4],
@@ -19,6 +22,7 @@ pub struct RenderList<'a> {
 #[derive(Clone)]
 pub struct RenderObject<'a> {
     pub object_type: ObjectType<'a>,
+    pub texture_handle: TextureHandle,
     pub transform: Matrix4<f32>,
     pub blend: BlendMode,
     pub z: i16,
@@ -263,7 +267,7 @@ impl Backend {
     pub fn draw(
         &mut self,
         render_list: &RenderList<'_>,
-        textures: &HashMap<String, Texture>,
+        textures: &HashMap<TextureHandle, Texture>,
         apply_present_back_pressure: bool,
     ) -> Result<DrawStats, Box<dyn Error>> {
         match &mut self.0 {
@@ -380,7 +384,7 @@ impl Backend {
         }
     }
 
-    pub fn dispose_textures(&mut self, textures: &mut HashMap<String, Texture>) {
+    pub fn dispose_textures(&mut self, textures: &mut HashMap<TextureHandle, Texture>) {
         self.wait_for_idle();
 
         let old_textures = std::mem::take(textures);

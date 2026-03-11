@@ -1,6 +1,6 @@
 use crate::core::gfx::{
     BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, Texture as RendererTexture,
+    SamplerWrap, Texture as RendererTexture, TextureHandle,
     draw_prep::{
         self, CachedTMeshGeom, DrawOp, GlScratch, SpriteInstanceRaw, TexturedMeshInstanceRaw,
         TexturedMeshVertexRaw,
@@ -516,7 +516,7 @@ pub const fn request_screenshot(_state: &mut State) {}
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<String, RendererTexture>,
+    textures: &HashMap<TextureHandle, RendererTexture>,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]
@@ -532,19 +532,6 @@ pub fn draw(
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
         return Ok(DrawStats::default());
-    }
-
-    #[inline(always)]
-    fn lookup_texture_case_insensitive<'a>(
-        textures: &'a HashMap<String, RendererTexture>,
-        key: &str,
-    ) -> Option<&'a RendererTexture> {
-        if let Some(tex) = textures.get(key) {
-            return Some(tex);
-        }
-        textures
-            .iter()
-            .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
     }
 
     #[inline(always)]
@@ -601,7 +588,7 @@ pub fn draw(
         let prep_stats = draw_prep::prepare_gl(
             render_list,
             prep,
-            |texture_key| match lookup_texture_case_insensitive(textures, texture_key) {
+            |texture_handle| match textures.get(&texture_handle) {
                 Some(RendererTexture::OpenGL(gl_tex)) => Some(gl_tex.0),
                 _ => None,
             },

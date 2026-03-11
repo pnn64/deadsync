@@ -2664,13 +2664,14 @@ impl App {
             upload_us = elapsed_us_since(upload_started);
         }
         let fonts = self.asset_manager.fonts();
-        let screen = crate::ui::compose::build_screen(
+        let mut screen = crate::ui::compose::build_screen(
             &actors,
             clear_color,
             &self.state.shell.metrics,
             fonts,
             total_elapsed,
         );
+        self.asset_manager.resolve_render_textures(&mut screen);
         compose_us = elapsed_us_since(compose_started).saturating_sub(upload_us);
 
         let apply_present_back_pressure = self.apply_present_back_pressure();
@@ -2681,7 +2682,7 @@ impl App {
             let draw_started = Instant::now();
             match backend.draw(
                 &screen,
-                &self.asset_manager.textures,
+                self.asset_manager.textures(),
                 apply_present_back_pressure,
             ) {
                 Ok(stats) => {
@@ -4369,20 +4370,18 @@ impl App {
             return Ok(());
         };
 
-        if let Some(old) = self
+        if let Some((handle, old)) = self
             .asset_manager
-            .textures
-            .remove(SCREENSHOT_PREVIEW_TEXTURE_KEY)
+            .remove_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY)
         {
             let mut old_map = HashMap::with_capacity(1);
-            old_map.insert(SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(), old);
+            old_map.insert(handle, old);
             backend.dispose_textures(&mut old_map);
         }
 
         let texture = backend.create_texture(image, crate::core::gfx::SamplerDesc::default())?;
         self.asset_manager
-            .textures
-            .insert(SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(), texture);
+            .insert_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(), texture);
         crate::assets::register_texture_dims(
             SCREENSHOT_PREVIEW_TEXTURE_KEY,
             image.width(),
@@ -5370,7 +5369,8 @@ impl App {
 
         if let Some(mut backend) = self.backend.take() {
             self.asset_manager.destroy_dynamic_assets(&mut backend);
-            backend.dispose_textures(&mut self.asset_manager.textures);
+            let mut textures = self.asset_manager.take_textures();
+            backend.dispose_textures(&mut textures);
             backend.cleanup();
         }
         self.backend = None;
@@ -7351,7 +7351,8 @@ impl ApplicationHandler<UserEvent> for App {
         config::flush_pending_saves();
         if let Some(backend) = &mut self.backend {
             self.asset_manager.destroy_dynamic_assets(backend);
-            backend.dispose_textures(&mut self.asset_manager.textures);
+            let mut textures = self.asset_manager.take_textures();
+            backend.dispose_textures(&mut textures);
             backend.cleanup();
         }
     }

@@ -1151,6 +1151,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
                 uv_tex_shift: *uv_tex_shift,
             },
         },
+        texture_handle: crate::core::gfx::INVALID_TEXTURE_HANDLE,
         transform: matrix_runtime(render.transform),
         blend: BlendMode::from(render.blend),
         z: render.z,
