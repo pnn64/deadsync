@@ -4657,7 +4657,7 @@ fn music_time_from_song_clock(
 }
 
 #[inline(always)]
-fn display_music_time_from_song_clock(
+fn target_display_music_time_from_song_clock(
     snapshot: SongClockSnapshot,
     music_time_sec: f32,
     predicted_host_nanos: u64,
@@ -4667,6 +4667,48 @@ fn display_music_time_from_song_clock(
     }
     music_time_from_song_clock(snapshot, snapshot.valid_at, predicted_host_nanos)
         .max(music_time_sec)
+}
+
+const DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S: f32 = 0.012;
+const DISPLAY_CLOCK_MAX_LAG_S: f32 = 0.020;
+const DISPLAY_CLOCK_MAX_LEAD_S: f32 = 0.006;
+const DISPLAY_CLOCK_RESET_ERROR_S: f32 = 0.100;
+
+#[inline(always)]
+fn frame_stable_display_music_time(
+    previous_display_time_sec: f32,
+    target_display_time_sec: f32,
+    delta_time: f32,
+    seconds_per_second: f32,
+    first_update: bool,
+) -> f32 {
+    if first_update
+        || !previous_display_time_sec.is_finite()
+        || !target_display_time_sec.is_finite()
+        || !delta_time.is_finite()
+        || delta_time <= 0.0
+    {
+        return target_display_time_sec;
+    }
+
+    let slope = if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
+        seconds_per_second
+    } else {
+        1.0
+    };
+    let max_error = DISPLAY_CLOCK_RESET_ERROR_S * slope;
+    if (target_display_time_sec - previous_display_time_sec).abs() > max_error {
+        return target_display_time_sec;
+    }
+
+    let advanced = previous_display_time_sec + delta_time * slope;
+    let correction_alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
+    let corrected = advanced + (target_display_time_sec - advanced) * correction_alpha;
+    let min_allowed = target_display_time_sec - DISPLAY_CLOCK_MAX_LAG_S * slope;
+    let max_allowed = target_display_time_sec + DISPLAY_CLOCK_MAX_LEAD_S * slope;
+    corrected
+        .clamp(min_allowed, max_allowed)
+        .max(previous_display_time_sec)
 }
 
 #[inline(always)]
@@ -9257,10 +9299,17 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
     song_clock.song_time = music_time_sec;
     state.current_music_time = music_time_sec;
-    let display_music_time_sec = display_music_time_from_song_clock(
+    let target_display_music_time_sec = target_display_music_time_from_song_clock(
         song_clock,
         music_time_sec,
         state.predicted_display_host_nanos,
+    );
+    let display_music_time_sec = frame_stable_display_music_time(
+        state.current_music_time_display,
+        target_display_music_time_sec,
+        delta_time,
+        song_clock.seconds_per_second,
+        is_first_update,
     );
     state.current_music_time_display = display_music_time_sec;
 
@@ -9709,5 +9758,24 @@ mod tests {
         };
         let edge_time = music_time_from_song_clock(snapshot, Instant::now(), 1_997_000_000);
         assert!((edge_time - 31.997).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn display_clock_snaps_on_first_update() {
+        let display_time = frame_stable_display_music_time(10.0, 12.5, 0.001, 1.0, true);
+        assert!((display_time - 12.5).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn display_clock_advances_smoothly_toward_target() {
+        let display_time = frame_stable_display_music_time(100.0, 100.004, 0.001, 1.0, false);
+        assert!(display_time > 100.0);
+        assert!(display_time < 100.004);
+    }
+
+    #[test]
+    fn display_clock_snaps_back_when_far_from_target() {
+        let display_time = frame_stable_display_music_time(100.0, 100.250, 0.001, 1.0, false);
+        assert!((display_time - 100.250).abs() < 0.000_5);
     }
 }
