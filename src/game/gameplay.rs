@@ -3206,6 +3206,32 @@ struct SongClockSnapshot {
     valid_at_host_nanos: u64,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct FrameStableDisplayClock {
+    current_time_sec: f32,
+    target_time_sec: f32,
+    catching_up: bool,
+}
+
+impl FrameStableDisplayClock {
+    #[inline(always)]
+    const fn new(time_sec: f32) -> Self {
+        Self {
+            current_time_sec: time_sec,
+            target_time_sec: time_sec,
+            catching_up: false,
+        }
+    }
+
+    #[inline(always)]
+    fn reset(&mut self, time_sec: f32) -> f32 {
+        self.current_time_sec = time_sec;
+        self.target_time_sec = time_sec;
+        self.catching_up = false;
+        time_sec
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct GameplayUpdatePhaseTimings {
     pre_notes_us: u32,
@@ -3354,7 +3380,7 @@ pub struct State {
     pub current_music_time: f32,
     pub current_beat_display: f32,
     pub current_music_time_display: f32,
-    predicted_display_host_nanos: u64,
+    display_clock: FrameStableDisplayClock,
     pub note_spawn_cursor: [usize; MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     pub arrows: [Vec<Arrow>; MAX_COLS],
@@ -4597,11 +4623,6 @@ fn current_music_time_from_stream(state: &State) -> f32 {
 }
 
 #[inline(always)]
-pub fn set_predicted_display_host_nanos(state: &mut State, host_nanos: u64) {
-    state.predicted_display_host_nanos = host_nanos;
-}
-
-#[inline(always)]
 fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
     let stream_clock = audio::get_music_stream_clock_snapshot();
     let fallback_rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -4656,39 +4677,28 @@ fn music_time_from_song_clock(
     }
 }
 
-#[inline(always)]
-fn target_display_music_time_from_song_clock(
-    snapshot: SongClockSnapshot,
-    music_time_sec: f32,
-    predicted_host_nanos: u64,
-) -> f32 {
-    if predicted_host_nanos == 0 {
-        return music_time_sec;
-    }
-    music_time_from_song_clock(snapshot, snapshot.valid_at, predicted_host_nanos)
-        .max(music_time_sec)
-}
-
 const DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S: f32 = 0.012;
 const DISPLAY_CLOCK_MAX_LAG_S: f32 = 0.020;
 const DISPLAY_CLOCK_MAX_LEAD_S: f32 = 0.006;
 const DISPLAY_CLOCK_RESET_ERROR_S: f32 = 0.100;
+const DISPLAY_CLOCK_MAX_STEP_S: f32 = 1.0 / 60.0;
 
 #[inline(always)]
 fn frame_stable_display_music_time(
-    previous_display_time_sec: f32,
+    display_clock: &mut FrameStableDisplayClock,
     target_display_time_sec: f32,
     delta_time: f32,
     seconds_per_second: f32,
     first_update: bool,
 ) -> f32 {
+    display_clock.target_time_sec = target_display_time_sec;
     if first_update
-        || !previous_display_time_sec.is_finite()
+        || !display_clock.current_time_sec.is_finite()
         || !target_display_time_sec.is_finite()
         || !delta_time.is_finite()
         || delta_time <= 0.0
     {
-        return target_display_time_sec;
+        return display_clock.reset(target_display_time_sec);
     }
 
     let slope = if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
@@ -4696,19 +4706,28 @@ fn frame_stable_display_music_time(
     } else {
         1.0
     };
+    let previous_display_time_sec = display_clock.current_time_sec;
     let max_error = DISPLAY_CLOCK_RESET_ERROR_S * slope;
     if (target_display_time_sec - previous_display_time_sec).abs() > max_error {
-        return target_display_time_sec;
+        return display_clock.reset(target_display_time_sec);
     }
 
     let advanced = previous_display_time_sec + delta_time * slope;
     let correction_alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
-    let corrected = advanced + (target_display_time_sec - advanced) * correction_alpha;
+    let mut corrected = advanced + (target_display_time_sec - advanced) * correction_alpha;
+    let max_step = DISPLAY_CLOCK_MAX_STEP_S * slope;
+    let step = corrected - previous_display_time_sec;
+    if step.abs() > max_step * 1.2 {
+        corrected = previous_display_time_sec + step.signum() * max_step;
+    }
     let min_allowed = target_display_time_sec - DISPLAY_CLOCK_MAX_LAG_S * slope;
     let max_allowed = target_display_time_sec + DISPLAY_CLOCK_MAX_LEAD_S * slope;
-    corrected
+    let corrected = corrected
         .clamp(min_allowed, max_allowed)
-        .max(previous_display_time_sec)
+        .max(previous_display_time_sec);
+    display_clock.current_time_sec = corrected;
+    display_clock.catching_up = (target_display_time_sec - corrected).abs() > max_step * 0.5;
+    corrected
 }
 
 #[inline(always)]
@@ -5699,7 +5718,7 @@ pub fn init(
         current_music_time: init_music_time,
         current_beat_display: init_beat,
         current_music_time_display: init_music_time,
-        predicted_display_host_nanos: 0,
+        display_clock: FrameStableDisplayClock::new(init_music_time),
         note_spawn_cursor: note_range_start,
         judged_row_cursor: [0; MAX_PLAYERS],
         arrows: std::array::from_fn(|col| {
@@ -9299,13 +9318,9 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     }
     song_clock.song_time = music_time_sec;
     state.current_music_time = music_time_sec;
-    let target_display_music_time_sec = target_display_music_time_from_song_clock(
-        song_clock,
-        music_time_sec,
-        state.predicted_display_host_nanos,
-    );
+    let target_display_music_time_sec = music_time_sec;
     let display_music_time_sec = frame_stable_display_music_time(
-        state.current_music_time_display,
+        &mut state.display_clock,
         target_display_music_time_sec,
         delta_time,
         song_clock.seconds_per_second,
@@ -9762,20 +9777,26 @@ mod tests {
 
     #[test]
     fn display_clock_snaps_on_first_update() {
-        let display_time = frame_stable_display_music_time(10.0, 12.5, 0.001, 1.0, true);
+        let mut display_clock = FrameStableDisplayClock::new(10.0);
+        let display_time =
+            frame_stable_display_music_time(&mut display_clock, 12.5, 0.001, 1.0, true);
         assert!((display_time - 12.5).abs() < 0.000_5);
     }
 
     #[test]
     fn display_clock_advances_smoothly_toward_target() {
-        let display_time = frame_stable_display_music_time(100.0, 100.004, 0.001, 1.0, false);
+        let mut display_clock = FrameStableDisplayClock::new(100.0);
+        let display_time =
+            frame_stable_display_music_time(&mut display_clock, 100.004, 0.001, 1.0, false);
         assert!(display_time > 100.0);
         assert!(display_time < 100.004);
     }
 
     #[test]
     fn display_clock_snaps_back_when_far_from_target() {
-        let display_time = frame_stable_display_music_time(100.0, 100.250, 0.001, 1.0, false);
+        let mut display_clock = FrameStableDisplayClock::new(100.0);
+        let display_time =
+            frame_stable_display_music_time(&mut display_clock, 100.250, 0.001, 1.0, false);
         assert!((display_time - 100.250).abs() < 0.000_5);
     }
 }

@@ -2619,7 +2619,6 @@ impl App {
     fn gameplay_present_prediction_host_ns(&self) -> Option<u64> {
         if self.state.screens.current_screen != CurrentScreen::Gameplay
             || self.state.shell.vsync_enabled
-            || self.effective_frame_interval().is_some()
             || self.state.shell.should_skip_compose_and_draw()
         {
             return None;
@@ -2634,7 +2633,6 @@ impl App {
     fn gameplay_present_prediction_deadline(&self) -> Option<Instant> {
         if self.state.screens.current_screen != CurrentScreen::Gameplay
             || self.state.shell.vsync_enabled
-            || self.effective_frame_interval().is_some()
             || self.state.shell.should_skip_compose_and_draw()
         {
             return None;
@@ -2649,11 +2647,7 @@ impl App {
 
     #[inline(always)]
     fn update_gameplay_display_prediction(&mut self) -> u64 {
-        let predicted_host_ns = self.gameplay_present_prediction_host_ns().unwrap_or(0);
-        if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-            crate::game::gameplay::set_predicted_display_host_nanos(gs, predicted_host_ns);
-        }
-        predicted_host_ns
+        self.gameplay_present_prediction_host_ns().unwrap_or(0)
     }
 
     #[inline(always)]
@@ -2741,8 +2735,8 @@ impl App {
     ) -> PresentPredictFeedback {
         if screen != CurrentScreen::Gameplay
             || self.state.shell.vsync_enabled
-            || self.effective_frame_interval().is_some()
             || self.state.shell.should_skip_compose_and_draw()
+            || draw_stats.present_stats.display_clock == renderer::ClockDomainTrace::Unknown
         {
             self.state.shell.present_phase_predictor.reset();
             return PresentPredictFeedback::default();
@@ -7838,6 +7832,32 @@ impl ApplicationHandler<UserEvent> for App {
             .state
             .shell
             .frame_interval_state(self.state.screens.current_screen);
+        if let Some(deadline) = self.gameplay_present_prediction_deadline() {
+            let now = Instant::now();
+            if self.state.shell.redraw_pending() {
+                self.log_frame_loop_mode(FrameLoopMode::WaitPending);
+                event_loop.set_control_flow(ControlFlow::Wait);
+                return;
+            }
+            let deadline = if let Some(interval) = interval_state.interval {
+                let cap_deadline = self.state.shell.next_redraw_at;
+                if now >= deadline.max(cap_deadline) {
+                    self.state.shell.next_redraw_at =
+                        advance_redraw_deadline(cap_deadline, now, interval);
+                }
+                deadline.max(cap_deadline)
+            } else {
+                deadline
+            };
+            self.log_frame_loop_mode(FrameLoopMode::PresentPredicted);
+            if now >= deadline {
+                self.request_redraw(&window, "present_predict");
+                event_loop.set_control_flow(ControlFlow::Wait);
+            } else {
+                event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+            }
+            return;
+        }
         if let Some(interval) = interval_state.interval {
             self.log_frame_loop_mode(FrameLoopMode::Scheduled(interval_state.reason, interval));
             let now = Instant::now();
@@ -7847,22 +7867,6 @@ impl ApplicationHandler<UserEvent> for App {
                     advance_redraw_deadline(self.state.shell.next_redraw_at, now, interval);
             }
             event_loop.set_control_flow(ControlFlow::WaitUntil(self.state.shell.next_redraw_at));
-            return;
-        }
-        if let Some(deadline) = self.gameplay_present_prediction_deadline() {
-            let now = Instant::now();
-            if self.state.shell.redraw_pending() {
-                self.log_frame_loop_mode(FrameLoopMode::WaitPending);
-                event_loop.set_control_flow(ControlFlow::Wait);
-                return;
-            }
-            self.log_frame_loop_mode(FrameLoopMode::PresentPredicted);
-            if now >= deadline {
-                self.request_redraw(&window, "present_predict");
-                event_loop.set_control_flow(ControlFlow::Wait);
-            } else {
-                event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
-            }
             return;
         }
         if self.state.shell.redraw_pending() {
