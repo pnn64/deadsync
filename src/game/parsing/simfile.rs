@@ -352,6 +352,7 @@ enum CachedNoteType {
     Hold,
     Roll,
     Mine,
+    Lift,
     Fake,
 }
 
@@ -362,6 +363,7 @@ impl From<NoteType> for CachedNoteType {
             NoteType::Hold => Self::Hold,
             NoteType::Roll => Self::Roll,
             NoteType::Mine => Self::Mine,
+            NoteType::Lift => Self::Lift,
             NoteType::Fake => Self::Fake,
         }
     }
@@ -374,6 +376,7 @@ impl From<CachedNoteType> for NoteType {
             CachedNoteType::Hold => Self::Hold,
             CachedNoteType::Roll => Self::Roll,
             CachedNoteType::Mine => Self::Mine,
+            CachedNoteType::Lift => Self::Lift,
             CachedNoteType::Fake => Self::Fake,
         }
     }
