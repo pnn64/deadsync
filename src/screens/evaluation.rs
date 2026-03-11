@@ -827,13 +827,15 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             scatter_mesh_hard_ex[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
+                let hard_ex_worst_window = si.scatter_worst_window_ms
+                    .min(timing_stats::effective_windows_ms()[1]);
                 let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
-                    si.scatter_worst_window_ms,
+                    hard_ex_worst_window,
                     crate::screens::components::eval_graphs::ScatterPlotScale::HardEx,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
