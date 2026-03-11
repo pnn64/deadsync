@@ -108,7 +108,8 @@ const GAMEPLAY_OFFSET_PROMPT_Z_BACKDROP: i16 = 31990;
 const GAMEPLAY_OFFSET_PROMPT_Z_CURSOR: i16 = 31991;
 const GAMEPLAY_OFFSET_PROMPT_Z_TEXT: i16 = 31993;
 const BACKGROUND_REDRAW_INTERVAL: Duration = Duration::from_millis(67);
-const GAMEPLAY_PACING_LOG_INTERVAL: Duration = Duration::from_secs(1);
+const GAMEPLAY_PACING_LOG_INTERVAL: Duration = Duration::from_secs(5);
+const SCHEDULED_REDRAW_POLL_GUARD: Duration = Duration::from_micros(1_000);
 const GAMEPLAY_REDRAW_DELIVERY_SLOW_US: u32 = 1_000;
 const GAMEPLAY_REDRAW_DELIVERY_BAD_US: u32 = 2_000;
 const GAMEPLAY_PRESENT_SLOW_US: u32 = 1_000;
@@ -7267,7 +7268,15 @@ impl ApplicationHandler<UserEvent> for App {
                 self.state.shell.next_redraw_at =
                     advance_redraw_deadline(self.state.shell.next_redraw_at, now, interval);
             }
-            event_loop.set_control_flow(ControlFlow::WaitUntil(self.state.shell.next_redraw_at));
+            let deadline = self.state.shell.next_redraw_at;
+            let time_until_deadline = deadline.saturating_duration_since(now);
+            if time_until_deadline <= SCHEDULED_REDRAW_POLL_GUARD {
+                event_loop.set_control_flow(ControlFlow::Poll);
+                return;
+            }
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                deadline - SCHEDULED_REDRAW_POLL_GUARD,
+            ));
             return;
         }
         if self.state.shell.redraw_pending() {
