@@ -463,6 +463,7 @@ pub struct Glyph {
     pub size: [f32; 2],   // draw units (SM authored units)
     pub offset: [f32; 2], // draw units: [x_off_from_pen, y_off_from_baseline]
     pub advance: f32,     // draw units: pen advance
+    pub advance_i32: i32, // draw units: StepMania ties-to-even pen advance
 }
 
 #[derive(Debug, Clone)]
@@ -2386,6 +2387,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                 size: glyph_size,
                 offset: glyph_offset,
                 advance,
+                advance_i32: advance.round_ties_even() as i32,
             };
 
             for (&ch, &frame_idx) in &char_to_frame {
@@ -2506,10 +2508,7 @@ pub fn measure_line_width_logical(
     all_fonts: &HashMap<&'static str, Font>,
 ) -> i32 {
     text.chars()
-        .map(|c| {
-            let g = find_glyph(font, c, all_fonts);
-            g.map_or(0, |glyph| glyph.advance as i32)
-        })
+        .map(|c| find_glyph(font, c, all_fonts).map_or(0, |glyph| glyph.advance_i32))
         .sum()
 }
 

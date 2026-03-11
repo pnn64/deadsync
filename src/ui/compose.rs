@@ -637,6 +637,9 @@ fn build_actor_recursive<'a>(
                 stroke_rgba[3] *= effect_color[3];
                 if stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty() {
                     out.reserve(end - before);
+                    let mut cached_texture_ptr: *const u8 = std::ptr::null();
+                    let mut cached_texture_len = 0usize;
+                    let mut cached_stroke: Option<&str> = None;
                     let mut idx = before;
                     while idx < end {
                         let (
@@ -662,14 +665,37 @@ fn build_actor_recursive<'a>(
                                 transform,
                                 ..
                             } => {
-                                let Some(stroke_key) =
-                                    fm.stroke_texture_map.get(texture_id.as_ref())
-                                else {
+                                let texture_key = texture_id.as_ref();
+                                let texture_bytes = texture_key.as_bytes();
+                                let stroke_key = if texture_bytes.len() == cached_texture_len
+                                    && !cached_texture_ptr.is_null()
+                                    && {
+                                        // Glyph texture keys are borrowed from font storage, so this
+                                        // cached byte slice stays valid across pushes after reserve().
+                                        let cached_bytes = unsafe {
+                                            std::slice::from_raw_parts(
+                                                cached_texture_ptr,
+                                                cached_texture_len,
+                                            )
+                                        };
+                                        cached_bytes == texture_bytes
+                                    } {
+                                    cached_stroke
+                                } else {
+                                    cached_texture_ptr = texture_bytes.as_ptr();
+                                    cached_texture_len = texture_bytes.len();
+                                    cached_stroke = fm
+                                        .stroke_texture_map
+                                        .get(texture_key)
+                                        .map(std::string::String::as_str);
+                                    cached_stroke
+                                };
+                                let Some(stroke_key) = stroke_key else {
                                     idx += 1;
                                     continue;
                                 };
                                 (
-                                    stroke_key.as_str(),
+                                    stroke_key,
                                     *transform,
                                     *uv_scale,
                                     *uv_offset,
@@ -1203,7 +1229,7 @@ fn layout_text<'a>(
 
     #[inline(always)]
     fn advance_logical(glyph: &font::Glyph) -> i32 {
-        lrint_ties_even(glyph.advance) as i32
+        glyph.advance_i32
     }
 
     const GLYPH_CACHE_LIMIT: usize = 128;

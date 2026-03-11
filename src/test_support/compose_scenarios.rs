@@ -96,6 +96,7 @@ fn bench_glyph(ch: char) -> Glyph {
     let row = idx / 16;
     let x = col as f32 * 24.0;
     let y = row as f32 * 32.0;
+    let advance = if ch == ' ' { 8.0 } else { 14.0 };
     Glyph {
         texture_key: FONT_MAIN.to_string(),
         tex_rect: [x, y, x + 22.0, y + 30.0],
@@ -103,7 +104,8 @@ fn bench_glyph(ch: char) -> Glyph {
         uv_offset: [x / 512.0, y / 256.0],
         size: [14.0, 18.0],
         offset: [0.0, -14.0],
-        advance: if ch == ' ' { 8.0 } else { 14.0 },
+        advance,
+        advance_i32: advance.round_ties_even() as i32,
     }
 }
 

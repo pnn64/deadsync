@@ -1,0 +1,787 @@
+use deadsync::core::gfx::draw_prep::{
+    self, CachedTMeshGeom, DrawOp, GlScratch, PrepareStats, SpriteInstanceRaw,
+    TexturedMeshInstanceRaw, TexturedMeshVertexRaw,
+};
+use deadsync::core::gfx::{BlendMode, MeshMode, RenderList};
+use deadsync::test_support::{compose_case, compose_scenarios};
+use deadsync::ui::compose;
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::collections::HashMap;
+use std::error::Error;
+use std::hash::Hasher;
+use std::hint::black_box;
+use std::mem;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
+use twox_hash::XxHash64;
+
+#[global_allocator]
+static ALLOC: CountingAlloc = CountingAlloc::new();
+
+const TMESH_CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
+const TMESH_CACHE_MIN_VERTS: usize = 32;
+const TMESH_CACHE_PROMOTE_HITS: u8 = 2;
+const TMESH_CACHE_SEEN_TTL_FRAMES: u64 = 1800;
+
+struct CountingAlloc {
+    alloc_calls: AtomicU64,
+    dealloc_calls: AtomicU64,
+    realloc_calls: AtomicU64,
+    alloc_bytes: AtomicU64,
+    free_bytes: AtomicU64,
+    live_bytes: AtomicU64,
+    peak_live_bytes: AtomicU64,
+    measure_peak_live_bytes: AtomicU64,
+}
+
+#[derive(Clone, Copy)]
+struct AllocSnapshot {
+    alloc_calls: u64,
+    dealloc_calls: u64,
+    realloc_calls: u64,
+    alloc_bytes: u64,
+    free_bytes: u64,
+    live_bytes: u64,
+    measure_peak_live_bytes: u64,
+}
+
+#[derive(Clone, Copy)]
+struct AllocDelta {
+    alloc_calls: u64,
+    dealloc_calls: u64,
+    realloc_calls: u64,
+    alloc_bytes: u64,
+    free_bytes: u64,
+    live_bytes: u64,
+    peak_live_delta: u64,
+}
+
+struct Args {
+    scenario: String,
+    case_path: Option<String>,
+    iters: u64,
+    warmup: u64,
+    expect_plan_hash: Option<String>,
+    write_plan: Option<String>,
+}
+
+struct BenchmarkResult {
+    name: String,
+    objects: usize,
+    cameras: usize,
+    sprite_instances: usize,
+    tmesh_vertices: usize,
+    tmesh_instances: usize,
+    ops: usize,
+    mesh_ops: usize,
+    iters: u64,
+    elapsed_s: f64,
+    alloc: AllocDelta,
+    checksum: u64,
+    plan_hash: String,
+    verification: Option<VerificationResult>,
+}
+
+struct VerificationResult {
+    expected_hash: String,
+    actual_hash: String,
+}
+
+#[derive(serde::Serialize)]
+struct PlanSnapshot {
+    dynamic_upload_vertices: u64,
+    sprite_instances: Vec<SpriteInstanceRaw>,
+    tmesh_vertices: Vec<TexturedMeshVertexRaw>,
+    tmesh_instances: Vec<TexturedMeshInstanceRaw>,
+    ops: Vec<PlanOpSnapshot>,
+}
+
+#[derive(serde::Serialize)]
+enum PlanOpSnapshot {
+    Sprite {
+        instance_start: u32,
+        instance_count: u32,
+        blend: &'static str,
+        texture: u64,
+        camera: u8,
+    },
+    Mesh {
+        index: usize,
+    },
+    TexturedMesh {
+        vertex_start: u32,
+        vertex_count: u32,
+        dynamic_geom: bool,
+        geom_key: u64,
+        cached_vertex_buffer: Option<u64>,
+        instance_start: u32,
+        instance_count: u32,
+        mode: &'static str,
+        blend: &'static str,
+        texture: u64,
+        camera: u8,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct TMeshCacheKey {
+    hash: u64,
+    len: u32,
+}
+
+struct BenchCacheEntry {
+    id: u64,
+    vertex_count: u32,
+    bytes: u64,
+    last_used_frame: u64,
+}
+
+struct BenchSeenEntry {
+    hits: u8,
+    last_seen_frame: u64,
+}
+
+#[derive(Default)]
+struct BenchTMeshCache {
+    entries: HashMap<TMeshCacheKey, BenchCacheEntry>,
+    seen: HashMap<TMeshCacheKey, BenchSeenEntry>,
+    frame: u64,
+    next_id: u64,
+    total_bytes: u64,
+}
+
+impl CountingAlloc {
+    const fn new() -> Self {
+        Self {
+            alloc_calls: AtomicU64::new(0),
+            dealloc_calls: AtomicU64::new(0),
+            realloc_calls: AtomicU64::new(0),
+            alloc_bytes: AtomicU64::new(0),
+            free_bytes: AtomicU64::new(0),
+            live_bytes: AtomicU64::new(0),
+            peak_live_bytes: AtomicU64::new(0),
+            measure_peak_live_bytes: AtomicU64::new(0),
+        }
+    }
+
+    fn begin_measurement(&self) -> AllocSnapshot {
+        let live = self.live_bytes.load(Ordering::Relaxed);
+        self.measure_peak_live_bytes.store(live, Ordering::Relaxed);
+        self.snapshot()
+    }
+
+    fn snapshot(&self) -> AllocSnapshot {
+        AllocSnapshot {
+            alloc_calls: self.alloc_calls.load(Ordering::Relaxed),
+            dealloc_calls: self.dealloc_calls.load(Ordering::Relaxed),
+            realloc_calls: self.realloc_calls.load(Ordering::Relaxed),
+            alloc_bytes: self.alloc_bytes.load(Ordering::Relaxed),
+            free_bytes: self.free_bytes.load(Ordering::Relaxed),
+            live_bytes: self.live_bytes.load(Ordering::Relaxed),
+            measure_peak_live_bytes: self.measure_peak_live_bytes.load(Ordering::Relaxed),
+        }
+    }
+
+    fn note_live(&self, live: u64) {
+        update_peak(&self.peak_live_bytes, live);
+        update_peak(&self.measure_peak_live_bytes, live);
+    }
+
+    fn add_live(&self, size: usize) {
+        let live = self.live_bytes.fetch_add(size as u64, Ordering::Relaxed) + size as u64;
+        self.note_live(live);
+    }
+
+    fn sub_live(&self, size: usize) {
+        let _ = self.live_bytes.fetch_sub(size as u64, Ordering::Relaxed);
+    }
+}
+
+impl AllocSnapshot {
+    fn diff(self, start: Self) -> AllocDelta {
+        AllocDelta {
+            alloc_calls: self.alloc_calls.saturating_sub(start.alloc_calls),
+            dealloc_calls: self.dealloc_calls.saturating_sub(start.dealloc_calls),
+            realloc_calls: self.realloc_calls.saturating_sub(start.realloc_calls),
+            alloc_bytes: self.alloc_bytes.saturating_sub(start.alloc_bytes),
+            free_bytes: self.free_bytes.saturating_sub(start.free_bytes),
+            live_bytes: self.live_bytes.saturating_sub(start.live_bytes),
+            peak_live_delta: self
+                .measure_peak_live_bytes
+                .saturating_sub(start.measure_peak_live_bytes),
+        }
+    }
+}
+
+unsafe impl GlobalAlloc for CountingAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = unsafe { System.alloc(layout) };
+        if !ptr.is_null() {
+            self.alloc_calls.fetch_add(1, Ordering::Relaxed);
+            self.alloc_bytes
+                .fetch_add(layout.size() as u64, Ordering::Relaxed);
+            self.add_live(layout.size());
+        }
+        ptr
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) };
+        self.dealloc_calls.fetch_add(1, Ordering::Relaxed);
+        self.free_bytes
+            .fetch_add(layout.size() as u64, Ordering::Relaxed);
+        self.sub_live(layout.size());
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, old: Layout, new_size: usize) -> *mut u8 {
+        let out = unsafe { System.realloc(ptr, old, new_size) };
+        if !out.is_null() {
+            self.realloc_calls.fetch_add(1, Ordering::Relaxed);
+            if new_size >= old.size() {
+                let delta = new_size - old.size();
+                self.alloc_bytes.fetch_add(delta as u64, Ordering::Relaxed);
+                self.add_live(delta);
+            } else {
+                let delta = old.size() - new_size;
+                self.free_bytes.fetch_add(delta as u64, Ordering::Relaxed);
+                self.sub_live(delta);
+            }
+        }
+        out
+    }
+}
+
+impl BenchTMeshCache {
+    fn begin_frame(&mut self) {
+        self.frame = self.frame.wrapping_add(1);
+        let frame = self.frame;
+        self.seen.retain(|_, seen| {
+            frame.saturating_sub(seen.last_seen_frame) <= TMESH_CACHE_SEEN_TTL_FRAMES
+        });
+    }
+
+    fn resolve(
+        &mut self,
+        vertices: &[deadsync::core::gfx::TexturedMeshVertex],
+    ) -> Option<CachedTMeshGeom<u64>> {
+        if vertices.len() < TMESH_CACHE_MIN_VERTS || vertices.is_empty() {
+            return None;
+        }
+
+        let key = tmesh_cache_key(vertices);
+        if let Some(entry) = self.entries.get_mut(&key) {
+            entry.last_used_frame = self.frame;
+            return Some(CachedTMeshGeom {
+                cache_id: entry.id,
+                vertex_count: entry.vertex_count,
+                buffer: entry.id,
+            });
+        }
+
+        let promote = {
+            let seen = self.seen.entry(key).or_insert(BenchSeenEntry {
+                hits: 0,
+                last_seen_frame: self.frame,
+            });
+            if self.frame.saturating_sub(seen.last_seen_frame) > TMESH_CACHE_SEEN_TTL_FRAMES {
+                seen.hits = 0;
+            }
+            seen.last_seen_frame = self.frame;
+            seen.hits = seen.hits.saturating_add(1);
+            seen.hits >= TMESH_CACHE_PROMOTE_HITS
+        };
+        if !promote {
+            return None;
+        }
+
+        let bytes = (vertices.len() * mem::size_of::<TexturedMeshVertexRaw>()) as u64;
+        let cache_id = self.next_id.wrapping_add(1).max(1);
+        self.next_id = cache_id;
+        self.total_bytes = self.total_bytes.saturating_add(bytes);
+        self.entries.insert(
+            key,
+            BenchCacheEntry {
+                id: cache_id,
+                vertex_count: vertices.len() as u32,
+                bytes,
+                last_used_frame: self.frame,
+            },
+        );
+        self.evict();
+        Some(CachedTMeshGeom {
+            cache_id,
+            vertex_count: vertices.len() as u32,
+            buffer: cache_id,
+        })
+    }
+
+    fn evict(&mut self) {
+        while self.total_bytes > TMESH_CACHE_MAX_BYTES {
+            let Some(oldest_key) = self
+                .entries
+                .iter()
+                .filter_map(|(key, entry)| {
+                    (entry.last_used_frame != self.frame).then_some((*key, entry.last_used_frame))
+                })
+                .min_by_key(|(_, frame)| *frame)
+                .map(|(key, _)| key)
+            else {
+                break;
+            };
+            if let Some(entry) = self.entries.remove(&oldest_key) {
+                self.total_bytes = self.total_bytes.saturating_sub(entry.bytes);
+            }
+        }
+    }
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let args = parse_args()?;
+    let single_run = args.case_path.is_some() || args.scenario != "all";
+    if !single_run && (args.expect_plan_hash.is_some() || args.write_plan.is_some()) {
+        return Err(
+            "--expect-plan-hash and --write-plan require a single scenario or --case".into(),
+        );
+    }
+
+    if let Some(case_path) = &args.case_path {
+        print_result(run_case(&args, case_path)?);
+        return Ok(());
+    }
+
+    if args.scenario == "all" {
+        for &name in compose_scenarios::scenario_names() {
+            print_result(run_scenario(&args, name)?);
+        }
+        return Ok(());
+    }
+
+    print_result(run_scenario(&args, &args.scenario)?);
+    Ok(())
+}
+
+fn run_scenario(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>> {
+    let scenario = compose_scenarios::build_scenario(name).ok_or_else(|| {
+        format!(
+            "unknown scenario '{name}', expected one of: {}",
+            compose_scenarios::scenario_names().join(", ")
+        )
+    })?;
+    let render = compose::build_screen(
+        &scenario.actors,
+        scenario.clear_color,
+        &scenario.metrics,
+        &scenario.fonts,
+        scenario.total_elapsed,
+    );
+    benchmark_draw(
+        scenario.name,
+        &render,
+        args.iters,
+        args.warmup,
+        args.expect_plan_hash.as_deref(),
+        args.write_plan.as_deref(),
+        None,
+    )
+}
+
+fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Error>> {
+    let case = compose_case::read_case(std::path::Path::new(case_path))?;
+    let output = compose_case::render_case_output(&case)?;
+    let actual_hash = compose_case::render_snapshot_hash(&output)?;
+    if actual_hash != case.expected.output_hash {
+        return Err(format!(
+            "compose output hash mismatch for '{}': expected {} got {}",
+            case_path, case.expected.output_hash, actual_hash
+        )
+        .into());
+    }
+
+    let render = compose_case::render_list_runtime(&output);
+    benchmark_draw(
+        &case.screen,
+        &render,
+        args.iters,
+        args.warmup,
+        args.expect_plan_hash.as_deref(),
+        args.write_plan.as_deref(),
+        Some(VerificationResult {
+            expected_hash: case.expected.output_hash,
+            actual_hash,
+        }),
+    )
+}
+
+fn benchmark_draw(
+    name: &str,
+    render: &RenderList<'_>,
+    iters: u64,
+    warmup: u64,
+    expect_plan_hash: Option<&str>,
+    write_plan: Option<&str>,
+    verification: Option<VerificationResult>,
+) -> Result<BenchmarkResult, Box<dyn Error>> {
+    let texture_ids = texture_ids(render);
+    let initial = build_plan(render, &texture_ids)?;
+    let plan_hash = plan_snapshot_hash(&initial.snapshot)?;
+    if let Some(expected) = expect_plan_hash
+        && expected != plan_hash
+    {
+        return Err(format!(
+            "draw plan hash mismatch for '{}': expected {} got {}",
+            name, expected, plan_hash
+        )
+        .into());
+    }
+    if let Some(path) = write_plan {
+        write_json(std::path::Path::new(path), &initial.snapshot)?;
+    }
+
+    let mut scratch = GlScratch::with_capacity(
+        initial.snapshot.sprite_instances.len().max(256),
+        initial.snapshot.tmesh_vertices.len().max(1024),
+        initial.snapshot.tmesh_instances.len().max(256),
+        initial.snapshot.ops.len().max(64),
+    );
+    let mut cache = BenchTMeshCache::default();
+
+    for _ in 0..warmup {
+        cache.begin_frame();
+        let stats = draw_prep::prepare_gl(
+            render,
+            &mut scratch,
+            |texture_key| lookup_texture_case_insensitive(&texture_ids, texture_key),
+            |vertices| cache.resolve(vertices),
+        );
+        black_box(checksum_plan(&scratch, stats));
+    }
+
+    let start_alloc = ALLOC.begin_measurement();
+    let started = Instant::now();
+    let mut checksum = 0u64;
+    for _ in 0..iters {
+        cache.begin_frame();
+        let stats = draw_prep::prepare_gl(
+            black_box(render),
+            &mut scratch,
+            |texture_key| lookup_texture_case_insensitive(&texture_ids, texture_key),
+            |vertices| cache.resolve(vertices),
+        );
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(checksum_plan(&scratch, stats));
+        black_box(checksum);
+    }
+
+    let mesh_ops = initial
+        .snapshot
+        .ops
+        .iter()
+        .filter(|op| matches!(op, PlanOpSnapshot::Mesh { .. }))
+        .count();
+
+    Ok(BenchmarkResult {
+        name: name.to_string(),
+        objects: render.objects.len(),
+        cameras: render.cameras.len(),
+        sprite_instances: initial.snapshot.sprite_instances.len(),
+        tmesh_vertices: initial.snapshot.tmesh_vertices.len(),
+        tmesh_instances: initial.snapshot.tmesh_instances.len(),
+        ops: initial.snapshot.ops.len(),
+        mesh_ops,
+        iters,
+        elapsed_s: started.elapsed().as_secs_f64(),
+        alloc: ALLOC.snapshot().diff(start_alloc),
+        checksum,
+        plan_hash,
+        verification,
+    })
+}
+
+struct BuiltPlan {
+    snapshot: PlanSnapshot,
+}
+
+fn build_plan(
+    render: &RenderList<'_>,
+    texture_ids: &HashMap<String, u64>,
+) -> Result<BuiltPlan, Box<dyn Error>> {
+    let mut scratch = GlScratch::with_capacity(256, 1024, 256, 64);
+    let mut cache = BenchTMeshCache::default();
+    cache.begin_frame();
+    let stats = draw_prep::prepare_gl(
+        render,
+        &mut scratch,
+        |texture_key| lookup_texture_case_insensitive(texture_ids, texture_key),
+        |vertices| cache.resolve(vertices),
+    );
+    Ok(BuiltPlan {
+        snapshot: plan_snapshot(&scratch, stats),
+    })
+}
+
+fn plan_snapshot(scratch: &GlScratch<u64, u64>, stats: PrepareStats) -> PlanSnapshot {
+    PlanSnapshot {
+        dynamic_upload_vertices: stats.dynamic_upload_vertices,
+        sprite_instances: scratch.sprite_instances.clone(),
+        tmesh_vertices: scratch.tmesh_vertices.clone(),
+        tmesh_instances: scratch.tmesh_instances.clone(),
+        ops: scratch
+            .ops
+            .iter()
+            .map(|op| match *op {
+                DrawOp::Sprite(run) => PlanOpSnapshot::Sprite {
+                    instance_start: run.instance_start,
+                    instance_count: run.instance_count,
+                    blend: blend_name(run.blend),
+                    texture: run.texture,
+                    camera: run.camera,
+                },
+                DrawOp::Mesh(index) => PlanOpSnapshot::Mesh { index },
+                DrawOp::TexturedMesh(run) => PlanOpSnapshot::TexturedMesh {
+                    vertex_start: run.vertex_start,
+                    vertex_count: run.vertex_count,
+                    dynamic_geom: run.dynamic_geom,
+                    geom_key: run.geom_key,
+                    cached_vertex_buffer: run.cached_vertex_buffer,
+                    instance_start: run.instance_start,
+                    instance_count: run.instance_count,
+                    mode: mesh_mode_name(run.mode),
+                    blend: blend_name(run.blend),
+                    texture: run.texture,
+                    camera: run.camera,
+                },
+            })
+            .collect(),
+    }
+}
+
+fn checksum_plan(scratch: &GlScratch<u64, u64>, stats: PrepareStats) -> u64 {
+    let mut sum = stats.dynamic_upload_vertices;
+    sum = sum
+        .wrapping_mul(131)
+        .wrapping_add(scratch.sprite_instances.len() as u64);
+    sum = sum
+        .wrapping_mul(131)
+        .wrapping_add(scratch.tmesh_vertices.len() as u64);
+    sum = sum
+        .wrapping_mul(131)
+        .wrapping_add(scratch.tmesh_instances.len() as u64);
+    sum = sum.wrapping_mul(131).wrapping_add(scratch.ops.len() as u64);
+    if let Some(first) = scratch.ops.first() {
+        sum = sum.wrapping_mul(131).wrapping_add(match *first {
+            DrawOp::Sprite(run) => run.texture,
+            DrawOp::Mesh(index) => index as u64,
+            DrawOp::TexturedMesh(run) => run.geom_key ^ run.texture,
+        });
+    }
+    sum
+}
+
+fn plan_snapshot_hash(snapshot: &PlanSnapshot) -> Result<String, Box<dyn Error>> {
+    let bytes = serde_json::to_vec(snapshot)?;
+    let mut hasher = XxHash64::with_seed(0);
+    hasher.write(&bytes);
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
+fn texture_ids(render: &RenderList<'_>) -> HashMap<String, u64> {
+    let mut ids = HashMap::new();
+    let mut next_id = 1u64;
+    for obj in &render.objects {
+        let key = match &obj.object_type {
+            deadsync::core::gfx::ObjectType::Sprite { texture_id, .. } => Some(texture_id.as_ref()),
+            deadsync::core::gfx::ObjectType::TexturedMesh { texture_id, .. } => {
+                Some(texture_id.as_ref())
+            }
+            deadsync::core::gfx::ObjectType::Mesh { .. } => None,
+        };
+        let Some(key) = key else {
+            continue;
+        };
+        if ids.contains_key(key) {
+            continue;
+        }
+        ids.insert(key.to_string(), next_id);
+        next_id = next_id.wrapping_add(1).max(1);
+    }
+    ids
+}
+
+fn lookup_texture_case_insensitive(textures: &HashMap<String, u64>, key: &str) -> Option<u64> {
+    if let Some(texture) = textures.get(key) {
+        return Some(*texture);
+    }
+    textures
+        .iter()
+        .find_map(|(candidate, texture)| candidate.eq_ignore_ascii_case(key).then_some(*texture))
+}
+
+fn tmesh_cache_key(vertices: &[deadsync::core::gfx::TexturedMeshVertex]) -> TMeshCacheKey {
+    let mut hasher = XxHash64::with_seed(0);
+    hasher.write(cast_slice(vertices));
+    TMeshCacheKey {
+        hash: hasher.finish(),
+        len: vertices.len() as u32,
+    }
+}
+
+fn cast_slice<T>(slice: &[T]) -> &[u8] {
+    let len = std::mem::size_of_val(slice);
+    unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<u8>(), len) }
+}
+
+fn blend_name(blend: BlendMode) -> &'static str {
+    match blend {
+        BlendMode::Alpha => "alpha",
+        BlendMode::Add => "add",
+        BlendMode::Multiply => "multiply",
+        BlendMode::Subtract => "subtract",
+    }
+}
+
+fn mesh_mode_name(mode: MeshMode) -> &'static str {
+    match mode {
+        MeshMode::Triangles => "triangles",
+    }
+}
+
+fn print_result(result: BenchmarkResult) {
+    let per_iter_s = if result.iters == 0 {
+        0.0
+    } else {
+        result.elapsed_s / result.iters as f64
+    };
+    let frames_per_s = if result.elapsed_s > 0.0 {
+        result.iters as f64 / result.elapsed_s
+    } else {
+        0.0
+    };
+    let allocs_per_iter = ratio(result.alloc.alloc_calls, result.iters);
+    let reallocs_per_iter = ratio(result.alloc.realloc_calls, result.iters);
+    let bytes_per_iter = ratio(result.alloc.alloc_bytes, result.iters);
+
+    println!("scenario: {}", result.name);
+    if let Some(verification) = &result.verification {
+        println!(
+            "compose_verify: ok expected_hash={} actual_hash={}",
+            verification.expected_hash, verification.actual_hash
+        );
+    }
+    println!("plan_hash: {}", result.plan_hash);
+    println!(
+        "shape: objects/frame={} cameras/frame={} sprite_instances/frame={} tmesh_vertices/frame={} tmesh_instances/frame={} ops/frame={} mesh_ops/frame={}",
+        result.objects,
+        result.cameras,
+        result.sprite_instances,
+        result.tmesh_vertices,
+        result.tmesh_instances,
+        result.ops,
+        result.mesh_ops
+    );
+    println!(
+        "time: iters={} total={:.3}s per_iter={:.3}us plans/s={:.1}",
+        result.iters,
+        result.elapsed_s,
+        per_iter_s * 1_000_000.0,
+        frames_per_s
+    );
+    println!(
+        "alloc: allocs/iter={:.3} reallocs/iter={:.3} bytes/iter={:.1} live_delta={} peak_live_delta={}",
+        allocs_per_iter,
+        reallocs_per_iter,
+        bytes_per_iter,
+        result.alloc.live_bytes,
+        result.alloc.peak_live_delta
+    );
+    println!(
+        "alloc_totals: alloc_calls={} dealloc_calls={} realloc_calls={} alloc_bytes={} free_bytes={}",
+        result.alloc.alloc_calls,
+        result.alloc.dealloc_calls,
+        result.alloc.realloc_calls,
+        result.alloc.alloc_bytes,
+        result.alloc.free_bytes
+    );
+    println!("checksum: {}", result.checksum);
+    println!();
+}
+
+fn ratio(total: u64, iters: u64) -> f64 {
+    if iters == 0 {
+        0.0
+    } else {
+        total as f64 / iters as f64
+    }
+}
+
+fn parse_args() -> Result<Args, Box<dyn Error>> {
+    let mut scenario = String::from("all");
+    let mut case_path = None;
+    let mut iters = 5_000u64;
+    let mut warmup = 500u64;
+    let mut expect_plan_hash = None;
+    let mut write_plan = None;
+
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--scenario" => scenario = next_value(&mut args, "--scenario")?,
+            "--case" => case_path = Some(next_value(&mut args, "--case")?),
+            "--iters" => iters = next_value(&mut args, "--iters")?.parse()?,
+            "--warmup" => warmup = next_value(&mut args, "--warmup")?.parse()?,
+            "--expect-plan-hash" => {
+                expect_plan_hash = Some(next_value(&mut args, "--expect-plan-hash")?)
+            }
+            "--write-plan" => write_plan = Some(next_value(&mut args, "--write-plan")?),
+            "--help" | "-h" => {
+                print_help();
+                std::process::exit(0);
+            }
+            _ => return Err(format!("unknown arg '{arg}'").into()),
+        }
+    }
+
+    Ok(Args {
+        scenario,
+        case_path,
+        iters,
+        warmup,
+        expect_plan_hash,
+        write_plan,
+    })
+}
+
+fn next_value(
+    args: &mut impl Iterator<Item = String>,
+    flag: &str,
+) -> Result<String, Box<dyn Error>> {
+    args.next()
+        .ok_or_else(|| format!("missing value for {flag}").into())
+}
+
+fn print_help() {
+    println!(
+        "draw_bench [--scenario all|hud|text|mask] [--case PATH] [--iters N] [--warmup N] [--expect-plan-hash HASH] [--write-plan PATH]"
+    );
+}
+
+fn write_json<T: serde::Serialize>(
+    path: &std::path::Path,
+    value: &T,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_vec_pretty(value)?)?;
+    Ok(())
+}
+
+fn update_peak(peak: &AtomicU64, value: u64) {
+    let mut current = peak.load(Ordering::Relaxed);
+    while value > current {
+        match peak.compare_exchange_weak(current, value, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => break,
+            Err(next) => current = next,
+        }
+    }
+}

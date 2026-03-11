@@ -1,5 +1,7 @@
 mod backends;
 
+pub mod draw_prep;
+
 use crate::core::gfx::backends::{opengl, software, vulkan, wgpu_core};
 use cgmath::Matrix4;
 use glow::HasContext;

@@ -9,6 +9,7 @@ use crate::ui::compose;
 use crate::ui::font::{Font, Glyph};
 use cgmath::Matrix4;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::error::Error;
 use std::fs;
@@ -422,6 +423,24 @@ pub fn read_case(path: &Path) -> Result<ComposeCase, Box<dyn Error>> {
     Ok(serde_json::from_slice(&bytes)?)
 }
 
+pub fn read_render_snapshot(path: &Path) -> Result<RenderListSnapshot, Box<dyn Error>> {
+    let bytes = fs::read(path)?;
+    Ok(serde_json::from_slice(&bytes)?)
+}
+
+pub fn render_list_runtime(snapshot: &RenderListSnapshot) -> RenderList<'static> {
+    RenderList {
+        clear_color: snapshot.clear_color,
+        cameras: snapshot
+            .cameras
+            .iter()
+            .copied()
+            .map(matrix_runtime)
+            .collect(),
+        objects: snapshot.objects.iter().map(render_object_runtime).collect(),
+    }
+}
+
 pub fn default_capture_paths(screen: &str) -> (PathBuf, PathBuf) {
     let stem = format!(
         "{}-{}",
@@ -644,6 +663,7 @@ fn glyph_runtime(glyph: &GlyphSnapshot) -> Glyph {
         size: glyph.size,
         offset: glyph.offset,
         advance: glyph.advance,
+        advance_i32: glyph.advance.round_ties_even() as i32,
     }
 }
 
@@ -1091,6 +1111,54 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
     }
 }
 
+fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static> {
+    RenderObject {
+        object_type: match &render.object_type {
+            RenderObjectTypeSnapshot::Sprite {
+                texture_id,
+                tint,
+                uv_scale,
+                uv_offset,
+                local_offset,
+                local_offset_rot_sin_cos,
+                edge_fade,
+            } => ObjectType::Sprite {
+                texture_id: Cow::Owned(texture_id.clone()),
+                tint: *tint,
+                uv_scale: *uv_scale,
+                uv_offset: *uv_offset,
+                local_offset: *local_offset,
+                local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
+                edge_fade: *edge_fade,
+            },
+            RenderObjectTypeSnapshot::Mesh { vertices, mode } => ObjectType::Mesh {
+                vertices: Cow::Owned(vertices.clone()),
+                mode: MeshMode::from(*mode),
+            },
+            RenderObjectTypeSnapshot::TexturedMesh {
+                texture_id,
+                vertices,
+                mode,
+                uv_scale,
+                uv_offset,
+                uv_tex_shift,
+            } => ObjectType::TexturedMesh {
+                texture_id: Cow::Owned(texture_id.clone()),
+                vertices: Cow::Owned(vertices.clone()),
+                mode: MeshMode::from(*mode),
+                uv_scale: *uv_scale,
+                uv_offset: *uv_offset,
+                uv_tex_shift: *uv_tex_shift,
+            },
+        },
+        transform: matrix_runtime(render.transform),
+        blend: BlendMode::from(render.blend),
+        z: render.z,
+        order: render.order,
+        camera: render.camera,
+    }
+}
+
 fn matrix_snapshot(m: &Matrix4<f32>) -> [[f32; 4]; 4] {
     [
         [m.x.x, m.x.y, m.x.z, m.x.w],
@@ -1346,5 +1414,26 @@ mod tests {
         assert_eq!(baseline_hash, replay_hash);
         assert_eq!(case.expected.objects, replay_output.objects.len());
         assert_eq!(case.expected.cameras, replay_output.cameras.len());
+    }
+
+    #[test]
+    fn render_snapshot_roundtrip_keeps_output_hash() {
+        let scenario = crate::test_support::compose_scenarios::build_scenario("mask")
+            .expect("mask scenario should exist");
+        let (_, output) = capture_case(
+            scenario.name,
+            &scenario.actors,
+            scenario.clear_color,
+            &scenario.metrics,
+            &scenario.fonts,
+            scenario.total_elapsed,
+        )
+        .expect("capture should succeed");
+        let render = render_list_runtime(&output);
+        let roundtrip = render_list_snapshot(&render);
+        let output_hash = render_snapshot_hash(&output).expect("hash should succeed");
+        let roundtrip_hash = render_snapshot_hash(&roundtrip).expect("hash should succeed");
+
+        assert_eq!(output_hash, roundtrip_hash);
     }
 }
