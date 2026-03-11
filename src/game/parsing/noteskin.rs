@@ -1113,6 +1113,7 @@ pub struct Style {
 pub struct Noteskin {
     pub notes: Vec<SpriteSlot>,
     pub note_layers: Vec<Arc<[SpriteSlot]>>,
+    pub lift_note_layers: Vec<Arc<[SpriteSlot]>>,
     pub receptor_off: Vec<SpriteSlot>,
     pub receptor_glow: Vec<Option<SpriteSlot>>,
     pub mines: Vec<Option<SpriteSlot>>,
@@ -1139,6 +1140,11 @@ impl Noteskin {
             visit(slot.texture_key());
         }
         for layer in &self.note_layers {
+            for slot in layer.iter() {
+                visit(slot.texture_key());
+            }
+        }
+        for layer in &self.lift_note_layers {
             for slot in layer.iter() {
                 visit(slot.texture_key());
             }
@@ -1856,6 +1862,7 @@ fn load_itg_sprite_noteskin(
 
     let mut notes = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
     let mut note_layers = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
+    let mut lift_note_layers: Vec<Arc<[SpriteSlot]>> = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
     let mut receptor_off = Vec::with_capacity(style.num_cols);
     let mut receptor_glow = Vec::with_capacity(style.num_cols);
     let mut mines = Vec::with_capacity(style.num_cols);
@@ -1934,6 +1941,27 @@ fn load_itg_sprite_noteskin(
             let primary = layers.first().cloned().unwrap_or_else(|| note_base.clone());
             notes.push(primary);
             note_layers.push(Arc::from(layers));
+        }
+
+        // Load "Tap Lift" sprites; fall back to tap sprites if not present.
+        let lift_sprites = itg_resolve_actor_sprites(data, &behavior, button, "Tap Lift")
+            .into_iter()
+            .map(|mut s| {
+                let (draw, timeline, effect) = itg_model_draw_program(&s.commands);
+                s.slot.model_draw = draw;
+                s.slot.model_timeline = timeline;
+                s.slot.model_effect = effect;
+                s.slot
+            })
+            .collect::<Vec<_>>();
+        let lift_layers_for_col: Arc<[SpriteSlot]> = if lift_sprites.is_empty() {
+            // Fall back to tap note sprites.
+            Arc::from(note_sprites.clone())
+        } else {
+            Arc::from(lift_sprites)
+        };
+        for _ in 0..NUM_QUANTIZATIONS {
+            lift_note_layers.push(Arc::clone(&lift_layers_for_col));
         }
 
         let receptor_sprites = itg_resolve_actor_sprites(data, &behavior, button, "Receptor");
@@ -2462,6 +2490,7 @@ fn load_itg_sprite_noteskin(
     Ok(Noteskin {
         notes,
         note_layers,
+        lift_note_layers,
         receptor_off,
         receptor_glow,
         mines,

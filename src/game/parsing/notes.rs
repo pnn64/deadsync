@@ -57,6 +57,12 @@ pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<Parsed
                         note_type: NoteType::Mine,
                         tail_row_index: None,
                     }),
+                    b'L' | b'l' => notes.push(ParsedNote {
+                        row_index,
+                        column: col_index,
+                        note_type: NoteType::Lift,
+                        tail_row_index: None,
+                    }),
                     b'3' => {
                         if let Some(head_idx) = hold_heads[col_index].take()
                             && let Some(note) = notes.get_mut(head_idx)
