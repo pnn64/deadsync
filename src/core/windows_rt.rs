@@ -11,7 +11,7 @@ use windows::core::w;
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
 #[derive(Clone, Copy)]
-pub(crate) enum ThreadRole {
+pub enum ThreadRole {
     Main,
     AudioRender,
     AudioDecode,
@@ -66,7 +66,7 @@ impl ThreadRole {
     }
 }
 
-pub(crate) struct ThreadPolicyGuard {
+pub struct ThreadPolicyGuard {
     mmcss_handle: Option<HANDLE>,
 }
 
@@ -100,7 +100,7 @@ fn apply_fallback_priority(profile: ThreadProfile) {
     }
 }
 
-pub(crate) fn boost_current_thread(role: ThreadRole) -> ThreadPolicyGuard {
+pub fn boost_current_thread(role: ThreadRole) -> ThreadPolicyGuard {
     let profile = role.profile();
     let mut task_index = 0u32;
     let mmcss =

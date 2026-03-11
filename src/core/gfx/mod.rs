@@ -25,14 +25,14 @@ pub struct RenderObject<'a> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct MeshVertex {
     pub pos: [f32; 2],
     pub color: [f32; 4],
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TexturedMeshVertex {
     pub pos: [f32; 2],
     pub uv: [f32; 2],

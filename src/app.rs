@@ -5428,6 +5428,54 @@ impl App {
         }
     }
 
+    fn capture_compose_case_now(&self) {
+        let total_elapsed = Instant::now()
+            .duration_since(self.state.shell.start_time)
+            .as_secs_f32();
+        let screen_name = format!("{:?}", self.state.screens.current_screen);
+        let (actors, clear_color) = self.get_current_actors();
+        let Ok((case, output)) = crate::test_support::compose_case::capture_case(
+            &screen_name,
+            &actors,
+            clear_color,
+            &self.state.shell.metrics,
+            self.asset_manager.fonts(),
+            total_elapsed,
+        ) else {
+            warn!("Failed to capture compose case for {screen_name}");
+            return;
+        };
+
+        let (case_path, output_path) =
+            crate::test_support::compose_case::default_capture_paths(&screen_name);
+        if let Err(e) = crate::test_support::compose_case::write_case(&case_path, &case) {
+            warn!(
+                "Failed to write compose case '{}': {e}",
+                case_path.display()
+            );
+            return;
+        }
+        if let Err(e) =
+            crate::test_support::compose_case::write_render_snapshot(&output_path, &output)
+        {
+            warn!(
+                "Failed to write compose output snapshot '{}': {e}",
+                output_path.display()
+            );
+            return;
+        }
+
+        info!(
+            "Saved compose capture for {}: case='{}' output='{}' hash={} objects={} cameras={}",
+            screen_name,
+            case_path.display(),
+            output_path.display(),
+            case.expected.output_hash,
+            case.expected.objects,
+            case.expected.cameras
+        );
+    }
+
     fn apply_display_mode(
         &mut self,
         mode: DisplayMode,
@@ -5776,6 +5824,16 @@ impl App {
             debug!("Overlay {}", self.state.shell.overlay_mode.label());
             config::update_show_stats_mode(mode);
             options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
+        }
+        if key_event.state == winit::event::ElementState::Pressed
+            && !key_event.repeat
+            && self.state.shell.ctrl_held
+            && self.state.shell.shift_held
+            && key_event.physical_key
+                == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F10)
+        {
+            self.capture_compose_case_now();
+            return;
         }
         // Screen-specific Escape handling resides in per-screen raw handlers now
 

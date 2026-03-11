@@ -4,7 +4,7 @@ use std::time::Instant;
 static HOST_EPOCH: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 #[inline(always)]
-pub(crate) fn init() {
+pub fn init() {
     let _ = *HOST_EPOCH;
 }
 

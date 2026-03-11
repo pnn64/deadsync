@@ -639,34 +639,70 @@ fn build_actor_recursive<'a>(
                     out.reserve(end - before);
                     let mut idx = before;
                     while idx < end {
-                        let Some(stroke_key) = (match &out[idx].object_type {
-                            renderer::ObjectType::Sprite { texture_id, .. } => {
-                                fm.stroke_texture_map.get(texture_id.as_ref())
+                        let (
+                            stroke_key,
+                            transform,
+                            uv_scale,
+                            uv_offset,
+                            local_offset,
+                            local_offset_rot_sin_cos,
+                            edge_fade,
+                        ) = match &out[idx] {
+                            RenderObject {
+                                object_type:
+                                    renderer::ObjectType::Sprite {
+                                        texture_id,
+                                        uv_scale,
+                                        uv_offset,
+                                        local_offset,
+                                        local_offset_rot_sin_cos,
+                                        edge_fade,
+                                        ..
+                                    },
+                                transform,
+                                ..
+                            } => {
+                                let Some(stroke_key) =
+                                    fm.stroke_texture_map.get(texture_id.as_ref())
+                                else {
+                                    idx += 1;
+                                    continue;
+                                };
+                                (
+                                    stroke_key.as_str(),
+                                    *transform,
+                                    *uv_scale,
+                                    *uv_offset,
+                                    *local_offset,
+                                    *local_offset_rot_sin_cos,
+                                    *edge_fade,
+                                )
                             }
-                            _ => None,
-                        }) else {
-                            idx += 1;
-                            continue;
+                            _ => {
+                                idx += 1;
+                                continue;
+                            }
                         };
-                        let mut stroke_obj = out[idx].clone();
-                        let renderer::ObjectType::Sprite {
-                            texture_id, tint, ..
-                        } = &mut stroke_obj.object_type
-                        else {
-                            idx += 1;
-                            continue;
-                        };
-                        *texture_id = std::borrow::Cow::Owned(stroke_key.clone());
-                        *tint = stroke_rgba;
-                        stroke_obj.z = layer;
-                        stroke_obj.order = {
-                            let o = *order_counter;
-                            *order_counter += 1;
-                            o
-                        };
-                        stroke_obj.blend = *blend;
-                        stroke_obj.camera = camera;
-                        out.push(stroke_obj);
+                        out.push(RenderObject {
+                            object_type: renderer::ObjectType::Sprite {
+                                texture_id: std::borrow::Cow::Borrowed(stroke_key),
+                                tint: stroke_rgba,
+                                uv_scale,
+                                uv_offset,
+                                local_offset,
+                                local_offset_rot_sin_cos,
+                                edge_fade,
+                            },
+                            transform,
+                            blend: *blend,
+                            z: layer,
+                            order: {
+                                let o = *order_counter;
+                                *order_counter += 1;
+                                o
+                            },
+                            camera,
+                        });
                         idx += 1;
                     }
                 }
@@ -1298,6 +1334,7 @@ fn layout_text<'a>(
         logical.mul_add(scale, center)
     }
 
+    let draws_space = font.glyph_map.contains_key(&' ');
     let mut dims_cache: [Option<(&str, (f32, f32))>; 8] = [None; 8];
     let mut dims_cache_len = 0usize;
     out.reserve(text.len());
@@ -1322,7 +1359,7 @@ fn layout_text<'a>(
             let quad_w = glyph.size[0] * sx;
             let quad_h = glyph.size[1] * sy;
 
-            let draw_quad = !(ch == ' ' && !font.glyph_map.contains_key(&ch));
+            let draw_quad = ch != ' ' || draws_space;
             if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
                 let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
                 let quad_y_logical = baseline_local_logical + glyph.offset[1];
@@ -1445,6 +1482,10 @@ fn clip_objects_range_to_world_masks(
     }
     if masks.is_empty() {
         objects.truncate(start);
+        return;
+    }
+    if let [mask] = masks {
+        clip_objects_range_to_world_rect(objects, start, *mask);
         return;
     }
     let len = objects.len();

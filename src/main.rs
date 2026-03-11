@@ -1,15 +1,9 @@
-mod app;
-mod assets;
-mod config;
-mod core;
-mod game;
-mod screens;
-mod ui;
+use deadsync::{app, config, core, game};
 
 #[cfg(windows)]
 struct WindowsTimingGuard {
     timer_period_ms: u32,
-    _thread_policy: crate::core::windows_rt::ThreadPolicyGuard,
+    _thread_policy: core::windows_rt::ThreadPolicyGuard,
 }
 
 #[cfg(windows)]
@@ -43,9 +37,7 @@ fn boost_windows_runtime_timing() -> WindowsTimingGuard {
 
     WindowsTimingGuard {
         timer_period_ms,
-        _thread_policy: crate::core::windows_rt::boost_current_thread(
-            crate::core::windows_rt::ThreadRole::Main,
-        ),
+        _thread_policy: core::windows_rt::boost_current_thread(core::windows_rt::ThreadRole::Main),
     }
 }
 

@@ -2465,6 +2465,13 @@ pub fn find_glyph<'a>(
     c: char,
     all_fonts: &'a HashMap<&'static str, Font>,
 ) -> Option<&'a Glyph> {
+    if start_font.fallback_font_name.is_none() {
+        return start_font
+            .glyph_map
+            .get(&c)
+            .or(start_font.default_glyph.as_ref());
+    }
+
     let mut current_font = Some(start_font);
     while let Some(font) = current_font {
         // Check the current font's glyph map.

@@ -8,6 +8,10 @@ license = "GPL-3.0"
 repository = "https://github.com/pnn64/deadsync"
 keywords = ["deadsync", "stepmania", "itg", "inthegroove", "rhythmgame", "vulkan"]
 
+[[bin]]
+name = "compose_bench"
+path = "tests/compose/bench.rs"
+
 [features]
 pipewire-audio = ["dep:pipewire"]
 

@@ -1,10 +1,10 @@
 pub mod audio;
 pub mod display;
 pub mod gfx;
-pub(crate) mod host_time;
+pub mod host_time;
 pub mod input;
 pub mod logging;
 pub mod network;
 pub mod space;
 #[cfg(windows)]
-pub(crate) mod windows_rt;
+pub mod windows_rt;
