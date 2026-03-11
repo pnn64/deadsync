@@ -5,6 +5,8 @@ use crate::core::space::Metrics;
 use crate::ui::actors::{self, Actor, SizeSpec};
 use crate::ui::{anim, font};
 use cgmath::{Matrix4, Rad, Vector2, Vector3};
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
@@ -13,8 +15,28 @@ pub fn build_screen<'a>(
     actors: &'a [actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &'a std::collections::HashMap<&'static str, font::Font>,
+    fonts: &'a HashMap<&'static str, font::Font>,
     total_elapsed: f32,
+) -> RenderList<'a> {
+    let mut text_cache = TextLayoutCache::default();
+    build_screen_cached(
+        actors,
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        &mut text_cache,
+    )
+}
+
+#[inline(always)]
+pub fn build_screen_cached<'a>(
+    actors: &'a [actors::Actor],
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &'a HashMap<&'static str, font::Font>,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
 ) -> RenderList<'a> {
     let mut objects = Vec::with_capacity(estimate_object_count(actors));
     let mut cameras: Vec<Matrix4<f32>> = Vec::with_capacity(4);
@@ -43,6 +65,7 @@ pub fn build_screen<'a>(
             &mut masks,
             &mut order_counter,
             &mut objects,
+            text_cache,
             total_elapsed,
         );
     }
@@ -55,6 +78,148 @@ pub fn build_screen<'a>(
         cameras,
         objects,
     }
+}
+
+#[derive(Clone, Copy)]
+struct CachedGlyph {
+    texture_key: *const str,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    size: [f32; 2],
+    offset: [f32; 2],
+    advance_i32: i32,
+    draw_quad: bool,
+}
+
+#[derive(Clone)]
+struct CachedLine {
+    width_i32: i32,
+    glyphs: Vec<CachedGlyph>,
+}
+
+#[derive(Clone)]
+struct CachedTextLayout {
+    max_logical_width_i: i32,
+    glyph_count: usize,
+    lines: Vec<CachedLine>,
+}
+
+pub struct TextLayoutCache {
+    entries: HashMap<u64, HashMap<Box<str>, CachedTextLayout>>,
+    entry_count: usize,
+    max_entries: usize,
+}
+
+impl Default for TextLayoutCache {
+    fn default() -> Self {
+        Self::new(4096)
+    }
+}
+
+impl TextLayoutCache {
+    pub fn new(max_entries: usize) -> Self {
+        Self {
+            entries: HashMap::new(),
+            entry_count: 0,
+            max_entries: max_entries.max(1),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.entry_count = 0;
+    }
+
+    fn get_or_build(
+        &mut self,
+        font: &font::Font,
+        fonts: &HashMap<&'static str, font::Font>,
+        text: &str,
+    ) -> &CachedTextLayout {
+        let font_key = font_chain_key(font, fonts);
+        if !self
+            .entries
+            .get(&font_key)
+            .is_some_and(|font_entries| font_entries.contains_key(text))
+        {
+            if self.entry_count >= self.max_entries {
+                self.clear();
+            }
+            let layout = build_cached_text_layout(font, fonts, text);
+            self.entries
+                .entry(font_key)
+                .or_default()
+                .insert(text.into(), layout);
+            self.entry_count += 1;
+        }
+        self.entries
+            .get(&font_key)
+            .and_then(|font_entries| font_entries.get(text))
+            .expect("text layout cache entry inserted")
+    }
+}
+
+fn font_chain_key(font: &font::Font, fonts: &HashMap<&'static str, font::Font>) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    let mut current = Some(font);
+    while let Some(font) = current {
+        (font as *const font::Font as usize).hash(&mut hasher);
+        current = font.fallback_font_name.and_then(|name| fonts.get(name));
+    }
+    hasher.finish()
+}
+
+fn build_cached_text_layout(
+    font: &font::Font,
+    fonts: &HashMap<&'static str, font::Font>,
+    text: &str,
+) -> CachedTextLayout {
+    let draws_space = font.glyph_map.contains_key(&' ');
+    let mut max_logical_width_i = 0i32;
+    let mut glyph_count = 0usize;
+    let mut lines = Vec::new();
+
+    let mut push_line = |line: &str| {
+        let mut width_i32 = 0i32;
+        let mut glyphs = Vec::with_capacity(line.chars().count());
+        for ch in line.chars() {
+            let Some(glyph) = font::find_glyph(font, ch, fonts) else {
+                continue;
+            };
+            width_i32 += glyph.advance_i32;
+            glyphs.push(CachedGlyph {
+                texture_key: std::ptr::from_ref(glyph.texture_key.as_str()),
+                uv_scale: glyph.uv_scale,
+                uv_offset: glyph.uv_offset,
+                size: glyph.size,
+                offset: glyph.offset,
+                advance_i32: glyph.advance_i32,
+                draw_quad: ch != ' ' || draws_space,
+            });
+        }
+        max_logical_width_i = max_logical_width_i.max(width_i32);
+        glyph_count += glyphs.len();
+        lines.push(CachedLine { width_i32, glyphs });
+    };
+
+    if text.as_bytes().contains(&b'\n') {
+        for line in text.lines() {
+            push_line(line);
+        }
+    } else {
+        push_line(text);
+    }
+
+    CachedTextLayout {
+        max_logical_width_i,
+        glyph_count,
+        lines,
+    }
+}
+
+#[inline(always)]
+unsafe fn str_from_cached_ptr<'a>(ptr: *const str) -> &'a str {
+    unsafe { &*ptr }
 }
 
 #[inline(always)]
@@ -210,13 +375,14 @@ fn build_actor_recursive<'a>(
     actor: &'a actors::Actor,
     parent: SmRect,
     m: &Metrics,
-    fonts: &'a std::collections::HashMap<&'static str, font::Font>,
+    fonts: &'a HashMap<&'static str, font::Font>,
     base_z: i16,
     camera: u8,
     cameras: &mut Vec<Matrix4<f32>>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
     out: &mut Vec<RenderObject<'a>>,
+    text_cache: &mut TextLayoutCache,
     total_elapsed: f32,
 ) {
     match actor {
@@ -485,6 +651,7 @@ fn build_actor_recursive<'a>(
                 masks,
                 order_counter,
                 out,
+                text_cache,
                 total_elapsed,
             );
 
@@ -572,6 +739,7 @@ fn build_actor_recursive<'a>(
                     masks,
                     order_counter,
                     out,
+                    text_cache,
                     total_elapsed,
                 );
             }
@@ -623,6 +791,7 @@ fn build_actor_recursive<'a>(
                     *offset,
                     *align_text,
                     m,
+                    text_cache,
                 );
                 if let Some([x, y, w, h]) = *clip {
                     let clip_sm = SmRect {
@@ -862,6 +1031,7 @@ fn build_actor_recursive<'a>(
                     masks,
                     order_counter,
                     out,
+                    text_cache,
                     total_elapsed,
                 );
             }
@@ -1211,7 +1381,7 @@ const fn quantize_up_even_i32(v: i32) -> i32 {
 fn layout_text<'a>(
     out: &mut Vec<RenderObject<'a>>,
     font: &'a font::Font,
-    fonts: &'a std::collections::HashMap<&'static str, font::Font>,
+    fonts: &'a HashMap<&'static str, font::Font>,
     text: &str,
     _px_size: f32,
     scale: [f32; 2],
@@ -1227,61 +1397,17 @@ fn layout_text<'a>(
     offset: [f32; 2],
     text_align: actors::TextAlign,
     m: &Metrics,
+    text_cache: &mut TextLayoutCache,
 ) {
     if text.is_empty() {
         return;
     }
-
-    #[inline(always)]
-    fn advance_logical(glyph: &font::Glyph) -> i32 {
-        glyph.advance_i32
+    let layout = text_cache.get_or_build(font, fonts, text);
+    let num_lines = layout.lines.len();
+    if num_lines == 0 {
+        return;
     }
-
-    const GLYPH_CACHE_LIMIT: usize = 128;
-    let draws_space = font.glyph_map.contains_key(&' ');
-    let single_line = !text.as_bytes().contains(&b'\n');
-    let mut max_logical_width_i = 0i32;
-    let num_lines: usize;
-    let single_line_width: i32;
-    let mut single_line_glyphs: [Option<(&font::Glyph, bool, i32)>; GLYPH_CACHE_LIMIT] =
-        [None; GLYPH_CACHE_LIMIT];
-    let mut single_line_glyph_count = 0usize;
-    let mut single_line_cache_full = false;
-    if single_line {
-        num_lines = 1;
-        let mut line_width = 0i32;
-        for ch in text.chars() {
-            let Some(glyph) = font::find_glyph(font, ch, fonts) else {
-                continue;
-            };
-            let advance = advance_logical(glyph);
-            line_width += advance;
-            if single_line_glyph_count < GLYPH_CACHE_LIMIT {
-                single_line_glyphs[single_line_glyph_count] =
-                    Some((glyph, ch != ' ' || draws_space, advance));
-            } else {
-                single_line_cache_full = true;
-            }
-            single_line_glyph_count += 1;
-        }
-        max_logical_width_i = line_width;
-        single_line_width = line_width;
-    } else {
-        let mut counted_lines = 0usize;
-        for line in text.lines() {
-            counted_lines += 1;
-            let mut line_width = 0i32;
-            for ch in line.chars() {
-                line_width += font::find_glyph(font, ch, fonts).map_or(0, advance_logical);
-            }
-            max_logical_width_i = max_logical_width_i.max(line_width);
-        }
-        if counted_lines == 0 {
-            return;
-        }
-        num_lines = counted_lines;
-        single_line_width = 0;
-    }
+    let max_logical_width_i = layout.max_logical_width_i;
     let block_w_logical_even = quantize_up_even_i32(max_logical_width_i) as f32;
 
     // 2) Unscaled block cap height + line spacing in logical units
@@ -1397,131 +1523,19 @@ fn layout_text<'a>(
         logical.mul_add(scale, center)
     }
 
-    out.reserve(text.len());
+    out.reserve(layout.glyph_count);
 
-    if single_line {
+    for line in &layout.lines {
         pen_y_logical += font.height;
         let baseline_local_logical = pen_y_logical as f32;
         let mut pen_x_logical =
-            start_x_logical(text_align, block_w_logical_even, single_line_width as f32);
+            start_x_logical(text_align, block_w_logical_even, line.width_i32 as f32);
 
-        if !single_line_cache_full {
-            for &(glyph, draw_quad, advance) in single_line_glyphs[..single_line_glyph_count]
-                .iter()
-                .flatten()
-            {
-                let quad_w = glyph.size[0] * sx;
-                let quad_h = glyph.size[1] * sy;
-
-                if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
-                    let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
-                    let quad_y_logical = baseline_local_logical + glyph.offset[1];
-
-                    let quad_x_sm = logical_to_world(block_center_x, quad_x_logical, sx);
-                    let quad_y_sm = logical_to_world(block_center_y, quad_y_logical, sy);
-
-                    let center_x = m.left + quad_x_sm + quad_w * 0.5;
-                    let center_y = m.top - (quad_y_sm + quad_h * 0.5);
-
-                    let transform = Matrix4::new(
-                        quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
-                        center_y, 0.0, 1.0,
-                    );
-
-                    out.push(RenderObject {
-                        object_type: renderer::ObjectType::Sprite {
-                            texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
-                            tint: [1.0; 4],
-                            uv_scale: glyph.uv_scale,
-                            uv_offset: glyph.uv_offset,
-                            local_offset: [0.0, 0.0],
-                            local_offset_rot_sin_cos: [0.0, 1.0],
-                            edge_fade: [0.0; 4],
-                        },
-                        texture_handle: renderer::INVALID_TEXTURE_HANDLE,
-                        transform,
-                        blend: BlendMode::Alpha,
-                        z: 0,
-                        order: 0,
-                        camera: 0,
-                    });
-                }
-
-                pen_x_logical += advance;
-            }
-        } else {
-            for ch in text.chars() {
-                let glyph = match font::find_glyph(font, ch, fonts) {
-                    Some(g) => g,
-                    None => continue,
-                };
-
-                let quad_w = glyph.size[0] * sx;
-                let quad_h = glyph.size[1] * sy;
-
-                let draw_quad = ch != ' ' || draws_space;
-                if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
-                    let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
-                    let quad_y_logical = baseline_local_logical + glyph.offset[1];
-
-                    let quad_x_sm = logical_to_world(block_center_x, quad_x_logical, sx);
-                    let quad_y_sm = logical_to_world(block_center_y, quad_y_logical, sy);
-
-                    let center_x = m.left + quad_x_sm + quad_w * 0.5;
-                    let center_y = m.top - (quad_y_sm + quad_h * 0.5);
-
-                    let transform = Matrix4::new(
-                        quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
-                        center_y, 0.0, 1.0,
-                    );
-
-                    out.push(RenderObject {
-                        object_type: renderer::ObjectType::Sprite {
-                            texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
-                            tint: [1.0; 4],
-                            uv_scale: glyph.uv_scale,
-                            uv_offset: glyph.uv_offset,
-                            local_offset: [0.0, 0.0],
-                            local_offset_rot_sin_cos: [0.0, 1.0],
-                            edge_fade: [0.0; 4],
-                        },
-                        texture_handle: renderer::INVALID_TEXTURE_HANDLE,
-                        transform,
-                        blend: BlendMode::Alpha,
-                        z: 0,
-                        order: 0,
-                        camera: 0,
-                    });
-                }
-
-                pen_x_logical += advance_logical(glyph);
-            }
-        }
-        return;
-    }
-
-    for line in text.lines() {
-        pen_y_logical += font.height;
-        let baseline_local_logical = pen_y_logical as f32;
-
-        let mut line_w_logical = 0i32;
-        for ch in line.chars() {
-            line_w_logical += font::find_glyph(font, ch, fonts).map_or(0, advance_logical);
-        }
-        let mut pen_x_logical =
-            start_x_logical(text_align, block_w_logical_even, line_w_logical as f32);
-
-        for ch in line.chars() {
-            let glyph = match font::find_glyph(font, ch, fonts) {
-                Some(g) => g,
-                None => continue,
-            };
-
+        for glyph in &line.glyphs {
             let quad_w = glyph.size[0] * sx;
             let quad_h = glyph.size[1] * sy;
 
-            let draw_quad = ch != ' ' || draws_space;
-            if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
+            if glyph.draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
                 let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
                 let quad_y_logical = baseline_local_logical + glyph.offset[1];
 
@@ -1543,7 +1557,9 @@ fn layout_text<'a>(
 
                 out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
-                        texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
+                        texture_id: std::borrow::Cow::Borrowed(unsafe {
+                            str_from_cached_ptr(glyph.texture_key)
+                        }),
                         tint: [1.0; 4],
                         uv_scale: glyph.uv_scale,
                         uv_offset: glyph.uv_offset,
@@ -1560,7 +1576,7 @@ fn layout_text<'a>(
                 });
             }
 
-            pen_x_logical += advance_logical(glyph);
+            pen_x_logical += glyph.advance_i32;
         }
         pen_y_logical += line_padding;
     }

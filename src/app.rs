@@ -2236,6 +2236,7 @@ pub struct App {
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
     asset_manager: AssetManager,
+    text_layout_cache: crate::ui::compose::TextLayoutCache,
     state: AppState,
     #[cfg(windows)]
     raw_keyboard_ring: Arc<RawKeyboardRing>,
@@ -2664,12 +2665,13 @@ impl App {
             upload_us = elapsed_us_since(upload_started);
         }
         let fonts = self.asset_manager.fonts();
-        let mut screen = crate::ui::compose::build_screen(
+        let mut screen = crate::ui::compose::build_screen_cached(
             &actors,
             clear_color,
             &self.state.shell.metrics,
             fonts,
             total_elapsed,
+            &mut self.text_layout_cache,
         );
         self.asset_manager.resolve_render_textures(&mut screen);
         compose_us = elapsed_us_since(compose_started).saturating_sub(upload_us);
@@ -2786,6 +2788,7 @@ impl App {
             backend: None,
             backend_type,
             asset_manager: AssetManager::new(),
+            text_layout_cache: crate::ui::compose::TextLayoutCache::default(),
             state,
             #[cfg(windows)]
             raw_keyboard_ring: Arc::new(RawKeyboardRing::new()),
