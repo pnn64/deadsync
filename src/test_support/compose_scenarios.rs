@@ -99,6 +99,8 @@ fn bench_glyph(ch: char) -> Glyph {
     Glyph {
         texture_key: FONT_MAIN.to_string(),
         tex_rect: [x, y, x + 22.0, y + 30.0],
+        uv_scale: [22.0 / 512.0, 30.0 / 256.0],
+        uv_offset: [x / 512.0, y / 256.0],
         size: [14.0, 18.0],
         offset: [0.0, -14.0],
         advance: if ch == ' ' { 8.0 } else { 14.0 },

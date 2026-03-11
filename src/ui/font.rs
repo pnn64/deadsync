@@ -458,9 +458,11 @@ pub fn replace_markers(text: &str) -> Cow<'_, str> {
 pub struct Glyph {
     pub texture_key: String,
     pub tex_rect: [f32; 4], // px: [x0, y0, x1, y1] (texture space)
-    pub size: [f32; 2],     // draw units (SM authored units)
-    pub offset: [f32; 2],   // draw units: [x_off_from_pen, y_off_from_baseline]
-    pub advance: f32,       // draw units: pen advance
+    pub uv_scale: [f32; 2],
+    pub uv_offset: [f32; 2],
+    pub size: [f32; 2],   // draw units (SM authored units)
+    pub offset: [f32; 2], // draw units: [x_off_from_pen, y_off_from_baseline]
+    pub advance: f32,     // draw units: pen advance
 }
 
 #[derive(Debug, Clone)]
@@ -2367,10 +2369,20 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                 tex_rect_right,
                 frame_top_px + actual_frame_h,
             ];
+            let uv_scale = [
+                (tex_rect[2] - tex_rect[0]) / tex_dims.0 as f32,
+                (tex_rect[3] - tex_rect[1]) / tex_dims.1 as f32,
+            ];
+            let uv_offset = [
+                tex_rect[0] / tex_dims.0 as f32,
+                tex_rect[1] / tex_dims.1 as f32,
+            ];
 
             let glyph = Glyph {
                 texture_key: texture_key.clone(),
                 tex_rect,
+                uv_scale,
+                uv_offset,
                 size: glyph_size,
                 offset: glyph_offset,
                 advance,

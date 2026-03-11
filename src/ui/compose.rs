@@ -1350,8 +1350,6 @@ fn layout_text<'a>(
     }
 
     let draws_space = font.glyph_map.contains_key(&' ');
-    let mut dims_cache: [Option<(&str, (f32, f32))>; 8] = [None; 8];
-    let mut dims_cache_len = 0usize;
     out.reserve(text.len());
 
     if single_line {
@@ -1385,44 +1383,12 @@ fn layout_text<'a>(
                     center_y, 0.0, 1.0,
                 );
 
-                let (tex_w, tex_h) = {
-                    let key = glyph.texture_key.as_str();
-                    let mut dims = None;
-                    let mut idx = 0usize;
-                    while idx < dims_cache_len {
-                        if let Some((cached_key, cached_dims)) = dims_cache[idx] {
-                            if cached_key == key {
-                                dims = Some(cached_dims);
-                                break;
-                            }
-                        }
-                        idx += 1;
-                    }
-                    if let Some(dims) = dims {
-                        dims
-                    } else {
-                        let dims = assets::texture_dims(key)
-                            .map_or((1.0_f32, 1.0_f32), |meta| (meta.w as f32, meta.h as f32));
-                        if dims_cache_len < dims_cache.len() {
-                            dims_cache[dims_cache_len] = Some((key, dims));
-                            dims_cache_len += 1;
-                        }
-                        dims
-                    }
-                };
-
-                let uv_scale = [
-                    (glyph.tex_rect[2] - glyph.tex_rect[0]) / tex_w,
-                    (glyph.tex_rect[3] - glyph.tex_rect[1]) / tex_h,
-                ];
-                let uv_offset = [glyph.tex_rect[0] / tex_w, glyph.tex_rect[1] / tex_h];
-
                 out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
                         texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
                         tint: [1.0; 4],
-                        uv_scale,
-                        uv_offset,
+                        uv_scale: glyph.uv_scale,
+                        uv_offset: glyph.uv_offset,
                         local_offset: [0.0, 0.0],
                         local_offset_rot_sin_cos: [0.0, 1.0],
                         edge_fade: [0.0; 4],
@@ -1481,45 +1447,12 @@ fn layout_text<'a>(
                     center_y, 0.0, 1.0,
                 );
 
-                // Inline atlas_dims with linear scan
-                let (tex_w, tex_h) = {
-                    let key = glyph.texture_key.as_str();
-                    let mut dims = None;
-                    let mut idx = 0usize;
-                    while idx < dims_cache_len {
-                        if let Some((cached_key, cached_dims)) = dims_cache[idx] {
-                            if cached_key == key {
-                                dims = Some(cached_dims);
-                                break;
-                            }
-                        }
-                        idx += 1;
-                    }
-                    if let Some(dims) = dims {
-                        dims
-                    } else {
-                        let dims = assets::texture_dims(key)
-                            .map_or((1.0_f32, 1.0_f32), |meta| (meta.w as f32, meta.h as f32));
-                        if dims_cache_len < dims_cache.len() {
-                            dims_cache[dims_cache_len] = Some((key, dims));
-                            dims_cache_len += 1;
-                        }
-                        dims
-                    }
-                };
-
-                let uv_scale = [
-                    (glyph.tex_rect[2] - glyph.tex_rect[0]) / tex_w,
-                    (glyph.tex_rect[3] - glyph.tex_rect[1]) / tex_h,
-                ];
-                let uv_offset = [glyph.tex_rect[0] / tex_w, glyph.tex_rect[1] / tex_h];
-
                 out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
                         texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
                         tint: [1.0; 4],
-                        uv_scale,
-                        uv_offset,
+                        uv_scale: glyph.uv_scale,
+                        uv_offset: glyph.uv_offset,
                         local_offset: [0.0, 0.0],
                         local_offset_rot_sin_cos: [0.0, 1.0],
                         edge_fade: [0.0; 4],

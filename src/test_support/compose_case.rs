@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use twox_hash::XxHash64;
 
-const CASE_VERSION: u32 = 1;
+const CASE_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComposeCase {
@@ -75,6 +75,8 @@ pub struct GlyphEntrySnapshot {
 pub struct GlyphSnapshot {
     pub texture_key: String,
     pub tex_rect: [f32; 4],
+    pub uv_scale: [f32; 2],
+    pub uv_offset: [f32; 2],
     pub size: [f32; 2],
     pub offset: [f32; 2],
     pub advance: f32,
@@ -625,6 +627,8 @@ fn glyph_snapshot(glyph: &Glyph) -> GlyphSnapshot {
     GlyphSnapshot {
         texture_key: glyph.texture_key.clone(),
         tex_rect: glyph.tex_rect,
+        uv_scale: glyph.uv_scale,
+        uv_offset: glyph.uv_offset,
         size: glyph.size,
         offset: glyph.offset,
         advance: glyph.advance,
@@ -635,6 +639,8 @@ fn glyph_runtime(glyph: &GlyphSnapshot) -> Glyph {
     Glyph {
         texture_key: glyph.texture_key.clone(),
         tex_rect: glyph.tex_rect,
+        uv_scale: glyph.uv_scale,
+        uv_offset: glyph.uv_offset,
         size: glyph.size,
         offset: glyph.offset,
         advance: glyph.advance,
