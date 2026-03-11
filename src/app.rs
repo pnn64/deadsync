@@ -392,49 +392,6 @@ impl GameplayEventTrace {
     }
 }
 
-#[derive(Clone, Copy)]
-struct FrameLoopCycleTrace {
-    new_events_at: Instant,
-    about_to_wait_at: Instant,
-    wake_cause: &'static str,
-}
-
-impl FrameLoopCycleTrace {
-    #[inline(always)]
-    fn new(now: Instant) -> Self {
-        Self {
-            new_events_at: now,
-            about_to_wait_at: now,
-            wake_cause: "none",
-        }
-    }
-
-    #[inline(always)]
-    fn reset(&mut self, now: Instant) {
-        *self = Self::new(now);
-    }
-}
-
-#[derive(Clone, Copy)]
-struct DirectPollBreakdown {
-    wake_us: u32,
-    dispatch_us: u32,
-    driver_us: u32,
-    wake_cause: &'static str,
-}
-
-impl DirectPollBreakdown {
-    #[inline(always)]
-    const fn empty() -> Self {
-        Self {
-            wake_us: 0,
-            dispatch_us: 0,
-            driver_us: 0,
-            wake_cause: "none",
-        }
-    }
-}
-
 /* -------------------- transition state machine -------------------- */
 #[derive(Debug)]
 enum TransitionState {
@@ -497,16 +454,6 @@ fn stutter_severity(frame_seconds: f32, expected_seconds: f32) -> u8 {
         severity = severity.saturating_add(1);
     }
     severity
-}
-
-#[inline(always)]
-fn start_cause_label(cause: StartCause) -> &'static str {
-    match cause {
-        StartCause::ResumeTimeReached { .. } => "resume_time",
-        StartCause::WaitCancelled { .. } => "wait_cancelled",
-        StartCause::Poll => "poll",
-        StartCause::Init => "init",
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -647,7 +594,6 @@ struct GameplayPacingTrace {
     started_at: Instant,
     frames: u32,
     chain_frames: u32,
-    direct_frames: u32,
     other_frames: u32,
     dt_sum_us: u64,
     dt_max_us: u32,
@@ -666,12 +612,11 @@ struct GameplayPacingTrace {
     draw_setup_sum_us: u64,
     draw_prepare_sum_us: u64,
     draw_record_sum_us: u64,
-    direct_wake_sum_us: u64,
-    direct_wake_max_us: u32,
-    direct_dispatch_sum_us: u64,
-    direct_dispatch_max_us: u32,
-    direct_driver_sum_us: u64,
-    direct_driver_max_us: u32,
+    display_error_abs_sum_us: u64,
+    display_error_abs_max_us: u32,
+    display_error_last_us: i32,
+    display_catching_up_frames: u32,
+    display_catching_up_last: bool,
     present_last_mode: renderer::PresentModeTrace,
     present_display_clock_last: renderer::ClockDomainTrace,
     present_host_clock_last: renderer::ClockDomainTrace,
@@ -699,7 +644,6 @@ impl GameplayPacingTrace {
             started_at: now,
             frames: 0,
             chain_frames: 0,
-            direct_frames: 0,
             other_frames: 0,
             dt_sum_us: 0,
             dt_max_us: 0,
@@ -718,12 +662,11 @@ impl GameplayPacingTrace {
             draw_setup_sum_us: 0,
             draw_prepare_sum_us: 0,
             draw_record_sum_us: 0,
-            direct_wake_sum_us: 0,
-            direct_wake_max_us: 0,
-            direct_dispatch_sum_us: 0,
-            direct_dispatch_max_us: 0,
-            direct_driver_sum_us: 0,
-            direct_driver_max_us: 0,
+            display_error_abs_sum_us: 0,
+            display_error_abs_max_us: 0,
+            display_error_last_us: 0,
+            display_catching_up_frames: 0,
+            display_catching_up_last: false,
             present_last_mode: renderer::PresentModeTrace::Unknown,
             present_display_clock_last: renderer::ClockDomainTrace::Unknown,
             present_host_clock_last: renderer::ClockDomainTrace::Unknown,
@@ -768,7 +711,6 @@ pub struct ShellState {
     gameplay_pacing_trace: GameplayPacingTrace,
     gameplay_event_batch_trace: GameplayEventBatchTrace,
     gameplay_event_trace: GameplayEventTrace,
-    frame_loop_cycle_trace: FrameLoopCycleTrace,
     display_mode: DisplayMode,
     display_monitor: usize,
     metrics: Metrics,
@@ -942,7 +884,6 @@ impl ShellState {
             gameplay_pacing_trace: GameplayPacingTrace::new(now),
             gameplay_event_batch_trace: GameplayEventBatchTrace::new(now),
             gameplay_event_trace: GameplayEventTrace::new(now),
-            frame_loop_cycle_trace: FrameLoopCycleTrace::new(now),
             display_mode: cfg.display_mode(),
             metrics,
             last_fps: 0.0,
@@ -996,7 +937,6 @@ impl ShellState {
         self.gameplay_pacing_trace.reset(now);
         self.gameplay_event_batch_trace.reset(now);
         self.gameplay_event_trace.reset(now);
-        self.frame_loop_cycle_trace.reset(now);
     }
 
     #[inline(always)]
@@ -1068,35 +1008,8 @@ impl ShellState {
     }
 
     #[inline(always)]
-    fn note_new_events(&mut self, now: Instant, cause: StartCause) {
+    fn note_new_events(&mut self, now: Instant) {
         self.gameplay_event_batch_trace.reset(now);
-        self.frame_loop_cycle_trace.new_events_at = now;
-        self.frame_loop_cycle_trace.about_to_wait_at = now;
-        self.frame_loop_cycle_trace.wake_cause = start_cause_label(cause);
-    }
-
-    #[inline(always)]
-    fn note_about_to_wait(&mut self, now: Instant) {
-        self.frame_loop_cycle_trace.about_to_wait_at = now;
-    }
-
-    #[inline(always)]
-    fn direct_poll_breakdown(
-        &self,
-        prev_frame_end: Instant,
-        frame_started: Instant,
-        redraw_request_reason: &'static str,
-    ) -> DirectPollBreakdown {
-        if redraw_request_reason != "direct_poll" {
-            return DirectPollBreakdown::empty();
-        }
-        let trace = self.frame_loop_cycle_trace;
-        DirectPollBreakdown {
-            wake_us: elapsed_us_between(trace.new_events_at, prev_frame_end),
-            dispatch_us: elapsed_us_between(trace.about_to_wait_at, trace.new_events_at),
-            driver_us: elapsed_us_between(frame_started, trace.about_to_wait_at),
-            wake_cause: trace.wake_cause,
-        }
     }
 
     #[inline(always)]
@@ -2499,11 +2412,6 @@ impl App {
     ) {
         let prev_frame_end = self.state.shell.last_frame_end_time;
         let pre_redraw_gap_us = elapsed_us_between(redraw_started, prev_frame_end);
-        let direct_poll_breakdown = self.state.shell.direct_poll_breakdown(
-            prev_frame_end,
-            redraw_started,
-            redraw_request_reason,
-        );
         let delta_time = redraw_started
             .duration_since(self.state.shell.last_frame_time)
             .as_secs_f32();
@@ -2804,7 +2712,6 @@ impl App {
             pre_redraw_gap_us,
             request_to_redraw_us,
             redraw_request_reason,
-            direct_poll_breakdown,
             input_us,
             update_us,
             compose_us,
@@ -2819,7 +2726,6 @@ impl App {
             pre_redraw_gap_us,
             request_to_redraw_us,
             redraw_request_reason,
-            direct_poll_breakdown,
             draw_us,
             draw_stats,
         );
@@ -4988,7 +4894,6 @@ impl App {
         pre_redraw_gap_us: u32,
         request_to_redraw_us: u32,
         redraw_request_reason: &'static str,
-        direct_poll_breakdown: DirectPollBreakdown,
         input_us: u32,
         update_us: u32,
         compose_us: u32,
@@ -5028,12 +4933,16 @@ impl App {
         let draw_other_us = draw_us.saturating_sub(draw_split_us);
         let present_stats = draw_stats.present_stats;
         let redraw_late_us = pre_redraw_gap_us.saturating_sub(request_to_redraw_us);
-        let mut dominant = if redraw_request_reason == "direct_poll" {
-            ("loop_wake", direct_poll_breakdown.wake_us)
-        } else {
-            ("redraw_delivery", request_to_redraw_us)
-        };
-        let mut candidates = [
+        let display_clock = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(crate::game::gameplay::display_clock_health)
+            .unwrap_or_default();
+        let display_error_ms = display_clock.error_seconds * 1000.0;
+        let mut dominant = ("redraw_delivery", request_to_redraw_us);
+        let candidates = [
             ("input", input_us),
             ("update", update_us),
             ("compose", compose_us),
@@ -5045,16 +4954,8 @@ impl App {
             ("draw_record", draw_stats.backend_record_us),
             ("draw_other", draw_other_us),
             ("unaccounted", unaccounted_gap_us),
-            ("loop_dispatch", 0),
-            ("loop_driver", 0),
-            ("redrive_late", 0),
+            ("redrive_late", redraw_late_us),
         ];
-        if redraw_request_reason == "direct_poll" {
-            candidates[11] = ("loop_dispatch", direct_poll_breakdown.dispatch_us);
-            candidates[12] = ("loop_driver", direct_poll_breakdown.driver_us);
-        } else {
-            candidates[13] = ("redrive_late", redraw_late_us);
-        }
         for (label, value) in candidates {
             if value > dominant.1 {
                 dominant = (label, value);
@@ -5067,7 +4968,7 @@ impl App {
         };
         let audio_stats = crate::core::audio::get_output_timing_snapshot();
         log::trace!(
-            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} wake={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] loop_ms=[wake:{:.3} dispatch:{:.3} driver:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} per_ms:{:.3} lat_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} per_ms:{:.3} lat_ms:{:.3} out_ms:{:.3} underruns:{}]",
             total_elapsed,
             severity,
             screen,
@@ -5075,7 +4976,6 @@ impl App {
             expected * 1000.0,
             multiple,
             redraw_request_reason,
-            direct_poll_breakdown.wake_cause,
             dominant.0,
             dominant.1 as f32 / 1000.0,
             pre_redraw_gap_us as f32 / 1000.0,
@@ -5087,9 +4987,6 @@ impl App {
             unaccounted_gap_us as f32 / 1000.0,
             redraw_late_us as f32 / 1000.0,
             request_to_redraw_us as f32 / 1000.0,
-            direct_poll_breakdown.wake_us as f32 / 1000.0,
-            direct_poll_breakdown.dispatch_us as f32 / 1000.0,
-            direct_poll_breakdown.driver_us as f32 / 1000.0,
             draw_stats.acquire_us as f32 / 1000.0,
             draw_stats.submit_us as f32 / 1000.0,
             draw_stats.present_us as f32 / 1000.0,
@@ -5098,6 +4995,9 @@ impl App {
             draw_stats.backend_setup_us as f32 / 1000.0,
             draw_stats.backend_prepare_us as f32 / 1000.0,
             draw_stats.backend_record_us as f32 / 1000.0,
+            u8::from(screen == CurrentScreen::Gameplay),
+            display_error_ms,
+            u8::from(display_clock.catching_up),
             present_stats.mode,
             present_stats.display_clock,
             present_stats.host_clock,
@@ -5139,7 +5039,6 @@ impl App {
         pre_redraw_gap_us: u32,
         request_to_redraw_us: u32,
         redraw_request_reason: &'static str,
-        direct_poll_breakdown: DirectPollBreakdown,
         draw_us: u32,
         draw_stats: renderer::DrawStats,
     ) {
@@ -5161,24 +5060,6 @@ impl App {
         trace.frames = trace.frames.saturating_add(1);
         if redraw_request_reason == "chain" {
             trace.chain_frames = trace.chain_frames.saturating_add(1);
-        } else if redraw_request_reason == "direct_poll" {
-            trace.direct_frames = trace.direct_frames.saturating_add(1);
-            trace.direct_wake_sum_us = trace
-                .direct_wake_sum_us
-                .saturating_add(u64::from(direct_poll_breakdown.wake_us));
-            trace.direct_wake_max_us = trace.direct_wake_max_us.max(direct_poll_breakdown.wake_us);
-            trace.direct_dispatch_sum_us = trace
-                .direct_dispatch_sum_us
-                .saturating_add(u64::from(direct_poll_breakdown.dispatch_us));
-            trace.direct_dispatch_max_us = trace
-                .direct_dispatch_max_us
-                .max(direct_poll_breakdown.dispatch_us);
-            trace.direct_driver_sum_us = trace
-                .direct_driver_sum_us
-                .saturating_add(u64::from(direct_poll_breakdown.driver_us));
-            trace.direct_driver_max_us = trace
-                .direct_driver_max_us
-                .max(direct_poll_breakdown.driver_us);
         } else {
             trace.other_frames = trace.other_frames.saturating_add(1);
         }
@@ -5213,6 +5094,26 @@ impl App {
         trace.draw_record_sum_us = trace
             .draw_record_sum_us
             .saturating_add(u64::from(draw_stats.backend_record_us));
+        let display_clock = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(crate::game::gameplay::display_clock_health)
+            .unwrap_or_default();
+        let display_error_us_i64 =
+            (f64::from(display_clock.error_seconds) * 1_000_000.0).round() as i64;
+        let display_error_last_us =
+            display_error_us_i64.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let display_error_abs_us =
+            display_error_us_i64.unsigned_abs().min(u64::from(u32::MAX)) as u32;
+        trace.display_error_last_us = display_error_last_us;
+        trace.display_error_abs_sum_us = trace
+            .display_error_abs_sum_us
+            .saturating_add(u64::from(display_error_abs_us));
+        trace.display_error_abs_max_us = trace.display_error_abs_max_us.max(display_error_abs_us);
+        trace.display_catching_up_frames += u32::from(display_clock.catching_up);
+        trace.display_catching_up_last = display_clock.catching_up;
         let present_stats = draw_stats.present_stats;
         trace.present_last_mode = present_stats.mode;
         trace.present_display_clock_last = present_stats.display_clock;
@@ -5256,17 +5157,14 @@ impl App {
             return;
         }
         let frames = trace.frames.max(1);
-        let direct_frames = trace.direct_frames.max(1);
         let ms = |sum_us: u64| sum_us as f64 / frames as f64 / 1000.0;
-        let direct_ms = |sum_us: u64| sum_us as f64 / direct_frames as f64 / 1000.0;
         let interval_samples = trace.present_interval_samples.max(1);
         let margin_samples = trace.present_margin_samples.max(1);
         let audio_stats = crate::core::audio::get_output_timing_snapshot();
         log::trace!(
-            "Gameplay frame pacing: frames={} req=[chain:{} direct:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] direct_loop_ms=[wake_avg:{:.3} wake_max:{:.3} dispatch_avg:{:.3} dispatch_max:{:.3} driver_avg:{:.3} driver_max:{:.3}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} per_ms:{:.3} lat_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} per_ms:{:.3} lat_ms:{:.3} out_ms:{:.3} underruns:{}]",
             frames,
             trace.chain_frames,
-            trace.direct_frames,
             trace.other_frames,
             ms(trace.dt_sum_us),
             trace.dt_max_us as f64 / 1000.0,
@@ -5276,12 +5174,6 @@ impl App {
             trace.redraw_delivery_max_us as f64 / 1000.0,
             trace.redraw_delivery_over_1ms,
             trace.redraw_delivery_over_2ms,
-            direct_ms(trace.direct_wake_sum_us),
-            trace.direct_wake_max_us as f64 / 1000.0,
-            direct_ms(trace.direct_dispatch_sum_us),
-            trace.direct_dispatch_max_us as f64 / 1000.0,
-            direct_ms(trace.direct_driver_sum_us),
-            trace.direct_driver_max_us as f64 / 1000.0,
             ms(trace.draw_sum_us),
             trace.draw_max_us as f64 / 1000.0,
             ms(trace.present_sum_us),
@@ -5291,6 +5183,11 @@ impl App {
             ms(trace.draw_setup_sum_us),
             ms(trace.draw_prepare_sum_us),
             ms(trace.draw_record_sum_us),
+            trace.display_error_last_us as f64 / 1000.0,
+            trace.display_error_abs_sum_us as f64 / frames as f64 / 1000.0,
+            trace.display_error_abs_max_us as f64 / 1000.0,
+            trace.display_catching_up_frames,
+            u8::from(trace.display_catching_up_last),
             trace.present_last_mode,
             trace.present_display_clock_last,
             trace.present_host_clock_last,
@@ -7126,8 +7023,8 @@ impl App {
 }
 
 impl ApplicationHandler<UserEvent> for App {
-    fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
-        self.state.shell.note_new_events(Instant::now(), cause);
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
+        self.state.shell.note_new_events(Instant::now());
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
@@ -7347,7 +7244,6 @@ impl ApplicationHandler<UserEvent> for App {
         let Some(window) = self.window.clone() else {
             return;
         };
-        self.state.shell.note_about_to_wait(Instant::now());
         self.state
             .shell
             .finish_gameplay_event_batch(Instant::now(), self.state.screens.current_screen);
