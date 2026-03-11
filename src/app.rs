@@ -2397,6 +2397,13 @@ impl App {
         if !self.state.shell.overlay_mode.shows_timing() {
             return None;
         }
+        let display_clock = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(crate::game::gameplay::display_clock_health)
+            .unwrap_or_default();
         let present = self.state.shell.last_present_stats;
         let interval_ns = if present.actual_interval_ns != 0 {
             present.actual_interval_ns
@@ -2405,6 +2412,8 @@ impl App {
         };
         Some(crate::screens::components::stats_overlay::TimingHealth {
             interval_ns,
+            display_error_ms: display_clock.error_seconds * 1000.0,
+            display_catching_up: display_clock.catching_up,
             present_mode: present.mode,
             display_clock: present.display_clock,
             host_clock: present.host_clock,

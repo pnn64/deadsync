@@ -87,6 +87,8 @@ pub struct AudioHealth {
 #[derive(Clone, Copy, Debug)]
 pub struct TimingHealth {
     pub interval_ns: u64,
+    pub display_error_ms: f32,
+    pub display_catching_up: bool,
     pub present_mode: PresentModeTrace,
     pub display_clock: ClockDomainTrace,
     pub host_clock: ClockDomainTrace,
@@ -118,7 +120,9 @@ fn ms_text(ns: u64) -> String {
 
 fn timing_text(timing: TimingHealth) -> String {
     let mut text = format!(
-        "Present int {}\nMode {} {}->{} map:{}\nQueue {} iw:{} bp:{} qi:{} sub:{}\nIDs {}/{} cal {}",
+        "Disp err {:+.2}ms catch:{}\nPresent int {}\nMode {} {}->{} map:{}\nQueue {} iw:{} bp:{} qi:{} sub:{}\nIDs {}/{} cal {}",
+        timing.display_error_ms,
+        flag(timing.display_catching_up),
         ms_text(timing.interval_ns),
         timing.present_mode,
         timing.display_clock,

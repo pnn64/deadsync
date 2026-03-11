@@ -3213,6 +3213,12 @@ struct FrameStableDisplayClock {
     catching_up: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DisplayClockHealth {
+    pub error_seconds: f32,
+    pub catching_up: bool,
+}
+
 impl FrameStableDisplayClock {
     #[inline(always)]
     const fn new(time_sec: f32) -> Self {
@@ -4090,6 +4096,14 @@ pub fn toggle_flash_text(state: &State) -> Option<(&'static str, f32)> {
         state.toggle_flash_text.map(|t| (t, alpha))
     } else {
         None
+    }
+}
+
+#[inline(always)]
+pub fn display_clock_health(state: &State) -> DisplayClockHealth {
+    DisplayClockHealth {
+        error_seconds: state.display_clock.target_time_sec - state.display_clock.current_time_sec,
+        catching_up: state.display_clock.catching_up,
     }
 }
 
