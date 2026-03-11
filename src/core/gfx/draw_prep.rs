@@ -133,6 +133,29 @@ pub fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
     (center, [sx, sy], [sin_t, cos_t])
 }
 
+#[inline(always)]
+fn resolve_texture_cached<Tex, ResolveTexture>(
+    texture_id: &str,
+    last_texture_ptr: &mut *const u8,
+    last_texture_len: &mut usize,
+    last_texture: &mut Option<Tex>,
+    resolve_texture: &mut ResolveTexture,
+) -> Option<Tex>
+where
+    Tex: Copy,
+    ResolveTexture: FnMut(&str) -> Option<Tex>,
+{
+    let bytes = texture_id.as_bytes();
+    if *last_texture_len == bytes.len() && *last_texture_ptr == bytes.as_ptr() {
+        return *last_texture;
+    }
+    let texture = resolve_texture(texture_id);
+    *last_texture_ptr = bytes.as_ptr();
+    *last_texture_len = bytes.len();
+    *last_texture = texture;
+    texture
+}
+
 pub fn prepare_gl<Tex, Buffer, ResolveTexture, ResolveCachedGeom>(
     render_list: &RenderList<'_>,
     scratch: &mut GlScratch<Tex, Buffer>,
@@ -146,6 +169,9 @@ where
     ResolveCachedGeom: FnMut(&[TexturedMeshVertex]) -> Option<CachedTMeshGeom<Buffer>>,
 {
     let objects_len = render_list.objects.len();
+    let mut last_texture_ptr = std::ptr::null();
+    let mut last_texture_len = 0usize;
+    let mut last_texture = None;
 
     scratch.sprite_instances.clear();
     if scratch.sprite_instances.capacity() < objects_len {
@@ -194,7 +220,13 @@ where
                 local_offset_rot_sin_cos,
                 edge_fade,
             } => {
-                let Some(texture) = resolve_texture(texture_id.as_ref()) else {
+                let Some(texture) = resolve_texture_cached(
+                    texture_id.as_ref(),
+                    &mut last_texture_ptr,
+                    &mut last_texture_len,
+                    &mut last_texture,
+                    &mut resolve_texture,
+                ) else {
                     continue;
                 };
 
@@ -248,7 +280,13 @@ where
                     continue;
                 }
 
-                let Some(texture) = resolve_texture(texture_id.as_ref()) else {
+                let Some(texture) = resolve_texture_cached(
+                    texture_id.as_ref(),
+                    &mut last_texture_ptr,
+                    &mut last_texture_len,
+                    &mut last_texture,
+                    &mut resolve_texture,
+                ) else {
                     continue;
                 };
 
