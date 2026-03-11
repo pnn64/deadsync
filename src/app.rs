@@ -123,6 +123,7 @@ const GAMEPLAY_PRESENT_PREDICT_BAD_ERROR_NS: u64 = 3_000_000;
 const GAMEPLAY_PRESENT_PREDICT_BAD_CAL_NS: u64 = 2_000_000;
 const GAMEPLAY_PRESENT_PREDICT_FALLBACK_NS: u64 = 100_000_000;
 const GAMEPLAY_PRESENT_PREDICT_HISTORY_SIZE: usize = 16;
+const GAMEPLAY_FRAME_STABLE_FALLBACK_REFRESH_MHZ: u32 = 144_000;
 const PENDING_INPUT_EVENT_CAPACITY: usize = 512;
 #[cfg(windows)]
 const RAW_KEYBOARD_EVENT_CAPACITY: usize = 1024;
@@ -605,6 +606,7 @@ impl StutterSample {
 enum FrameIntervalReason {
     None,
     MaxFps,
+    GameplayStable,
     Background,
     MaxFpsBackground,
 }
@@ -615,6 +617,7 @@ impl FrameIntervalReason {
         match self {
             Self::None => "none",
             Self::MaxFps => "max_fps",
+            Self::GameplayStable => "gameplay_stable",
             Self::Background => "background",
             Self::MaxFpsBackground => "max_fps+background",
         }
@@ -625,6 +628,7 @@ impl FrameIntervalReason {
         match self {
             Self::None => "scheduled",
             Self::MaxFps => "scheduled_maxfps",
+            Self::GameplayStable => "scheduled_gameplay_stable",
             Self::Background => "scheduled_background",
             Self::MaxFpsBackground => "scheduled_maxfps_background",
         }
@@ -645,7 +649,6 @@ const fn should_background_throttle_unfocused(screen: CurrentScreen) -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum FrameLoopMode {
     Poll,
-    DirectPoll,
     PresentPredicted,
     WaitPending,
     Scheduled(FrameIntervalReason, Duration),
@@ -2609,6 +2612,44 @@ impl App {
     }
 
     #[inline(always)]
+    fn gameplay_frame_stable_interval(&self, window: &Window) -> Option<Duration> {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay
+            || self.state.shell.vsync_enabled
+            || self.state.shell.frame_interval.is_some()
+            || self.state.shell.should_skip_compose_and_draw()
+            || self.gameplay_present_prediction_deadline().is_some()
+        {
+            return None;
+        }
+        let refresh_millihertz = window
+            .current_monitor()
+            .and_then(|monitor| monitor.refresh_rate_millihertz())
+            .filter(|mhz| *mhz >= 1_000)
+            .unwrap_or(GAMEPLAY_FRAME_STABLE_FALLBACK_REFRESH_MHZ);
+        Some(Duration::from_secs_f64(
+            1000.0 / f64::from(refresh_millihertz),
+        ))
+    }
+
+    #[inline(always)]
+    fn redraw_interval_state(&self, window: &Window) -> FrameIntervalState {
+        let state = self
+            .state
+            .shell
+            .frame_interval_state(self.state.screens.current_screen);
+        if state.interval.is_some() {
+            return state;
+        }
+        if let Some(interval) = self.gameplay_frame_stable_interval(window) {
+            return FrameIntervalState {
+                interval: Some(interval),
+                reason: FrameIntervalReason::GameplayStable,
+            };
+        }
+        state
+    }
+
+    #[inline(always)]
     fn apply_present_back_pressure(&self) -> bool {
         !self.state.shell.vsync_enabled
             && self.state.shell.present_mode_policy == PresentModePolicy::Mailbox
@@ -2770,22 +2811,12 @@ impl App {
 
     #[inline(always)]
     fn chain_continuous_redraw(&mut self, window: &Window) {
-        if self.effective_frame_interval().is_none()
+        if self.redraw_interval_state(window).interval.is_none()
             && !self.state.shell.should_skip_compose_and_draw()
-            && !self.should_drive_direct_gameplay_frame()
             && self.gameplay_present_prediction_deadline().is_none()
         {
             self.request_redraw_if_needed(window, "chain");
         }
-    }
-
-    #[inline(always)]
-    fn should_drive_direct_gameplay_frame(&self) -> bool {
-        self.state.screens.current_screen == CurrentScreen::Gameplay
-            && !self.state.shell.vsync_enabled
-            && self.effective_frame_interval().is_none()
-            && !self.state.shell.should_skip_compose_and_draw()
-            && self.gameplay_present_prediction_deadline().is_none()
     }
 
     fn log_frame_loop_mode(&mut self, mode: FrameLoopMode) {
@@ -2812,22 +2843,6 @@ impl App {
         match mode {
             FrameLoopMode::Poll => debug!(
                 "Frame pacing: poll screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps} pred_err_ms={:.3} pred_ema_ms={:.3} pred_fallback_ms={:.3}",
-                self.state.shell.vsync_enabled,
-                self.state.shell.present_mode_policy,
-                self.state
-                    .shell
-                    .present_phase_predictor
-                    .last_prediction_error_ns as f64
-                    / 1_000_000.0,
-                self.state
-                    .shell
-                    .present_phase_predictor
-                    .prediction_error_ema_ns as f64
-                    / 1_000_000.0,
-                predict_fallback_ms
-            ),
-            FrameLoopMode::DirectPoll => debug!(
-                "Frame pacing: direct_poll screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps} pred_err_ms={:.3} pred_ema_ms={:.3} pred_fallback_ms={:.3}",
                 self.state.shell.vsync_enabled,
                 self.state.shell.present_mode_policy,
                 self.state
@@ -7828,10 +7843,7 @@ impl ApplicationHandler<UserEvent> for App {
                 return;
             }
         }
-        let interval_state = self
-            .state
-            .shell
-            .frame_interval_state(self.state.screens.current_screen);
+        let interval_state = self.redraw_interval_state(&window);
         if let Some(deadline) = self.gameplay_present_prediction_deadline() {
             let now = Instant::now();
             if self.state.shell.redraw_pending() {
@@ -7872,12 +7884,6 @@ impl ApplicationHandler<UserEvent> for App {
         if self.state.shell.redraw_pending() {
             self.log_frame_loop_mode(FrameLoopMode::WaitPending);
             event_loop.set_control_flow(ControlFlow::Wait);
-            return;
-        }
-        if self.should_drive_direct_gameplay_frame() {
-            self.log_frame_loop_mode(FrameLoopMode::DirectPoll);
-            event_loop.set_control_flow(ControlFlow::Poll);
-            self.run_frame(event_loop, window, Instant::now(), 0, "direct_poll");
             return;
         }
         self.log_frame_loop_mode(FrameLoopMode::Poll);

@@ -26,6 +26,8 @@ use winit::{
 // --- Constants ---
 const MAX_FRAMES_IN_FLIGHT: usize = 3;
 const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
+const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
+const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 #[cfg(windows)]
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
@@ -201,7 +203,10 @@ struct PresentTelemetryState {
     calibration_error_ns: u64,
     next_present_id: u32,
     last_seen_present_id: u32,
+    cpu_last_completed_present_id: u32,
+    cpu_last_completed_host_ns: u64,
     last_completed: Option<CompletedPresentTiming>,
+    cpu_image_present_ids: Vec<u32>,
     scratch_timings: Vec<vk::PastPresentationTimingGOOGLE>,
 }
 
@@ -217,7 +222,10 @@ impl Default for PresentTelemetryState {
             calibration_error_ns: 0,
             next_present_id: 1,
             last_seen_present_id: 0,
+            cpu_last_completed_present_id: 0,
+            cpu_last_completed_host_ns: 0,
             last_completed: None,
+            cpu_image_present_ids: Vec::new(),
             scratch_timings: Vec::new(),
         }
     }
@@ -1473,15 +1481,15 @@ pub fn draw(
             Err(e) => return Err(e.into()),
         };
         stats.acquire_us = elapsed_us_since(acquire_started);
+        record_cpu_present_completion(state, image_index);
 
         let in_flight = state.images_in_flight[image_index as usize];
         if in_flight != vk::Fence::null() {
             let wait_started = Instant::now();
             device.wait_for_fences(&[in_flight], true, u64::MAX)?;
-            stats.gpu_wait_us = stats
-                .gpu_wait_us
-                .saturating_add(elapsed_us_since(wait_started));
-            waited_for_image = true;
+            let wait_us = elapsed_us_since(wait_started);
+            stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+            waited_for_image = wait_us >= VULKAN_IMAGE_WAIT_THRESHOLD_US;
         }
         state.images_in_flight[image_index as usize] = fence;
 
@@ -2075,7 +2083,7 @@ pub fn draw(
             .wait_semaphores(&sig)
             .swapchains(std::slice::from_ref(&state.swapchain_resources.swapchain))
             .image_indices(std::slice::from_ref(&image_index));
-        if submitted_present_id != 0 {
+        if state.present_telemetry.display_timing.is_some() {
             present_info = present_info.push_next(&mut present_times_info);
         }
         let present_started = Instant::now();
@@ -2089,6 +2097,13 @@ pub fn draw(
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR) => true,
             Err(e) => return Err(e.into()),
         };
+        if let Some(slot) = state
+            .present_telemetry
+            .cpu_image_present_ids
+            .get_mut(image_index as usize)
+        {
+            *slot = submitted_present_id;
+        }
         calibrate_present_clock(state);
         poll_past_presentation_timing(state);
         stats.present_stats = snapshot_present_stats(
@@ -2111,10 +2126,9 @@ pub fn draw(
             // helping pacing.
             let wait_started = Instant::now();
             device.wait_for_fences(&[fence], true, u64::MAX)?;
-            stats.gpu_wait_us = stats
-                .gpu_wait_us
-                .saturating_add(elapsed_us_since(wait_started));
-            back_pressure_waited = true;
+            let wait_us = elapsed_us_since(wait_started);
+            stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+            back_pressure_waited = wait_us >= VULKAN_BACK_PRESSURE_THRESHOLD_US;
         }
         if let Some((staging, width, height, format)) = screenshot_staging {
             let wait_started = Instant::now();
@@ -3348,6 +3362,18 @@ fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
     Some(((ticks as u128) * 1_000_000_000u128 / hz as u128).min(u128::from(u64::MAX)) as u64)
 }
 
+#[cfg(target_os = "windows")]
+#[inline(always)]
+fn current_host_nanos() -> u64 {
+    crate::core::windows_rt::current_host_nanos()
+}
+
+#[cfg(not(target_os = "windows"))]
+#[inline(always)]
+fn current_host_nanos() -> u64 {
+    crate::core::host_time::now_nanos()
+}
+
 #[inline(always)]
 fn vk_present_mode_trace(mode: vk::PresentModeKHR) -> PresentModeTrace {
     match mode {
@@ -3510,9 +3536,16 @@ fn refresh_cycle_duration(
 fn reset_present_telemetry(state: &mut State) {
     state.present_telemetry.next_present_id = 1;
     state.present_telemetry.last_seen_present_id = 0;
+    state.present_telemetry.cpu_last_completed_present_id = 0;
+    state.present_telemetry.cpu_last_completed_host_ns = 0;
     state.present_telemetry.last_completed = None;
     state.present_telemetry.host_minus_display_ns = 0;
     state.present_telemetry.calibration_error_ns = 0;
+    state
+        .present_telemetry
+        .cpu_image_present_ids
+        .resize(state.images_in_flight.len(), 0);
+    state.present_telemetry.cpu_image_present_ids.fill(0);
     state.present_telemetry.scratch_timings.clear();
     state.present_telemetry.refresh_ns = refresh_cycle_duration(
         &state.present_telemetry,
@@ -3523,12 +3556,47 @@ fn reset_present_telemetry(state: &mut State) {
 
 #[inline(always)]
 fn next_present_id(state: &mut State) -> u32 {
-    if state.present_telemetry.display_timing.is_none() {
-        return 0;
-    }
     let id = state.present_telemetry.next_present_id.max(1);
     state.present_telemetry.next_present_id = id.wrapping_add(1).max(1);
     id
+}
+
+fn record_cpu_present_completion(state: &mut State, image_index: u32) {
+    if state.present_telemetry.display_timing.is_some() {
+        return;
+    }
+    let idx = image_index as usize;
+    if idx >= state.present_telemetry.cpu_image_present_ids.len() {
+        state
+            .present_telemetry
+            .cpu_image_present_ids
+            .resize(state.images_in_flight.len(), 0);
+    }
+    let Some(&present_id) = state.present_telemetry.cpu_image_present_ids.get(idx) else {
+        return;
+    };
+    if present_id == 0 || present_id <= state.present_telemetry.cpu_last_completed_present_id {
+        return;
+    }
+    let host_present_ns = current_host_nanos();
+    if host_present_ns == 0 {
+        return;
+    }
+    let interval_ns = if state.present_telemetry.cpu_last_completed_host_ns == 0 {
+        0
+    } else {
+        host_present_ns.saturating_sub(state.present_telemetry.cpu_last_completed_host_ns)
+    };
+    state.present_telemetry.last_seen_present_id = present_id;
+    state.present_telemetry.cpu_last_completed_present_id = present_id;
+    state.present_telemetry.cpu_last_completed_host_ns = host_present_ns;
+    state.present_telemetry.last_completed = Some(CompletedPresentTiming {
+        present_id,
+        actual_present_time_ns: 0,
+        interval_ns,
+        present_margin_ns: 0,
+        host_present_time_ns: host_present_ns,
+    });
 }
 
 fn calibrate_present_clock(state: &mut State) {
@@ -3662,7 +3730,24 @@ fn snapshot_present_stats(
     let mut stats = PresentStats {
         mode: vk_present_mode_trace(state.swapchain_resources.present_mode),
         display_clock: vk_clock_domain_trace(state.present_telemetry.display_clock),
-        host_clock: vk_clock_domain_trace(state.present_telemetry.host_clock),
+        host_clock: if state.present_telemetry.host_clock.is_some() {
+            vk_clock_domain_trace(state.present_telemetry.host_clock)
+        } else if state
+            .present_telemetry
+            .last_completed
+            .is_some_and(|completed| completed.host_present_time_ns != 0)
+        {
+            #[cfg(target_os = "windows")]
+            {
+                ClockDomainTrace::Qpc
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                ClockDomainTrace::Monotonic
+            }
+        } else {
+            ClockDomainTrace::Unknown
+        },
         in_flight_images: state
             .images_in_flight
             .iter()
