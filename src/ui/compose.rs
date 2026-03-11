@@ -1206,15 +1206,32 @@ fn layout_text<'a>(
         lrint_ties_even(glyph.advance) as i32
     }
 
+    const GLYPH_CACHE_LIMIT: usize = 128;
+    let draws_space = font.glyph_map.contains_key(&' ');
     let single_line = !text.as_bytes().contains(&b'\n');
     let mut max_logical_width_i = 0i32;
     let num_lines: usize;
     let single_line_width: i32;
+    let mut single_line_glyphs: [Option<(&font::Glyph, bool, i32)>; GLYPH_CACHE_LIMIT] =
+        [None; GLYPH_CACHE_LIMIT];
+    let mut single_line_glyph_count = 0usize;
+    let mut single_line_cache_full = false;
     if single_line {
         num_lines = 1;
         let mut line_width = 0i32;
         for ch in text.chars() {
-            line_width += font::find_glyph(font, ch, fonts).map_or(0, advance_logical);
+            let Some(glyph) = font::find_glyph(font, ch, fonts) else {
+                continue;
+            };
+            let advance = advance_logical(glyph);
+            line_width += advance;
+            if single_line_glyph_count < GLYPH_CACHE_LIMIT {
+                single_line_glyphs[single_line_glyph_count] =
+                    Some((glyph, ch != ' ' || draws_space, advance));
+            } else {
+                single_line_cache_full = true;
+            }
+            single_line_glyph_count += 1;
         }
         max_logical_width_i = line_width;
         single_line_width = line_width;
@@ -1349,7 +1366,6 @@ fn layout_text<'a>(
         logical.mul_add(scale, center)
     }
 
-    let draws_space = font.glyph_map.contains_key(&' ');
     out.reserve(text.len());
 
     if single_line {
@@ -1358,50 +1374,95 @@ fn layout_text<'a>(
         let mut pen_x_logical =
             start_x_logical(text_align, block_w_logical_even, single_line_width as f32);
 
-        for ch in text.chars() {
-            let glyph = match font::find_glyph(font, ch, fonts) {
-                Some(g) => g,
-                None => continue,
-            };
+        if !single_line_cache_full {
+            for &(glyph, draw_quad, advance) in single_line_glyphs[..single_line_glyph_count]
+                .iter()
+                .flatten()
+            {
+                let quad_w = glyph.size[0] * sx;
+                let quad_h = glyph.size[1] * sy;
 
-            let quad_w = glyph.size[0] * sx;
-            let quad_h = glyph.size[1] * sy;
+                if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
+                    let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
+                    let quad_y_logical = baseline_local_logical + glyph.offset[1];
 
-            let draw_quad = ch != ' ' || draws_space;
-            if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
-                let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
-                let quad_y_logical = baseline_local_logical + glyph.offset[1];
+                    let quad_x_sm = logical_to_world(block_center_x, quad_x_logical, sx);
+                    let quad_y_sm = logical_to_world(block_center_y, quad_y_logical, sy);
 
-                let quad_x_sm = logical_to_world(block_center_x, quad_x_logical, sx);
-                let quad_y_sm = logical_to_world(block_center_y, quad_y_logical, sy);
+                    let center_x = m.left + quad_x_sm + quad_w * 0.5;
+                    let center_y = m.top - (quad_y_sm + quad_h * 0.5);
 
-                let center_x = m.left + quad_x_sm + quad_w * 0.5;
-                let center_y = m.top - (quad_y_sm + quad_h * 0.5);
+                    let transform = Matrix4::new(
+                        quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
+                        center_y, 0.0, 1.0,
+                    );
 
-                let transform = Matrix4::new(
-                    quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
-                    center_y, 0.0, 1.0,
-                );
+                    out.push(RenderObject {
+                        object_type: renderer::ObjectType::Sprite {
+                            texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
+                            tint: [1.0; 4],
+                            uv_scale: glyph.uv_scale,
+                            uv_offset: glyph.uv_offset,
+                            local_offset: [0.0, 0.0],
+                            local_offset_rot_sin_cos: [0.0, 1.0],
+                            edge_fade: [0.0; 4],
+                        },
+                        transform,
+                        blend: BlendMode::Alpha,
+                        z: 0,
+                        order: 0,
+                        camera: 0,
+                    });
+                }
 
-                out.push(RenderObject {
-                    object_type: renderer::ObjectType::Sprite {
-                        texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
-                        tint: [1.0; 4],
-                        uv_scale: glyph.uv_scale,
-                        uv_offset: glyph.uv_offset,
-                        local_offset: [0.0, 0.0],
-                        local_offset_rot_sin_cos: [0.0, 1.0],
-                        edge_fade: [0.0; 4],
-                    },
-                    transform,
-                    blend: BlendMode::Alpha,
-                    z: 0,
-                    order: 0,
-                    camera: 0,
-                });
+                pen_x_logical += advance;
             }
+        } else {
+            for ch in text.chars() {
+                let glyph = match font::find_glyph(font, ch, fonts) {
+                    Some(g) => g,
+                    None => continue,
+                };
 
-            pen_x_logical += advance_logical(glyph);
+                let quad_w = glyph.size[0] * sx;
+                let quad_h = glyph.size[1] * sy;
+
+                let draw_quad = ch != ' ' || draws_space;
+                if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
+                    let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
+                    let quad_y_logical = baseline_local_logical + glyph.offset[1];
+
+                    let quad_x_sm = logical_to_world(block_center_x, quad_x_logical, sx);
+                    let quad_y_sm = logical_to_world(block_center_y, quad_y_logical, sy);
+
+                    let center_x = m.left + quad_x_sm + quad_w * 0.5;
+                    let center_y = m.top - (quad_y_sm + quad_h * 0.5);
+
+                    let transform = Matrix4::new(
+                        quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
+                        center_y, 0.0, 1.0,
+                    );
+
+                    out.push(RenderObject {
+                        object_type: renderer::ObjectType::Sprite {
+                            texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
+                            tint: [1.0; 4],
+                            uv_scale: glyph.uv_scale,
+                            uv_offset: glyph.uv_offset,
+                            local_offset: [0.0, 0.0],
+                            local_offset_rot_sin_cos: [0.0, 1.0],
+                            edge_fade: [0.0; 4],
+                        },
+                        transform,
+                        blend: BlendMode::Alpha,
+                        z: 0,
+                        order: 0,
+                        camera: 0,
+                    });
+                }
+
+                pen_x_logical += advance_logical(glyph);
+            }
         }
         return;
     }
