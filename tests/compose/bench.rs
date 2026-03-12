@@ -305,7 +305,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
             let (case, output) = capture
                 .as_ref()
                 .ok_or("resolve phase requires a captured compose output")?;
-            let assets = compose_case::asset_manager_for_case(case)?;
+            let assets = asset_manager_for_bench(case)?;
             let render = compose_case::render_list_runtime(output);
             benchmark_resolve(
                 scenario.name,
@@ -321,7 +321,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
             let (case, _) = capture
                 .as_ref()
                 .ok_or("compose-resolve phase requires a captured compose output")?;
-            let assets = compose_case::asset_manager_for_case(case)?;
+            let assets = asset_manager_for_bench(case)?;
             benchmark_compose_resolve(
                 scenario.name,
                 &scenario.actors,
@@ -355,7 +355,7 @@ fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Err
         compose_case::write_render_snapshot(Path::new(path), &output)?;
     }
     if let Some(path) = &args.write_resolved_output {
-        let assets = compose_case::asset_manager_for_case(&case)?;
+        let assets = asset_manager_for_bench(&case)?;
         let mut render = compose_case::render_list_runtime(&output);
         assets.resolve_render_textures(&mut render);
         let snapshot = compose_case::texture_resolve_snapshot(&render);
@@ -382,7 +382,7 @@ fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Err
             |_| replay.total_elapsed,
         ),
         Phase::Resolve => {
-            let assets = compose_case::asset_manager_for_case(&case)?;
+            let assets = asset_manager_for_bench(&case)?;
             let render = compose_case::render_list_runtime(&output);
             benchmark_resolve(
                 &replay.screen,
@@ -395,7 +395,7 @@ fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Err
             )
         }
         Phase::ComposeResolve => {
-            let assets = compose_case::asset_manager_for_case(&case)?;
+            let assets = asset_manager_for_bench(&case)?;
             benchmark_compose_resolve(
                 &replay.screen,
                 &replay.actors,
@@ -425,6 +425,16 @@ fn capture_scenario(
     )
 }
 
+fn asset_manager_for_bench(
+    case: &compose_case::ComposeCase,
+) -> Result<AssetManager, Box<dyn Error>> {
+    if case.screen.ends_with("-ci") {
+        compose_case::asset_manager_for_case_lowercase(case)
+    } else {
+        compose_case::asset_manager_for_case(case)
+    }
+}
+
 fn write_requested_outputs(
     args: &Args,
     case: &compose_case::ComposeCase,
@@ -437,7 +447,7 @@ fn write_requested_outputs(
         compose_case::write_render_snapshot(Path::new(path), output)?;
     }
     if let Some(path) = &args.write_resolved_output {
-        let assets = compose_case::asset_manager_for_case(case)?;
+        let assets = asset_manager_for_bench(case)?;
         let mut render = compose_case::render_list_runtime(output);
         assets.resolve_render_textures(&mut render);
         let snapshot = compose_case::texture_resolve_snapshot(&render);

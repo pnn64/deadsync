@@ -172,6 +172,16 @@ pub fn texture_source_frame_dims_from_real(
     (source_w / frames_wide.max(1), source_h / frames_high.max(1))
 }
 
+#[inline(always)]
+fn ascii_ci_hash(input: &str) -> u64 {
+    let mut hash = 14_695_981_039_346_656_037u64;
+    for &b in input.as_bytes() {
+        hash ^= u64::from(b.to_ascii_lowercase());
+        hash = hash.wrapping_mul(1_099_511_628_211);
+    }
+    hash
+}
+
 pub fn parse_texture_hints(raw: &str) -> TextureHints {
     let mut hints = TextureHints::default();
     let trimmed = raw.trim();
@@ -1013,6 +1023,7 @@ struct DynamicBannerState {
 pub struct AssetManager {
     textures: HashMap<TextureHandle, GfxTexture>,
     texture_handles: HashMap<String, TextureHandle>,
+    texture_handles_ascii_ci: HashMap<u64, TextureHandle>,
     next_texture_handle: TextureHandle,
     fonts: HashMap<&'static str, Font>,
     current_dynamic_banner: Option<DynamicBannerState>,
@@ -1043,6 +1054,7 @@ impl AssetManager {
         Self {
             textures: HashMap::new(),
             texture_handles: HashMap::new(),
+            texture_handles_ascii_ci: HashMap::new(),
             next_texture_handle: 1,
             fonts: HashMap::new(),
             current_dynamic_banner: None,
@@ -1076,12 +1088,18 @@ impl AssetManager {
 
     pub fn take_textures(&mut self) -> HashMap<TextureHandle, GfxTexture> {
         self.texture_handles.clear();
+        self.texture_handles_ascii_ci.clear();
         std::mem::take(&mut self.textures)
     }
 
     #[inline(always)]
     pub fn texture_handle_for_key(&self, key: &str) -> TextureHandle {
         if let Some(handle) = self.texture_handles.get(key) {
+            return *handle;
+        }
+        if let Some(handle) = self.texture_handles_ascii_ci.get(&ascii_ci_hash(key))
+            && *handle != INVALID_TEXTURE_HANDLE
+        {
             return *handle;
         }
         self.texture_handles
@@ -1139,7 +1157,8 @@ impl AssetManager {
             Some(handle) => handle,
             None => {
                 let handle = self.alloc_texture_handle();
-                self.texture_handles.insert(key, handle);
+                self.texture_handles.insert(key.clone(), handle);
+                self.note_texture_handle_alias(&key, handle);
                 handle
             }
         }
@@ -1156,9 +1175,37 @@ impl AssetManager {
 
     pub(crate) fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, GfxTexture)> {
         let handle = self.texture_handles.remove(key)?;
+        self.rebuild_texture_handle_aliases();
         self.textures
             .remove(&handle)
             .map(|texture| (handle, texture))
+    }
+
+    fn note_texture_handle_alias(&mut self, key: &str, handle: TextureHandle) {
+        let folded = ascii_ci_hash(key);
+        match self.texture_handles_ascii_ci.get_mut(&folded) {
+            Some(existing) if *existing != handle => *existing = INVALID_TEXTURE_HANDLE,
+            Some(_) => {}
+            None => {
+                self.texture_handles_ascii_ci.insert(folded, handle);
+            }
+        }
+    }
+
+    fn rebuild_texture_handle_aliases(&mut self) {
+        self.texture_handles_ascii_ci.clear();
+        self.texture_handles_ascii_ci
+            .reserve(self.texture_handles.len());
+        for (key, &handle) in &self.texture_handles {
+            let folded = ascii_ci_hash(key);
+            match self.texture_handles_ascii_ci.get_mut(&folded) {
+                Some(existing) if *existing != handle => *existing = INVALID_TEXTURE_HANDLE,
+                Some(_) => {}
+                None => {
+                    self.texture_handles_ascii_ci.insert(folded, handle);
+                }
+            }
+        }
     }
 
     // --- Loading Logic ---

@@ -412,15 +412,29 @@ pub fn render_case_output(case: &ComposeCase) -> Result<RenderListSnapshot, Box<
 }
 
 pub fn asset_manager_for_case(case: &ComposeCase) -> Result<assets::AssetManager, Box<dyn Error>> {
+    asset_manager_for_case_impl(case, |key| key.to_string())
+}
+
+pub fn asset_manager_for_case_lowercase(
+    case: &ComposeCase,
+) -> Result<assets::AssetManager, Box<dyn Error>> {
+    asset_manager_for_case_impl(case, |key| key.to_ascii_lowercase())
+}
+
+fn asset_manager_for_case_impl(
+    case: &ComposeCase,
+    map_key: impl Fn(&str) -> String,
+) -> Result<assets::AssetManager, Box<dyn Error>> {
     let mut assets = assets::AssetManager::new();
     for key in case
         .textures
         .keys()
         .map(String::as_str)
         .chain(["__white", "__black"])
+        .map(map_key)
         .collect::<BTreeSet<_>>()
     {
-        assets.reserve_texture_handle(key.to_string());
+        assets.reserve_texture_handle(key);
     }
 
     Ok(assets)

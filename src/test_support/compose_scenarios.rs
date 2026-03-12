@@ -7,7 +7,7 @@ use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 3] = ["hud", "text", "mask"];
+const SCENARIO_NAMES: [&str; 5] = ["hud", "text", "text-ci", "resolve-ci", "mask"];
 const BENCH_FONT: &str = "bench";
 const FONT_MAIN: &str = "bench/font_main.png";
 const FONT_STROKE: &str = "bench/font_stroke.png";
@@ -16,6 +16,7 @@ const BANNER_TEX: &str = "bench/banner.png";
 const ICON_TEX: &str = "bench/icon.png";
 const SHEET_TEX: &str = "bench/sheet.png";
 const MESH_TEX: &str = "bench/mesh.png";
+const CASEFOLD_TEX_COUNT: usize = 64;
 const SCREEN_W: f32 = 854.0;
 const SCREEN_H: f32 = 480.0;
 
@@ -39,6 +40,8 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
     match name {
         "hud" => Some(hud_scenario(metrics, fonts)),
         "text" => Some(text_scenario(metrics, fonts)),
+        "text-ci" => Some(text_ci_scenario(metrics, fonts)),
+        "resolve-ci" => Some(resolve_ci_scenario(metrics, fonts)),
         "mask" => Some(mask_scenario(metrics, fonts)),
         _ => None,
     }
@@ -58,6 +61,12 @@ fn ensure_textures() {
             (MESH_TEX, 256, 256),
         ] {
             assets::register_texture_dims(key, w, h);
+        }
+        for idx in 0..CASEFOLD_TEX_COUNT {
+            let key = casefold_tex_key(idx);
+            let mixed = mixed_case_texture_key(&key);
+            assets::register_texture_dims(&key, 128, 64);
+            assets::register_texture_dims(&mixed, 128, 64);
         }
     });
 }
@@ -217,6 +226,83 @@ fn text_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> Compos
         metrics,
         fonts,
         total_elapsed: 24.0,
+    }
+}
+
+fn text_ci_scenario(metrics: Metrics, mut fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    for font in fonts.values_mut() {
+        remap_font_texture_case(font);
+    }
+    let mut scenario = text_scenario(metrics, fonts);
+    scenario.name = "text-ci";
+    remap_actor_texture_case(&mut scenario.actors);
+    scenario
+}
+
+fn resolve_ci_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let mut actors = Vec::with_capacity(1 + 48 * 32);
+    actors.push(Actor::Frame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children: Vec::new(),
+        background: Some(Background::Color([0.03, 0.03, 0.04, 1.0])),
+        z: -20,
+    });
+
+    for row in 0..32 {
+        for col in 0..48 {
+            let idx = (row * 17 + col * 11) % CASEFOLD_TEX_COUNT;
+            let x = -392.0 + col as f32 * 16.5;
+            let y = -220.0 + row as f32 * 14.0;
+            actors.push(Actor::Sprite {
+                align: [0.0, 0.0],
+                offset: screen_pos(x, y),
+                size: [SizeSpec::Px(16.0), SizeSpec::Px(12.0)],
+                source: SpriteSource::Texture(Arc::<str>::from(mixed_case_texture_key(
+                    &casefold_tex_key(idx),
+                ))),
+                tint: [0.85, 0.9, 1.0, 0.9],
+                glow: [0.0; 4],
+                z: 1,
+                cell: None,
+                grid: None,
+                uv_rect: None,
+                visible: true,
+                flip_x: false,
+                flip_y: false,
+                cropleft: 0.0,
+                cropright: 0.0,
+                croptop: 0.0,
+                cropbottom: 0.0,
+                fadeleft: 0.0,
+                faderight: 0.0,
+                fadetop: 0.0,
+                fadebottom: 0.0,
+                blend: BlendMode::Alpha,
+                mask_source: false,
+                mask_dest: false,
+                rot_x_deg: 0.0,
+                rot_y_deg: 0.0,
+                rot_z_deg: 0.0,
+                local_offset: [0.0, 0.0],
+                local_offset_rot_sin_cos: [0.0, 1.0],
+                texcoordvelocity: None,
+                animate: false,
+                state_delay: 0.0,
+                scale: [1.0, 1.0],
+                effect: EffectState::default(),
+            });
+        }
+    }
+
+    ComposeScenario {
+        name: "resolve-ci",
+        actors,
+        clear_color: [0.02, 0.02, 0.03, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 5.0,
     }
 }
 
@@ -560,6 +646,70 @@ fn text_actor(
         blend: BlendMode::Alpha,
         effect: EffectState::default(),
     }
+}
+
+fn remap_font_texture_case(font: &mut Font) {
+    for glyph in font.glyph_map.values_mut() {
+        glyph.texture_key = mixed_case_texture_key(&glyph.texture_key);
+    }
+    if let Some(glyph) = font.default_glyph.as_mut() {
+        glyph.texture_key = mixed_case_texture_key(&glyph.texture_key);
+    }
+
+    let mut stroke_texture_map = HashMap::with_capacity(font.stroke_texture_map.len());
+    for (key, value) in std::mem::take(&mut font.stroke_texture_map) {
+        stroke_texture_map.insert(mixed_case_texture_key(&key), mixed_case_texture_key(&value));
+    }
+    font.stroke_texture_map = stroke_texture_map;
+}
+
+fn remap_actor_texture_case(actors: &mut [Actor]) {
+    for actor in actors {
+        match actor {
+            Actor::Sprite {
+                source: SpriteSource::Texture(texture),
+                ..
+            } => *texture = Arc::<str>::from(mixed_case_texture_key(texture.as_ref())),
+            Actor::Sprite {
+                source: SpriteSource::Solid,
+                ..
+            } => {}
+            Actor::TexturedMesh { texture, .. } => {
+                *texture = Arc::<str>::from(mixed_case_texture_key(texture.as_ref()));
+            }
+            Actor::Frame {
+                background,
+                children,
+                ..
+            } => {
+                if let Some(Background::Texture(texture)) = background {
+                    *texture = Box::leak(mixed_case_texture_key(texture).into_boxed_str());
+                }
+                remap_actor_texture_case(children);
+            }
+            Actor::Camera { children, .. } => remap_actor_texture_case(children),
+            Actor::Shadow { child, .. } => {
+                remap_actor_texture_case(std::slice::from_mut(child.as_mut()))
+            }
+            Actor::Text { .. } | Actor::Mesh { .. } => {}
+        }
+    }
+}
+
+fn mixed_case_texture_key(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for (idx, ch) in input.bytes().enumerate() {
+        out.push(char::from(if ch.is_ascii_lowercase() && idx % 2 == 0 {
+            ch.to_ascii_uppercase()
+        } else {
+            ch
+        }));
+    }
+    out
+}
+
+fn casefold_tex_key(idx: usize) -> String {
+    format!("bench/casefold/tex{:02}.png", idx)
 }
 
 fn screen_pos(x: f32, y: f32) -> [f32; 2] {
