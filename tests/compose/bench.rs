@@ -1,7 +1,8 @@
 use deadsync::assets::AssetManager;
 use deadsync::core::gfx::RenderList;
 use deadsync::test_support::{
-    compose_case, compose_scenarios, density_graph_bench, music_wheel_bench, pane_stats_bench,
+    compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench,
+    music_wheel_bench, pane_stats_bench,
 };
 use deadsync::ui::{actors::Actor, compose};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -326,6 +327,20 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(),
                 )
             }
+            density_graph_life_bench::SCENARIO_NAME => {
+                let fixture = density_graph_life_bench::fixture();
+                benchmark_actor_builder(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    || fixture.build(),
+                )
+            }
             pane_stats_bench::SCENARIO_NAME => {
                 let fixture = pane_stats_bench::fixture();
                 benchmark_actor_builder(
@@ -341,7 +356,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                 )
             }
             _ => Err(
-                "actors phase currently only supports --scenario music-wheel, density-graph, or pane-stats".into(),
+                "actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, or pane-stats".into(),
             ),
         },
         Phase::Compose => benchmark_compose(
@@ -396,7 +411,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
 fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Error>> {
     if matches!(args.phase, Phase::Actors) {
         return Err(
-            "actors phase does not support --case; use --scenario music-wheel, density-graph, or pane-stats".into(),
+            "actors phase does not support --case; use --scenario music-wheel, density-graph, density-graph-life, or pane-stats".into(),
         );
     }
     let case = compose_case::read_case(Path::new(case_path))?;
@@ -587,6 +602,8 @@ where
     let objects = sample_render.objects.len();
     let cameras = sample_render.cameras.len();
     black_box(actors ^ objects ^ cameras);
+    drop(sample_render);
+    drop(sample_actors);
 
     for _ in 0..warmup {
         let actors = build_actors();

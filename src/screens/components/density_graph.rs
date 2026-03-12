@@ -274,6 +274,143 @@ impl DensityHistCache {
     }
 }
 
+#[inline(always)]
+fn density_life_vertex_count(points: &[[f32; 2]], start: usize, end: usize) -> usize {
+    const MIN_LEN_SQ: f32 = 0.000_000_01_f32;
+
+    let mut prev: Option<[f32; 2]> = None;
+    let mut count = 0usize;
+    for &point in &points[start..end] {
+        if let Some(a) = prev {
+            let dx = point[0] - a[0];
+            let dy = point[1] - a[1];
+            let len_sq = dx.mul_add(dx, dy * dy);
+            if len_sq > MIN_LEN_SQ {
+                count += 6;
+            }
+        }
+        prev = Some(point);
+    }
+    count
+}
+
+#[inline(always)]
+unsafe fn write_density_life_vertices(
+    mut dst: *mut MeshVertex,
+    points: &[[f32; 2]],
+    start: usize,
+    end: usize,
+    offset: f32,
+    half: f32,
+    color: [f32; 4],
+) -> usize {
+    const MIN_LEN_SQ: f32 = 0.000_000_01_f32;
+
+    let mut prev: Option<[f32; 2]> = None;
+    let mut written = 0usize;
+    for i in start..end {
+        let p = [points[i][0] - offset, points[i][1]];
+        let Some(a) = prev else {
+            prev = Some(p);
+            continue;
+        };
+        let dx = p[0] - a[0];
+        let dy = p[1] - a[1];
+        let len_sq = dx.mul_add(dx, dy * dy);
+        if len_sq <= MIN_LEN_SQ {
+            continue;
+        }
+        let inv_len = len_sq.sqrt().recip();
+        let nx = -dy * inv_len * half;
+        let ny = dx * inv_len * half;
+        let l0 = [a[0] + nx, a[1] + ny];
+        let r0 = [a[0] - nx, a[1] - ny];
+        let l1 = [p[0] + nx, p[1] + ny];
+        let r1 = [p[0] - nx, p[1] - ny];
+
+        unsafe { dst.write(MeshVertex { pos: l0, color }) };
+        dst = unsafe { dst.add(1) };
+        unsafe { dst.write(MeshVertex { pos: r0, color }) };
+        dst = unsafe { dst.add(1) };
+        unsafe { dst.write(MeshVertex { pos: l1, color }) };
+        dst = unsafe { dst.add(1) };
+        unsafe { dst.write(MeshVertex { pos: r0, color }) };
+        dst = unsafe { dst.add(1) };
+        unsafe { dst.write(MeshVertex { pos: r1, color }) };
+        dst = unsafe { dst.add(1) };
+        unsafe { dst.write(MeshVertex { pos: l1, color }) };
+        dst = unsafe { dst.add(1) };
+        written += 6;
+        prev = Some(p);
+    }
+    written
+}
+
+pub(crate) fn update_density_life_mesh(
+    mesh: &mut Option<Arc<[MeshVertex]>>,
+    points: &[[f32; 2]],
+    offset: f32,
+    width: f32,
+    thickness: f32,
+    color: [f32; 4],
+) {
+    if points.len() < 2 || width <= 0.0_f32 || thickness <= 0.0_f32 {
+        *mesh = None;
+        return;
+    }
+
+    let right = offset + width;
+    let start = points.partition_point(|p| p[0] < offset);
+    let end = points.partition_point(|p| p[0] <= right);
+    if end.saturating_sub(start) < 2 {
+        *mesh = None;
+        return;
+    }
+
+    let len = density_life_vertex_count(points, start, end);
+    if len == 0 {
+        *mesh = None;
+        return;
+    }
+
+    let half = thickness * 0.5_f32;
+    if let Some(existing) = mesh.as_mut().and_then(Arc::get_mut)
+        && existing.len() == len
+    {
+        let written = unsafe {
+            write_density_life_vertices(
+                existing.as_mut_ptr(),
+                points,
+                start,
+                end,
+                offset,
+                half,
+                color,
+            )
+        };
+        debug_assert_eq!(written, len);
+        return;
+    }
+
+    let mut verts = Arc::<[MeshVertex]>::new_uninit_slice(len);
+    let written = unsafe {
+        write_density_life_vertices(
+            Arc::get_mut(&mut verts)
+                .expect("new arc should be unique")
+                .as_mut_ptr()
+                .cast(),
+            points,
+            start,
+            end,
+            offset,
+            half,
+            color,
+        )
+    };
+    debug_assert_eq!(written, len);
+    *mesh = Some(unsafe { verts.assume_init() });
+}
+
 pub fn build_density_histogram_mesh(
     measure_nps: &[f64],
     peak_nps: f64,

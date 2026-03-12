@@ -21,7 +21,7 @@ use crate::game::{
     profile,
     scroll::ScrollSpeedSetting,
 };
-use crate::screens::components::density_graph::DensityHistCache;
+use crate::screens::components::density_graph::{self, DensityHistCache};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
 use log::{debug, trace, warn};
@@ -4288,61 +4288,6 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
     points.drain(0..(first_visible - 1));
 }
 
-fn build_density_life_mesh(
-    points: &[[f32; 2]],
-    offset: f32,
-    width: f32,
-    thickness: f32,
-    color: [f32; 4],
-) -> Vec<MeshVertex> {
-    if points.len() < 2 || width <= 0.0_f32 || thickness <= 0.0_f32 {
-        return Vec::new();
-    }
-
-    let right = offset + width;
-    let start = points.partition_point(|p| p[0] < offset);
-    let end = points.partition_point(|p| p[0] <= right);
-    let visible = end.saturating_sub(start);
-    if visible < 2 {
-        return Vec::new();
-    }
-
-    let half = thickness * 0.5_f32;
-    let mut out: Vec<MeshVertex> = Vec::with_capacity((visible - 1) * 6);
-    let mut prev: Option<[f32; 2]> = None;
-    for i in start..end {
-        let p = [points[i][0] - offset, points[i][1]];
-        let Some(a) = prev else {
-            prev = Some(p);
-            continue;
-        };
-        let dx = p[0] - a[0];
-        let dy = p[1] - a[1];
-        let len_sq = dx.mul_add(dx, dy * dy);
-        if len_sq <= 0.000_000_01_f32 {
-            continue;
-        }
-        let inv_len = len_sq.sqrt().recip();
-        let nx = -dy * inv_len * half;
-        let ny = dx * inv_len * half;
-        let l0 = [a[0] + nx, a[1] + ny];
-        let r0 = [a[0] - nx, a[1] - ny];
-        let l1 = [p[0] + nx, p[1] + ny];
-        let r1 = [p[0] - nx, p[1] - ny];
-
-        out.push(MeshVertex { pos: l0, color });
-        out.push(MeshVertex { pos: r0, color });
-        out.push(MeshVertex { pos: l1, color });
-
-        out.push(MeshVertex { pos: r0, color });
-        out.push(MeshVertex { pos: r1, color });
-        out.push(MeshVertex { pos: l1, color });
-        prev = Some(p);
-    }
-
-    out
-}
-
 fn update_density_graph(
     state: &mut State,
     current_music_time: f32,
@@ -4475,18 +4420,14 @@ fn update_density_graph(
             }
 
             let mesh_started = Instant::now();
-            let verts = build_density_life_mesh(
+            density_graph::update_density_life_mesh(
+                &mut state.density_graph_life_mesh[player],
                 &state.density_graph_life_points[player],
                 offset_px_f,
                 graph_w,
                 2.0_f32,
                 [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
             );
-            state.density_graph_life_mesh[player] = if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            };
             add_elapsed_us(&mut phase_timings.density_life_mesh_us, mesh_started);
         } else {
             if should_clip {
@@ -4496,18 +4437,14 @@ fn update_density_graph(
                 state.density_graph_life_mesh[player] = None;
                 continue;
             }
-            let verts = build_density_life_mesh(
+            density_graph::update_density_life_mesh(
+                &mut state.density_graph_life_mesh[player],
                 &state.density_graph_life_points[player],
                 offset_px_f,
                 graph_w,
                 2.0_f32,
                 [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
             );
-            state.density_graph_life_mesh[player] = if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            };
         }
     }
 }
