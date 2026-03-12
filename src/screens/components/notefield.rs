@@ -2390,8 +2390,12 @@ pub fn build(
                     base_rotation + receptor_rotation - draw.rot[2] - confusion_receptor_rot;
                 let center = [playfield_center_x + col_x_offset, receptor_y_lane];
                 let color = draw.tint;
-                let glow =
-                    hold_slot.model_glow_at(state.total_elapsed_in_screen, current_beat, color[3]);
+                let glow = hold_slot.model_glow_with_draw(
+                    draw,
+                    state.total_elapsed_in_screen,
+                    current_beat,
+                    color[3],
+                );
                 let blend = if draw.blend_add {
                     BlendMode::Add
                 } else {
@@ -3257,10 +3261,12 @@ pub fn build(
                         .as_ref()
                         .or(visuals.head_active.as_ref())
                 };
-                let head_slot = head_slot.filter(|slot| {
+                let hold_head_translation =
+                    ns.part_uv_translation(hold_head_part, note.beat, false);
+                let head_slot = head_slot.and_then(|slot| {
                     let draw = slot.model_draw_at(elapsed, current_beat);
                     if !draw.visible {
-                        return false;
+                        return None;
                     }
                     let h = note_scale_height(slot);
                     let note_scale = if h > f32::EPSILON {
@@ -3269,11 +3275,11 @@ pub fn build(
                         1.0
                     };
                     let base_size = scaled_note_slot_size(slot, note_scale);
-                    base_size[0] * draw.zoom[0].max(0.0) > f32::EPSILON
-                        && base_size[1] * draw.zoom[1].max(0.0) > f32::EPSILON
+                    (base_size[0] * draw.zoom[0].max(0.0) > f32::EPSILON
+                        && base_size[1] * draw.zoom[1].max(0.0) > f32::EPSILON)
+                        .then_some((slot, draw, note_scale, base_size))
                 });
-                if let Some(head_slot) = head_slot {
-                    let draw = head_slot.model_draw_at(elapsed, current_beat);
+                if let Some((head_slot, draw, note_scale, base_size)) = head_slot {
                     let frame = head_slot.frame_index_from_phase(hold_part_phase);
                     let uv_elapsed = if head_slot.model.is_some() {
                         hold_part_phase
@@ -3282,15 +3288,8 @@ pub fn build(
                     };
                     let uv = translated_uv_rect(
                         head_slot.uv_for_frame_at(frame, uv_elapsed),
-                        ns.part_uv_translation(hold_head_part, note.beat, false),
+                        hold_head_translation,
                     );
-                    let h = note_scale_height(head_slot);
-                    let note_scale = if h > f32::EPSILON {
-                        target_arrow_px / h
-                    } else {
-                        1.0
-                    };
-                    let base_size = scaled_note_slot_size(head_slot, note_scale);
                     let local_offset = [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
                     let local_offset_rot_sin_cos = head_slot.base_rot_sin_cos();
                     let model_center = if head_slot.model.is_some() {
@@ -3385,7 +3384,7 @@ pub fn build(
                         };
                         let uv = translated_uv_rect(
                             note_slot.uv_for_frame_at(frame, uv_elapsed),
-                            ns.part_uv_translation(hold_head_part, note.beat, false),
+                            hold_head_translation,
                         );
                         let base_size = scaled_note_slot_size(note_slot, note_scale);
                         let offset_scale = note_scale;
@@ -3474,7 +3473,7 @@ pub fn build(
                     };
                     let uv = translated_uv_rect(
                         note_slot.uv_for_frame_at(frame, uv_elapsed),
-                        ns.part_uv_translation(hold_head_part, note.beat, false),
+                        hold_head_translation,
                     );
                     let size = scale_sprite(note_slot.size());
                     let draw = note_slot.model_draw_at(elapsed, current_beat);

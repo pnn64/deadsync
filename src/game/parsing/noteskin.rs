@@ -494,8 +494,15 @@ impl SpriteSlot {
         out
     }
 
-    pub fn model_glow_at(&self, time: f32, beat: f32, diffuse_alpha: f32) -> Option<[f32; 4]> {
-        let mut glow = self.model_draw_at(time, beat).glow;
+    #[inline(always)]
+    pub fn model_glow_with_draw(
+        &self,
+        draw: ModelDrawState,
+        time: f32,
+        beat: f32,
+        diffuse_alpha: f32,
+    ) -> Option<[f32; 4]> {
+        let mut glow = draw.glow;
         let effect = self.model_effect;
         if matches!(effect.mode, ModelEffectMode::GlowShift) {
             let through = Self::model_effect_mix(effect, time, beat)?;
@@ -512,6 +519,11 @@ impl SpriteSlot {
         glow[2] = glow[2].clamp(0.0, 1.0);
         glow[3] = glow[3].clamp(0.0, 1.0);
         (glow[3] > f32::EPSILON).then_some(glow)
+    }
+
+    #[inline(always)]
+    pub fn model_glow_at(&self, time: f32, beat: f32, diffuse_alpha: f32) -> Option<[f32; 4]> {
+        self.model_glow_with_draw(self.model_draw_at(time, beat), time, beat, diffuse_alpha)
     }
 
     pub fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
