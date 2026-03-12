@@ -1,6 +1,9 @@
 use crate::game::chart::{ChartData, StaminaCounts};
-use crate::game::gameplay::{self, ActiveHold, ActiveTapExplosion, Arrow, MAX_COLS, MAX_PLAYERS};
-use crate::game::judgment::JudgeGrade;
+use crate::game::gameplay::{
+    self, ActiveHold, ActiveTapExplosion, Arrow, ColumnCue, ColumnCueColumn, ErrorBarText,
+    ErrorBarTick, MAX_COLS, MAX_PLAYERS,
+};
+use crate::game::judgment::{JudgeGrade, TimingWindow};
 use crate::game::note::NoteType;
 use crate::game::parsing::notes::ParsedNote;
 use crate::game::profile;
@@ -68,9 +71,12 @@ pub fn fixture() -> NotefieldBenchFixture {
     player_profiles[0].judgment_graphic = profile::JudgmentGraphic::Wendy;
     player_profiles[0].hold_judgment_graphic = profile::HoldJudgmentGraphic::Love;
     player_profiles[0].hide_combo = false;
+    player_profiles[0].column_cues = true;
     player_profiles[0].error_bar = profile::ErrorBarStyle::Colorful;
     player_profiles[0].error_bar_active_mask =
-        profile::error_bar_mask_from_style(profile::ErrorBarStyle::Colorful, false);
+        profile::error_bar_mask_from_style(profile::ErrorBarStyle::Colorful, true);
+    player_profiles[0].error_bar_text = true;
+    player_profiles[0].measure_lines = profile::MeasureLines::Eighth;
 
     let mut state = gameplay::init(
         song,
@@ -170,10 +176,43 @@ fn prime_visible_window(state: &mut gameplay::State) {
         elapsed: 0.08,
         start_beat: beat,
     });
+    state.column_cues[0] = vec![ColumnCue {
+        start_time: time - 1.4,
+        duration: 8.0,
+        columns: vec![
+            ColumnCueColumn {
+                column: 0,
+                is_mine: false,
+            },
+            ColumnCueColumn {
+                column: 1,
+                is_mine: true,
+            },
+            ColumnCueColumn {
+                column: 3,
+                is_mine: false,
+            },
+        ],
+    }];
     state.receptor_bop_timers[0] = 0.05;
     state.players[0].combo = 327;
     state.players[0].current_combo_grade = Some(JudgeGrade::Fantastic);
     state.players[0].full_combo_grade = Some(JudgeGrade::Fantastic);
+    state.players[0].error_bar_color_bar_started_at = Some(state.total_elapsed_in_screen - 0.06);
+    state.players[0].error_bar_color_ticks[0] = Some(ErrorBarTick {
+        started_at: state.total_elapsed_in_screen - 0.04,
+        offset_s: -0.011,
+        window: TimingWindow::W1,
+    });
+    state.players[0].error_bar_color_ticks[1] = Some(ErrorBarTick {
+        started_at: state.total_elapsed_in_screen - 0.08,
+        offset_s: 0.019,
+        window: TimingWindow::W2,
+    });
+    state.players[0].error_bar_text = Some(ErrorBarText {
+        started_at: state.total_elapsed_in_screen - 0.05,
+        early: true,
+    });
     state.players[0].last_judgment = None;
 }
 

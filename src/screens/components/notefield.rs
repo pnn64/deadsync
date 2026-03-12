@@ -139,6 +139,10 @@ thread_local! {
         512,
         BuildHasherDefault::default(),
     ));
+    static INT_CACHE_U32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+        512,
+        BuildHasherDefault::default(),
+    ));
     static RATIO_CACHE_I32: RefCell<TextCache<(i32, i32)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
@@ -220,6 +224,11 @@ fn cached_paren_i32(value: i32) -> Arc<str> {
 #[inline(always)]
 fn cached_int_i32(value: i32) -> Arc<str> {
     cached_text(&INT_CACHE_I32, value, || value.to_string())
+}
+
+#[inline(always)]
+fn cached_int_u32(value: u32) -> Arc<str> {
+    cached_text(&INT_CACHE_U32, value, || value.to_string())
 }
 
 #[inline(always)]
@@ -1814,8 +1823,33 @@ pub fn build(
     if num_cols == 0 {
         return (Vec::new(), screen_center_x());
     }
-    let mut actors = Vec::with_capacity((num_cols * 6).max(24));
-    let mut hud_actors: Vec<Actor> = Vec::with_capacity(8);
+    let error_bar_mask = {
+        let mut mask = profile::normalize_error_bar_mask(profile.error_bar_active_mask);
+        if mask == 0 {
+            mask = profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+        }
+        mask
+    };
+    let measure_line_extra = match profile.measure_lines {
+        crate::game::profile::MeasureLines::Off => 0,
+        crate::game::profile::MeasureLines::Measure => 18,
+        crate::game::profile::MeasureLines::Quarter => 30,
+        crate::game::profile::MeasureLines::Eighth => 42,
+    };
+    let actor_cap = (num_cols * 10).max(28)
+        + measure_line_extra
+        + if profile.column_cues { num_cols + 4 } else { 0 }
+        + if error_bar_mask != 0 { 18 } else { 0 };
+    let hud_cap = 8
+        + if profile.column_cues { 1 } else { 0 }
+        + if !profile.hide_combo { 2 } else { 0 }
+        + if (error_bar_mask & profile::ERROR_BAR_BIT_TEXT) != 0 {
+            1
+        } else {
+            0
+        };
+    let mut actors = Vec::with_capacity(actor_cap);
+    let mut hud_actors: Vec<Actor> = Vec::with_capacity(hud_cap);
     let p = &state.players[player_idx];
     let mut model_cache = state.notefield_model_cache[player_idx].borrow_mut();
 
@@ -2100,6 +2134,16 @@ pub fn build(
             let thickness = (2.0 * field_zoom).max(1.0);
             let y_min = -400.0;
             let y_max = screen_height() + 400.0;
+            let alpha_lut = [
+                alpha_measure,
+                alpha_eighth,
+                alpha_quarter,
+                alpha_eighth,
+                alpha_quarter,
+                alpha_eighth,
+                alpha_quarter,
+                alpha_eighth,
+            ];
 
             let mut draw_group = |min_x: f32, max_x: f32, receptor_y: f32, dir: f32| {
                 let center_x_offset = 0.5 * (min_x + max_x) * field_zoom;
@@ -2114,13 +2158,7 @@ pub fn build(
                 let mut u = beat_units_start;
                 let mut iters = 0;
                 while iters < 2000 {
-                    let alpha = if u.rem_euclid(8) == 0 {
-                        alpha_measure
-                    } else if u.rem_euclid(2) == 0 {
-                        alpha_quarter
-                    } else {
-                        alpha_eighth
-                    };
+                    let alpha = alpha_lut[u.rem_euclid(8) as usize];
 
                     let beat = (u as f32) * 0.5;
                     let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
@@ -2130,7 +2168,7 @@ pub fn build(
                     if (dir >= 0.0 && y < y_min) || (dir < 0.0 && y > y_max) {
                         break;
                     }
-                    if alpha > 0.0 && y >= y_min && y <= y_max {
+                    if alpha > 0.0 {
                         actors.push(act!(quad:
                             align(0.5, 0.5): xy(x_center, y):
                             zoomto(w, thickness):
@@ -2146,13 +2184,7 @@ pub fn build(
                 let mut u = beat_units_start + 1;
                 let mut iters = 0;
                 while iters < 2000 {
-                    let alpha = if u.rem_euclid(8) == 0 {
-                        alpha_measure
-                    } else if u.rem_euclid(2) == 0 {
-                        alpha_quarter
-                    } else {
-                        alpha_eighth
-                    };
+                    let alpha = alpha_lut[u.rem_euclid(8) as usize];
 
                     let beat = (u as f32) * 0.5;
                     let y = compute_lane_y_dynamic(0, beat, receptor_y, dir);
@@ -2162,7 +2194,7 @@ pub fn build(
                     if (dir >= 0.0 && y > y_max) || (dir < 0.0 && y < y_min) {
                         break;
                     }
-                    if alpha > 0.0 && y >= y_min && y <= y_max {
+                    if alpha > 0.0 {
                         actors.push(act!(quad:
                             align(0.5, 0.5): xy(x_center, y):
                             zoomto(w, thickness):
@@ -2264,7 +2296,7 @@ pub fn build(
                     if let Some((x, y, value)) = countdown_text {
                         hud_actors.push(act!(text:
                             font(mc_font_name):
-                            settext(value.to_string()):
+                            settext(cached_int_i32(value)):
                             align(0.5, 0.5):
                             xy(x, y):
                             zoom(0.5):
@@ -4050,7 +4082,7 @@ pub fn build(
         if p.miss_combo >= SHOW_COMBO_AT {
             if let Some(font_name) = combo_font_name {
                 hud_actors.push(act!(text:
-                    font(font_name): settext(p.miss_combo.to_string()):
+                    font(font_name): settext(cached_int_u32(p.miss_combo)):
                     align(0.5, 0.5): xy(playfield_center_x, combo_y):
                     zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
                     diffuse(1.0, 0.0, 0.0, 1.0):
@@ -4123,7 +4155,7 @@ pub fn build(
             };
             if let Some(font_name) = combo_font_name {
                 hud_actors.push(act!(text:
-                    font(font_name): settext(p.combo.to_string()):
+                    font(font_name): settext(cached_int_u32(p.combo)):
                     align(0.5, 0.5): xy(playfield_center_x, combo_y):
                     zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
                     diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
@@ -4133,11 +4165,6 @@ pub fn build(
         }
     }
 
-    let mut error_bar_mask = profile::normalize_error_bar_mask(profile.error_bar_active_mask);
-    if error_bar_mask == 0 {
-        error_bar_mask =
-            profile::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
-    }
     let show_error_bar_colorful = (error_bar_mask & profile::ERROR_BAR_BIT_COLORFUL) != 0;
     let show_error_bar_monochrome = (error_bar_mask & profile::ERROR_BAR_BIT_MONOCHROME) != 0;
     let show_error_bar_text = (error_bar_mask & profile::ERROR_BAR_BIT_TEXT) != 0;
