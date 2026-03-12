@@ -126,6 +126,16 @@ fn game_time_key(seconds: f32, total_seconds: f32) -> (u32, u8) {
 }
 
 #[inline(always)]
+fn glyph_width_scaled(
+    metrics_font: &font::Font,
+    all_fonts: &HashMap<&'static str, font::Font>,
+    ch: char,
+    zoom: f32,
+) -> f32 {
+    font::find_glyph(metrics_font, ch, all_fonts).map_or(0, |glyph| glyph.advance_i32) as f32 * zoom
+}
+
+#[inline(always)]
 fn push_versus_count_texts(
     actors: &mut Vec<Actor>,
     is_p1: bool,
@@ -394,8 +404,7 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
 
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("wendy_screenevaluation", |f| {
-            let digit_w =
-                (font::measure_line_width_logical(f, "0", all_fonts) as f32) * numbers_zoom_x;
+            let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom_x);
             if digit_w <= 0.0 {
                 return;
             }
@@ -630,8 +639,7 @@ pub fn build_double_step_stats(
         asset_manager.with_fonts(|all_fonts| {
             asset_manager.with_font("wendy_screenevaluation", |f| {
                 let numbers_zoom = base_zoom * 0.5;
-                let digit_w =
-                    (font::measure_line_width_logical(f, "0", all_fonts) as f32) * numbers_zoom;
+                let digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom);
                 if digit_w <= 0.0 {
                     return;
                 }
@@ -1246,13 +1254,11 @@ fn build_holds_mines_rolls_pane_at(
             const GRAY: [f32; 4] = color::rgba_hex("#5A6166");
             let white = [1.0, 1.0, 1.0, 1.0];
 
-            let digit_width =
-                font::measure_line_width_logical(metrics_font, "0", all_fonts) as f32 * value_zoom;
+            let digit_width = glyph_width_scaled(metrics_font, all_fonts, '0', value_zoom);
             if digit_width <= 0.0 {
                 return;
             }
-            let slash_width =
-                font::measure_line_width_logical(metrics_font, "/", all_fonts) as f32 * value_zoom;
+            let slash_width = glyph_width_scaled(metrics_font, all_fonts, '/', value_zoom);
 
             const LOGICAL_CHAR_WIDTH_FOR_LABEL: f32 = 36.0;
             let fixed_char_width_scaled_for_label = LOGICAL_CHAR_WIDTH_FOR_LABEL * value_zoom;
@@ -1409,9 +1415,9 @@ fn build_holds_mines_rolls_pane(
 
         // --- HYBRID LAYOUT LOGIC ---
         // 1. Measure real character widths for number layout.
-        let digit_width = font::measure_line_width_logical(metrics_font, "0", all_fonts) as f32 * value_zoom;
+        let digit_width = glyph_width_scaled(metrics_font, all_fonts, '0', value_zoom);
         if digit_width <= 0.0 { return; }
-        let slash_width = font::measure_line_width_logical(metrics_font, "/", all_fonts) as f32 * value_zoom;
+        let slash_width = glyph_width_scaled(metrics_font, all_fonts, '/', value_zoom);
 
         // 2. Use a hardcoded width for calculating the label's position (for theme parity).
         const LOGICAL_CHAR_WIDTH_FOR_LABEL: f32 = 36.0;
@@ -1588,7 +1594,7 @@ fn build_side_pane(
 
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |f| {
         let numbers_zoom = final_text_base_zoom * 0.5;
-        let max_digit_w = (font::measure_line_width_logical(f, "0", all_fonts) as f32) * numbers_zoom;
+        let max_digit_w = glyph_width_scaled(f, all_fonts, '0', numbers_zoom);
         if max_digit_w <= 0.0 { return; }
 
         let digit_local_width = max_digit_w / final_text_base_zoom;
