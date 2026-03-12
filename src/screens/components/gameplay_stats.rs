@@ -27,6 +27,20 @@ thread_local! {
     static GAME_TIME_WIDTH_CACHE: RefCell<HashMap<(u32, u8), f32>> = RefCell::new(HashMap::with_capacity(1024));
 }
 
+static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
+    LazyLock::new(|| ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(Arc::<str>::from));
+static STEP_INFO_LABEL_TEXT: LazyLock<[Arc<str>; 4]> =
+    LazyLock::new(|| ["Song", "Artist", "Pack", "Desc"].map(Arc::<str>::from));
+static HOLDS_MINES_ROLLS_LABEL_TEXT: LazyLock<[Arc<str>; 3]> =
+    LazyLock::new(|| ["holds", "mines", "rolls"].map(Arc::<str>::from));
+static TIME_SONG_LEFT_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from(" song"));
+static TIME_REMAINING_LEFT_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from(" remaining"));
+static TIME_SONG_RIGHT_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("song "));
+static TIME_REMAINING_RIGHT_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("remaining "));
+static SLASH_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("/"));
+
 #[inline(always)]
 fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
 where
@@ -240,20 +254,22 @@ fn cached_game_time_width_for_key(key: (u32, u8), asset_manager: &AssetManager) 
 }
 
 #[inline(always)]
-const fn digit_text(digit: u8) -> &'static str {
-    match digit {
-        b'0' => "0",
-        b'1' => "1",
-        b'2' => "2",
-        b'3' => "3",
-        b'4' => "4",
-        b'5' => "5",
-        b'6' => "6",
-        b'7' => "7",
-        b'8' => "8",
-        b'9' => "9",
-        _ => "",
+fn digit_text(digit: u8) -> Arc<str> {
+    if digit.is_ascii_digit() {
+        DIGIT_TEXT[(digit - b'0') as usize].clone()
+    } else {
+        Arc::<str>::from("")
     }
+}
+
+#[inline(always)]
+fn step_info_label_text(index: usize) -> Arc<str> {
+    STEP_INFO_LABEL_TEXT[index].clone()
+}
+
+#[inline(always)]
+fn holds_mines_rolls_label_text(index: usize) -> Arc<str> {
+    HOLDS_MINES_ROLLS_LABEL_TEXT[index].clone()
 }
 
 pub fn build(
@@ -723,15 +739,6 @@ pub fn build_double_step_stats(
                 } else {
                     let wc = gameplay::display_window_counts(state, 0, Some(blue_window_ms));
                     let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
-                    let labels = [
-                        "FANTASTIC",
-                        "FANTASTIC",
-                        "EXCELLENT",
-                        "GREAT",
-                        "DECENT",
-                        "WAY OFF",
-                        "MISS",
-                    ];
                     let bright_colors = [
                         color::JUDGMENT_RGBA[0],
                         color::JUDGMENT_FA_PLUS_WHITE_RGBA,
@@ -751,6 +758,15 @@ pub fn build_double_step_stats(
                         color::JUDGMENT_DIM_RGBA[5],
                     ];
 
+                    let labels = [
+                        "FANTASTIC",
+                        "FANTASTIC",
+                        "EXCELLENT",
+                        "GREAT",
+                        "DECENT",
+                        "WAY OFF",
+                        "MISS",
+                    ];
                     for row_i in 0..labels.len() {
                         let local_y = y_base + (row_i as f32 * row_height);
                         let y_numbers = origin_y + (local_y * base_zoom);
@@ -904,7 +920,7 @@ pub fn build_double_step_stats(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext("remaining "):
+            settext(TIME_REMAINING_RIGHT_TEXT.clone()):
             align(1.0, 0.5):
             horizalign(right):
             xy(label_x, base_y + 1.0 * number_zoom):
@@ -925,7 +941,7 @@ pub fn build_double_step_stats(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext("song "):
+            settext(TIME_SONG_RIGHT_TEXT.clone()):
             align(1.0, 0.5):
             horizalign(right):
             xy(label_x, base_y + (20.0 * number_zoom) + 1.0 * number_zoom):
@@ -970,7 +986,6 @@ static JUDGMENT_ORDER: [JudgeGrade; 6] = [
 ];
 
 struct JudgmentDisplayInfo {
-    label: &'static str,
     color: [f32; 4],
 }
 
@@ -979,42 +994,36 @@ static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyL
         (
             JudgeGrade::Fantastic,
             JudgmentDisplayInfo {
-                label: "FANTASTIC",
                 color: color::JUDGMENT_RGBA[0],
             },
         ),
         (
             JudgeGrade::Excellent,
             JudgmentDisplayInfo {
-                label: "EXCELLENT",
                 color: color::JUDGMENT_RGBA[1],
             },
         ),
         (
             JudgeGrade::Great,
             JudgmentDisplayInfo {
-                label: "GREAT",
                 color: color::JUDGMENT_RGBA[2],
             },
         ),
         (
             JudgeGrade::Decent,
             JudgmentDisplayInfo {
-                label: "DECENT",
                 color: color::JUDGMENT_RGBA[3],
             },
         ),
         (
             JudgeGrade::WayOff,
             JudgmentDisplayInfo {
-                label: "WAY OFF",
                 color: color::JUDGMENT_RGBA[4],
             },
         ),
         (
             JudgeGrade::Miss,
             JudgmentDisplayInfo {
-                label: "MISS",
                 color: color::JUDGMENT_RGBA[5],
             },
         ),
@@ -1171,10 +1180,10 @@ fn build_steps_info(
     let row_h = 16.0;
     let z = 72i16;
     if !note_field_is_centered {
-        for (i, label) in ["Song", "Artist", "Pack", "Desc"].iter().enumerate() {
+        for i in 0..STEP_INFO_LABEL_TEXT.len() {
             let y = origin_y + (row_h * (i as f32 + 1.0) * group_zoom);
             actors.push(act!(text:
-                font("miso"): settext(*label):
+                font("miso"): settext(step_info_label_text(i)):
                 align(0.0, 0.5): xy(origin_x, y):
                 zoom(group_zoom): z(z):
                 horizalign(left)
@@ -1228,9 +1237,9 @@ fn build_holds_mines_rolls_pane_at(
     let mut actors = Vec::with_capacity(1);
 
     let categories = [
-        ("holds", p.holds_held, state.holds_total[0]),
-        ("mines", p.mines_avoided, state.mines_total[0]),
-        ("rolls", p.rolls_held, state.rolls_total[0]),
+        (0usize, p.holds_held, state.holds_total[0]),
+        (1usize, p.mines_avoided, state.mines_total[0]),
+        (2usize, p.rolls_held, state.rolls_total[0]),
     ];
 
     let largest_count = categories
@@ -1263,7 +1272,7 @@ fn build_holds_mines_rolls_pane_at(
             const LOGICAL_CHAR_WIDTH_FOR_LABEL: f32 = 36.0;
             let fixed_char_width_scaled_for_label = LOGICAL_CHAR_WIDTH_FOR_LABEL * value_zoom;
 
-            for (i, (label_text, achieved, total)) in categories.iter().enumerate() {
+            for (i, (label_index, achieved, total)) in categories.iter().enumerate() {
                 let item_y = (i as f32 - 1.0) * row_height;
                 let right_anchor_x = 0.0;
                 let mut cursor_x = right_anchor_x;
@@ -1289,7 +1298,7 @@ fn build_holds_mines_rolls_pane_at(
                 cursor_x -= possible_bytes.len() as f32 * digit_width;
 
                 children.push(act!(text:
-                    font("wendy_screenevaluation"): settext("/"):
+                    font("wendy_screenevaluation"): settext(SLASH_TEXT.clone()):
                     align(1.0, 0.5): xy(cursor_x, item_y):
                     zoom(value_zoom): diffuse(GRAY[0], GRAY[1], GRAY[2], GRAY[3])
                 ));
@@ -1312,7 +1321,7 @@ fn build_holds_mines_rolls_pane_at(
                 let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame_zoom);
 
                 children.push(act!(text:
-                    font("miso"): settext(*label_text):
+                    font("miso"): settext(holds_mines_rolls_label_text(*label_index)):
                     align(1.0, 0.5): xy(label_x, item_y):
                     zoom(label_zoom):
                     horizalign(right):
@@ -1388,9 +1397,9 @@ fn build_holds_mines_rolls_pane(
     let frame_zoom = banner_data_zoom;
 
     let categories = [
-        ("holds", p.holds_held, state.holds_total[0]),
-        ("mines", p.mines_avoided, state.mines_total[0]),
-        ("rolls", p.rolls_held, state.rolls_total[0]),
+        (0usize, p.holds_held, state.holds_total[0]),
+        (1usize, p.mines_avoided, state.mines_total[0]),
+        (2usize, p.rolls_held, state.rolls_total[0]),
     ];
 
     let largest_count = categories
@@ -1423,7 +1432,7 @@ fn build_holds_mines_rolls_pane(
         const LOGICAL_CHAR_WIDTH_FOR_LABEL: f32 = 36.0;
         let fixed_char_width_scaled_for_label = LOGICAL_CHAR_WIDTH_FOR_LABEL * value_zoom;
 
-        for (i, (label_text, achieved, total)) in categories.iter().enumerate() {
+        for (i, (label_index, achieved, total)) in categories.iter().enumerate() {
             let item_y = (i as f32 - 1.0) * row_height;
             let right_anchor_x = match player_side {
                 profile::PlayerSide::P1 => 0.0,
@@ -1457,7 +1466,7 @@ fn build_holds_mines_rolls_pane(
             cursor_x -= possible_bytes.len() as f32 * digit_width;
 
             // 2. Draw slash
-            children.push(act!(text: font("wendy_screenevaluation"): settext("/"): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3])));
+            children.push(act!(text: font("wendy_screenevaluation"): settext(SLASH_TEXT.clone()): align(1.0, 0.5): xy(cursor_x, item_y): zoom(value_zoom): diffuse(gray[0], gray[1], gray[2], gray[3])));
             cursor_x -= slash_width;
 
             // 3. Draw "achieved" number
@@ -1481,7 +1490,7 @@ fn build_holds_mines_rolls_pane(
             let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame_zoom);
 
             children.push(act!(text:
-                font("miso"): settext(*label_text): align(1.0, 0.5): xy(label_x, item_y):
+                font("miso"): settext(holds_mines_rolls_label_text(*label_index)): align(1.0, 0.5): xy(label_x, item_y):
                 zoom(label_zoom): horizalign(right): diffuse(white[0], white[1], white[2], white[3])
             ));
         }
@@ -1658,10 +1667,18 @@ fn build_side_pane(
 
                 let label_world_y = world_y + (1.0 * final_text_base_zoom);
                 let label_zoom = final_text_base_zoom * 0.833;
+                let label = match index {
+                    0 => "FANTASTIC",
+                    1 => "EXCELLENT",
+                    2 => "GREAT",
+                    3 => "DECENT",
+                    4 => "WAY OFF",
+                    _ => "MISS",
+                };
 
                 if player_side == profile::PlayerSide::P1 {
                     actors.push(act!(text:
-                        font("miso"): settext(info.label): align(0.0, 0.5):
+                        font("miso"): settext(label): align(0.0, 0.5):
                         xy(label_world_x, label_world_y): zoom(label_zoom):
                         maxwidth(72.0 * final_text_base_zoom): horizalign(left):
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1669,7 +1686,7 @@ fn build_side_pane(
                     ));
                 } else {
                     actors.push(act!(text:
-                        font("miso"): settext(info.label): align(1.0, 0.5):
+                        font("miso"): settext(label): align(1.0, 0.5):
                         xy(label_world_x, label_world_y): zoom(label_zoom):
                         maxwidth(72.0 * final_text_base_zoom): horizalign(right):
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1718,17 +1735,17 @@ fn build_side_pane(
 
 	            let white_fa_color = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
 
-            let rows: [(&str, [f32; 4], [f32; 4], u32); 7] = [
-                ("FANTASTIC", fantastic_color, dim_fantastic, wc.w0),
-                ("FANTASTIC",       white_fa_color, dim_white_fa, wc.w1),
-                ("EXCELLENT", excellent_color, dim_excellent, wc.w2),
-                ("GREAT",     great_color, dim_great, wc.w3),
-                ("DECENT",    decent_color, dim_decent, wc.w4),
-                ("WAY OFF",   wayoff_color, dim_wayoff, wc.w5),
-                ("MISS",      miss_color, dim_miss, wc.miss),
+            let rows: [(usize, [f32; 4], [f32; 4], u32); 7] = [
+                (0, fantastic_color, dim_fantastic, wc.w0),
+                (0, white_fa_color, dim_white_fa, wc.w1),
+                (1, excellent_color, dim_excellent, wc.w2),
+                (2, great_color, dim_great, wc.w3),
+                (3, decent_color, dim_decent, wc.w4),
+                (4, wayoff_color, dim_wayoff, wc.w5),
+                (5, miss_color, dim_miss, wc.miss),
             ];
 
-            for (index, (label, bright, dim, count)) in rows.iter().enumerate() {
+            for (index, (label_index, bright, dim, count)) in rows.iter().enumerate() {
                 let local_y = y_base + (index as f32 * row_height);
                 let world_y = final_judgments_center_y + (local_y * final_text_base_zoom);
 
@@ -1776,10 +1793,18 @@ fn build_side_pane(
                 let label_zoom = final_text_base_zoom * 0.833;
                 let sublabel_y = label_world_y + (12.0 * final_text_base_zoom);
                 let sublabel_zoom = final_text_base_zoom * 0.6;
+                let label = match *label_index {
+                    0 => "FANTASTIC",
+                    1 => "EXCELLENT",
+                    2 => "GREAT",
+                    3 => "DECENT",
+                    4 => "WAY OFF",
+                    _ => "MISS",
+                };
 
                 if player_side == profile::PlayerSide::P1 {
                     actors.push(act!(text:
-                        font("miso"): settext(*label): align(0.0, 0.5):
+                        font("miso"): settext(label): align(0.0, 0.5):
                         xy(label_world_x, label_world_y): zoom(label_zoom):
                         maxwidth(72.0 * final_text_base_zoom): horizalign(left):
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1796,7 +1821,7 @@ fn build_side_pane(
                     }
                 } else {
                     actors.push(act!(text:
-                        font("miso"): settext(*label): align(1.0, 0.5):
+                        font("miso"): settext(label): align(1.0, 0.5):
                         xy(label_world_x, label_world_y): zoom(label_zoom):
                         maxwidth(72.0 * final_text_base_zoom): horizalign(right):
                         diffuse(bright[0], bright[1], bright[2], bright[3]):
@@ -1901,7 +1926,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(" song"):
+                actors.push(act!(text: font(font_name): settext(TIME_SONG_LEFT_TEXT.clone()):
                     align(0.0, 0.5): horizalign(left):
                     xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
                     zoom(text_zoom): z(71):
@@ -1914,7 +1939,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(white_color[0], white_color[1], white_color[2], white_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(" song"):
+                actors.push(act!(text: font(font_name): settext(TIME_SONG_LEFT_TEXT.clone()):
                     align(1.0, 0.5): horizalign(right):
                     xy(time_x + label_dir * label_offset_total, y_pos_total + 1.0):
                     zoom(text_zoom): z(71):
@@ -1939,7 +1964,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(" remaining"):
+                actors.push(act!(text: font(font_name): settext(TIME_REMAINING_LEFT_TEXT.clone()):
                     align(0.0, 0.5): horizalign(left):
                     xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
                     zoom(text_zoom): z(71):
@@ -1952,7 +1977,7 @@ fn build_side_pane(
                     z(71):
                     diffuse(remaining_color[0], remaining_color[1], remaining_color[2], remaining_color[3])
                 ));
-                actors.push(act!(text: font(font_name): settext(" remaining"):
+                actors.push(act!(text: font(font_name): settext(TIME_REMAINING_LEFT_TEXT.clone()):
                     align(1.0, 0.5): horizalign(right):
                     xy(time_x + label_dir * label_offset_remaining, y_pos_remaining + 1.0):
                     zoom(text_zoom): z(71):
