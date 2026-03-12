@@ -1091,14 +1091,25 @@ impl AssetManager {
     }
 
     pub fn resolve_render_textures(&self, render: &mut RenderList<'_>) {
-        for obj in &mut render.objects {
-            obj.texture_handle = match &obj.object_type {
+        #[inline(always)]
+        fn texture_key<'a>(obj: &'a crate::core::gfx::RenderObject<'a>) -> Option<&'a str> {
+            match &obj.object_type {
                 ObjectType::Sprite { texture_id, .. }
-                | ObjectType::TexturedMesh { texture_id, .. } => {
-                    self.texture_handle_for_key(texture_id.as_ref())
-                }
-                ObjectType::Mesh { .. } => INVALID_TEXTURE_HANDLE,
+                | ObjectType::TexturedMesh { texture_id, .. } => Some(texture_id.as_ref()),
+                ObjectType::Mesh { .. } => None,
+            }
+        }
+
+        let objects = &mut render.objects;
+        let mut last_handle = INVALID_TEXTURE_HANDLE;
+        for idx in 0..objects.len() {
+            let handle = match texture_key(&objects[idx]) {
+                Some(key) if idx > 0 && texture_key(&objects[idx - 1]) == Some(key) => last_handle,
+                Some(key) => self.texture_handle_for_key(key),
+                None => INVALID_TEXTURE_HANDLE,
             };
+            objects[idx].texture_handle = handle;
+            last_handle = handle;
         }
     }
 
