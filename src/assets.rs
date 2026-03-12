@@ -1123,19 +1123,23 @@ impl AssetManager {
         handle
     }
 
-    pub(crate) fn insert_texture(
-        &mut self,
-        key: String,
-        texture: GfxTexture,
-    ) -> Option<GfxTexture> {
-        let handle = match self.texture_handles.get(&key).copied() {
+    pub(crate) fn reserve_texture_handle(&mut self, key: String) -> TextureHandle {
+        match self.texture_handles.get(&key).copied() {
             Some(handle) => handle,
             None => {
                 let handle = self.alloc_texture_handle();
                 self.texture_handles.insert(key, handle);
                 handle
             }
-        };
+        }
+    }
+
+    pub(crate) fn insert_texture(
+        &mut self,
+        key: String,
+        texture: GfxTexture,
+    ) -> Option<GfxTexture> {
+        let handle = self.reserve_texture_handle(key);
         self.textures.insert(handle, texture)
     }
 

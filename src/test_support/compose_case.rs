@@ -259,6 +259,17 @@ pub struct RenderListSnapshot {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TextureResolveSnapshot {
+    pub objects: Vec<TextureResolveObjectSnapshot>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TextureResolveObjectSnapshot {
+    pub texture_id: Option<String>,
+    pub texture_handle: crate::core::gfx::TextureHandle,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RenderObjectSnapshot {
     pub object_type: RenderObjectTypeSnapshot,
     pub transform: [[f32; 4]; 4],
@@ -400,7 +411,41 @@ pub fn render_case_output(case: &ComposeCase) -> Result<RenderListSnapshot, Box<
     )))
 }
 
+pub fn asset_manager_for_case(case: &ComposeCase) -> Result<assets::AssetManager, Box<dyn Error>> {
+    let mut assets = assets::AssetManager::new();
+    for key in case
+        .textures
+        .keys()
+        .map(String::as_str)
+        .chain(["__white", "__black"])
+        .collect::<BTreeSet<_>>()
+    {
+        assets.reserve_texture_handle(key.to_string());
+    }
+
+    Ok(assets)
+}
+
 pub fn render_snapshot_hash(snapshot: &RenderListSnapshot) -> Result<String, Box<dyn Error>> {
+    let bytes = serde_json::to_vec(snapshot)?;
+    let mut hasher = XxHash64::with_seed(0);
+    hasher.write(&bytes);
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
+pub fn texture_resolve_snapshot(render: &RenderList<'_>) -> TextureResolveSnapshot {
+    TextureResolveSnapshot {
+        objects: render
+            .objects
+            .iter()
+            .map(texture_resolve_object_snapshot)
+            .collect(),
+    }
+}
+
+pub fn texture_resolve_snapshot_hash(
+    snapshot: &TextureResolveSnapshot,
+) -> Result<String, Box<dyn Error>> {
     let bytes = serde_json::to_vec(snapshot)?;
     let mut hasher = XxHash64::with_seed(0);
     hasher.write(&bytes);
@@ -414,6 +459,13 @@ pub fn write_case(path: &Path, case: &ComposeCase) -> Result<(), Box<dyn Error>>
 pub fn write_render_snapshot(
     path: &Path,
     snapshot: &RenderListSnapshot,
+) -> Result<(), Box<dyn Error>> {
+    write_json(path, snapshot)
+}
+
+pub fn write_texture_resolve_snapshot(
+    path: &Path,
+    snapshot: &TextureResolveSnapshot,
 ) -> Result<(), Box<dyn Error>> {
     write_json(path, snapshot)
 }
@@ -1108,6 +1160,18 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
         z: render.z,
         order: render.order,
         camera: render.camera,
+    }
+}
+
+fn texture_resolve_object_snapshot(render: &RenderObject<'_>) -> TextureResolveObjectSnapshot {
+    TextureResolveObjectSnapshot {
+        texture_id: match &render.object_type {
+            ObjectType::Sprite { texture_id, .. } | ObjectType::TexturedMesh { texture_id, .. } => {
+                Some(texture_id.as_ref().to_string())
+            }
+            ObjectType::Mesh { .. } => None,
+        },
+        texture_handle: render.texture_handle,
     }
 }
 
