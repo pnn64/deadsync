@@ -27,6 +27,9 @@ thread_local! {
     static SCORE_2DP_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
     static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
     static BPM_TEXT_CACHE: RefCell<TextCache<(u64, bool)>> = RefCell::new(HashMap::with_capacity(512));
+    static LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
+        RefCell::new(HashMap::with_capacity(1024));
+    static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(64));
 }
 
 #[inline(always)]
@@ -90,6 +93,55 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
             format!("{rounded_tenth:.1}")
         }
     })
+}
+
+#[inline(always)]
+fn cached_life_percent_text(life_percent: f32) -> Arc<str> {
+    cached_text(&LIFE_PERCENT_TEXT_CACHE, life_percent.to_bits(), || {
+        format!("{life_percent:.1}%")
+    })
+}
+
+#[inline(always)]
+fn cached_meter_text(meter: u32) -> Arc<str> {
+    cached_text(&METER_TEXT_CACHE, meter, || meter.to_string())
+}
+
+fn sync_overlay_text(state: &State) -> Option<(String, usize)> {
+    let mut lines = [""; 4];
+    let mut line_count = 0usize;
+    let mut total_len = 0usize;
+    if state.autoplay_enabled {
+        let line = state.replay_status_text.as_deref().unwrap_or("AutoPlay");
+        lines[line_count] = line;
+        line_count += 1;
+        total_len += line.len();
+    }
+    if let Some(line) = timing_tick_status_line(state) {
+        lines[line_count] = line;
+        line_count += 1;
+        total_len += line.len();
+    }
+    if let Some(line) = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode) {
+        lines[line_count] = line;
+        line_count += 1;
+        total_len += line.len();
+    }
+    if let Some(line) = state.sync_overlay_message.as_deref() {
+        lines[line_count] = line;
+        line_count += 1;
+        total_len += line.len();
+    }
+    if line_count == 0 {
+        return None;
+    }
+    let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
+    out.push_str(lines[0]);
+    for line in &lines[1..line_count] {
+        out.push('\n');
+        out.push_str(line);
+    }
+    Some((out, line_count))
 }
 
 // --- TRANSITIONS ---
@@ -204,7 +256,7 @@ fn build_background(state: &State, bg_brightness: f32) -> Actor {
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let cfg = crate::config::get();
     let hud_snapshot = profile::gameplay_hud_snapshot();
-    let mut actors = Vec::new();
+    let mut actors = Vec::with_capacity(96);
     let play_style = hud_snapshot.play_style;
     let player_side = hud_snapshot.player_side;
     let is_p2_single =
@@ -236,28 +288,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // ITGmania/Simply Love parity: ScreenSyncOverlay status text.
     {
-        let mut status_lines: Vec<String> = Vec::with_capacity(4);
-        if state.autoplay_enabled {
-            if let Some(replay_text) = &state.replay_status_text {
-                status_lines.push(replay_text.clone());
-            } else {
-                status_lines.push("AutoPlay".to_string());
-            }
-        }
-        if let Some(line) = timing_tick_status_line(state) {
-            status_lines.push(line.to_string());
-        }
-        if let Some(line) = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode) {
-            status_lines.push(line.to_string());
-        }
-        if let Some(msg) = &state.sync_overlay_message {
-            status_lines.push(msg.clone());
-        }
-
-        if !status_lines.is_empty() {
+        let status_line_count = if let Some((status_text, line_count)) = sync_overlay_text(state) {
             actors.push(act!(text:
                 font("miso"):
-                settext(status_lines.join("\n")):
+                settext(status_text):
                 align(0.5, 0.5):
                 xy(screen_center_x(), screen_center_y() + 150.0):
                 shadowlength(2.0):
@@ -265,13 +299,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 diffuse(1.0, 1.0, 1.0, 1.0):
                 z(901)
             ));
-        }
+            line_count
+        } else {
+            0
+        };
 
         if let Some((flash, alpha)) = toggle_flash_text(state) {
-            let y = if status_lines.is_empty() {
+            let y = if status_line_count == 0 {
                 screen_center_y() + 150.0
             } else {
-                screen_center_y() + 150.0 + 20.0 * status_lines.len() as f32
+                screen_center_y() + 150.0 + 20.0 * status_line_count as f32
             };
             actors.push(act!(text:
                 font("miso"):
@@ -515,6 +552,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
+    actors.reserve(p1_actors.len() + p2_actors.as_ref().map_or(0, Vec::len) + 48);
     if let Some(p2_actors) = p2_actors {
         actors.extend(p2_actors);
     }
@@ -525,53 +563,55 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
     let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
 
-    let mut players: Vec<(usize, profile::PlayerSide, f32, f32, f32, f32)> =
-        Vec::with_capacity(state.num_players);
-    match play_style {
+    let mut players = [(0usize, profile::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
+    let player_count = match play_style {
         profile::PlayStyle::Versus => {
-            players.push((
+            players[0] = (
                 0,
                 profile::PlayerSide::P1,
                 per_player_fields[0].1,
                 diff_x_p1,
                 score_x_p1,
                 score_x_p2,
-            ));
-            players.push((
+            );
+            players[1] = (
                 1,
                 profile::PlayerSide::P2,
                 per_player_fields[1].1,
                 diff_x_p2,
                 score_x_p2,
                 score_x_p1,
-            ));
+            );
+            2
         }
         _ if is_p2_single => {
-            players.push((
+            players[0] = (
                 0,
                 profile::PlayerSide::P2,
                 per_player_fields[0].1,
                 diff_x_p2,
                 score_x_p2,
                 score_x_p1,
-            ));
+            );
+            1
         }
         _ => {
-            players.push((
+            players[0] = (
                 0,
                 profile::PlayerSide::P1,
                 per_player_fields[0].1,
                 diff_x_p1,
                 score_x_p1,
                 score_x_p2,
-            ));
+            );
+            1
         }
-    }
+    };
 
     let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
     let graph_center_shift = widescale(45.0, 95.0);
 
-    for &(player_idx, player_side, field_x, _, _, _) in &players {
+    for &(player_idx, player_side, field_x, _, _, _) in &players[..player_count] {
         if !state.player_profiles[player_idx].nps_graph_at_top {
             continue;
         }
@@ -636,10 +676,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
-    for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in &players {
+    for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
+        &players[..player_count]
+    {
         let chart = &state.charts[player_idx];
         let difficulty_color = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-        let meter_text = chart.meter.to_string();
+        let meter_text = cached_meter_text(chart.meter as u32);
         let meter_detail_text =
             color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
 
@@ -652,7 +694,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
         let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
         diff_children.push(act!(text:
-            font("wendy"): settext(meter_text.clone()): align(0.5, 0.5): xy(0.0, meter_y):
+            font("wendy"): settext(meter_text): align(0.5, 0.5): xy(0.0, meter_y):
             zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
         ));
         if cfg.zmod_rating_box_text {
@@ -817,7 +859,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let h = 22.0;
         let box_cx = screen_center_x();
         let box_cy = 20.0;
-        let mut frame_children = Vec::new();
+        let mut frame_children = Vec::with_capacity(4);
         frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w, h): diffuse(1.0, 1.0, 1.0, 1.0): z(0) ));
         frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w - 4.0, h - 4.0): diffuse(0.0, 0.0, 0.0, 1.0): z(1) ));
         if state.song.total_length_seconds > 0 && state.current_music_time_display >= 0.0 {
@@ -897,15 +939,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
         let show_standard_life_percent = screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
 
-        let players: &[(usize, profile::PlayerSide)] = match play_style {
+        let mut life_players = [(0usize, profile::PlayerSide::P1); 2];
+        let life_player_count = match play_style {
             profile::PlayStyle::Versus => {
-                &[(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)]
+                life_players[0] = (0, profile::PlayerSide::P1);
+                life_players[1] = (1, profile::PlayerSide::P2);
+                2
             }
-            _ if is_p2_single => &[(0, profile::PlayerSide::P2)],
-            _ => &[(0, profile::PlayerSide::P1)],
+            _ if is_p2_single => {
+                life_players[0] = (0, profile::PlayerSide::P2);
+                1
+            }
+            _ => {
+                life_players[0] = (0, profile::PlayerSide::P1);
+                1
+            }
         };
 
-        for &(player_idx, side) in players {
+        for &(player_idx, side) in &life_players[..life_player_count] {
             if state.player_profiles[player_idx].hide_lifebar {
                 continue;
             }
@@ -921,7 +972,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let is_hot = !dead && life_for_render >= 1.0;
             let life_color = fill_life_color(player_idx, life_for_render, dead);
             let life_percent = life_for_render * 100.0;
-            let life_percent_text = format!("{life_percent:.1}%");
+            let life_percent_text = cached_life_percent_text(life_percent);
 
             match state.player_profiles[player_idx].lifemeter_type {
                 profile::LifeMeterType::Standard => {

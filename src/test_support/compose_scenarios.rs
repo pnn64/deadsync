@@ -3,6 +3,7 @@ use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
 use crate::core::space::{Metrics, metrics_for_window};
 use crate::test_support::density_graph_bench;
 use crate::test_support::density_graph_life_bench;
+use crate::test_support::gameplay_bench;
 use crate::test_support::gameplay_stats_bench;
 use crate::test_support::gs_scorebox_bench;
 use crate::test_support::music_wheel_bench;
@@ -14,9 +15,10 @@ use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 12] = [
+const SCENARIO_NAMES: [&str; 13] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
+    gameplay_bench::SCENARIO_NAME,
     gameplay_stats_bench::SCENARIO_NAME,
     gs_scorebox_bench::SCENARIO_NAME,
     "hud",
@@ -32,6 +34,7 @@ const BENCH_FONT: &str = "bench";
 const MISO_FONT: &str = "miso";
 const GAME_FONT: &str = "game";
 const WENDY_FONT: &str = "wendy";
+const WENDY_MONO_NUMBERS_FONT: &str = "wendy_monospace_numbers";
 const WENDY_COMBO_FONT: &str = "wendy_combo";
 const COMBO_ARIAL_ROUNDED_FONT: &str = "combo_arial_rounded";
 const COMBO_ASAP_FONT: &str = "combo_asap";
@@ -79,6 +82,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         density_graph_life_bench::SCENARIO_NAME => {
             Some(density_graph_life_scenario(metrics, fonts))
         }
+        gameplay_bench::SCENARIO_NAME => Some(gameplay_scenario(metrics, fonts)),
         gameplay_stats_bench::SCENARIO_NAME => Some(gameplay_stats_scenario(metrics, fonts)),
         gs_scorebox_bench::SCENARIO_NAME => Some(gs_scorebox_scenario(metrics, fonts)),
         "hud" => Some(hud_scenario(metrics, fonts)),
@@ -135,6 +139,18 @@ fn gameplay_stats_scenario(
     }
 }
 
+fn gameplay_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let fixture = gameplay_bench::fixture();
+    ComposeScenario {
+        name: gameplay_bench::SCENARIO_NAME,
+        actors: fixture.build(true),
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.0,
+    }
+}
+
 fn gs_scorebox_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
     let fixture = gs_scorebox_bench::fixture();
     ComposeScenario {
@@ -166,6 +182,7 @@ fn ensure_textures() {
             ("__white", 1, 1),
             (FONT_MAIN, 512, 256),
             (FONT_STROKE, 512, 256),
+            ("bench/gameplay_bg.png", 1920, 1080),
             (PANEL_TEX, 512, 192),
             (BANNER_TEX, 512, 128),
             (ICON_TEX, 128, 128),
@@ -196,6 +213,7 @@ pub(crate) fn bench_fonts() -> HashMap<&'static str, Font> {
         MISO_FONT,
         GAME_FONT,
         WENDY_FONT,
+        WENDY_MONO_NUMBERS_FONT,
         WENDY_COMBO_FONT,
         COMBO_ARIAL_ROUNDED_FONT,
         COMBO_ASAP_FONT,

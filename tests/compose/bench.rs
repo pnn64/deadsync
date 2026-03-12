@@ -1,7 +1,7 @@
 use deadsync::assets::AssetManager;
 use deadsync::core::gfx::RenderList;
 use deadsync::test_support::{
-    compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench,
+    compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench, gameplay_bench,
     gameplay_stats_bench, gs_scorebox_bench, music_wheel_bench, notefield_bench, pane_stats_bench,
 };
 use deadsync::ui::{actors::Actor, compose};
@@ -355,6 +355,20 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(),
                 )
             }
+            gameplay_bench::SCENARIO_NAME => {
+                let fixture = gameplay_bench::fixture();
+                benchmark_actor_builder(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    || fixture.build(matches!(args.cache_mode, CacheMode::Retained)),
+                )
+            }
             gs_scorebox_bench::SCENARIO_NAME => {
                 let fixture = gs_scorebox_bench::fixture();
                 benchmark_actor_builder(
@@ -397,7 +411,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(),
                 )
             }
-            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, gameplay-stats, gs-scorebox, notefield, or pane-stats".into()),
+            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gs-scorebox, notefield, or pane-stats".into()),
         },
         Phase::Compose => benchmark_compose(
             scenario.name,
@@ -451,7 +465,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
 fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Error>> {
     if matches!(args.phase, Phase::Actors) {
         return Err(
-            "actors phase does not support --case; use --scenario music-wheel, density-graph, density-graph-life, gameplay-stats, gs-scorebox, notefield, or pane-stats".into(),
+            "actors phase does not support --case; use --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gs-scorebox, notefield, or pane-stats".into(),
         );
     }
     let case = compose_case::read_case(Path::new(case_path))?;
@@ -1114,6 +1128,6 @@ fn next_value(
 
 fn print_help() {
     println!(
-        "compose_bench [--scenario all|hud|text|text-ci|resolve-ci|mask|music-wheel|gameplay-stats|gs-scorebox] [--case PATH] [--phase actors|compose|resolve|compose-resolve] [--iters N] [--warmup N] [--cache fresh|retained] [--write-case PATH] [--write-actors-output PATH] [--write-output PATH] [--write-resolved-output PATH]"
+        "compose_bench [--scenario all|hud|text|text-ci|resolve-ci|mask|music-wheel|gameplay|gameplay-stats|gs-scorebox] [--case PATH] [--phase actors|compose|resolve|compose-resolve] [--iters N] [--warmup N] [--cache fresh|retained] [--write-case PATH] [--write-actors-output PATH] [--write-output PATH] [--write-resolved-output PATH]"
     );
 }
