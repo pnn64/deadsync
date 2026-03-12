@@ -7,6 +7,7 @@ use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use crate::ui::font;
+use std::sync::{Arc, LazyLock};
 
 use super::utils::pane_origin_x;
 
@@ -22,6 +23,7 @@ static JUDGMENT_ORDER: [JudgeGrade; 6] = [
     JudgeGrade::Miss,
 ];
 
+#[derive(Clone, Copy)]
 struct JudgmentDisplayInfo {
     label: &'static str,
     color: [f32; 4],
@@ -54,6 +56,15 @@ const JUDGMENT_INFO: [JudgmentDisplayInfo; 6] = [
     },
 ];
 
+static DIGIT_TEXT: LazyLock<[Arc<str>; 10]> =
+    LazyLock::new(|| ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map(Arc::<str>::from));
+static JUDGMENT_LABEL_TEXT: LazyLock<[Arc<str>; 6]> =
+    LazyLock::new(|| JUDGMENT_INFO.map(|info| Arc::<str>::from(info.label)));
+static RADAR_LABEL_TEXT: LazyLock<[Arc<str>; 4]> =
+    LazyLock::new(|| ["hands", "holds", "mines", "rolls"].map(Arc::<str>::from));
+static TEN_MS_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("(10ms)"));
+static SLASH_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("/"));
+
 #[inline(always)]
 fn rolling_number_value(target: u32, elapsed_s: f32) -> u32 {
     if target == 0 {
@@ -69,20 +80,18 @@ fn rolling_number_value(target: u32, elapsed_s: f32) -> u32 {
 }
 
 #[inline(always)]
-const fn digit_text(digit: u8) -> &'static str {
-    match digit {
-        0 => "0",
-        1 => "1",
-        2 => "2",
-        3 => "3",
-        4 => "4",
-        5 => "5",
-        6 => "6",
-        7 => "7",
-        8 => "8",
-        9 => "9",
-        _ => "0",
-    }
+fn digit_text(digit: u8) -> Arc<str> {
+    DIGIT_TEXT[digit.min(9) as usize].clone()
+}
+
+#[inline(always)]
+fn judgment_label_text(index: usize) -> Arc<str> {
+    JUDGMENT_LABEL_TEXT[index].clone()
+}
+
+#[inline(always)]
+fn radar_label_text(index: usize) -> Arc<str> {
+    RADAR_LABEL_TEXT[index].clone()
 }
 
 #[inline(always)]
@@ -226,7 +235,7 @@ pub fn build_stats_pane(
 
                 // Label
                 let label_local_y = (i as f32).mul_add(28.0, -16.0);
-                actors.push(act!(text: font("miso"): settext(info.label):
+                actors.push(act!(text: font("miso"): settext(judgment_label_text(i)):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
                     diffuse(info.color[0], info.color[1], info.color[2], info.color[3]): z(101)
@@ -258,29 +267,29 @@ pub fn build_stats_pane(
             let white_fa_color = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
             let dim_white_fa = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
 
-            let rows: [(&str, [f32; 4], [f32; 4], u32); 7] = [
-                ("FANTASTIC", JUDGMENT_INFO[0].color, color::JUDGMENT_DIM_EVAL_RGBA[0], wc.w0),
-                ("FANTASTIC",       white_fa_color, dim_white_fa, wc.w1),
-                ("EXCELLENT", JUDGMENT_INFO[1].color, color::JUDGMENT_DIM_EVAL_RGBA[1], wc.w2),
-                ("GREAT", JUDGMENT_INFO[2].color, color::JUDGMENT_DIM_EVAL_RGBA[2], wc.w3),
-                ("DECENT", JUDGMENT_INFO[3].color, color::JUDGMENT_DIM_EVAL_RGBA[3], wc.w4),
-                ("WAY OFF", JUDGMENT_INFO[4].color, color::JUDGMENT_DIM_EVAL_RGBA[4], wc.w5),
-                ("MISS", JUDGMENT_INFO[5].color, color::JUDGMENT_DIM_EVAL_RGBA[5], wc.miss),
+            let rows: [(usize, [f32; 4], [f32; 4], u32); 7] = [
+                (0, JUDGMENT_INFO[0].color, color::JUDGMENT_DIM_EVAL_RGBA[0], wc.w0),
+                (0, white_fa_color, dim_white_fa, wc.w1),
+                (1, JUDGMENT_INFO[1].color, color::JUDGMENT_DIM_EVAL_RGBA[1], wc.w2),
+                (2, JUDGMENT_INFO[2].color, color::JUDGMENT_DIM_EVAL_RGBA[2], wc.w3),
+                (3, JUDGMENT_INFO[3].color, color::JUDGMENT_DIM_EVAL_RGBA[3], wc.w4),
+                (4, JUDGMENT_INFO[4].color, color::JUDGMENT_DIM_EVAL_RGBA[4], wc.w5),
+                (5, JUDGMENT_INFO[5].color, color::JUDGMENT_DIM_EVAL_RGBA[5], wc.miss),
             ];
 
-            for (i, (label, bright_color, dim_color, count)) in rows.iter().enumerate() {
+            for (i, (label_idx, bright_color, dim_color, count)) in rows.iter().enumerate() {
                 let count = rolling_number_value(*count, elapsed_s);
                 // Label: match Simply Love Pane2 labels using 26px spacing.
                 // Original Lua uses 1-based indexing: y = i*26 - 46.
                 // Our rows are 0-based, so use (i+1) here.
                 let label_local_y = (i as f32 + 1.0).mul_add(26.0, -46.0);
-                actors.push(act!(text: font("miso"): settext(*label):
+                actors.push(act!(text: font("miso"): settext(judgment_label_text(*label_idx)):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
                     diffuse(bright_color[0], bright_color[1], bright_color[2], bright_color[3]): z(101)
                 ));
                 if show_10ms_blue && i == 0 {
-                    actors.push(act!(text: font("miso"): settext("(10ms)"):
+                    actors.push(act!(text: font("miso"): settext(TEN_MS_TEXT.clone()):
                         align(1.0, 0.5):
                         xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y + 10.0):
                         maxwidth(76.0): zoom(sublabel_zoom): horizalign(right):
@@ -320,14 +329,14 @@ pub fn build_stats_pane(
         const GRAY_ACHIEVED: [f32; 4] = color::rgba_hex("#444444");
         let white_color = [1.0, 1.0, 1.0, 1.0];
 
-        for (i, (label, achieved, possible)) in radar_categories.iter().copied().enumerate() {
+        for (i, (_, achieved, possible)) in radar_categories.iter().copied().enumerate() {
             let label_local_x = if controller == profile::PlayerSide::P1 {
                 -160.0
             } else {
                 90.0
             };
             let label_local_y = (i as f32).mul_add(28.0, 41.0);
-            actors.push(act!(text: font("miso"): settext(label):
+            actors.push(act!(text: font("miso"): settext(radar_label_text(i)):
                 align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): horizalign(right): zoom(0.833): z(101)
             ));
 
@@ -398,7 +407,7 @@ pub fn build_stats_pane(
 
             // 2. Draw slash
             // Moved 1px to the right for visual parity
-            actors.push(act!(text: font("wendy_screenevaluation"): settext("/"):
+            actors.push(act!(text: font("wendy_screenevaluation"): settext(SLASH_TEXT.clone()):
                 align(1.0, 0.5): xy(cursor_x + 0.5, number_final_y): zoom(final_numbers_zoom):
                 diffuse(GRAY_POSSIBLE[0], GRAY_POSSIBLE[1], GRAY_POSSIBLE[2], GRAY_POSSIBLE[3]): z(101)
             ));
