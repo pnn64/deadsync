@@ -7,6 +7,7 @@ use crate::ui::{anim, font};
 use cgmath::{Matrix4, Rad, Vector2, Vector3};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::Arc;
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
@@ -105,9 +106,12 @@ struct CachedTextLayout {
 }
 
 pub struct TextLayoutCache {
-    entries: HashMap<u64, HashMap<Box<str>, CachedTextLayout>>,
+    owned_entries: HashMap<u64, HashMap<Box<str>, Box<CachedTextLayout>>>,
+    shared_aliases: HashMap<u64, HashMap<usize, (Arc<str>, *const CachedTextLayout)>>,
     entry_count: usize,
+    alias_count: usize,
     max_entries: usize,
+    max_aliases: usize,
 }
 
 impl Default for TextLayoutCache {
@@ -118,27 +122,50 @@ impl Default for TextLayoutCache {
 
 impl TextLayoutCache {
     pub fn new(max_entries: usize) -> Self {
+        let max_entries = max_entries.max(1);
         Self {
-            entries: HashMap::new(),
+            owned_entries: HashMap::new(),
+            shared_aliases: HashMap::new(),
             entry_count: 0,
-            max_entries: max_entries.max(1),
+            alias_count: 0,
+            max_entries,
+            max_aliases: max_entries.saturating_mul(8),
         }
     }
 
     pub fn clear(&mut self) {
-        self.entries.clear();
+        self.owned_entries.clear();
+        self.shared_aliases.clear();
         self.entry_count = 0;
+        self.alias_count = 0;
     }
 
     fn get_or_build(
         &mut self,
         font: &font::Font,
         fonts: &HashMap<&'static str, font::Font>,
-        text: &str,
+        content: &actors::TextContent,
     ) -> &CachedTextLayout {
         let font_key = font_chain_key(font, fonts);
+        match content {
+            actors::TextContent::Owned(text) => {
+                self.get_or_build_owned(font_key, font, fonts, text)
+            }
+            actors::TextContent::Shared(text) => {
+                self.get_or_build_shared(font_key, font, fonts, text)
+            }
+        }
+    }
+
+    fn get_or_build_owned(
+        &mut self,
+        font_key: u64,
+        font: &font::Font,
+        fonts: &HashMap<&'static str, font::Font>,
+        text: &str,
+    ) -> &CachedTextLayout {
         if !self
-            .entries
+            .owned_entries
             .get(&font_key)
             .is_some_and(|font_entries| font_entries.contains_key(text))
         {
@@ -146,16 +173,73 @@ impl TextLayoutCache {
                 self.clear();
             }
             let layout = build_cached_text_layout(font, fonts, text);
-            self.entries
+            self.owned_entries
                 .entry(font_key)
                 .or_default()
-                .insert(text.into(), layout);
+                .insert(text.into(), Box::new(layout));
             self.entry_count += 1;
         }
-        self.entries
+        self.owned_entries
             .get(&font_key)
             .and_then(|font_entries| font_entries.get(text))
-            .expect("text layout cache entry inserted")
+            .map(Box::as_ref)
+            .expect("owned text layout cache entry inserted")
+    }
+
+    fn get_or_build_shared(
+        &mut self,
+        font_key: u64,
+        font: &font::Font,
+        fonts: &HashMap<&'static str, font::Font>,
+        text: &Arc<str>,
+    ) -> &CachedTextLayout {
+        let text_key = Arc::as_ptr(text) as *const () as usize;
+        if let Some(layout_ptr) = self
+            .shared_aliases
+            .get(&font_key)
+            .and_then(|font_entries| font_entries.get(&text_key))
+            .map(|entry| entry.1)
+        {
+            return unsafe { &*layout_ptr };
+        }
+        let layout_ptr = if !self
+            .owned_entries
+            .get(&font_key)
+            .is_some_and(|font_entries| font_entries.contains_key(text.as_ref()))
+        {
+            if self.entry_count >= self.max_entries {
+                self.clear();
+            }
+            let layout = build_cached_text_layout(font, fonts, text);
+            let layout = self
+                .owned_entries
+                .entry(font_key)
+                .or_default()
+                .entry(text.as_ref().into())
+                .or_insert_with(|| Box::new(layout));
+            self.entry_count += 1;
+            layout.as_ref() as *const CachedTextLayout
+        } else {
+            self.owned_entries
+                .get(&font_key)
+                .and_then(|font_entries| font_entries.get(text.as_ref()))
+                .map(|layout| layout.as_ref() as *const CachedTextLayout)
+                .expect("shared text layout cache entry inserted")
+        };
+        if self.alias_count >= self.max_aliases {
+            self.shared_aliases.clear();
+            self.alias_count = 0;
+        }
+        if self
+            .shared_aliases
+            .entry(font_key)
+            .or_default()
+            .insert(text_key, (text.clone(), layout_ptr))
+            .is_none()
+        {
+            self.alias_count += 1;
+        }
+        unsafe { &*layout_ptr }
     }
 }
 
@@ -776,7 +860,7 @@ fn build_actor_recursive<'a>(
                     out,
                     fm,
                     fonts,
-                    content.as_str(),
+                    content,
                     0.0, // _px_size unused
                     effect_scale,
                     *fit_width,
@@ -1382,7 +1466,7 @@ fn layout_text<'a>(
     out: &mut Vec<RenderObject<'a>>,
     font: &'a font::Font,
     fonts: &'a HashMap<&'static str, font::Font>,
-    text: &str,
+    content: &actors::TextContent,
     _px_size: f32,
     scale: [f32; 2],
     fit_width: Option<f32>,
@@ -1399,10 +1483,10 @@ fn layout_text<'a>(
     m: &Metrics,
     text_cache: &mut TextLayoutCache,
 ) {
-    if text.is_empty() {
+    if content.as_str().is_empty() {
         return;
     }
-    let layout = text_cache.get_or_build(font, fonts, text);
+    let layout = text_cache.get_or_build(font, fonts, content);
     let num_lines = layout.lines.len();
     if num_lines == 0 {
         return;
