@@ -2,7 +2,7 @@ use deadsync::core::gfx::draw_prep::{
     self, CachedTMeshGeom, DrawOp, GlScratch, PrepareStats, SpriteInstanceRaw,
     TexturedMeshInstanceRaw, TexturedMeshVertexRaw,
 };
-use deadsync::core::gfx::{BlendMode, MeshMode, RenderList};
+use deadsync::core::gfx::{BlendMode, MeshMode, RenderList, TextureHandle};
 use deadsync::test_support::{compose_case, compose_scenarios};
 use deadsync::ui::compose;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -61,6 +61,7 @@ struct Args {
     case_path: Option<String>,
     iters: u64,
     warmup: u64,
+    flip_texture_keys: bool,
     expect_plan_hash: Option<String>,
     write_plan: Option<String>,
 }
@@ -379,6 +380,7 @@ fn run_scenario(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Erro
         &render,
         args.iters,
         args.warmup,
+        args.flip_texture_keys,
         args.expect_plan_hash.as_deref(),
         args.write_plan.as_deref(),
         None,
@@ -403,6 +405,7 @@ fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Err
         &render,
         args.iters,
         args.warmup,
+        args.flip_texture_keys,
         args.expect_plan_hash.as_deref(),
         args.write_plan.as_deref(),
         Some(VerificationResult {
@@ -417,12 +420,15 @@ fn benchmark_draw(
     render: &RenderList<'_>,
     iters: u64,
     warmup: u64,
+    flip_texture_keys: bool,
     expect_plan_hash: Option<&str>,
     write_plan: Option<&str>,
     verification: Option<VerificationResult>,
 ) -> Result<BenchmarkResult, Box<dyn Error>> {
-    let texture_ids = texture_ids(render);
-    let initial = build_plan(render, &texture_ids)?;
+    let texture_ids = texture_ids(render, flip_texture_keys);
+    let mut render = render.clone();
+    resolve_texture_handles(&mut render, &texture_ids);
+    let initial = build_plan(&render)?;
     let plan_hash = plan_snapshot_hash(&initial.snapshot)?;
     if let Some(expected) = expect_plan_hash
         && expected != plan_hash
@@ -447,12 +453,9 @@ fn benchmark_draw(
 
     for _ in 0..warmup {
         cache.begin_frame();
-        let stats = draw_prep::prepare_gl(
-            render,
-            &mut scratch,
-            |texture_key| lookup_texture_case_insensitive(&texture_ids, texture_key),
-            |vertices| cache.resolve(vertices),
-        );
+        let stats = draw_prep::prepare_gl(&render, &mut scratch, Some, |vertices| {
+            cache.resolve(vertices)
+        });
         black_box(checksum_plan(&scratch, stats));
     }
 
@@ -461,12 +464,9 @@ fn benchmark_draw(
     let mut checksum = 0u64;
     for _ in 0..iters {
         cache.begin_frame();
-        let stats = draw_prep::prepare_gl(
-            black_box(render),
-            &mut scratch,
-            |texture_key| lookup_texture_case_insensitive(&texture_ids, texture_key),
-            |vertices| cache.resolve(vertices),
-        );
+        let stats = draw_prep::prepare_gl(black_box(&render), &mut scratch, Some, |vertices| {
+            cache.resolve(vertices)
+        });
         checksum = checksum
             .wrapping_mul(131)
             .wrapping_add(checksum_plan(&scratch, stats));
@@ -502,19 +502,13 @@ struct BuiltPlan {
     snapshot: PlanSnapshot,
 }
 
-fn build_plan(
-    render: &RenderList<'_>,
-    texture_ids: &HashMap<String, u64>,
-) -> Result<BuiltPlan, Box<dyn Error>> {
+fn build_plan(render: &RenderList<'_>) -> Result<BuiltPlan, Box<dyn Error>> {
     let mut scratch = GlScratch::with_capacity(256, 1024, 256, 64);
     let mut cache = BenchTMeshCache::default();
     cache.begin_frame();
-    let stats = draw_prep::prepare_gl(
-        render,
-        &mut scratch,
-        |texture_key| lookup_texture_case_insensitive(texture_ids, texture_key),
-        |vertices| cache.resolve(vertices),
-    );
+    let stats = draw_prep::prepare_gl(render, &mut scratch, Some, |vertices| {
+        cache.resolve(vertices)
+    });
     Ok(BuiltPlan {
         snapshot: plan_snapshot(&scratch, stats),
     })
@@ -585,7 +579,7 @@ fn plan_snapshot_hash(snapshot: &PlanSnapshot) -> Result<String, Box<dyn Error>>
     Ok(format!("{:016x}", hasher.finish()))
 }
 
-fn texture_ids(render: &RenderList<'_>) -> HashMap<String, u64> {
+fn texture_ids(render: &RenderList<'_>, flip_texture_keys: bool) -> HashMap<String, u64> {
     let mut ids = HashMap::new();
     let mut next_id = 1u64;
     for obj in &render.objects {
@@ -599,22 +593,52 @@ fn texture_ids(render: &RenderList<'_>) -> HashMap<String, u64> {
         let Some(key) = key else {
             continue;
         };
-        if ids.contains_key(key) {
+        let key = if flip_texture_keys {
+            flip_ascii_case(key)
+        } else {
+            key.to_string()
+        };
+        if ids.contains_key(key.as_str()) {
             continue;
         }
-        ids.insert(key.to_string(), next_id);
+        ids.insert(key, next_id);
         next_id = next_id.wrapping_add(1).max(1);
     }
     ids
 }
 
-fn lookup_texture_case_insensitive(textures: &HashMap<String, u64>, key: &str) -> Option<u64> {
-    if let Some(texture) = textures.get(key) {
-        return Some(*texture);
+fn resolve_texture_handles(render: &mut RenderList<'_>, textures: &HashMap<String, TextureHandle>) {
+    for obj in &mut render.objects {
+        obj.texture_handle = match &obj.object_type {
+            deadsync::core::gfx::ObjectType::Sprite { texture_id, .. }
+            | deadsync::core::gfx::ObjectType::TexturedMesh { texture_id, .. } => textures
+                .get(texture_id.as_ref())
+                .copied()
+                .or_else(|| {
+                    textures.iter().find_map(|(candidate, texture)| {
+                        candidate
+                            .eq_ignore_ascii_case(texture_id.as_ref())
+                            .then_some(*texture)
+                    })
+                })
+                .unwrap_or(deadsync::core::gfx::INVALID_TEXTURE_HANDLE),
+            deadsync::core::gfx::ObjectType::Mesh { .. } => {
+                deadsync::core::gfx::INVALID_TEXTURE_HANDLE
+            }
+        };
     }
-    textures
-        .iter()
-        .find_map(|(candidate, texture)| candidate.eq_ignore_ascii_case(key).then_some(*texture))
+}
+
+fn flip_ascii_case(s: &str) -> String {
+    let mut out = Vec::with_capacity(s.len());
+    for b in s.bytes() {
+        out.push(match b {
+            b'a'..=b'z' => b - 32,
+            b'A'..=b'Z' => b + 32,
+            _ => b,
+        });
+    }
+    String::from_utf8(out).expect("ascii flip should preserve utf8")
 }
 
 fn tmesh_cache_key(vertices: &[deadsync::core::gfx::TexturedMeshVertex]) -> TMeshCacheKey {
@@ -719,6 +743,7 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
     let mut case_path = None;
     let mut iters = 5_000u64;
     let mut warmup = 500u64;
+    let mut flip_texture_keys = false;
     let mut expect_plan_hash = None;
     let mut write_plan = None;
 
@@ -729,6 +754,7 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
             "--case" => case_path = Some(next_value(&mut args, "--case")?),
             "--iters" => iters = next_value(&mut args, "--iters")?.parse()?,
             "--warmup" => warmup = next_value(&mut args, "--warmup")?.parse()?,
+            "--flip-texture-key-case" => flip_texture_keys = true,
             "--expect-plan-hash" => {
                 expect_plan_hash = Some(next_value(&mut args, "--expect-plan-hash")?)
             }
@@ -746,6 +772,7 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
         case_path,
         iters,
         warmup,
+        flip_texture_keys,
         expect_plan_hash,
         write_plan,
     })
@@ -761,7 +788,7 @@ fn next_value(
 
 fn print_help() {
     println!(
-        "draw_bench [--scenario all|hud|text|mask] [--case PATH] [--iters N] [--warmup N] [--expect-plan-hash HASH] [--write-plan PATH]"
+        "draw_bench [--scenario all|hud|text|mask] [--case PATH] [--iters N] [--warmup N] [--flip-texture-key-case] [--expect-plan-hash HASH] [--write-plan PATH]"
     );
 }
 

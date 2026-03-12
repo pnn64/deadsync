@@ -1,9 +1,12 @@
+use deadsync::assets::AssetManager;
+use deadsync::core::gfx::RenderList;
 use deadsync::test_support::{compose_case, compose_scenarios};
 use deadsync::ui::{actors::Actor, compose};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::error::Error;
 use std::hint::black_box;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
@@ -48,12 +51,30 @@ struct Args {
     case_path: Option<String>,
     iters: u64,
     warmup: u64,
+    cache_mode: CacheMode,
+    phase: Phase,
     write_case: Option<String>,
     write_output: Option<String>,
+    write_resolved_output: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+enum CacheMode {
+    Fresh,
+    Retained,
+}
+
+#[derive(Clone, Copy)]
+enum Phase {
+    Compose,
+    Resolve,
+    ComposeResolve,
 }
 
 struct BenchmarkResult {
     name: String,
+    phase: Phase,
+    cache_mode: CacheMode,
     actors: usize,
     objects: usize,
     cameras: usize,
@@ -65,8 +86,52 @@ struct BenchmarkResult {
 }
 
 struct VerificationResult {
+    kind: &'static str,
     expected_hash: String,
     actual_hash: String,
+}
+
+impl CacheMode {
+    fn parse(value: &str) -> Result<Self, Box<dyn Error>> {
+        match value {
+            "fresh" => Ok(Self::Fresh),
+            "retained" => Ok(Self::Retained),
+            _ => Err(format!("unknown --cache value '{value}', expected fresh or retained").into()),
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Fresh => "fresh",
+            Self::Retained => "retained",
+        }
+    }
+}
+
+impl Phase {
+    fn parse(value: &str) -> Result<Self, Box<dyn Error>> {
+        match value {
+            "compose" => Ok(Self::Compose),
+            "resolve" => Ok(Self::Resolve),
+            "compose-resolve" => Ok(Self::ComposeResolve),
+            _ => Err(format!(
+                "unknown --phase value '{value}', expected compose, resolve, or compose-resolve"
+            )
+            .into()),
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Compose => "compose",
+            Self::Resolve => "resolve",
+            Self::ComposeResolve => "compose-resolve",
+        }
+    }
+
+    const fn needs_compose_output(self) -> bool {
+        !matches!(self, Self::Compose)
+    }
 }
 
 impl CountingAlloc {
@@ -182,8 +247,13 @@ fn update_peak(slot: &AtomicU64, value: u64) {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = parse_args()?;
-    if args.case_path.is_none() && args.write_case.is_some() && args.scenario == "all" {
-        return Err("--write-case requires a single --scenario value".into());
+    if args.case_path.is_none()
+        && args.scenario == "all"
+        && (args.write_case.is_some()
+            || args.write_output.is_some()
+            || args.write_resolved_output.is_some())
+    {
+        return Err("write-output options require a single --scenario value".into());
     }
     if let Some(case_path) = &args.case_path {
         print_result(run_case(&args, case_path)?);
@@ -204,41 +274,75 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
             compose_scenarios::scenario_names().join(", ")
         )
     })?;
-    if let Some(path) = &args.write_case {
-        let (case, output) = compose_case::capture_case(
+    let capture = if args.phase.needs_compose_output()
+        || args.write_case.is_some()
+        || args.write_output.is_some()
+        || args.write_resolved_output.is_some()
+    {
+        Some(capture_scenario(&scenario)?)
+    } else {
+        None
+    };
+
+    if let Some((case, output)) = capture.as_ref() {
+        write_requested_outputs(args, case, output)?;
+    }
+
+    match args.phase {
+        Phase::Compose => benchmark_compose(
             scenario.name,
             &scenario.actors,
             scenario.clear_color,
             &scenario.metrics,
             &scenario.fonts,
-            scenario.total_elapsed,
-        )?;
-        compose_case::write_case(std::path::Path::new(path), &case)?;
-        if let Some(output_path) = &args.write_output {
-            compose_case::write_render_snapshot(std::path::Path::new(output_path), &output)?;
+            args.iters,
+            args.warmup,
+            args.cache_mode,
+            None,
+            |idx| scenario.total_elapsed + (idx & 63) as f32 * 0.016,
+        ),
+        Phase::Resolve => {
+            let (case, output) = capture
+                .as_ref()
+                .ok_or("resolve phase requires a captured compose output")?;
+            let assets = compose_case::asset_manager_for_case(case)?;
+            let render = compose_case::render_list_runtime(output);
+            benchmark_resolve(
+                scenario.name,
+                actor_count(&scenario.actors),
+                args.cache_mode,
+                &assets,
+                render,
+                args.iters,
+                args.warmup,
+            )
+        }
+        Phase::ComposeResolve => {
+            let (case, _) = capture
+                .as_ref()
+                .ok_or("compose-resolve phase requires a captured compose output")?;
+            let assets = compose_case::asset_manager_for_case(case)?;
+            benchmark_compose_resolve(
+                scenario.name,
+                &scenario.actors,
+                scenario.clear_color,
+                &scenario.metrics,
+                &scenario.fonts,
+                args.iters,
+                args.warmup,
+                args.cache_mode,
+                &assets,
+                |idx| scenario.total_elapsed + (idx & 63) as f32 * 0.016,
+            )
         }
     }
-    Ok(benchmark_compose(
-        scenario.name,
-        &scenario.actors,
-        scenario.clear_color,
-        &scenario.metrics,
-        &scenario.fonts,
-        args.iters,
-        args.warmup,
-        |idx| scenario.total_elapsed + (idx & 63) as f32 * 0.016,
-        None,
-    ))
 }
 
 fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Error>> {
-    let case = compose_case::read_case(std::path::Path::new(case_path))?;
+    let case = compose_case::read_case(Path::new(case_path))?;
     let replay = compose_case::replay_case(&case)?;
     let output = compose_case::render_case_output(&case)?;
     let actual_hash = compose_case::render_snapshot_hash(&output)?;
-    if let Some(path) = &args.write_output {
-        compose_case::write_render_snapshot(std::path::Path::new(path), &output)?;
-    }
     if actual_hash != case.expected.output_hash {
         return Err(format!(
             "compose output hash mismatch for '{}': expected {} got {}",
@@ -247,20 +351,124 @@ fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Err
         .into());
     }
 
-    Ok(benchmark_compose(
-        &replay.screen,
-        &replay.actors,
-        replay.clear_color,
-        &replay.metrics,
-        &replay.fonts,
-        args.iters,
-        args.warmup,
-        |_| replay.total_elapsed,
-        Some(VerificationResult {
-            expected_hash: case.expected.output_hash,
-            actual_hash,
-        }),
-    ))
+    if let Some(path) = &args.write_output {
+        compose_case::write_render_snapshot(Path::new(path), &output)?;
+    }
+    if let Some(path) = &args.write_resolved_output {
+        let assets = compose_case::asset_manager_for_case(&case)?;
+        let mut render = compose_case::render_list_runtime(&output);
+        assets.resolve_render_textures(&mut render);
+        let snapshot = compose_case::texture_resolve_snapshot(&render);
+        compose_case::write_texture_resolve_snapshot(Path::new(path), &snapshot)?;
+    }
+
+    let compose_verification = VerificationResult {
+        kind: "compose",
+        expected_hash: case.expected.output_hash.clone(),
+        actual_hash,
+    };
+
+    match args.phase {
+        Phase::Compose => benchmark_compose(
+            &replay.screen,
+            &replay.actors,
+            replay.clear_color,
+            &replay.metrics,
+            &replay.fonts,
+            args.iters,
+            args.warmup,
+            args.cache_mode,
+            Some(compose_verification),
+            |_| replay.total_elapsed,
+        ),
+        Phase::Resolve => {
+            let assets = compose_case::asset_manager_for_case(&case)?;
+            let render = compose_case::render_list_runtime(&output);
+            benchmark_resolve(
+                &replay.screen,
+                actor_count(&replay.actors),
+                args.cache_mode,
+                &assets,
+                render,
+                args.iters,
+                args.warmup,
+            )
+        }
+        Phase::ComposeResolve => {
+            let assets = compose_case::asset_manager_for_case(&case)?;
+            benchmark_compose_resolve(
+                &replay.screen,
+                &replay.actors,
+                replay.clear_color,
+                &replay.metrics,
+                &replay.fonts,
+                args.iters,
+                args.warmup,
+                args.cache_mode,
+                &assets,
+                |_| replay.total_elapsed,
+            )
+        }
+    }
+}
+
+fn capture_scenario(
+    scenario: &compose_scenarios::ComposeScenario,
+) -> Result<(compose_case::ComposeCase, compose_case::RenderListSnapshot), Box<dyn Error>> {
+    compose_case::capture_case(
+        scenario.name,
+        &scenario.actors,
+        scenario.clear_color,
+        &scenario.metrics,
+        &scenario.fonts,
+        scenario.total_elapsed,
+    )
+}
+
+fn write_requested_outputs(
+    args: &Args,
+    case: &compose_case::ComposeCase,
+    output: &compose_case::RenderListSnapshot,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(path) = &args.write_case {
+        compose_case::write_case(Path::new(path), case)?;
+    }
+    if let Some(path) = &args.write_output {
+        compose_case::write_render_snapshot(Path::new(path), output)?;
+    }
+    if let Some(path) = &args.write_resolved_output {
+        let assets = compose_case::asset_manager_for_case(case)?;
+        let mut render = compose_case::render_list_runtime(output);
+        assets.resolve_render_textures(&mut render);
+        let snapshot = compose_case::texture_resolve_snapshot(&render);
+        compose_case::write_texture_resolve_snapshot(Path::new(path), &snapshot)?;
+    }
+    Ok(())
+}
+
+#[inline(always)]
+fn build_screen_for_mode<'a>(
+    cache_mode: CacheMode,
+    text_cache: &mut compose::TextLayoutCache,
+    actors: &'a [Actor],
+    clear_color: [f32; 4],
+    metrics: &deadsync::core::space::Metrics,
+    fonts: &'a HashMap<&'static str, deadsync::ui::font::Font>,
+    total_elapsed: f32,
+) -> RenderList<'a> {
+    match cache_mode {
+        CacheMode::Fresh => {
+            compose::build_screen(actors, clear_color, metrics, fonts, total_elapsed)
+        }
+        CacheMode::Retained => compose::build_screen_cached(
+            actors,
+            clear_color,
+            metrics,
+            fonts,
+            total_elapsed,
+            text_cache,
+        ),
+    }
 }
 
 fn benchmark_compose<F>(
@@ -271,20 +479,37 @@ fn benchmark_compose<F>(
     fonts: &HashMap<&'static str, deadsync::ui::font::Font>,
     iters: u64,
     warmup: u64,
-    elapsed_for_iter: F,
+    cache_mode: CacheMode,
     verification: Option<VerificationResult>,
-) -> BenchmarkResult
+    elapsed_for_iter: F,
+) -> Result<BenchmarkResult, Box<dyn Error>>
 where
     F: Fn(u64) -> f32,
 {
-    let sample = compose::build_screen(actors, clear_color, metrics, fonts, elapsed_for_iter(0));
+    let mut text_cache = compose::TextLayoutCache::default();
+    let sample = build_screen_for_mode(
+        cache_mode,
+        &mut text_cache,
+        actors,
+        clear_color,
+        metrics,
+        fonts,
+        elapsed_for_iter(0),
+    );
     let objects = sample.objects.len();
     let cameras = sample.cameras.len();
     black_box(objects ^ cameras);
 
     for idx in 0..warmup {
-        let screen =
-            compose::build_screen(actors, clear_color, metrics, fonts, elapsed_for_iter(idx));
+        let screen = build_screen_for_mode(
+            cache_mode,
+            &mut text_cache,
+            actors,
+            clear_color,
+            metrics,
+            fonts,
+            elapsed_for_iter(idx),
+        );
         black_box(screen.objects.len());
     }
 
@@ -292,7 +517,9 @@ where
     let started = Instant::now();
     let mut checksum = 0u64;
     for idx in 0..iters {
-        let screen = black_box(compose::build_screen(
+        let screen = black_box(build_screen_for_mode(
+            cache_mode,
+            &mut text_cache,
             actors,
             clear_color,
             metrics,
@@ -306,8 +533,10 @@ where
         black_box(checksum);
     }
 
-    BenchmarkResult {
+    Ok(BenchmarkResult {
         name: name.to_string(),
+        phase: Phase::Compose,
+        cache_mode,
         actors: actor_count(actors),
         objects,
         cameras,
@@ -316,7 +545,188 @@ where
         alloc: ALLOC.snapshot().diff(start_alloc),
         checksum,
         verification,
+    })
+}
+
+fn benchmark_resolve(
+    name: &str,
+    actors: usize,
+    cache_mode: CacheMode,
+    assets: &AssetManager,
+    mut render: RenderList<'static>,
+    iters: u64,
+    warmup: u64,
+) -> Result<BenchmarkResult, Box<dyn Error>> {
+    let objects = render.objects.len();
+    let cameras = render.cameras.len();
+    assets.resolve_render_textures(&mut render);
+    let expected_hash = compose_case::texture_resolve_snapshot_hash(
+        &compose_case::texture_resolve_snapshot(&render),
+    )?;
+
+    for _ in 0..warmup {
+        assets.resolve_render_textures(&mut render);
+        black_box(texture_handle_checksum(&render));
     }
+
+    let start_alloc = ALLOC.begin_measurement();
+    let started = Instant::now();
+    let mut checksum = 0u64;
+    for _ in 0..iters {
+        assets.resolve_render_textures(&mut render);
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(texture_handle_checksum(&render))
+            .wrapping_add(render.cameras.len() as u64);
+        black_box(checksum);
+    }
+    let elapsed_s = started.elapsed().as_secs_f64();
+    let alloc = ALLOC.snapshot().diff(start_alloc);
+    let actual_hash = compose_case::texture_resolve_snapshot_hash(
+        &compose_case::texture_resolve_snapshot(&render),
+    )?;
+    if actual_hash != expected_hash {
+        return Err(format!(
+            "resolved texture hash drifted during benchmark: expected {} got {}",
+            expected_hash, actual_hash
+        )
+        .into());
+    }
+
+    Ok(BenchmarkResult {
+        name: name.to_string(),
+        phase: Phase::Resolve,
+        cache_mode,
+        actors,
+        objects,
+        cameras,
+        iters,
+        elapsed_s,
+        alloc,
+        checksum,
+        verification: Some(VerificationResult {
+            kind: "resolve",
+            expected_hash,
+            actual_hash,
+        }),
+    })
+}
+
+fn benchmark_compose_resolve<F>(
+    name: &str,
+    actors: &[Actor],
+    clear_color: [f32; 4],
+    metrics: &deadsync::core::space::Metrics,
+    fonts: &HashMap<&'static str, deadsync::ui::font::Font>,
+    iters: u64,
+    warmup: u64,
+    cache_mode: CacheMode,
+    assets: &AssetManager,
+    elapsed_for_iter: F,
+) -> Result<BenchmarkResult, Box<dyn Error>>
+where
+    F: Fn(u64) -> f32,
+{
+    let mut text_cache = compose::TextLayoutCache::default();
+    let mut sample = build_screen_for_mode(
+        cache_mode,
+        &mut text_cache,
+        actors,
+        clear_color,
+        metrics,
+        fonts,
+        elapsed_for_iter(0),
+    );
+    assets.resolve_render_textures(&mut sample);
+    let objects = sample.objects.len();
+    let cameras = sample.cameras.len();
+    let expected_hash = compose_case::texture_resolve_snapshot_hash(
+        &compose_case::texture_resolve_snapshot(&sample),
+    )?;
+
+    for idx in 0..warmup {
+        let mut screen = build_screen_for_mode(
+            cache_mode,
+            &mut text_cache,
+            actors,
+            clear_color,
+            metrics,
+            fonts,
+            elapsed_for_iter(idx),
+        );
+        assets.resolve_render_textures(&mut screen);
+        black_box(texture_handle_checksum(&screen));
+    }
+
+    let start_alloc = ALLOC.begin_measurement();
+    let started = Instant::now();
+    let mut checksum = 0u64;
+    for idx in 0..iters {
+        let mut screen = build_screen_for_mode(
+            cache_mode,
+            &mut text_cache,
+            actors,
+            clear_color,
+            metrics,
+            fonts,
+            elapsed_for_iter(idx),
+        );
+        assets.resolve_render_textures(&mut screen);
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(texture_handle_checksum(&screen))
+            .wrapping_add(screen.objects.len() as u64);
+        black_box(checksum);
+    }
+    let elapsed_s = started.elapsed().as_secs_f64();
+    let alloc = ALLOC.snapshot().diff(start_alloc);
+
+    let mut final_screen = build_screen_for_mode(
+        cache_mode,
+        &mut text_cache,
+        actors,
+        clear_color,
+        metrics,
+        fonts,
+        elapsed_for_iter(0),
+    );
+    assets.resolve_render_textures(&mut final_screen);
+    let actual_hash = compose_case::texture_resolve_snapshot_hash(
+        &compose_case::texture_resolve_snapshot(&final_screen),
+    )?;
+    if actual_hash != expected_hash {
+        return Err(format!(
+            "compose-resolve hash mismatch: expected {} got {}",
+            expected_hash, actual_hash
+        )
+        .into());
+    }
+
+    Ok(BenchmarkResult {
+        name: name.to_string(),
+        phase: Phase::ComposeResolve,
+        cache_mode,
+        actors: actor_count(actors),
+        objects,
+        cameras,
+        iters,
+        elapsed_s,
+        alloc,
+        checksum,
+        verification: Some(VerificationResult {
+            kind: "resolve",
+            expected_hash,
+            actual_hash,
+        }),
+    })
+}
+
+fn texture_handle_checksum(render: &RenderList<'_>) -> u64 {
+    render.objects.iter().fold(0u64, |acc, obj| {
+        acc.wrapping_mul(131)
+            .wrapping_add(obj.texture_handle)
+            .wrapping_add(obj.order as u64)
+    })
 }
 
 fn actor_count(actors: &[Actor]) -> usize {
@@ -348,10 +758,12 @@ fn print_result(result: BenchmarkResult) {
     let bytes_per_iter = ratio(result.alloc.alloc_bytes, result.iters);
 
     println!("scenario: {}", result.name);
+    println!("phase: {}", result.phase.as_str());
+    println!("cache: {}", result.cache_mode.as_str());
     if let Some(verification) = &result.verification {
         println!(
-            "verify: ok expected_hash={} actual_hash={}",
-            verification.expected_hash, verification.actual_hash
+            "verify: ok kind={} expected_hash={} actual_hash={}",
+            verification.kind, verification.expected_hash, verification.actual_hash
         );
     }
     println!(
@@ -399,8 +811,11 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
     let mut case_path = None;
     let mut iters = 5_000u64;
     let mut warmup = 500u64;
+    let mut cache_mode = CacheMode::Retained;
+    let mut phase = Phase::Compose;
     let mut write_case = None;
     let mut write_output = None;
+    let mut write_resolved_output = None;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -409,8 +824,13 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
             "--case" => case_path = Some(next_value(&mut args, "--case")?),
             "--iters" => iters = next_value(&mut args, "--iters")?.parse()?,
             "--warmup" => warmup = next_value(&mut args, "--warmup")?.parse()?,
+            "--cache" => cache_mode = CacheMode::parse(&next_value(&mut args, "--cache")?)?,
+            "--phase" => phase = Phase::parse(&next_value(&mut args, "--phase")?)?,
             "--write-case" => write_case = Some(next_value(&mut args, "--write-case")?),
             "--write-output" => write_output = Some(next_value(&mut args, "--write-output")?),
+            "--write-resolved-output" => {
+                write_resolved_output = Some(next_value(&mut args, "--write-resolved-output")?)
+            }
             "--help" | "-h" => {
                 print_help();
                 std::process::exit(0);
@@ -424,8 +844,11 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
         case_path,
         iters,
         warmup,
+        cache_mode,
+        phase,
         write_case,
         write_output,
+        write_resolved_output,
     })
 }
 
@@ -439,6 +862,6 @@ fn next_value(
 
 fn print_help() {
     println!(
-        "compose_bench [--scenario all|hud|text|mask] [--case PATH] [--iters N] [--warmup N] [--write-case PATH] [--write-output PATH]"
+        "compose_bench [--scenario all|hud|text|mask] [--case PATH] [--phase compose|resolve|compose-resolve] [--iters N] [--warmup N] [--cache fresh|retained] [--write-case PATH] [--write-output PATH] [--write-resolved-output PATH]"
     );
 }
