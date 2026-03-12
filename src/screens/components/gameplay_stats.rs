@@ -170,23 +170,15 @@ pub fn build(
     playfield_center_x: f32,
     player_side: profile::PlayerSide,
 ) -> Vec<Actor> {
-    let mut actors = Vec::new();
-    actors.extend(build_banner(state, playfield_center_x, player_side));
-    actors.extend(build_pack_banner(state, playfield_center_x, player_side));
-    actors.extend(build_steps_info(state, playfield_center_x, player_side));
-    actors.extend(build_side_pane(
-        state,
-        asset_manager,
-        playfield_center_x,
-        player_side,
-    ));
-    actors.extend(build_holds_mines_rolls_pane(
-        state,
-        asset_manager,
-        playfield_center_x,
-        player_side,
-    ));
-    actors.extend(build_scorebox_pane(state, playfield_center_x, player_side));
+    let wide = is_wide();
+    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
+    let mut actors = Vec::with_capacity(if wide { 48 } else { 1 });
+    build_banner(&mut actors, state, layout, wide, player_side);
+    build_pack_banner(&mut actors, state, layout, wide, player_side);
+    build_steps_info(&mut actors, state, layout, wide, player_side);
+    build_side_pane(&mut actors, state, asset_manager, layout, wide, player_side);
+    build_holds_mines_rolls_pane(&mut actors, state, asset_manager, layout, wide, player_side);
+    build_scorebox_pane(&mut actors, state, layout, wide, player_side);
     actors
 }
 
@@ -1032,16 +1024,16 @@ static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyL
 });
 
 fn build_banner(
+    actors: &mut Vec<Actor>,
     state: &State,
-    playfield_center_x: f32,
+    layout: StepStatsPaneLayout,
+    wide: bool,
     player_side: profile::PlayerSide,
-) -> Vec<Actor> {
-    let mut actors = Vec::new();
+) {
     if let Some(banner_path) = &state.song.banner_path {
         let banner_key = banner_path.to_string_lossy().into_owned();
-        let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
         let mut local_banner_x = 70.0;
-        if layout.note_field_is_centered && is_wide() {
+        if layout.note_field_is_centered && wide {
             local_banner_x = 72.0;
         }
         if player_side == profile::PlayerSide::P2 {
@@ -1060,22 +1052,22 @@ fn build_banner(
             z(-50)
         ));
     }
-    actors
 }
 
 fn build_pack_banner(
+    actors: &mut Vec<Actor>,
     state: &State,
-    playfield_center_x: f32,
+    layout: StepStatsPaneLayout,
+    wide: bool,
     player_side: profile::PlayerSide,
-) -> Vec<Actor> {
-    if !is_wide() {
-        return vec![];
+) {
+    if !wide {
+        return;
     }
     let Some(pack_banner_path) = state.pack_banner_path.as_ref() else {
-        return vec![];
+        return;
     };
     let pack_key = pack_banner_path.to_string_lossy().into_owned();
-    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
 
     let x_sign = match player_side {
         profile::PlayerSide::P1 => 1.0,
@@ -1090,25 +1082,26 @@ fn build_pack_banner(
     let x = layout.sidepane_center_x + (final_offset * x_sign * layout.banner_data_zoom);
     let y = layout.sidepane_center_y + (20.0 * layout.banner_data_zoom);
 
-    vec![act!(sprite(pack_key):
+    actors.push(act!(sprite(pack_key):
         align(0.5, 0.5):
         xy(x, y):
         setsize(418.0, 164.0):
         zoom(final_size * layout.banner_data_zoom):
         z(-49)
-    )]
+    ));
 }
 
 fn build_steps_info(
+    actors: &mut Vec<Actor>,
     state: &State,
-    playfield_center_x: f32,
+    layout: StepStatsPaneLayout,
+    wide: bool,
     player_side: profile::PlayerSide,
-) -> Vec<Actor> {
-    if !is_wide() {
-        return vec![];
+) {
+    if !wide {
+        return;
     }
-    let mut actors = Vec::new();
-    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
+    actors.reserve(if layout.note_field_is_centered { 5 } else { 9 });
 
     // Dark background for the Step Statistics side pane (Simply Love: DarkBackground.lua).
     actors.push(act!(quad:
@@ -1224,8 +1217,6 @@ fn build_steps_info(
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
-
-    actors
 }
 
 fn build_holds_mines_rolls_pane_at(
@@ -1391,17 +1382,17 @@ fn notefield_width(state: &State) -> Option<f32> {
 }
 
 fn build_holds_mines_rolls_pane(
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
-    playfield_center_x: f32,
+    layout: StepStatsPaneLayout,
+    wide: bool,
     player_side: profile::PlayerSide,
-) -> Vec<Actor> {
-    if !is_wide() {
-        return vec![];
+) {
+    if !wide {
+        return;
     }
     let p = &state.players[0];
-    let mut actors = Vec::new();
-    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
     let banner_data_zoom = layout.banner_data_zoom;
     let local_x = match player_side {
         profile::PlayerSide::P1 => 155.0,
@@ -1430,7 +1421,7 @@ fn build_holds_mines_rolls_pane(
     };
     let digits_to_fmt = digits_needed.clamp(3, 4);
     let row_height = 28.0 * frame_zoom;
-    let mut children = Vec::new();
+    let mut children = Vec::with_capacity(categories.len() * (digits_to_fmt * 2 + 2));
 
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |metrics_font| {
         let value_zoom = 0.4 * frame_zoom;
@@ -1517,25 +1508,25 @@ fn build_holds_mines_rolls_pane(
         background: None,
         z: 70,
     });
-    actors
 }
 
 fn build_scorebox_pane(
+    actors: &mut Vec<Actor>,
     state: &State,
-    playfield_center_x: f32,
+    layout: StepStatsPaneLayout,
+    wide: bool,
     player_side: profile::PlayerSide,
-) -> Vec<Actor> {
-    if !is_wide() {
-        return Vec::new();
+) {
+    if !wide {
+        return;
     }
-    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
 
     let x_sign = match player_side {
         profile::PlayerSide::P1 => 1.0,
         profile::PlayerSide::P2 => -1.0,
     };
     let mut local_x = 70.0 * x_sign;
-    if layout.note_field_is_centered && is_wide() {
+    if layout.note_field_is_centered && wide {
         local_x += 2.0 * x_sign;
     }
     if layout.is_ultrawide && state.num_players > 1 {
@@ -1544,7 +1535,7 @@ fn build_scorebox_pane(
     let frame_cx = layout.sidepane_center_x + (local_x * layout.banner_data_zoom);
     let frame_cy = layout.sidepane_center_y + (-115.0 * layout.banner_data_zoom);
 
-    gs_scorebox::gameplay_scorebox_actors_from_snapshot(
+    actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
         player_side,
         gameplay::scorebox_snapshot_for_side(state, player_side),
         profile::get_for_side(player_side).display_scorebox,
@@ -1552,20 +1543,20 @@ fn build_scorebox_pane(
         frame_cy,
         layout.banner_data_zoom,
         state.current_music_time_display,
-    )
+    ));
 }
 
 fn build_side_pane(
+    actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
-    playfield_center_x: f32,
+    layout: StepStatsPaneLayout,
+    wide: bool,
     player_side: profile::PlayerSide,
-) -> Vec<Actor> {
-    if !is_wide() {
-        return vec![];
+) {
+    if !wide {
+        return;
     }
-    let mut actors = Vec::new();
-    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
 
     let x_sign = match player_side {
         profile::PlayerSide::P1 => 1.0,
@@ -1577,7 +1568,7 @@ fn build_side_pane(
     };
     let judgments_local_x = if layout.is_ultrawide && state.num_players > 1 {
         154.0 * x_sign
-    } else if layout.note_field_is_centered && is_wide() {
+    } else if layout.note_field_is_centered && wide {
         -156.0 * x_sign
     } else {
         -widescale(152.0, 204.0) * x_sign
@@ -1606,6 +1597,11 @@ fn build_side_pane(
         || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
     let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
     let blue_window_label = cached_blue_window_label(blue_window_ms.round() as i32);
+    actors.reserve(if show_fa_split {
+        22 + usize::from(show_blue_ms_label)
+    } else {
+        16
+    });
     let row_height = if show_fa_split { 29.0 } else { 35.0 };
     let y_base = -280.0;
 
@@ -1980,7 +1976,7 @@ fn build_side_pane(
     }));
 
     // Density graph (Simply Love StepStatistics/DensityGraph.lua).
-    if is_wide() {
+    if wide {
         const BG_RGB: [f32; 3] = [
             30.0 / 255.0, // 0x1E
             40.0 / 255.0, // 0x28
@@ -2038,7 +2034,7 @@ fn build_side_pane(
     }
 
     // --- Peak NPS Display (as seen in Simply Love's Step Statistics) ---
-    if is_wide() {
+    if wide {
         let scaled_peak = (state.charts[0].max_nps as f32 * state.music_rate).max(0.0);
         let peak_nps_text = cached_peak_nps_text(scaled_peak);
 
@@ -2063,6 +2059,4 @@ fn build_side_pane(
             z(200)
         ));
     }
-
-    actors
 }

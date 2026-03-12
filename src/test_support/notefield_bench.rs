@@ -25,6 +25,18 @@ pub struct NotefieldBenchFixture {
 }
 
 impl NotefieldBenchFixture {
+    pub fn state(&self) -> &gameplay::State {
+        &self.state
+    }
+
+    pub fn state_mut(&mut self) -> &mut gameplay::State {
+        &mut self.state
+    }
+
+    pub fn profile(&self) -> &profile::Profile {
+        &self.profile
+    }
+
     pub fn build(&self, retained: bool) -> Vec<Actor> {
         if !retained {
             for cache in &self.state.notefield_model_cache {

@@ -3,6 +3,7 @@ use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
 use crate::core::space::{Metrics, metrics_for_window};
 use crate::test_support::density_graph_bench;
 use crate::test_support::density_graph_life_bench;
+use crate::test_support::gameplay_stats_bench;
 use crate::test_support::music_wheel_bench;
 use crate::test_support::notefield_bench;
 use crate::test_support::pane_stats_bench;
@@ -12,9 +13,10 @@ use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 10] = [
+const SCENARIO_NAMES: [&str; 11] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
+    gameplay_stats_bench::SCENARIO_NAME,
     "hud",
     "text",
     "text-ci",
@@ -44,6 +46,11 @@ const ICON_TEX: &str = "bench/icon.png";
 const HAS_EDIT_TEX: &str = "has_edit.png";
 const SHEET_TEX: &str = "bench/sheet.png";
 const MESH_TEX: &str = "bench/mesh.png";
+const GROOVESTATS_LOGO_TEX: &str = "GrooveStats.png";
+const ARROWCLOUD_LOGO_TEX: &str = "arrowcloud.png";
+const RPG_LOGO_TEX: &str = "srpg9_logo_alt.png";
+const ITL_LOGO_TEX: &str = "ITL.png";
+const CROWN_TEX: &str = "crown.png";
 const CASEFOLD_TEX_COUNT: usize = 64;
 const SCREEN_W: f32 = 854.0;
 const SCREEN_H: f32 = 480.0;
@@ -70,6 +77,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         density_graph_life_bench::SCENARIO_NAME => {
             Some(density_graph_life_scenario(metrics, fonts))
         }
+        gameplay_stats_bench::SCENARIO_NAME => Some(gameplay_stats_scenario(metrics, fonts)),
         "hud" => Some(hud_scenario(metrics, fonts)),
         "text" => Some(text_scenario(metrics, fonts)),
         "text-ci" => Some(text_ci_scenario(metrics, fonts)),
@@ -109,6 +117,21 @@ fn density_graph_life_scenario(
     }
 }
 
+fn gameplay_stats_scenario(
+    metrics: Metrics,
+    fonts: HashMap<&'static str, Font>,
+) -> ComposeScenario {
+    let fixture = gameplay_stats_bench::fixture();
+    ComposeScenario {
+        name: gameplay_stats_bench::SCENARIO_NAME,
+        actors: fixture.build(),
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.0,
+    }
+}
+
 fn notefield_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
     let fixture = notefield_bench::fixture();
     ComposeScenario {
@@ -134,6 +157,11 @@ fn ensure_textures() {
             (HAS_EDIT_TEX, 128, 64),
             (SHEET_TEX, 256, 256),
             (MESH_TEX, 256, 256),
+            (GROOVESTATS_LOGO_TEX, 512, 128),
+            (ARROWCLOUD_LOGO_TEX, 768, 256),
+            (RPG_LOGO_TEX, 512, 512),
+            (ITL_LOGO_TEX, 512, 256),
+            (CROWN_TEX, 128, 128),
         ] {
             assets::register_texture_dims(key, w, h);
         }
