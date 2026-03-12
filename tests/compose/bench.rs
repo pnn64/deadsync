@@ -2,7 +2,8 @@ use deadsync::assets::AssetManager;
 use deadsync::core::gfx::RenderList;
 use deadsync::test_support::{
     compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench, gameplay_bench,
-    gameplay_stats_bench, gs_scorebox_bench, music_wheel_bench, notefield_bench, pane_stats_bench,
+    gameplay_stats_bench, gameplay_stats_double_bench, gs_scorebox_bench, music_wheel_bench,
+    notefield_bench, pane_stats_bench,
 };
 use deadsync::ui::{actors::Actor, compose};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -355,6 +356,20 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(),
                 )
             }
+            gameplay_stats_double_bench::SCENARIO_NAME => {
+                let fixture = gameplay_stats_double_bench::fixture();
+                benchmark_actor_builder(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    || fixture.build(),
+                )
+            }
             gameplay_bench::SCENARIO_NAME => {
                 let fixture = gameplay_bench::fixture();
                 benchmark_actor_builder(
@@ -411,7 +426,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
                     || fixture.build(),
                 )
             }
-            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gs-scorebox, notefield, or pane-stats".into()),
+            _ => Err("actors phase currently only supports --scenario music-wheel, density-graph, density-graph-life, gameplay, gameplay-stats, gameplay-stats-double, gs-scorebox, notefield, or pane-stats".into()),
         },
         Phase::Compose => benchmark_compose(
             scenario.name,
