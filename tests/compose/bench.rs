@@ -1,6 +1,8 @@
 use deadsync::assets::AssetManager;
 use deadsync::core::gfx::RenderList;
-use deadsync::test_support::{compose_case, compose_scenarios, music_wheel_bench};
+use deadsync::test_support::{
+    compose_case, compose_scenarios, music_wheel_bench, pane_stats_bench,
+};
 use deadsync::ui::{actors::Actor, compose};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -295,23 +297,39 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
     }
 
     match args.phase {
-        Phase::Actors => {
-            if name != music_wheel_bench::SCENARIO_NAME {
-                return Err("actors phase currently only supports --scenario music-wheel".into());
+        Phase::Actors => match name {
+            music_wheel_bench::SCENARIO_NAME => {
+                let fixture = music_wheel_bench::fixture();
+                benchmark_actor_builder(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    || fixture.build(),
+                )
             }
-            let fixture = music_wheel_bench::fixture();
-            benchmark_actor_builder(
-                scenario.name,
-                scenario.clear_color,
-                &scenario.metrics,
-                &scenario.fonts,
-                scenario.total_elapsed,
-                args.iters,
-                args.warmup,
-                args.cache_mode,
-                || fixture.build(),
-            )
-        }
+            pane_stats_bench::SCENARIO_NAME => {
+                let fixture = pane_stats_bench::fixture();
+                benchmark_actor_builder(
+                    scenario.name,
+                    scenario.clear_color,
+                    &scenario.metrics,
+                    &scenario.fonts,
+                    scenario.total_elapsed,
+                    args.iters,
+                    args.warmup,
+                    args.cache_mode,
+                    || fixture.build(),
+                )
+            }
+            _ => Err(
+                "actors phase currently only supports --scenario music-wheel or pane-stats".into(),
+            ),
+        },
         Phase::Compose => benchmark_compose(
             scenario.name,
             &scenario.actors,
@@ -363,7 +381,9 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
 
 fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Error>> {
     if matches!(args.phase, Phase::Actors) {
-        return Err("actors phase does not support --case; use --scenario music-wheel".into());
+        return Err(
+            "actors phase does not support --case; use --scenario music-wheel or pane-stats".into(),
+        );
     }
     let case = compose_case::read_case(Path::new(case_path))?;
     let replay = compose_case::replay_case(&case)?;

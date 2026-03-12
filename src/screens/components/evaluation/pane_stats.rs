@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use std::sync::LazyLock;
-
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::space::screen_center_y;
@@ -30,52 +27,32 @@ struct JudgmentDisplayInfo {
     color: [f32; 4],
 }
 
-static JUDGMENT_INFO: LazyLock<HashMap<JudgeGrade, JudgmentDisplayInfo>> = LazyLock::new(|| {
-    HashMap::from([
-        (
-            JudgeGrade::Fantastic,
-            JudgmentDisplayInfo {
-                label: "FANTASTIC",
-                color: color::JUDGMENT_RGBA[0],
-            },
-        ),
-        (
-            JudgeGrade::Excellent,
-            JudgmentDisplayInfo {
-                label: "EXCELLENT",
-                color: color::JUDGMENT_RGBA[1],
-            },
-        ),
-        (
-            JudgeGrade::Great,
-            JudgmentDisplayInfo {
-                label: "GREAT",
-                color: color::JUDGMENT_RGBA[2],
-            },
-        ),
-        (
-            JudgeGrade::Decent,
-            JudgmentDisplayInfo {
-                label: "DECENT",
-                color: color::JUDGMENT_RGBA[3],
-            },
-        ),
-        (
-            JudgeGrade::WayOff,
-            JudgmentDisplayInfo {
-                label: "WAY OFF",
-                color: color::JUDGMENT_RGBA[4],
-            },
-        ),
-        (
-            JudgeGrade::Miss,
-            JudgmentDisplayInfo {
-                label: "MISS",
-                color: color::JUDGMENT_RGBA[5],
-            },
-        ),
-    ])
-});
+const JUDGMENT_INFO: [JudgmentDisplayInfo; 6] = [
+    JudgmentDisplayInfo {
+        label: "FANTASTIC",
+        color: color::JUDGMENT_RGBA[0],
+    },
+    JudgmentDisplayInfo {
+        label: "EXCELLENT",
+        color: color::JUDGMENT_RGBA[1],
+    },
+    JudgmentDisplayInfo {
+        label: "GREAT",
+        color: color::JUDGMENT_RGBA[2],
+    },
+    JudgmentDisplayInfo {
+        label: "DECENT",
+        color: color::JUDGMENT_RGBA[3],
+    },
+    JudgmentDisplayInfo {
+        label: "WAY OFF",
+        color: color::JUDGMENT_RGBA[4],
+    },
+    JudgmentDisplayInfo {
+        label: "MISS",
+        color: color::JUDGMENT_RGBA[5],
+    },
+];
 
 #[inline(always)]
 fn rolling_number_value(target: u32, elapsed_s: f32) -> u32 {
@@ -91,6 +68,83 @@ fn rolling_number_value(target: u32, elapsed_s: f32) -> u32 {
     current.round() as u32
 }
 
+#[inline(always)]
+const fn digit_text(digit: u8) -> &'static str {
+    match digit {
+        0 => "0",
+        1 => "1",
+        2 => "2",
+        3 => "3",
+        4 => "4",
+        5 => "5",
+        6 => "6",
+        7 => "7",
+        8 => "8",
+        9 => "9",
+        _ => "0",
+    }
+}
+
+#[inline(always)]
+const fn decimal_digits(value: u32) -> usize {
+    if value >= 1_000_000_000 {
+        10
+    } else if value >= 100_000_000 {
+        9
+    } else if value >= 10_000_000 {
+        8
+    } else if value >= 1_000_000 {
+        7
+    } else if value >= 100_000 {
+        6
+    } else if value >= 10_000 {
+        5
+    } else if value >= 1_000 {
+        4
+    } else if value >= 100 {
+        3
+    } else if value >= 10 {
+        2
+    } else {
+        1
+    }
+}
+
+#[inline(always)]
+fn fill_padded_digits(mut value: u32, width: usize, out: &mut [u8; 10]) -> usize {
+    let width = width.min(out.len());
+    let mut idx = width;
+    while idx > 0 {
+        idx -= 1;
+        out[idx] = (value % 10) as u8;
+        value /= 10;
+    }
+    let mut first_nonzero = 0usize;
+    while first_nonzero < width && out[first_nonzero] == 0 {
+        first_nonzero += 1;
+    }
+    first_nonzero
+}
+
+#[inline(always)]
+fn max_window_count(wc: crate::game::timing::WindowCounts) -> u32 {
+    wc.w0
+        .max(wc.w1)
+        .max(wc.w2)
+        .max(wc.w3)
+        .max(wc.w4)
+        .max(wc.w5)
+        .max(wc.miss)
+}
+
+#[inline(always)]
+fn actor_capacity(show_fa_plus_pane: bool, show_10ms_blue: bool, digits_to_fmt: usize) -> usize {
+    let judgment_rows = if show_fa_plus_pane { 7 } else { 6 };
+    let judgment_labels = judgment_rows + usize::from(show_10ms_blue);
+    let radar_rows = 4;
+    judgment_labels + (judgment_rows * digits_to_fmt) + (radar_rows * 8)
+}
+
 /// Builds a 300px evaluation pane for a given controller side, including judgment and radar counts.
 pub fn build_stats_pane(
     score_info: &ScoreInfo,
@@ -99,7 +153,6 @@ pub fn build_stats_pane(
     asset_manager: &AssetManager,
     elapsed_s: f32,
 ) -> Vec<Actor> {
-    let mut actors = Vec::new();
     let cy = screen_center_y();
 
     let pane_origin_x = pane_origin_x(controller);
@@ -118,23 +171,18 @@ pub fn build_stats_pane(
     } else {
         score_info.window_counts
     };
+    let judgment_counts =
+        JUDGMENT_ORDER.map(|grade| score_info.judgment_counts.get(&grade).copied().unwrap_or(0));
 
     // --- Calculate label shift for large numbers ---
     let max_judgment_count = if !show_fa_plus_pane {
-        JUDGMENT_ORDER
-            .iter()
-            .map(|grade| score_info.judgment_counts.get(grade).copied().unwrap_or(0))
-            .max()
-            .unwrap_or(0)
+        *judgment_counts.iter().max().unwrap_or(&0)
     } else {
-        *[wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss]
-            .iter()
-            .max()
-            .unwrap_or(&0)
+        max_window_count(wc)
     };
 
     let (label_shift_x, label_zoom, sublabel_zoom) = if max_judgment_count > 9999 {
-        let length = (max_judgment_count as f32).log10().floor() as i32 + 1;
+        let length = decimal_digits(max_judgment_count) as i32;
         (
             -11.0 * (length - 4) as f32,
             0.1f32.mul_add(-((length - 4) as f32), 0.833),
@@ -144,12 +192,13 @@ pub fn build_stats_pane(
         (0.0, 0.833, 0.6)
     };
 
-    let digits_needed = if max_judgment_count == 0 {
-        1
-    } else {
-        (max_judgment_count as f32).log10().floor() as usize + 1
-    };
+    let digits_needed = decimal_digits(max_judgment_count);
     let digits_to_fmt = digits_needed.max(4);
+    let mut actors = Vec::with_capacity(actor_capacity(
+        show_fa_plus_pane,
+        show_10ms_blue,
+        digits_to_fmt,
+    ));
 
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font("wendy_screenevaluation", |metrics_font| {
         let numbers_frame_zoom: f32 = 0.8;
@@ -166,15 +215,16 @@ pub fn build_stats_pane(
         } else {
             94.0
         };
+        let label_local_x = (28.0f32).mul_add(1.0, label_shift_x * side_sign) * side_sign;
+        let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
+        let mut digits = [0u8; 10];
 
         if !show_fa_plus_pane {
-            for (i, grade) in JUDGMENT_ORDER.iter().enumerate() {
-                let info = JUDGMENT_INFO.get(grade).unwrap();
-                let target_count = score_info.judgment_counts.get(grade).copied().unwrap_or(0);
+            for (i, info) in JUDGMENT_INFO.iter().enumerate() {
+                let target_count = judgment_counts[i];
                 let count = rolling_number_value(target_count, elapsed_s);
 
                 // Label
-                let label_local_x = (28.0f32).mul_add(1.0, label_shift_x * side_sign) * side_sign;
                 let label_local_y = (i as f32).mul_add(28.0, -16.0);
                 actors.push(act!(text: font("miso"): settext(info.label):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
@@ -185,59 +235,37 @@ pub fn build_stats_pane(
                 // Number (digit by digit for dimming)
                 let bright_color = info.color;
                 let dim_color = color::JUDGMENT_DIM_EVAL_RGBA[i];
-                let number_str = format!("{count:0digits_to_fmt$}");
-                let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
+                let first_nonzero = fill_padded_digits(count, digits_to_fmt, &mut digits);
 
                 let number_local_y = (i as f32).mul_add(35.0, -20.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
-                let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
-
-                for (char_idx, ch) in number_str.chars().enumerate() {
+                for char_idx in 0..digits_to_fmt {
                     let is_dim = if count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
                     let color = if is_dim { dim_color } else { bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
 
-                    actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
+                    actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(digits[char_idx])):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
                     ));
                 }
             }
         } else {
-            let fantastic_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Fantastic).map_or_else(|| color::JUDGMENT_RGBA[0], |info| info.color);
-            let excellent_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Excellent).map_or_else(|| color::JUDGMENT_RGBA[1], |info| info.color);
-            let great_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Great).map_or_else(|| color::JUDGMENT_RGBA[2], |info| info.color);
-            let decent_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Decent).map_or_else(|| color::JUDGMENT_RGBA[3], |info| info.color);
-            let wayoff_color = JUDGMENT_INFO
-                .get(&JudgeGrade::WayOff).map_or_else(|| color::JUDGMENT_RGBA[4], |info| info.color);
-            let miss_color = JUDGMENT_INFO
-                .get(&JudgeGrade::Miss).map_or_else(|| color::JUDGMENT_RGBA[5], |info| info.color);
-
             // Dim colors: reuse the standard evaluation dim palette for blue Fantastic
             // through Miss, and use a dedicated dim color for the white FA+ row.
-            let dim_fantastic = color::JUDGMENT_DIM_EVAL_RGBA[0];
-            let dim_excellent = color::JUDGMENT_DIM_EVAL_RGBA[1];
-            let dim_great = color::JUDGMENT_DIM_EVAL_RGBA[2];
-            let dim_decent = color::JUDGMENT_DIM_EVAL_RGBA[3];
-            let dim_wayoff = color::JUDGMENT_DIM_EVAL_RGBA[4];
-            let dim_miss = color::JUDGMENT_DIM_EVAL_RGBA[5];
             // White Fantastic (FA+ outer window) bright/dim colors.
             let white_fa_color = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
             let dim_white_fa = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
 
             let rows: [(&str, [f32; 4], [f32; 4], u32); 7] = [
-                ("FANTASTIC", fantastic_color, dim_fantastic, wc.w0),
+                ("FANTASTIC", JUDGMENT_INFO[0].color, color::JUDGMENT_DIM_EVAL_RGBA[0], wc.w0),
                 ("FANTASTIC",       white_fa_color, dim_white_fa, wc.w1),
-                ("EXCELLENT", excellent_color, dim_excellent, wc.w2),
-                ("GREAT", great_color, dim_great, wc.w3),
-                ("DECENT", decent_color, dim_decent, wc.w4),
-                ("WAY OFF", wayoff_color, dim_wayoff, wc.w5),
-                ("MISS", miss_color, dim_miss, wc.miss),
+                ("EXCELLENT", JUDGMENT_INFO[1].color, color::JUDGMENT_DIM_EVAL_RGBA[1], wc.w2),
+                ("GREAT", JUDGMENT_INFO[2].color, color::JUDGMENT_DIM_EVAL_RGBA[2], wc.w3),
+                ("DECENT", JUDGMENT_INFO[3].color, color::JUDGMENT_DIM_EVAL_RGBA[3], wc.w4),
+                ("WAY OFF", JUDGMENT_INFO[4].color, color::JUDGMENT_DIM_EVAL_RGBA[4], wc.w5),
+                ("MISS", JUDGMENT_INFO[5].color, color::JUDGMENT_DIM_EVAL_RGBA[5], wc.miss),
             ];
 
             for (i, (label, bright_color, dim_color, count)) in rows.iter().enumerate() {
@@ -245,15 +273,14 @@ pub fn build_stats_pane(
                 // Label: match Simply Love Pane2 labels using 26px spacing.
                 // Original Lua uses 1-based indexing: y = i*26 - 46.
                 // Our rows are 0-based, so use (i+1) here.
-                let label_local_x = (28.0f32).mul_add(1.0, label_shift_x * side_sign) * side_sign;
                 let label_local_y = (i as f32 + 1.0).mul_add(26.0, -46.0);
-                actors.push(act!(text: font("miso"): settext(label.to_string()):
+                actors.push(act!(text: font("miso"): settext(*label):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
                     diffuse(bright_color[0], bright_color[1], bright_color[2], bright_color[3]): z(101)
                 ));
                 if show_10ms_blue && i == 0 {
-                    actors.push(act!(text: font("miso"): settext("(10ms)".to_string()):
+                    actors.push(act!(text: font("miso"): settext("(10ms)"):
                         align(1.0, 0.5):
                         xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y + 10.0):
                         maxwidth(76.0): zoom(sublabel_zoom): horizalign(right):
@@ -262,21 +289,18 @@ pub fn build_stats_pane(
                 }
 
                 // Number
-                let number_str = format!("{count:0digits_to_fmt$}");
-                let first_nonzero = number_str.find(|c: char| c != '0').unwrap_or(number_str.len());
+                let first_nonzero = fill_padded_digits(count, digits_to_fmt, &mut digits);
 
                 // Numbers: match Simply Love Pane2 numbers using 32px spacing.
                 let number_local_y = (i as f32).mul_add(32.0, -24.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
-                let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
-
-                for (char_idx, ch) in number_str.chars().enumerate() {
+                for char_idx in 0..digits_to_fmt {
                     let is_dim = if count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
                     let color = if is_dim { *dim_color } else { *bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
 
-                    actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
+                    actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(digits[char_idx])):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
                     ));
@@ -303,7 +327,7 @@ pub fn build_stats_pane(
                 90.0
             };
             let label_local_y = (i as f32).mul_add(28.0, 41.0);
-            actors.push(act!(text: font("miso"): settext(label.to_string()):
+            actors.push(act!(text: font("miso"): settext(label):
                 align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): horizalign(right): zoom(0.833): z(101)
             ));
 
@@ -323,10 +347,9 @@ pub fn build_stats_pane(
             })
             .mul_add(numbers_frame_zoom, numbers_frame_origin_x);
 
-            let achieved_str = format!("{achieved_rolling:03}");
-            let first_nonzero_achieved = achieved_str.find(|c: char| c != '0').unwrap_or(achieved_str.len());
+            let first_nonzero_achieved = fill_padded_digits(achieved_rolling, 3, &mut digits);
 
-            for (char_idx_from_right, ch) in achieved_str.chars().rev().enumerate() {
+            for char_idx_from_right in 0..3 {
                 let is_dim = if achieved_rolling == 0 {
                     char_idx_from_right > 0
                 } else {
@@ -335,8 +358,9 @@ pub fn build_stats_pane(
                 };
                 let color = if is_dim { GRAY_ACHIEVED } else { white_color };
                 let x_pos = (char_idx_from_right as f32).mul_add(-digit_width, achieved_anchor_x);
+                let digit_idx = 2 - char_idx_from_right;
 
-                actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
+                actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(digits[digit_idx])):
                     align(1.0, 0.5): xy(x_pos, number_final_y): zoom(final_numbers_zoom):
                     diffuse(color[0], color[1], color[2], color[3]): z(101)
                 ));
@@ -353,10 +377,9 @@ pub fn build_stats_pane(
             let mut cursor_x = possible_anchor_x;
 
             // 1. Draw "possible" number (right-most part)
-            let possible_str = format!("{possible_clamped:03}");
-            let first_nonzero_possible = possible_str.find(|c: char| c != '0').unwrap_or(possible_str.len());
+            let first_nonzero_possible = fill_padded_digits(possible_clamped, 3, &mut digits);
 
-            for (char_idx_from_right, ch) in possible_str.chars().rev().enumerate() {
+            for char_idx_from_right in 0..3 {
                 let is_dim = if possible_clamped == 0 {
                     char_idx_from_right > 0
                 } else {
@@ -364,8 +387,9 @@ pub fn build_stats_pane(
                     idx_from_left < first_nonzero_possible
                 };
                 let color = if is_dim { GRAY_POSSIBLE } else { white_color };
+                let digit_idx = 2 - char_idx_from_right;
 
-                actors.push(act!(text: font("wendy_screenevaluation"): settext(ch.to_string()):
+                actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(digits[digit_idx])):
                     align(1.0, 0.5): xy(cursor_x, number_final_y): zoom(final_numbers_zoom):
                     diffuse(color[0], color[1], color[2], color[3]): z(101)
                 ));

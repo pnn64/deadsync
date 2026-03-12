@@ -2,19 +2,21 @@ use crate::assets;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
 use crate::core::space::{Metrics, metrics_for_window};
 use crate::test_support::music_wheel_bench;
+use crate::test_support::pane_stats_bench;
 use crate::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::ui::anim::{EffectMode, EffectState};
 use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 6] = [
+const SCENARIO_NAMES: [&str; 7] = [
     "hud",
     "text",
     "text-ci",
     "resolve-ci",
     "mask",
     music_wheel_bench::SCENARIO_NAME,
+    pane_stats_bench::SCENARIO_NAME,
 ];
 const BENCH_FONT: &str = "bench";
 const MISO_FONT: &str = "miso";
@@ -55,6 +57,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         "resolve-ci" => Some(resolve_ci_scenario(metrics, fonts)),
         "mask" => Some(mask_scenario(metrics, fonts)),
         music_wheel_bench::SCENARIO_NAME => Some(music_wheel_scenario(metrics, fonts)),
+        pane_stats_bench::SCENARIO_NAME => Some(pane_stats_scenario(metrics, fonts)),
         _ => None,
     }
 }
@@ -84,7 +87,7 @@ fn ensure_textures() {
     });
 }
 
-fn bench_fonts() -> HashMap<&'static str, Font> {
+pub(crate) fn bench_fonts() -> HashMap<&'static str, Font> {
     let mut fonts = HashMap::with_capacity(3);
     fonts.insert(BENCH_FONT, bench_font());
     fonts.insert(MISO_FONT, bench_font());
@@ -171,6 +174,18 @@ fn hud_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> Compose
         metrics,
         fonts,
         total_elapsed: 12.5,
+    }
+}
+
+fn pane_stats_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let fixture = pane_stats_bench::fixture();
+    ComposeScenario {
+        name: pane_stats_bench::SCENARIO_NAME,
+        actors: fixture.build(),
+        clear_color: [0.03, 0.04, 0.05, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.41,
     }
 }
 
