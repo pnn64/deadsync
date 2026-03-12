@@ -36,8 +36,8 @@ pub fn fixture() -> GameplayBenchFixture {
         state.stage_intro_text = Arc::from("STAGE 1");
         state.background_texture_key = "bench/gameplay_bg.png".to_string();
         state.autoplay_enabled = true;
-        state.replay_status_text = Some("REPLAY BENCH".to_string());
-        state.sync_overlay_message = Some("Clock drift stable".to_string());
+        state.replay_status_text = Some(Arc::from("REPLAY BENCH"));
+        state.sync_overlay_message = Some(Arc::from("Clock drift stable"));
         state.autosync_mode = gameplay::AutosyncMode::Machine;
         state.initial_global_offset_seconds = -0.021;
         state.global_offset_seconds = -0.012;

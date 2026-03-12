@@ -6413,7 +6413,11 @@ impl App {
                 }
             });
             let replay_status_text = replay_pending.as_ref().map(|payload| {
-                format!("Autoplay - {} {:.2}%", payload.name, payload.score / 100.0)
+                Arc::<str>::from(format!(
+                    "Autoplay - {} {:.2}%",
+                    payload.name,
+                    payload.score / 100.0
+                ))
             });
             if let Some(po_state) = self.state.screens.player_options_state.take() {
                 let song_arc = po_state.song;

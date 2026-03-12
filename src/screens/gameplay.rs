@@ -30,6 +30,37 @@ thread_local! {
     static LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
         RefCell::new(HashMap::with_capacity(1024));
     static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(64));
+    static SYNC_OVERLAY_CACHE: RefCell<TextCache<SyncOverlayTextKey>> =
+        RefCell::new(HashMap::with_capacity(256));
+    static AUTOSYNC_TEXT_CACHE: RefCell<TextCache<AutosyncTextKey>> =
+        RefCell::new(HashMap::with_capacity(256));
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct SyncOverlayTextKey {
+    replay_tag: u8,
+    replay_ptr: usize,
+    replay_len: usize,
+    timing_ptr: usize,
+    timing_len: usize,
+    autosync_ptr: usize,
+    autosync_len: usize,
+    message_ptr: usize,
+    message_len: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct AutosyncTextKey {
+    mode: u8,
+    old_offset_bits: u32,
+    new_offset_bits: u32,
+    stddev_bits: u32,
+    sample_count: u16,
+}
+
+#[inline(always)]
+fn str_key(line: &str) -> (usize, usize) {
+    (line.as_ptr() as usize, line.len())
 }
 
 #[inline(always)]
@@ -107,7 +138,7 @@ fn cached_meter_text(meter: u32) -> Arc<str> {
     cached_text(&METER_TEXT_CACHE, meter, || meter.to_string())
 }
 
-fn sync_overlay_text(state: &State) -> Option<(String, usize)> {
+fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
     let mut lines = [""; 4];
     let mut line_count = 0usize;
     let mut total_len = 0usize;
@@ -135,13 +166,74 @@ fn sync_overlay_text(state: &State) -> Option<(String, usize)> {
     if line_count == 0 {
         return None;
     }
-    let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
-    out.push_str(lines[0]);
-    for line in &lines[1..line_count] {
-        out.push('\n');
-        out.push_str(line);
-    }
-    Some((out, line_count))
+    let replay_line = if state.autoplay_enabled {
+        Some(state.replay_status_text.as_deref().unwrap_or("AutoPlay"))
+    } else {
+        None
+    };
+    let timing_line = timing_tick_status_line(state);
+    let autosync_line = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode);
+    let message_line = state.sync_overlay_message.as_deref();
+    let (replay_ptr, replay_len, replay_tag) = if let Some(line) = replay_line {
+        let (ptr, len) = str_key(line);
+        (
+            ptr,
+            len,
+            if state.replay_status_text.is_some() {
+                2
+            } else {
+                1
+            },
+        )
+    } else {
+        (0, 0, 0)
+    };
+    let (timing_ptr, timing_len) = timing_line.map_or((0, 0), str_key);
+    let (autosync_ptr, autosync_len) = autosync_line.map_or((0, 0), str_key);
+    let (message_ptr, message_len) = message_line.map_or((0, 0), str_key);
+    let key = SyncOverlayTextKey {
+        replay_tag,
+        replay_ptr,
+        replay_len,
+        timing_ptr,
+        timing_len,
+        autosync_ptr,
+        autosync_len,
+        message_ptr,
+        message_len,
+    };
+    let text = cached_text(&SYNC_OVERLAY_CACHE, key, || {
+        let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
+        out.push_str(lines[0]);
+        for line in &lines[1..line_count] {
+            out.push('\n');
+            out.push_str(line);
+        }
+        out
+    });
+    Some((text, line_count))
+}
+
+#[inline(always)]
+fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<str> {
+    let key = AutosyncTextKey {
+        mode: state.autosync_mode as u8,
+        old_offset_bits: old_offset.to_bits(),
+        new_offset_bits: new_offset.to_bits(),
+        stddev_bits: state.autosync_standard_deviation.to_bits(),
+        sample_count: state.autosync_offset_sample_count.min(u16::MAX as usize) as u16,
+    };
+    cached_text(&AUTOSYNC_TEXT_CACHE, key, || {
+        let collecting_sample = state
+            .autosync_offset_sample_count
+            .saturating_add(1)
+            .min(crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT);
+        format!(
+            "Old offset: {old_offset:0.3}\nNew offset: {new_offset:0.3}\nStandard deviation: {stddev:0.3}\nCollecting sample: {collecting_sample} / {max_samples}",
+            stddev = state.autosync_standard_deviation,
+            max_samples = crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT,
+        )
+    })
 }
 
 // --- TRANSITIONS ---
@@ -332,15 +424,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     (state.initial_song_offset_seconds, state.song_offset_seconds)
                 };
-            let collecting_sample = state
-                .autosync_offset_sample_count
-                .saturating_add(1)
-                .min(crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT);
-            let adjustments = format!(
-                "Old offset: {old_offset:0.3}\nNew offset: {new_offset:0.3}\nStandard deviation: {stddev:0.3}\nCollecting sample: {collecting_sample} / {max_samples}",
-                stddev = state.autosync_standard_deviation,
-                max_samples = crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT,
-            );
+            let adjustments = cached_autosync_text(state, old_offset, new_offset);
             actors.push(act!(text:
                 font("miso"):
                 settext(adjustments):

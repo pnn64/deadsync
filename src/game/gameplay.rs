@@ -3489,8 +3489,8 @@ pub struct State {
 
     pub total_elapsed_in_screen: f32,
 
-    pub sync_overlay_message: Option<String>,
-    pub replay_status_text: Option<String>,
+    pub sync_overlay_message: Option<Arc<str>>,
+    pub replay_status_text: Option<Arc<str>>,
     danger_fx: [DangerFx; MAX_PLAYERS],
 
     pub density_graph_first_second: f32,
@@ -4847,7 +4847,7 @@ pub fn init(
     mut player_profiles: [profile::Profile; MAX_PLAYERS],
     replay_edges: Option<Vec<ReplayInputEdge>>,
     replay_offsets: Option<ReplayOffsetSnapshot>,
-    replay_status_text: Option<String>,
+    replay_status_text: Option<Arc<str>>,
     stage_intro_text: Arc<str>,
     lead_in_timing: Option<LeadInTiming>,
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
@@ -8084,7 +8084,7 @@ fn refresh_sync_overlay_message(state: &mut State) {
     if message.is_empty() {
         state.sync_overlay_message = None;
     } else {
-        state.sync_overlay_message = Some(message);
+        state.sync_overlay_message = Some(Arc::<str>::from(message));
     }
 }
 

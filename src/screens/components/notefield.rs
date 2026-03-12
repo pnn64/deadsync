@@ -3246,8 +3246,6 @@ pub fn build(
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 let head_center = [playfield_center_x + col_x_offset, head_draw_y];
                 let elapsed = state.total_elapsed_in_screen;
-                let hold_head_translation =
-                    ns.part_uv_translation(hold_head_part, note.beat, false);
                 let head_slot = if use_active {
                     visuals
                         .head_active
@@ -3284,7 +3282,7 @@ pub fn build(
                     };
                     let uv = translated_uv_rect(
                         head_slot.uv_for_frame_at(frame, uv_elapsed),
-                        hold_head_translation,
+                        ns.part_uv_translation(hold_head_part, note.beat, false),
                     );
                     let h = note_scale_height(head_slot);
                     let note_scale = if h > f32::EPSILON {
@@ -3387,7 +3385,7 @@ pub fn build(
                         };
                         let uv = translated_uv_rect(
                             note_slot.uv_for_frame_at(frame, uv_elapsed),
-                            hold_head_translation,
+                            ns.part_uv_translation(hold_head_part, note.beat, false),
                         );
                         let base_size = scaled_note_slot_size(note_slot, note_scale);
                         let offset_scale = note_scale;
@@ -3476,7 +3474,7 @@ pub fn build(
                     };
                     let uv = translated_uv_rect(
                         note_slot.uv_for_frame_at(frame, uv_elapsed),
-                        hold_head_translation,
+                        ns.part_uv_translation(hold_head_part, note.beat, false),
                     );
                     let size = scale_sprite(note_slot.size());
                     let draw = note_slot.model_draw_at(elapsed, current_beat);
