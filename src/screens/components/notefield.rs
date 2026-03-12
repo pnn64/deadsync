@@ -149,6 +149,20 @@ thread_local! {
     static RUN_TIMER_CACHE: RefCell<TextCache<(i32, i32, bool)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
+    static GAMEPLAY_MODS_CACHE: RefCell<TextCache<GameplayModsTextKey>> = RefCell::new(
+        HashMap::with_capacity_and_hasher(128, BuildHasherDefault::default()),
+    );
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct GameplayModsTextKey {
+    speed_tag: u8,
+    speed_bits: u32,
+    scroll_bits: u8,
+    turn: u8,
+    perspective: u8,
+    mini_percent: i16,
+    visual_delay_ms: i16,
 }
 
 #[inline(always)]
@@ -243,6 +257,50 @@ fn cached_run_timer(seconds: i32, minute_threshold: i32, trailing_space: bool) -
             s
         },
     )
+}
+
+#[inline(always)]
+const fn scroll_option_bits(scroll: profile::ScrollOption) -> u8 {
+    let mut bits = 0u8;
+    if scroll.contains(profile::ScrollOption::Reverse) {
+        bits |= 1 << 0;
+    }
+    if scroll.contains(profile::ScrollOption::Split) {
+        bits |= 1 << 1;
+    }
+    if scroll.contains(profile::ScrollOption::Alternate) {
+        bits |= 1 << 2;
+    }
+    if scroll.contains(profile::ScrollOption::Cross) {
+        bits |= 1 << 3;
+    }
+    if scroll.contains(profile::ScrollOption::Centered) {
+        bits |= 1 << 4;
+    }
+    bits
+}
+
+#[inline(always)]
+fn gameplay_mods_text_key(
+    scroll_speed: ScrollSpeedSetting,
+    profile: &profile::Profile,
+) -> GameplayModsTextKey {
+    let (speed_tag, speed_bits) = match scroll_speed {
+        ScrollSpeedSetting::CMod(value) => (0, value.to_bits()),
+        ScrollSpeedSetting::XMod(value) => (1, value.to_bits()),
+        ScrollSpeedSetting::MMod(value) => (2, value.to_bits()),
+    };
+    GameplayModsTextKey {
+        speed_tag,
+        speed_bits,
+        scroll_bits: scroll_option_bits(profile.scroll_option),
+        turn: profile.turn_option as u8,
+        perspective: profile.perspective as u8,
+        mini_percent: profile.mini_percent.clamp(i16::MIN as i32, i16::MAX as i32) as i16,
+        visual_delay_ms: profile
+            .visual_delay_ms
+            .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -806,40 +864,43 @@ fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
 }
 
 #[inline(always)]
-fn gameplay_mods_text(scroll_speed: ScrollSpeedSetting, profile: &profile::Profile) -> String {
-    let mut parts = Vec::with_capacity(10);
-    parts.push(format_speed_mod_for_display(scroll_speed));
-    let scroll = profile.scroll_option;
-    if scroll.contains(profile::ScrollOption::Reverse) {
-        parts.push("Reverse".to_string());
-    }
-    if scroll.contains(profile::ScrollOption::Split) {
-        parts.push("Split".to_string());
-    }
-    if scroll.contains(profile::ScrollOption::Alternate) {
-        parts.push("Alternate".to_string());
-    }
-    if scroll.contains(profile::ScrollOption::Cross) {
-        parts.push("Cross".to_string());
-    }
-    if scroll.contains(profile::ScrollOption::Centered) {
-        parts.push("Centered".to_string());
-    }
-    if !matches!(profile.turn_option, profile::TurnOption::None) {
-        parts.push(profile.turn_option.to_string());
-    }
-    if profile.mini_percent != 0 {
-        let mut part = profile.mini_percent.to_string();
-        part.push_str("% Mini");
-        parts.push(part);
-    }
-    parts.push(profile.perspective.to_string());
-    if profile.visual_delay_ms != 0 {
-        let mut part = profile.visual_delay_ms.to_string();
-        part.push_str("ms VisualDelay");
-        parts.push(part);
-    }
-    parts.join(", ")
+fn gameplay_mods_text(scroll_speed: ScrollSpeedSetting, profile: &profile::Profile) -> Arc<str> {
+    let key = gameplay_mods_text_key(scroll_speed, profile);
+    cached_text(&GAMEPLAY_MODS_CACHE, key, || {
+        let mut parts = Vec::with_capacity(10);
+        parts.push(format_speed_mod_for_display(scroll_speed));
+        let scroll = profile.scroll_option;
+        if scroll.contains(profile::ScrollOption::Reverse) {
+            parts.push("Reverse".to_string());
+        }
+        if scroll.contains(profile::ScrollOption::Split) {
+            parts.push("Split".to_string());
+        }
+        if scroll.contains(profile::ScrollOption::Alternate) {
+            parts.push("Alternate".to_string());
+        }
+        if scroll.contains(profile::ScrollOption::Cross) {
+            parts.push("Cross".to_string());
+        }
+        if scroll.contains(profile::ScrollOption::Centered) {
+            parts.push("Centered".to_string());
+        }
+        if !matches!(profile.turn_option, profile::TurnOption::None) {
+            parts.push(profile.turn_option.to_string());
+        }
+        if profile.mini_percent != 0 {
+            let mut part = profile.mini_percent.to_string();
+            part.push_str("% Mini");
+            parts.push(part);
+        }
+        parts.push(profile.perspective.to_string());
+        if profile.visual_delay_ms != 0 {
+            let mut part = profile.visual_delay_ms.to_string();
+            part.push_str("ms VisualDelay");
+            parts.push(part);
+        }
+        parts.join(", ")
+    })
 }
 
 #[inline(always)]
@@ -1718,8 +1779,6 @@ pub fn build(
     play_style: profile::PlayStyle,
     center_1player_notefield: bool,
 ) -> (Vec<Actor>, f32) {
-    let mut actors = Vec::new();
-    let mut hud_actors: Vec<Actor> = Vec::new();
     let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
         profile::HoldJudgmentGraphic::Love => Some("hold_judgements/Love 1x2 (doubleres).png"),
         profile::HoldJudgmentGraphic::Mute => Some("hold_judgements/mute 1x2 (doubleres).png"),
@@ -1755,6 +1814,8 @@ pub fn build(
     if num_cols == 0 {
         return (Vec::new(), screen_center_x());
     }
+    let mut actors = Vec::with_capacity((num_cols * 6).max(24));
+    let mut hud_actors: Vec<Actor> = Vec::with_capacity(8);
     let p = &state.players[player_idx];
     let mut model_cache = state.notefield_model_cache[player_idx].borrow_mut();
 
@@ -3153,6 +3214,8 @@ pub fn build(
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 let head_center = [playfield_center_x + col_x_offset, head_draw_y];
                 let elapsed = state.total_elapsed_in_screen;
+                let hold_head_translation =
+                    ns.part_uv_translation(hold_head_part, note.beat, false);
                 let head_slot = if use_active {
                     visuals
                         .head_active
@@ -3189,7 +3252,7 @@ pub fn build(
                     };
                     let uv = translated_uv_rect(
                         head_slot.uv_for_frame_at(frame, uv_elapsed),
-                        ns.part_uv_translation(hold_head_part, note.beat, false),
+                        hold_head_translation,
                     );
                     let h = note_scale_height(head_slot);
                     let note_scale = if h > f32::EPSILON {
@@ -3292,7 +3355,7 @@ pub fn build(
                         };
                         let uv = translated_uv_rect(
                             note_slot.uv_for_frame_at(frame, uv_elapsed),
-                            ns.part_uv_translation(hold_head_part, note.beat, false),
+                            hold_head_translation,
                         );
                         let base_size = scaled_note_slot_size(note_slot, note_scale);
                         let offset_scale = note_scale;
@@ -3381,7 +3444,7 @@ pub fn build(
                     };
                     let uv = translated_uv_rect(
                         note_slot.uv_for_frame_at(frame, uv_elapsed),
-                        ns.part_uv_translation(hold_head_part, note.beat, false),
+                        hold_head_translation,
                     );
                     let size = scale_sprite(note_slot.size());
                     let draw = note_slot.model_draw_at(elapsed, current_beat);
@@ -3470,6 +3533,8 @@ pub fn build(
                     let beat = current_beat;
                     let mine_note_beat = note.beat;
                     let mine_uv_phase = ns.tap_mine_uv_phase(phase_time, beat, mine_note_beat);
+                    let mine_translation =
+                        ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false);
                     let circle_reference = frame_slot
                         .map(scale_mine_slot)
                         .or_else(|| fill_slot.map(scale_mine_slot))
@@ -3509,11 +3574,7 @@ pub fn build(
                                 };
                                 let uv = translated_uv_rect(
                                     slot.uv_for_frame_at(frame, uv_elapsed),
-                                    ns.part_uv_translation(
-                                        NoteAnimPart::Mine,
-                                        mine_note_beat,
-                                        false,
-                                    ),
+                                    mine_translation,
                                 );
                                 let size = scale_mine_slot(slot);
                                 let width = size[0];
@@ -3571,7 +3632,7 @@ pub fn build(
                         };
                         let uv = translated_uv_rect(
                             slot.uv_for_frame_at(frame, uv_elapsed),
-                            ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false),
+                            mine_translation,
                         );
                         let size = scale_mine_slot(slot);
                         let base_rotation = -slot.def.rotation_deg as f32;
@@ -3658,6 +3719,7 @@ pub fn build(
                             NoteAnimPart::HoldHead
                         };
                         let head_phase = ns.part_uv_phase(part, elapsed, current_beat, note.beat);
+                        let head_translation = ns.part_uv_translation(part, note.beat, false);
                         let note_frame = head_slot.frame_index_from_phase(head_phase);
                         let uv_elapsed = if head_slot.model.is_some() {
                             head_phase
@@ -3666,7 +3728,7 @@ pub fn build(
                         };
                         let note_uv = translated_uv_rect(
                             head_slot.uv_for_frame_at(note_frame, uv_elapsed),
-                            ns.part_uv_translation(part, note.beat, false),
+                            head_translation,
                         );
                         let h = note_scale_height(head_slot);
                         let note_scale = if h > f32::EPSILON {
@@ -3705,6 +3767,7 @@ pub fn build(
                     }
                 }
                 let note_idx = col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize;
+                let tap_note_translation = ns.part_uv_translation(tap_note_part, note.beat, false);
                 if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let note_center = [playfield_center_x + col_x_offset, y_pos];
                     let elapsed = state.total_elapsed_in_screen;
@@ -3729,7 +3792,7 @@ pub fn build(
                         };
                         let note_uv = translated_uv_rect(
                             note_slot.uv_for_frame_at(note_frame, uv_elapsed),
-                            ns.part_uv_translation(tap_note_part, note.beat, false),
+                            tap_note_translation,
                         );
                         let base_size = scaled_note_slot_size(note_slot, note_scale);
                         let offset_scale = note_scale;
@@ -3817,7 +3880,7 @@ pub fn build(
                     };
                     let note_uv = translated_uv_rect(
                         note_slot.uv_for_frame_at(note_frame, uv_elapsed),
-                        ns.part_uv_translation(tap_note_part, note.beat, false),
+                        tap_note_translation,
                     );
                     let note_size = scale_sprite(note_slot.size());
                     let center = [playfield_center_x + col_x_offset, y_pos];
