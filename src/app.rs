@@ -4335,18 +4335,21 @@ impl App {
     }
 
     fn sync_gameplay_background(&mut self) {
-        let path_opt = self
-            .state
-            .screens
-            .gameplay_state
-            .as_ref()
-            .and_then(|gs| gs.song.active_background_path(gs.current_beat).cloned());
+        let show_video_backgrounds = config::get().show_video_backgrounds;
+        let path_opt = self.state.screens.gameplay_state.as_ref().and_then(|gs| {
+            gs.song
+                .gameplay_background_path(gs.current_beat, show_video_backgrounds)
+                .cloned()
+        });
         if path_opt.is_some() || self.state.screens.current_screen == CurrentScreen::Gameplay {
             self.apply_dynamic_background(path_opt);
         }
     }
 
     fn active_banner_video_paths(&self) -> Vec<PathBuf> {
+        if !config::get().show_select_music_video_banners {
+            return Vec::new();
+        }
         match self.state.screens.current_screen {
             CurrentScreen::SelectMusic => {
                 let state = &self.state.screens.select_music_state;
@@ -6690,8 +6693,11 @@ impl App {
                     }
                 }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
+                let show_video_backgrounds = config::get().show_video_backgrounds;
                 commands.push(Command::SetDynamicBackground(
-                    gs.song.active_background_path(gs.current_beat).cloned(),
+                    gs.song
+                        .gameplay_background_path(gs.current_beat, show_video_backgrounds)
+                        .cloned(),
                 ));
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(course) = self.state.session.course_run.as_mut() {

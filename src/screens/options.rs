@@ -266,6 +266,7 @@ pub const ITEMS: &[Item] = &[
             "Gameover Screen",
             "Menu Music",
             "Keyboard Features",
+            "Video BGs",
         ],
     },
     Item {
@@ -283,6 +284,7 @@ pub const ITEMS: &[Item] = &[
         help: &[
             "Adjust behavior and display for the Select Music screen.",
             "Show Banners",
+            "Show Video Banners",
             "Show Breakdown",
             "Show Native Language",
             "Music Wheel Speed",
@@ -561,6 +563,7 @@ const INPUT_BACKEND_INLINE: bool = true;
 #[cfg(not(target_os = "windows"))]
 const INPUT_BACKEND_INLINE: bool = false;
 const SELECT_MUSIC_ROW_SHOW_BANNERS: &str = "Show Banners";
+const SELECT_MUSIC_ROW_SHOW_VIDEO_BANNERS: &str = "Show Video Banners";
 const SELECT_MUSIC_ROW_SHOW_BREAKDOWN: &str = "Show Breakdown";
 const SELECT_MUSIC_ROW_BREAKDOWN_STYLE: &str = "Breakdown Style";
 const SELECT_MUSIC_ROW_NATIVE_LANGUAGE: &str = "Show Native Language";
@@ -586,6 +589,7 @@ const MACHINE_ROW_NAME_ENTRY: &str = "Name Entry";
 const MACHINE_ROW_GAMEOVER: &str = "Gameover Screen";
 const MACHINE_ROW_MENU_MUSIC: &str = "Menu Music";
 const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
+const MACHINE_ROW_VIDEO_BGS: &str = "Video BGs";
 const ADVANCED_ROW_DEFAULT_FAIL_TYPE: &str = "Default Fail Type";
 const ADVANCED_ROW_BANNER_CACHE: &str = "Banner Cache";
 const ADVANCED_ROW_CDTITLE_CACHE: &str = "CDTitle Cache";
@@ -850,12 +854,14 @@ const GRAPHICS_ROW_PRESENT_MODE: &str = "Present Mode";
 const GRAPHICS_ROW_MAX_FPS: &str = "Max FPS";
 const GRAPHICS_ROW_MAX_FPS_VALUE: &str = "FPS Limit";
 const GRAPHICS_ROW_VALIDATION_LAYERS: &str = "Validation Layers";
-const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 1;
-const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 2;
-const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 9;
-const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 10;
-const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 12;
-const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 13;
+const SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX: usize = 0;
+const SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX: usize = 1;
+const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 2;
+const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 3;
+const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 10;
+const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 11;
+const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 13;
+const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 14;
 const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
 const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
 const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
@@ -1207,6 +1213,11 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["Off", "On"],
         inline: true,
     },
+    SubRow {
+        label: MACHINE_ROW_VIDEO_BGS,
+        choices: &["Off", "On"],
+        inline: true,
+    },
 ];
 
 pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
@@ -1253,6 +1264,13 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: MACHINE_ROW_KEYBOARD_FEATURES,
         help: &["Enable keyboard-only shortcuts like Ctrl+R restart in gameplay."],
+    },
+    Item {
+        name: MACHINE_ROW_VIDEO_BGS,
+        help: &[
+            "Animate gameplay background movies.",
+            "When Off, video BGs use the first-frame poster instead.",
+        ],
     },
     Item {
         name: "Exit",
@@ -1494,6 +1512,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: SELECT_MUSIC_ROW_SHOW_VIDEO_BANNERS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
         label: SELECT_MUSIC_ROW_SHOW_BREAKDOWN,
         choices: &["No", "Yes"],
         inline: true,
@@ -1564,6 +1587,13 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SELECT_MUSIC_ROW_SHOW_BANNERS,
         help: &["Show song/pack banners or force color fallback banners."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_SHOW_VIDEO_BANNERS,
+        help: &[
+            "Animate MP4 banner files when a selection is settled.",
+            "When No, video banners use the cached poster frame only.",
+        ],
     },
     Item {
         name: SELECT_MUSIC_ROW_SHOW_BREAKDOWN,
@@ -2204,6 +2234,12 @@ fn submenu_visible_row_indices(
         }
         SubmenuKind::Advanced => rows.iter().enumerate().map(|(idx, _)| idx).collect(),
         SubmenuKind::SelectMusic => {
+            let show_banners = state
+                .sub_choice_indices_select_music
+                .get(SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX)
+                .copied()
+                .unwrap_or_else(|| yes_no_choice_index(true));
+            let show_banners = yes_no_from_choice(show_banners);
             let show_breakdown = state
                 .sub_choice_indices_select_music
                 .get(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX)
@@ -2225,7 +2261,9 @@ fn submenu_visible_row_indices(
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, _)| {
-                    if idx == SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX && !show_breakdown {
+                    if idx == SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX && !show_banners {
+                        None
+                    } else if idx == SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX && !show_breakdown {
                         None
                     } else if idx == SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX && !show_previews {
                         None
@@ -3926,6 +3964,12 @@ pub fn init() -> State {
         usize::from(cfg.keyboard_features),
     );
     set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_VIDEO_BGS,
+        usize::from(cfg.show_video_backgrounds),
+    );
+    set_choice_by_label(
         &mut state.sub_choice_indices_advanced,
         ADVANCED_OPTIONS_ROWS,
         ADVANCED_ROW_DEFAULT_FAIL_TYPE,
@@ -4074,6 +4118,12 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_SHOW_BANNERS,
         yes_no_choice_index(cfg.show_select_music_banners),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_SHOW_VIDEO_BANNERS,
+        yes_no_choice_index(cfg.show_select_music_video_banners),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -5429,6 +5479,7 @@ fn apply_submenu_choice_delta(
             MACHINE_ROW_GAMEOVER => config::update_machine_show_gameover(enabled),
             MACHINE_ROW_MENU_MUSIC => config::update_menu_music(enabled),
             MACHINE_ROW_KEYBOARD_FEATURES => config::update_keyboard_features(enabled),
+            MACHINE_ROW_VIDEO_BGS => config::update_show_video_backgrounds(enabled),
             _ => {}
         }
     } else if matches!(kind, SubmenuKind::Advanced) {
@@ -5526,6 +5577,8 @@ fn apply_submenu_choice_delta(
         let row = &rows[row_index];
         if row.label == SELECT_MUSIC_ROW_SHOW_BANNERS {
             config::update_show_select_music_banners(yes_no_from_choice(new_index));
+        } else if row.label == SELECT_MUSIC_ROW_SHOW_VIDEO_BANNERS {
+            config::update_show_select_music_video_banners(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_SHOW_BREAKDOWN {
             config::update_show_select_music_breakdown(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_BREAKDOWN_STYLE {
@@ -6263,6 +6316,7 @@ fn update_advanced_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
 
 const fn select_music_parent_row(actual_idx: usize) -> Option<usize> {
     match actual_idx {
+        SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX => Some(SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX),
         SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX => Some(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX),
         SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX => Some(SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX),
         SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX => Some(SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX),

@@ -541,6 +541,7 @@ pub struct Config {
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
     pub show_select_music_banners: bool,
+    pub show_select_music_video_banners: bool,
     pub show_select_music_breakdown: bool,
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
@@ -549,6 +550,8 @@ pub struct Config {
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart.
     pub keyboard_features: bool,
+    /// Enable or disable animated gameplay background videos.
+    pub show_video_backgrounds: bool,
     /// Startup flow: show Select Profile before continuing.
     pub machine_show_select_profile: bool,
     /// Startup flow: show Select Color before continuing.
@@ -651,6 +654,7 @@ impl Default for Config {
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
             show_select_music_banners: true,
+            show_select_music_video_banners: true,
             show_select_music_breakdown: true,
             show_select_music_cdtitles: true,
             show_music_wheel_grades: true,
@@ -658,6 +662,7 @@ impl Default for Config {
             show_select_music_previews: true,
             select_music_preview_loop: true,
             keyboard_features: true,
+            show_video_backgrounds: true,
             machine_show_select_profile: true,
             machine_show_select_color: true,
             machine_show_select_style: true,
@@ -1188,6 +1193,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicShowVideoBanners={}\n",
+        if default.show_select_music_video_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicShowBreakdown={}\n",
         if default.show_select_music_breakdown {
             "1"
@@ -1376,6 +1389,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "KeyboardFeatures={}\n",
         if default.keyboard_features { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "VideoBackgrounds={}\n",
+        if default.show_video_backgrounds {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!(
         "MachineShowEvalSummary={}\n",
@@ -1736,6 +1757,10 @@ pub fn load() {
                     .get("Options", "SelectMusicShowBanners")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_banners, |v| v != 0);
+                cfg.show_select_music_video_banners = conf
+                    .get("Options", "SelectMusicShowVideoBanners")
+                    .and_then(|v| parse_bool_str(&v))
+                    .unwrap_or(default.show_select_music_video_banners);
                 cfg.show_select_music_breakdown = conf
                     .get("Options", "SelectMusicShowBreakdown")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1895,45 +1920,15 @@ pub fn load() {
                     .unwrap_or(default.show_select_music_gameplay_timer);
                 cfg.keyboard_features = conf
                     .get("Theme", "KeyboardFeatures")
-                    .map(|v| v.trim().to_string())
-                    .and_then(|v| {
-                        if v.is_empty() {
-                            None
-                        } else if v.eq_ignore_ascii_case("true")
-                            || v.eq_ignore_ascii_case("yes")
-                            || v.eq_ignore_ascii_case("on")
-                        {
-                            Some(true)
-                        } else if v.eq_ignore_ascii_case("false")
-                            || v.eq_ignore_ascii_case("no")
-                            || v.eq_ignore_ascii_case("off")
-                        {
-                            Some(false)
-                        } else {
-                            v.parse::<u8>().ok().map(|n| n != 0)
-                        }
-                    })
+                    .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.keyboard_features);
+                cfg.show_video_backgrounds = conf
+                    .get("Theme", "VideoBackgrounds")
+                    .and_then(|v| parse_bool_str(&v))
+                    .unwrap_or(default.show_video_backgrounds);
                 cfg.machine_show_eval_summary = conf
                     .get("Theme", "MachineShowEvalSummary")
-                    .map(|v| v.trim().to_string())
-                    .and_then(|v| {
-                        if v.is_empty() {
-                            None
-                        } else if v.eq_ignore_ascii_case("true")
-                            || v.eq_ignore_ascii_case("yes")
-                            || v.eq_ignore_ascii_case("on")
-                        {
-                            Some(true)
-                        } else if v.eq_ignore_ascii_case("false")
-                            || v.eq_ignore_ascii_case("no")
-                            || v.eq_ignore_ascii_case("off")
-                        {
-                            Some(false)
-                        } else {
-                            v.parse::<u8>().ok().map(|n| n != 0)
-                        }
-                    })
+                    .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.machine_show_eval_summary);
                 cfg.machine_show_name_entry = conf
                     .get("Theme", "MachineShowNameEntry")
@@ -2167,6 +2162,7 @@ pub fn load() {
                     "RateModPreservesPitch",
                     "SelectMusicBreakdown",
                     "SelectMusicShowBanners",
+                    "SelectMusicShowVideoBanners",
                     "SelectMusicShowBreakdown",
                     "SelectMusicShowCDTitles",
                     "SelectMusicWheelGrades",
@@ -2208,6 +2204,9 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "KeyboardFeatures") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "VideoBackgrounds") {
                     miss = true;
                 }
                 if !miss && !has("Theme", "MachineShowEvalSummary") {
@@ -3060,6 +3059,14 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicShowVideoBanners={}\n",
+        if cfg.show_select_music_video_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicShowBreakdown={}\n",
         if cfg.show_select_music_breakdown {
             "1"
@@ -3219,6 +3226,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "KeyboardFeatures={}\n",
         if cfg.keyboard_features { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "VideoBackgrounds={}\n",
+        if cfg.show_video_backgrounds { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "MachineShowEvalSummary={}\n",
@@ -3790,6 +3801,17 @@ pub fn update_show_select_music_banners(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_select_music_video_banners(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_video_banners == enabled {
+            return;
+        }
+        cfg.show_select_music_video_banners = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_cdtitles(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -4053,6 +4075,17 @@ pub fn update_machine_show_select_profile(enabled: bool) {
             return;
         }
         cfg.machine_show_select_profile = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_video_backgrounds(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_video_backgrounds == enabled {
+            return;
+        }
+        cfg.show_video_backgrounds = enabled;
     }
     save_without_keymaps();
 }

@@ -2080,10 +2080,15 @@ impl AssetManager {
         const FALLBACK_KEY: &str = "__black";
 
         if let Some(path) = path_opt {
+            let animate_video = crate::config::get().show_video_backgrounds;
             if self
                 .current_dynamic_background
                 .as_ref()
-                .is_some_and(|state| state.path == path)
+                .is_some_and(|state| {
+                    state.path == path
+                        && (state.video.is_some()
+                            == (animate_video && is_dynamic_video_path(&path)))
+                })
             {
                 return self
                     .current_dynamic_background
@@ -2097,30 +2102,64 @@ impl AssetManager {
 
             if is_dynamic_video_path(&path) {
                 let key = path.to_string_lossy().into_owned();
-                match video::open(&path, true) {
-                    Ok(video) => {
-                        match backend.create_texture(&video.poster, SamplerDesc::default()) {
-                            Ok(texture) => {
-                                self.set_texture_for_key(backend, key.clone(), texture);
-                                register_texture_dims(&key, video.info.width, video.info.height);
-                                self.current_dynamic_background = Some(DynamicBackgroundState {
-                                    key: key.clone(),
-                                    path,
-                                    video: Some(video.player),
-                                });
-                                return key;
-                            }
-                            Err(e) => {
-                                warn!(
-                                    "Failed to create GPU texture for video background {path:?}: {e}. Using fallback."
-                                );
-                                return FALLBACK_KEY.to_string();
+                if animate_video {
+                    match video::open(&path, true) {
+                        Ok(video) => {
+                            match backend.create_texture(&video.poster, SamplerDesc::default()) {
+                                Ok(texture) => {
+                                    self.set_texture_for_key(backend, key.clone(), texture);
+                                    register_texture_dims(
+                                        &key,
+                                        video.info.width,
+                                        video.info.height,
+                                    );
+                                    self.current_dynamic_background =
+                                        Some(DynamicBackgroundState {
+                                            key: key.clone(),
+                                            path,
+                                            video: Some(video.player),
+                                        });
+                                    return key;
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to create GPU texture for video background {path:?}: {e}. Using fallback."
+                                    );
+                                    return FALLBACK_KEY.to_string();
+                                }
                             }
                         }
+                        Err(e) => {
+                            warn!(
+                                "Failed to open video background '{}': {e}. Using fallback.",
+                                path.display()
+                            );
+                            return FALLBACK_KEY.to_string();
+                        }
                     }
+                }
+                match video::load_poster(&path) {
+                    Ok(rgba) => match backend.create_texture(&rgba, SamplerDesc::default()) {
+                        Ok(texture) => {
+                            self.set_texture_for_key(backend, key.clone(), texture);
+                            register_texture_dims(&key, rgba.width(), rgba.height());
+                            self.current_dynamic_background = Some(DynamicBackgroundState {
+                                key: key.clone(),
+                                path,
+                                video: None,
+                            });
+                            return key;
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Failed to create GPU texture for video background poster {path:?}: {e}. Using fallback."
+                            );
+                            return FALLBACK_KEY.to_string();
+                        }
+                    },
                     Err(e) => {
                         warn!(
-                            "Failed to open video background '{}': {e}. Using fallback.",
+                            "Failed to load video background poster '{}': {e}. Using fallback.",
                             path.display()
                         );
                         return FALLBACK_KEY.to_string();

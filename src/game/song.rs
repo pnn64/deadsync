@@ -1,5 +1,5 @@
 use crate::game::chart::ChartData;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
@@ -82,6 +82,18 @@ pub(super) fn set_song_cache(packs: Vec<SongPack>) {
 }
 
 impl SongData {
+    #[inline(always)]
+    fn is_video_path(path: &Path) -> bool {
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| {
+                matches!(
+                    ext.to_ascii_lowercase().as_str(),
+                    "mp4" | "m4v" | "mov" | "webm" | "mkv"
+                )
+            })
+    }
+
     #[inline(always)]
     fn chart_last_beat(chart: &ChartData) -> Option<f32> {
         let mut last_row: Option<usize> = None;
@@ -221,5 +233,16 @@ impl SongData {
             Some(SongBackgroundChangeTarget::Random) => None,
             None => self.background_path.as_ref(),
         }
+    }
+
+    pub fn gameplay_background_path(&self, beat: f32, allow_video: bool) -> Option<&PathBuf> {
+        let path = self.active_background_path(beat)?;
+        if allow_video || !Self::is_video_path(path) {
+            return Some(path);
+        }
+        self.background_path
+            .as_ref()
+            .filter(|fallback| !Self::is_video_path(fallback))
+            .or(Some(path))
     }
 }
