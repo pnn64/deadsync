@@ -98,7 +98,7 @@ struct GameplayScoreboxPane {
     kind: PaneKind,
     mode_text: String,
     border_color: [f32; 4],
-    rows: Vec<GameplayScoreboxRow>,
+    rows: [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES],
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -437,16 +437,13 @@ fn gameplay_status_row(text: &str) -> GameplayScoreboxRow {
     }
 }
 
-#[inline(always)]
-fn padded_rows(mut rows: Vec<GameplayScoreboxRow>) -> Vec<GameplayScoreboxRow> {
-    while rows.len() < SCOREBOX_NUM_ENTRIES {
-        rows.push(gameplay_empty_row());
-    }
-    rows
+fn empty_rows() -> [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES] {
+    std::array::from_fn(|_| gameplay_empty_row())
 }
 
 fn gameplay_status_pane(side: profile::PlayerSide, text: &str) -> GameplayScoreboxPane {
-    let rows = padded_rows(vec![gameplay_status_row(text)]);
+    let mut rows = empty_rows();
+    rows[0] = gameplay_status_row(text);
     let kind = if profile::get_for_side(side).show_ex_score {
         PaneKind::Ex
     } else {
@@ -503,80 +500,104 @@ fn gameplay_row_from_entry(
     }
 }
 
+#[inline(always)]
+fn same_leaderboard_entry(a: &scores::LeaderboardEntry, b: &scores::LeaderboardEntry) -> bool {
+    a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
+}
+
+fn selected_contains(
+    selected: &[Option<&scores::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
+    entry: &scores::LeaderboardEntry,
+) -> bool {
+    selected
+        .iter()
+        .flatten()
+        .any(|chosen| same_leaderboard_entry(chosen, entry))
+}
+
+fn push_selected_entry<'a>(
+    selected: &mut [Option<&'a scores::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
+    len: &mut usize,
+    entry: &'a scores::LeaderboardEntry,
+) {
+    if *len >= SCOREBOX_NUM_ENTRIES || selected_contains(selected, entry) {
+        return;
+    }
+    selected[*len] = Some(entry);
+    *len += 1;
+}
+
+fn next_best_entry<'a>(
+    entries: &'a [scores::LeaderboardEntry],
+    selected: &[Option<&'a scores::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
+    include: impl Fn(&scores::LeaderboardEntry) -> bool,
+) -> Option<&'a scores::LeaderboardEntry> {
+    entries
+        .iter()
+        .filter(|entry| include(entry) && !selected_contains(selected, entry))
+        .min_by_key(|entry| entry.rank)
+}
+
+fn scorebox_rows_for_kind(
+    entries: &[scores::LeaderboardEntry],
+    kind: PaneKind,
+) -> [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES] {
+    let mut rows = empty_rows();
+    if entries.is_empty() {
+        rows[0] = gameplay_status_row("No Scores");
+        return rows;
+    }
+    if !matches!(kind, PaneKind::HardEx) {
+        for (slot, entry) in rows.iter_mut().zip(entries.iter()) {
+            *slot = gameplay_row_from_entry(entry, kind);
+        }
+        return rows;
+    }
+
+    let mut selected: [Option<&scores::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES] =
+        [None; SCOREBOX_NUM_ENTRIES];
+    let mut len = 0usize;
+
+    if let Some(top) = next_best_entry(entries, &selected, |_| true) {
+        push_selected_entry(&mut selected, &mut len, top);
+    }
+    if let Some(self_entry) = next_best_entry(entries, &selected, |entry| entry.is_self) {
+        push_selected_entry(&mut selected, &mut len, self_entry);
+    }
+    while len < SCOREBOX_NUM_ENTRIES {
+        let Some(rival) = next_best_entry(entries, &selected, |entry| entry.is_rival) else {
+            break;
+        };
+        push_selected_entry(&mut selected, &mut len, rival);
+    }
+    while len < SCOREBOX_NUM_ENTRIES {
+        let Some(entry) = next_best_entry(entries, &selected, |_| true) else {
+            break;
+        };
+        push_selected_entry(&mut selected, &mut len, entry);
+    }
+
+    for i in 1..len {
+        let mut j = i;
+        while j > 0 && selected[j - 1].unwrap().rank > selected[j].unwrap().rank {
+            selected.swap(j - 1, j);
+            j -= 1;
+        }
+    }
+
+    for (slot, entry) in rows.iter_mut().zip(selected.into_iter().flatten()) {
+        *slot = gameplay_row_from_entry(entry, kind);
+    }
+    rows
+}
+
 fn gameplay_pane_from_leaderboard(pane: &scores::LeaderboardPane) -> GameplayScoreboxPane {
     let kind = pane_kind(pane);
-    let mode_text = pane_mode_text(kind, pane);
-    let border_color = pane_color(kind);
-
-    fn scorebox_rows_for_kind(
-        entries: &[scores::LeaderboardEntry],
-        kind: PaneKind,
-    ) -> Vec<scores::LeaderboardEntry> {
-        if !matches!(kind, PaneKind::HardEx) {
-            return entries.iter().take(SCOREBOX_NUM_ENTRIES).cloned().collect();
-        }
-
-        let mut sorted = entries.to_vec();
-        sorted.sort_by_key(|entry| entry.rank);
-        let mut out: Vec<scores::LeaderboardEntry> = Vec::with_capacity(SCOREBOX_NUM_ENTRIES);
-
-        // Always include world record/top row first.
-        if let Some(top) = sorted.first().cloned() {
-            out.push(top);
-        }
-
-        // Always include self if present.
-        if let Some(self_entry) = sorted.iter().find(|entry| entry.is_self) {
-            let already = out.iter().any(|e| {
-                e.rank == self_entry.rank && e.name.eq_ignore_ascii_case(self_entry.name.as_str())
-            });
-            if !already && out.len() < SCOREBOX_NUM_ENTRIES {
-                out.push(self_entry.clone());
-            }
-        }
-
-        // Always include rivals when space permits.
-        for rival in sorted.iter().filter(|entry| entry.is_rival) {
-            let already = out
-                .iter()
-                .any(|e| e.rank == rival.rank && e.name.eq_ignore_ascii_case(rival.name.as_str()));
-            if !already && out.len() < SCOREBOX_NUM_ENTRIES {
-                out.push(rival.clone());
-            }
-        }
-
-        // Fill remaining slots with best ranked leftover rows.
-        for entry in &sorted {
-            let already = out
-                .iter()
-                .any(|e| e.rank == entry.rank && e.name.eq_ignore_ascii_case(entry.name.as_str()));
-            if !already {
-                out.push(entry.clone());
-            }
-            if out.len() >= SCOREBOX_NUM_ENTRIES {
-                break;
-            }
-        }
-
-        out.sort_by_key(|entry| entry.rank);
-        out
-    }
-
-    let mut rows = Vec::with_capacity(SCOREBOX_NUM_ENTRIES);
-    if pane.entries.is_empty() {
-        rows.push(gameplay_status_row("No Scores"));
-    } else {
-        let display_entries = scorebox_rows_for_kind(pane.entries.as_slice(), kind);
-        for entry in &display_entries {
-            rows.push(gameplay_row_from_entry(entry, kind));
-        }
-    }
-
     GameplayScoreboxPane {
         kind,
-        mode_text,
-        border_color,
-        rows: padded_rows(rows),
+        mode_text: pane_mode_text(kind, pane),
+        border_color: pane_color(kind),
+        rows: scorebox_rows_for_kind(pane.entries.as_slice(), kind),
     }
 }
 
@@ -1211,6 +1232,24 @@ pub fn gameplay_scorebox_actors_from_snapshot(
     let Some(snapshot) = snapshot else {
         return Vec::new();
     };
+    gameplay_scorebox_actors_from_cached_snapshot(
+        side,
+        snapshot,
+        center_x,
+        center_y,
+        zoom,
+        elapsed_seconds,
+    )
+}
+
+pub(crate) fn gameplay_scorebox_actors_from_cached_snapshot(
+    side: profile::PlayerSide,
+    snapshot: &scores::CachedPlayerLeaderboardData,
+    center_x: f32,
+    center_y: f32,
+    zoom: f32,
+    elapsed_seconds: f32,
+) -> Vec<Actor> {
     let panes = gameplay_panes_from_snapshot(snapshot, side);
     gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
 }
