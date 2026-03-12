@@ -3517,21 +3517,40 @@ pub fn build(
                 }
             }
         }
+        let elapsed = state.total_elapsed_in_screen;
+        let note_display_time = elapsed * note_display_time_scale;
+        let mine_fill_phase = current_beat.rem_euclid(1.0);
+        let draw_hold_same_row = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
+        let draw_roll_same_row = ns.note_display_metrics.draw_roll_head_for_taps_on_same_row;
+        let tap_same_row_means_hold = ns.note_display_metrics.tap_hold_roll_on_row_means_hold;
         // Active arrows
         for col_idx in 0..num_cols {
             let col = col_start + col_idx;
             let column_arrows = &state.arrows[col];
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
+            let col_x_offset = ns.column_xs[col_idx] as f32 * field_zoom;
+            let column_center_x = playfield_center_x + col_x_offset;
+            let fill_slot = ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
+            let fill_gradient_slot = ns
+                .mine_fill_slots
+                .get(col_idx)
+                .and_then(|slot| slot.as_ref());
+            let frame_slot = ns.mine_frames.get(col_idx).and_then(|slot| slot.as_ref());
             for arrow in column_arrows {
                 let travel_offset = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
-                        let note_time_chart = state.note_time_cache[arrow.note_index];
+                        let note_time_chart =
+                            unsafe { *state.note_time_cache.get_unchecked(arrow.note_index) };
                         (note_time_chart - current_time) / rate * pps_chart
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                        let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
+                        let note_disp_beat = unsafe {
+                            *state
+                                .note_display_beat_cache
+                                .get_unchecked(arrow.note_index)
+                        };
                         (note_disp_beat - curr_disp_beat)
                             * ScrollSpeedSetting::ARROW_SPACING
                             * field_zoom
@@ -3544,27 +3563,18 @@ pub fn build(
                     continue;
                 }
                 let note_alpha = 1.0;
-                let col_x_offset = ns.column_xs[col_idx] as f32 * field_zoom;
                 if matches!(arrow.note_type, NoteType::Hold | NoteType::Roll) {
                     continue;
                 }
-                let note = &state.notes[arrow.note_index];
+                // `state.arrows` stores indices produced from `state.notes`, so these are in-bounds.
+                let note = unsafe { state.notes.get_unchecked(arrow.note_index) };
                 let note_rot = calc_note_rotation_z(visual_mask, note.beat, current_beat, false);
                 if matches!(arrow.note_type, NoteType::Mine) {
-                    let fill_slot = ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
-                    let fill_gradient_slot = ns
-                        .mine_fill_slots
-                        .get(col_idx)
-                        .and_then(|slot| slot.as_ref());
-                    let frame_slot = ns.mine_frames.get(col_idx).and_then(|slot| slot.as_ref());
                     if fill_slot.is_none() && frame_slot.is_none() {
                         continue;
                     }
-                    let phase_time = state.total_elapsed_in_screen;
-                    let note_display_time = phase_time * note_display_time_scale;
-                    let beat = current_beat;
                     let mine_note_beat = note.beat;
-                    let mine_uv_phase = ns.tap_mine_uv_phase(phase_time, beat, mine_note_beat);
+                    let mine_uv_phase = ns.tap_mine_uv_phase(elapsed, current_beat, mine_note_beat);
                     let mine_translation =
                         ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false);
                     let circle_reference = frame_slot
@@ -3583,12 +3593,11 @@ pub fn build(
                             let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
                             let height = circle_reference[1] * MINE_CORE_SIZE_RATIO;
                             if width > 0.0 && height > 0.0 {
-                                let fill_phase = current_beat.rem_euclid(1.0);
-                                let frame = gradient_slot.frame_index_from_phase(fill_phase);
-                                let uv = gradient_slot.uv_for_frame_at(frame, phase_time);
+                                let frame = gradient_slot.frame_index_from_phase(mine_fill_phase);
+                                let uv = gradient_slot.uv_for_frame_at(frame, elapsed);
                                 actors.push(act!(sprite(gradient_slot.texture_key_shared()):
                                     align(0.5, 0.5):
-                                    xy(playfield_center_x + col_x_offset, y_pos):
+                                    xy(column_center_x, y_pos):
                                     setsize(width, height):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(1.0, 1.0, 1.0, note_alpha):
@@ -3596,13 +3605,13 @@ pub fn build(
                                 ));
                             }
                         } else {
-                            let draw = slot.model_draw_at(note_display_time, beat);
+                            let draw = slot.model_draw_at(note_display_time, current_beat);
                             if draw.visible {
                                 let frame = slot.frame_index_from_phase(mine_uv_phase);
                                 let uv_elapsed = if slot.model.is_some() {
                                     mine_uv_phase
                                 } else {
-                                    phase_time
+                                    elapsed
                                 };
                                 let uv = translated_uv_rect(
                                     slot.uv_for_frame_at(frame, uv_elapsed),
@@ -3623,7 +3632,7 @@ pub fn build(
                                 };
                                 let sprite_rotation =
                                     base_rotation + legacy_rot + draw.rot[2] + note_rot;
-                                let center = [playfield_center_x + col_x_offset, y_pos];
+                                let center = [column_center_x, y_pos];
                                 if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                                     slot,
                                     draw,
@@ -3652,7 +3661,7 @@ pub fn build(
                         }
                     }
                     if let Some(slot) = frame_slot {
-                        let draw = slot.model_draw_at(note_display_time, beat);
+                        let draw = slot.model_draw_at(note_display_time, current_beat);
                         if !draw.visible {
                             continue;
                         }
@@ -3660,7 +3669,7 @@ pub fn build(
                         let uv_elapsed = if slot.model.is_some() {
                             mine_uv_phase
                         } else {
-                            phase_time
+                            elapsed
                         };
                         let uv = translated_uv_rect(
                             slot.uv_for_frame_at(frame, uv_elapsed),
@@ -3678,7 +3687,7 @@ pub fn build(
                             note_display_time * 120.0
                         };
                         let sprite_rotation = base_rotation + legacy_rot + draw.rot[2] + note_rot;
-                        let center = [playfield_center_x + col_x_offset, y_pos];
+                        let center = [column_center_x, y_pos];
                         if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                             slot,
                             draw,
@@ -3707,29 +3716,27 @@ pub fn build(
                     continue;
                 }
                 let tap_note_part = tap_part_for_note_type(note.note_type);
-                let tap_row_flags = state
-                    .tap_row_hold_roll_flags
-                    .get(arrow.note_index)
-                    .copied()
-                    .unwrap_or(0);
+                let tap_row_flags = unsafe {
+                    *state
+                        .tap_row_hold_roll_flags
+                        .get_unchecked(arrow.note_index)
+                };
                 let tap_replacement_roll = if note.note_type == NoteType::Tap {
                     let same_row_has_hold = tap_row_flags & 0b01 != 0;
                     let same_row_has_roll = tap_row_flags & 0b10 != 0;
-                    let draw_hold = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
-                    let draw_roll = ns.note_display_metrics.draw_roll_head_for_taps_on_same_row;
                     if same_row_has_hold && same_row_has_roll {
-                        if draw_hold && draw_roll {
-                            Some(!ns.note_display_metrics.tap_hold_roll_on_row_means_hold)
-                        } else if draw_hold {
+                        if draw_hold_same_row && draw_roll_same_row {
+                            Some(!tap_same_row_means_hold)
+                        } else if draw_hold_same_row {
                             Some(false)
-                        } else if draw_roll {
+                        } else if draw_roll_same_row {
                             Some(true)
                         } else {
                             None
                         }
-                    } else if same_row_has_hold && draw_hold {
+                    } else if same_row_has_hold && draw_hold_same_row {
                         Some(false)
-                    } else if same_row_has_roll && draw_roll {
+                    } else if same_row_has_roll && draw_roll_same_row {
                         Some(true)
                     } else {
                         None
@@ -3744,7 +3751,6 @@ pub fn build(
                         .as_ref()
                         .or(visuals.head_active.as_ref())
                     {
-                        let elapsed = state.total_elapsed_in_screen;
                         let part = if use_roll_head {
                             NoteAnimPart::RollHead
                         } else {
@@ -3769,7 +3775,7 @@ pub fn build(
                             1.0
                         };
                         let note_size = scaled_note_slot_size(head_slot, note_scale);
-                        let center = [playfield_center_x + col_x_offset, y_pos];
+                        let center = [column_center_x, y_pos];
                         let draw = head_slot.model_draw_at(elapsed, current_beat);
                         if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                             head_slot,
@@ -3801,8 +3807,7 @@ pub fn build(
                 let note_idx = col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 let tap_note_translation = ns.part_uv_translation(tap_note_part, note.beat, false);
                 if let Some(note_slots) = ns.note_layers.get(note_idx) {
-                    let note_center = [playfield_center_x + col_x_offset, y_pos];
-                    let elapsed = state.total_elapsed_in_screen;
+                    let note_center = [column_center_x, y_pos];
                     let note_uv_phase =
                         ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
                     let primary_h = note_slots.first().map(note_scale_height).unwrap_or(1.0);
@@ -3901,7 +3906,6 @@ pub fn build(
                         }
                     }
                 } else if let Some(note_slot) = ns.notes.get(note_idx) {
-                    let elapsed = state.total_elapsed_in_screen;
                     let note_uv_phase =
                         ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
                     let note_frame = note_slot.frame_index_from_phase(note_uv_phase);
@@ -3915,7 +3919,7 @@ pub fn build(
                         tap_note_translation,
                     );
                     let note_size = scale_sprite(note_slot.size());
-                    let center = [playfield_center_x + col_x_offset, y_pos];
+                    let center = [column_center_x, y_pos];
                     let draw = note_slot.model_draw_at(elapsed, current_beat);
                     if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                         note_slot,

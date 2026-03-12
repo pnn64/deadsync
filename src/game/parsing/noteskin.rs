@@ -386,6 +386,7 @@ impl SpriteSlot {
 
         let mut out = self.model_draw;
         let local = time.max(0.0);
+        let effect = self.model_effect;
 
         for seg in self.model_timeline.iter() {
             let start = seg.start.max(0.0);
@@ -432,7 +433,6 @@ impl SpriteSlot {
             out.rot[2] = (out.rot[2] + rot_z).rem_euclid(360.0);
         }
 
-        let effect = self.model_effect;
         if matches!(effect.mode, ModelEffectMode::Spin) {
             let clock = ui_anim::effect_clock_units(effect, time, beat);
             out.rot[0] = (out.rot[0] + effect.magnitude[0] * clock).rem_euclid(360.0);
