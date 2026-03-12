@@ -4,6 +4,7 @@ use crate::core::space::{Metrics, metrics_for_window};
 use crate::test_support::density_graph_bench;
 use crate::test_support::density_graph_life_bench;
 use crate::test_support::music_wheel_bench;
+use crate::test_support::notefield_bench;
 use crate::test_support::pane_stats_bench;
 use crate::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::ui::anim::{EffectMode, EffectState};
@@ -11,7 +12,7 @@ use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 9] = [
+const SCENARIO_NAMES: [&str; 10] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
     "hud",
@@ -20,10 +21,20 @@ const SCENARIO_NAMES: [&str; 9] = [
     "resolve-ci",
     "mask",
     music_wheel_bench::SCENARIO_NAME,
+    notefield_bench::SCENARIO_NAME,
     pane_stats_bench::SCENARIO_NAME,
 ];
 const BENCH_FONT: &str = "bench";
 const MISO_FONT: &str = "miso";
+const GAME_FONT: &str = "game";
+const WENDY_FONT: &str = "wendy";
+const WENDY_COMBO_FONT: &str = "wendy_combo";
+const COMBO_ARIAL_ROUNDED_FONT: &str = "combo_arial_rounded";
+const COMBO_ASAP_FONT: &str = "combo_asap";
+const COMBO_BEBAS_NEUE_FONT: &str = "combo_bebas_neue";
+const COMBO_SOURCE_CODE_FONT: &str = "combo_source_code";
+const COMBO_WENDY_CURSED_FONT: &str = "combo_wendy_cursed";
+const COMBO_WORK_FONT: &str = "combo_work";
 const SCREENEVAL_FONT: &str = "wendy_screenevaluation";
 const FONT_MAIN: &str = "bench/font_main.png";
 const FONT_STROKE: &str = "bench/font_stroke.png";
@@ -65,6 +76,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         "resolve-ci" => Some(resolve_ci_scenario(metrics, fonts)),
         "mask" => Some(mask_scenario(metrics, fonts)),
         music_wheel_bench::SCENARIO_NAME => Some(music_wheel_scenario(metrics, fonts)),
+        notefield_bench::SCENARIO_NAME => Some(notefield_scenario(metrics, fonts)),
         pane_stats_bench::SCENARIO_NAME => Some(pane_stats_scenario(metrics, fonts)),
         _ => None,
     }
@@ -97,6 +109,18 @@ fn density_graph_life_scenario(
     }
 }
 
+fn notefield_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let fixture = notefield_bench::fixture();
+    ComposeScenario {
+        name: notefield_bench::SCENARIO_NAME,
+        actors: fixture.build(true),
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.0,
+    }
+}
+
 fn ensure_textures() {
     static ONCE: OnceLock<()> = OnceLock::new();
     ONCE.get_or_init(|| {
@@ -123,10 +147,23 @@ fn ensure_textures() {
 }
 
 pub(crate) fn bench_fonts() -> HashMap<&'static str, Font> {
-    let mut fonts = HashMap::with_capacity(3);
-    fonts.insert(BENCH_FONT, bench_font());
-    fonts.insert(MISO_FONT, bench_font());
-    fonts.insert(SCREENEVAL_FONT, bench_font());
+    let mut fonts = HashMap::with_capacity(12);
+    for name in [
+        BENCH_FONT,
+        MISO_FONT,
+        GAME_FONT,
+        WENDY_FONT,
+        WENDY_COMBO_FONT,
+        COMBO_ARIAL_ROUNDED_FONT,
+        COMBO_ASAP_FONT,
+        COMBO_BEBAS_NEUE_FONT,
+        COMBO_SOURCE_CODE_FONT,
+        COMBO_WENDY_CURSED_FONT,
+        COMBO_WORK_FONT,
+        SCREENEVAL_FONT,
+    ] {
+        fonts.insert(name, bench_font());
+    }
     fonts
 }
 

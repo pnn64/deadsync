@@ -111,6 +111,7 @@ const Z_ERROR_BAR_TEXT_BACK: i16 = 90;
 const VISUAL_MASK_DIZZY: u16 = 1 << 1;
 const VISUAL_MASK_CONFUSION: u16 = 1 << 2;
 const VISUAL_MASK_BIG: u16 = 1 << 3;
+const MODEL_MESH_CACHE_LIMIT: usize = 512;
 
 type TextCache<K> = HashMap<K, Arc<str>, BuildHasherDefault<XxHash64>>;
 
@@ -263,16 +264,21 @@ struct ModelMeshCacheKey {
 }
 
 #[derive(Default)]
-struct ModelMeshCache {
+pub(crate) struct ModelMeshCache {
     entries: HashMap<ModelMeshCacheKey, Arc<[TexturedMeshVertex]>, BuildHasherDefault<XxHash64>>,
 }
 
 impl ModelMeshCache {
     #[inline(always)]
-    fn with_capacity(capacity: usize) -> Self {
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             entries: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
         }
+    }
+
+    #[inline(always)]
+    pub(crate) fn clear(&mut self) {
+        self.entries.clear();
     }
 
     #[inline(always)]
@@ -288,6 +294,9 @@ impl ModelMeshCache {
             return vertices.clone();
         }
         let vertices = build();
+        if self.entries.len() >= MODEL_MESH_CACHE_LIMIT {
+            self.entries.clear();
+        }
         self.entries.insert(key, vertices.clone());
         vertices
     }
@@ -1711,7 +1720,6 @@ pub fn build(
 ) -> (Vec<Actor>, f32) {
     let mut actors = Vec::new();
     let mut hud_actors: Vec<Actor> = Vec::new();
-    let mut model_cache = ModelMeshCache::with_capacity(96);
     let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
         profile::HoldJudgmentGraphic::Love => Some("hold_judgements/Love 1x2 (doubleres).png"),
         profile::HoldJudgmentGraphic::Mute => Some("hold_judgements/mute 1x2 (doubleres).png"),
@@ -1748,6 +1756,7 @@ pub fn build(
         return (Vec::new(), screen_center_x());
     }
     let p = &state.players[player_idx];
+    let mut model_cache = state.notefield_model_cache[player_idx].borrow_mut();
 
     // NoteFieldOffsetX is stored as a non-negative magnitude; for a single P1-style field,
     // apply the player-side sign flip used by Simply Love (P1=-, P2=+).

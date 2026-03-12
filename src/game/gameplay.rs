@@ -21,11 +21,15 @@ use crate::game::{
     profile,
     scroll::ScrollSpeedSetting,
 };
-use crate::screens::components::density_graph::{self, DensityHistCache};
+use crate::screens::components::{
+    density_graph::{self, DensityHistCache},
+    notefield::ModelMeshCache,
+};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
 use log::{debug, trace, warn};
 use rssp::streams::StreamSegment;
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
@@ -3462,6 +3466,7 @@ pub struct State {
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     pub scroll_reference_bpm: f32,
     pub field_zoom: [f32; MAX_PLAYERS],
+    pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     pub scroll_pixels_per_second: [f32; MAX_PLAYERS],
     pub scroll_travel_time: [f32; MAX_PLAYERS],
     pub draw_distance_before_targets: [f32; MAX_PLAYERS],
@@ -4890,6 +4895,14 @@ pub fn init(
         let skin = player_profiles[player].noteskin.to_string();
         noteskin::load_itg_skin(&style, &skin).ok()
     });
+    let notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            RefCell::new(if player < num_players {
+                ModelMeshCache::with_capacity(96)
+            } else {
+                ModelMeshCache::default()
+            })
+        });
 
     let field_zoom: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -5745,6 +5758,7 @@ pub fn init(
         scroll_speed,
         scroll_reference_bpm: reference_bpm,
         field_zoom,
+        notefield_model_cache,
         scroll_pixels_per_second: pixels_per_second,
         scroll_travel_time: travel_time,
         draw_distance_before_targets,
