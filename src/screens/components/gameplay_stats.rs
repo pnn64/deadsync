@@ -126,6 +126,88 @@ fn game_time_key(seconds: f32, total_seconds: f32) -> (u32, u8) {
 }
 
 #[inline(always)]
+fn push_versus_count_texts(
+    actors: &mut Vec<Actor>,
+    is_p1: bool,
+    anchor_x: f32,
+    y: f32,
+    digit_w: f32,
+    numbers_zoom_x: f32,
+    numbers_zoom_y: f32,
+    dim_text: Arc<str>,
+    bright_text: Arc<str>,
+    dim: [f32; 4],
+    bright: [f32; 4],
+    z: i16,
+) {
+    let dim_len = dim_text.len() as f32;
+    let bright_len = bright_text.len() as f32;
+    if is_p1 {
+        if !dim_text.is_empty() {
+            let mut a = act!(text:
+                font("wendy_screenevaluation"): settext(dim_text):
+                align(0.0, 0.5): xy(anchor_x, y):
+                zoom(numbers_zoom_y):
+                diffuse(dim[0], dim[1], dim[2], dim[3]):
+                z(z):
+                horizalign(left)
+            );
+            if let Actor::Text { scale, .. } = &mut a {
+                scale[0] = numbers_zoom_x;
+                scale[1] = numbers_zoom_y;
+            }
+            actors.push(a);
+        }
+        if !bright_text.is_empty() {
+            let mut a = act!(text:
+                font("wendy_screenevaluation"): settext(bright_text):
+                align(0.0, 0.5): xy(anchor_x + dim_len * digit_w, y):
+                zoom(numbers_zoom_y):
+                diffuse(bright[0], bright[1], bright[2], bright[3]):
+                z(z):
+                horizalign(left)
+            );
+            if let Actor::Text { scale, .. } = &mut a {
+                scale[0] = numbers_zoom_x;
+                scale[1] = numbers_zoom_y;
+            }
+            actors.push(a);
+        }
+    } else {
+        if !bright_text.is_empty() {
+            let mut a = act!(text:
+                font("wendy_screenevaluation"): settext(bright_text):
+                align(1.0, 0.5): xy(anchor_x, y):
+                zoom(numbers_zoom_y):
+                diffuse(bright[0], bright[1], bright[2], bright[3]):
+                z(z):
+                horizalign(right)
+            );
+            if let Actor::Text { scale, .. } = &mut a {
+                scale[0] = numbers_zoom_x;
+                scale[1] = numbers_zoom_y;
+            }
+            actors.push(a);
+        }
+        if !dim_text.is_empty() {
+            let mut a = act!(text:
+                font("wendy_screenevaluation"): settext(dim_text):
+                align(1.0, 0.5): xy(anchor_x - bright_len * digit_w, y):
+                zoom(numbers_zoom_y):
+                diffuse(dim[0], dim[1], dim[2], dim[3]):
+                z(z):
+                horizalign(right)
+            );
+            if let Actor::Text { scale, .. } = &mut a {
+                scale[0] = numbers_zoom_x;
+                scale[1] = numbers_zoom_y;
+            }
+            actors.push(a);
+        }
+    }
+}
+
+#[inline(always)]
 fn cached_game_time_width_for_key(key: (u32, u8), asset_manager: &AssetManager) -> f32 {
     if let Some(w) = GAME_TIME_WIDTH_CACHE.with(|cache| cache.borrow().get(&key).copied()) {
         return w;
@@ -310,40 +392,6 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
         z(z_bg)
     ));
 
-    let fantastic_color = JUDGMENT_INFO
-        .get(&JudgeGrade::Fantastic)
-        .map(|info| info.color)
-        .unwrap_or_else(|| color::JUDGMENT_RGBA[0]);
-    let excellent_color = JUDGMENT_INFO
-        .get(&JudgeGrade::Excellent)
-        .map(|info| info.color)
-        .unwrap_or_else(|| color::JUDGMENT_RGBA[1]);
-    let great_color = JUDGMENT_INFO
-        .get(&JudgeGrade::Great)
-        .map(|info| info.color)
-        .unwrap_or_else(|| color::JUDGMENT_RGBA[2]);
-    let decent_color = JUDGMENT_INFO
-        .get(&JudgeGrade::Decent)
-        .map(|info| info.color)
-        .unwrap_or_else(|| color::JUDGMENT_RGBA[3]);
-    let wayoff_color = JUDGMENT_INFO
-        .get(&JudgeGrade::WayOff)
-        .map(|info| info.color)
-        .unwrap_or_else(|| color::JUDGMENT_RGBA[4]);
-    let miss_color = JUDGMENT_INFO
-        .get(&JudgeGrade::Miss)
-        .map(|info| info.color)
-        .unwrap_or_else(|| color::JUDGMENT_RGBA[5]);
-
-    let dim_fantastic = color::JUDGMENT_DIM_RGBA[0];
-    let dim_excellent = color::JUDGMENT_DIM_RGBA[1];
-    let dim_great = color::JUDGMENT_DIM_RGBA[2];
-    let dim_decent = color::JUDGMENT_DIM_RGBA[3];
-    let dim_wayoff = color::JUDGMENT_DIM_RGBA[4];
-    let dim_miss = color::JUDGMENT_DIM_RGBA[5];
-    let white_fa_color = color::JUDGMENT_FA_PLUS_WHITE_RGBA;
-    let dim_white_fa = color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA;
-
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("wendy_screenevaluation", |f| {
             let digit_w =
@@ -384,174 +432,71 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                     let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
                     let wc =
                         gameplay::display_window_counts(state, player_idx, Some(blue_window_ms));
-                    let rows: [([f32; 4], [f32; 4], u32); 7] = [
-                        (fantastic_color, dim_fantastic, wc.w0),
-                        (white_fa_color, dim_white_fa, wc.w1),
-                        (excellent_color, dim_excellent, wc.w2),
-                        (great_color, dim_great, wc.w3),
-                        (decent_color, dim_decent, wc.w4),
-                        (wayoff_color, dim_wayoff, wc.w5),
-                        (miss_color, dim_miss, wc.miss),
+                    let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
+                    let bright_colors = [
+                        color::JUDGMENT_RGBA[0],
+                        color::JUDGMENT_FA_PLUS_WHITE_RGBA,
+                        color::JUDGMENT_RGBA[1],
+                        color::JUDGMENT_RGBA[2],
+                        color::JUDGMENT_RGBA[3],
+                        color::JUDGMENT_RGBA[4],
+                        color::JUDGMENT_RGBA[5],
                     ];
-                    for (row_i, (bright, dim, count)) in rows.iter().enumerate() {
+                    let dim_colors = [
+                        color::JUDGMENT_DIM_RGBA[0],
+                        color::JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA,
+                        color::JUDGMENT_DIM_RGBA[1],
+                        color::JUDGMENT_DIM_RGBA[2],
+                        color::JUDGMENT_DIM_RGBA[3],
+                        color::JUDGMENT_DIM_RGBA[4],
+                        color::JUDGMENT_DIM_RGBA[5],
+                    ];
+                    for row_i in 0..counts.len() {
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let (dim_text, bright_text) = cached_padded_runs(*count, digits);
-                        let dim_len = dim_text.len() as f32;
-                        let bright_len = bright_text.len() as f32;
-
-                        if is_p1 {
-                            if !dim_text.is_empty() {
-                                let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(dim_text):
-                                    align(0.0, 0.5): xy(anchor_x, y):
-                                    zoom(numbers_zoom_y):
-                                    diffuse(dim[0], dim[1], dim[2], dim[3]):
-                                    z(z_fg):
-                                    horizalign(left)
-                                );
-                                if let Actor::Text { scale, .. } = &mut a {
-                                    scale[0] = numbers_zoom_x;
-                                    scale[1] = numbers_zoom_y;
-                                }
-                                actors.push(a);
-                            }
-                            if !bright_text.is_empty() {
-                                let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(bright_text):
-                                    align(0.0, 0.5): xy(anchor_x + dim_len * digit_w, y):
-                                    zoom(numbers_zoom_y):
-                                    diffuse(bright[0], bright[1], bright[2], bright[3]):
-                                    z(z_fg):
-                                    horizalign(left)
-                                );
-                                if let Actor::Text { scale, .. } = &mut a {
-                                    scale[0] = numbers_zoom_x;
-                                    scale[1] = numbers_zoom_y;
-                                }
-                                actors.push(a);
-                            }
-                        } else {
-                            if !bright_text.is_empty() {
-                                let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(bright_text):
-                                    align(1.0, 0.5): xy(anchor_x, y):
-                                    zoom(numbers_zoom_y):
-                                    diffuse(bright[0], bright[1], bright[2], bright[3]):
-                                    z(z_fg):
-                                    horizalign(right)
-                                );
-                                if let Actor::Text { scale, .. } = &mut a {
-                                    scale[0] = numbers_zoom_x;
-                                    scale[1] = numbers_zoom_y;
-                                }
-                                actors.push(a);
-                            }
-                            if !dim_text.is_empty() {
-                                let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(dim_text):
-                                    align(1.0, 0.5): xy(anchor_x - bright_len * digit_w, y):
-                                    zoom(numbers_zoom_y):
-                                    diffuse(dim[0], dim[1], dim[2], dim[3]):
-                                    z(z_fg):
-                                    horizalign(right)
-                                );
-                                if let Actor::Text { scale, .. } = &mut a {
-                                    scale[0] = numbers_zoom_x;
-                                    scale[1] = numbers_zoom_y;
-                                }
-                                actors.push(a);
-                            }
-                        }
+                        let (dim_text, bright_text) = cached_padded_runs(counts[row_i], digits);
+                        push_versus_count_texts(
+                            &mut actors,
+                            is_p1,
+                            anchor_x,
+                            y,
+                            digit_w,
+                            numbers_zoom_x,
+                            numbers_zoom_y,
+                            dim_text,
+                            bright_text,
+                            dim_colors[row_i],
+                            bright_colors[row_i],
+                            z_fg,
+                        );
                     }
                 } else {
-                    for (row_i, grade) in JUDGMENT_ORDER.iter().enumerate() {
-                        let count = gameplay::display_judgment_count(state, player_idx, *grade);
-                        let bright = match grade {
-                            JudgeGrade::Fantastic => fantastic_color,
-                            JudgeGrade::Excellent => excellent_color,
-                            JudgeGrade::Great => great_color,
-                            JudgeGrade::Decent => decent_color,
-                            JudgeGrade::WayOff => wayoff_color,
-                            JudgeGrade::Miss => miss_color,
-                        };
-                        let dim = match row_i {
-                            0 => dim_fantastic,
-                            1 => dim_excellent,
-                            2 => dim_great,
-                            3 => dim_decent,
-                            4 => dim_wayoff,
-                            _ => dim_miss,
-                        };
+                    let counts = [
+                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Fantastic),
+                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Excellent),
+                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Great),
+                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Decent),
+                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::WayOff),
+                        gameplay::display_judgment_count(state, player_idx, JudgeGrade::Miss),
+                    ];
+                    for row_i in 0..counts.len() {
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let (dim_text, bright_text) = cached_padded_runs(count, digits);
-                        let dim_len = dim_text.len() as f32;
-                        let bright_len = bright_text.len() as f32;
-
-                        if is_p1 {
-                            if !dim_text.is_empty() {
-                                let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(dim_text):
-                                    align(0.0, 0.5): xy(anchor_x, y):
-                                    zoom(numbers_zoom_y):
-                                    diffuse(dim[0], dim[1], dim[2], dim[3]):
-                                    z(z_fg):
-                                    horizalign(left)
-                                );
-                                if let Actor::Text { scale, .. } = &mut a {
-                                    scale[0] = numbers_zoom_x;
-                                    scale[1] = numbers_zoom_y;
-                                }
-                                actors.push(a);
-                            }
-                            if !bright_text.is_empty() {
-                                let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(bright_text):
-                                    align(0.0, 0.5): xy(anchor_x + dim_len * digit_w, y):
-                                    zoom(numbers_zoom_y):
-                                    diffuse(bright[0], bright[1], bright[2], bright[3]):
-                                    z(z_fg):
-                                    horizalign(left)
-                                );
-                                if let Actor::Text { scale, .. } = &mut a {
-                                    scale[0] = numbers_zoom_x;
-                                    scale[1] = numbers_zoom_y;
-                                }
-                                actors.push(a);
-                            }
-                        } else {
-                            if !bright_text.is_empty() {
-                                let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(bright_text):
-                                    align(1.0, 0.5): xy(anchor_x, y):
-                                    zoom(numbers_zoom_y):
-                                    diffuse(bright[0], bright[1], bright[2], bright[3]):
-                                    z(z_fg):
-                                    horizalign(right)
-                                );
-                                if let Actor::Text { scale, .. } = &mut a {
-                                    scale[0] = numbers_zoom_x;
-                                    scale[1] = numbers_zoom_y;
-                                }
-                                actors.push(a);
-                            }
-                            if !dim_text.is_empty() {
-                                let mut a = act!(text:
-                                    font("wendy_screenevaluation"): settext(dim_text):
-                                    align(1.0, 0.5): xy(anchor_x - bright_len * digit_w, y):
-                                    zoom(numbers_zoom_y):
-                                    diffuse(dim[0], dim[1], dim[2], dim[3]):
-                                    z(z_fg):
-                                    horizalign(right)
-                                );
-                                if let Actor::Text { scale, .. } = &mut a {
-                                    scale[0] = numbers_zoom_x;
-                                    scale[1] = numbers_zoom_y;
-                                }
-                                actors.push(a);
-                            }
-                        }
+                        let (dim_text, bright_text) = cached_padded_runs(counts[row_i], digits);
+                        push_versus_count_texts(
+                            &mut actors,
+                            is_p1,
+                            anchor_x,
+                            y,
+                            digit_w,
+                            numbers_zoom_x,
+                            numbers_zoom_y,
+                            dim_text,
+                            bright_text,
+                            color::JUDGMENT_DIM_RGBA[row_i],
+                            color::JUDGMENT_RGBA[row_i],
+                            z_fg,
+                        );
                     }
                 }
             }

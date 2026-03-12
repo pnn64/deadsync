@@ -6,6 +6,7 @@ use crate::test_support::density_graph_life_bench;
 use crate::test_support::gameplay_bench;
 use crate::test_support::gameplay_stats_bench;
 use crate::test_support::gameplay_stats_double_bench;
+use crate::test_support::gameplay_stats_versus_bench;
 use crate::test_support::gs_scorebox_bench;
 use crate::test_support::music_wheel_bench;
 use crate::test_support::notefield_bench;
@@ -16,12 +17,13 @@ use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 14] = [
+const SCENARIO_NAMES: [&str; 15] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
     gameplay_bench::SCENARIO_NAME,
     gameplay_stats_bench::SCENARIO_NAME,
     gameplay_stats_double_bench::SCENARIO_NAME,
+    gameplay_stats_versus_bench::SCENARIO_NAME,
     gs_scorebox_bench::SCENARIO_NAME,
     "hud",
     "text",
@@ -89,6 +91,9 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         gameplay_stats_double_bench::SCENARIO_NAME => {
             Some(gameplay_stats_double_scenario(metrics, fonts))
         }
+        gameplay_stats_versus_bench::SCENARIO_NAME => {
+            Some(gameplay_stats_versus_scenario(metrics, fonts))
+        }
         gs_scorebox_bench::SCENARIO_NAME => Some(gs_scorebox_scenario(metrics, fonts)),
         "hud" => Some(hud_scenario(metrics, fonts)),
         "text" => Some(text_scenario(metrics, fonts)),
@@ -151,6 +156,21 @@ fn gameplay_stats_double_scenario(
     let fixture = gameplay_stats_double_bench::fixture();
     ComposeScenario {
         name: gameplay_stats_double_bench::SCENARIO_NAME,
+        actors: fixture.build(),
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.0,
+    }
+}
+
+fn gameplay_stats_versus_scenario(
+    metrics: Metrics,
+    fonts: HashMap<&'static str, Font>,
+) -> ComposeScenario {
+    let fixture = gameplay_stats_versus_bench::fixture();
+    ComposeScenario {
+        name: gameplay_stats_versus_bench::SCENARIO_NAME,
         actors: fixture.build(),
         clear_color: [0.0, 0.0, 0.0, 1.0],
         metrics,
