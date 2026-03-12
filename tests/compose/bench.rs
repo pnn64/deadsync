@@ -1,6 +1,6 @@
 use deadsync::assets::AssetManager;
 use deadsync::core::gfx::RenderList;
-use deadsync::test_support::{compose_case, compose_scenarios};
+use deadsync::test_support::{compose_case, compose_scenarios, music_wheel_bench};
 use deadsync::ui::{actors::Actor, compose};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -54,6 +54,7 @@ struct Args {
     cache_mode: CacheMode,
     phase: Phase,
     write_case: Option<String>,
+    write_actors_output: Option<String>,
     write_output: Option<String>,
     write_resolved_output: Option<String>,
 }
@@ -66,6 +67,7 @@ enum CacheMode {
 
 #[derive(Clone, Copy)]
 enum Phase {
+    Actors,
     Compose,
     Resolve,
     ComposeResolve,
@@ -82,7 +84,7 @@ struct BenchmarkResult {
     elapsed_s: f64,
     alloc: AllocDelta,
     checksum: u64,
-    verification: Option<VerificationResult>,
+    verifications: Vec<VerificationResult>,
 }
 
 struct VerificationResult {
@@ -111,11 +113,12 @@ impl CacheMode {
 impl Phase {
     fn parse(value: &str) -> Result<Self, Box<dyn Error>> {
         match value {
+            "actors" => Ok(Self::Actors),
             "compose" => Ok(Self::Compose),
             "resolve" => Ok(Self::Resolve),
             "compose-resolve" => Ok(Self::ComposeResolve),
             _ => Err(format!(
-                "unknown --phase value '{value}', expected compose, resolve, or compose-resolve"
+                "unknown --phase value '{value}', expected actors, compose, resolve, or compose-resolve"
             )
             .into()),
         }
@@ -123,6 +126,7 @@ impl Phase {
 
     const fn as_str(self) -> &'static str {
         match self {
+            Self::Actors => "actors",
             Self::Compose => "compose",
             Self::Resolve => "resolve",
             Self::ComposeResolve => "compose-resolve",
@@ -130,7 +134,7 @@ impl Phase {
     }
 
     const fn needs_compose_output(self) -> bool {
-        !matches!(self, Self::Compose)
+        matches!(self, Self::Resolve | Self::ComposeResolve)
     }
 }
 
@@ -250,6 +254,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     if args.case_path.is_none()
         && args.scenario == "all"
         && (args.write_case.is_some()
+            || args.write_actors_output.is_some()
             || args.write_output.is_some()
             || args.write_resolved_output.is_some())
     {
@@ -276,6 +281,7 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
     })?;
     let capture = if args.phase.needs_compose_output()
         || args.write_case.is_some()
+        || args.write_actors_output.is_some()
         || args.write_output.is_some()
         || args.write_resolved_output.is_some()
     {
@@ -289,6 +295,23 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
     }
 
     match args.phase {
+        Phase::Actors => {
+            if name != music_wheel_bench::SCENARIO_NAME {
+                return Err("actors phase currently only supports --scenario music-wheel".into());
+            }
+            let fixture = music_wheel_bench::fixture();
+            benchmark_actor_builder(
+                scenario.name,
+                scenario.clear_color,
+                &scenario.metrics,
+                &scenario.fonts,
+                scenario.total_elapsed,
+                args.iters,
+                args.warmup,
+                args.cache_mode,
+                || fixture.build(),
+            )
+        }
         Phase::Compose => benchmark_compose(
             scenario.name,
             &scenario.actors,
@@ -339,6 +362,9 @@ fn run_named(args: &Args, name: &str) -> Result<BenchmarkResult, Box<dyn Error>>
 }
 
 fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Error>> {
+    if matches!(args.phase, Phase::Actors) {
+        return Err("actors phase does not support --case; use --scenario music-wheel".into());
+    }
     let case = compose_case::read_case(Path::new(case_path))?;
     let replay = compose_case::replay_case(&case)?;
     let output = compose_case::render_case_output(&case)?;
@@ -353,6 +379,12 @@ fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Err
 
     if let Some(path) = &args.write_output {
         compose_case::write_render_snapshot(Path::new(path), &output)?;
+    }
+    if let Some(path) = &args.write_actors_output {
+        compose_case::write_actor_snapshot(
+            Path::new(path),
+            &compose_case::actor_list_snapshot(&replay.actors),
+        )?;
     }
     if let Some(path) = &args.write_resolved_output {
         let assets = asset_manager_for_bench(&case)?;
@@ -369,6 +401,7 @@ fn run_case(args: &Args, case_path: &str) -> Result<BenchmarkResult, Box<dyn Err
     };
 
     match args.phase {
+        Phase::Actors => unreachable!("actors phase is rejected before case replay"),
         Phase::Compose => benchmark_compose(
             &replay.screen,
             &replay.actors,
@@ -443,6 +476,12 @@ fn write_requested_outputs(
     if let Some(path) = &args.write_case {
         compose_case::write_case(Path::new(path), case)?;
     }
+    if let Some(path) = &args.write_actors_output {
+        compose_case::write_actor_snapshot(
+            Path::new(path),
+            &compose_case::actor_list_snapshot(&compose_case::replay_case(case)?.actors),
+        )?;
+    }
     if let Some(path) = &args.write_output {
         compose_case::write_render_snapshot(Path::new(path), output)?;
     }
@@ -479,6 +518,113 @@ fn build_screen_for_mode<'a>(
             text_cache,
         ),
     }
+}
+
+fn benchmark_actor_builder<F>(
+    name: &str,
+    clear_color: [f32; 4],
+    metrics: &deadsync::core::space::Metrics,
+    fonts: &HashMap<&'static str, deadsync::ui::font::Font>,
+    total_elapsed: f32,
+    iters: u64,
+    warmup: u64,
+    cache_mode: CacheMode,
+    build_actors: F,
+) -> Result<BenchmarkResult, Box<dyn Error>>
+where
+    F: Fn() -> Vec<Actor>,
+{
+    let sample_actors = build_actors();
+    let actor_snapshot = compose_case::actor_list_snapshot(&sample_actors);
+    let actor_hash = compose_case::actor_snapshot_hash(&actor_snapshot)?;
+    let mut text_cache = compose::TextLayoutCache::default();
+    let sample_render = build_screen_for_mode(
+        cache_mode,
+        &mut text_cache,
+        &sample_actors,
+        clear_color,
+        metrics,
+        fonts,
+        total_elapsed,
+    );
+    let render_hash =
+        compose_case::render_snapshot_hash(&compose_case::render_list_snapshot(&sample_render))?;
+    let actors = actor_count(&sample_actors);
+    let objects = sample_render.objects.len();
+    let cameras = sample_render.cameras.len();
+    black_box(actors ^ objects ^ cameras);
+
+    for _ in 0..warmup {
+        let actors = build_actors();
+        black_box(actor_count(&actors));
+    }
+
+    let start_alloc = ALLOC.begin_measurement();
+    let started = Instant::now();
+    let mut checksum = 0u64;
+    for _ in 0..iters {
+        let actors = black_box(build_actors());
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(actor_count(&actors) as u64)
+            .wrapping_add(actors.len() as u64);
+        black_box(checksum);
+    }
+
+    let final_actors = build_actors();
+    let actual_actor_hash =
+        compose_case::actor_snapshot_hash(&compose_case::actor_list_snapshot(&final_actors))?;
+    if actual_actor_hash != actor_hash {
+        return Err(format!(
+            "actor hash mismatch after benchmark: expected {} got {}",
+            actor_hash, actual_actor_hash
+        )
+        .into());
+    }
+    let mut verify_cache = compose::TextLayoutCache::default();
+    let final_render = build_screen_for_mode(
+        cache_mode,
+        &mut verify_cache,
+        &final_actors,
+        clear_color,
+        metrics,
+        fonts,
+        total_elapsed,
+    );
+    let actual_render_hash =
+        compose_case::render_snapshot_hash(&compose_case::render_list_snapshot(&final_render))?;
+    if actual_render_hash != render_hash {
+        return Err(format!(
+            "actor compose hash mismatch: expected {} got {}",
+            render_hash, actual_render_hash
+        )
+        .into());
+    }
+
+    Ok(BenchmarkResult {
+        name: name.to_string(),
+        phase: Phase::Actors,
+        cache_mode,
+        actors,
+        objects,
+        cameras,
+        iters,
+        elapsed_s: started.elapsed().as_secs_f64(),
+        alloc: ALLOC.snapshot().diff(start_alloc),
+        checksum,
+        verifications: vec![
+            VerificationResult {
+                kind: "actors",
+                expected_hash: actor_hash,
+                actual_hash: actual_actor_hash,
+            },
+            VerificationResult {
+                kind: "compose",
+                expected_hash: render_hash,
+                actual_hash: actual_render_hash,
+            },
+        ],
+    })
 }
 
 fn benchmark_compose<F>(
@@ -554,7 +700,7 @@ where
         elapsed_s: started.elapsed().as_secs_f64(),
         alloc: ALLOC.snapshot().diff(start_alloc),
         checksum,
-        verification,
+        verifications: verification.into_iter().collect(),
     })
 }
 
@@ -614,11 +760,11 @@ fn benchmark_resolve(
         elapsed_s,
         alloc,
         checksum,
-        verification: Some(VerificationResult {
+        verifications: vec![VerificationResult {
             kind: "resolve",
             expected_hash,
             actual_hash,
-        }),
+        }],
     })
 }
 
@@ -723,11 +869,11 @@ where
         elapsed_s,
         alloc,
         checksum,
-        verification: Some(VerificationResult {
+        verifications: vec![VerificationResult {
             kind: "resolve",
             expected_hash,
             actual_hash,
-        }),
+        }],
     })
 }
 
@@ -770,7 +916,7 @@ fn print_result(result: BenchmarkResult) {
     println!("scenario: {}", result.name);
     println!("phase: {}", result.phase.as_str());
     println!("cache: {}", result.cache_mode.as_str());
-    if let Some(verification) = &result.verification {
+    for verification in &result.verifications {
         println!(
             "verify: ok kind={} expected_hash={} actual_hash={}",
             verification.kind, verification.expected_hash, verification.actual_hash
@@ -824,6 +970,7 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
     let mut cache_mode = CacheMode::Retained;
     let mut phase = Phase::Compose;
     let mut write_case = None;
+    let mut write_actors_output = None;
     let mut write_output = None;
     let mut write_resolved_output = None;
 
@@ -837,6 +984,9 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
             "--cache" => cache_mode = CacheMode::parse(&next_value(&mut args, "--cache")?)?,
             "--phase" => phase = Phase::parse(&next_value(&mut args, "--phase")?)?,
             "--write-case" => write_case = Some(next_value(&mut args, "--write-case")?),
+            "--write-actors-output" => {
+                write_actors_output = Some(next_value(&mut args, "--write-actors-output")?)
+            }
             "--write-output" => write_output = Some(next_value(&mut args, "--write-output")?),
             "--write-resolved-output" => {
                 write_resolved_output = Some(next_value(&mut args, "--write-resolved-output")?)
@@ -857,6 +1007,7 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
         cache_mode,
         phase,
         write_case,
+        write_actors_output,
         write_output,
         write_resolved_output,
     })
@@ -872,6 +1023,6 @@ fn next_value(
 
 fn print_help() {
     println!(
-        "compose_bench [--scenario all|hud|text|mask] [--case PATH] [--phase compose|resolve|compose-resolve] [--iters N] [--warmup N] [--cache fresh|retained] [--write-case PATH] [--write-output PATH] [--write-resolved-output PATH]"
+        "compose_bench [--scenario all|hud|text|text-ci|resolve-ci|mask|music-wheel] [--case PATH] [--phase actors|compose|resolve|compose-resolve] [--iters N] [--warmup N] [--cache fresh|retained] [--write-case PATH] [--write-actors-output PATH] [--write-output PATH] [--write-resolved-output PATH]"
     );
 }

@@ -1,19 +1,30 @@
 use crate::assets;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
 use crate::core::space::{Metrics, metrics_for_window};
+use crate::test_support::music_wheel_bench;
 use crate::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
 use crate::ui::anim::{EffectMode, EffectState};
 use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 5] = ["hud", "text", "text-ci", "resolve-ci", "mask"];
+const SCENARIO_NAMES: [&str; 6] = [
+    "hud",
+    "text",
+    "text-ci",
+    "resolve-ci",
+    "mask",
+    music_wheel_bench::SCENARIO_NAME,
+];
 const BENCH_FONT: &str = "bench";
+const MISO_FONT: &str = "miso";
+const SCREENEVAL_FONT: &str = "wendy_screenevaluation";
 const FONT_MAIN: &str = "bench/font_main.png";
 const FONT_STROKE: &str = "bench/font_stroke.png";
 const PANEL_TEX: &str = "bench/panel.png";
 const BANNER_TEX: &str = "bench/banner.png";
 const ICON_TEX: &str = "bench/icon.png";
+const HAS_EDIT_TEX: &str = "has_edit.png";
 const SHEET_TEX: &str = "bench/sheet.png";
 const MESH_TEX: &str = "bench/mesh.png";
 const CASEFOLD_TEX_COUNT: usize = 64;
@@ -43,6 +54,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         "text-ci" => Some(text_ci_scenario(metrics, fonts)),
         "resolve-ci" => Some(resolve_ci_scenario(metrics, fonts)),
         "mask" => Some(mask_scenario(metrics, fonts)),
+        music_wheel_bench::SCENARIO_NAME => Some(music_wheel_scenario(metrics, fonts)),
         _ => None,
     }
 }
@@ -57,6 +69,7 @@ fn ensure_textures() {
             (PANEL_TEX, 512, 192),
             (BANNER_TEX, 512, 128),
             (ICON_TEX, 128, 128),
+            (HAS_EDIT_TEX, 128, 64),
             (SHEET_TEX, 256, 256),
             (MESH_TEX, 256, 256),
         ] {
@@ -72,8 +85,10 @@ fn ensure_textures() {
 }
 
 fn bench_fonts() -> HashMap<&'static str, Font> {
-    let mut fonts = HashMap::with_capacity(1);
+    let mut fonts = HashMap::with_capacity(3);
     fonts.insert(BENCH_FONT, bench_font());
+    fonts.insert(MISO_FONT, bench_font());
+    fonts.insert(SCREENEVAL_FONT, bench_font());
     fonts
 }
 
@@ -372,6 +387,18 @@ fn mask_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> Compos
         metrics,
         fonts,
         total_elapsed: 37.0,
+    }
+}
+
+fn music_wheel_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let fixture = music_wheel_bench::fixture();
+    ComposeScenario {
+        name: music_wheel_bench::SCENARIO_NAME,
+        actors: fixture.build(),
+        clear_color: [0.02, 0.03, 0.05, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 18.0,
     }
 }
 

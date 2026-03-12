@@ -259,6 +259,11 @@ pub struct RenderListSnapshot {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ActorListSnapshot {
+    pub actors: Vec<ActorSnapshot>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TextureResolveSnapshot {
     pub objects: Vec<TextureResolveObjectSnapshot>,
 }
@@ -447,6 +452,19 @@ pub fn render_snapshot_hash(snapshot: &RenderListSnapshot) -> Result<String, Box
     Ok(format!("{:016x}", hasher.finish()))
 }
 
+pub fn actor_list_snapshot(actors: &[Actor]) -> ActorListSnapshot {
+    ActorListSnapshot {
+        actors: actors.iter().map(actor_snapshot).collect(),
+    }
+}
+
+pub fn actor_snapshot_hash(snapshot: &ActorListSnapshot) -> Result<String, Box<dyn Error>> {
+    let bytes = serde_json::to_vec(snapshot)?;
+    let mut hasher = XxHash64::with_seed(0);
+    hasher.write(&bytes);
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
 pub fn texture_resolve_snapshot(render: &RenderList<'_>) -> TextureResolveSnapshot {
     TextureResolveSnapshot {
         objects: render
@@ -473,6 +491,13 @@ pub fn write_case(path: &Path, case: &ComposeCase) -> Result<(), Box<dyn Error>>
 pub fn write_render_snapshot(
     path: &Path,
     snapshot: &RenderListSnapshot,
+) -> Result<(), Box<dyn Error>> {
+    write_json(path, snapshot)
+}
+
+pub fn write_actor_snapshot(
+    path: &Path,
+    snapshot: &ActorListSnapshot,
 ) -> Result<(), Box<dyn Error>> {
     write_json(path, snapshot)
 }
@@ -1121,7 +1146,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
     }
 }
 
-fn render_list_snapshot(render: &RenderList<'_>) -> RenderListSnapshot {
+pub fn render_list_snapshot(render: &RenderList<'_>) -> RenderListSnapshot {
     RenderListSnapshot {
         clear_color: render.clear_color,
         cameras: render.cameras.iter().map(matrix_snapshot).collect(),

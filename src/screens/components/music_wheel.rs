@@ -59,6 +59,12 @@ fn lamp_judge_count_color(lamp_index: u8) -> [f32; 4] {
     }
 }
 
+#[inline(always)]
+fn digit_text(digit: u8) -> &'static str {
+    const DIGITS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+    DIGITS[digit as usize]
+}
+
 // Helper from select_music.rs
 fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [
@@ -126,9 +132,11 @@ pub struct MusicWheelParams<'a> {
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
-    let mut actors = Vec::new();
+    let mut actors = Vec::with_capacity(NUM_WHEEL_SLOTS + 1);
     let translated_titles = crate::config::get().translated_titles;
     let target_chart_type = profile::get_session_play_style().chart_type();
+    let song_box_color = p.song_box_color.unwrap_or_else(col_music_wheel_box);
+    let default_song_text_color = p.song_text_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
 
     const WHEEL_WIDTH_DIVISOR: f32 = 2.125;
     let num_visible_items = NUM_VISIBLE_WHEEL_ITEMS;
@@ -171,6 +179,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let lamp_pulse_t_unscaled =
         (p.selection_animation_timer / LAMP_PULSE_PERIOD) * std::f32::consts::PI * 2.0;
     let lamp_pulse_t = f32::midpoint(lamp_pulse_t_unscaled.sin(), 1.0);
+    let grade_y = half_item_h;
+    let grade_zoom = widescale(0.18, 0.3);
+    let grade_x_p1 = widescale(10.0, 17.0);
+    let grade_x_p2 = widescale(26.0, 47.0);
 
     let num_entries = p.entries.len();
 
@@ -190,300 +202,266 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                 ((p.selected_index as isize + offset_from_center + num_entries as isize) as usize)
                     % num_entries;
 
-            let (is_pack, bg_col, txt_col, title_str, subtitle_str, pack_name_opt, has_edit) =
-                match p.entries.get(list_index) {
-                    Some(MusicWheelEntry::Song(info)) => {
-                        let has_edit = if let Some(cached) = p.song_has_edit_ptrs {
-                            cached.contains(&(std::sync::Arc::as_ptr(info) as usize))
-                        } else {
-                            info.charts.iter().any(|c| {
-                                c.chart_type.eq_ignore_ascii_case(target_chart_type)
-                                    && c.difficulty.eq_ignore_ascii_case("edit")
-                            })
-                        };
-                        let bg = p.song_box_color.unwrap_or_else(col_music_wheel_box);
-                        let song_ptr = std::sync::Arc::as_ptr(info) as usize;
-                        let txt = p
-                            .song_text_color_overrides
-                            .and_then(|m| m.get(&song_ptr).copied())
-                            .or(p.song_text_color)
-                            .unwrap_or([1.0, 1.0, 1.0, 1.0]);
-                        (
-                            false,
-                            bg,
-                            txt,
-                            info.display_title(translated_titles).to_string(),
-                            info.display_subtitle(translated_titles).to_string(),
-                            None,
-                            has_edit,
-                        )
-                    }
-                    Some(MusicWheelEntry::PackHeader {
-                        name,
-                        original_index,
-                        ..
-                    }) => {
-                        let c = if p.color_pack_headers {
-                            color::simply_love_rgba(*original_index as i32)
-                        } else {
-                            [1.0, 1.0, 1.0, 1.0]
-                        };
-                        (
-                            true,
-                            col_pack_header_box(),
-                            [c[0], c[1], c[2], 1.0],
-                            name.clone(),
-                            String::new(),
-                            Some(name.clone()),
-                            false,
-                        )
-                    }
-                    _ => (
-                        false,
-                        col_music_wheel_box(),
-                        [1.0; 4],
-                        String::new(),
-                        String::new(),
-                        None,
-                        false,
-                    ),
-                };
-
-            let has_subtitle = !subtitle_str.trim().is_empty();
-
-            // Children local to container-left (highlight_left_world)
-            let mut slot_children: Vec<Actor> = Vec::new();
-
-            // Base quad (full height) for the 1px gap effect.
-            // Simply Love uses a solid black base for pack headers, and a dark translucent base for songs.
-            let base_full_col = if is_pack {
-                [0.0, 0.0, 0.0, 1.0]
-            } else {
-                [0.0, 10.0 / 255.0, 17.0 / 255.0, 0.5]
+            let Some(entry) = p.entries.get(list_index) else {
+                continue;
             };
-            slot_children.push(act!(quad:
-                align(0.0, 0.5):
-                xy(0.0, half_item_h):
-                zoomto(highlight_w, item_h_full):
-                diffuse(base_full_col[0], base_full_col[1], base_full_col[2], base_full_col[3]):
-                z(0)
-            ));
-            // Colored quad (height - 1)
-            slot_children.push(act!(quad:
-                align(0.0, 0.5):
-                xy(0.0, half_item_h):
-                zoomto(highlight_w, item_h_colored):
-                diffuse(bg_col[0], bg_col[1], bg_col[2], bg_col[3]):
-                z(1)
-            ));
 
-            if is_pack {
-                // PACK name — centered with slight right bias
-                slot_children.push(act!(text:
-                    font("miso"):
-                    settext(title_str.clone()):
-                    align(0.5, 0.5):
-                    xy(pack_center_x_local, half_item_h): // FIX: Center vertically
-                    maxwidth(pack_name_max_w):
-                    zoom(1.0):
-                    diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
-                    z(2)
-                ));
-
-                // PACK count — right-aligned, inset from edge
-                if let Some(pack_name) = pack_name_opt
-                    && let Some(count) = p.pack_song_counts.get(&pack_name)
-                    && *count > 0
-                {
+            match entry {
+                MusicWheelEntry::PackHeader {
+                    name,
+                    original_index,
+                    ..
+                } => {
+                    let bg_col = col_pack_header_box();
+                    let header_color = if p.color_pack_headers {
+                        color::simply_love_rgba(*original_index as i32)
+                    } else {
+                        [1.0, 1.0, 1.0, 1.0]
+                    };
+                    let mut slot_children = Vec::with_capacity(4);
+                    slot_children.push(act!(quad:
+                        align(0.0, 0.5):
+                        xy(0.0, half_item_h):
+                        zoomto(highlight_w, item_h_full):
+                        diffuse(0.0, 0.0, 0.0, 1.0):
+                        z(0)
+                    ));
+                    slot_children.push(act!(quad:
+                        align(0.0, 0.5):
+                        xy(0.0, half_item_h):
+                        zoomto(highlight_w, item_h_colored):
+                        diffuse(bg_col[0], bg_col[1], bg_col[2], bg_col[3]):
+                        z(1)
+                    ));
                     slot_children.push(act!(text:
                         font("miso"):
-                        settext(format!("{}", count)):
-                        align(1.0, 0.5):
-                        xy(pack_count_x_local, half_item_h): // FIX: Center vertically
-                        zoom(0.75):
-                        horizalign(right):
-                        diffuse(1.0, 1.0, 1.0, 1.0):
+                        settext(name.as_str()):
+                        align(0.5, 0.5):
+                        xy(pack_center_x_local, half_item_h):
+                        maxwidth(pack_name_max_w):
+                        zoom(1.0):
+                        diffuse(header_color[0], header_color[1], header_color[2], 1.0):
                         z(2)
                     ));
+                    if let Some(count) = p.pack_song_counts.get(name.as_str())
+                        && *count > 0
+                    {
+                        slot_children.push(act!(text:
+                            font("miso"):
+                            settext(count.to_string()):
+                            align(1.0, 0.5):
+                            xy(pack_count_x_local, half_item_h):
+                            zoom(0.75):
+                            horizalign(right):
+                            diffuse(1.0, 1.0, 1.0, 1.0):
+                            z(2)
+                        ));
+                    }
+                    actors.push(Actor::Frame {
+                        align: [0.0, 0.5],
+                        offset: [highlight_left_world, y_center_item],
+                        size: [SizeSpec::Px(highlight_w), SizeSpec::Px(item_h_full)],
+                        background: None,
+                        z: 51,
+                        children: slot_children,
+                    });
+                    continue;
                 }
-            } else {
-                // SONG title/subtitle — subtract sl_shift to avoid double offset
-                let subtitle_y_offset = if has_subtitle { -line_gap_units } else { 0.0 };
-                slot_children.push(act!(text:
-                    font("miso"):
-                    settext(title_str.clone()):
-                    align(0.0, 0.5):
-                    xy(title_x_local, half_item_h + subtitle_y_offset): // FIX: Center vertically
-                    maxwidth(title_max_w_local):
-                    zoom(0.85):
-                    diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
-                    z(2)
-                ));
-                if has_subtitle {
+                MusicWheelEntry::Song(info) => {
+                    let song_ptr = std::sync::Arc::as_ptr(info) as usize;
+                    let txt_col = p
+                        .song_text_color_overrides
+                        .and_then(|m| m.get(&song_ptr).copied())
+                        .unwrap_or(default_song_text_color);
+                    let title = info.display_title(translated_titles);
+                    let subtitle = info.display_subtitle(translated_titles);
+                    let has_subtitle = !subtitle.trim().is_empty();
+                    let has_edit = if let Some(cached) = p.song_has_edit_ptrs {
+                        cached.contains(&song_ptr)
+                    } else {
+                        info.charts.iter().any(|c| {
+                            c.chart_type.eq_ignore_ascii_case(target_chart_type)
+                                && c.difficulty.eq_ignore_ascii_case("edit")
+                        })
+                    };
+                    let mut slot_capacity = 4 + usize::from(has_subtitle) + usize::from(has_edit);
+                    if p.show_music_wheel_grades {
+                        slot_capacity += 2;
+                    }
+                    if p.show_music_wheel_lamps {
+                        slot_capacity += 4;
+                    }
+                    let mut slot_children = Vec::with_capacity(slot_capacity);
+                    slot_children.push(act!(quad:
+                        align(0.0, 0.5):
+                        xy(0.0, half_item_h):
+                        zoomto(highlight_w, item_h_full):
+                        diffuse(0.0, 10.0 / 255.0, 17.0 / 255.0, 0.5):
+                        z(0)
+                    ));
+                    slot_children.push(act!(quad:
+                        align(0.0, 0.5):
+                        xy(0.0, half_item_h):
+                        zoomto(highlight_w, item_h_colored):
+                        diffuse(song_box_color[0], song_box_color[1], song_box_color[2], song_box_color[3]):
+                        z(1)
+                    ));
+
+                    let subtitle_y_offset = if has_subtitle { -line_gap_units } else { 0.0 };
                     slot_children.push(act!(text:
                         font("miso"):
-                        settext(subtitle_str.clone()):
+                        settext(title):
                         align(0.0, 0.5):
-                        xy(title_x_local, half_item_h + line_gap_units): // FIX: Center vertically
+                        xy(title_x_local, half_item_h + subtitle_y_offset):
                         maxwidth(title_max_w_local):
-                        zoom(0.7):
+                        zoom(0.85):
                         diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
                         z(2)
                     ));
-                }
+                    if has_subtitle {
+                        slot_children.push(act!(text:
+                            font("miso"):
+                            settext(subtitle):
+                            align(0.0, 0.5):
+                            xy(title_x_local, half_item_h + line_gap_units):
+                            maxwidth(title_max_w_local):
+                            zoom(0.7):
+                            diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
+                            z(2)
+                        ));
+                    }
+                    if has_edit {
+                        slot_children.push(act!(sprite("has_edit.png"):
+                            align(1.0, 0.5):
+                            xy(has_edit_right_x_local, half_item_h):
+                            zoom(0.1875):
+                            z(2)
+                        ));
+                    }
 
-                if has_edit {
-                    slot_children.push(act!(sprite("has_edit.png"):
-                        align(1.0, 0.5):
-                        xy(has_edit_right_x_local, half_item_h):
-                        // Simply Love uses `Has Edit (doubleres).png` at `zoom(0.375)`;
-                        // our asset is untagged, so scale down by 0.5 for parity.
-                        zoom(0.1875):
-                        z(2)
-                    ));
-                }
+                    if p.show_music_wheel_grades || p.show_music_wheel_lamps {
+                        let chart = if is_selected_slot {
+                            crate::screens::select_music::chart_for_steps_index(
+                                info,
+                                target_chart_type,
+                                p.selected_steps_index,
+                            )
+                        } else {
+                            chart_for_preferred_or_nearest_standard(
+                                info,
+                                target_chart_type,
+                                p.preferred_difficulty_index,
+                            )
+                        };
 
-                // --- Grade Sprites + Lamps (using cached scores) ---
-                let grade_y = half_item_h;
-                let grade_zoom = widescale(0.18, 0.3);
-                // Simply Love metrics: [MusicWheel] GradeP1X/GradeP2X, adjusted for our container shift.
-                let grade_x_p1 = widescale(10.0, 17.0); // WideScale(38,50) - sl_shift
-                let grade_x_p2 = widescale(26.0, 47.0); // WideScale(54,80) - sl_shift
-
-                // Find the relevant chart to check for a grade (and lamp).
-                if let Some(MusicWheelEntry::Song(info)) = p.entries.get(list_index) {
-                    // For the selected item, use the *actual* selected difficulty.
-                    // For all other items, prefer the player's preferred difficulty, but
-                    // fall back to the nearest available standard chart when missing.
-                    let chart = if is_selected_slot {
-                        crate::screens::select_music::chart_for_steps_index(
-                            info,
-                            target_chart_type,
-                            p.selected_steps_index,
-                        )
-                    } else {
-                        chart_for_preferred_or_nearest_standard(
-                            info,
-                            target_chart_type,
-                            p.preferred_difficulty_index,
-                        )
-                    };
-
-                    if let Some(chart) = chart {
-                        let sides = [
-                            (profile::PlayerSide::P1, grade_x_p1),
-                            (profile::PlayerSide::P2, grade_x_p2),
-                        ];
-
-                        for (side, grade_x) in sides {
-                            if !profile::is_session_side_joined(side) {
-                                continue;
-                            }
-                            let Some(cached_score) =
-                                scores::get_cached_score_for_side(&chart.short_hash, side)
-                            else {
-                                continue;
-                            };
-                            let has_score = cached_score.grade != scores::Grade::Failed
-                                || cached_score.score_percent > 0.0;
-                            if !has_score {
-                                continue;
-                            }
-
-                            if p.show_music_wheel_grades {
-                                let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
-                                    align(0.5, 0.5):
-                                    xy(grade_x, grade_y):
-                                    zoom(grade_zoom):
-                                    z(2):
-                                    visible(true)
-                                );
-                                if let Actor::Sprite { cell, .. } = &mut grade_actor {
-                                    *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
+                        if let Some(chart) = chart {
+                            for (side, grade_x) in [
+                                (profile::PlayerSide::P1, grade_x_p1),
+                                (profile::PlayerSide::P2, grade_x_p2),
+                            ] {
+                                if !profile::is_session_side_joined(side) {
+                                    continue;
                                 }
-                                slot_children.push(grade_actor);
-                            }
-
-                            if p.show_music_wheel_lamps {
-                                // Position and size mirror Simply Love/zmod's lamp quad.
-                                let lamp_dir = if side == profile::PlayerSide::P1 {
-                                    -1.0
-                                } else {
-                                    1.0
+                                let Some(cached_score) =
+                                    scores::get_cached_score_for_side(&chart.short_hash, side)
+                                else {
+                                    continue;
                                 };
-                                let lamp_x = grade_x + lamp_dir * widescale(13.0, 20.0);
-                                let lamp_w = widescale(5.0, 6.0);
-                                let lamp_h = 31.0;
+                                let has_score = cached_score.grade != scores::Grade::Failed
+                                    || cached_score.score_percent > 0.0;
+                                if !has_score {
+                                    continue;
+                                }
 
-                                // zmod: show a clear/fail lamp if no StageAward-like lamp exists.
-                                // In deadsync today, that means:
-                                // - `lamp_index=Some(..)` => FC lamp tier (pulse)
-                                // - `lamp_index=None`     => clear lamp (solid) for any non-FC score
-                                // - `grade=Failed`        => fail lamp (solid) if a real fail score exists
-                                let (lamp_color, lamp_pulsing, lamp_index) =
-                                    match cached_score.lamp_index {
-                                        Some(0) => (col_quint_lamp(), true, Some(0u8)),
-                                        Some(idx @ 1..=4) => {
-                                            let color_index = (idx - 1) as usize;
-                                            let base = color::JUDGMENT_RGBA[color_index.min(5)];
-                                            (base, true, Some(idx))
-                                        }
-                                        Some(_) => (col_clear_lamp(), false, None),
-                                        None if cached_score.grade == scores::Grade::Failed => {
-                                            (col_fail_lamp(), false, None)
-                                        }
-                                        None => (col_clear_lamp(), false, None),
-                                    };
-
-                                let lamp_color_final = if lamp_pulsing {
-                                    let lamp_color2 =
-                                        lerp_color([1.0; 4], lamp_color, LAMP_PULSE_LERP_TO_WHITE);
-                                    lerp_color(lamp_color, lamp_color2, lamp_pulse_t)
-                                } else {
-                                    lamp_color
-                                };
-
-                                slot_children.push(act!(quad:
-                                    align(0.5, 0.5):
-                                    xy(lamp_x, grade_y):
-                                    zoomto(lamp_w, lamp_h):
-                                    diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
-                                    z(2)
-                                ));
-
-                                if let Some(lamp_index) = lamp_index
-                                    && let Some(count) = cached_score.lamp_judge_count
-                                    && count < 10
-                                {
-                                    let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
-                                    let judge_y = grade_y + 10.0;
-                                    let judge_col = lamp_judge_count_color(lamp_index);
-                                    slot_children.push(act!(text:
-                                        font("wendy_screenevaluation"):
-                                        settext(format!("{}", count)):
+                                if p.show_music_wheel_grades {
+                                    let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
                                         align(0.5, 0.5):
-                                        horizalign(center):
-                                        xy(judge_x, judge_y):
-                                        zoom(0.15):
-                                        diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
-                                        z(10)
+                                        xy(grade_x, grade_y):
+                                        zoom(grade_zoom):
+                                        z(2):
+                                        visible(true)
+                                    );
+                                    if let Actor::Sprite { cell, .. } = &mut grade_actor {
+                                        *cell =
+                                            Some((cached_score.grade.to_sprite_state(), u32::MAX));
+                                    }
+                                    slot_children.push(grade_actor);
+                                }
+
+                                if p.show_music_wheel_lamps {
+                                    let lamp_dir = if side == profile::PlayerSide::P1 {
+                                        -1.0
+                                    } else {
+                                        1.0
+                                    };
+                                    let lamp_x = grade_x + lamp_dir * widescale(13.0, 20.0);
+                                    let lamp_w = widescale(5.0, 6.0);
+                                    let lamp_h = 31.0;
+                                    let (lamp_color, lamp_pulsing, lamp_index) =
+                                        match cached_score.lamp_index {
+                                            Some(0) => (col_quint_lamp(), true, Some(0u8)),
+                                            Some(idx @ 1..=4) => {
+                                                let color_index = (idx - 1) as usize;
+                                                let base = color::JUDGMENT_RGBA[color_index.min(5)];
+                                                (base, true, Some(idx))
+                                            }
+                                            Some(_) => (col_clear_lamp(), false, None),
+                                            None if cached_score.grade == scores::Grade::Failed => {
+                                                (col_fail_lamp(), false, None)
+                                            }
+                                            None => (col_clear_lamp(), false, None),
+                                        };
+                                    let lamp_color_final = if lamp_pulsing {
+                                        let lamp_color2 = lerp_color(
+                                            [1.0; 4],
+                                            lamp_color,
+                                            LAMP_PULSE_LERP_TO_WHITE,
+                                        );
+                                        lerp_color(lamp_color, lamp_color2, lamp_pulse_t)
+                                    } else {
+                                        lamp_color
+                                    };
+                                    slot_children.push(act!(quad:
+                                        align(0.5, 0.5):
+                                        xy(lamp_x, grade_y):
+                                        zoomto(lamp_w, lamp_h):
+                                        diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
+                                        z(2)
                                     ));
+                                    if let Some(lamp_index) = lamp_index
+                                        && let Some(count) = cached_score.lamp_judge_count
+                                        && count < 10
+                                    {
+                                        let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
+                                        let judge_y = grade_y + 10.0;
+                                        let judge_col = lamp_judge_count_color(lamp_index);
+                                        slot_children.push(act!(text:
+                                            font("wendy_screenevaluation"):
+                                            settext(digit_text(count)):
+                                            align(0.5, 0.5):
+                                            horizalign(center):
+                                            xy(judge_x, judge_y):
+                                            zoom(0.15):
+                                            diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
+                                            z(10)
+                                        ));
+                                    }
                                 }
                             }
                         }
                     }
+
+                    actors.push(Actor::Frame {
+                        align: [0.0, 0.5],
+                        offset: [highlight_left_world, y_center_item],
+                        size: [SizeSpec::Px(highlight_w), SizeSpec::Px(item_h_full)],
+                        background: None,
+                        z: 51,
+                        children: slot_children,
+                    });
+                    continue;
                 }
             }
-
-            // Container: left-anchored at SL highlight-left
-            actors.push(Actor::Frame {
-                align: [0.0, 0.5], // left-center
-                offset: [highlight_left_world, y_center_item],
-                size: [SizeSpec::Px(highlight_w), SizeSpec::Px(item_h_full)],
-                background: None,
-                z: 51,
-                children: slot_children,
-            });
         }
     } else {
         // Handle the case where there are no songs or packs loaded.
@@ -501,7 +479,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
             // Use pack header colors for the empty state
             let bg_col = col_pack_header_box();
 
-            let mut slot_children: Vec<Actor> = Vec::new();
+            let mut slot_children = Vec::with_capacity(3);
 
             // Add black background for 1px gap effect, just like real pack headers
             slot_children.push(act!(quad:
