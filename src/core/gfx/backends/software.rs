@@ -64,6 +64,11 @@ pub fn create_texture(image: &RgbaImage, sampler: SamplerDesc) -> Result<Texture
     })
 }
 
+pub fn update_texture(texture: &mut Texture, image: &RgbaImage) -> Result<(), Box<dyn Error>> {
+    texture.image = image.clone();
+    Ok(())
+}
+
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,

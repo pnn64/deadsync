@@ -2660,6 +2660,14 @@ impl App {
         self.update_fps_title(&window, redraw_started);
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
+            let gameplay_time = self
+                .state
+                .screens
+                .gameplay_state
+                .as_ref()
+                .map(|state| state.current_music_time);
+            self.asset_manager
+                .update_dynamic_video_frames(backend, gameplay_time);
             self.asset_manager
                 .upload_pending_generated_textures(backend);
             upload_us = elapsed_us_since(upload_started);

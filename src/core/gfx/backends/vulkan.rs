@@ -1094,6 +1094,12 @@ fn transition_image_layout_cmd(
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::PipelineStageFlags::TRANSFER,
         ),
+        (vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL, vk::ImageLayout::TRANSFER_DST_OPTIMAL) => (
+            vk::AccessFlags::SHADER_READ,
+            vk::AccessFlags::TRANSFER_WRITE,
+            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            vk::PipelineStageFlags::TRANSFER,
+        ),
         (vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) => (
             vk::AccessFlags::TRANSFER_WRITE,
             vk::AccessFlags::SHADER_READ,
@@ -1284,6 +1290,73 @@ pub fn create_texture(
         descriptor_set_repeat: set_repeat,
         pool,
     })
+}
+
+pub fn update_texture(
+    state: &mut State,
+    texture: &mut Texture,
+    image: &RgbaImage,
+) -> Result<(), Box<dyn Error>> {
+    let device = texture.device.as_ref();
+    let (width, height) = image.dimensions();
+    let image_data = image.as_raw();
+    let staging_size = image_data.len() as vk::DeviceSize;
+    let (staging_buffer, staging_memory) = create_gpu_buffer(
+        &state.instance,
+        device,
+        state.pdevice,
+        staging_size,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )?;
+    unsafe {
+        let mapped =
+            device.map_memory(staging_memory, 0, staging_size, vk::MemoryMapFlags::empty())?;
+        std::ptr::copy_nonoverlapping(image_data.as_ptr(), mapped.cast::<u8>(), image_data.len());
+        device.unmap_memory(staging_memory);
+    }
+    state.pending_tex_staging.push(BufferResource {
+        buffer: staging_buffer,
+        memory: staging_memory,
+    });
+
+    let cmd = begin_pending_texture_upload_cmd(state)?;
+    transition_image_layout_cmd(
+        device,
+        cmd,
+        texture.image,
+        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+    );
+    let region = vk::BufferImageCopy::default()
+        .image_subresource(vk::ImageSubresourceLayers {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            mip_level: 0,
+            base_array_layer: 0,
+            layer_count: 1,
+        })
+        .image_extent(vk::Extent3D {
+            width,
+            height,
+            depth: 1,
+        });
+    unsafe {
+        device.cmd_copy_buffer_to_image(
+            cmd,
+            staging_buffer,
+            texture.image,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            &[region],
+        );
+    }
+    transition_image_layout_cmd(
+        device,
+        cmd,
+        texture.image,
+        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+    );
+    Ok(())
 }
 
 #[inline(always)]

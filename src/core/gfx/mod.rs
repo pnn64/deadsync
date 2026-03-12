@@ -384,6 +384,36 @@ impl Backend {
         }
     }
 
+    pub fn update_texture(
+        &mut self,
+        texture: &mut Texture,
+        image: &RgbaImage,
+    ) -> Result<(), Box<dyn Error>> {
+        match (&mut self.0, texture) {
+            (BackendImpl::Vulkan(state), Texture::Vulkan(texture)) => {
+                vulkan::update_texture(state, texture, image)
+            }
+            (BackendImpl::VulkanWgpu(state), Texture::VulkanWgpu(texture)) => {
+                wgpu_core::update_texture(state, texture, image)
+            }
+            (BackendImpl::OpenGL(state), Texture::OpenGL(texture)) => {
+                opengl::update_texture(&state.gl, texture, image)?;
+                Ok(())
+            }
+            (BackendImpl::OpenGLWgpu(state), Texture::OpenGLWgpu(texture)) => {
+                wgpu_core::update_texture(state, texture, image)
+            }
+            (BackendImpl::Software(_state), Texture::Software(texture)) => {
+                software::update_texture(texture, image)
+            }
+            #[cfg(target_os = "windows")]
+            (BackendImpl::DirectX(state), Texture::DirectX(texture)) => {
+                wgpu_core::update_texture(state, texture, image)
+            }
+            _ => Err(std::io::Error::other("texture/backend mismatch").into()),
+        }
+    }
+
     pub fn dispose_textures(&mut self, textures: &mut HashMap<TextureHandle, Texture>) {
         self.wait_for_idle();
 

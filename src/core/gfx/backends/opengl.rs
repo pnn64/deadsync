@@ -510,6 +510,36 @@ pub fn create_texture(
     }
 }
 
+pub fn update_texture(
+    gl: &glow::Context,
+    texture: &Texture,
+    image: &RgbaImage,
+) -> Result<(), String> {
+    let w = i32::try_from(image.width()).map_err(|_| "texture width overflow".to_string())?;
+    let h = i32::try_from(image.height()).map_err(|_| "texture height overflow".to_string())?;
+    let raw = image.as_raw();
+    unsafe {
+        gl.bind_texture(glow::TEXTURE_2D, Some(texture.0));
+        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+        gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, 0);
+        gl.pixel_store_i32(glow::UNPACK_SKIP_ROWS, 0);
+        gl.pixel_store_i32(glow::UNPACK_SKIP_PIXELS, 0);
+        gl.tex_sub_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            0,
+            0,
+            w,
+            h,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            PixelUnpackData::Slice(Some(raw)),
+        );
+        gl.bind_texture(glow::TEXTURE_2D, None);
+    }
+    Ok(())
+}
+
 #[inline(always)]
 pub const fn request_screenshot(_state: &mut State) {}
 

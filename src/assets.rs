@@ -2,6 +2,7 @@ use crate::core::gfx::{
     Backend, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, SamplerDesc, SamplerFilter,
     SamplerWrap, Texture as GfxTexture, TextureHandle,
 };
+use crate::core::video;
 use crate::game::profile;
 use crate::ui::font::{self, Font, FontLoadData};
 use image::{ImageFormat, ImageReader, RgbaImage};
@@ -600,6 +601,17 @@ fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
     )
 }
 
+#[inline(always)]
+fn is_dynamic_video_path(path: &Path) -> bool {
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return false;
+    };
+    matches!(
+        ext.to_ascii_lowercase().as_str(),
+        "mp4" | "m4v" | "mov" | "webm" | "mkv"
+    )
+}
+
 fn ensure_cached_dynamic_image_on_disk(
     path: &Path,
     opts: BannerCacheOptions,
@@ -1013,11 +1025,22 @@ fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
 
 // --- Asset Manager ---
 
-#[derive(Debug, Clone)]
+struct DynamicVideoState {
+    player: video::Player,
+    started_at: Instant,
+}
+
 struct DynamicBannerState {
     key: String,
     path: PathBuf,
     high_res_loaded: bool,
+    video: Option<DynamicVideoState>,
+}
+
+struct DynamicBackgroundState {
+    key: String,
+    path: PathBuf,
+    video: Option<video::Player>,
 }
 
 pub struct AssetManager {
@@ -1030,7 +1053,7 @@ pub struct AssetManager {
     current_dynamic_cdtitle: Option<(String, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: HashSet<String>,
-    current_dynamic_background: Option<(String, PathBuf)>,
+    current_dynamic_background: Option<DynamicBackgroundState>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
 }
 
@@ -1179,6 +1202,59 @@ impl AssetManager {
         self.textures
             .remove(&handle)
             .map(|texture| (handle, texture))
+    }
+
+    fn dispose_texture(
+        &mut self,
+        backend: &mut Backend,
+        handle: TextureHandle,
+        texture: GfxTexture,
+    ) {
+        let mut textures = HashMap::with_capacity(1);
+        textures.insert(handle, texture);
+        backend.dispose_textures(&mut textures);
+    }
+
+    fn set_texture_for_key(
+        &mut self,
+        backend: &mut Backend,
+        key: String,
+        texture: GfxTexture,
+    ) -> TextureHandle {
+        let handle = self.reserve_texture_handle(key);
+        if let Some(old) = self.textures.insert(handle, texture) {
+            self.dispose_texture(backend, handle, old);
+        }
+        handle
+    }
+
+    fn update_texture_for_key(
+        &mut self,
+        backend: &mut Backend,
+        key: &str,
+        rgba: &RgbaImage,
+    ) -> Result<(), Box<dyn Error>> {
+        let dims = texture_dims(key);
+        let handle = self.texture_handles.get(key).copied();
+        if let (Some(meta), Some(handle)) = (dims, handle)
+            && meta.w == rgba.width()
+            && meta.h == rgba.height()
+            && let Some(texture) = self.textures.get_mut(&handle)
+        {
+            backend.update_texture(texture, rgba)?;
+            return Ok(());
+        }
+
+        let texture = backend.create_texture(rgba, SamplerDesc::default())?;
+        self.set_texture_for_key(backend, key.to_string(), texture);
+        register_texture_dims(key, rgba.width(), rgba.height());
+        Ok(())
+    }
+
+    fn remove_texture_and_dispose(&mut self, backend: &mut Backend, key: &str) {
+        if let Some((handle, texture)) = self.remove_texture(key) {
+            self.dispose_texture(backend, handle, texture);
+        }
     }
 
     fn note_texture_handle_alias(&mut self, key: &str, handle: TextureHandle) {
@@ -1730,23 +1806,22 @@ impl AssetManager {
             || !self.dynamic_pack_banner_keys.is_empty()
             || self.current_dynamic_background.is_some()
         {
-            backend.wait_for_idle(); // Wait for GPU to finish using old textures
             if let Some(state) = self.current_dynamic_banner.take() {
-                let _ = self.remove_texture(&state.key);
+                self.remove_texture_and_dispose(backend, &state.key);
             }
             if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
-                let _ = self.remove_texture(&key);
+                self.remove_texture_and_dispose(backend, &key);
             }
             if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
                 self.dynamic_pack_banner_keys.remove(&key);
-                let _ = self.remove_texture(&key);
+                self.remove_texture_and_dispose(backend, &key);
             }
             let drained_pack_keys: Vec<_> = self.dynamic_pack_banner_keys.drain().collect();
             for key in drained_pack_keys {
-                let _ = self.remove_texture(&key);
+                self.remove_texture_and_dispose(backend, &key);
             }
-            if let Some((key, _)) = self.current_dynamic_background.take() {
-                let _ = self.remove_texture(&key);
+            if let Some(state) = self.current_dynamic_background.take() {
+                self.remove_texture_and_dispose(backend, &state.key);
             }
         }
     }
@@ -1832,10 +1907,9 @@ impl AssetManager {
             if banner_cache_opts.enabled {
                 self.current_dynamic_pack_banner = None;
             } else {
-                backend.wait_for_idle();
                 if let Some((old_key, _)) = self.current_dynamic_pack_banner.take() {
                     self.dynamic_pack_banner_keys.remove(&old_key);
-                    let _ = self.remove_texture(&old_key);
+                    self.remove_texture_and_dispose(backend, &old_key);
                 }
             }
 
@@ -1877,10 +1951,9 @@ impl AssetManager {
             if banner_cache_opts.enabled {
                 self.current_dynamic_pack_banner = None;
             } else {
-                backend.wait_for_idle();
                 if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
                     self.dynamic_pack_banner_keys.remove(&key);
-                    let _ = self.remove_texture(&key);
+                    self.remove_texture_and_dispose(backend, &key);
                 }
             }
         }
@@ -1902,6 +1975,43 @@ impl AssetManager {
                 return current.key.clone();
             }
             self.destroy_current_dynamic_banner(backend);
+
+            if is_dynamic_video_path(&path) {
+                match video::open(&path, true) {
+                    Ok(video) => {
+                        match backend.create_texture(&video.poster, SamplerDesc::default()) {
+                            Ok(texture) => {
+                                self.set_texture_for_key(backend, key.clone(), texture);
+                                register_texture_dims(&key, video.info.width, video.info.height);
+                                self.current_dynamic_banner = Some(DynamicBannerState {
+                                    key: key.clone(),
+                                    path,
+                                    high_res_loaded: true,
+                                    video: Some(DynamicVideoState {
+                                        player: video.player,
+                                        started_at: Instant::now(),
+                                    }),
+                                });
+                                return key;
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Failed to create GPU texture for video banner '{}': {e}. Using fallback.",
+                                    key
+                                );
+                                return FALLBACK_KEY.to_string();
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to open video banner '{}': {e}. Using fallback.",
+                            path.display()
+                        );
+                        return FALLBACK_KEY.to_string();
+                    }
+                }
+            }
 
             let rgba = if banner_cache_opts.enabled && is_cacheable_dynamic_image_path(&path) {
                 match load_or_build_cached_banner(&path, banner_cache_opts) {
@@ -1926,12 +2036,13 @@ impl AssetManager {
 
             match backend.create_texture(&rgba, SamplerDesc::default()) {
                 Ok(texture) => {
-                    self.insert_texture(key.clone(), texture);
+                    self.set_texture_for_key(backend, key.clone(), texture);
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     self.current_dynamic_banner = Some(DynamicBannerState {
                         key: key.clone(),
                         path,
                         high_res_loaded: true,
+                        video: None,
                     });
                     key
                 }
@@ -1960,12 +2071,50 @@ impl AssetManager {
             if self
                 .current_dynamic_background
                 .as_ref()
-                .is_some_and(|(_, p)| p == &path)
+                .is_some_and(|state| state.path == path)
             {
-                return self.current_dynamic_background.as_ref().unwrap().0.clone();
+                return self
+                    .current_dynamic_background
+                    .as_ref()
+                    .unwrap()
+                    .key
+                    .clone();
             }
 
             self.destroy_current_dynamic_background(backend);
+
+            if is_dynamic_video_path(&path) {
+                let key = path.to_string_lossy().into_owned();
+                match video::open(&path, true) {
+                    Ok(video) => {
+                        match backend.create_texture(&video.poster, SamplerDesc::default()) {
+                            Ok(texture) => {
+                                self.set_texture_for_key(backend, key.clone(), texture);
+                                register_texture_dims(&key, video.info.width, video.info.height);
+                                self.current_dynamic_background = Some(DynamicBackgroundState {
+                                    key: key.clone(),
+                                    path,
+                                    video: Some(video.player),
+                                });
+                                return key;
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Failed to create GPU texture for video background {path:?}: {e}. Using fallback."
+                                );
+                                return FALLBACK_KEY.to_string();
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to open video background '{}': {e}. Using fallback.",
+                            path.display()
+                        );
+                        return FALLBACK_KEY.to_string();
+                    }
+                }
+            }
 
             let rgba = match open_image_fallback(&path) {
                 Ok(img) => img.to_rgba8(),
@@ -1978,9 +2127,13 @@ impl AssetManager {
             match backend.create_texture(&rgba, SamplerDesc::default()) {
                 Ok(texture) => {
                     let key = path.to_string_lossy().into_owned();
-                    self.insert_texture(key.clone(), texture);
+                    self.set_texture_for_key(backend, key.clone(), texture);
                     register_texture_dims(&key, rgba.width(), rgba.height());
-                    self.current_dynamic_background = Some((key.clone(), path));
+                    self.current_dynamic_background = Some(DynamicBackgroundState {
+                        key: key.clone(),
+                        path,
+                        video: None,
+                    });
                     key
                 }
                 Err(e) => {
@@ -2026,24 +2179,54 @@ impl AssetManager {
         }
     }
 
+    pub fn update_dynamic_video_frames(
+        &mut self,
+        backend: &mut Backend,
+        gameplay_time_sec: Option<f32>,
+    ) {
+        let banner_frame = self.current_dynamic_banner.as_mut().and_then(|state| {
+            let video = state.video.as_mut()?;
+            let play_time = video.started_at.elapsed().as_secs_f32();
+            video
+                .player
+                .take_due_frame(play_time)
+                .map(|frame| (state.key.clone(), frame))
+        });
+        if let Some((key, frame)) = banner_frame
+            && let Err(e) = self.update_texture_for_key(backend, &key, &frame)
+        {
+            warn!("Failed to update dynamic video banner '{}': {e}", key);
+        }
+
+        let background_frame = self.current_dynamic_background.as_mut().and_then(|state| {
+            let video = state.video.as_mut()?;
+            let play_time = gameplay_time_sec.unwrap_or(0.0).max(0.0);
+            video
+                .take_due_frame(play_time)
+                .map(|frame| (state.key.clone(), frame))
+        });
+        if let Some((key, frame)) = background_frame
+            && let Err(e) = self.update_texture_for_key(backend, &key, &frame)
+        {
+            warn!("Failed to update dynamic video background '{}': {e}", key);
+        }
+    }
+
     fn destroy_current_dynamic_banner(&mut self, backend: &mut Backend) {
         if let Some(state) = self.current_dynamic_banner.take() {
-            backend.wait_for_idle();
-            let _ = self.remove_texture(&state.key);
+            self.remove_texture_and_dispose(backend, &state.key);
         }
     }
 
     fn destroy_current_dynamic_cdtitle(&mut self, backend: &mut Backend) {
         if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
-            backend.wait_for_idle();
-            let _ = self.remove_texture(&key);
+            self.remove_texture_and_dispose(backend, &key);
         }
     }
 
     fn destroy_current_dynamic_background(&mut self, backend: &mut Backend) {
-        if let Some((key, _)) = self.current_dynamic_background.take() {
-            backend.wait_for_idle();
-            let _ = self.remove_texture(&key);
+        if let Some(state) = self.current_dynamic_background.take() {
+            self.remove_texture_and_dispose(backend, &state.key);
         }
     }
 
@@ -2149,32 +2332,34 @@ impl AssetManager {
             return;
         }
 
-        match open_image_fallback(path) {
-            Ok(img) => {
-                let rgba = img.to_rgba8();
-                match backend.create_texture(&rgba, SamplerDesc::default()) {
-                    Ok(texture) => {
-                        if has_existing {
-                            backend.wait_for_idle();
-                        }
-                        self.insert_texture(key.clone(), texture);
-                        register_texture_dims(&key, rgba.width(), rgba.height());
-                        if needs_high_res_upgrade
-                            && let Some(state) = self.current_dynamic_banner.as_mut()
-                            && state.key == key
-                            && state.path == path
-                        {
-                            state.high_res_loaded = true;
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Failed to create GPU texture for image {path:?}: {e}. Skipping.");
-                    }
+        let rgba = if is_dynamic_video_path(path) {
+            match video::load_poster(path) {
+                Ok(img) => img,
+                Err(e) => {
+                    warn!("Failed to open video poster {path:?}: {e}. Skipping.");
+                    return;
                 }
             }
-            Err(e) => {
-                warn!("Failed to open image {path:?}: {e}. Skipping.");
+        } else {
+            match open_image_fallback(path) {
+                Ok(img) => img.to_rgba8(),
+                Err(e) => {
+                    warn!("Failed to open image {path:?}: {e}. Skipping.");
+                    return;
+                }
             }
+        };
+
+        if let Err(e) = self.update_texture_for_key(backend, &key, &rgba) {
+            warn!("Failed to create GPU texture for image {path:?}: {e}. Skipping.");
+            return;
+        }
+        if needs_high_res_upgrade
+            && let Some(state) = self.current_dynamic_banner.as_mut()
+            && state.key == key
+            && state.path == path
+        {
+            state.high_res_loaded = true;
         }
     }
 }

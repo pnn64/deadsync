@@ -895,6 +895,34 @@ pub fn create_texture(
     })
 }
 
+pub fn update_texture(
+    state: &mut State,
+    texture: &mut Texture,
+    image: &RgbaImage,
+) -> Result<(), Box<dyn Error>> {
+    let size = wgpu::Extent3d {
+        width: image.width(),
+        height: image.height(),
+        depth_or_array_layers: 1,
+    };
+    state.queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture._texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        image.as_raw(),
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * size.width),
+            rows_per_image: Some(size.height),
+        },
+        size,
+    );
+    Ok(())
+}
+
 #[inline(always)]
 fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
     let center = [m[3][0], m[3][1]];
