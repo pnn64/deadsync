@@ -3,6 +3,19 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
+pub enum SongBackgroundChangeTarget {
+    File(PathBuf),
+    NoSongBg,
+    Random,
+}
+
+#[derive(Clone, Debug)]
+pub struct SongBackgroundChange {
+    pub start_beat: f32,
+    pub target: SongBackgroundChangeTarget,
+}
+
+#[derive(Clone, Debug)]
 pub struct SongData {
     pub simfile_path: PathBuf,
     pub title: String,
@@ -12,6 +25,7 @@ pub struct SongData {
     pub artist: String,
     pub banner_path: Option<PathBuf>,
     pub background_path: Option<PathBuf>,
+    pub background_changes: Vec<SongBackgroundChange>,
     pub cdtitle_path: Option<PathBuf>,
     pub music_path: Option<PathBuf>,
     pub display_bpm: String,
@@ -190,6 +204,22 @@ impl SongData {
             lo_i.to_string()
         } else {
             format!("{} - {}", lo_i.min(hi_i), lo_i.max(hi_i))
+        }
+    }
+
+    pub fn active_background_path(&self, beat: f32) -> Option<&PathBuf> {
+        let mut active = None;
+        for change in &self.background_changes {
+            if change.start_beat > beat {
+                break;
+            }
+            active = Some(change);
+        }
+        match active.map(|change| &change.target) {
+            Some(SongBackgroundChangeTarget::File(path)) => Some(path),
+            Some(SongBackgroundChangeTarget::NoSongBg) => None,
+            Some(SongBackgroundChangeTarget::Random) => None,
+            None => self.background_path.as_ref(),
         }
     }
 }

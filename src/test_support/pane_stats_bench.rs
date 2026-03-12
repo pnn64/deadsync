@@ -139,6 +139,7 @@ fn bench_song() -> SongData {
         artist: "Bench Artist".to_string(),
         banner_path: None,
         background_path: None,
+        background_changes: Vec::new(),
         cdtitle_path: None,
         music_path: None,
         display_bpm: "180".to_string(),

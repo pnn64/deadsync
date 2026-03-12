@@ -1762,6 +1762,21 @@ fn prewarm_gameplay_assets(
             }
         });
     }
+    if let Some(path) = state.song.background_path.as_ref() {
+        let key = path.to_string_lossy().into_owned();
+        if seen.insert(key) {
+            assets.ensure_texture_from_path(backend, path);
+        }
+    }
+    for change in &state.song.background_changes {
+        let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
+            continue;
+        };
+        let key = path.to_string_lossy().into_owned();
+        if seen.insert(key) {
+            assets.ensure_texture_from_path(backend, path);
+        }
+    }
     crate::core::audio::preload_sfx("assets/sounds/boom.ogg");
     crate::core::audio::preload_sfx("assets/sounds/assist_tick.ogg");
 }
@@ -2655,6 +2670,7 @@ impl App {
             return;
         }
 
+        self.sync_gameplay_background();
         let compose_started = Instant::now();
         let (actors, clear_color) = self.get_current_actors();
         self.update_fps_title(&window, redraw_started);
@@ -4315,6 +4331,18 @@ impl App {
             if let Some(gs) = &mut self.state.screens.gameplay_state {
                 gs.background_texture_key = key;
             }
+        }
+    }
+
+    fn sync_gameplay_background(&mut self) {
+        let path_opt = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .and_then(|gs| gs.song.active_background_path(gs.current_beat).cloned());
+        if path_opt.is_some() || self.state.screens.current_screen == CurrentScreen::Gameplay {
+            self.apply_dynamic_background(path_opt);
         }
     }
 
@@ -6663,7 +6691,7 @@ impl App {
                 }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 commands.push(Command::SetDynamicBackground(
-                    gs.song.background_path.clone(),
+                    gs.song.active_background_path(gs.current_beat).cloned(),
                 ));
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(course) = self.state.session.course_run.as_mut() {

@@ -4,7 +4,10 @@ use crate::game::{
     course::set_course_cache,
     note::NoteType,
     parsing::notes::ParsedNote,
-    song::{SongData, SongPack, get_song_cache, set_song_cache},
+    song::{
+        SongBackgroundChange, SongBackgroundChangeTarget, SongData, SongPack, get_song_cache,
+        set_song_cache,
+    },
     timing::{
         DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
         TimingSegments, WarpSegment,
@@ -29,7 +32,7 @@ use twox_hash::XxHash64;
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
 // Bump when the serialized song payload changes or resolved asset semantics change.
-const SONG_CACHE_VERSION: u8 = 1;
+const SONG_CACHE_VERSION: u8 = 2;
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 
@@ -535,6 +538,55 @@ impl From<SerializableChartData> for ChartData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+enum SerializableSongBackgroundChangeTarget {
+    File(String),
+    NoSongBg,
+    Random,
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct SerializableSongBackgroundChange {
+    start_beat: f32,
+    target: SerializableSongBackgroundChangeTarget,
+}
+
+impl From<&SongBackgroundChange> for SerializableSongBackgroundChange {
+    fn from(change: &SongBackgroundChange) -> Self {
+        let target = match &change.target {
+            SongBackgroundChangeTarget::File(path) => {
+                SerializableSongBackgroundChangeTarget::File(path.to_string_lossy().into_owned())
+            }
+            SongBackgroundChangeTarget::NoSongBg => {
+                SerializableSongBackgroundChangeTarget::NoSongBg
+            }
+            SongBackgroundChangeTarget::Random => SerializableSongBackgroundChangeTarget::Random,
+        };
+        Self {
+            start_beat: change.start_beat,
+            target,
+        }
+    }
+}
+
+impl From<SerializableSongBackgroundChange> for SongBackgroundChange {
+    fn from(change: SerializableSongBackgroundChange) -> Self {
+        let target = match change.target {
+            SerializableSongBackgroundChangeTarget::File(path) => {
+                SongBackgroundChangeTarget::File(PathBuf::from(path))
+            }
+            SerializableSongBackgroundChangeTarget::NoSongBg => {
+                SongBackgroundChangeTarget::NoSongBg
+            }
+            SerializableSongBackgroundChangeTarget::Random => SongBackgroundChangeTarget::Random,
+        };
+        Self {
+            start_beat: change.start_beat,
+            target,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 struct SerializableSongData {
     simfile_path: String,
     title: String,
@@ -544,6 +596,7 @@ struct SerializableSongData {
     artist: String,
     banner_path: Option<String>,
     background_path: Option<String>,
+    background_changes: Vec<SerializableSongBackgroundChange>,
     cdtitle_path: Option<String>,
     music_path: Option<String>,
     display_bpm: String,
@@ -581,6 +634,11 @@ impl From<&SongData> for SerializableSongData {
                 .background_path
                 .as_ref()
                 .map(|p| p.to_string_lossy().into_owned()),
+            background_changes: song
+                .background_changes
+                .iter()
+                .map(SerializableSongBackgroundChange::from)
+                .collect(),
             cdtitle_path: song
                 .cdtitle_path
                 .as_ref()
@@ -624,6 +682,11 @@ impl From<SerializableSongData> for SongData {
             artist: song.artist,
             banner_path: song.banner_path.map(PathBuf::from),
             background_path: song.background_path.map(PathBuf::from),
+            background_changes: song
+                .background_changes
+                .into_iter()
+                .map(SongBackgroundChange::from)
+                .collect(),
             cdtitle_path: song.cdtitle_path.map(PathBuf::from),
             music_path: song.music_path.map(PathBuf::from),
             display_bpm: song.display_bpm,
@@ -728,8 +791,17 @@ fn cached_path_exists(path_opt: Option<&str>) -> bool {
 #[inline(always)]
 fn cached_song_paths_exist(song: &CachedSong) -> bool {
     let data = &song.data;
+    let bgchange_paths_ok = data
+        .background_changes
+        .iter()
+        .all(|change| match &change.target {
+            SerializableSongBackgroundChangeTarget::File(path) => cached_path_exists(Some(path)),
+            SerializableSongBackgroundChangeTarget::NoSongBg
+            | SerializableSongBackgroundChangeTarget::Random => true,
+        });
     cached_path_exists(data.banner_path.as_deref())
         && cached_path_exists(data.background_path.as_deref())
+        && bgchange_paths_ok
         && cached_path_exists(data.cdtitle_path.as_deref())
         && cached_path_exists(data.music_path.as_deref())
 }
@@ -2007,6 +2079,20 @@ fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<
     collapsed_path.is_file().then_some(collapsed_path)
 }
 
+fn convert_background_change(
+    change: rssp::assets::ResolvedBackgroundChange,
+) -> SongBackgroundChange {
+    let target = match change.target {
+        rssp::assets::BackgroundChangeTarget::File(path) => SongBackgroundChangeTarget::File(path),
+        rssp::assets::BackgroundChangeTarget::NoSongBg => SongBackgroundChangeTarget::NoSongBg,
+        rssp::assets::BackgroundChangeTarget::Random => SongBackgroundChangeTarget::Random,
+    };
+    SongBackgroundChange {
+        start_beat: change.start_beat,
+        target,
+    }
+}
+
 /// The original parsing logic, now separated to be called on a cache miss.
 fn parse_and_process_song_file(
     path: &Path,
@@ -2087,6 +2173,11 @@ fn parse_and_process_song_file(
         &summary.banner_path,
         &summary.background_path,
     );
+    let background_changes =
+        rssp::assets::resolve_background_changes_like_itg(simfile_dir, &simfile_data)
+            .into_iter()
+            .map(convert_background_change)
+            .collect();
     let cdtitle_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.cdtitle_path);
 
     let music_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.music_path)
@@ -2120,6 +2211,7 @@ fn parse_and_process_song_file(
             artist: summary.artist_str,
             banner_path, // Keep original logic for banner
             background_path: background_path_opt,
+            background_changes,
             cdtitle_path,
             display_bpm: summary.display_bpm_str,
             offset: summary.offset as f32,

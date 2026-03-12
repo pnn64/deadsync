@@ -112,6 +112,7 @@ fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
         artist: format!("Bench Artist {}", pack_idx + 1),
         banner_path: None,
         background_path: None,
+        background_changes: Vec::new(),
         cdtitle_path: None,
         music_path: None,
         display_bpm: String::from("160"),

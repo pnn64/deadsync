@@ -27,8 +27,8 @@ chrono = "0.4.43"
 qrcodegen = "1.8.0"
 
 # rssp and nod
-rssp = { git = "https://github.com/pnn64/rssp", rev = "069f5c2" }
-nod = { git = "https://github.com/pnn64/nod", rev = "a8af11f" }
+rssp = { git = "https://github.com/pnn64/rssp", rev = "302a0fb" }
+nod = { git = "https://github.com/pnn64/nod", rev = "19cd27b" }
 
 # Software renderer
 softbuffer = "0.4.8"
