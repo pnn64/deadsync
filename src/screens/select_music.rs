@@ -778,7 +778,7 @@ pub struct State {
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
-    banner_high_quality_requested: bool,
+    pub(crate) banner_high_quality_requested: bool,
     cdtitle_spin_elapsed: f32,
     cdtitle_anim_elapsed: f32,
     last_requested_chart_hash: Option<String>,

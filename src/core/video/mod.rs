@@ -93,6 +93,23 @@ impl Drop for Player {
 pub fn open(path: &Path, looped: bool) -> Result<LoadedVideo, String> {
     let info = probe(path, looped)?;
     let poster = load_poster_with_info(path, info)?;
+    let player = open_player_with_info(path, info)?;
+    Ok(LoadedVideo {
+        info,
+        poster,
+        player,
+    })
+}
+
+pub fn load_poster(path: &Path) -> Result<RgbaImage, String> {
+    load_poster_with_info(path, probe(path, false)?)
+}
+
+pub fn open_player(path: &Path, looped: bool) -> Result<Player, String> {
+    open_player_with_info(path, probe(path, looped)?)
+}
+
+fn open_player_with_info(path: &Path, info: Info) -> Result<Player, String> {
     let queue = Arc::new(Mutex::new(SharedQueue::default()));
     let stop = Arc::new(AtomicBool::new(false));
     let child = Arc::new(Mutex::new(None));
@@ -103,21 +120,13 @@ pub fn open(path: &Path, looped: bool) -> Result<LoadedVideo, String> {
         stop.clone(),
         child.clone(),
     )?;
-    Ok(LoadedVideo {
+    Ok(Player {
         info,
-        poster,
-        player: Player {
-            info,
-            queue,
-            stop,
-            child,
-            worker: Some(worker),
-        },
+        queue,
+        stop,
+        child,
+        worker: Some(worker),
     })
-}
-
-pub fn load_poster(path: &Path) -> Result<RgbaImage, String> {
-    load_poster_with_info(path, probe(path, false)?)
 }
 
 fn spawn_worker(

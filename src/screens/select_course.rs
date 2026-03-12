@@ -243,7 +243,7 @@ pub struct State {
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     last_requested_banner_path: Option<PathBuf>,
-    banner_high_quality_requested: bool,
+    pub(crate) banner_high_quality_requested: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
     out_prompt: OutPromptState,

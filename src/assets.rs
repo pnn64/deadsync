@@ -597,7 +597,20 @@ fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
     };
     matches!(
         ext.to_ascii_lowercase().as_str(),
-        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tga" | "tif" | "tiff"
+        "png"
+            | "jpg"
+            | "jpeg"
+            | "gif"
+            | "bmp"
+            | "webp"
+            | "tga"
+            | "tif"
+            | "tiff"
+            | "mp4"
+            | "m4v"
+            | "mov"
+            | "webm"
+            | "mkv"
     )
 }
 
@@ -932,7 +945,23 @@ fn build_cached_banner_rgba(
     path: &Path,
     _opts: BannerCacheOptions,
 ) -> image::ImageResult<RgbaImage> {
+    if is_dynamic_video_path(path) {
+        return video::load_poster(path)
+            .map_err(|e| image::ImageError::IoError(std::io::Error::other(e)));
+    }
     Ok(open_image_fallback_quiet(path)?.to_rgba8())
+}
+
+fn load_banner_source_rgba(path: &Path, opts: BannerCacheOptions) -> Result<RgbaImage, String> {
+    if opts.enabled && is_cacheable_dynamic_image_path(path) {
+        return load_or_build_cached_banner(path, opts).map_err(|e| e.to_string());
+    }
+    if is_dynamic_video_path(path) {
+        return video::load_poster(path);
+    }
+    open_image_fallback(path)
+        .map(|img| img.to_rgba8())
+        .map_err(|e| e.to_string())
 }
 
 fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, folder: &str) {
@@ -1034,7 +1063,6 @@ struct DynamicBannerState {
     key: String,
     path: PathBuf,
     high_res_loaded: bool,
-    video: Option<DynamicVideoState>,
 }
 
 struct DynamicBackgroundState {
@@ -1050,6 +1078,7 @@ pub struct AssetManager {
     next_texture_handle: TextureHandle,
     fonts: HashMap<&'static str, Font>,
     current_dynamic_banner: Option<DynamicBannerState>,
+    active_banner_videos: HashMap<String, DynamicVideoState>,
     current_dynamic_cdtitle: Option<(String, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: HashSet<String>,
@@ -1081,6 +1110,7 @@ impl AssetManager {
             next_texture_handle: 1,
             fonts: HashMap::new(),
             current_dynamic_banner: None,
+            active_banner_videos: HashMap::new(),
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: HashSet::new(),
@@ -1801,6 +1831,7 @@ impl AssetManager {
 
     pub fn destroy_dynamic_assets(&mut self, backend: &mut Backend) {
         if self.current_dynamic_banner.is_some()
+            || !self.active_banner_videos.is_empty()
             || self.current_dynamic_cdtitle.is_some()
             || self.current_dynamic_pack_banner.is_some()
             || !self.dynamic_pack_banner_keys.is_empty()
@@ -1809,6 +1840,7 @@ impl AssetManager {
             if let Some(state) = self.current_dynamic_banner.take() {
                 self.remove_texture_and_dispose(backend, &state.key);
             }
+            self.active_banner_videos.clear();
             if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
                 self.remove_texture_and_dispose(backend, &key);
             }
@@ -1913,24 +1945,14 @@ impl AssetManager {
                 }
             }
 
-            let rgba = if banner_cache_opts.enabled && is_cacheable_dynamic_image_path(&path) {
-                match load_or_build_cached_banner(&path, banner_cache_opts) {
-                    Ok(cached) => cached,
-                    Err(e) => {
-                        warn!(
-                            "Failed to load cached pack banner '{}': {e}. Skipping.",
-                            path.display()
-                        );
-                        return;
-                    }
-                }
-            } else {
-                match open_image_fallback(&path) {
-                    Ok(img) => img.to_rgba8(),
-                    Err(e) => {
-                        warn!("Failed to open pack banner image {path:?}: {e}. Skipping.");
-                        return;
-                    }
+            let rgba = match load_banner_source_rgba(&path, banner_cache_opts) {
+                Ok(rgba) => rgba,
+                Err(e) => {
+                    warn!(
+                        "Failed to load pack banner '{}': {e}. Skipping.",
+                        path.display()
+                    );
+                    return;
                 }
             };
 
@@ -1975,62 +1997,14 @@ impl AssetManager {
                 return current.key.clone();
             }
             self.destroy_current_dynamic_banner(backend);
-
-            if is_dynamic_video_path(&path) {
-                match video::open(&path, true) {
-                    Ok(video) => {
-                        match backend.create_texture(&video.poster, SamplerDesc::default()) {
-                            Ok(texture) => {
-                                self.set_texture_for_key(backend, key.clone(), texture);
-                                register_texture_dims(&key, video.info.width, video.info.height);
-                                self.current_dynamic_banner = Some(DynamicBannerState {
-                                    key: key.clone(),
-                                    path,
-                                    high_res_loaded: true,
-                                    video: Some(DynamicVideoState {
-                                        player: video.player,
-                                        started_at: Instant::now(),
-                                    }),
-                                });
-                                return key;
-                            }
-                            Err(e) => {
-                                warn!(
-                                    "Failed to create GPU texture for video banner '{}': {e}. Using fallback.",
-                                    key
-                                );
-                                return FALLBACK_KEY.to_string();
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to open video banner '{}': {e}. Using fallback.",
-                            path.display()
-                        );
-                        return FALLBACK_KEY.to_string();
-                    }
-                }
-            }
-
-            let rgba = if banner_cache_opts.enabled && is_cacheable_dynamic_image_path(&path) {
-                match load_or_build_cached_banner(&path, banner_cache_opts) {
-                    Ok(cached) => cached,
-                    Err(e) => {
-                        warn!(
-                            "Failed to load cached banner '{}': {e}. Using fallback.",
-                            path.display()
-                        );
-                        return FALLBACK_KEY.to_string();
-                    }
-                }
-            } else {
-                match open_image_fallback(&path) {
-                    Ok(full) => full.to_rgba8(),
-                    Err(e) => {
-                        warn!("Failed to open banner image {path:?}: {e}. Using fallback.");
-                        return FALLBACK_KEY.to_string();
-                    }
+            let rgba = match load_banner_source_rgba(&path, banner_cache_opts) {
+                Ok(rgba) => rgba,
+                Err(e) => {
+                    warn!(
+                        "Failed to load banner '{}': {e}. Using fallback.",
+                        path.display()
+                    );
+                    return FALLBACK_KEY.to_string();
                 }
             };
 
@@ -2042,7 +2016,6 @@ impl AssetManager {
                         key: key.clone(),
                         path,
                         high_res_loaded: true,
-                        video: None,
                     });
                     key
                 }
@@ -2057,6 +2030,45 @@ impl AssetManager {
         } else {
             self.destroy_current_dynamic_banner(backend);
             FALLBACK_KEY.to_string()
+        }
+    }
+
+    pub fn sync_active_banner_videos(&mut self, backend: &mut Backend, desired_paths: &[PathBuf]) {
+        let mut desired = HashSet::<String>::with_capacity(desired_paths.len());
+        for path in desired_paths {
+            if !is_dynamic_video_path(path) {
+                continue;
+            }
+            desired.insert(path.to_string_lossy().into_owned());
+        }
+        self.active_banner_videos
+            .retain(|key, _| desired.contains(key));
+        for path in desired_paths {
+            if !is_dynamic_video_path(path) {
+                continue;
+            }
+            let key = path.to_string_lossy().into_owned();
+            if self.active_banner_videos.contains_key(&key) {
+                continue;
+            }
+            self.ensure_texture_from_path(backend, path);
+            if !self.has_texture_key(&key) {
+                continue;
+            }
+            match video::open_player(path, true) {
+                Ok(player) => {
+                    self.active_banner_videos.insert(
+                        key,
+                        DynamicVideoState {
+                            player,
+                            started_at: Instant::now(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    warn!("Failed to start banner video '{}': {e}", path.display());
+                }
+            }
         }
     }
 
@@ -2184,18 +2196,21 @@ impl AssetManager {
         backend: &mut Backend,
         gameplay_time_sec: Option<f32>,
     ) {
-        let banner_frame = self.current_dynamic_banner.as_mut().and_then(|state| {
-            let video = state.video.as_mut()?;
-            let play_time = video.started_at.elapsed().as_secs_f32();
-            video
-                .player
-                .take_due_frame(play_time)
-                .map(|frame| (state.key.clone(), frame))
-        });
-        if let Some((key, frame)) = banner_frame
-            && let Err(e) = self.update_texture_for_key(backend, &key, &frame)
-        {
-            warn!("Failed to update dynamic video banner '{}': {e}", key);
+        let banner_frames: Vec<_> = self
+            .active_banner_videos
+            .iter_mut()
+            .filter_map(|(key, video)| {
+                let play_time = video.started_at.elapsed().as_secs_f32();
+                video
+                    .player
+                    .take_due_frame(play_time)
+                    .map(|frame| (key.clone(), frame))
+            })
+            .collect();
+        for (key, frame) in banner_frames {
+            if let Err(e) = self.update_texture_for_key(backend, &key, &frame) {
+                warn!("Failed to update dynamic video banner '{}': {e}", key);
+            }
         }
 
         let background_frame = self.current_dynamic_background.as_mut().and_then(|state| {
@@ -2214,6 +2229,7 @@ impl AssetManager {
 
     fn destroy_current_dynamic_banner(&mut self, backend: &mut Backend) {
         if let Some(state) = self.current_dynamic_banner.take() {
+            self.active_banner_videos.remove(&state.key);
             self.remove_texture_and_dispose(backend, &state.key);
         }
     }
@@ -2332,21 +2348,12 @@ impl AssetManager {
             return;
         }
 
-        let rgba = if is_dynamic_video_path(path) {
-            match video::load_poster(path) {
-                Ok(img) => img,
-                Err(e) => {
-                    warn!("Failed to open video poster {path:?}: {e}. Skipping.");
-                    return;
-                }
-            }
-        } else {
-            match open_image_fallback(path) {
-                Ok(img) => img.to_rgba8(),
-                Err(e) => {
-                    warn!("Failed to open image {path:?}: {e}. Skipping.");
-                    return;
-                }
+        let banner_cache_opts = BannerCacheOptions::from_banner_config(&crate::config::get());
+        let rgba = match load_banner_source_rgba(path, banner_cache_opts) {
+            Ok(rgba) => rgba,
+            Err(e) => {
+                warn!("Failed to load banner source {path:?}: {e}. Skipping.");
+                return;
             }
         };
 
