@@ -1,6 +1,7 @@
 use crate::assets;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
 use crate::core::space::{Metrics, metrics_for_window};
+use crate::test_support::density_graph_bench;
 use crate::test_support::music_wheel_bench;
 use crate::test_support::pane_stats_bench;
 use crate::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
@@ -9,7 +10,8 @@ use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 7] = [
+const SCENARIO_NAMES: [&str; 8] = [
+    density_graph_bench::SCENARIO_NAME,
     "hud",
     "text",
     "text-ci",
@@ -51,6 +53,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
     let metrics = metrics_for_window(1920, 1080);
     let fonts = bench_fonts();
     match name {
+        density_graph_bench::SCENARIO_NAME => Some(density_graph_scenario(metrics, fonts)),
         "hud" => Some(hud_scenario(metrics, fonts)),
         "text" => Some(text_scenario(metrics, fonts)),
         "text-ci" => Some(text_ci_scenario(metrics, fonts)),
@@ -59,6 +62,18 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         music_wheel_bench::SCENARIO_NAME => Some(music_wheel_scenario(metrics, fonts)),
         pane_stats_bench::SCENARIO_NAME => Some(pane_stats_scenario(metrics, fonts)),
         _ => None,
+    }
+}
+
+fn density_graph_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let fixture = density_graph_bench::fixture();
+    ComposeScenario {
+        name: density_graph_bench::SCENARIO_NAME,
+        actors: fixture.build(),
+        clear_color: [0.01, 0.02, 0.03, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.0,
     }
 }
 

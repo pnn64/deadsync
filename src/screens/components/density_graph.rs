@@ -173,76 +173,43 @@ fn interp_hist_col(a: HistCol, b: HistCol, x: f32) -> HistCol {
     }
 }
 
-fn clip_hist_cols(cols: &[HistCol], left: f32, right: f32) -> Vec<HistCol> {
-    if cols.is_empty() || left >= right {
-        return Vec::new();
-    }
-    if left <= cols[0].x && right >= cols[cols.len() - 1].x {
-        return cols.to_vec();
-    }
+#[inline(always)]
+fn push_hist_segment(
+    out: &mut Vec<MeshVertex>,
+    a: HistCol,
+    b: HistCol,
+    left: f32,
+    bottom_y: f32,
+    bottom_color: [f32; 4],
+) {
+    let ax = a.x - left;
+    let bx = b.x - left;
 
-    let mut li = 0usize;
-    while li < cols.len() && cols[li].x < left {
-        li += 1;
-    }
-    if li >= cols.len() {
-        return Vec::new();
-    }
+    out.push(MeshVertex {
+        pos: [ax, bottom_y],
+        color: bottom_color,
+    });
+    out.push(MeshVertex {
+        pos: [ax, a.top_y],
+        color: a.top_color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, bottom_y],
+        color: bottom_color,
+    });
 
-    let mut ri = li;
-    while ri < cols.len() && cols[ri].x <= right {
-        ri += 1;
-    }
-
-    let mut out: Vec<HistCol> = Vec::with_capacity(ri.saturating_sub(li) + 2);
-    out.extend_from_slice(&cols[li..ri]);
-
-    if li > 0 {
-        out.insert(0, interp_hist_col(cols[li - 1], cols[li], left));
-    }
-    if ri < cols.len() && ri > 0 {
-        out.push(interp_hist_col(cols[ri - 1], cols[ri], right));
-    }
-
-    out
-}
-
-fn hist_cols_to_tris(cols: &[HistCol], bottom_y: f32, bottom_color: [f32; 4]) -> Vec<MeshVertex> {
-    if cols.len() < 2 {
-        return Vec::new();
-    }
-    let mut out: Vec<MeshVertex> = Vec::with_capacity(cols.len().saturating_sub(1) * 6);
-    for w in cols.windows(2) {
-        let a = w[0];
-        let b = w[1];
-
-        out.push(MeshVertex {
-            pos: [a.x, bottom_y],
-            color: bottom_color,
-        });
-        out.push(MeshVertex {
-            pos: [a.x, a.top_y],
-            color: a.top_color,
-        });
-        out.push(MeshVertex {
-            pos: [b.x, bottom_y],
-            color: bottom_color,
-        });
-
-        out.push(MeshVertex {
-            pos: [a.x, a.top_y],
-            color: a.top_color,
-        });
-        out.push(MeshVertex {
-            pos: [b.x, b.top_y],
-            color: b.top_color,
-        });
-        out.push(MeshVertex {
-            pos: [b.x, bottom_y],
-            color: bottom_color,
-        });
-    }
-    out
+    out.push(MeshVertex {
+        pos: [ax, a.top_y],
+        color: a.top_color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, b.top_y],
+        color: b.top_color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, bottom_y],
+        color: bottom_color,
+    });
 }
 
 impl DensityHistCache {
@@ -254,11 +221,56 @@ impl DensityHistCache {
 
         let left = offset.clamp(0.0, self.scaled_width);
         let right = (left + visible_width).clamp(0.0, self.scaled_width);
-        let mut clipped = clip_hist_cols(&self.cols, left, right);
-        for c in &mut clipped {
-            c.x -= left;
+        if self.cols.is_empty() || left >= right {
+            return Vec::new();
         }
-        hist_cols_to_tris(&clipped, self.height, self.bottom_color)
+
+        let cols = &self.cols;
+        let point_count = if left <= cols[0].x && right >= cols[cols.len() - 1].x {
+            cols.len()
+        } else {
+            let li = cols.partition_point(|p| p.x < left);
+            let ri = cols.partition_point(|p| p.x <= right);
+            ri.saturating_sub(li) + usize::from(li > 0) + usize::from(ri < cols.len() && ri > 0)
+        };
+        if point_count < 2 {
+            return Vec::new();
+        }
+
+        let mut out = Vec::with_capacity((point_count - 1) * 6);
+        let mut prev: Option<HistCol> = None;
+
+        let mut push_point = |point: HistCol| {
+            if let Some(last) = prev {
+                push_hist_segment(&mut out, last, point, left, self.height, self.bottom_color);
+            }
+            prev = Some(point);
+        };
+
+        if left <= cols[0].x && right >= cols[cols.len() - 1].x {
+            for &point in cols.iter() {
+                push_point(point);
+            }
+            return out;
+        }
+
+        let li = cols.partition_point(|p| p.x < left);
+        if li >= cols.len() {
+            return Vec::new();
+        }
+        let ri = cols.partition_point(|p| p.x <= right);
+
+        if li > 0 {
+            push_point(interp_hist_col(cols[li - 1], cols[li], left));
+        }
+        for &point in &cols[li..ri] {
+            push_point(point);
+        }
+        if ri < cols.len() && ri > 0 {
+            push_point(interp_hist_col(cols[ri - 1], cols[ri], right));
+        }
+
+        out
     }
 }
 
