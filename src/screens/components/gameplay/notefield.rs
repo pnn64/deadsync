@@ -75,6 +75,8 @@ const ERROR_BAR_LINES_FADE_DUR_S: f32 = 0.5;
 const ERROR_BAR_LABEL_FADE_DUR_S: f32 = 0.5;
 const ERROR_BAR_LABEL_HOLD_S: f32 = 2.0;
 const OFFSET_INDICATOR_DUR_S: f32 = 0.5;
+const DISPLAY_MODS_ZOOM: f32 = 0.8;
+const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
 const TEXT_CACHE_LIMIT: usize = 4096;
@@ -3647,7 +3649,7 @@ pub fn build(
                 hud_actors.push(act!(text:
                     font("miso"): settext(mods_text):
                     align(0.5, 0.5): xy(playfield_center_x, y):
-                    zoom(0.8): maxwidth(125.0):
+                    zoom(DISPLAY_MODS_ZOOM): wrapwidthpixels(DISPLAY_MODS_WRAP_WIDTH_PX): horizalign(center):
                     shadowcolor(0.0, 0.0, 0.0, 1.0):
                     shadowlength(1.0):
                     diffuse(1.0, 1.0, 1.0, alpha):
@@ -4712,9 +4714,8 @@ pub fn build(
 mod tests {
     use super::{
         Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, bottom_cap_uv_window, clipped_hold_body_bounds,
-        hold_head_render_flags, hold_tail_cap_bounds,
-        maybe_mirror_uv_horiz_for_reverse_flipped, note_scale_height, offset_center,
-        top_cap_rotation_deg,
+        hold_head_render_flags, hold_tail_cap_bounds, maybe_mirror_uv_horiz_for_reverse_flipped,
+        note_scale_height, offset_center, top_cap_rotation_deg,
     };
     use crate::game::gameplay::ActiveHold;
     use crate::game::note::NoteType;

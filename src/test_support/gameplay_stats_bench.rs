@@ -102,6 +102,11 @@ pub fn fixture() -> GameplayStatsBenchFixture {
         });
     }
 
+    let mut asset_manager = AssetManager::new();
+    for (name, font) in compose_scenarios::bench_fonts() {
+        asset_manager.register_font(name, font);
+    }
+
     let playfield_center_x = notefield::build(
         base.state(),
         base.profile(),
@@ -110,11 +115,6 @@ pub fn fixture() -> GameplayStatsBenchFixture {
         false,
     )
     .1;
-
-    let mut asset_manager = AssetManager::new();
-    for (name, font) in compose_scenarios::bench_fonts() {
-        asset_manager.register_font(name, font);
-    }
 
     GameplayStatsBenchFixture {
         base,

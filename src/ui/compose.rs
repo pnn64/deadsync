@@ -105,9 +105,15 @@ struct CachedTextLayout {
     lines: Vec<CachedLine>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct TextLayoutKey {
+    font_key: u64,
+    wrap_width_pixels: i32,
+}
+
 pub struct TextLayoutCache {
-    owned_entries: HashMap<u64, HashMap<Box<str>, Box<CachedTextLayout>>>,
-    shared_aliases: HashMap<u64, HashMap<usize, (Arc<str>, *const CachedTextLayout)>>,
+    owned_entries: HashMap<TextLayoutKey, HashMap<Box<str>, Box<CachedTextLayout>>>,
+    shared_aliases: HashMap<TextLayoutKey, HashMap<usize, (Arc<str>, *const CachedTextLayout)>>,
     entry_count: usize,
     alias_count: usize,
     max_entries: usize,
@@ -145,42 +151,42 @@ impl TextLayoutCache {
         font: &font::Font,
         fonts: &HashMap<&'static str, font::Font>,
         content: &actors::TextContent,
+        wrap_width_pixels: Option<i32>,
     ) -> &CachedTextLayout {
-        let font_key = font_chain_key(font, fonts);
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, fonts),
+            wrap_width_pixels: wrap_width_pixels.unwrap_or(-1),
+        };
         match content {
-            actors::TextContent::Owned(text) => {
-                self.get_or_build_owned(font_key, font, fonts, text)
-            }
-            actors::TextContent::Shared(text) => {
-                self.get_or_build_shared(font_key, font, fonts, text)
-            }
+            actors::TextContent::Owned(text) => self.get_or_build_owned(key, font, fonts, text),
+            actors::TextContent::Shared(text) => self.get_or_build_shared(key, font, fonts, text),
         }
     }
 
     fn get_or_build_owned(
         &mut self,
-        font_key: u64,
+        key: TextLayoutKey,
         font: &font::Font,
         fonts: &HashMap<&'static str, font::Font>,
         text: &str,
     ) -> &CachedTextLayout {
         if !self
             .owned_entries
-            .get(&font_key)
+            .get(&key)
             .is_some_and(|font_entries| font_entries.contains_key(text))
         {
             if self.entry_count >= self.max_entries {
                 self.clear();
             }
-            let layout = build_cached_text_layout(font, fonts, text);
+            let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
             self.owned_entries
-                .entry(font_key)
+                .entry(key)
                 .or_default()
                 .insert(text.into(), Box::new(layout));
             self.entry_count += 1;
         }
         self.owned_entries
-            .get(&font_key)
+            .get(&key)
             .and_then(|font_entries| font_entries.get(text))
             .map(Box::as_ref)
             .expect("owned text layout cache entry inserted")
@@ -188,7 +194,7 @@ impl TextLayoutCache {
 
     fn get_or_build_shared(
         &mut self,
-        font_key: u64,
+        key: TextLayoutKey,
         font: &font::Font,
         fonts: &HashMap<&'static str, font::Font>,
         text: &Arc<str>,
@@ -196,7 +202,7 @@ impl TextLayoutCache {
         let text_key = Arc::as_ptr(text) as *const () as usize;
         if let Some(layout_ptr) = self
             .shared_aliases
-            .get(&font_key)
+            .get(&key)
             .and_then(|font_entries| font_entries.get(&text_key))
             .map(|entry| entry.1)
         {
@@ -204,16 +210,16 @@ impl TextLayoutCache {
         }
         let layout_ptr = if !self
             .owned_entries
-            .get(&font_key)
+            .get(&key)
             .is_some_and(|font_entries| font_entries.contains_key(text.as_ref()))
         {
             if self.entry_count >= self.max_entries {
                 self.clear();
             }
-            let layout = build_cached_text_layout(font, fonts, text);
+            let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
             let layout = self
                 .owned_entries
-                .entry(font_key)
+                .entry(key)
                 .or_default()
                 .entry(text.as_ref().into())
                 .or_insert_with(|| Box::new(layout));
@@ -221,7 +227,7 @@ impl TextLayoutCache {
             layout.as_ref() as *const CachedTextLayout
         } else {
             self.owned_entries
-                .get(&font_key)
+                .get(&key)
                 .and_then(|font_entries| font_entries.get(text.as_ref()))
                 .map(|layout| layout.as_ref() as *const CachedTextLayout)
                 .expect("shared text layout cache entry inserted")
@@ -232,7 +238,7 @@ impl TextLayoutCache {
         }
         if self
             .shared_aliases
-            .entry(font_key)
+            .entry(key)
             .or_default()
             .insert(text_key, (text.clone(), layout_ptr))
             .is_none()
@@ -257,6 +263,7 @@ fn build_cached_text_layout(
     font: &font::Font,
     fonts: &HashMap<&'static str, font::Font>,
     text: &str,
+    wrap_width_pixels: i32,
 ) -> CachedTextLayout {
     let draws_space = font.glyph_map.contains_key(&' ');
     let mut max_logical_width_i = 0i32;
@@ -286,12 +293,8 @@ fn build_cached_text_layout(
         lines.push(CachedLine { width_i32, glyphs });
     };
 
-    if text.as_bytes().contains(&b'\n') {
-        for line in text.lines() {
-            push_line(line);
-        }
-    } else {
-        push_line(text);
+    for line in wrapped_text_lines(text, wrap_width_pixels, font, fonts) {
+        push_line(line.as_ref());
     }
 
     CachedTextLayout {
@@ -299,6 +302,57 @@ fn build_cached_text_layout(
         glyph_count,
         lines,
     }
+}
+
+fn wrap_text_lines_by_words<F>(
+    text: &str,
+    wrap_width_pixels: i32,
+    space_width: i32,
+    mut word_width: F,
+) -> Vec<Box<str>>
+where
+    F: FnMut(&str) -> i32,
+{
+    let mut out = Vec::new();
+    for src in text.split('\n') {
+        if wrap_width_pixels < 0 {
+            out.push(src.into());
+            continue;
+        }
+        let mut words = src.split(' ').filter(|word| !word.is_empty());
+        let Some(first) = words.next() else {
+            out.push("".into());
+            continue;
+        };
+        let mut line = String::from(first);
+        let mut line_width = word_width(first);
+        for word in words {
+            let width_to_add = space_width + word_width(word);
+            if line_width + width_to_add <= wrap_width_pixels {
+                line.push(' ');
+                line.push_str(word);
+                line_width += width_to_add;
+            } else {
+                out.push(line.into_boxed_str());
+                line = word.to_owned();
+                line_width = word_width(word);
+            }
+        }
+        out.push(line.into_boxed_str());
+    }
+    out
+}
+
+fn wrapped_text_lines(
+    text: &str,
+    wrap_width_pixels: i32,
+    font: &font::Font,
+    fonts: &HashMap<&'static str, font::Font>,
+) -> Vec<Box<str>> {
+    let space_width = font::measure_line_width_logical(font, " ", fonts);
+    wrap_text_lines_by_words(text, wrap_width_pixels, space_width, |word| {
+        font::measure_line_width_logical(font, word, fonts)
+    })
 }
 
 #[inline(always)]
@@ -841,6 +895,7 @@ fn build_actor_recursive<'a>(
             scale,
             fit_width,
             fit_height,
+            wrap_width_pixels,
             max_width,
             max_height,
             // NEW:
@@ -865,6 +920,7 @@ fn build_actor_recursive<'a>(
                     effect_scale,
                     *fit_width,
                     *fit_height,
+                    *wrap_width_pixels,
                     *max_width,
                     *max_height,
                     // NEW flags:
@@ -1471,6 +1527,7 @@ fn layout_text<'a>(
     scale: [f32; 2],
     fit_width: Option<f32>,
     fit_height: Option<f32>,
+    wrap_width_pixels: Option<i32>,
     max_width: Option<f32>,
     max_height: Option<f32>,
     // NEW: StepMania order semantics (per axis)
@@ -1486,7 +1543,7 @@ fn layout_text<'a>(
     if content.as_str().is_empty() {
         return;
     }
-    let layout = text_cache.get_or_build(font, fonts, content);
+    let layout = text_cache.get_or_build(font, fonts, content, wrap_width_pixels);
     let num_lines = layout.lines.len();
     if num_lines == 0 {
         return;
@@ -2034,4 +2091,27 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
     };
     obj.transform = Matrix4::from_scale(1.0);
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wrap_text_lines_by_words;
+
+    #[test]
+    fn wrapwidthpixels_wraps_on_spaces() {
+        let lines = wrap_text_lines_by_words("A BB CCC", 3, 1, |word| word.len() as i32);
+        assert_eq!(lines, vec!["A", "BB", "CCC"]);
+    }
+
+    #[test]
+    fn wrapwidthpixels_keeps_empty_lines() {
+        let lines = wrap_text_lines_by_words("AA\n\nBB CC", 5, 1, |word| word.len() as i32);
+        assert_eq!(lines, vec!["AA", "", "BB", "CC"]);
+    }
+
+    #[test]
+    fn wrapwidthpixels_keeps_long_word_on_own_line() {
+        let lines = wrap_text_lines_by_words("AAAA BB", 3, 1, |word| word.len() as i32);
+        assert_eq!(lines, vec!["AAAA", "BB"]);
+    }
 }
