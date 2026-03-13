@@ -10,15 +10,18 @@ use crate::core::space::ortho_for_window;
 use cgmath::Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
 use glutin::{
-    config::ConfigTemplateBuilder,
-    context::{ContextAttributesBuilder, PossiblyCurrentContext},
+    config::{Api as ConfigApi, Config, ConfigTemplateBuilder},
+    context::{
+        ContextApi, ContextAttributes, ContextAttributesBuilder, GlProfile, PossiblyCurrentContext,
+        Version,
+    },
     display::{Display, DisplayApiPreference},
     prelude::*,
     surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
 };
 use image::RgbaImage;
 use log::{debug, info, warn};
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
 use std::{
     collections::HashMap, error::Error, ffi::CStr, hash::Hasher, mem, num::NonZeroU32, sync::Arc,
     time::Instant,
@@ -28,6 +31,52 @@ use winit::window::Window;
 
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GlApi {
+    Desktop,
+    Gles,
+}
+
+impl GlApi {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Desktop => "desktop OpenGL",
+            Self::Gles => "OpenGL ES",
+        }
+    }
+
+    const fn shaders(self) -> ShaderSet {
+        match self {
+            Self::Desktop => ShaderSet {
+                sprite_vert: include_str!("../shaders/opengl_shader.vert"),
+                sprite_frag: include_str!("../shaders/opengl_shader.frag"),
+                mesh_vert: include_str!("../shaders/opengl_mesh.vert"),
+                mesh_frag: include_str!("../shaders/opengl_mesh.frag"),
+                tmesh_vert: include_str!("../shaders/opengl_tmesh.vert"),
+                tmesh_frag: include_str!("../shaders/opengl_tmesh.frag"),
+            },
+            Self::Gles => ShaderSet {
+                sprite_vert: include_str!("../shaders/opengl_shader_gles.vert"),
+                sprite_frag: include_str!("../shaders/opengl_shader_gles.frag"),
+                mesh_vert: include_str!("../shaders/opengl_mesh_gles.vert"),
+                mesh_frag: include_str!("../shaders/opengl_mesh_gles.frag"),
+                tmesh_vert: include_str!("../shaders/opengl_tmesh_gles.vert"),
+                tmesh_frag: include_str!("../shaders/opengl_tmesh_gles.frag"),
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ShaderSet {
+    sprite_vert: &'static str,
+    sprite_frag: &'static str,
+    mesh_vert: &'static str,
+    mesh_frag: &'static str,
+    tmesh_vert: &'static str,
+    tmesh_frag: &'static str,
+}
 
 // A handle to an OpenGL texture on the GPU.
 #[derive(Debug, Clone, Copy)]
@@ -75,6 +124,7 @@ pub struct State {
     pub gl: glow::Context,
     gl_surface: Surface<WindowSurface>,
     gl_context: PossiblyCurrentContext,
+    api: GlApi,
     program: glow::Program,
     mesh_program: glow::Program,
     tmesh_program: glow::Program,
@@ -117,12 +167,17 @@ pub fn init(
         debug!("OpenGL debug context requested.");
     }
 
-    let (gl_surface, gl_context, gl) =
+    let (gl_surface, gl_context, gl, api) =
         create_opengl_context(&window, vsync_enabled, gfx_debug_enabled)?;
+    info!("OpenGL context API: {}", api.label());
     log_opengl_driver_info(&gl);
-    let (program, mvp_location, texture_location) = create_graphics_program(&gl)?;
-    let (mesh_program, mesh_mvp_location) = create_mesh_program(&gl)?;
-    let (tmesh_program, tmesh_mvp_location, tmesh_texture_location) = create_tmesh_program(&gl)?;
+    let shaders = api.shaders();
+    let (program, mvp_location, texture_location) =
+        create_graphics_program(&gl, shaders.sprite_vert, shaders.sprite_frag)?;
+    let (mesh_program, mesh_mvp_location) =
+        create_mesh_program(&gl, shaders.mesh_vert, shaders.mesh_frag)?;
+    let (tmesh_program, tmesh_mvp_location, tmesh_texture_location) =
+        create_tmesh_program(&gl, shaders.tmesh_vert, shaders.tmesh_frag)?;
 
     // Create shared static unit quad + index buffer.
     let (shared_vao, _shared_vbo, _shared_ibo, shared_instance_vbo, index_count) = unsafe {
@@ -371,6 +426,7 @@ pub fn init(
         gl,
         gl_surface,
         gl_context,
+        api,
         program,
         mesh_program,
         tmesh_program,
@@ -1042,7 +1098,10 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
     let mut pixels = vec![0u8; byte_len];
     unsafe {
         state.gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
-        state.gl.read_buffer(glow::FRONT);
+        state.gl.read_buffer(match state.api {
+            GlApi::Desktop => glow::FRONT,
+            GlApi::Gles => glow::BACK,
+        });
         state.gl.read_pixels(
             0,
             0,
@@ -1310,6 +1369,7 @@ fn create_opengl_context(
         Surface<WindowSurface>,
         PossiblyCurrentContext,
         glow::Context,
+        GlApi,
     ),
     Box<dyn Error>,
 > {
@@ -1384,29 +1444,110 @@ fn create_opengl_context(
         (display, vsync_logic)
     };
 
-    let template = ConfigTemplateBuilder::new()
-        .with_alpha_size(0)
-        .with_stencil_size(8)
-        .with_transparency(false)
-        .build();
-
-    let config = unsafe { display.find_configs(template)?.next() }
-        .ok_or("Failed to find a suitable GL config")?;
-
     let (width, height): (u32, u32) = window.inner_size().into();
     let raw_window_handle = window.window_handle()?.as_raw();
-    let surface_attributes = SurfaceAttributesBuilder::<WindowSurface>::new().build(
-        raw_window_handle,
-        NonZeroU32::new(width).unwrap(),
-        NonZeroU32::new(height).unwrap(),
-    );
-    let surface = unsafe { display.create_window_surface(&config, &surface_attributes)? };
+    #[cfg(target_os = "windows")]
+    let (surface, context, api) = {
+        let config = find_config(
+            &display,
+            raw_window_handle,
+            ConfigApi::OPENGL,
+            "desktop OpenGL",
+        )?;
+        let context_attributes = ContextAttributesBuilder::new()
+            .with_debug(gfx_debug_enabled)
+            .build(Some(raw_window_handle));
+        let (surface, context) = create_window_surface_context(
+            &display,
+            &config,
+            raw_window_handle,
+            width,
+            height,
+            context_attributes,
+        )?;
+        (surface, context, GlApi::Desktop)
+    };
 
-    let context_attributes = ContextAttributesBuilder::new()
-        .with_debug(gfx_debug_enabled)
-        .build(Some(raw_window_handle));
-    let context =
-        unsafe { display.create_context(&config, &context_attributes)? }.make_current(&surface)?;
+    #[cfg(target_os = "macos")]
+    let (surface, context, api) = {
+        let config = find_config(
+            &display,
+            raw_window_handle,
+            ConfigApi::OPENGL,
+            "desktop OpenGL",
+        )?;
+        let context_attributes = ContextAttributesBuilder::new()
+            .with_debug(gfx_debug_enabled)
+            .build(Some(raw_window_handle));
+        let (surface, context) = create_window_surface_context(
+            &display,
+            &config,
+            raw_window_handle,
+            width,
+            height,
+            context_attributes,
+        )?;
+        (surface, context, GlApi::Desktop)
+    };
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let (surface, context, api) = {
+        let try_desktop =
+            || -> Result<(Surface<WindowSurface>, PossiblyCurrentContext), Box<dyn Error>> {
+                let config = find_config(
+                    &display,
+                    raw_window_handle,
+                    ConfigApi::OPENGL,
+                    "desktop OpenGL",
+                )?;
+                let context_attributes = ContextAttributesBuilder::new()
+                    .with_debug(gfx_debug_enabled)
+                    .with_profile(GlProfile::Core)
+                    .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
+                    .build(Some(raw_window_handle));
+                create_window_surface_context(
+                    &display,
+                    &config,
+                    raw_window_handle,
+                    width,
+                    height,
+                    context_attributes,
+                )
+            };
+
+        match try_desktop() {
+            Ok((surface, context)) => (surface, context, GlApi::Desktop),
+            Err(desktop_err) => {
+                warn!(
+                    "Desktop OpenGL context creation failed over EGL: {desktop_err}. Retrying with OpenGL ES 3.0."
+                );
+                let config = find_config(
+                    &display,
+                    raw_window_handle,
+                    ConfigApi::GLES3,
+                    "OpenGL ES 3.x",
+                )?;
+                let context_attributes = ContextAttributesBuilder::new()
+                    .with_debug(gfx_debug_enabled)
+                    .with_context_api(ContextApi::Gles(Some(Version::new(3, 0))))
+                    .build(Some(raw_window_handle));
+                let (surface, context) = create_window_surface_context(
+                    &display,
+                    &config,
+                    raw_window_handle,
+                    width,
+                    height,
+                    context_attributes,
+                )
+                .map_err(|gles_err| {
+                    std::io::Error::other(format!(
+                        "Failed to create an OpenGL ES 3.0 context after desktop OpenGL fallback. desktop={desktop_err}; gles={gles_err}"
+                    ))
+                })?;
+                (surface, context, GlApi::Gles)
+            }
+        }
+    };
 
     #[cfg(target_os = "windows")]
     vsync_logic(&display);
@@ -1415,12 +1556,14 @@ fn create_opengl_context(
 
     unsafe {
         let gl = glow::Context::from_loader_function_cstr(|s: &CStr| display.get_proc_address(s));
-        Ok((surface, context, gl))
+        Ok((surface, context, gl, api))
     }
 }
 
 fn create_graphics_program(
     gl: &glow::Context,
+    vert_src: &str,
+    frag_src: &str,
 ) -> Result<(glow::Program, UniformLocation, UniformLocation), String> {
     unsafe {
         let program = gl.create_program()?;
@@ -1436,14 +1579,8 @@ fn create_graphics_program(
             Ok(sh)
         };
 
-        let vert = compile(
-            glow::VERTEX_SHADER,
-            include_str!("../shaders/opengl_shader.vert"),
-        )?;
-        let frag = compile(
-            glow::FRAGMENT_SHADER,
-            include_str!("../shaders/opengl_shader.frag"),
-        )?;
+        let vert = compile(glow::VERTEX_SHADER, vert_src)?;
+        let frag = compile(glow::FRAGMENT_SHADER, frag_src)?;
 
         gl.attach_shader(program, vert);
         gl.attach_shader(program, frag);
@@ -1473,7 +1610,11 @@ fn create_graphics_program(
     }
 }
 
-fn create_mesh_program(gl: &glow::Context) -> Result<(glow::Program, UniformLocation), String> {
+fn create_mesh_program(
+    gl: &glow::Context,
+    vert_src: &str,
+    frag_src: &str,
+) -> Result<(glow::Program, UniformLocation), String> {
     unsafe {
         let program = gl.create_program()?;
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
@@ -1488,14 +1629,8 @@ fn create_mesh_program(gl: &glow::Context) -> Result<(glow::Program, UniformLoca
             Ok(sh)
         };
 
-        let vert = compile(
-            glow::VERTEX_SHADER,
-            include_str!("../shaders/opengl_mesh.vert"),
-        )?;
-        let frag = compile(
-            glow::FRAGMENT_SHADER,
-            include_str!("../shaders/opengl_mesh.frag"),
-        )?;
+        let vert = compile(glow::VERTEX_SHADER, vert_src)?;
+        let frag = compile(glow::FRAGMENT_SHADER, frag_src)?;
 
         gl.attach_shader(program, vert);
         gl.attach_shader(program, frag);
@@ -1524,6 +1659,8 @@ fn create_mesh_program(gl: &glow::Context) -> Result<(glow::Program, UniformLoca
 
 fn create_tmesh_program(
     gl: &glow::Context,
+    vert_src: &str,
+    frag_src: &str,
 ) -> Result<(glow::Program, UniformLocation, UniformLocation), String> {
     unsafe {
         let program = gl.create_program()?;
@@ -1539,14 +1676,8 @@ fn create_tmesh_program(
             Ok(sh)
         };
 
-        let vert = compile(
-            glow::VERTEX_SHADER,
-            include_str!("../shaders/opengl_tmesh.vert"),
-        )?;
-        let frag = compile(
-            glow::FRAGMENT_SHADER,
-            include_str!("../shaders/opengl_tmesh.frag"),
-        )?;
+        let vert = compile(glow::VERTEX_SHADER, vert_src)?;
+        let frag = compile(glow::FRAGMENT_SHADER, frag_src)?;
 
         gl.attach_shader(program, vert);
         gl.attach_shader(program, frag);
@@ -1574,6 +1705,44 @@ fn create_tmesh_program(
 
         Ok((program, mvp_location, texture_location))
     }
+}
+
+fn find_config(
+    display: &Display,
+    raw_window_handle: RawWindowHandle,
+    api: ConfigApi,
+    label: &str,
+) -> Result<Config, Box<dyn Error>> {
+    let template = ConfigTemplateBuilder::new()
+        .with_api(api)
+        .with_alpha_size(8)
+        .with_depth_size(0)
+        .with_stencil_size(0)
+        .with_transparency(false)
+        .compatible_with_native_window(raw_window_handle)
+        .build();
+    unsafe { display.find_configs(template)?.next() }
+        .ok_or_else(|| std::io::Error::other(format!("Failed to find a suitable {label} config")))
+        .map_err(Into::into)
+}
+
+fn create_window_surface_context(
+    display: &Display,
+    config: &Config,
+    raw_window_handle: RawWindowHandle,
+    width: u32,
+    height: u32,
+    context_attributes: ContextAttributes,
+) -> Result<(Surface<WindowSurface>, PossiblyCurrentContext), Box<dyn Error>> {
+    let surface_attributes = SurfaceAttributesBuilder::<WindowSurface>::new().build(
+        raw_window_handle,
+        NonZeroU32::new(width).unwrap(),
+        NonZeroU32::new(height).unwrap(),
+    );
+    let surface = unsafe { display.create_window_surface(config, &surface_attributes)? };
+    let context =
+        unsafe { display.create_context(config, &context_attributes)? }.make_current(&surface)?;
+    Ok((surface, context))
 }
 
 mod bytemuck {
