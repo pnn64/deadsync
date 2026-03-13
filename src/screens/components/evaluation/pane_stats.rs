@@ -155,7 +155,7 @@ fn actor_capacity(show_fa_plus_pane: bool, show_10ms_blue: bool, digits_to_fmt: 
 }
 
 /// Builds a 300px evaluation pane for a given controller side, including judgment and radar counts.
-pub fn build_stats_pane(
+pub(crate) fn build_stats_pane(
     score_info: &ScoreInfo,
     pane: EvalPane,
     controller: profile::PlayerSide,
