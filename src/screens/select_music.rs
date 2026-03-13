@@ -5,7 +5,8 @@ use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
 use crate::core::space::{
-    is_wide, screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+    current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+    widescale,
 };
 use crate::game::chart::ChartData;
 use crate::game::parsing::simfile as song_loading;
@@ -455,6 +456,72 @@ fn preview_song_sec(state: &State) -> Option<f64> {
         rel_song_sec = rel_song_sec.rem_euclid(length_sec);
     }
     Some((start_sec + rel_song_sec) as f64)
+}
+
+#[inline(always)]
+fn preview_marker(
+    displayed: Option<&DisplayedChart>,
+    preview_sec: Option<f64>,
+    graph_left: f32,
+    graph_w: f32,
+) -> Option<PreviewMarker> {
+    let displayed = displayed?;
+    let preview_sec = preview_sec?;
+    let chart = displayed.song.charts.get(displayed.chart_ix)?;
+    if graph_w <= 0.0 || !preview_sec.is_finite() {
+        return None;
+    }
+    let first_second = 0.0_f32.min(chart.timing.get_time_for_beat(0.0));
+    let last_second = displayed
+        .song
+        .precise_last_second()
+        .max(first_second + 0.001);
+    let (window_w_px, _) = current_window_px();
+    let px_per_unit = window_w_px as f32 / screen_width().max(1.0);
+    let unit_per_px = if px_per_unit.is_finite() && px_per_unit > 0.0 {
+        1.0 / px_per_unit
+    } else {
+        1.0
+    };
+    let width_px = 2.0_f32;
+    let width_units = width_px * unit_per_px;
+    let max_x = (graph_w - width_units).max(0.0);
+    let x = (((preview_sec as f32 - first_second) / (last_second - first_second)).clamp(0.0, 1.0)
+        * max_x)
+        .clamp(0.0, max_x);
+    let left_px = (graph_left + x) * px_per_unit;
+    let right_px = left_px + width_px;
+    let start_px = left_px.floor() as i32;
+    let end_px = right_px.ceil() as i32;
+    let mut marker = PreviewMarker::default();
+    for px in start_px..end_px {
+        if marker.len == marker.cols.len() {
+            break;
+        }
+        let overlap = (right_px.min(px as f32 + 1.0) - left_px.max(px as f32)).clamp(0.0, 1.0);
+        if overlap <= 0.0 {
+            continue;
+        }
+        let col_x = (px as f32 * unit_per_px - graph_left).clamp(0.0, graph_w - unit_per_px);
+        marker.cols[marker.len] = PreviewMarkerCol {
+            x: col_x,
+            a: overlap,
+        };
+        marker.len += 1;
+    }
+    (marker.len > 0).then_some(marker)
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PreviewMarkerCol {
+    x: f32,
+    a: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PreviewMarker {
+    cols: [PreviewMarkerCol; 4],
+    len: usize,
 }
 
 #[inline(always)]
@@ -5906,16 +5973,43 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
+    let graph_h = 64.0_f32;
+    let graph_body_h = 47.0_f32;
     let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
+    let graph_left = chart_info_cx - 0.5 * panel_w;
+    let (window_w_px, _) = current_window_px();
+    let marker_col_w = if window_w_px > 0 {
+        screen_width() / window_w_px as f32
+    } else {
+        1.0
+    };
     let breakdown_style = cfg.select_music_breakdown_style;
     let pattern_info_mode = cfg.select_music_pattern_info_mode;
+    let preview_sec = if cfg.show_select_music_preview_marker {
+        preview_song_sec(state)
+    } else {
+        None
+    };
+    let preview_marker_p1 = preview_marker(
+        state.displayed_chart_p1.as_ref(),
+        preview_sec,
+        graph_left,
+        panel_w,
+    );
+    let preview_marker_p2 = preview_marker(
+        state.displayed_chart_p2.as_ref(),
+        preview_sec,
+        graph_left,
+        panel_w,
+    );
     let build_breakdown_panel = |graph_cy: f32,
                                  is_p2_layout: bool,
                                  graph_key: &String,
                                  graph_mesh: Option<Arc<[MeshVertex]>>,
+                                 preview_marker: Option<PreviewMarker>,
                                  chart: Option<&ChartData>| {
         let mut graph_kids = vec![
-            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
+            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
         ];
 
         if let Some(c) = chart {
@@ -5972,7 +6066,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 graph_kids.push(Actor::Mesh {
                     align: [0.0, 0.0],
                     offset: [0.0, 0.0],
-                    size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
+                    size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
                     vertices: mesh,
                     mode: MeshMode::Triangles,
                     visible: true,
@@ -5981,18 +6075,29 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 });
             } else if graph_key != "__white" {
                 graph_kids.push(act!(sprite(graph_key.clone()):
-                    align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)
+                    align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h)
                 ));
             }
-            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
-            graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, 47.0): setsize(panel_w, 17.0): diffuse(0.0, 0.0, 0.0, 0.5)));
-            graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w)));
+            if let Some(marker) = preview_marker {
+                for col in marker.cols.iter().take(marker.len) {
+                    graph_kids.push(act!(quad:
+                        align(0.0, 0.0):
+                        xy(col.x, 0.0):
+                        setsize(marker_col_w, graph_h):
+                        diffuse(1.0, 1.0, 1.0, col.a):
+                        z(1)
+                    ));
+                }
+            }
+            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0): z(2)));
+            graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, graph_body_h): setsize(panel_w, graph_h - graph_body_h): diffuse(0.0, 0.0, 0.0, 0.5): z(2)));
+            graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w): z(2)));
         }
 
         Actor::Frame {
             align: [0.0, 0.0],
-            offset: [chart_info_cx - 0.5 * panel_w, graph_cy - 32.0],
-            size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
+            offset: [graph_left, graph_cy - 32.0],
+            size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
             background: None,
             z: 51,
             children: graph_kids,
@@ -6006,6 +6111,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 false,
                 &state.current_graph_key,
                 state.current_graph_mesh.clone(),
+                preview_marker_p1,
                 disp_chart_p1,
             ));
             actors.push(build_breakdown_panel(
@@ -6013,6 +6119,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 true,
                 &state.current_graph_key_p2,
                 state.current_graph_mesh_p2.clone(),
+                preview_marker_p2,
                 disp_chart_p2,
             ));
         } else {
@@ -6022,6 +6129,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 is_p2_single,
                 &state.current_graph_key,
                 state.current_graph_mesh.clone(),
+                preview_marker_p1,
                 disp_chart_p1,
             ));
         }

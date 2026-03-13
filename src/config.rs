@@ -547,6 +547,7 @@ pub struct Config {
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
     pub show_select_music_previews: bool,
+    pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart.
     pub keyboard_features: bool,
@@ -660,6 +661,7 @@ impl Default for Config {
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
             show_select_music_previews: true,
+            show_select_music_preview_marker: false,
             select_music_preview_loop: true,
             keyboard_features: true,
             show_video_backgrounds: true,
@@ -1241,6 +1243,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicPreviewMarker={}\n",
+        if default.show_select_music_preview_marker {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviewLoop={}\n",
         if default.select_music_preview_loop {
             "1"
@@ -1781,6 +1791,10 @@ pub fn load() {
                     .get("Options", "SelectMusicPreviews")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_previews, |v| v != 0);
+                cfg.show_select_music_preview_marker = conf
+                    .get("Options", "SelectMusicPreviewMarker")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_select_music_preview_marker, |v| v != 0);
                 cfg.select_music_preview_loop = conf
                     .get("Options", "SelectMusicPreviewLoop")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -3103,6 +3117,14 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicPreviewMarker={}\n",
+        if cfg.show_select_music_preview_marker {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviewLoop={}\n",
         if cfg.select_music_preview_loop {
             "1"
@@ -3852,6 +3874,17 @@ pub fn update_show_select_music_previews(enabled: bool) {
             return;
         }
         cfg.show_select_music_previews = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_select_music_preview_marker(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_preview_marker == enabled {
+            return;
+        }
+        cfg.show_select_music_preview_marker = enabled;
     }
     save_without_keymaps();
 }

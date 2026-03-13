@@ -601,6 +601,7 @@ const SELECT_MUSIC_ROW_WHEEL_GRADES: &str = "Show Music Wheel Grades";
 const SELECT_MUSIC_ROW_WHEEL_LAMPS: &str = "Show Music Wheel Lamps";
 const SELECT_MUSIC_ROW_PATTERN_INFO: &str = "Show Pattern Info";
 const SELECT_MUSIC_ROW_PREVIEWS: &str = "Music Previews";
+const SELECT_MUSIC_ROW_PREVIEW_MARKER: &str = "Preview Marker";
 const SELECT_MUSIC_ROW_PREVIEW_LOOP: &str = "Loop Music";
 const SELECT_MUSIC_ROW_GAMEPLAY_TIMER: &str = "Show Gameplay Timer";
 const SELECT_MUSIC_ROW_SHOW_RIVALS: &str = "Show GS Box";
@@ -1590,6 +1591,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: SELECT_MUSIC_ROW_PREVIEW_MARKER,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
         label: SELECT_MUSIC_ROW_PREVIEW_LOOP,
         choices: &["Play Once", "Loop"],
         inline: true,
@@ -1671,6 +1677,13 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SELECT_MUSIC_ROW_PREVIEWS,
         help: &["Enable or disable Select Music audio previews."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_PREVIEW_MARKER,
+        help: &[
+            "Show a white line over the density graph for the current preview position.",
+            "Only appears while music previews are playing.",
+        ],
     },
     Item {
         name: SELECT_MUSIC_ROW_PREVIEW_LOOP,
@@ -4286,6 +4299,12 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_PREVIEW_MARKER,
+        yes_no_choice_index(cfg.show_select_music_preview_marker),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_PREVIEW_LOOP,
         usize::from(cfg.select_music_preview_loop),
     );
@@ -5722,6 +5741,8 @@ fn apply_submenu_choice_delta(
             ));
         } else if row.label == SELECT_MUSIC_ROW_PREVIEWS {
             config::update_show_select_music_previews(yes_no_from_choice(new_index));
+        } else if row.label == SELECT_MUSIC_ROW_PREVIEW_MARKER {
+            config::update_show_select_music_preview_marker(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_PREVIEW_LOOP {
             config::update_select_music_preview_loop(new_index == 1);
         } else if row.label == SELECT_MUSIC_ROW_GAMEPLAY_TIMER {
