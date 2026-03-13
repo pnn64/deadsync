@@ -17,6 +17,7 @@ use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading}
 use crate::game::{profile, scores};
 use crate::screens::{Screen, ScreenAction};
 use std::borrow::Cow;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -79,6 +80,16 @@ impl RowTween {
     fn a(&self) -> f32 {
         (self.to_a - self.from_a).mul_add(self.t, self.from_a)
     }
+}
+
+#[derive(Clone, Debug)]
+struct SubmenuRowLayout {
+    texts: Arc<[Arc<str>]>,
+    widths: Arc<[f32]>,
+    x_positions: Arc<[f32]>,
+    centers: Arc<[f32]>,
+    text_h: f32,
+    inline_row: bool,
 }
 
 #[inline(always)]
@@ -383,6 +394,23 @@ const fn is_launcher_submenu(kind: SubmenuKind) -> bool {
 pub enum OptionsView {
     Main,
     Submenu(SubmenuKind),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DescriptionCacheKey {
+    Main(usize),
+    Submenu(SubmenuKind, usize),
+}
+
+#[derive(Clone, Debug)]
+struct DescriptionLayout {
+    key: DescriptionCacheKey,
+    title: Arc<str>,
+    title_lines: usize,
+    bullet_text: Option<Arc<str>>,
+    bullet_line_count: usize,
+    note_text: Option<Arc<str>>,
+    note_line_count: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2486,6 +2514,7 @@ pub fn update_monitor_specs(state: &mut State, specs: Vec<MonitorSpec>) {
     if state.max_fps_at_load == 0 && !max_fps_enabled(state) {
         seed_max_fps_value_choice(state, 0);
     }
+    clear_render_cache(state);
 }
 
 fn set_display_mode_row_selection(
@@ -3066,35 +3095,62 @@ fn row_choices<'a>(
         .unwrap_or_default()
 }
 
-fn submenu_inline_choice_centers(
-    state: &State,
-    asset_manager: &AssetManager,
+fn submenu_display_choice_texts<'a>(
+    state: &'a State,
     kind: SubmenuKind,
+    rows: &'a [SubRow<'a>],
     row_idx: usize,
-) -> Vec<f32> {
-    let rows = submenu_rows(kind);
-    let Some(row) = rows.get(row_idx) else {
-        return Vec::new();
-    };
-    if !row.inline {
-        return Vec::new();
-    }
+) -> Vec<Cow<'a, str>> {
     let mut choice_texts = row_choices(state, kind, rows, row_idx);
+    let Some(row) = rows.get(row_idx) else {
+        return choice_texts;
+    };
     if choice_texts.is_empty() {
-        return Vec::new();
+        return choice_texts;
     }
-    if row.label == "Global Offset (ms)" {
+    if row.label == SOUND_ROW_GLOBAL_OFFSET {
         choice_texts[0] = Cow::Owned(format_ms(state.global_offset_ms));
+    } else if row.label == SOUND_ROW_MASTER_VOLUME {
+        choice_texts[0] = Cow::Owned(format_percent(state.master_volume_pct));
+    } else if row.label == SOUND_ROW_SFX_VOLUME {
+        choice_texts[0] = Cow::Owned(format_percent(state.sfx_volume_pct));
+    } else if row.label == SOUND_ROW_ASSIST_TICK_VOLUME {
+        choice_texts[0] = Cow::Owned(format_percent(state.assist_tick_volume_pct));
+    } else if row.label == SOUND_ROW_MUSIC_VOLUME {
+        choice_texts[0] = Cow::Owned(format_percent(state.music_volume_pct));
     } else if row.label == "Visual Delay (ms)" {
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
     } else if row.label == INPUT_ROW_DEBOUNCE {
         choice_texts[0] = Cow::Owned(format_ms(state.input_debounce_ms));
     }
+    choice_texts
+}
+
+fn build_submenu_row_layout(
+    state: &State,
+    asset_manager: &AssetManager,
+    kind: SubmenuKind,
+    row_idx: usize,
+) -> Option<SubmenuRowLayout> {
+    let rows = submenu_rows(kind);
+    let Some(row) = rows.get(row_idx) else {
+        return None;
+    };
+    let choice_texts = submenu_display_choice_texts(state, kind, rows, row_idx);
+    if choice_texts.is_empty() {
+        return None;
+    }
     let value_zoom = 0.835_f32;
+    let texts: Vec<Arc<str>> = choice_texts
+        .iter()
+        .map(|text| Arc::<str>::from(text.as_ref()))
+        .collect();
     let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
+    let mut text_h = 16.0_f32;
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("miso", |metrics_font| {
-            for text in &choice_texts {
+            text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
+            for text in &texts {
                 let mut w =
                     font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts) as f32;
                 if !w.is_finite() || w <= 0.0 {
@@ -3104,16 +3160,56 @@ fn submenu_inline_choice_centers(
             }
         });
     });
-    if !submenu_inline_widths_fit(&widths) {
-        return Vec::new();
+    let inline_row = row.inline && submenu_inline_widths_fit(&widths);
+    let mut x_positions: Vec<f32> = Vec::new();
+    let mut centers: Vec<f32> = Vec::new();
+    if inline_row {
+        x_positions = Vec::with_capacity(widths.len());
+        centers = Vec::with_capacity(widths.len());
+        let mut x = 0.0_f32;
+        for &draw_w in &widths {
+            x_positions.push(x);
+            centers.push(draw_w.mul_add(0.5, x));
+            x += draw_w + INLINE_SPACING;
+        }
     }
-    let mut centers: Vec<f32> = Vec::with_capacity(widths.len());
-    let mut x = 0.0_f32;
-    for draw_w in widths {
-        centers.push(draw_w.mul_add(0.5, x));
-        x += draw_w + INLINE_SPACING;
+    Some(SubmenuRowLayout {
+        texts: Arc::from(texts),
+        widths: Arc::from(widths),
+        x_positions: Arc::from(x_positions),
+        centers: Arc::from(centers),
+        text_h,
+        inline_row,
+    })
+}
+
+fn submenu_row_layout(
+    state: &State,
+    asset_manager: &AssetManager,
+    kind: SubmenuKind,
+    row_idx: usize,
+) -> Option<SubmenuRowLayout> {
+    let rows = submenu_rows(kind);
+    let mut cache = state.submenu_row_layout_cache.borrow_mut();
+    if state.submenu_layout_cache_kind.get() != Some(kind) || cache.len() != rows.len() {
+        state.submenu_layout_cache_kind.set(Some(kind));
+        cache.clear();
+        cache.resize(rows.len(), None);
     }
-    centers
+    if let Some(layout) = cache.get(row_idx).and_then(|entry| entry.clone()) {
+        return Some(layout);
+    }
+    let layout = build_submenu_row_layout(state, asset_manager, kind, row_idx)?;
+    if row_idx < cache.len() {
+        cache[row_idx] = Some(layout.clone());
+    }
+    Some(layout)
+}
+
+pub fn clear_submenu_row_layout_cache(state: &State) {
+    state.submenu_layout_cache_kind.set(None);
+    let mut cache = state.submenu_row_layout_cache.borrow_mut();
+    cache.clear();
 }
 
 fn sync_submenu_inline_x_from_row(
@@ -3125,16 +3221,18 @@ fn sync_submenu_inline_x_from_row(
     let Some(row_idx) = submenu_visible_row_to_actual(state, kind, visible_row_idx) else {
         return;
     };
-    let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_idx);
-    if centers.is_empty() {
+    let Some(layout) = submenu_row_layout(state, asset_manager, kind, row_idx) else {
+        return;
+    };
+    if !layout.inline_row || layout.centers.is_empty() {
         return;
     }
     let choice_idx = submenu_choice_indices(state, kind)
         .get(row_idx)
         .copied()
         .unwrap_or(0)
-        .min(centers.len().saturating_sub(1));
-    state.sub_inline_x = centers[choice_idx];
+        .min(layout.centers.len().saturating_sub(1));
+    state.sub_inline_x = layout.centers[choice_idx];
 }
 
 fn apply_submenu_inline_x_to_row(
@@ -3146,21 +3244,21 @@ fn apply_submenu_inline_x_to_row(
     let Some(row_idx) = submenu_visible_row_to_actual(state, kind, visible_row_idx) else {
         return;
     };
-    let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_idx);
-    if centers.is_empty() {
+    let Some(layout) = submenu_row_layout(state, asset_manager, kind, row_idx) else {
+        return;
+    };
+    if !layout.inline_row || layout.centers.is_empty() {
         return;
     }
     let choice_idx = submenu_choice_indices(state, kind)
         .get(row_idx)
         .copied()
         .unwrap_or(0)
-        .min(centers.len().saturating_sub(1));
+        .min(layout.centers.len().saturating_sub(1));
     if let Some(slot) = submenu_cursor_indices_mut(state, kind).get_mut(row_idx) {
         *slot = choice_idx;
     }
-    if let Some(&x) = centers.get(choice_idx) {
-        state.sub_inline_x = x;
-    }
+    state.sub_inline_x = layout.centers[choice_idx];
 }
 
 fn move_submenu_selection_vertical(
@@ -3675,6 +3773,9 @@ pub struct State {
     cursor_t: f32,
     // Shared row tween state for the active view (main list or submenu list).
     row_tweens: Vec<RowTween>,
+    submenu_layout_cache_kind: Cell<Option<SubmenuKind>>,
+    submenu_row_layout_cache: RefCell<Vec<Option<SubmenuRowLayout>>>,
+    description_layout_cache: RefCell<Option<DescriptionLayout>>,
     graphics_prev_visible_rows: Vec<usize>,
     advanced_prev_visible_rows: Vec<usize>,
     select_music_prev_visible_rows: Vec<usize>,
@@ -3797,6 +3898,9 @@ pub fn init() -> State {
         cursor_to_h: 0.0,
         cursor_t: 1.0,
         row_tweens: Vec::new(),
+        submenu_layout_cache_kind: Cell::new(None),
+        submenu_row_layout_cache: RefCell::new(Vec::new()),
+        description_layout_cache: RefCell::new(None),
         graphics_prev_visible_rows: Vec::new(),
         advanced_prev_visible_rows: Vec::new(),
         select_music_prev_visible_rows: Vec::new(),
@@ -4262,6 +4366,7 @@ pub fn open_input_submenu(state: &mut State) {
     state.advanced_prev_visible_rows.clear();
     state.select_music_prev_visible_rows.clear();
     clear_navigation_holds(state);
+    clear_render_cache(state);
 }
 
 fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
@@ -4366,6 +4471,7 @@ pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
         *slot = backend_to_renderer_choice_index(renderer);
     }
     sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
 }
 
 pub fn sync_display_mode(
@@ -4389,6 +4495,7 @@ pub fn sync_display_mode(
         *slot = fullscreen_type_to_choice_index(target_type);
     }
     sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
 }
 
 pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
@@ -4396,6 +4503,7 @@ pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
     state.display_width_at_load = width;
     state.display_height_at_load = height;
     sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
 }
 
 pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
@@ -4406,6 +4514,7 @@ pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
         mode.min(3) as usize,
     );
     sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
 }
 
 pub fn sync_max_fps(state: &mut State, max_fps: u16) {
@@ -4416,6 +4525,7 @@ pub fn sync_max_fps(state: &mut State, max_fps: u16) {
         seed_max_fps_value_choice(state, max_fps);
     }
     sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
 }
 
 pub fn sync_vsync(state: &mut State, enabled: bool) {
@@ -4424,6 +4534,7 @@ pub fn sync_vsync(state: &mut State, enabled: bool) {
         *slot = yes_no_choice_index(enabled);
     }
     sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
 }
 
 pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
@@ -4435,6 +4546,7 @@ pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
         *slot = present_mode_choice_index(mode);
     }
     sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -5286,6 +5398,7 @@ fn apply_submenu_choice_delta(
                     ) {
                         config::update_master_volume(state.master_volume_pct as u8);
                         audio::play_sfx("assets/sounds/change_value.ogg");
+                        clear_render_cache(state);
                     }
                     return None;
                 }
@@ -5298,6 +5411,7 @@ fn apply_submenu_choice_delta(
                     ) {
                         config::update_sfx_volume(state.sfx_volume_pct as u8);
                         audio::play_sfx("assets/sounds/change_value.ogg");
+                        clear_render_cache(state);
                     }
                     return None;
                 }
@@ -5310,6 +5424,7 @@ fn apply_submenu_choice_delta(
                     ) {
                         config::update_assist_tick_volume(state.assist_tick_volume_pct as u8);
                         audio::play_sfx("assets/sounds/change_value.ogg");
+                        clear_render_cache(state);
                     }
                     return None;
                 }
@@ -5322,6 +5437,7 @@ fn apply_submenu_choice_delta(
                     ) {
                         config::update_music_volume(state.music_volume_pct as u8);
                         audio::play_sfx("assets/sounds/change_value.ogg");
+                        clear_render_cache(state);
                     }
                     return None;
                 }
@@ -5337,6 +5453,7 @@ fn apply_submenu_choice_delta(
             ) {
                 config::update_global_offset(state.global_offset_ms as f32 / 1000.0);
                 audio::play_sfx("assets/sounds/change_value.ogg");
+                clear_render_cache(state);
             }
             return None;
         }
@@ -5349,6 +5466,7 @@ fn apply_submenu_choice_delta(
             ) {
                 config::update_visual_delay_seconds(state.visual_delay_ms as f32 / 1000.0);
                 audio::play_sfx("assets/sounds/change_value.ogg");
+                clear_render_cache(state);
             }
             return None;
         }
@@ -5361,6 +5479,7 @@ fn apply_submenu_choice_delta(
             ) {
                 config::update_input_debounce_seconds(state.input_debounce_ms as f32 / 1000.0);
                 audio::play_sfx("assets/sounds/change_value.ogg");
+                clear_render_cache(state);
             }
             return None;
         }
@@ -5395,8 +5514,10 @@ fn apply_submenu_choice_delta(
 
     submenu_choice_indices_mut(state, kind)[row_index] = new_index;
     submenu_cursor_indices_mut(state, kind)[row_index] = new_index;
-    let centers = submenu_inline_choice_centers(state, asset_manager, kind, row_index);
-    if let Some(&x) = centers.get(new_index) {
+    if let Some(layout) = submenu_row_layout(state, asset_manager, kind, row_index)
+        && layout.inline_row
+        && let Some(&x) = layout.centers.get(new_index)
+    {
         state.sub_inline_x = x;
     }
     audio::play_sfx("assets/sounds/change_value.ogg");
@@ -5633,6 +5754,7 @@ fn apply_submenu_choice_delta(
             refresh_score_import_profile_options(state);
         }
     }
+    clear_render_cache(state);
     action
 }
 
@@ -6519,6 +6641,121 @@ fn wrap_miso_text(
         .unwrap_or_else(|| raw_text.to_string())
 }
 
+fn build_description_layout(
+    asset_manager: &AssetManager,
+    key: DescriptionCacheKey,
+    item: &Item<'_>,
+    s: f32,
+) -> DescriptionLayout {
+    let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
+    let wrap_extra_pad = desc_wrap_extra_pad_unscaled() * s;
+    let help = item.help;
+    let (raw_title_text, bullet_lines): (&str, &[&str]) = if help.is_empty() {
+        (item.name, &[][..])
+    } else {
+        (help[0], &help[1..])
+    };
+    let title_max_width_px =
+        desc_w_unscaled().mul_add(s, -((2.0 * title_side_pad) + wrap_extra_pad));
+    let wrapped_title = wrap_miso_text(
+        asset_manager,
+        raw_title_text,
+        title_max_width_px,
+        DESC_TITLE_ZOOM * s,
+    );
+    let title_lines = wrapped_title.lines().count().max(1);
+    let mut bullet_text = String::new();
+    let mut bullet_line_count = 0usize;
+    let mut note_text = String::new();
+    if !bullet_lines.is_empty() {
+        let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
+        let bullet_max_width_px = desc_w_unscaled().mul_add(
+            s,
+            -((2.0 * bullet_side_pad) + (DESC_BULLET_INDENT_PX * s) + wrap_extra_pad),
+        );
+        let note_max_width_px =
+            desc_w_unscaled().mul_add(s, -((2.0 * title_side_pad) + wrap_extra_pad));
+        for line in bullet_lines {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if let Some(note) = trimmed
+                .strip_prefix("NOTE:")
+                .or_else(|| trimmed.strip_prefix("Note:"))
+            {
+                let wrapped = wrap_miso_text(
+                    asset_manager,
+                    note.trim(),
+                    note_max_width_px,
+                    DESC_BODY_ZOOM * s,
+                );
+                if !note_text.is_empty() {
+                    note_text.push('\n');
+                }
+                note_text.push_str(&wrapped);
+                continue;
+            }
+            let entry = if trimmed == "..." {
+                "...".to_string()
+            } else {
+                let mut v = String::with_capacity(trimmed.len() + 2);
+                v.push('•');
+                v.push(' ');
+                v.push_str(trimmed);
+                v
+            };
+            let wrapped = wrap_miso_text(
+                asset_manager,
+                &entry,
+                bullet_max_width_px,
+                DESC_BODY_ZOOM * s,
+            );
+            bullet_line_count += wrapped.lines().count();
+            if !bullet_text.is_empty() {
+                bullet_text.push('\n');
+            }
+            bullet_text.push_str(&wrapped);
+        }
+    }
+    let note_line_count = note_text.lines().count().max(1);
+    DescriptionLayout {
+        key,
+        title: Arc::from(wrapped_title),
+        title_lines,
+        bullet_text: (!bullet_text.is_empty()).then(|| Arc::from(bullet_text)),
+        bullet_line_count,
+        note_text: (!note_text.is_empty()).then(|| Arc::from(note_text)),
+        note_line_count,
+    }
+}
+
+fn description_layout(
+    state: &State,
+    asset_manager: &AssetManager,
+    key: DescriptionCacheKey,
+    item: &Item<'_>,
+    s: f32,
+) -> DescriptionLayout {
+    if let Some(layout) = state.description_layout_cache.borrow().as_ref()
+        && layout.key == key
+    {
+        return layout.clone();
+    }
+    let layout = build_description_layout(asset_manager, key, item, s);
+    *state.description_layout_cache.borrow_mut() = Some(layout.clone());
+    layout
+}
+
+pub fn clear_description_layout_cache(state: &State) {
+    *state.description_layout_cache.borrow_mut() = None;
+}
+
+pub fn clear_render_cache(state: &State) {
+    clear_submenu_row_layout_cache(state);
+    clear_description_layout_cache(state);
+}
+
 fn submenu_cursor_dest(
     state: &State,
     asset_manager: &AssetManager,
@@ -6553,65 +6790,25 @@ fn submenu_cursor_dest(
     let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
         return None;
     };
-
     let row = &rows[row_idx];
-    let mut choice_texts = row_choices(state, kind, rows, row_idx);
-    if choice_texts.is_empty() {
+    let layout = submenu_row_layout(state, asset_manager, kind, row_idx)?;
+    if layout.texts.is_empty() {
         return None;
     }
-    if row.label == SOUND_ROW_GLOBAL_OFFSET {
-        choice_texts[0] = Cow::Owned(format_ms(state.global_offset_ms));
-    } else if row.label == SOUND_ROW_MASTER_VOLUME {
-        choice_texts[0] = Cow::Owned(format_percent(state.master_volume_pct));
-    } else if row.label == SOUND_ROW_SFX_VOLUME {
-        choice_texts[0] = Cow::Owned(format_percent(state.sfx_volume_pct));
-    } else if row.label == SOUND_ROW_ASSIST_TICK_VOLUME {
-        choice_texts[0] = Cow::Owned(format_percent(state.assist_tick_volume_pct));
-    } else if row.label == SOUND_ROW_MUSIC_VOLUME {
-        choice_texts[0] = Cow::Owned(format_percent(state.music_volume_pct));
-    } else if row.label == "Visual Delay (ms)" {
-        choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
-    } else if row.label == INPUT_ROW_DEBOUNCE {
-        choice_texts[0] = Cow::Owned(format_ms(state.input_debounce_ms));
-    }
-
     let selected_choice = submenu_cursor_indices(state, kind)
         .get(row_idx)
         .copied()
         .unwrap_or(0)
-        .min(choice_texts.len().saturating_sub(1));
+        .min(layout.texts.len().saturating_sub(1));
 
-    let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
-    let mut text_h = 16.0_f32;
-    asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("miso", |metrics_font| {
-            text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-            for text in &choice_texts {
-                let mut w =
-                    font::measure_line_width_logical(metrics_font, text.as_ref(), all_fonts) as f32;
-                if !w.is_finite() || w <= 0.0 {
-                    w = 1.0;
-                }
-                widths.push(w * value_zoom);
-            }
-        });
-    });
-    if widths.is_empty() {
-        return None;
-    }
-
-    let draw_w = widths[selected_choice.min(widths.len().saturating_sub(1))];
-    let center_x = if row.inline && submenu_inline_widths_fit(&widths) {
+    let draw_w = layout.widths[selected_choice];
+    let center_x = if row.inline && layout.inline_row {
         let choice_inner_left = SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
-        let mut x = choice_inner_left;
-        for width in widths.iter().take(selected_choice) {
-            x += *width + INLINE_SPACING;
-        }
-        x + draw_w * 0.5
+        choice_inner_left + layout.centers[selected_choice]
     } else {
         single_center_x
     };
-    let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h);
+    let (ring_w, ring_h) = ring_size_for_text(draw_w, layout.text_h);
     Some((center_x, row_mid_y, ring_w, ring_h))
 }
 
@@ -6815,7 +7012,7 @@ pub fn get_actors(
     ));
 
     // -------------------------- Rows + Description -------------------------
-    let selected_item: Option<&Item>;
+    let selected_item: Option<(DescriptionCacheKey, &Item)>;
     let cursor_now = || -> Option<(f32, f32, f32, f32)> {
         if !state.cursor_initialized {
             return None;
@@ -6908,7 +7105,7 @@ pub fn get_actors(
             }
 
             let sel = state.selected.min(ITEMS.len() - 1);
-            selected_item = Some(&ITEMS[sel]);
+            selected_item = Some((DescriptionCacheKey::Main(sel), &ITEMS[sel]));
         }
         OptionsView::Submenu(kind) => {
             let rows = submenu_rows(kind);
@@ -7026,12 +7223,13 @@ pub fn get_actors(
                 }
 
                 let sel = state.sub_selected.min(total_rows.saturating_sub(1));
-                let item = if sel < rows.len() {
-                    &items[sel]
+                let (item_idx, item) = if sel < rows.len() {
+                    (sel, &items[sel])
                 } else {
-                    &items[items.len().saturating_sub(1)]
+                    let idx = items.len().saturating_sub(1);
+                    (idx, &items[idx])
                 };
-                selected_item = Some(item);
+                selected_item = Some((DescriptionCacheKey::Submenu(kind, item_idx), item));
             } else {
                 // Active text color for submenu rows.
                 let col_active_text = color::simply_love_rgba(state.active_color_index);
@@ -7071,47 +7269,21 @@ pub fn get_actors(
                     if !row.inline {
                         return single_center_x;
                     }
-                    let choices = row_choices(state, kind, rows, actual_row_idx);
-                    if choices.is_empty() {
+                    let Some(layout) =
+                        submenu_row_layout(state, asset_manager, kind, actual_row_idx)
+                    else {
                         return list_w.mul_add(0.5, list_x);
-                    }
-                    let value_zoom = 0.835_f32;
-                    let choice_inner_left =
-                        SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
-                    let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
-                    asset_manager.with_fonts(|all_fonts| {
-                        asset_manager.with_font("miso", |metrics_font| {
-                            for text in choices {
-                                let mut w = font::measure_line_width_logical(
-                                    metrics_font,
-                                    text.as_ref(),
-                                    all_fonts,
-                                ) as f32;
-                                if !w.is_finite() || w <= 0.0 {
-                                    w = 1.0;
-                                }
-                                widths.push(w * value_zoom);
-                            }
-                        });
-                    });
-                    if widths.is_empty() {
-                        return list_w.mul_add(0.5, list_x);
-                    }
-                    if !submenu_inline_widths_fit(&widths) {
+                    };
+                    if !layout.inline_row || layout.centers.is_empty() {
                         return single_center_x;
-                    }
-                    let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
-                    let mut x = choice_inner_left;
-                    for w in &widths {
-                        x_positions.push(x);
-                        x += *w + INLINE_SPACING;
                     }
                     let sel_idx = choice_indices
                         .get(actual_row_idx)
                         .copied()
                         .unwrap_or(0)
-                        .min(widths.len().saturating_sub(1));
-                    widths[sel_idx].mul_add(0.5, x_positions[sel_idx])
+                        .min(layout.centers.len().saturating_sub(1));
+                    SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w)
+                        + layout.centers[sel_idx]
                 };
 
                 let row_h = ROW_H * s;
@@ -7190,58 +7362,16 @@ pub fn get_actors(
                         ));
 
                         // Inline Off/On options in the items column (or a single centered value if inline == false).
-                        let mut choice_texts: Vec<Cow<'_, str>> =
-                            row_choices(state, kind, rows, actual_row_idx);
-                        if !choice_texts.is_empty() {
+                        if let Some(layout) =
+                            submenu_row_layout(state, asset_manager, kind, actual_row_idx)
+                            && !layout.texts.is_empty()
+                        {
                             let value_zoom = 0.835_f32;
-                            if row.label == SOUND_ROW_GLOBAL_OFFSET {
-                                let formatted = Cow::Owned(format_ms(state.global_offset_ms));
-                                choice_texts[0] = formatted;
-                            } else if row.label == SOUND_ROW_MASTER_VOLUME {
-                                let formatted = Cow::Owned(format_percent(state.master_volume_pct));
-                                choice_texts[0] = formatted;
-                            } else if row.label == SOUND_ROW_SFX_VOLUME {
-                                let formatted = Cow::Owned(format_percent(state.sfx_volume_pct));
-                                choice_texts[0] = formatted;
-                            } else if row.label == SOUND_ROW_ASSIST_TICK_VOLUME {
-                                let formatted =
-                                    Cow::Owned(format_percent(state.assist_tick_volume_pct));
-                                choice_texts[0] = formatted;
-                            } else if row.label == SOUND_ROW_MUSIC_VOLUME {
-                                let formatted = Cow::Owned(format_percent(state.music_volume_pct));
-                                choice_texts[0] = formatted;
-                            } else if row.label == "Visual Delay (ms)" {
-                                let formatted = Cow::Owned(format_ms(state.visual_delay_ms));
-                                choice_texts[0] = formatted;
-                            } else if row.label == INPUT_ROW_DEBOUNCE {
-                                let formatted = Cow::Owned(format_ms(state.input_debounce_ms));
-                                choice_texts[0] = formatted;
-                            }
-
-                            let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
-                            asset_manager.with_fonts(|all_fonts| {
-                                asset_manager.with_font("miso", |metrics_font| {
-                                    for text in &choice_texts {
-                                        let mut w = font::measure_line_width_logical(
-                                            metrics_font,
-                                            text.as_ref(),
-                                            all_fonts,
-                                        )
-                                            as f32;
-                                        if !w.is_finite() || w <= 0.0 {
-                                            w = 1.0;
-                                        }
-                                        widths.push(w * value_zoom);
-                                    }
-                                });
-                            });
-                            let inline_row = row.inline && submenu_inline_widths_fit(&widths);
-
                             let selected_choice = choice_indices
                                 .get(actual_row_idx)
                                 .copied()
                                 .unwrap_or(0)
-                                .min(choice_texts.len().saturating_sub(1));
+                                .min(layout.texts.len().saturating_sub(1));
                             let is_scorebox_cycle_row = matches!(kind, SubmenuKind::SelectMusic)
                                 && row.label == SELECT_MUSIC_ROW_SCOREBOX_CYCLE;
                             let scorebox_enabled_mask = if is_scorebox_cycle_row {
@@ -7250,22 +7380,13 @@ pub fn get_actors(
                                 0
                             };
                             let mut selected_left_x: Option<f32> = None;
-
                             let choice_inner_left =
                                 SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
-                            let mut x_positions: Vec<f32> = Vec::with_capacity(choice_texts.len());
-                            if inline_row {
-                                let mut x = choice_inner_left;
-                                for w in &widths {
-                                    x_positions.push(x);
-                                    x += *w + INLINE_SPACING;
-                                }
-                            }
 
-                            if inline_row {
-                                for (idx, choice) in choice_texts.iter().enumerate() {
-                                    let x =
-                                        x_positions.get(idx).copied().unwrap_or(choice_inner_left);
+                            if layout.inline_row {
+                                for (idx, choice) in layout.texts.iter().enumerate() {
+                                    let x = choice_inner_left
+                                        + layout.x_positions.get(idx).copied().unwrap_or_default();
                                     let is_choice_selected = idx == selected_choice;
                                     if is_choice_selected {
                                         selected_left_x = Some(x);
@@ -7289,90 +7410,84 @@ pub fn get_actors(
                                     };
                                     choice_color[3] *= row_alpha;
                                     ui_actors.push(act!(text:
-                                    align(0.0, 0.5):
-                                    xy(x, row_mid_y):
-                                    zoom(value_zoom):
-                                    diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                                    font("miso"):
-                                    settext(choice.as_ref()):
-                                    horizalign(left)
-                                ));
+                                        align(0.0, 0.5):
+                                        xy(x, row_mid_y):
+                                        zoom(value_zoom):
+                                        diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                                        font("miso"):
+                                        settext(choice):
+                                        horizalign(left)
+                                    ));
                                 }
                             } else {
                                 let mut choice_color = if is_active { col_white } else { sl_gray };
                                 choice_color[3] *= row_alpha;
                                 let choice_center_x = calc_row_center_x(row_idx);
-                                let choice_text = choice_texts
-                                    .get(selected_choice)
-                                    .map_or("??", std::convert::AsRef::as_ref);
-                                let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
+                                let draw_w =
+                                    layout.widths.get(selected_choice).copied().unwrap_or(40.0);
                                 selected_left_x = Some(choice_center_x - draw_w * 0.5);
+                                let choice_text = layout
+                                    .texts
+                                    .get(selected_choice)
+                                    .cloned()
+                                    .unwrap_or_else(|| Arc::<str>::from("??"));
                                 ui_actors.push(act!(text:
-                                align(0.5, 0.5):
-                                xy(choice_center_x, row_mid_y):
-                                zoom(value_zoom):
-                                diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
-                                font("miso"):
-                                settext(choice_text):
-                                horizalign(center)
-                            ));
+                                    align(0.5, 0.5):
+                                    xy(choice_center_x, row_mid_y):
+                                    zoom(value_zoom):
+                                    diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
+                                    font("miso"):
+                                    settext(choice_text):
+                                    horizalign(center)
+                                ));
                             }
 
                             // For normal rows, underline the selected option.
                             // For GS Box Leaderboards, underline each enabled option (multi-select).
-                            if inline_row && is_scorebox_cycle_row {
-                                asset_manager.with_fonts(|_all_fonts| {
-                                    asset_manager.with_font("miso", |metrics_font| {
-                                        let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                                        let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                                        let offset = widescale(3.0, 4.0);
-                                        let underline_y = row_mid_y + text_h * 0.5 + offset;
-                                        let mut line_color =
-                                            color::decorative_rgba(state.active_color_index);
-                                        line_color[3] *= row_alpha;
-                                        for idx in 0..choice_texts.len() {
-                                            let bit = scorebox_cycle_bit_from_choice(idx);
-                                            if bit == 0 || (scorebox_enabled_mask & bit) == 0 {
-                                                continue;
-                                            }
-                                            let Some(underline_left_x) = x_positions.get(idx).copied()
-                                            else {
-                                                continue;
-                                            };
-                                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-                                            let underline_w = draw_w.ceil();
-                                            ui_actors.push(act!(quad:
-                                                align(0.0, 0.5):
-                                                xy(underline_left_x, underline_y):
-                                                zoomto(underline_w, line_thickness):
-                                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                                z(101)
-                                            ));
-                                        }
-                                    });
-                                });
+                            if layout.inline_row && is_scorebox_cycle_row {
+                                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                                let offset = widescale(3.0, 4.0);
+                                let underline_y = row_mid_y + layout.text_h * 0.5 + offset;
+                                let mut line_color =
+                                    color::decorative_rgba(state.active_color_index);
+                                line_color[3] *= row_alpha;
+                                for idx in 0..layout.texts.len() {
+                                    let bit = scorebox_cycle_bit_from_choice(idx);
+                                    if bit == 0 || (scorebox_enabled_mask & bit) == 0 {
+                                        continue;
+                                    }
+                                    let underline_left_x = choice_inner_left
+                                        + layout.x_positions.get(idx).copied().unwrap_or_default();
+                                    let underline_w =
+                                        layout.widths.get(idx).copied().unwrap_or(40.0).ceil();
+                                    ui_actors.push(act!(quad:
+                                        align(0.0, 0.5):
+                                        xy(underline_left_x, underline_y):
+                                        zoomto(underline_w, line_thickness):
+                                        diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                        z(101)
+                                    ));
+                                }
                             } else if let Some(sel_left_x) = selected_left_x {
-                                let draw_w = widths.get(selected_choice).copied().unwrap_or(40.0);
-                                asset_manager.with_fonts(|_all_fonts| {
-                                    asset_manager.with_font("miso", |metrics_font| {
-                                        let text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                                        let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                                        let underline_w = draw_w.ceil();
-                                        let offset = widescale(3.0, 4.0);
-                                        let underline_y = row_mid_y + text_h * 0.5 + offset;
-                                        let mut line_color =
-                                            color::decorative_rgba(state.active_color_index);
-                                        line_color[3] *= row_alpha;
-                                        let underline_left_x = sel_left_x;
-                                        ui_actors.push(act!(quad:
-                                            align(0.0, 0.5):
-                                            xy(underline_left_x, underline_y):
-                                            zoomto(underline_w, line_thickness):
-                                            diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                                            z(101)
-                                        ));
-                                    });
-                                });
+                                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                                let underline_w = layout
+                                    .widths
+                                    .get(selected_choice)
+                                    .copied()
+                                    .unwrap_or(40.0)
+                                    .ceil();
+                                let offset = widescale(3.0, 4.0);
+                                let underline_y = row_mid_y + layout.text_h * 0.5 + offset;
+                                let mut line_color =
+                                    color::decorative_rgba(state.active_color_index);
+                                line_color[3] *= row_alpha;
+                                ui_actors.push(act!(quad:
+                                    align(0.0, 0.5):
+                                    xy(sel_left_x, underline_y):
+                                    zoomto(underline_w, line_thickness):
+                                    diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                    z(101)
+                                ));
                             }
 
                             // Encircling cursor ring around the active option when this row is active.
@@ -7487,48 +7602,28 @@ pub fn get_actors(
                 // Description items for the submenu
                 let total_rows = visible_rows.len() + 1;
                 let sel = state.sub_selected.min(total_rows.saturating_sub(1));
-                let item = if sel < visible_rows.len() {
+                let (item_idx, item) = if sel < visible_rows.len() {
                     let actual_row_idx = visible_rows[sel];
-                    &items[actual_row_idx]
+                    (actual_row_idx, &items[actual_row_idx])
                 } else {
-                    &items[items.len().saturating_sub(1)]
+                    let idx = items.len().saturating_sub(1);
+                    (idx, &items[idx])
                 };
-                selected_item = Some(item);
+                selected_item = Some((DescriptionCacheKey::Submenu(kind, item_idx), item));
             }
         }
     }
 
     // ------------------- Description content (selected) -------------------
-    if let Some(item) = selected_item {
+    if let Some((desc_key, item)) = selected_item {
         // Match Simply Love's description box feel:
         // - explicit top/side padding for title and bullets so they can be tuned
         // - text zoom similar to other help text (player options, etc.)
         let mut cursor_y = DESC_TITLE_TOP_PAD_PX.mul_add(s, list_y);
+        let desc_layout = description_layout(state, asset_manager, desc_key, item, s);
         let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
         let title_step_px = 20.0 * s; // approximate vertical advance for title line
         let body_step_px = 18.0 * s;
-
-        // Title/explanation text:
-        // - For any item with help lines, use the first help line as the long explanation,
-        //   with remaining lines rendered as the bullet list (if any).
-        // - Fallback to the item name if there is no help text.
-        let help = item.help;
-        let (raw_title_text, bullet_lines): (&str, &[&str]) = if help.is_empty() {
-            (item.name, &[][..])
-        } else {
-            (help[0], &help[1..])
-        };
-
-        let wrap_extra_pad = desc_wrap_extra_pad_unscaled() * s;
-        let title_max_width_px =
-            desc_w_unscaled().mul_add(s, -((2.0 * title_side_pad) + wrap_extra_pad));
-        let wrapped_title = wrap_miso_text(
-            asset_manager,
-            raw_title_text,
-            title_max_width_px,
-            DESC_TITLE_ZOOM * s,
-        );
-        let title_lines = wrapped_title.lines().count().max(1) as f32;
 
         // Draw the wrapped explanation/title text.
         ui_actors.push(act!(text:
@@ -7536,94 +7631,43 @@ pub fn get_actors(
             xy(desc_x + title_side_pad, cursor_y):
             zoom(DESC_TITLE_ZOOM):
             diffuse(1.0, 1.0, 1.0, 1.0):
-            font("miso"): settext(wrapped_title):
+            font("miso"): settext(&desc_layout.title):
             horizalign(left)
         ));
-        cursor_y += title_step_px * title_lines + DESC_BULLET_TOP_PAD_PX * s;
+        cursor_y += title_step_px * desc_layout.title_lines as f32 + DESC_BULLET_TOP_PAD_PX * s;
 
-        // Lines prefixed with "NOTE:" render as plain footer text instead of bullets.
-        if !bullet_lines.is_empty() {
+        if let Some(bullet_text) = desc_layout.bullet_text.as_ref() {
             let bullet_side_pad = DESC_BULLET_SIDE_PAD_PX * s;
-            let mut bullet_text = String::new();
-            let mut bullet_line_count = 0usize;
-            let mut note_text = String::new();
-            let bullet_max_width_px = desc_w_unscaled().mul_add(
-                s,
-                -((2.0 * bullet_side_pad) + (DESC_BULLET_INDENT_PX * s) + wrap_extra_pad),
-            );
-            let note_max_width_px =
-                desc_w_unscaled().mul_add(s, -((2.0 * title_side_pad) + wrap_extra_pad));
-            for line in bullet_lines {
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                if let Some(note) = trimmed
-                    .strip_prefix("NOTE:")
-                    .or_else(|| trimmed.strip_prefix("Note:"))
-                {
-                    let wrapped = wrap_miso_text(
-                        asset_manager,
-                        note.trim(),
-                        note_max_width_px,
-                        DESC_BODY_ZOOM * s,
-                    );
-                    if !note_text.is_empty() {
-                        note_text.push('\n');
-                    }
-                    note_text.push_str(&wrapped);
-                    continue;
-                }
-                let entry = if trimmed == "..." {
-                    "...".to_string()
-                } else {
-                    let mut v = String::with_capacity(trimmed.len() + 2);
-                    v.push('•');
-                    v.push(' ');
-                    v.push_str(trimmed);
-                    v
-                };
-                let wrapped = wrap_miso_text(
-                    asset_manager,
-                    &entry,
-                    bullet_max_width_px,
-                    DESC_BODY_ZOOM * s,
-                );
-                bullet_line_count += wrapped.lines().count();
-                if !bullet_text.is_empty() {
-                    bullet_text.push('\n');
-                }
-                bullet_text.push_str(&wrapped);
-            }
             let bullet_x = DESC_BULLET_INDENT_PX.mul_add(s, desc_x + bullet_side_pad);
-            let has_bullets = !bullet_text.is_empty();
-            if has_bullets {
-                ui_actors.push(act!(text:
-                    align(0.0, 0.0):
-                    xy(bullet_x, cursor_y):
-                    zoom(DESC_BODY_ZOOM):
-                    diffuse(1.0, 1.0, 1.0, 1.0):
-                    font("miso"): settext(bullet_text):
-                    horizalign(left)
-                ));
-                cursor_y += body_step_px * bullet_line_count as f32;
-            }
-            if !note_text.is_empty() {
-                let note_line_count = note_text.lines().count().max(1) as f32;
-                let note_min_y = cursor_y + if has_bullets { 8.0 * s } else { 0.0 };
-                let note_bottom_y = (list_y + desc_h)
-                    - (DESC_NOTE_BOTTOM_PAD_PX * s)
-                    - (body_step_px * note_line_count);
-                let note_y = note_min_y.max(note_bottom_y);
-                ui_actors.push(act!(text:
-                    align(0.0, 0.0):
-                    xy(desc_x + title_side_pad, note_y):
-                    zoom(DESC_BODY_ZOOM):
-                    diffuse(1.0, 1.0, 1.0, 1.0):
-                    font("miso"): settext(note_text):
-                    horizalign(left)
-                ));
-            }
+            ui_actors.push(act!(text:
+                align(0.0, 0.0):
+                xy(bullet_x, cursor_y):
+                zoom(DESC_BODY_ZOOM):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                font("miso"): settext(bullet_text):
+                horizalign(left)
+            ));
+            cursor_y += body_step_px * desc_layout.bullet_line_count as f32;
+        }
+        if let Some(note_text) = desc_layout.note_text.as_ref() {
+            let note_min_y = cursor_y
+                + if desc_layout.bullet_text.is_some() {
+                    8.0 * s
+                } else {
+                    0.0
+                };
+            let note_bottom_y = (list_y + desc_h)
+                - (DESC_NOTE_BOTTOM_PAD_PX * s)
+                - (body_step_px * desc_layout.note_line_count as f32);
+            let note_y = note_min_y.max(note_bottom_y);
+            ui_actors.push(act!(text:
+                align(0.0, 0.0):
+                xy(desc_x + title_side_pad, note_y):
+                zoom(DESC_BODY_ZOOM):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                font("miso"): settext(note_text):
+                horizalign(left)
+            ));
         }
     }
     if let Some(confirm) = &state.score_import_confirm {

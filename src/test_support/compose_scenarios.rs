@@ -10,6 +10,7 @@ use crate::test_support::gameplay_stats_versus_bench;
 use crate::test_support::gs_scorebox_bench;
 use crate::test_support::music_wheel_bench;
 use crate::test_support::notefield_bench;
+use crate::test_support::options_bench;
 use crate::test_support::pane_stats_bench;
 use crate::test_support::player_options_bench;
 use crate::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
@@ -18,7 +19,7 @@ use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 16] = [
+const SCENARIO_NAMES: [&str; 17] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
     gameplay_bench::SCENARIO_NAME,
@@ -33,6 +34,7 @@ const SCENARIO_NAMES: [&str; 16] = [
     "mask",
     music_wheel_bench::SCENARIO_NAME,
     notefield_bench::SCENARIO_NAME,
+    options_bench::SCENARIO_NAME,
     pane_stats_bench::SCENARIO_NAME,
     player_options_bench::SCENARIO_NAME,
 ];
@@ -104,6 +106,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         "mask" => Some(mask_scenario(metrics, fonts)),
         music_wheel_bench::SCENARIO_NAME => Some(music_wheel_scenario(metrics, fonts)),
         notefield_bench::SCENARIO_NAME => Some(notefield_scenario(metrics, fonts)),
+        options_bench::SCENARIO_NAME => Some(options_scenario(metrics, fonts)),
         pane_stats_bench::SCENARIO_NAME => Some(pane_stats_scenario(metrics, fonts)),
         player_options_bench::SCENARIO_NAME => Some(player_options_scenario(metrics, fonts)),
         _ => None,
@@ -225,6 +228,18 @@ fn player_options_scenario(
     let fixture = player_options_bench::fixture();
     ComposeScenario {
         name: player_options_bench::SCENARIO_NAME,
+        actors: fixture.build(true),
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.0,
+    }
+}
+
+fn options_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let fixture = options_bench::fixture();
+    ComposeScenario {
+        name: options_bench::SCENARIO_NAME,
         actors: fixture.build(true),
         clear_color: [0.0, 0.0, 0.0, 1.0],
         metrics,
