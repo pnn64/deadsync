@@ -8,6 +8,7 @@ use crate::test_support::gameplay_stats_bench;
 use crate::test_support::gameplay_stats_double_bench;
 use crate::test_support::gameplay_stats_versus_bench;
 use crate::test_support::gs_scorebox_bench;
+use crate::test_support::menu_bench;
 use crate::test_support::music_wheel_bench;
 use crate::test_support::notefield_bench;
 use crate::test_support::options_bench;
@@ -19,7 +20,7 @@ use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 17] = [
+const SCENARIO_NAMES: [&str; 18] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
     gameplay_bench::SCENARIO_NAME,
@@ -32,6 +33,7 @@ const SCENARIO_NAMES: [&str; 17] = [
     "text-ci",
     "resolve-ci",
     "mask",
+    menu_bench::SCENARIO_NAME,
     music_wheel_bench::SCENARIO_NAME,
     notefield_bench::SCENARIO_NAME,
     options_bench::SCENARIO_NAME,
@@ -104,6 +106,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         "text-ci" => Some(text_ci_scenario(metrics, fonts)),
         "resolve-ci" => Some(resolve_ci_scenario(metrics, fonts)),
         "mask" => Some(mask_scenario(metrics, fonts)),
+        menu_bench::SCENARIO_NAME => Some(menu_scenario(metrics, fonts)),
         music_wheel_bench::SCENARIO_NAME => Some(music_wheel_scenario(metrics, fonts)),
         notefield_bench::SCENARIO_NAME => Some(notefield_scenario(metrics, fonts)),
         options_bench::SCENARIO_NAME => Some(options_scenario(metrics, fonts)),
@@ -209,6 +212,18 @@ fn gs_scorebox_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) ->
     }
 }
 
+fn menu_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let fixture = menu_bench::fixture();
+    ComposeScenario {
+        name: menu_bench::SCENARIO_NAME,
+        actors: fixture.build(true),
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.0,
+    }
+}
+
 fn notefield_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
     let fixture = notefield_bench::fixture();
     ComposeScenario {
@@ -267,6 +282,9 @@ fn ensure_textures() {
             (RPG_LOGO_TEX, 512, 512),
             (ITL_LOGO_TEX, 512, 256),
             (CROWN_TEX, 128, 128),
+            ("dance.png", 1360, 164),
+            ("heart.png", 668, 566),
+            ("logo.png", 752, 634),
         ] {
             assets::register_texture_dims(key, w, h);
         }
