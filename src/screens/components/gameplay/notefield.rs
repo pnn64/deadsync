@@ -90,7 +90,9 @@ const Z_HOLD_CAP: i32 = 110;
 const Z_HOLD_EXPLOSION: i32 = 145;
 // ITG's Explosion actor declares hold/roll children before tap judgments, so taps render on top.
 const Z_TAP_EXPLOSION: i32 = 150;
-const Z_HOLD_GLOW: i32 = 130;
+// ITG NoteField draws ReceptorArrowRow before column renderers, so receptor
+// press glow must stay under hold bodies instead of cutting through them.
+const Z_HOLD_GLOW: i32 = 105;
 const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
 const Z_COLUMN_CUE: i32 = 90;
@@ -4709,9 +4711,10 @@ pub fn build(
 #[cfg(test)]
 mod tests {
     use super::{
-        bottom_cap_uv_window, clipped_hold_body_bounds, hold_head_render_flags,
-        hold_tail_cap_bounds, maybe_mirror_uv_horiz_for_reverse_flipped, note_scale_height,
-        offset_center, top_cap_rotation_deg,
+        Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, bottom_cap_uv_window, clipped_hold_body_bounds,
+        hold_head_render_flags, hold_tail_cap_bounds,
+        maybe_mirror_uv_horiz_for_reverse_flipped, note_scale_height, offset_center,
+        top_cap_rotation_deg,
     };
     use crate::game::gameplay::ActiveHold;
     use crate::game::note::NoteType;
@@ -4779,6 +4782,12 @@ mod tests {
             hold_head_render_flags(Some(&let_go), 200.0, 100.0),
             (false, false)
         );
+    }
+
+    #[test]
+    fn receptor_glow_draws_under_hold_body() {
+        assert!(Z_RECEPTOR < Z_HOLD_BODY);
+        assert!(Z_HOLD_GLOW < Z_HOLD_BODY);
     }
 
     #[test]
