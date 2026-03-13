@@ -9,6 +9,7 @@ use crate::test_support::gameplay_stats_double_bench;
 use crate::test_support::gameplay_stats_versus_bench;
 use crate::test_support::gs_scorebox_bench;
 use crate::test_support::heart_bg_bench;
+use crate::test_support::init_bench;
 use crate::test_support::menu_bench;
 use crate::test_support::music_wheel_bench;
 use crate::test_support::notefield_bench;
@@ -21,7 +22,7 @@ use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCENARIO_NAMES: [&str; 19] = [
+const SCENARIO_NAMES: [&str; 20] = [
     density_graph_bench::SCENARIO_NAME,
     density_graph_life_bench::SCENARIO_NAME,
     gameplay_bench::SCENARIO_NAME,
@@ -30,6 +31,7 @@ const SCENARIO_NAMES: [&str; 19] = [
     gameplay_stats_versus_bench::SCENARIO_NAME,
     gs_scorebox_bench::SCENARIO_NAME,
     heart_bg_bench::SCENARIO_NAME,
+    init_bench::SCENARIO_NAME,
     "hud",
     "text",
     "text-ci",
@@ -104,6 +106,7 @@ pub fn build_scenario(name: &str) -> Option<ComposeScenario> {
         }
         gs_scorebox_bench::SCENARIO_NAME => Some(gs_scorebox_scenario(metrics, fonts)),
         heart_bg_bench::SCENARIO_NAME => Some(heart_bg_scenario(metrics, fonts)),
+        init_bench::SCENARIO_NAME => Some(init_scenario(metrics, fonts)),
         "hud" => Some(hud_scenario(metrics, fonts)),
         "text" => Some(text_scenario(metrics, fonts)),
         "text-ci" => Some(text_ci_scenario(metrics, fonts)),
@@ -227,6 +230,18 @@ fn heart_bg_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> Co
     }
 }
 
+fn init_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
+    let fixture = init_bench::fixture();
+    ComposeScenario {
+        name: init_bench::SCENARIO_NAME,
+        actors: fixture.build(true),
+        clear_color: [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        total_elapsed: 0.0,
+    }
+}
+
 fn menu_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> ComposeScenario {
     let fixture = menu_bench::fixture();
     ComposeScenario {
@@ -297,6 +312,7 @@ fn ensure_textures() {
             (RPG_LOGO_TEX, 512, 512),
             (ITL_LOGO_TEX, 512, 256),
             (CROWN_TEX, 128, 128),
+            ("init_arrow.png", 64, 64),
             ("dance.png", 1360, 164),
             ("heart.png", 668, 566),
             ("logo.png", 752, 634),
