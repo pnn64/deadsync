@@ -2,7 +2,7 @@ use crate::act;
 use crate::core::space::{screen_height, screen_width};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 // Shared start time for phase-locked animations across screens.
@@ -39,9 +39,8 @@ const PHI: f32 = 0.618_034;
 #[derive(Clone)]
 pub struct State {
     t0: Instant,
-    tex_key: &'static str,
-    base_w: f32,
-    base_h: f32,
+    tex_key: Arc<str>,
+    variant_size: [[f32; 2]; 3],
 }
 
 pub struct Params {
@@ -60,23 +59,33 @@ impl State {
         // We assume standard assets. If dynamic sizing is strictly required later,
         // it should be passed in via arguments, not read from disk here.
         let (w, h) = DEFAULT_DIMS;
+        let aspect = h / w;
+        let scale_k = (w * 0.6) / BW_BIG;
+        let var_w = [BW_NORMAL * scale_k, BW_BIG * scale_k, BW_SMALL * scale_k];
+        let variant_size = [
+            [var_w[0], var_w[0] * aspect],
+            [var_w[1], var_w[1] * aspect],
+            [var_w[2], var_w[2] * aspect],
+        ];
 
         Self {
             t0: *GLOBAL_T0.get_or_init(Instant::now),
-            tex_key,
-            base_w: w,
-            base_h: h,
+            tex_key: Arc::<str>::from(tex_key),
+            variant_size,
         }
     }
 
     pub fn build(&self, params: Params) -> Vec<Actor> {
+        self.build_at_elapsed(params, self.t0.elapsed().as_secs_f32())
+    }
+
+    pub fn build_at_elapsed(&self, params: Params, elapsed_s: f32) -> Vec<Actor> {
         // Pre-allocate for 1 background + 10 hearts (up to 4 clones each for wrapping)
         let mut actors: Vec<Actor> = Vec::with_capacity(41);
 
         let w = screen_width();
         let h = screen_height();
 
-        // Backdrop
         actors.push(act!(quad:
             align(0.0, 0.0):
             xy(0.0, 0.0):
@@ -85,21 +94,12 @@ impl State {
             z(-100)
         ));
 
-        // Layout calcs
-        let aspect = self.base_h / self.base_w;
-        let scale_k = (self.base_w * 0.6) / BW_BIG;
-
-        // Precompute variant sizes
-        let var_w = [BW_NORMAL * scale_k, BW_BIG * scale_k, BW_SMALL * scale_k];
-        let var_h = [var_w[0] * aspect, var_w[1] * aspect, var_w[2] * aspect];
-
         let speed_scale_px = w.max(h) * 1.3;
-        let t = self.t0.elapsed().as_secs_f32();
+        let t = elapsed_s;
 
         for i in 0..10 {
             let variant = VARIANTS[i];
-            let heart_w = var_w[variant];
-            let heart_h = var_h[variant];
+            let [heart_w, heart_h] = self.variant_size[variant];
             let half_w = heart_w * 0.5;
             let half_h = heart_h * 0.5;
 
@@ -137,7 +137,7 @@ impl State {
             };
 
             // Primary heart
-            actors.push(act!(sprite(self.tex_key):
+            actors.push(act!(sprite(&self.tex_key):
                 align(0.5, 0.5):
                 xy(x0, y0):
                 zoomto(heart_w, heart_h):
@@ -147,7 +147,7 @@ impl State {
 
             // Horizontal wrap
             if let Some(wx) = wrap_x {
-                actors.push(act!(sprite(self.tex_key):
+                actors.push(act!(sprite(&self.tex_key):
                     align(0.5, 0.5):
                     xy(wx, y0):
                     zoomto(heart_w, heart_h):
@@ -158,7 +158,7 @@ impl State {
 
             // Vertical wrap
             if let Some(wy) = wrap_y {
-                actors.push(act!(sprite(self.tex_key):
+                actors.push(act!(sprite(&self.tex_key):
                     align(0.5, 0.5):
                     xy(x0, wy):
                     zoomto(heart_w, heart_h):
@@ -169,7 +169,7 @@ impl State {
 
             // Corner wrap
             if let (Some(wx), Some(wy)) = (wrap_x, wrap_y) {
-                actors.push(act!(sprite(self.tex_key):
+                actors.push(act!(sprite(&self.tex_key):
                     align(0.5, 0.5):
                     xy(wx, wy):
                     zoomto(heart_w, heart_h):

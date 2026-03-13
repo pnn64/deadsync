@@ -7,6 +7,7 @@ pub mod gameplay_stats_bench;
 pub mod gameplay_stats_double_bench;
 pub mod gameplay_stats_versus_bench;
 pub mod gs_scorebox_bench;
+pub mod heart_bg_bench;
 pub mod menu_bench;
 pub mod music_wheel_bench;
 pub mod notefield_bench;
