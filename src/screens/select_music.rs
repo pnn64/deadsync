@@ -15,8 +15,8 @@ use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
-    gs_scorebox, heart_bg, music_wheel, profile_boxes, select_pane, select_shared, sort_menu,
-    step_artist_bar, test_input,
+    select_music::{music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar},
+    shared::{gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input, timers},
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource};
@@ -5691,7 +5691,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(select_shared::build_screen_bars("SELECT MUSIC"));
+    actors.extend(screen_bars::build("SELECT MUSIC"));
 
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
@@ -5741,19 +5741,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Timer (zmod parity: optional gameplay timer to the right of session timer).
-    actors.push(select_shared::build_session_timer(format_session_time(
+    actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
     if cfg.show_select_music_gameplay_timer {
-        actors.push(select_shared::build_gameplay_timer(format_session_time(
+        actors.push(timers::build_gameplay(format_session_time(
             state.gameplay_elapsed,
         )));
     }
 
     // Pads
     {
-        actors.push(select_shared::build_mode_pad_text(score_mode_text.as_str()));
-        actors.extend(select_shared::build_mode_pads());
+        actors.push(mode_pads::build_label(score_mode_text.as_str()));
+        actors.extend(mode_pads::build());
     }
 
     // Banner

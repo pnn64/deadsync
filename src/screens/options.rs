@@ -24,8 +24,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::screens::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::screens::components::{heart_bg, screen_bar};
+use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::ui::actors;
 use crate::ui::actors::Actor;
 use crate::ui::color;

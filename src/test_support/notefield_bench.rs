@@ -10,7 +10,7 @@ use crate::game::profile;
 use crate::game::scroll::ScrollSpeedSetting;
 use crate::game::song::SongData;
 use crate::game::timing::{ROWS_PER_BEAT, TimingData, TimingSegments, note_row_to_beat};
-use crate::screens::components::notefield::{self, FieldPlacement};
+use crate::screens::components::gameplay::notefield::{self, FieldPlacement};
 use crate::ui::actors::Actor;
 use rssp::TechCounts;
 use rssp::stats::ArrowStats;

@@ -1,7 +1,7 @@
 use crate::game::chart::{ChartData, StaminaCounts};
 use crate::game::song::SongData;
 use crate::game::timing::{TimingData, TimingSegments};
-use crate::screens::components::music_wheel::{self, MusicWheelParams};
+use crate::screens::components::select_music::music_wheel::{self, MusicWheelParams};
 use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::Actor;
 use rssp::TechCounts;

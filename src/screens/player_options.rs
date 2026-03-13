@@ -10,9 +10,9 @@ use crate::game::parsing::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization,
 };
 use crate::game::song::SongData;
-use crate::screens::components::heart_bg;
-use crate::screens::components::notefield::noteskin_model_actor;
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::heart_bg;
+use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
+use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::{Screen, ScreenAction};

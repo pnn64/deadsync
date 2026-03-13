@@ -2296,34 +2296,36 @@ impl App {
     #[inline(always)]
     fn stats_overlay_audio(
         &self,
-    ) -> Option<crate::screens::components::stats_overlay::AudioHealth> {
+    ) -> Option<crate::screens::components::shared::stats_overlay::AudioHealth> {
         let audio = crate::core::audio::get_output_timing_snapshot();
         if !audio.has_measurement() {
             return None;
         }
-        Some(crate::screens::components::stats_overlay::AudioHealth {
-            backend: audio.backend,
-            requested_output_mode: audio.requested_output_mode,
-            fallback_from_native: audio.fallback_from_native,
-            timing_clock: audio.timing_clock,
-            timing_quality: audio.timing_quality,
-            sample_rate_hz: audio.sample_rate_hz,
-            device_period_ns: audio.device_period_ns,
-            stream_latency_ns: audio.stream_latency_ns,
-            buffer_frames: audio.buffer_frames,
-            padding_frames: audio.padding_frames,
-            queued_frames: audio.queued_frames,
-            estimated_output_delay_ns: audio.estimated_output_delay_ns,
-            clock_fallback_count: audio.clock_fallback_count,
-            timing_sanity_failure_count: audio.timing_sanity_failure_count,
-            underrun_count: audio.underrun_count,
-        })
+        Some(
+            crate::screens::components::shared::stats_overlay::AudioHealth {
+                backend: audio.backend,
+                requested_output_mode: audio.requested_output_mode,
+                fallback_from_native: audio.fallback_from_native,
+                timing_clock: audio.timing_clock,
+                timing_quality: audio.timing_quality,
+                sample_rate_hz: audio.sample_rate_hz,
+                device_period_ns: audio.device_period_ns,
+                stream_latency_ns: audio.stream_latency_ns,
+                buffer_frames: audio.buffer_frames,
+                padding_frames: audio.padding_frames,
+                queued_frames: audio.queued_frames,
+                estimated_output_delay_ns: audio.estimated_output_delay_ns,
+                clock_fallback_count: audio.clock_fallback_count,
+                timing_sanity_failure_count: audio.timing_sanity_failure_count,
+                underrun_count: audio.underrun_count,
+            },
+        )
     }
 
     #[inline(always)]
     fn stats_overlay_timing(
         &self,
-    ) -> Option<crate::screens::components::stats_overlay::TimingHealth> {
+    ) -> Option<crate::screens::components::shared::stats_overlay::TimingHealth> {
         if !self.state.shell.overlay_mode.shows_timing() {
             return None;
         }
@@ -2340,26 +2342,28 @@ impl App {
         } else {
             present.refresh_ns
         };
-        Some(crate::screens::components::stats_overlay::TimingHealth {
-            interval_ns,
-            display_error_ms: display_clock.error_seconds * 1000.0,
-            display_catching_up: display_clock.catching_up,
-            present_mode: present.mode,
-            display_clock: present.display_clock,
-            host_clock: present.host_clock,
-            in_flight_images: present.in_flight_images,
-            waited_for_image: present.waited_for_image,
-            applied_back_pressure: present.applied_back_pressure,
-            queue_idle_waited: present.queue_idle_waited,
-            suboptimal: present.suboptimal,
-            submitted_present_id: present.submitted_present_id,
-            completed_present_id: present.completed_present_id,
-            calibration_error_ns: present.calibration_error_ns,
-            host_mapped: present.host_present_ns != 0
-                && present.display_clock != renderer::ClockDomainTrace::Unknown
-                && present.host_clock != renderer::ClockDomainTrace::Unknown,
-            audio: self.stats_overlay_audio(),
-        })
+        Some(
+            crate::screens::components::shared::stats_overlay::TimingHealth {
+                interval_ns,
+                display_error_ms: display_clock.error_seconds * 1000.0,
+                display_catching_up: display_clock.catching_up,
+                present_mode: present.mode,
+                display_clock: present.display_clock,
+                host_clock: present.host_clock,
+                in_flight_images: present.in_flight_images,
+                waited_for_image: present.waited_for_image,
+                applied_back_pressure: present.applied_back_pressure,
+                queue_idle_waited: present.queue_idle_waited,
+                suboptimal: present.suboptimal,
+                submitted_present_id: present.submitted_present_id,
+                completed_present_id: present.completed_present_id,
+                calibration_error_ns: present.calibration_error_ns,
+                host_mapped: present.host_present_ns != 0
+                    && present.display_clock != renderer::ClockDomainTrace::Unknown
+                    && present.host_clock != renderer::ClockDomainTrace::Unknown,
+                audio: self.stats_overlay_audio(),
+            },
+        )
     }
 
     #[inline(always)]
@@ -4255,19 +4259,20 @@ impl App {
             (276.0_f32, 64.0_f32)
         };
         let mesh = chart_opt.and_then(|chart| {
-            let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
-                &chart.measure_nps_vec,
-                chart.max_nps,
-                &chart.timing,
-                chart.first_second,
-                chart.last_second,
-                graph_w,
-                graph_h,
-                0.0,
-                graph_w,
-                None,
-                1.0,
-            );
+            let verts =
+                crate::screens::components::shared::density_graph::build_density_histogram_mesh(
+                    &chart.measure_nps_vec,
+                    chart.max_nps,
+                    &chart.timing,
+                    chart.first_second,
+                    chart.last_second,
+                    graph_w,
+                    graph_h,
+                    0.0,
+                    graph_w,
+                    None,
+                    1.0,
+                );
             if verts.is_empty() {
                 None
             } else {
@@ -4808,7 +4813,7 @@ impl App {
         };
 
         if self.state.shell.overlay_mode.shows_fps() {
-            let overlay = crate::screens::components::stats_overlay::build(
+            let overlay = crate::screens::components::shared::stats_overlay::build(
                 self.backend_type,
                 self.state.shell.last_fps,
                 self.state.shell.last_vpf,
@@ -4820,16 +4825,19 @@ impl App {
                     .duration_since(self.state.shell.start_time)
                     .as_secs_f32();
                 let stutters = self.collect_visible_stutters(now_seconds);
-                actors.extend(crate::screens::components::stats_overlay::build_stutter(
-                    &stutters,
-                ));
+                actors.extend(
+                    crate::screens::components::shared::stats_overlay::build_stutter(&stutters),
+                );
             }
         }
 
         // Gamepad connection overlay (always on top of screen, but below transitions)
         if let Some((msg, _)) = &self.state.shell.gamepad_overlay_state {
-            let params = crate::screens::components::gamepad_overlay::Params { message: msg };
-            actors.extend(crate::screens::components::gamepad_overlay::build(params));
+            let params =
+                crate::screens::components::shared::gamepad_overlay::Params { message: msg };
+            actors.extend(crate::screens::components::shared::gamepad_overlay::build(
+                params,
+            ));
         }
         self.append_gameplay_offset_prompt_actors(&mut actors);
 
@@ -4847,7 +4855,7 @@ impl App {
                         || *target == CurrentScreen::SelectColor
                         || *target == CurrentScreen::Options)
                 {
-                    let splash = crate::screens::components::menu_splash::build(
+                    let splash = crate::screens::components::menu::menu_splash::build(
                         self.state.screens.menu_state.active_color_index,
                     );
                     actors.extend(splash);
@@ -4925,7 +4933,7 @@ impl App {
     fn collect_visible_stutters(
         &self,
         now_seconds: f32,
-    ) -> Vec<crate::screens::components::stats_overlay::StutterEvent> {
+    ) -> Vec<crate::screens::components::shared::stats_overlay::StutterEvent> {
         let mut out = Vec::with_capacity(STUTTER_SAMPLE_COUNT);
         let start = self.state.shell.stutter_cursor;
         for i in 0..STUTTER_SAMPLE_COUNT {
@@ -4942,13 +4950,15 @@ impl App {
             } else {
                 0.0
             };
-            out.push(crate::screens::components::stats_overlay::StutterEvent {
-                timestamp_seconds: sample.at_seconds,
-                frame_ms: sample.frame_seconds * 1000.0,
-                frame_multiple,
-                severity: sample.severity,
-                age_seconds,
-            });
+            out.push(
+                crate::screens::components::shared::stats_overlay::StutterEvent {
+                    timestamp_seconds: sample.at_seconds,
+                    frame_ms: sample.frame_seconds * 1000.0,
+                    frame_multiple,
+                    severity: sample.severity,
+                    age_seconds,
+                },
+            );
         }
         out
     }

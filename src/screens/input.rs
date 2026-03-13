@@ -1,7 +1,7 @@
 use crate::act;
 use crate::core::input::{InputEvent, InputSource, PadEvent, VirtualAction, with_keymap};
 use crate::core::space::{screen_height, screen_width};
-use crate::screens::components::{heart_bg, test_input};
+use crate::screens::components::shared::{heart_bg, test_input};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;

@@ -5,8 +5,8 @@ use crate::core::input::{
     GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, VirtualAction, with_keymap,
 };
 use crate::core::space::{screen_height, screen_width, widescale};
-use crate::screens::components::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
-use crate::screens::components::{heart_bg, screen_bar};
+use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;

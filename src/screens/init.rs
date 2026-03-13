@@ -4,7 +4,7 @@ use crate::core::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use crate::game::parsing::{noteskin, simfile as song_loading};
-use crate::screens::components::heart_bg;
+use crate::screens::components::shared::heart_bg;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;

@@ -1,6 +1,6 @@
 use crate::act;
 use crate::game::profile;
-use crate::screens::components::qr_code;
+use crate::screens::components::shared::qr_code;
 use crate::screens::evaluation::ScoreInfo;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;

@@ -4,8 +4,10 @@ use crate::game::scores::{
     CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
 };
 use crate::game::timing::WindowCounts;
-use crate::screens::components::gameplay_stats;
-use crate::screens::components::notefield::{self, FieldPlacement};
+use crate::screens::components::gameplay::{
+    gameplay_stats,
+    notefield::{self, FieldPlacement},
+};
 use crate::test_support::{compose_scenarios, notefield_bench};
 use crate::ui::actors::Actor;
 use std::path::PathBuf;

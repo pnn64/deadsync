@@ -21,9 +21,9 @@ use crate::game::{
     profile,
     scroll::ScrollSpeedSetting,
 };
-use crate::screens::components::{
+use crate::screens::components::shared::{
     density_graph::{self, DensityHistCache},
-    notefield::ModelMeshCache,
+    noteskin_model::ModelMeshCache,
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
@@ -5570,19 +5570,20 @@ pub fn init(
                 return None;
             }
             let chart = charts[p].as_ref();
-            let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
-                &chart.measure_nps_vec,
-                chart.max_nps,
-                &timing,
-                density_graph_first_second,
-                density_graph_last_second,
-                graph_w,
-                graph_h,
-                0.0,
-                graph_w,
-                None,
-                1.0,
-            );
+            let verts =
+                crate::screens::components::shared::density_graph::build_density_histogram_mesh(
+                    &chart.measure_nps_vec,
+                    chart.max_nps,
+                    &timing,
+                    density_graph_first_second,
+                    density_graph_last_second,
+                    graph_w,
+                    graph_h,
+                    0.0,
+                    graph_w,
+                    None,
+                    1.0,
+                );
             if verts.is_empty() {
                 None
             } else {
@@ -5595,7 +5596,7 @@ pub fn init(
             return None;
         }
         let chart = charts[p].as_ref();
-        crate::screens::components::density_graph::build_density_histogram_cache(
+        crate::screens::components::shared::density_graph::build_density_histogram_cache(
             &chart.measure_nps_vec,
             chart.max_nps,
             &timing,

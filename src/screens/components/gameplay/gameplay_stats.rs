@@ -5,7 +5,7 @@ use crate::core::space::*;
 use crate::game::gameplay::{self, State};
 use crate::game::judgment::JudgeGrade;
 use crate::game::profile;
-use crate::screens::components::gs_scorebox;
+use crate::screens::components::shared::gs_scorebox;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::font;

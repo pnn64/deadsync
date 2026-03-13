@@ -1,13 +1,10 @@
-use crate::act;
-use crate::core::space::{screen_center_x, screen_width, widescale};
 use crate::game::profile;
-use crate::screens::components::pad_display;
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::ui::actors::{Actor, TextContent};
+use crate::ui::actors::Actor;
 
-pub fn build_screen_bars(top_title: &'static str) -> Vec<Actor> {
+pub fn build(top_title: &'static str) -> [Actor; 2] {
     let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
     let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
     let p1_avatar = p1_profile
@@ -49,7 +46,7 @@ pub fn build_screen_bars(top_title: &'static str) -> Vec<Actor> {
         (Some("PRESS START"), None)
     };
 
-    vec![
+    [
         screen_bar::build(ScreenBarParams {
             title: top_title,
             title_placement: ScreenBarTitlePlacement::Left,
@@ -73,71 +70,6 @@ pub fn build_screen_bars(top_title: &'static str) -> Vec<Actor> {
             right_text: footer_right,
             left_avatar,
             right_avatar,
-        }),
-    ]
-}
-
-pub fn build_session_timer(text: impl Into<TextContent>) -> Actor {
-    build_header_timer(text, screen_center_x())
-}
-
-pub fn build_gameplay_timer(text: impl Into<TextContent>) -> Actor {
-    build_header_timer(text, screen_center_x() + widescale(150.0, 200.0))
-}
-
-fn build_header_timer(text: impl Into<TextContent>, x: f32) -> Actor {
-    let text = text.into();
-    act!(text:
-        font("wendy_monospace_numbers"):
-        settext(text):
-        align(0.5, 0.5):
-        xy(x, 10.0):
-        zoom(widescale(0.3, 0.36)):
-        z(121):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        horizalign(center)
-    )
-}
-
-pub fn build_mode_pad_text(text: &str) -> Actor {
-    act!(text:
-        font("wendy"):
-        settext(text):
-        align(1.0, 0.5):
-        xy(screen_width() - widescale(55.0, 62.0), 15.0):
-        zoom(widescale(0.5, 0.6)):
-        z(121):
-        diffuse(1.0, 1.0, 1.0, 1.0)
-    )
-}
-
-fn mode_pad_states() -> [bool; 2] {
-    if profile::get_session_play_style() == profile::PlayStyle::Double {
-        return [true, true];
-    }
-    [
-        profile::is_session_side_joined(profile::PlayerSide::P1),
-        profile::is_session_side_joined(profile::PlayerSide::P2),
-    ]
-}
-
-pub fn build_mode_pads() -> [Actor; 2] {
-    let [p1_active, p2_active] = mode_pad_states();
-    let pad_zoom = 0.24 * widescale(0.435, 0.525);
-    [
-        pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(35.0, 41.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: pad_zoom,
-            z: 121,
-            is_active: p1_active,
-        }),
-        pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(15.0, 17.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: pad_zoom,
-            z: 121,
-            is_active: p2_active,
         }),
     ]
 }

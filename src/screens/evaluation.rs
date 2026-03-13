@@ -3,11 +3,12 @@ use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::Screen;
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::{
-    eval_grades, evaluation as eval_panes, heart_bg, screen_bar, select_shared,
+    evaluation::{self as eval_panes, eval_grades},
+    shared::{heart_bg, mode_pads, screen_bar, timers},
 };
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -781,88 +782,89 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             density_graph_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
                 let last_second = si.song.total_length_seconds.max(0) as f32;
-                let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
-                    &si.chart.measure_nps_vec,
-                    si.chart.max_nps,
-                    &si.chart.timing,
-                    si.graph_first_second,
-                    last_second,
-                    graph_width,
-                    GRAPH_H,
-                    0.0,
-                    graph_width,
-                    Some(0.5),
-                    0.5,
-                );
+                let verts =
+                    crate::screens::components::shared::density_graph::build_density_histogram_mesh(
+                        &si.chart.measure_nps_vec,
+                        si.chart.max_nps,
+                        &si.chart.timing,
+                        si.graph_first_second,
+                        last_second,
+                        graph_width,
+                        GRAPH_H,
+                        0.0,
+                        graph_width,
+                        Some(0.5),
+                        0.5,
+                    );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_itg[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Itg,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Itg,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_ex[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Ex,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Ex,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_hard_ex[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::HardEx,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_arrow[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Arrow,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Arrow,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_foot[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Foot,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Foot,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -874,12 +876,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Itg,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Itg,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -892,12 +894,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Ex,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Ex,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -910,12 +912,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::HardEx,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::HardEx,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -1466,11 +1468,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }));
 
     // Header timers (zmod parity): session timer + optional cumulative gameplay timer.
-    actors.push(select_shared::build_session_timer(format_session_time(
+    actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
     if cfg.show_select_music_gameplay_timer {
-        actors.push(select_shared::build_gameplay_timer(format_session_time(
+        actors.push(timers::build_gameplay(format_session_time(
             state.gameplay_elapsed,
         )));
     }
@@ -2047,19 +2049,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     si,
                     state.timing_hist_mesh[player_idx].as_ref(),
                     controller,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Itg,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Itg,
                 )),
                 EvalPane::TimingEx => actors.extend(eval_panes::build_timing_pane(
                     si,
                     state.timing_hist_mesh_ex[player_idx].as_ref(),
                     controller,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Ex,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Ex,
                 )),
                 EvalPane::TimingHardEx => actors.extend(eval_panes::build_timing_pane(
                     si,
                     state.timing_hist_mesh_hard_ex[player_idx].as_ref(),
                     controller,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::HardEx,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::HardEx,
                 )),
                 EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(si, controller)),
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
@@ -2535,7 +2537,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
         actors.push(act!(text: font("wendy"): settext("ITG"): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
-        actors.extend(select_shared::build_mode_pads());
+        actors.extend(mode_pads::build());
     }
 
     // 3. Bottom Bar

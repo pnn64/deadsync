@@ -1,7 +1,7 @@
 use crate::core::gfx::{BlendMode, MeshMode};
 use crate::core::space::screen_center_x;
 use crate::game::timing::{TimingData, TimingSegments};
-use crate::screens::components::density_graph::{self, DensityHistCache};
+use crate::screens::components::shared::density_graph::{self, DensityHistCache};
 use crate::ui::actors::{Actor, SizeSpec};
 use std::sync::Arc;
 

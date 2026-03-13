@@ -1,3 +1,5 @@
+pub mod eval_grades;
+pub mod eval_graphs;
 pub mod pane_column;
 pub mod pane_gs_records;
 pub mod pane_machine_records;

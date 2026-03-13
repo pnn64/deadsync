@@ -1,7 +1,7 @@
 use crate::assets::AssetManager;
 use crate::game::profile;
 use crate::game::timing::WindowCounts;
-use crate::screens::components::gameplay_stats;
+use crate::screens::components::gameplay::gameplay_stats;
 use crate::test_support::{compose_scenarios, notefield_bench};
 use crate::ui::actors::Actor;
 use std::sync::Arc;

@@ -8,11 +8,11 @@ use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantiza
 use crate::game::profile::{self, ActiveProfile};
 use crate::game::scores;
 use crate::game::scroll::ScrollSpeedSetting;
-use crate::screens::components::notefield::noteskin_model_actor;
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
+use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::{heart_bg, screen_bar};
+use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{self, Actor};
 use crate::ui::color;
