@@ -114,6 +114,10 @@ rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 // --- Timing & Logic Constants ---
 // ITGmania WheelBase::Move() uses `m_TimeBeforeMovingBegins = 1/4.0f` before auto-scrolling.
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
+// ScreenSelectMusic inherits Screen's default menu repeat timing via InputFilter:
+// 0.375s before repeating, then 8 repeats/sec.
+const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
+const OVERLAY_NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(125);
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 // ITGmania InputQueue: g_fSimultaneousThreshold = 0.05f.
 const CHORD_SIMULTANEOUS_WINDOW: Duration = Duration::from_millis(50);
@@ -635,7 +639,7 @@ fn cached_music_rate_banner_text(rate: f32) -> Arc<str> {
     })
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum NavDirection {
     Left,
     Right,
@@ -869,6 +873,9 @@ pub struct State {
     last_steps_nav_time_p2: Option<Instant>,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
+    overlay_nav_held_direction: Option<NavDirection>,
+    overlay_nav_held_since: Option<Instant>,
+    overlay_nav_last_scrolled_at: Option<Instant>,
     sort_menu_prev_selected_index: usize,
     sort_menu_focus_anim_elapsed: f32,
     currently_playing_preview_path: Option<PathBuf>,
@@ -1967,6 +1974,9 @@ pub fn init() -> State {
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_since: None,
+        overlay_nav_held_direction: None,
+        overlay_nav_held_since: None,
+        overlay_nav_last_scrolled_at: None,
         sort_menu_prev_selected_index: 0,
         sort_menu_focus_anim_elapsed: sort_menu::FOCUS_TWEEN_SECONDS,
         currently_playing_preview_path: None,
@@ -2143,6 +2153,9 @@ pub fn init_placeholder() -> State {
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_since: None,
+        overlay_nav_held_direction: None,
+        overlay_nav_held_since: None,
+        overlay_nav_last_scrolled_at: None,
         sort_menu_prev_selected_index: 0,
         sort_menu_focus_anim_elapsed: sort_menu::FOCUS_TWEEN_SECONDS,
         currently_playing_preview_path: None,
@@ -2297,6 +2310,59 @@ fn clear_p2_ud_chord(state: &mut State) {
 }
 
 #[inline(always)]
+fn clear_overlay_nav_hold(state: &mut State) {
+    state.overlay_nav_held_direction = None;
+    state.overlay_nav_held_since = None;
+    state.overlay_nav_last_scrolled_at = None;
+}
+
+#[inline(always)]
+fn start_overlay_nav_hold(state: &mut State, dir: NavDirection) {
+    let now = Instant::now();
+    state.overlay_nav_held_direction = Some(dir);
+    state.overlay_nav_held_since = Some(now);
+    state.overlay_nav_last_scrolled_at = Some(now);
+}
+
+#[inline(always)]
+fn release_overlay_nav_hold(state: &mut State, dir: NavDirection) {
+    if state.overlay_nav_held_direction == Some(dir) {
+        clear_overlay_nav_hold(state);
+    }
+}
+
+#[inline(always)]
+const fn overlay_nav_delta(dir: NavDirection) -> isize {
+    match dir {
+        NavDirection::Left => -1,
+        NavDirection::Right => 1,
+    }
+}
+
+#[inline(always)]
+const fn overlay_nav_dir(action: VirtualAction) -> Option<NavDirection> {
+    match action {
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => Some(NavDirection::Left),
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(NavDirection::Right),
+        _ => None,
+    }
+}
+
+#[inline(always)]
 fn show_sort_menu(state: &mut State) {
     state.sort_menu = sort_menu::State::Visible {
         page: sort_menu::Page::Main,
@@ -2304,6 +2370,7 @@ fn show_sort_menu(state: &mut State) {
     };
     state.sort_menu_prev_selected_index = 0;
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
@@ -2315,6 +2382,7 @@ fn show_sort_menu(state: &mut State) {
 fn hide_sort_menu(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
 }
@@ -2430,6 +2498,7 @@ fn show_test_input_overlay(state: &mut State) {
     state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.test_input_overlay_visible = true;
@@ -2450,6 +2519,7 @@ fn start_song_search_prompt(state: &mut State) {
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.song_search = sort_menu::begin_song_search_prompt();
@@ -2467,6 +2537,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -2496,20 +2567,24 @@ fn restore_sort_menu_after_profile_overlay(state: &mut State) {
     };
     state.sort_menu_prev_selected_index = selected_index;
     state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
+    clear_overlay_nav_hold(state);
 }
 
 #[inline(always)]
 fn close_song_search(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
+    clear_overlay_nav_hold(state);
 }
 
 #[inline(always)]
 fn cancel_song_search(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
+    clear_overlay_nav_hold(state);
     state.song_search_ignore_next_back_select = true;
 }
 
 fn start_song_search_results(state: &mut State, search_text: String) {
+    clear_overlay_nav_hold(state);
     state.song_search = sort_menu::begin_song_search_results(&state.group_entries, search_text);
 }
 
@@ -2583,6 +2658,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -3613,22 +3689,22 @@ fn refresh_after_reload(state: &mut State) {
     *state = refreshed;
 }
 
-fn sort_menu_move(state: &mut State, delta: isize) {
+fn sort_menu_move(state: &mut State, delta: isize) -> bool {
     let (page, selected_index) = match state.sort_menu {
         sort_menu::State::Visible {
             page,
             selected_index,
         } => (page, selected_index),
-        sort_menu::State::Hidden => return,
+        sort_menu::State::Hidden => return false,
     };
     let len = sort_menu_items(state, page).len();
     if len == 0 {
-        return;
+        return false;
     }
     let old = selected_index.min(len - 1);
     let next = ((old as isize + delta).rem_euclid(len as isize)) as usize;
     if next == old {
-        return;
+        return false;
     }
     state.sort_menu_prev_selected_index = old;
     if let sort_menu::State::Visible { selected_index, .. } = &mut state.sort_menu {
@@ -3636,6 +3712,48 @@ fn sort_menu_move(state: &mut State, delta: isize) {
     }
     state.sort_menu_focus_anim_elapsed = 0.0;
     audio::play_sfx("assets/sounds/change.ogg");
+    true
+}
+
+fn update_overlay_nav_hold(state: &mut State) {
+    let Some(dir) = state.overlay_nav_held_direction else {
+        return;
+    };
+    let Some(held_since) = state.overlay_nav_held_since else {
+        clear_overlay_nav_hold(state);
+        return;
+    };
+    let Some(last_at) = state.overlay_nav_last_scrolled_at else {
+        clear_overlay_nav_hold(state);
+        return;
+    };
+
+    let overlay_active = state.sort_menu != sort_menu::State::Hidden
+        || matches!(state.song_search, sort_menu::SongSearchState::Results(_));
+    if !overlay_active {
+        clear_overlay_nav_hold(state);
+        return;
+    }
+
+    let now = Instant::now();
+    if now.duration_since(held_since) < OVERLAY_NAV_INITIAL_HOLD_DELAY
+        || now.duration_since(last_at) < OVERLAY_NAV_REPEAT_SCROLL_INTERVAL
+    {
+        return;
+    }
+
+    let moved = if let sort_menu::SongSearchState::Results(results) = &mut state.song_search {
+        if results.input_lock > 0.0 {
+            false
+        } else {
+            sort_menu::song_search_move(results, overlay_nav_delta(dir))
+        }
+    } else {
+        sort_menu_move(state, overlay_nav_delta(dir))
+    };
+    if moved {
+        state.overlay_nav_last_scrolled_at = Some(now);
+    }
 }
 
 #[inline(always)]
@@ -3832,6 +3950,7 @@ fn show_sync_overlay(state: &mut State) {
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -4220,6 +4339,7 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
 }
 
 fn sort_menu_activate(state: &mut State) -> ScreenAction {
+    clear_overlay_nav_hold(state);
     let (page, selected_index) = match state.sort_menu {
         sort_menu::State::Visible {
             page,
@@ -4334,127 +4454,136 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
 }
 
 fn handle_sort_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-    match ev.action {
-        VirtualAction::p1_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p1_left
-        | VirtualAction::p1_menu_left
-        | VirtualAction::p2_up
-        | VirtualAction::p2_menu_up
-        | VirtualAction::p2_left
-        | VirtualAction::p2_menu_left => sort_menu_move(state, -1),
-        VirtualAction::p1_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p1_right
-        | VirtualAction::p1_menu_right
-        | VirtualAction::p2_down
-        | VirtualAction::p2_menu_down
-        | VirtualAction::p2_right
-        | VirtualAction::p2_menu_right => sort_menu_move(state, 1),
-        VirtualAction::p1_start | VirtualAction::p2_start => return sort_menu_activate(state),
-        VirtualAction::p1_back
-        | VirtualAction::p2_back
-        | VirtualAction::p1_select
-        | VirtualAction::p2_select => {
-            audio::play_sfx("assets/sounds/start.ogg");
-            match state.sort_menu {
-                sort_menu::State::Visible {
-                    page: sort_menu::Page::Sorts,
-                    ..
-                } => {
-                    state.sort_menu = sort_menu::State::Visible {
-                        page: sort_menu::Page::Main,
-                        selected_index: 0,
-                    };
-                    state.sort_menu_prev_selected_index = 0;
-                    state.sort_menu_focus_anim_elapsed = 0.0;
-                }
-                _ => hide_sort_menu(state),
-            }
+    let Some(dir) = overlay_nav_dir(ev.action) else {
+        if !ev.pressed {
+            return ScreenAction::None;
         }
-        _ => {}
-    }
-    ScreenAction::None
-}
-
-fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-
-    let mut prompt_start: Option<String> = None;
-    let mut prompt_close = false;
-    match &mut state.song_search {
-        sort_menu::SongSearchState::TextEntry(entry) => match ev.action {
-            VirtualAction::p1_start | VirtualAction::p2_start => {
-                prompt_start = Some(entry.query.clone());
-            }
+        clear_overlay_nav_hold(state);
+        return match ev.action {
+            VirtualAction::p1_start | VirtualAction::p2_start => sort_menu_activate(state),
             VirtualAction::p1_back
             | VirtualAction::p2_back
             | VirtualAction::p1_select
             | VirtualAction::p2_select => {
-                prompt_close = true;
-            }
-            _ => {}
-        },
-        sort_menu::SongSearchState::Results(results) => {
-            if results.input_lock > 0.0 {
-                return ScreenAction::None;
-            }
-            match ev.action {
-                VirtualAction::p1_up
-                | VirtualAction::p1_menu_up
-                | VirtualAction::p1_left
-                | VirtualAction::p1_menu_left
-                | VirtualAction::p2_up
-                | VirtualAction::p2_menu_up
-                | VirtualAction::p2_left
-                | VirtualAction::p2_menu_left => {
-                    let _ = sort_menu::song_search_move(results, -1);
-                }
-                VirtualAction::p1_down
-                | VirtualAction::p1_menu_down
-                | VirtualAction::p1_right
-                | VirtualAction::p1_menu_right
-                | VirtualAction::p2_down
-                | VirtualAction::p2_menu_down
-                | VirtualAction::p2_right
-                | VirtualAction::p2_menu_right => {
-                    let _ = sort_menu::song_search_move(results, 1);
-                }
-                VirtualAction::p1_start | VirtualAction::p2_start => {
-                    let picked =
-                        sort_menu::song_search_focused_candidate(results).map(|c| c.song.clone());
-                    close_song_search(state);
-                    if let Some(song) = picked {
-                        focus_song_from_search(state, &song);
-                        refresh_after_reload(state);
+                audio::play_sfx("assets/sounds/start.ogg");
+                match state.sort_menu {
+                    sort_menu::State::Visible {
+                        page: sort_menu::Page::Sorts,
+                        ..
+                    } => {
+                        state.sort_menu = sort_menu::State::Visible {
+                            page: sort_menu::Page::Main,
+                            selected_index: 0,
+                        };
+                        state.sort_menu_prev_selected_index = 0;
+                        state.sort_menu_focus_anim_elapsed = 0.0;
                     }
+                    _ => hide_sort_menu(state),
+                }
+                ScreenAction::None
+            }
+            _ => ScreenAction::None,
+        };
+    };
+
+    if !ev.pressed {
+        release_overlay_nav_hold(state, dir);
+        return ScreenAction::None;
+    }
+
+    let _ = sort_menu_move(state, overlay_nav_delta(dir));
+    start_overlay_nav_hold(state, dir);
+    ScreenAction::None
+}
+
+fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if matches!(state.song_search, sort_menu::SongSearchState::Hidden) {
+        return ScreenAction::None;
+    }
+
+    if matches!(state.song_search, sort_menu::SongSearchState::TextEntry(_)) {
+        if !ev.pressed {
+            return ScreenAction::None;
+        }
+
+        let mut prompt_start = None;
+        let mut prompt_close = false;
+        if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
+            match ev.action {
+                VirtualAction::p1_start | VirtualAction::p2_start => {
+                    prompt_start = Some(entry.query.clone());
                 }
                 VirtualAction::p1_back
                 | VirtualAction::p2_back
                 | VirtualAction::p1_select
                 | VirtualAction::p2_select => {
-                    cancel_song_search(state);
+                    prompt_close = true;
                 }
                 _ => {}
             }
         }
-        sort_menu::SongSearchState::Hidden => {}
-    }
 
-    if let Some(search_text) = prompt_start {
-        start_song_search_results(state, search_text);
-        return ScreenAction::None;
-    }
-    if prompt_close {
-        cancel_song_search(state);
+        if let Some(search_text) = prompt_start {
+            start_song_search_results(state, search_text);
+        } else if prompt_close {
+            cancel_song_search(state);
+        }
         return ScreenAction::None;
     }
 
+    if let Some(dir) = overlay_nav_dir(ev.action) {
+        if !ev.pressed {
+            release_overlay_nav_hold(state, dir);
+            return ScreenAction::None;
+        }
+
+        if let sort_menu::SongSearchState::Results(results) = &state.song_search
+            && results.input_lock > 0.0
+        {
+            return ScreenAction::None;
+        }
+
+        start_overlay_nav_hold(state, dir);
+        if let sort_menu::SongSearchState::Results(results) = &mut state.song_search
+            && results.input_lock <= 0.0
+        {
+            let _ = sort_menu::song_search_move(results, overlay_nav_delta(dir));
+        }
+        return ScreenAction::None;
+    }
+
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
+
+    if let sort_menu::SongSearchState::Results(results) = &state.song_search
+        && results.input_lock > 0.0
+    {
+        return ScreenAction::None;
+    }
+
+    clear_overlay_nav_hold(state);
+    match ev.action {
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            let picked = if let sort_menu::SongSearchState::Results(results) = &state.song_search {
+                sort_menu::song_search_focused_candidate(results).map(|c| c.song.clone())
+            } else {
+                None
+            };
+            close_song_search(state);
+            if let Some(song) = picked {
+                focus_song_from_search(state, &song);
+                refresh_after_reload(state);
+            }
+        }
+        VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => {
+            cancel_song_search(state);
+        }
+        _ => {}
+    }
     ScreenAction::None
 }
 
@@ -5100,6 +5229,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     if sort_menu::update_song_search(&mut state.song_search, dt) {
+        update_overlay_nav_hold(state);
         return ScreenAction::None;
     }
     if let SyncOverlayState::Visible(overlay) = &mut state.sync_overlay {
@@ -5170,6 +5300,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.sort_menu_focus_anim_elapsed =
                 (state.sort_menu_focus_anim_elapsed + dt).min(sort_menu::FOCUS_TWEEN_SECONDS);
         }
+    }
+    if state.sort_menu != sort_menu::State::Hidden {
+        update_overlay_nav_hold(state);
     }
 
     let now = Instant::now();
