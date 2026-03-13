@@ -10,3 +10,4 @@ pub mod gs_scorebox_bench;
 pub mod music_wheel_bench;
 pub mod notefield_bench;
 pub mod pane_stats_bench;
+pub mod player_options_bench;

@@ -18,6 +18,7 @@ use crate::screens::components::screen_bar::{
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -297,6 +298,24 @@ pub struct Row {
 }
 
 #[derive(Clone, Debug)]
+struct InlineChoiceLayout {
+    widths: Arc<[f32]>,
+    centers: Arc<[f32]>,
+    x_positions: Arc<[f32]>,
+    text_h: f32,
+}
+
+#[derive(Clone, Debug)]
+struct RowTextCache {
+    name: Arc<str>,
+    title_top: Option<Arc<str>>,
+    title_bottom: Option<Arc<str>>,
+    choices: Vec<Arc<str>>,
+    help_lines: Vec<Arc<str>>,
+    help_joined: Arc<str>,
+}
+
+#[derive(Clone, Debug)]
 pub struct FixedStepchart {
     pub label: String,
 }
@@ -404,6 +423,8 @@ pub struct State {
     pub nav_key_held_since: [Option<Instant>; PLAYER_SLOTS],
     pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
     inline_choice_x: [f32; PLAYER_SLOTS],
+    inline_choice_layouts: RefCell<Vec<Option<InlineChoiceLayout>>>,
+    row_text_cache: RefCell<Vec<Option<RowTextCache>>>,
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
     noteskin_names: Vec<String>,
     noteskin_cache: HashMap<String, Arc<Noteskin>>,
@@ -2406,6 +2427,7 @@ pub fn init(
         )
     });
     let active = session_active_players();
+    let row_count = rows.len();
     let row_tweens = init_row_tweens(
         &rows,
         [0; PLAYER_SLOTS],
@@ -2466,6 +2488,8 @@ pub fn init(
         nav_key_held_since: [None; PLAYER_SLOTS],
         nav_key_last_scrolled_at: [None; PLAYER_SLOTS],
         inline_choice_x: [f32::NAN; PLAYER_SLOTS],
+        inline_choice_layouts: RefCell::new(vec![None; row_count]),
+        row_text_cache: RefCell::new(vec![None; row_count]),
         player_profiles,
         noteskin_names,
         noteskin_cache,
@@ -2989,19 +3013,158 @@ fn row_selects_on_focus_move(row_name: &str) -> bool {
     row_name == "Stepchart"
 }
 
-fn inline_choice_centers(choices: &[String], asset_manager: &AssetManager) -> Vec<f32> {
-    if choices.is_empty() {
-        return Vec::new();
-    }
+fn build_inline_choice_layout(
+    choices: &[String],
+    asset_manager: &AssetManager,
+) -> InlineChoiceLayout {
+    let mut widths: Vec<f32> = Vec::with_capacity(choices.len());
     let mut centers: Vec<f32> = Vec::with_capacity(choices.len());
+    let mut x_positions: Vec<f32> = Vec::with_capacity(choices.len());
     let mut x = widescale(162.0, 176.0);
     let zoom = 0.835_f32;
-    for text in choices {
-        let (draw_w, _) = measure_option_text(asset_manager, text, zoom);
-        centers.push(draw_w.mul_add(0.5, x));
-        x += draw_w + INLINE_SPACING;
+    let mut text_h = 16.0_f32;
+    if !choices.is_empty() {
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager.with_font("miso", |metrics_font| {
+                text_h = (metrics_font.height as f32).max(1.0) * zoom;
+                for text in choices {
+                    let mut w =
+                        crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts)
+                            as f32;
+                    if !w.is_finite() || w <= 0.0 {
+                        w = 1.0;
+                    }
+                    let draw_w = w * zoom;
+                    widths.push(draw_w);
+                    x_positions.push(x);
+                    centers.push(draw_w.mul_add(0.5, x));
+                    x += draw_w + INLINE_SPACING;
+                }
+            });
+        });
     }
-    centers
+    InlineChoiceLayout {
+        widths: Arc::from(widths),
+        centers: Arc::from(centers),
+        x_positions: Arc::from(x_positions),
+        text_h,
+    }
+}
+
+fn inline_choice_layout(
+    state: &State,
+    asset_manager: &AssetManager,
+    row_idx: usize,
+) -> Option<InlineChoiceLayout> {
+    let row = state.rows.get(row_idx)?;
+    if !row_supports_inline_nav(row) || row.choices.is_empty() {
+        return None;
+    }
+    if let Some(layout) = state
+        .inline_choice_layouts
+        .borrow()
+        .get(row_idx)
+        .and_then(|layout| layout.clone())
+    {
+        return Some(layout);
+    }
+    let layout = build_inline_choice_layout(&row.choices, asset_manager);
+    let mut cache = state.inline_choice_layouts.borrow_mut();
+    if cache.len() != state.rows.len() {
+        cache.resize(state.rows.len(), None);
+    }
+    if row_idx < cache.len() {
+        cache[row_idx] = Some(layout.clone());
+    }
+    Some(layout)
+}
+
+pub fn clear_inline_choice_layout_cache(state: &State) {
+    let mut cache = state.inline_choice_layouts.borrow_mut();
+    if cache.len() != state.rows.len() {
+        cache.resize(state.rows.len(), None);
+    } else {
+        cache.fill(None);
+    }
+}
+
+fn build_row_text_cache(row: &Row) -> RowTextCache {
+    let name: Arc<str> = Arc::from(row.name.as_str());
+    let (title_top, title_bottom) = match row.name.split_once('\n') {
+        Some((top, bottom)) if !bottom.contains('\n') => {
+            (Some(Arc::from(top)), Some(Arc::from(bottom)))
+        }
+        _ => (None, None),
+    };
+    let choices = row
+        .choices
+        .iter()
+        .map(|choice| Arc::from(choice.as_str()))
+        .collect();
+    let help_lines: Vec<Arc<str>> = row
+        .help
+        .iter()
+        .map(|line| Arc::from(line.as_str()))
+        .collect();
+    let help_joined = if row.help.len() <= 1 {
+        help_lines
+            .first()
+            .cloned()
+            .unwrap_or_else(|| Arc::<str>::from(""))
+    } else {
+        Arc::from(row.help.join(" | "))
+    };
+    RowTextCache {
+        name,
+        title_top,
+        title_bottom,
+        choices,
+        help_lines,
+        help_joined,
+    }
+}
+
+fn row_text_cache(state: &State, row_idx: usize) -> Option<RowTextCache> {
+    let row = state.rows.get(row_idx)?;
+    let mut cache = state.row_text_cache.borrow_mut();
+    if cache.len() != state.rows.len() {
+        cache.resize(state.rows.len(), None);
+    }
+    let needs_rebuild = cache
+        .get(row_idx)
+        .and_then(|cached| cached.as_ref())
+        .is_none_or(|cached| cached.name.as_ref() != row.name.as_str());
+    if needs_rebuild {
+        cache[row_idx] = Some(build_row_text_cache(row));
+    }
+    cache[row_idx].clone()
+}
+
+pub fn clear_row_text_cache(state: &State) {
+    let mut cache = state.row_text_cache.borrow_mut();
+    if cache.len() != state.rows.len() {
+        cache.resize(state.rows.len(), None);
+    } else {
+        cache.fill(None);
+    }
+}
+
+fn clear_row_text_cache_row(state: &State, row_idx: usize) {
+    let mut cache = state.row_text_cache.borrow_mut();
+    if cache.len() != state.rows.len() {
+        cache.resize(state.rows.len(), None);
+    }
+    if row_idx < cache.len() {
+        cache[row_idx] = None;
+    }
+}
+
+fn inline_choice_centers(
+    state: &State,
+    asset_manager: &AssetManager,
+    row_idx: usize,
+) -> Option<Arc<[f32]>> {
+    inline_choice_layout(state, asset_manager, row_idx).map(|layout| layout.centers)
 }
 
 fn focused_inline_choice_index(
@@ -3015,10 +3178,7 @@ fn focused_inline_choice_index(
     if !row_supports_inline_nav(row) {
         return None;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
-    if centers.is_empty() {
-        return None;
-    }
+    let centers = inline_choice_centers(state, asset_manager, row_idx)?;
     let mut focus_idx = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
     let anchor_x = state.inline_choice_x[idx];
     if anchor_x.is_finite() {
@@ -3051,10 +3211,9 @@ fn move_inline_focus(
     if !row_supports_inline_nav(row) {
         return false;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
-    if centers.is_empty() {
+    let Some(centers) = inline_choice_centers(state, asset_manager, row_idx) else {
         return false;
-    }
+    };
     let Some(current_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
         return false;
     };
@@ -3107,10 +3266,9 @@ fn sync_inline_intent_from_row(
     if !row_supports_inline_nav(row) {
         return;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
-    if centers.is_empty() {
+    let Some(centers) = inline_choice_centers(state, asset_manager, row_idx) else {
         return;
-    }
+    };
     let sel = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
     state.inline_choice_x[idx] = centers[sel];
 }
@@ -3128,10 +3286,9 @@ fn apply_inline_intent_to_row(
     if !row_supports_inline_nav(row) {
         return;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
-    if centers.is_empty() {
+    let Some(centers) = inline_choice_centers(state, asset_manager, row_idx) else {
         return;
-    }
+    };
     let sel = row.selected_choice_index[idx].min(centers.len().saturating_sub(1));
     if state.current_pane == OptionsPane::Main {
         state.inline_choice_x[idx] = centers[sel];
@@ -3264,27 +3421,8 @@ fn cursor_dest_for_player(
     }
 
     if row_shows_all_choices_inline(&row.name) {
-        if row.choices.is_empty() {
-            return None;
-        }
-        let spacing = INLINE_SPACING;
-        let choice_inner_left = widescale(162.0, 176.0);
-        let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
-        let mut text_h: f32 = 16.0;
-        asset_manager.with_fonts(|all_fonts| {
-            asset_manager.with_font("miso", |metrics_font| {
-                text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                for text in &row.choices {
-                    let mut w =
-                        crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts)
-                            as f32;
-                    if !w.is_finite() || w <= 0.0 {
-                        w = 1.0;
-                    }
-                    widths.push(w * value_zoom);
-                }
-            });
-        });
+        let layout = inline_choice_layout(state, asset_manager, row_idx)?;
+        let widths = &layout.widths;
         if widths.is_empty() {
             return None;
         }
@@ -3292,12 +3430,8 @@ fn cursor_dest_for_player(
         let focus_idx = focused_inline_choice_index(state, asset_manager, player_idx, row_idx)
             .unwrap_or_else(|| row.selected_choice_index[player_idx])
             .min(widths.len().saturating_sub(1));
-        let mut left_x = choice_inner_left;
-        for w in widths.iter().take(focus_idx) {
-            left_x += *w + spacing;
-        }
         let draw_w = widths[focus_idx];
-        let center_x = draw_w.mul_add(0.5, left_x);
+        let center_x = layout.centers[focus_idx];
 
         let mut size_t = draw_w / width_ref;
         if !size_t.is_finite() {
@@ -3305,12 +3439,12 @@ fn cursor_dest_for_player(
         }
         size_t = size_t.clamp(0.0, 1.0);
         let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
-        let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+        let max_pad_by_spacing = (INLINE_SPACING - border_w).max(min_pad_x);
         if pad_x > max_pad_by_spacing {
             pad_x = max_pad_by_spacing;
         }
         let ring_w = draw_w + pad_x * 2.0;
-        let ring_h = text_h + pad_y * 2.0;
+        let ring_h = layout.text_h + pad_y * 2.0;
         return Some((center_x, y, ring_w, ring_h));
     }
 
@@ -3394,6 +3528,7 @@ fn change_choice_for_player(
             format!("{effective_bpm:.1}")
         };
         row.name = format!("Music Rate\nbpm: {bpm_str}");
+        clear_row_text_cache_row(state, row_index);
 
         audio::play_sfx("assets/sounds/change_value.ogg");
         crate::game::profile::set_session_music_rate(state.music_rate);
@@ -5171,6 +5306,8 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.selected_row = [0; PLAYER_SLOTS];
     state.prev_selected_row = [0; PLAYER_SLOTS];
     state.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
+    clear_inline_choice_layout_cache(state);
+    clear_row_text_cache(state);
     state.cursor_initialized = [false; PLAYER_SLOTS];
     state.cursor_from_x = [0.0; PLAYER_SLOTS];
     state.cursor_from_y = [0.0; PLAYER_SLOTS];
@@ -5680,6 +5817,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let is_active = (active[P1] && item_idx == state.selected_row[P1])
             || (active[P2] && item_idx == state.selected_row[P2]);
         let row = &state.rows[item_idx];
+        let text_cache = row_text_cache(state, item_idx).expect("row text cache");
         let active_bg = color::rgba_hex("#333333");
         let inactive_bg_base = color::rgba_hex("#071016");
         let bg_color = if is_active {
@@ -5717,35 +5855,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
         title_color[3] *= a;
         // Handle multi-line row titles (e.g., "Music Rate\nbpm: 120")
-        if row.name.contains('\n') {
-            let lines: Vec<&str> = row.name.split('\n').collect();
-            if lines.len() == 2 {
-                // First line (e.g., "Music Rate")
-                actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
-                    align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
-                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(title_max_w):
-                    z(101)
-                ));
-                // Second line (e.g., "bpm: 120") - smaller and slightly below
-                actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
-                    align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
-                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(title_max_w):
-                    z(101)
-                ));
-            } else {
-                // Fallback for unexpected multi-line format
-                actors.push(act!(text: font("miso"): settext(row.name.clone()):
-                    align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
-                    diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
-                    horizalign(left): maxwidth(title_max_w):
-                    z(101)
-                ));
-            }
-        } else {
-            // Single-line title (normal case)
-            actors.push(act!(text: font("miso"): settext(row.name.clone()):
+        if let (Some(title_top), Some(title_bottom)) = (
+            text_cache.title_top.clone(),
+            text_cache.title_bottom.clone(),
+        ) {
+            actors.push(act!(text: font("miso"): settext(title_top):
+                align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
+                diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                horizalign(left): maxwidth(title_max_w):
+                z(101)
+            ));
+            actors.push(act!(text: font("miso"): settext(title_bottom):
+                align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
+                diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
+                horizalign(left): maxwidth(title_max_w):
+                z(101)
+            ));
+        } else if !row.name.is_empty() {
+            actors.push(act!(text: font("miso"): settext(text_cache.name.clone()):
                 align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                 diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                 horizalign(left): maxwidth(title_max_w):
@@ -5768,7 +5895,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
         if row.name.is_empty() {
             // Special case for the last "Exit" row
-            let choice_text = &row.choices[row.selected_choice_index[P1]];
             let choice_color = if is_active {
                 [1.0, 1.0, 1.0, a]
             } else {
@@ -5776,7 +5902,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
             // Align Exit horizontally with other single-value options (Speed Mod line)
             let choice_center_x = speed_mod_x;
-            actors.push(act!(text: font("miso"): settext(choice_text.clone()):
+            actors.push(act!(text: font("miso"): settext(text_cache.choices[row.selected_choice_index[P1]].clone()):
                 align(0.5, 0.5): xy(choice_center_x, current_row_y): zoom(0.835):
                 diffuse(choice_color[0], choice_color[1], choice_color[2], choice_color[3]):
                 z(101)
@@ -5829,35 +5955,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Render every option horizontally; when active, all options should be white.
             // The active option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
-            let spacing = 15.75;
-            // First pass: measure widths to lay out options inline
-            let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
-            let mut text_h: f32 = 16.0;
-            asset_manager.with_fonts(|all_fonts| {
-                asset_manager.with_font("miso", |metrics_font| {
-                    text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
-                    for text in &row.choices {
-                        let mut w = crate::ui::font::measure_line_width_logical(
-                            metrics_font,
-                            text,
-                            all_fonts,
-                        ) as f32;
-                        if !w.is_finite() || w <= 0.0 {
-                            w = 1.0;
-                        }
-                        widths.push(w * value_zoom);
-                    }
-                });
-            });
-            // Build x positions for each option
-            let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
-            {
-                let mut x = choice_inner_left;
-                for w in &widths {
-                    x_positions.push(x);
-                    x += *w + spacing;
-                }
-            }
+            let layout = inline_choice_layout(state, asset_manager, item_idx)
+                .expect("inline rows must produce a cached layout");
+            let widths = &layout.widths;
+            let x_positions = &layout.x_positions;
+            let text_h = layout.text_h;
             // Draw underline under active options:
             // - For normal rows: underline the currently selected choice.
             // - For Scroll row: underline each enabled scroll mode (multi-select).
@@ -6579,7 +6681,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
             // Draw each option's text (active row: all white; inactive: #808080)
-            for (idx, text) in row.choices.iter().enumerate() {
+            for (idx, text) in text_cache.choices.iter().enumerate() {
                 let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
                 let color_rgba = if is_active {
                     [1.0, 1.0, 1.0, a]
@@ -6626,7 +6728,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             _ => String::new(),
                         }
                     } else {
-                        choice_text.clone()
+                        text_cache.choices[choice_text_idx].to_string()
                     };
                     let mut text_w = crate::ui::font::measure_line_width_logical(
                         metrics_font,
@@ -7130,6 +7232,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let Some(row) = state.rows.get(row_idx) else {
             continue;
         };
+        let Some(text_cache) = row_text_cache(state, row_idx) else {
+            continue;
+        };
         let help_text_color = color::simply_love_rgba(player_color_index(player_idx));
         let wrap_width = if split_help || player_idx == P2 {
             (help_box_w * 0.5) - 30.0
@@ -7152,7 +7257,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let total_height = (row.help.len() as f32 - 1.0) * line_spacing;
             let start_y = help_box_bottom_y - (help_box_h * 0.5) - (total_height * 0.5);
 
-            for (i, help_line) in row.help.iter().enumerate() {
+            for (i, help_line) in text_cache.help_lines.iter().enumerate() {
                 let start_time = i as f32 * time_per_line;
                 let end_time = start_time + time_per_line;
                 let anim_time = state.help_anim_time[player_idx];
@@ -7165,7 +7270,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     let char_count = help_line.chars().count();
                     ((char_count as f32 * line_fraction).round() as usize).min(char_count)
                 };
-                let visible_text: String = help_line.chars().take(visible_chars).collect();
+                let char_count = help_line.chars().count();
+                let visible_text = if visible_chars >= char_count {
+                    text_cache.help_lines[i].clone()
+                } else {
+                    Arc::<str>::from(help_line.chars().take(visible_chars).collect::<String>())
+                };
 
                 let line_y = (i as f32).mul_add(line_spacing, start_y);
                 actors.push(act!(text:
@@ -7179,11 +7289,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ));
             }
         } else {
-            let help_text = row.help.join(" | ");
+            let help_text = text_cache.help_joined.clone();
             let char_count = help_text.chars().count();
             let fraction = (state.help_anim_time[player_idx] / REVEAL_DURATION).clamp(0.0, 1.0);
             let visible_chars = ((char_count as f32 * fraction).round() as usize).min(char_count);
-            let visible_text: String = help_text.chars().take(visible_chars).collect();
+            let visible_text = if visible_chars >= char_count {
+                help_text
+            } else {
+                Arc::<str>::from(help_text.chars().take(visible_chars).collect::<String>())
+            };
 
             actors.push(act!(text:
                 font("miso"): settext(visible_text):
