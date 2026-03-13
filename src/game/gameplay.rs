@@ -3538,7 +3538,6 @@ pub struct State {
     replay_cursor: usize,
     pub replay_edges: Vec<RecordedLaneEdge>,
 
-    log_timer: f32,
     update_trace: GameplayUpdateTraceState,
 }
 
@@ -5825,7 +5824,6 @@ pub fn init(
         replay_input,
         replay_cursor: 0,
         replay_edges: Vec::with_capacity(4096),
-        log_timer: 0.0,
         update_trace: GameplayUpdateTraceState::default(),
     };
     state.update_trace = GameplayUpdateTraceState::from_state(&state);
@@ -9250,8 +9248,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    let trace_enabled =
-        log::log_enabled!(log::Level::Debug) || log::log_enabled!(log::Level::Trace);
+    let trace_enabled = log::log_enabled!(log::Level::Trace);
     let frame_trace_started = if trace_enabled {
         Some(Instant::now())
     } else {
@@ -9598,19 +9595,6 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::Navigate(Screen::Evaluation);
     }
 
-    state.log_timer += delta_time;
-    if state.log_timer >= 1.0 {
-        let active_arrows: usize = state.arrows.iter().map(std::vec::Vec::len).sum();
-        log::debug!(
-            "Beat: {:.2}, Time: {:.2}, Combo: {}, Misses: {}, Active Arrows: {}",
-            state.current_beat,
-            music_time_sec,
-            state.players[0].combo,
-            state.players[0].miss_combo,
-            active_arrows
-        );
-        state.log_timer -= 1.0;
-    }
     debug_validate_hot_state(state, delta_time, music_time_sec);
     finalize_update_trace(
         state,
