@@ -11,10 +11,7 @@ use cgmath::Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
 use glutin::{
     config::{Api as ConfigApi, Config, ConfigTemplateBuilder},
-    context::{
-        ContextApi, ContextAttributes, ContextAttributesBuilder, GlProfile, PossiblyCurrentContext,
-        Version,
-    },
+    context::{ContextAttributes, ContextAttributesBuilder, PossiblyCurrentContext},
     display::{Display, DisplayApiPreference},
     prelude::*,
     surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
@@ -29,12 +26,16 @@ use std::{
 use twox_hash::XxHash64;
 use winit::window::Window;
 
+#[cfg(all(unix, not(target_os = "macos")))]
+use glutin::context::{ContextApi, GlProfile, Version};
+
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GlApi {
     Desktop,
+    #[cfg(all(unix, not(target_os = "macos")))]
     Gles,
 }
 
@@ -42,6 +43,7 @@ impl GlApi {
     const fn label(self) -> &'static str {
         match self {
             Self::Desktop => "desktop OpenGL",
+            #[cfg(all(unix, not(target_os = "macos")))]
             Self::Gles => "OpenGL ES",
         }
     }
@@ -56,6 +58,7 @@ impl GlApi {
                 tmesh_vert: include_str!("../shaders/opengl_tmesh.vert"),
                 tmesh_frag: include_str!("../shaders/opengl_tmesh.frag"),
             },
+            #[cfg(all(unix, not(target_os = "macos")))]
             Self::Gles => ShaderSet {
                 sprite_vert: include_str!("../shaders/opengl_shader_gles.vert"),
                 sprite_frag: include_str!("../shaders/opengl_shader_gles.frag"),
@@ -1100,6 +1103,7 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
         state.gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
         state.gl.read_buffer(match state.api {
             GlApi::Desktop => glow::FRONT,
+            #[cfg(all(unix, not(target_os = "macos")))]
             GlApi::Gles => glow::BACK,
         });
         state.gl.read_pixels(

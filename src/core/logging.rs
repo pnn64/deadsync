@@ -1,11 +1,13 @@
 use chrono::Local;
-use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::num::NonZeroUsize;
 use std::path::{Component, Path};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
+
+#[cfg(not(windows))]
+use std::ffi::OsStr;
 
 const LOG_FILE_PATH: &str = "deadsync.log";
 static FILE_LOGGING_ENABLED: AtomicBool = AtomicBool::new(true);
@@ -195,6 +197,7 @@ fn meminfo_kib(meminfo: &str, key: &str) -> Option<u64> {
     })
 }
 
+#[cfg(target_os = "linux")]
 #[inline(always)]
 fn kib_to_mb(kib: u64) -> u64 {
     kib / 1024
@@ -275,6 +278,8 @@ pub fn init(file_logging_enabled: bool) {
         .filter_module("wgpu_hal", log::LevelFilter::Warn)
         .filter_module("wgpu_types", log::LevelFilter::Warn)
         .filter_module("naga", log::LevelFilter::Warn)
+        // Keep window loop internals quiet; calloop trace logs can flood files.
+        .filter_module("calloop", log::LevelFilter::Warn)
         // Never emit raw ureq proto dumps; they can include sensitive request headers.
         .filter_module("ureq_proto::util", log::LevelFilter::Off)
         // Keep HTTP client internals quiet unless warning/error.
