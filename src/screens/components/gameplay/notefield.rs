@@ -79,7 +79,7 @@ const DISPLAY_MODS_ZOOM: f32 = 0.8;
 const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
-const TEXT_CACHE_LIMIT: usize = 4096;
+const TEXT_CACHE_LIMIT: usize = 8192;
 
 // Visual Feedback
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
@@ -119,15 +119,15 @@ const VISUAL_MASK_BIG: u16 = 1 << 3;
 type TextCache<K> = HashMap<K, Arc<str>, BuildHasherDefault<XxHash64>>;
 
 thread_local! {
-    static FMT2_CACHE_F32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static FMT2_CACHE_F32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static PERCENT2_CACHE_F64: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static PERCENT2_CACHE_F64: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static SIGNED_PERCENT2_CACHE_F64: RefCell<TextCache<(u64, bool)>> = RefCell::new(
+    static SIGNED_PERCENT2_CACHE_F64: RefCell<TextCache<(u32, bool)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
     );
     static NEG_INT_CACHE_U32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
@@ -149,7 +149,7 @@ thread_local! {
     static RATIO_CACHE_I32: RefCell<TextCache<(i32, i32)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
-    static OFFSET_MS_CACHE_F32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static OFFSET_MS_CACHE_F32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
@@ -192,24 +192,46 @@ where
 }
 
 #[inline(always)]
+fn quantize_centi_i32(value: f64) -> i32 {
+    (if value.is_finite() { value } else { 0.0 } * 100.0)
+        .round()
+        .clamp(i32::MIN as f64, i32::MAX as f64) as i32
+}
+
+#[inline(always)]
+fn quantize_centi_u32(value: f64) -> u32 {
+    let value = if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
+    };
+    ((value * 100.0).round()).clamp(0.0, u32::MAX as f64) as u32
+}
+
+#[inline(always)]
 fn cached_fmt2_f32(value: f32) -> Arc<str> {
-    cached_text(&FMT2_CACHE_F32, value.to_bits(), || format!("{value:.2}"))
+    let key = quantize_centi_i32(f64::from(value));
+    cached_text(&FMT2_CACHE_F32, key, || {
+        format!("{:.2}", key as f64 / 100.0)
+    })
 }
 
 #[inline(always)]
 fn cached_percent2_f64(value: f64) -> Arc<str> {
-    cached_text(&PERCENT2_CACHE_F64, value.to_bits(), || {
-        format!("{value:.2}%")
+    let key = quantize_centi_u32(value);
+    cached_text(&PERCENT2_CACHE_F64, key, || {
+        format!("{:.2}%", key as f64 / 100.0)
     })
 }
 
 #[inline(always)]
 fn cached_signed_percent2_f64(value: f64, neg: bool) -> Arc<str> {
-    cached_text(&SIGNED_PERCENT2_CACHE_F64, (value.to_bits(), neg), || {
+    let key = quantize_centi_u32(value);
+    cached_text(&SIGNED_PERCENT2_CACHE_F64, (key, neg), || {
         if neg {
-            format!("-{value:.2}%")
+            format!("-{:.2}%", key as f64 / 100.0)
         } else {
-            format!("+{value:.2}%")
+            format!("+{:.2}%", key as f64 / 100.0)
         }
     })
 }
@@ -243,8 +265,9 @@ fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
 
 #[inline(always)]
 fn cached_offset_ms(value: f32) -> Arc<str> {
-    cached_text(&OFFSET_MS_CACHE_F32, value.to_bits(), || {
-        format!("{value:.2}ms")
+    let key = quantize_centi_i32(f64::from(value));
+    cached_text(&OFFSET_MS_CACHE_F32, key, || {
+        format!("{:.2}ms", key as f64 / 100.0)
     })
 }
 

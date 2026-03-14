@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use std::thread::LocalKey;
 
-const TEXT_CACHE_LIMIT: usize = 2048;
+const TEXT_CACHE_LIMIT: usize = 8192;
 type TextCache<K> = HashMap<K, Arc<str>>;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 
@@ -24,7 +24,7 @@ use crate::game::gameplay::{
 };
 
 thread_local! {
-    static SCORE_2DP_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
+    static SCORE_2DP_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
     static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
     static BPM_TEXT_CACHE: RefCell<TextCache<(u64, bool)>> = RefCell::new(HashMap::with_capacity(512));
     static LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
@@ -89,8 +89,31 @@ where
 }
 
 #[inline(always)]
+fn quantize_centi_u32(value: f64) -> u32 {
+    let value = if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
+    };
+    ((value * 100.0).round()).clamp(0.0, u32::MAX as f64) as u32
+}
+
+#[inline(always)]
+fn quantize_tenths_u32(value: f32) -> u32 {
+    let value = if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
+    };
+    ((value * 10.0).round()).clamp(0.0, u32::MAX as f32) as u32
+}
+
+#[inline(always)]
 fn cached_score_2dp(value: f64) -> Arc<str> {
-    cached_text(&SCORE_2DP_CACHE, value.to_bits(), || format!("{value:.2}"))
+    let key = quantize_centi_u32(value);
+    cached_text(&SCORE_2DP_CACHE, key, || {
+        format!("{:.2}", key as f64 / 100.0)
+    })
 }
 
 #[inline(always)]
@@ -128,8 +151,9 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
 
 #[inline(always)]
 fn cached_life_percent_text(life_percent: f32) -> Arc<str> {
-    cached_text(&LIFE_PERCENT_TEXT_CACHE, life_percent.to_bits(), || {
-        format!("{life_percent:.1}%")
+    let key = quantize_tenths_u32(life_percent);
+    cached_text(&LIFE_PERCENT_TEXT_CACHE, key, || {
+        format!("{:.1}%", key as f32 / 10.0)
     })
 }
 

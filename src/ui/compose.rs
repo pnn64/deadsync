@@ -105,6 +105,11 @@ struct CachedTextLayout {
     lines: Vec<CachedLine>,
 }
 
+struct OwnedLayoutEntry {
+    layout: Box<CachedTextLayout>,
+    last_used: u64,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct TextLayoutKey {
     font_key: u64,
@@ -112,12 +117,13 @@ struct TextLayoutKey {
 }
 
 pub struct TextLayoutCache {
-    owned_entries: HashMap<TextLayoutKey, HashMap<Box<str>, Box<CachedTextLayout>>>,
+    owned_entries: HashMap<TextLayoutKey, HashMap<Box<str>, OwnedLayoutEntry>>,
     shared_aliases: HashMap<TextLayoutKey, HashMap<usize, (Arc<str>, *const CachedTextLayout)>>,
     entry_count: usize,
     alias_count: usize,
     max_entries: usize,
     max_aliases: usize,
+    use_tick: u64,
 }
 
 impl Default for TextLayoutCache {
@@ -136,6 +142,7 @@ impl TextLayoutCache {
             alias_count: 0,
             max_entries,
             max_aliases: max_entries.saturating_mul(8),
+            use_tick: 0,
         }
     }
 
@@ -144,6 +151,86 @@ impl TextLayoutCache {
         self.shared_aliases.clear();
         self.entry_count = 0;
         self.alias_count = 0;
+        self.use_tick = 0;
+    }
+
+    #[inline(always)]
+    fn next_use_tick(&mut self) -> u64 {
+        self.use_tick = self.use_tick.saturating_add(1);
+        self.use_tick
+    }
+
+    fn prune_owned_entries(&mut self) {
+        if self.entry_count < self.max_entries {
+            return;
+        }
+        let keep = self
+            .max_entries
+            .saturating_sub((self.max_entries / 4).max(1));
+        let remove = self.entry_count.saturating_sub(keep).max(1);
+        let mut ages = Vec::with_capacity(self.entry_count);
+        for font_entries in self.owned_entries.values() {
+            ages.extend(font_entries.values().map(|entry| entry.last_used));
+        }
+        if ages.is_empty() {
+            self.clear();
+            return;
+        }
+        let cutoff_ix = remove.saturating_sub(1).min(ages.len().saturating_sub(1));
+        ages.select_nth_unstable(cutoff_ix);
+        let cutoff = ages[cutoff_ix];
+        let mut removed = 0usize;
+        self.owned_entries.retain(|_, font_entries| {
+            font_entries.retain(|_, entry| {
+                let drop = removed < remove && entry.last_used <= cutoff;
+                removed += usize::from(drop);
+                !drop
+            });
+            !font_entries.is_empty()
+        });
+        if removed == 0 {
+            self.clear();
+            return;
+        }
+        self.entry_count = self.entry_count.saturating_sub(removed);
+        self.shared_aliases.clear();
+        self.alias_count = 0;
+    }
+
+    #[inline(always)]
+    fn touch_owned_layout(
+        &mut self,
+        key: TextLayoutKey,
+        text: &str,
+        tick: u64,
+    ) -> Option<*const CachedTextLayout> {
+        let entry = self.owned_entries.get_mut(&key)?.get_mut(text)?;
+        entry.last_used = tick;
+        Some(entry.layout.as_ref() as *const CachedTextLayout)
+    }
+
+    fn insert_owned_layout(
+        &mut self,
+        key: TextLayoutKey,
+        text: &str,
+        layout: CachedTextLayout,
+        tick: u64,
+    ) -> *const CachedTextLayout {
+        if self.entry_count >= self.max_entries {
+            // Avoid hard-clearing the entire cache; that was causing visible
+            // compose spikes once gameplay churn hit the entry cap.
+            self.prune_owned_entries();
+        }
+        self.owned_entries.entry(key).or_default().insert(
+            text.into(),
+            OwnedLayoutEntry {
+                layout: Box::new(layout),
+                last_used: tick,
+            },
+        );
+        self.entry_count += 1;
+        self.touch_owned_layout(key, text, tick)
+            .expect("owned text layout cache entry inserted")
     }
 
     fn get_or_build(
@@ -170,26 +257,13 @@ impl TextLayoutCache {
         fonts: &HashMap<&'static str, font::Font>,
         text: &str,
     ) -> &CachedTextLayout {
-        if !self
-            .owned_entries
-            .get(&key)
-            .is_some_and(|font_entries| font_entries.contains_key(text))
-        {
-            if self.entry_count >= self.max_entries {
-                self.clear();
-            }
-            let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
-            self.owned_entries
-                .entry(key)
-                .or_default()
-                .insert(text.into(), Box::new(layout));
-            self.entry_count += 1;
+        let tick = self.next_use_tick();
+        if let Some(layout_ptr) = self.touch_owned_layout(key, text, tick) {
+            return unsafe { &*layout_ptr };
         }
-        self.owned_entries
-            .get(&key)
-            .and_then(|font_entries| font_entries.get(text))
-            .map(Box::as_ref)
-            .expect("owned text layout cache entry inserted")
+        let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
+        let layout_ptr = self.insert_owned_layout(key, text, layout, tick);
+        unsafe { &*layout_ptr }
     }
 
     fn get_or_build_shared(
@@ -199,38 +273,29 @@ impl TextLayoutCache {
         fonts: &HashMap<&'static str, font::Font>,
         text: &Arc<str>,
     ) -> &CachedTextLayout {
+        let tick = self.next_use_tick();
         let text_key = Arc::as_ptr(text) as *const () as usize;
-        if let Some(layout_ptr) = self
+        if self
             .shared_aliases
             .get(&key)
             .and_then(|font_entries| font_entries.get(&text_key))
-            .map(|entry| entry.1)
+            .is_some()
         {
-            return unsafe { &*layout_ptr };
-        }
-        let layout_ptr = if !self
-            .owned_entries
-            .get(&key)
-            .is_some_and(|font_entries| font_entries.contains_key(text.as_ref()))
-        {
-            if self.entry_count >= self.max_entries {
-                self.clear();
+            if let Some(layout_ptr) = self.touch_owned_layout(key, text.as_ref(), tick) {
+                return unsafe { &*layout_ptr };
             }
-            let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
-            let layout = self
-                .owned_entries
+            self.shared_aliases
                 .entry(key)
                 .or_default()
-                .entry(text.as_ref().into())
-                .or_insert_with(|| Box::new(layout));
-            self.entry_count += 1;
-            layout.as_ref() as *const CachedTextLayout
+                .remove(&text_key);
+            self.alias_count = self.alias_count.saturating_sub(1);
+        }
+        let layout_ptr = if let Some(layout_ptr) = self.touch_owned_layout(key, text.as_ref(), tick)
+        {
+            layout_ptr
         } else {
-            self.owned_entries
-                .get(&key)
-                .and_then(|font_entries| font_entries.get(text.as_ref()))
-                .map(|layout| layout.as_ref() as *const CachedTextLayout)
-                .expect("shared text layout cache entry inserted")
+            let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
+            self.insert_owned_layout(key, text, layout, tick)
         };
         if self.alias_count >= self.max_aliases {
             self.shared_aliases.clear();
