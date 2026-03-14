@@ -5425,6 +5425,9 @@ impl App {
         }
 
         self.asset_manager.load_initial_assets(&mut backend)?;
+        // Text layout cache entries borrow glyph texture keys from font storage.
+        // Renderer reinit reloads fonts, so cached layouts must be dropped before compose.
+        self.text_layout_cache.clear();
 
         let now = Instant::now();
         self.state.shell.start_time = now;
