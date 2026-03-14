@@ -847,7 +847,8 @@ const fn next_pow2_usize(x: usize) -> usize {
     v |= v >> 4;
     v |= v >> 8;
     v |= v >> 16;
-    if std::mem::size_of::<usize>() == 8 {
+    #[cfg(target_pointer_width = "64")]
+    {
         v |= v >> 32;
     }
     v + 1

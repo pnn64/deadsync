@@ -31,8 +31,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     // OUT_DIR used by include_bytes! in Vulkan source
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
 
-    // Compile Vulkan shaders with optimization based on the build profile.
-    compile_vulkan_shaders(&mut compiler, &out_dir)?;
+    // 32-bit targets compile without Vulkan backends, so skip the shader pass there.
+    if std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH").as_deref() != Ok("32") {
+        compile_vulkan_shaders(&mut compiler, &out_dir)?;
+    }
 
     // Copy assets into target/<profile>
     let target_dir = compute_target_dir()?;

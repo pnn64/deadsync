@@ -775,7 +775,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             let cs = lparam.0 as *const CREATESTRUCTW;
             if !cs.is_null() {
                 let p = unsafe { (*cs).lpCreateParams }.cast::<Ctx>();
-                unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, p as isize) };
+                unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, p as _) };
             }
             LRESULT(0)
         }

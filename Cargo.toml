@@ -38,16 +38,13 @@ nod = { git = "https://github.com/pnn64/nod", rev = "19cd27b" }
 # Software renderer
 softbuffer = "0.4.8"
 
-# Vulkan Dependencies
-ash = { version = "0.38.0", features = ["linked"] }
-ash-window = "0.13.0"
+# Math
 cgmath = "0.18.0"
 
 # OpenGL Dependencies
 glow = "0.17.0"
 glutin = "0.32.3"
 raw-window-handle = "0.6.2"
-wgpu = { version = "28.0.0", features = ["dx12", "vulkan", "gles"] }
 pollster = "0.4.0"
 
 # Audio
@@ -92,6 +89,22 @@ windows = { version = "0.62.2", features = [
 ] }
 windows-core = "0.62.2"
 windows-targets = "0.53.5"
+
+[target.'cfg(not(target_pointer_width = "32"))'.dependencies]
+ash = { version = "0.38.0", features = ["linked"] }
+ash-window = "0.13.0"
+
+[target.'cfg(all(not(target_pointer_width = "32"), target_os = "windows"))'.dependencies]
+wgpu = { version = "28.0.0", features = ["dx12", "vulkan", "gles"] }
+
+[target.'cfg(all(not(target_pointer_width = "32"), not(target_os = "windows")))'.dependencies]
+wgpu = { version = "28.0.0", features = ["vulkan", "gles"] }
+
+[target.'cfg(all(target_pointer_width = "32", target_os = "windows"))'.dependencies]
+wgpu = { version = "28.0.0", features = ["dx12", "gles"] }
+
+[target.'cfg(all(target_pointer_width = "32", not(target_os = "windows")))'.dependencies]
+wgpu = { version = "28.0.0", features = ["gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 libc = "0.2"

@@ -2,7 +2,9 @@ mod backends;
 
 pub mod draw_prep;
 
-use crate::core::gfx::backends::{opengl, software, vulkan, wgpu_core};
+#[cfg(not(target_pointer_width = "32"))]
+use crate::core::gfx::backends::vulkan;
+use crate::core::gfx::backends::{opengl, software, wgpu_core};
 use cgmath::Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
@@ -228,7 +230,9 @@ pub struct DrawStats {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendType {
+    #[cfg(not(target_pointer_width = "32"))]
     Vulkan,
+    #[cfg(not(target_pointer_width = "32"))]
     VulkanWgpu,
     OpenGL,
     OpenGLWgpu,
@@ -239,7 +243,9 @@ pub enum BackendType {
 
 // A handle to a backend-specific texture resource.
 pub enum Texture {
+    #[cfg(not(target_pointer_width = "32"))]
     Vulkan(vulkan::Texture),
+    #[cfg(not(target_pointer_width = "32"))]
     VulkanWgpu(wgpu_core::Texture),
     OpenGL(opengl::Texture),
     OpenGLWgpu(wgpu_core::Texture),
@@ -250,7 +256,9 @@ pub enum Texture {
 
 // An internal enum to hold the state for the active rendering backend.
 enum BackendImpl {
+    #[cfg(not(target_pointer_width = "32"))]
     Vulkan(vulkan::State),
+    #[cfg(not(target_pointer_width = "32"))]
     VulkanWgpu(wgpu_core::State),
     OpenGL(opengl::State),
     OpenGLWgpu(wgpu_core::State),
@@ -271,9 +279,11 @@ impl Backend {
         apply_present_back_pressure: bool,
     ) -> Result<DrawStats, Box<dyn Error>> {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => {
                 vulkan::draw(state, render_list, textures, apply_present_back_pressure)
             }
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {
                 wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
             }
@@ -295,7 +305,9 @@ impl Backend {
 
     pub fn request_screenshot(&mut self) {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => vulkan::request_screenshot(state),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::request_screenshot(state),
             BackendImpl::OpenGL(state) => opengl::request_screenshot(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::request_screenshot(state),
@@ -308,7 +320,9 @@ impl Backend {
     pub fn capture_frame(&mut self) -> Result<RgbaImage, Box<dyn Error>> {
         match &mut self.0 {
             BackendImpl::OpenGL(state) => opengl::capture_frame(state),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => vulkan::capture_frame(state),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::capture_frame(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::capture_frame(state),
             BackendImpl::Software(_) => Err(std::io::Error::other(
@@ -328,7 +342,9 @@ impl Backend {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => vulkan::resize(state, width, height),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::resize(state, width, height),
             BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::resize(state, width, height),
@@ -340,7 +356,9 @@ impl Backend {
 
     pub fn cleanup(&mut self) {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => vulkan::cleanup(state),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::cleanup(state),
             BackendImpl::OpenGL(state) => opengl::cleanup(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::cleanup(state),
@@ -356,10 +374,12 @@ impl Backend {
         sampler: SamplerDesc,
     ) -> Result<Texture, Box<dyn Error>> {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => {
                 let tex = vulkan::create_texture(state, image, sampler)?;
                 Ok(Texture::Vulkan(tex))
             }
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {
                 let tex = wgpu_core::create_texture(state, image, sampler)?;
                 Ok(Texture::VulkanWgpu(tex))
@@ -390,9 +410,11 @@ impl Backend {
         image: &RgbaImage,
     ) -> Result<(), Box<dyn Error>> {
         match (&mut self.0, texture) {
+            #[cfg(not(target_pointer_width = "32"))]
             (BackendImpl::Vulkan(state), Texture::Vulkan(texture)) => {
                 vulkan::update_texture(state, texture, image)
             }
+            #[cfg(not(target_pointer_width = "32"))]
             (BackendImpl::VulkanWgpu(state), Texture::VulkanWgpu(texture)) => {
                 wgpu_core::update_texture(state, texture, image)
             }
@@ -419,10 +441,12 @@ impl Backend {
 
         let old_textures = std::mem::take(textures);
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(_) => {
                 // Vulkan textures are cleaned up by their Drop implementation.
                 drop(old_textures);
             }
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(_) => {
                 drop(old_textures);
             }
@@ -448,6 +472,7 @@ impl Backend {
 
     pub fn wait_for_idle(&mut self) {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => {
                 let _ = vulkan::flush_pending_uploads(state);
                 if let Some(device) = &state.device {
@@ -456,6 +481,7 @@ impl Backend {
                     }
                 }
             }
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {
                 let _ = state.device.poll(wgpu::PollType::Wait {
                     submission_index: None,
@@ -494,12 +520,14 @@ pub fn create_backend(
     gfx_debug_enabled: bool,
 ) -> Result<Backend, Box<dyn Error>> {
     let backend_impl = match backend_type {
+        #[cfg(not(target_pointer_width = "32"))]
         BackendType::Vulkan => BackendImpl::Vulkan(vulkan::init(
             &window,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
         )?),
+        #[cfg(not(target_pointer_width = "32"))]
         BackendType::VulkanWgpu => BackendImpl::VulkanWgpu(wgpu_core::init_vulkan(
             window,
             vsync_enabled,
@@ -534,9 +562,11 @@ impl Backend {
         present_mode_policy: PresentModePolicy,
     ) {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => {
                 vulkan::set_present_config(state, vsync_enabled, present_mode_policy)
             }
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {
                 wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
             }
@@ -557,7 +587,9 @@ impl Backend {
 impl core::fmt::Display for BackendType {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            #[cfg(not(target_pointer_width = "32"))]
             Self::Vulkan => write!(f, "Vulkan"),
+            #[cfg(not(target_pointer_width = "32"))]
             Self::VulkanWgpu => write!(f, "Vulkan (wgpu)"),
             Self::OpenGL => write!(f, "OpenGL"),
             Self::OpenGLWgpu => write!(f, "OpenGL (wgpu)"),
@@ -571,7 +603,9 @@ impl FromStr for BackendType {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            #[cfg(not(target_pointer_width = "32"))]
             "vulkan" => Ok(Self::Vulkan),
+            #[cfg(not(target_pointer_width = "32"))]
             "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => Ok(Self::VulkanWgpu),
             "opengl" => Ok(Self::OpenGL),
             "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => Ok(Self::OpenGLWgpu),

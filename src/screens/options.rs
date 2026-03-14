@@ -831,7 +831,7 @@ pub const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(target_pointer_width = "32")))]
 const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::OpenGL, "OpenGL"),
     (BackendType::Vulkan, "Vulkan"),
@@ -840,7 +840,14 @@ const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
     (BackendType::Software, "Software"),
 ];
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(target_os = "windows", target_pointer_width = "32"))]
+const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::DirectX, "DirectX"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+#[cfg(all(not(target_os = "windows"), not(target_pointer_width = "32")))]
 const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::OpenGL, "OpenGL"),
     (BackendType::Vulkan, "Vulkan"),
@@ -848,8 +855,14 @@ const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
     (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
     (BackendType::Software, "Software"),
 ];
+#[cfg(all(not(target_os = "windows"), target_pointer_width = "32"))]
+const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::Software, "Software"),
+];
 
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", not(target_pointer_width = "32")))]
 const VIDEO_RENDERER_LABELS: &[&str] = &[
     VIDEO_RENDERER_OPTIONS[0].1,
     VIDEO_RENDERER_OPTIONS[1].1,
@@ -858,13 +871,26 @@ const VIDEO_RENDERER_LABELS: &[&str] = &[
     VIDEO_RENDERER_OPTIONS[4].1,
     VIDEO_RENDERER_OPTIONS[5].1,
 ];
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(target_os = "windows", target_pointer_width = "32"))]
+const VIDEO_RENDERER_LABELS: &[&str] = &[
+    VIDEO_RENDERER_OPTIONS[0].1,
+    VIDEO_RENDERER_OPTIONS[1].1,
+    VIDEO_RENDERER_OPTIONS[2].1,
+    VIDEO_RENDERER_OPTIONS[3].1,
+];
+#[cfg(all(not(target_os = "windows"), not(target_pointer_width = "32")))]
 const VIDEO_RENDERER_LABELS: &[&str] = &[
     VIDEO_RENDERER_OPTIONS[0].1,
     VIDEO_RENDERER_OPTIONS[1].1,
     VIDEO_RENDERER_OPTIONS[2].1,
     VIDEO_RENDERER_OPTIONS[3].1,
     VIDEO_RENDERER_OPTIONS[4].1,
+];
+#[cfg(all(not(target_os = "windows"), target_pointer_width = "32"))]
+const VIDEO_RENDERER_LABELS: &[&str] = &[
+    VIDEO_RENDERER_OPTIONS[0].1,
+    VIDEO_RENDERER_OPTIONS[1].1,
+    VIDEO_RENDERER_OPTIONS[2].1,
 ];
 
 const VIDEO_RENDERER_ROW_INDEX: usize = 0;

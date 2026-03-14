@@ -28,6 +28,7 @@ const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Api {
+    #[cfg(not(target_pointer_width = "32"))]
     Vulkan,
     OpenGL,
     #[cfg(target_os = "windows")]
@@ -38,6 +39,7 @@ impl Api {
     #[inline(always)]
     const fn name(self) -> &'static str {
         match self {
+            #[cfg(not(target_pointer_width = "32"))]
             Self::Vulkan => "Vulkan",
             Self::OpenGL => "OpenGL",
             #[cfg(target_os = "windows")]
@@ -48,6 +50,7 @@ impl Api {
     #[inline(always)]
     const fn backends(self) -> wgpu::Backends {
         match self {
+            #[cfg(not(target_pointer_width = "32"))]
             Self::Vulkan => wgpu::Backends::VULKAN,
             Self::OpenGL => wgpu::Backends::GL,
             #[cfg(target_os = "windows")]
@@ -327,6 +330,7 @@ pub struct State {
     captured_frame: Option<RgbaImage>,
 }
 
+#[cfg(not(target_pointer_width = "32"))]
 pub fn init_vulkan(
     window: Arc<Window>,
     vsync_enabled: bool,
@@ -409,7 +413,10 @@ fn init(
     .map_err(|e| format!("No suitable {} adapter found: {e}", api.name()))?;
     log_wgpu_adapter_info(api, &adapter);
 
+    #[cfg(not(target_pointer_width = "32"))]
     let want_immediates = matches!(api, Api::Vulkan);
+    #[cfg(target_pointer_width = "32")]
+    let want_immediates = false;
     let use_immediates = want_immediates && adapter.features().contains(wgpu::Features::IMMEDIATES);
     if want_immediates && !use_immediates {
         warn!(
@@ -938,6 +945,7 @@ fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
 #[inline(always)]
 fn pick_tex<'a>(api: Api, tex: &'a RendererTexture) -> Option<&'a Texture> {
     match (api, tex) {
+        #[cfg(not(target_pointer_width = "32"))]
         (Api::Vulkan, RendererTexture::VulkanWgpu(t)) => Some(t),
         (Api::OpenGL, RendererTexture::OpenGLWgpu(t)) => Some(t),
         #[cfg(target_os = "windows")]
