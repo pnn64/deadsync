@@ -932,6 +932,7 @@ const MAX_FPS_MIN: u16 = 5;
 const MAX_FPS_MAX: u16 = 1000;
 const MAX_FPS_STEP: u16 = 5;
 const MAX_FPS_DEFAULT: u16 = 60;
+const DISPLAY_ASPECT_RATIO_CHOICES: [&str; 4] = ["16:9", "16:10", "4:3", "1:1"];
 const PRESENT_MODE_CHOICES: [&str; 2] = ["Mailbox", "Immediate"];
 const CENTERED_P1_NOTEFIELD_CHOICES: [&str; 2] = ["Off", "On"];
 const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 7] = [
@@ -985,7 +986,7 @@ pub const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: "Display Aspect Ratio",
-        choices: &["16:9", "16:10", "4:3", "1:1"],
+        choices: &DISPLAY_ASPECT_RATIO_CHOICES,
         inline: true,
     },
     SubRow {
@@ -2615,11 +2616,58 @@ fn selected_aspect_label(state: &State) -> &'static str {
         .get(DISPLAY_ASPECT_RATIO_ROW_INDEX)
         .copied()
         .unwrap_or(0);
-    GRAPHICS_OPTIONS_ROWS
-        .get(DISPLAY_ASPECT_RATIO_ROW_INDEX)
-        .and_then(|row| row.choices.get(idx))
+    DISPLAY_ASPECT_RATIO_CHOICES
+        .get(idx)
         .copied()
-        .unwrap_or("16:9")
+        .unwrap_or(DISPLAY_ASPECT_RATIO_CHOICES[0])
+}
+
+fn inferred_aspect_choice(width: u32, height: u32) -> usize {
+    if height == 0 {
+        return 0;
+    }
+
+    if let Some(idx) = DISPLAY_ASPECT_RATIO_CHOICES
+        .iter()
+        .position(|label| aspect_matches(width, height, label))
+    {
+        return idx;
+    }
+
+    let ratio = width as f32 / height as f32;
+    let mut best_idx = 0;
+    let mut best_delta = f32::INFINITY;
+    for (idx, label) in DISPLAY_ASPECT_RATIO_CHOICES.iter().enumerate() {
+        let target = match *label {
+            "16:9" => 16.0 / 9.0,
+            "16:10" => 16.0 / 10.0,
+            "4:3" => 4.0 / 3.0,
+            "1:1" => 1.0,
+            _ => continue,
+        };
+        let delta = (ratio - target).abs();
+        if delta < best_delta {
+            best_delta = delta;
+            best_idx = idx;
+        }
+    }
+    best_idx
+}
+
+fn sync_display_aspect_ratio(state: &mut State, width: u32, height: u32) {
+    let idx = inferred_aspect_choice(width, height);
+    if let Some(slot) = state
+        .sub_choice_indices_graphics
+        .get_mut(DISPLAY_ASPECT_RATIO_ROW_INDEX)
+    {
+        *slot = idx;
+    }
+    if let Some(slot) = state
+        .sub_cursor_indices_graphics
+        .get_mut(DISPLAY_ASPECT_RATIO_ROW_INDEX)
+    {
+        *slot = idx;
+    }
 }
 
 fn push_unique_resolution(target: &mut Vec<(u32, u32)>, width: u32, height: u32) {
@@ -4582,6 +4630,7 @@ pub fn sync_display_mode(
 }
 
 pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
+    sync_display_aspect_ratio(state, width, height);
     rebuild_resolution_choices(state, width, height);
     state.display_width_at_load = width;
     state.display_height_at_load = height;
@@ -7838,4 +7887,25 @@ pub fn get_actors(
     actors.extend(ui_actors);
 
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inferred_aspect_choice_maps_1024x768_to_4_3() {
+        let idx = inferred_aspect_choice(1024, 768);
+        assert_eq!(DISPLAY_ASPECT_RATIO_CHOICES[idx], "4:3");
+    }
+
+    #[test]
+    fn sync_display_resolution_selects_loaded_4_3_mode() {
+        let mut state = init();
+        sync_display_resolution(&mut state, 1024, 768);
+
+        assert_eq!(selected_aspect_label(&state), "4:3");
+        assert_eq!(selected_resolution(&state), (1024, 768));
+        assert!(state.resolution_choices.contains(&(1024, 768)));
+    }
 }
