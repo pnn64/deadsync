@@ -399,6 +399,7 @@ const fn top_cap_rotation_deg(lane_reverse: bool, body_flipped: bool) -> f32 {
 const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
     match note_type {
         NoteType::Fake => NoteAnimPart::Fake,
+        NoteType::Lift => NoteAnimPart::Lift,
         _ => NoteAnimPart::Tap,
     }
 }
@@ -3610,7 +3611,7 @@ pub fn build(
                     .get(arrow.note_index)
                     .copied()
                     .unwrap_or(0);
-                let tap_replacement_roll = if note.note_type == NoteType::Tap {
+                let tap_replacement_roll = if matches!(note.note_type, NoteType::Tap | NoteType::Lift) {
                     let same_row_has_hold = tap_row_flags & 0b01 != 0;
                     let same_row_has_roll = tap_row_flags & 0b10 != 0;
                     let draw_hold = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
@@ -3696,7 +3697,12 @@ pub fn build(
                     }
                 }
                 let note_idx = col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize;
-                if let Some(note_slots) = ns.note_layers.get(note_idx) {
+                let lift_layers = if note.note_type == NoteType::Lift {
+                    ns.lift_note_layers.get(note_idx)
+                } else {
+                    None
+                };
+                if let Some(note_slots) = lift_layers.or_else(|| ns.note_layers.get(note_idx)) {
                     let note_center = [playfield_center_x + col_x_offset, y_pos];
                     let elapsed = state.total_elapsed_in_screen;
                     let note_uv_phase =

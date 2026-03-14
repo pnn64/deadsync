@@ -575,7 +575,7 @@ fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usi
                 && !note.is_fake
                 && matches!(
                     note.note_type,
-                    NoteType::Tap | NoteType::Hold | NoteType::Roll
+                    NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
                 )
             {
                 has_clap = true;
@@ -827,7 +827,7 @@ fn apply_turn_options(
 #[inline(always)]
 fn note_counts_for_simultaneous_limit(note: &Note) -> bool {
     match note.note_type {
-        NoteType::Tap => !note.is_fake,
+        NoteType::Tap | NoteType::Lift => !note.is_fake,
         NoteType::Hold | NoteType::Roll => true,
         NoteType::Mine | NoteType::Fake => false,
     }
@@ -986,7 +986,7 @@ fn count_tap_or_hold_tracks_at_row(
         }
         if !matches!(
             note.note_type,
-            NoteType::Tap | NoteType::Hold | NoteType::Roll
+            NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
         ) {
             continue;
         }
@@ -1000,7 +1000,7 @@ fn count_tap_or_hold_tracks_at_row(
 fn count_tap_tracks_at_row(notes: &[Note], row: usize, col_offset: usize, cols: usize) -> usize {
     let mut seen = [false; MAX_COLS];
     for note in notes {
-        if note.row_index != row || note.note_type != NoteType::Tap || note.is_fake {
+        if note.row_index != row || !matches!(note.note_type, NoteType::Tap | NoteType::Lift) || note.is_fake {
             continue;
         }
         if let Some(local) = local_player_col(note.column, col_offset, cols) {
@@ -1040,7 +1040,7 @@ fn first_tap_track_at_row(
 ) -> Option<usize> {
     let mut first: Option<usize> = None;
     for note in notes {
-        if note.row_index != row || note.note_type != NoteType::Tap || note.is_fake {
+        if note.row_index != row || !matches!(note.note_type, NoteType::Tap | NoteType::Lift) || note.is_fake {
             continue;
         }
         let Some(local) = local_player_col(note.column, col_offset, cols) else {
@@ -1309,7 +1309,7 @@ fn apply_stomp_insert(
         let row_end = row.saturating_add(half_beat);
         for note in notes.iter() {
             if local_player_col(note.column, col_offset, cols).is_none()
-                || note.note_type != NoteType::Tap
+                || !matches!(note.note_type, NoteType::Tap | NoteType::Lift)
                 || note.is_fake
                 || note.row_index == row
             {
@@ -1400,7 +1400,7 @@ fn find_tap_index(notes: &[Note], row: usize, column: usize) -> Option<usize> {
     notes.iter().position(|note| {
         note.row_index == row
             && note.column == column
-            && note.note_type == NoteType::Tap
+            && matches!(note.note_type, NoteType::Tap | NoteType::Lift)
             && !note.is_fake
     })
 }
@@ -1494,7 +1494,7 @@ fn apply_uncommon_masks_with_masks(
     timing_player: &TimingData,
     col_offset: usize,
     cols: usize,
-    player: usize,
+    _player: usize,
 ) {
     if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
         let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
@@ -1624,10 +1624,7 @@ fn apply_uncommon_masks_with_masks(
         }
     }
     if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 {
-        debug!(
-            "Player {} selected NoLifts, but deadsync note parsing does not currently produce lift notes.",
-            player + 1,
-        );
+        notes.retain(|note| note.note_type != NoteType::Lift);
     }
 
     sort_player_notes(notes);
@@ -2316,7 +2313,7 @@ fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> (u32, 
             NoteType::Hold => holds = holds.saturating_add(1),
             NoteType::Roll => rolls = rolls.saturating_add(1),
             NoteType::Mine => mines = mines.saturating_add(1),
-            NoteType::Tap | NoteType::Fake => {}
+            NoteType::Tap | NoteType::Lift | NoteType::Fake => {}
         }
     }
     (
@@ -2435,7 +2432,7 @@ pub fn course_display_totals_for_chart(
             NoteType::Mine => {
                 mines_total = mines_total.saturating_add(1);
             }
-            NoteType::Tap | NoteType::Fake => {
+            NoteType::Tap | NoteType::Lift | NoteType::Fake => {
                 rows.push(parsed.row_index);
             }
         }
@@ -2537,7 +2534,7 @@ pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
 #[inline(always)]
 const fn column_cue_is_mine(note_type: NoteType) -> Option<bool> {
     match note_type {
-        NoteType::Tap | NoteType::Hold | NoteType::Roll => Some(false),
+        NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll => Some(false),
         NoteType::Mine => Some(true),
         NoteType::Fake => None,
     }
@@ -4965,7 +4962,7 @@ pub fn init(
                     NoteType::Mine => {
                         mines_total[player] = mines_total[player].saturating_add(1);
                     }
-                    NoteType::Tap => {}
+                    NoteType::Tap | NoteType::Lift => {}
                     NoteType::Fake => {}
                 }
             }
@@ -7135,7 +7132,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     for (idx, arrow) in state.arrows[column].iter().enumerate() {
         let note_index = arrow.note_index;
         let n = &state.notes[note_index];
-        if n.result.is_some() || !n.can_be_judged || n.is_fake {
+        if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type == NoteType::Lift {
             continue;
         }
         let note_time = state.note_time_cache[note_index];
@@ -7195,7 +7192,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             {
                 for &idx in &state.row_entries[pos as usize].nonmine_note_indices {
                     let col = state.notes[idx].column;
-                    if col < col_start || col >= col_end || state.notes[idx].result.is_some() {
+                    if col < col_start || col >= col_end || state.notes[idx].result.is_some()
+                        || state.notes[idx].note_type == NoteType::Lift
+                    {
                         continue;
                     }
                     if notes_on_row_len < MAX_COLS {
@@ -7208,7 +7207,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     if n.row_index != note_row_index
                         || n.column < col_start
                         || n.column >= col_end
-                        || matches!(n.note_type, NoteType::Mine)
+                        || matches!(n.note_type, NoteType::Mine | NoteType::Lift)
                         || n.is_fake
                         || n.result.is_some()
                     {
@@ -7434,6 +7433,116 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         return mine_hit_on_press;
     }
     try_hit_mine_while_held(state, column, current_time)
+}
+
+/// Judge lift notes on button release. Mirrors judge_a_tap but only matches
+/// NoteType::Lift and judges a single note (no row-wide all-pressed check).
+pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool {
+    let windows = state.timing_profile.windows_s;
+    let way_off_window = windows[4];
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    let timing_hit_log = timing_hit_log_enabled();
+    let player = player_for_col(state, column);
+    let scoring_blocked = autoplay_blocks_scoring(state);
+    let way_off_window_music = way_off_window * rate;
+    let search_start_time = current_time - way_off_window_music;
+    let search_end_time = current_time + way_off_window_music;
+
+    // Find the closest unjudged lift note on this column within the timing window.
+    let mut best: Option<(usize, usize, f32)> = None;
+    for (idx, arrow) in state.arrows[column].iter().enumerate() {
+        let note_index = arrow.note_index;
+        let n = &state.notes[note_index];
+        if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type != NoteType::Lift {
+            continue;
+        }
+        let note_time = state.note_time_cache[note_index];
+        if note_time < search_start_time {
+            continue;
+        }
+        if note_time > search_end_time {
+            break;
+        }
+        let abs_err_music = (current_time - note_time).abs();
+        if abs_err_music <= way_off_window_music {
+            match best {
+                Some((_, _, best_err)) if abs_err_music >= best_err => {}
+                _ => best = Some((idx, note_index, abs_err_music)),
+            }
+        }
+    }
+
+    let Some((_arrow_list_index, note_index, _)) = best else {
+        return false;
+    };
+
+    let note_time = state.note_time_cache[note_index];
+    let time_error_music = current_time - note_time;
+    let time_error_real = time_error_music / rate;
+    let abs_time_error = time_error_real.abs();
+
+    if abs_time_error > way_off_window {
+        return false;
+    }
+
+    let mut timing_profile = state.timing_profile;
+    timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
+    let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
+
+    let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
+        (
+            state.song_offset_seconds,
+            state.global_offset_seconds,
+            state.audio_lead_in_seconds.max(0.0),
+            audio::get_music_stream_position_seconds(),
+        )
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+
+    let note_col = state.notes[note_index].column;
+    let note_row_index = state.notes[note_index].row_index;
+    let note_beat = state.notes[note_index].beat;
+
+    let judgment = Judgment {
+        time_error_ms: time_error_real * 1000.0,
+        grade,
+        window: Some(window),
+        miss_because_held: false,
+    };
+    if !scoring_blocked {
+        error_bar_register_tap(state, player, &judgment, current_time);
+    }
+    state.notes[note_index].result = Some(judgment);
+
+    log_timing_hit_detail(
+        timing_hit_log,
+        stream_pos_s,
+        grade,
+        note_row_index,
+        note_col,
+        note_beat,
+        song_offset_s,
+        global_offset_s,
+        note_time,
+        current_time,
+        state.current_music_time,
+        rate,
+        lead_in_s,
+    );
+
+    let col_arrows = &mut state.arrows[note_col];
+    if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
+        col_arrows.remove(pos);
+    }
+    trigger_receptor_glow_pulse(state, note_col);
+    trigger_tap_explosion(state, note_col, grade);
+
+    true
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -7698,6 +7807,11 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
                             }
                             None => state.autoplay_hold_release_time[col] = Some(release_at),
                         }
+                    }
+                    NoteType::Lift => {
+                        // Lift notes are judged on release. Schedule an immediate
+                        // release at the note's time so judge_a_lift fires.
+                        tap_releases[col] = Some(row_event_time);
                     }
                     NoteType::Roll | NoteType::Tap => {
                         tap_releases[col] = Some(row_event_time + AUTOPLAY_TAP_RELEASE_SECONDS);
@@ -8437,6 +8551,11 @@ fn process_input_edges(
                 add_elapsed_us(&mut phase_timings.input_glow_us, started);
             } else {
                 release_receptor_glow(state, lane_idx);
+            }
+            let event_music_time = edge.event_music_time;
+            let hit_lift = judge_a_lift(state, lane_idx, event_music_time);
+            if hit_lift && state.tick_mode == TickMode::Hit {
+                audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
             }
         }
     }
