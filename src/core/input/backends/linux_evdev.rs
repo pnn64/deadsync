@@ -2,21 +2,54 @@ use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_fr
 use crate::core::host_time::{instant_nanos, now_nanos};
 use log::{debug, warn};
 use std::collections::HashSet;
-use std::ffi::c_void;
+use std::ffi::{CStr, c_char, c_void};
 use std::fs;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
 use std::time::{Duration, Instant};
 
 const POLLIN: i16 = 0x0001;
+const POLLERR: i16 = 0x0008;
+const POLLHUP: i16 = 0x0010;
+const POLLNVAL: i16 = 0x0020;
 
 const EV_KEY: u16 = 0x01;
 const EV_ABS: u16 = 0x03;
 const EV_SYN: u16 = 0x00;
 
-// EV_ABS hats (most d-pads and many dance pads expose these).
+const ABS_X: u16 = 0x00;
+const ABS_Y: u16 = 0x01;
+const ABS_RX: u16 = 0x03;
+const ABS_RY: u16 = 0x04;
 const ABS_HAT0X: u16 = 0x10;
 const ABS_HAT0Y: u16 = 0x11;
+
+const BTN_TRIGGER: u16 = 0x120;
+const BTN_JOYSTICK_LAST: u16 = 0x12f;
+const BTN_GAMEPAD: u16 = 0x130;
+const BTN_GAMEPAD_LAST: u16 = 0x13f;
+const BTN_SELECT: u16 = 0x13a;
+const BTN_START: u16 = 0x13b;
+const BTN_DPAD_UP: u16 = 0x220;
+const BTN_DPAD_RIGHT: u16 = 0x223;
+const BTN_TRIGGER_HAPPY1: u16 = 0x2c0;
+const BTN_TRIGGER_HAPPY4: u16 = 0x2c3;
+
+const INPUT_PATH: &[u8] = b"/dev/input\0";
+const INPUT_SUBSYSTEM: &[u8] = b"input\0";
+const UDEV_NETLINK: &[u8] = b"udev\0";
+const ID_INPUT_JOYSTICK: &[u8] = b"ID_INPUT_JOYSTICK\0";
+const VALUE_ONE: &[u8] = b"1\0";
+const ACTION_ADD: &[u8] = b"add\0";
+const ACTION_REMOVE: &[u8] = b"remove\0";
+const INOTIFY_MASK: u32 =
+    libc::IN_CREATE | libc::IN_DELETE | libc::IN_ATTRIB | libc::IN_MOVED_TO | libc::IN_MOVED_FROM;
+
+type UdevCtxHandle = c_void;
+type UdevEnumHandle = c_void;
+type UdevListHandle = c_void;
+type UdevDeviceHandle = c_void;
+type UdevMonitorHandle = c_void;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -36,7 +69,54 @@ struct InputEventRaw {
     value: i32,
 }
 
+#[link(name = "udev")]
 unsafe extern "C" {
+    fn udev_new() -> *mut UdevCtxHandle;
+    fn udev_unref(udev: *mut UdevCtxHandle) -> *mut UdevCtxHandle;
+
+    fn udev_enumerate_new(udev: *mut UdevCtxHandle) -> *mut UdevEnumHandle;
+    fn udev_enumerate_unref(enumerate: *mut UdevEnumHandle) -> *mut UdevEnumHandle;
+    fn udev_enumerate_add_match_property(
+        enumerate: *mut UdevEnumHandle,
+        key: *const c_char,
+        value: *const c_char,
+    ) -> i32;
+    fn udev_enumerate_add_match_subsystem(
+        enumerate: *mut UdevEnumHandle,
+        subsystem: *const c_char,
+    ) -> i32;
+    fn udev_enumerate_scan_devices(enumerate: *mut UdevEnumHandle) -> i32;
+    fn udev_enumerate_get_list_entry(enumerate: *mut UdevEnumHandle) -> *mut UdevListHandle;
+
+    fn udev_list_entry_get_next(list_entry: *mut UdevListHandle) -> *mut UdevListHandle;
+    fn udev_list_entry_get_name(list_entry: *mut UdevListHandle) -> *const c_char;
+
+    fn udev_device_new_from_syspath(
+        udev: *mut UdevCtxHandle,
+        syspath: *const c_char,
+    ) -> *mut UdevDeviceHandle;
+    fn udev_device_unref(device: *mut UdevDeviceHandle) -> *mut UdevDeviceHandle;
+    fn udev_device_get_devnode(device: *mut UdevDeviceHandle) -> *const c_char;
+    fn udev_device_get_action(device: *mut UdevDeviceHandle) -> *const c_char;
+    fn udev_device_get_property_value(
+        device: *mut UdevDeviceHandle,
+        key: *const c_char,
+    ) -> *const c_char;
+
+    fn udev_monitor_new_from_netlink(
+        udev: *mut UdevCtxHandle,
+        name: *const c_char,
+    ) -> *mut UdevMonitorHandle;
+    fn udev_monitor_unref(monitor: *mut UdevMonitorHandle) -> *mut UdevMonitorHandle;
+    fn udev_monitor_filter_add_match_subsystem_devtype(
+        monitor: *mut UdevMonitorHandle,
+        subsystem: *const c_char,
+        devtype: *const c_char,
+    ) -> i32;
+    fn udev_monitor_enable_receiving(monitor: *mut UdevMonitorHandle) -> i32;
+    fn udev_monitor_get_fd(monitor: *mut UdevMonitorHandle) -> i32;
+    fn udev_monitor_receive_device(monitor: *mut UdevMonitorHandle) -> *mut UdevDeviceHandle;
+
     fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
     fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
 }
@@ -44,6 +124,7 @@ unsafe extern "C" {
 struct Dev {
     id: PadId,
     uuid: [u8; 16],
+    name: String,
     path: String,
     file: std::fs::File,
     monotonic_timestamps: bool,
@@ -53,16 +134,83 @@ struct Dev {
     dir: [bool; 4],
 }
 
+#[derive(Clone)]
+struct DevSpec {
+    path: String,
+    name: String,
+    vendor_id: Option<u16>,
+    product_id: Option<u16>,
+}
+
 #[derive(Clone, Copy)]
 struct ClockSample {
     instant: Instant,
     monotonic_nanos: u64,
 }
 
+#[derive(Default)]
+struct CapabilityBits(Vec<u64>);
+
 struct EvdevClockHealth {
     kernel_trusted: bool,
     invalid_samples: u32,
     last_event_nanos: u64,
+}
+
+struct InotifyWatch {
+    fd: i32,
+    wd: i32,
+}
+
+struct UdevContext(*mut UdevCtxHandle);
+struct UdevEnumerate(*mut UdevEnumHandle);
+struct UdevDevice(*mut UdevDeviceHandle);
+struct UdevMonitor(*mut UdevMonitorHandle);
+
+struct UdevState {
+    _ctx: UdevContext,
+    monitor: UdevMonitor,
+}
+
+enum Discovery {
+    Udev(UdevState),
+    Inotify(InotifyWatch),
+    None,
+}
+
+enum HotplugEvent {
+    Add(DevSpec),
+    Remove(String),
+}
+
+impl CapabilityBits {
+    fn parse(text: &str) -> Self {
+        let mut words = Vec::new();
+        for chunk in text.split_whitespace().rev() {
+            let Ok(word) = u64::from_str_radix(chunk, 16) else {
+                return Self::default();
+            };
+            words.push(word);
+        }
+        Self(words)
+    }
+
+    #[inline(always)]
+    fn has(&self, bit: u16) -> bool {
+        let word = (bit as usize) >> 6;
+        word < self.0.len() && ((self.0[word] >> (bit as usize & 63)) & 1) != 0
+    }
+
+    fn has_range(&self, start: u16, end: u16) -> bool {
+        let mut bit = start;
+        while bit <= end {
+            if self.has(bit) {
+                return true;
+            }
+            bit = bit.saturating_add(1);
+        }
+        false
+    }
 }
 
 impl EvdevClockHealth {
@@ -103,6 +251,266 @@ impl EvdevClockHealth {
     }
 }
 
+impl InotifyWatch {
+    fn new() -> Option<Self> {
+        let fd = unsafe { libc::inotify_init1(libc::IN_NONBLOCK | libc::IN_CLOEXEC) };
+        if fd < 0 {
+            warn!(
+                "linux evdev could not create inotify fallback for /dev/input: {}",
+                std::io::Error::last_os_error()
+            );
+            return None;
+        }
+        let wd = unsafe { libc::inotify_add_watch(fd, INPUT_PATH.as_ptr().cast(), INOTIFY_MASK) };
+        if wd < 0 {
+            warn!(
+                "linux evdev could not watch /dev/input for hotplug fallback: {}",
+                std::io::Error::last_os_error()
+            );
+            unsafe {
+                libc::close(fd);
+            }
+            return None;
+        }
+        Some(Self { fd, wd })
+    }
+
+    #[inline(always)]
+    const fn pollfd(&self) -> PollFd {
+        PollFd {
+            fd: self.fd,
+            events: POLLIN,
+            revents: 0,
+        }
+    }
+
+    fn drain(&self) {
+        let mut buf = [0u8; 1024];
+        loop {
+            let n = unsafe { read(self.fd, buf.as_mut_ptr().cast(), buf.len()) };
+            if n > 0 {
+                continue;
+            }
+            if n == 0 {
+                return;
+            }
+            let err = std::io::Error::last_os_error();
+            let raw = err.raw_os_error();
+            if raw == Some(libc::EAGAIN) || raw == Some(libc::EWOULDBLOCK) {
+                return;
+            }
+            warn!("linux evdev inotify fallback read failed: {err}");
+            return;
+        }
+    }
+}
+
+impl Drop for InotifyWatch {
+    fn drop(&mut self) {
+        unsafe {
+            libc::inotify_rm_watch(self.fd, self.wd);
+            libc::close(self.fd);
+        }
+    }
+}
+
+impl UdevContext {
+    fn new() -> Option<Self> {
+        let ptr = unsafe { udev_new() };
+        (!ptr.is_null()).then_some(Self(ptr))
+    }
+
+    fn enumerate(&self) -> Option<UdevEnumerate> {
+        let ptr = unsafe { udev_enumerate_new(self.0) };
+        (!ptr.is_null()).then_some(UdevEnumerate(ptr))
+    }
+
+    fn device_from_syspath(&self, syspath: &CStr) -> Option<UdevDevice> {
+        let ptr = unsafe { udev_device_new_from_syspath(self.0, syspath.as_ptr()) };
+        (!ptr.is_null()).then_some(UdevDevice(ptr))
+    }
+
+    fn monitor(&self) -> Option<UdevMonitor> {
+        let ptr = unsafe { udev_monitor_new_from_netlink(self.0, UDEV_NETLINK.as_ptr().cast()) };
+        if ptr.is_null() {
+            return None;
+        }
+        if unsafe {
+            udev_monitor_filter_add_match_subsystem_devtype(
+                ptr,
+                INPUT_SUBSYSTEM.as_ptr().cast(),
+                std::ptr::null(),
+            )
+        } != 0
+        {
+            unsafe {
+                udev_monitor_unref(ptr);
+            }
+            return None;
+        }
+        if unsafe { udev_monitor_enable_receiving(ptr) } != 0 {
+            unsafe {
+                udev_monitor_unref(ptr);
+            }
+            return None;
+        }
+        Some(UdevMonitor(ptr))
+    }
+}
+
+impl Drop for UdevContext {
+    fn drop(&mut self) {
+        unsafe {
+            udev_unref(self.0);
+        }
+    }
+}
+
+impl UdevEnumerate {
+    fn configure_for_joysticks(&self) -> bool {
+        unsafe {
+            udev_enumerate_add_match_property(
+                self.0,
+                ID_INPUT_JOYSTICK.as_ptr().cast(),
+                VALUE_ONE.as_ptr().cast(),
+            ) == 0
+                && udev_enumerate_add_match_subsystem(self.0, INPUT_SUBSYSTEM.as_ptr().cast()) == 0
+                && udev_enumerate_scan_devices(self.0) == 0
+        }
+    }
+
+    fn syspaths(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut entry = unsafe { udev_enumerate_get_list_entry(self.0) };
+        while !entry.is_null() {
+            let name = unsafe { udev_list_entry_get_name(entry) };
+            if !name.is_null() {
+                out.push(
+                    unsafe { CStr::from_ptr(name) }
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+            entry = unsafe { udev_list_entry_get_next(entry) };
+        }
+        out
+    }
+}
+
+impl Drop for UdevEnumerate {
+    fn drop(&mut self) {
+        unsafe {
+            udev_enumerate_unref(self.0);
+        }
+    }
+}
+
+impl UdevDevice {
+    fn devnode(&self) -> Option<String> {
+        ptr_to_string(unsafe { udev_device_get_devnode(self.0) })
+    }
+
+    fn action_matches(&self, value: &[u8]) -> bool {
+        cstr_matches(unsafe { udev_device_get_action(self.0) }, value)
+    }
+
+    fn property_matches(&self, key: &[u8], value: &[u8]) -> bool {
+        cstr_matches(
+            unsafe { udev_device_get_property_value(self.0, key.as_ptr().cast()) },
+            value,
+        )
+    }
+}
+
+impl Drop for UdevDevice {
+    fn drop(&mut self) {
+        unsafe {
+            udev_device_unref(self.0);
+        }
+    }
+}
+
+impl UdevMonitor {
+    #[inline(always)]
+    fn pollfd(&self) -> PollFd {
+        PollFd {
+            fd: unsafe { udev_monitor_get_fd(self.0) },
+            events: POLLIN,
+            revents: 0,
+        }
+    }
+
+    fn collect_hotplug(&self) -> Vec<HotplugEvent> {
+        let mut out = Vec::new();
+        loop {
+            let ptr = unsafe { udev_monitor_receive_device(self.0) };
+            if ptr.is_null() {
+                break;
+            }
+            let dev = UdevDevice(ptr);
+            if !dev.property_matches(ID_INPUT_JOYSTICK, VALUE_ONE) {
+                continue;
+            }
+            if dev.action_matches(ACTION_ADD) {
+                if let Some(path) = dev.devnode()
+                    && let Some(spec) = dev_spec_from_event_path(&path)
+                {
+                    out.push(HotplugEvent::Add(spec));
+                }
+                continue;
+            }
+            if dev.action_matches(ACTION_REMOVE)
+                && let Some(path) = dev.devnode()
+            {
+                out.push(HotplugEvent::Remove(path));
+            }
+        }
+        out
+    }
+}
+
+impl Drop for UdevMonitor {
+    fn drop(&mut self) {
+        unsafe {
+            udev_monitor_unref(self.0);
+        }
+    }
+}
+
+impl UdevState {
+    fn new() -> Option<Self> {
+        let ctx = UdevContext::new()?;
+        let monitor = ctx.monitor()?;
+        Some(Self { _ctx: ctx, monitor })
+    }
+
+    fn enumerate_specs(&self) -> Vec<DevSpec> {
+        let Some(enumerate) = self._ctx.enumerate() else {
+            return Vec::new();
+        };
+        if !enumerate.configure_for_joysticks() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for syspath in enumerate.syspaths() {
+            let Ok(syspath) = std::ffi::CString::new(syspath) else {
+                continue;
+            };
+            let Some(dev) = self._ctx.device_from_syspath(syspath.as_c_str()) else {
+                continue;
+            };
+            if let Some(path) = dev.devnode()
+                && let Some(spec) = dev_spec_from_event_path(&path)
+            {
+                out.push(spec);
+            }
+        }
+        out.sort_unstable_by(|a, b| a.path.cmp(&b.path));
+        out.dedup_by(|a, b| a.path == b.path);
+        out
+    }
+}
+
 const EVDEV_FUTURE_TOLERANCE_NS: u64 = 5_000_000;
 const EVDEV_REGRESSION_TOLERANCE_NS: u64 = 1_000_000;
 const EVDEV_MAX_INVALID_SAMPLES: u32 = 4;
@@ -115,16 +523,33 @@ const IOC_TYPESHIFT: u32 = IOC_NRSHIFT + IOC_NRBITS;
 const IOC_SIZESHIFT: u32 = IOC_TYPESHIFT + IOC_TYPEBITS;
 const IOC_DIRSHIFT: u32 = IOC_SIZESHIFT + IOC_SIZEBITS;
 const IOC_WRITE: u32 = 1;
+
 const fn ioc(dir: u32, type_: u32, nr: u32, size: u32) -> libc::c_ulong {
     ((dir << IOC_DIRSHIFT)
         | (type_ << IOC_TYPESHIFT)
         | (nr << IOC_NRSHIFT)
         | (size << IOC_SIZESHIFT)) as libc::c_ulong
 }
+
 const fn iow(type_: u8, nr: u8, size: usize) -> libc::c_ulong {
     ioc(IOC_WRITE, type_ as u32, nr as u32, size as u32)
 }
+
 const EVIOCSCLOCKID: libc::c_ulong = iow(b'E', 0xA0, size_of::<libc::c_int>());
+
+#[inline(always)]
+fn ptr_to_string(ptr: *const c_char) -> Option<String> {
+    (!ptr.is_null()).then(|| {
+        unsafe { CStr::from_ptr(ptr) }
+            .to_string_lossy()
+            .into_owned()
+    })
+}
+
+#[inline(always)]
+fn cstr_matches(ptr: *const c_char, expected: &[u8]) -> bool {
+    !ptr.is_null() && unsafe { CStr::from_ptr(ptr) }.to_bytes() == &expected[..expected.len() - 1]
+}
 
 #[inline(always)]
 fn current_monotonic_nanos() -> Option<u64> {
@@ -223,121 +648,247 @@ fn enable_monotonic_timestamps(fd: i32) -> bool {
 
 #[inline(always)]
 fn code_u32(type_: u16, code: u16) -> u32 {
-    ((type_ as u32) << 16) | (code as u32)
+    ((type_ as u32) << 16) | code as u32
 }
 
-fn wanted_event_nodes() -> HashSet<String> {
-    // Best-effort filter to avoid opening keyboards/mice:
-    // include only `eventX` devices that also expose a `jsY` handler.
-    //
-    // Source: /proc/bus/input/devices, which is stable across distros and doesn't require ioctls.
-    let Ok(text) = fs::read_to_string("/proc/bus/input/devices") else {
-        return HashSet::new();
-    };
+#[inline(always)]
+fn read_trimmed(path: &str) -> Option<String> {
+    let text = fs::read_to_string(path).ok()?;
+    let text = text.trim_matches(|ch: char| ch.is_ascii_whitespace() || ch == '\0');
+    (!text.is_empty()).then(|| text.to_string())
+}
 
+#[inline(always)]
+fn read_hex_u16(path: &str) -> Option<u16> {
+    let text = read_trimmed(path)?;
+    u16::from_str_radix(text.trim_start_matches("0x"), 16).ok()
+}
+
+#[inline(always)]
+fn event_name_from_path(path: &str) -> Option<&str> {
+    let name = path.rsplit('/').next()?;
+    (name.starts_with("event")
+        && name.len() > 5
+        && name[5..].bytes().all(|byte| byte.is_ascii_digit()))
+    .then_some(name)
+}
+
+fn dev_spec_from_event_path(path: &str) -> Option<DevSpec> {
+    let event_name = event_name_from_path(path)?;
+    let sys = format!("/sys/class/input/{event_name}/device");
+    let name = read_trimmed(&format!("{sys}/name")).unwrap_or_else(|| format!("evdev:{path}"));
+    Some(DevSpec {
+        path: path.to_string(),
+        name,
+        vendor_id: read_hex_u16(&format!("{sys}/id/vendor")),
+        product_id: read_hex_u16(&format!("{sys}/id/product")),
+    })
+}
+
+#[inline(always)]
+fn looks_like_controller(ev: &CapabilityBits, key: &CapabilityBits, abs: &CapabilityBits) -> bool {
+    if !ev.has(EV_KEY) {
+        return false;
+    }
+    let face = key.has_range(BTN_GAMEPAD, BTN_GAMEPAD_LAST);
+    let joystick = key.has_range(BTN_TRIGGER, BTN_JOYSTICK_LAST);
+    let dpad = key.has_range(BTN_DPAD_UP, BTN_DPAD_RIGHT)
+        || key.has_range(BTN_TRIGGER_HAPPY1, BTN_TRIGGER_HAPPY4);
+    let menu = key.has(BTN_START) || key.has(BTN_SELECT);
+    let sticks = abs.has(ABS_X) || abs.has(ABS_Y) || abs.has(ABS_RX) || abs.has(ABS_RY);
+    let hats = abs.has(ABS_HAT0X) || abs.has(ABS_HAT0Y);
+    (face || joystick) && (dpad || menu || sticks || hats)
+}
+
+fn fallback_spec_from_event_path(path: &str) -> Option<DevSpec> {
+    let event_name = event_name_from_path(path)?;
+    let sys = format!("/sys/class/input/{event_name}/device");
+    let ev = read_trimmed(&format!("{sys}/capabilities/ev"))
+        .map_or_else(CapabilityBits::default, |text| CapabilityBits::parse(&text));
+    let key = read_trimmed(&format!("{sys}/capabilities/key"))
+        .map_or_else(CapabilityBits::default, |text| CapabilityBits::parse(&text));
+    let abs = read_trimmed(&format!("{sys}/capabilities/abs"))
+        .map_or_else(CapabilityBits::default, |text| CapabilityBits::parse(&text));
+    looks_like_controller(&ev, &key, &abs)
+        .then(|| dev_spec_from_event_path(path))
+        .flatten()
+}
+
+fn scan_live_event_paths() -> HashSet<String> {
     let mut out = HashSet::new();
-    let mut has_js = false;
-    let mut events: Vec<String> = Vec::new();
-
-    for line in text.lines().chain(std::iter::once("")) {
-        if line.trim().is_empty() {
-            if has_js {
-                out.extend(events.drain(..));
-            } else {
-                events.clear();
-            }
-            has_js = false;
-            continue;
-        }
-
-        let Some(rest) = line.strip_prefix("H:") else {
-            continue;
-        };
-        let rest = rest.trim();
-        let Some(handlers) = rest.strip_prefix("Handlers=") else {
-            continue;
-        };
-        for tok in handlers.split_whitespace() {
-            if tok.starts_with("js") {
-                has_js = true;
-            } else if tok.starts_with("event") {
-                events.push(tok.to_string());
+    if let Ok(entries) = fs::read_dir("/dev/input") {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if name.to_string_lossy().starts_with("event") {
+                out.insert(entry.path().to_string_lossy().to_string());
             }
         }
     }
-
     out
 }
 
-pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystemEvent)) {
-    let mut devs: Vec<Dev> = Vec::new();
-
-    let wanted = wanted_event_nodes();
+fn scan_fallback_specs(open_paths: &HashSet<String>) -> Vec<DevSpec> {
+    let mut out = Vec::new();
     if let Ok(entries) = fs::read_dir("/dev/input") {
-        for e in entries.flatten() {
-            let name_os = e.file_name();
-            let name = name_os.to_string_lossy();
-            if !name.starts_with("event") {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if !name.to_string_lossy().starts_with("event") {
                 continue;
             }
-            if !wanted.is_empty() && !wanted.contains(name.as_ref()) {
+            let path = entry.path().to_string_lossy().to_string();
+            if open_paths.contains(&path) {
                 continue;
             }
-            let path = e.path();
-            let Ok(file) = std::fs::File::open(&path) else {
-                continue;
-            };
-            let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
-            let path_s = path.to_string_lossy().to_string();
-            if monotonic_timestamps {
-                debug!("linux evdev '{path_s}' enabled CLOCK_MONOTONIC event timestamps");
-            } else {
-                warn!(
-                    "linux evdev '{path_s}' could not enable CLOCK_MONOTONIC event timestamps; using receipt-time fallback"
-                );
+            if let Some(spec) = fallback_spec_from_event_path(&path) {
+                out.push(spec);
             }
-            let uuid = uuid_from_bytes(path_s.as_bytes());
-            let id = PadId(devs.len() as u32);
-            let dev_name = format!("evdev:{path_s}");
+        }
+    }
+    out.sort_unstable_by(|a, b| a.path.cmp(&b.path));
+    out
+}
 
-            emit_sys(GpSystemEvent::Connected {
-                name: dev_name.clone(),
-                id,
-                vendor_id: None,
-                product_id: None,
-                backend: PadBackend::LinuxEvdev,
-                initial: true,
-            });
+fn remove_dev_by_path(path: &str, devs: &mut Vec<Dev>, emit_sys: &mut impl FnMut(GpSystemEvent)) {
+    if let Some(idx) = devs.iter().position(|dev| dev.path == path) {
+        let dev = devs.swap_remove(idx);
+        emit_sys(GpSystemEvent::Disconnected {
+            name: dev.name,
+            id: dev.id,
+            backend: PadBackend::LinuxEvdev,
+            initial: false,
+        });
+    }
+}
 
-            devs.push(Dev {
-                id,
-                uuid,
-                path: path_s,
-                file,
-                monotonic_timestamps,
-                clock_health: EvdevClockHealth::new(monotonic_timestamps),
-                hat_x: 0,
-                hat_y: 0,
-                dir: [false; 4],
-            });
+fn open_dev(
+    spec: DevSpec,
+    id: PadId,
+    initial: bool,
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+) -> Option<Dev> {
+    let file = match std::fs::File::open(&spec.path) {
+        Ok(file) => file,
+        Err(err) => {
+            warn!(
+                "linux evdev could not open controller candidate '{}' at '{}': {err}",
+                spec.name, spec.path
+            );
+            return None;
+        }
+    };
+    let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
+    if monotonic_timestamps {
+        debug!(
+            "linux evdev '{}' enabled CLOCK_MONOTONIC event timestamps",
+            spec.path
+        );
+    } else {
+        warn!(
+            "linux evdev '{}' could not enable CLOCK_MONOTONIC event timestamps; using receipt-time fallback",
+            spec.path
+        );
+    }
+    let uuid = uuid_from_bytes(spec.path.as_bytes());
+    emit_sys(GpSystemEvent::Connected {
+        name: spec.name.clone(),
+        id,
+        vendor_id: spec.vendor_id,
+        product_id: spec.product_id,
+        backend: PadBackend::LinuxEvdev,
+        initial,
+    });
+    Some(Dev {
+        id,
+        uuid,
+        name: spec.name,
+        path: spec.path,
+        file,
+        monotonic_timestamps,
+        clock_health: EvdevClockHealth::new(monotonic_timestamps),
+        hat_x: 0,
+        hat_y: 0,
+        dir: [false; 4],
+    })
+}
+
+fn add_dev_if_new(
+    spec: DevSpec,
+    devs: &mut Vec<Dev>,
+    next_id: &mut u32,
+    initial: bool,
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+) {
+    if devs.iter().any(|dev| dev.path == spec.path) {
+        return;
+    }
+    let id = PadId(*next_id);
+    if let Some(dev) = open_dev(spec, id, initial, emit_sys) {
+        *next_id = next_id.saturating_add(1);
+        devs.push(dev);
+    }
+}
+
+fn refresh_fallback(
+    devs: &mut Vec<Dev>,
+    next_id: &mut u32,
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+) {
+    let live_paths = scan_live_event_paths();
+    let mut remove = Vec::new();
+    for (idx, dev) in devs.iter().enumerate() {
+        if !live_paths.contains(&dev.path) {
+            remove.push(idx);
+        }
+    }
+    for &idx in remove.iter().rev() {
+        let dev = devs.swap_remove(idx);
+        emit_sys(GpSystemEvent::Disconnected {
+            name: dev.name,
+            id: dev.id,
+            backend: PadBackend::LinuxEvdev,
+            initial: false,
+        });
+    }
+    let open_paths = devs
+        .iter()
+        .map(|dev| dev.path.clone())
+        .collect::<HashSet<_>>();
+    for spec in scan_fallback_specs(&open_paths) {
+        add_dev_if_new(spec, devs, next_id, false, emit_sys);
+    }
+}
+
+fn init_discovery() -> Discovery {
+    if let Some(state) = UdevState::new() {
+        return Discovery::Udev(state);
+    }
+    if let Some(watch) = InotifyWatch::new() {
+        warn!("linux evdev falling back to inotify gamepad discovery; udev unavailable");
+        return Discovery::Inotify(watch);
+    }
+    warn!("linux evdev has no hotplug discovery backend; startup enumeration only");
+    Discovery::None
+}
+
+pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystemEvent)) {
+    let discovery = init_discovery();
+    let mut devs: Vec<Dev> = Vec::new();
+    let mut next_id = 0u32;
+
+    match &discovery {
+        Discovery::Udev(state) => {
+            for spec in state.enumerate_specs() {
+                add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys);
+            }
+        }
+        Discovery::Inotify(_) | Discovery::None => {
+            for spec in scan_fallback_specs(&HashSet::new()) {
+                add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys);
+            }
         }
     }
 
     emit_sys(GpSystemEvent::StartupComplete);
-    if devs.is_empty() {
-        loop {
-            std::thread::park();
-        }
-    }
-
-    let mut pollfds: Vec<PollFd> = devs
-        .iter()
-        .map(|d| PollFd {
-            fd: d.file.as_raw_fd(),
-            events: POLLIN,
-            revents: 0,
-        })
-        .collect();
 
     let mut buf: [MaybeUninit<InputEventRaw>; 64] = [MaybeUninit::uninit(); 64];
     let buf_bytes = unsafe {
@@ -346,45 +897,94 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
             buf.len() * size_of::<InputEventRaw>(),
         )
     };
+    let mut pollfds = Vec::with_capacity(9);
 
     loop {
-        for p in &mut pollfds {
-            p.revents = 0;
-        }
+        pollfds.clear();
+        let dev_offset = match &discovery {
+            Discovery::Udev(state) => {
+                pollfds.push(state.monitor.pollfd());
+                1usize
+            }
+            Discovery::Inotify(watch) => {
+                pollfds.push(watch.pollfd());
+                1usize
+            }
+            Discovery::None => 0usize,
+        };
+        pollfds.extend(devs.iter().map(|dev| PollFd {
+            fd: dev.file.as_raw_fd(),
+            events: POLLIN,
+            revents: 0,
+        }));
 
-        let rc = unsafe { poll(pollfds.as_mut_ptr(), pollfds.len(), -1) };
-        if rc <= 0 {
+        let poll_ptr = if pollfds.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            pollfds.as_mut_ptr()
+        };
+        let rc = unsafe { poll(poll_ptr, pollfds.len(), -1) };
+        if rc < 0 {
             continue;
         }
 
-        for i in 0..pollfds.len() {
-            if (pollfds[i].revents & POLLIN) == 0 {
+        let mut hotplug = Vec::new();
+        let mut fallback_refresh = false;
+        if dev_offset == 1 {
+            let revents = pollfds[0].revents;
+            if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                warn!("linux evdev discovery fd reported poll error");
+            }
+            if (revents & POLLIN) != 0 {
+                match &discovery {
+                    Discovery::Udev(state) => hotplug = state.monitor.collect_hotplug(),
+                    Discovery::Inotify(watch) => {
+                        watch.drain();
+                        fallback_refresh = true;
+                    }
+                    Discovery::None => {}
+                }
+            }
+        }
+
+        let mut remove = Vec::new();
+        for i in 0..devs.len() {
+            let revents = pollfds[i + dev_offset].revents;
+            if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                remove.push(i);
+                continue;
+            }
+            if (revents & POLLIN) == 0 {
                 continue;
             }
 
-            let fd = pollfds[i].fd;
-            let dev = &mut devs[i];
-            let n = unsafe { read(fd, buf_bytes.as_mut_ptr().cast::<c_void>(), buf_bytes.len()) };
+            let n = unsafe {
+                read(
+                    pollfds[i + dev_offset].fd,
+                    buf_bytes.as_mut_ptr().cast(),
+                    buf_bytes.len(),
+                )
+            };
             if n <= 0 {
+                remove.push(i);
                 continue;
             }
 
-            let count = (n as usize) / size_of::<InputEventRaw>();
-            let count = count.min(buf.len());
+            let dev = &mut devs[i];
+            let count = (n as usize / size_of::<InputEventRaw>()).min(buf.len());
             let clock_sample =
                 if dev.monotonic_timestamps && dev.clock_health.uses_kernel_timestamps() {
                     sample_monotonic_clock()
                 } else {
                     None
                 };
+
             for j in 0..count {
                 let ev = unsafe { buf[j].assume_init() };
                 if ev.type_ == EV_SYN {
                     continue;
                 }
-
                 if ev.type_ == EV_KEY {
-                    // 0 = release, 1 = press, 2 = autorepeat
                     if ev.value == 2 {
                         continue;
                     }
@@ -401,47 +1001,68 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                     });
                     continue;
                 }
+                if ev.type_ != EV_ABS {
+                    continue;
+                }
 
-                if ev.type_ == EV_ABS {
-                    let (timestamp, host_nanos) = event_time(dev, ev, clock_sample);
-                    emit_pad(PadEvent::RawAxis {
+                let (timestamp, host_nanos) = event_time(dev, ev, clock_sample);
+                emit_pad(PadEvent::RawAxis {
+                    id: dev.id,
+                    timestamp,
+                    host_nanos,
+                    code: PadCode(code_u32(ev.type_, ev.code)),
+                    uuid: dev.uuid,
+                    value: ev.value as f32,
+                });
+
+                if ev.code == ABS_HAT0X {
+                    dev.hat_x = ev.value;
+                } else if ev.code == ABS_HAT0Y {
+                    dev.hat_y = ev.value;
+                } else {
+                    continue;
+                }
+
+                let want = [dev.hat_y < 0, dev.hat_y > 0, dev.hat_x < 0, dev.hat_x > 0];
+                let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
+                for k in 0..4 {
+                    if dev.dir[k] == want[k] {
+                        continue;
+                    }
+                    dev.dir[k] = want[k];
+                    emit_pad(PadEvent::Dir {
                         id: dev.id,
                         timestamp,
                         host_nanos,
-                        code: PadCode(code_u32(ev.type_, ev.code)),
-                        uuid: dev.uuid,
-                        value: ev.value as f32,
+                        dir: dirs[k],
+                        pressed: want[k],
                     });
-
-                    if ev.code == ABS_HAT0X {
-                        dev.hat_x = ev.value;
-                    } else if ev.code == ABS_HAT0Y {
-                        dev.hat_y = ev.value;
-                    } else {
-                        continue;
-                    }
-
-                    let want_up = dev.hat_y < 0;
-                    let want_down = dev.hat_y > 0;
-                    let want_left = dev.hat_x < 0;
-                    let want_right = dev.hat_x > 0;
-                    let want = [want_up, want_down, want_left, want_right];
-                    let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
-                    for k in 0..4 {
-                        if dev.dir[k] == want[k] {
-                            continue;
-                        }
-                        dev.dir[k] = want[k];
-                        emit_pad(PadEvent::Dir {
-                            id: dev.id,
-                            timestamp,
-                            host_nanos,
-                            dir: dirs[k],
-                            pressed: want[k],
-                        });
-                    }
                 }
             }
+        }
+
+        remove.sort_unstable();
+        remove.dedup();
+        for &idx in remove.iter().rev() {
+            let dev = devs.swap_remove(idx);
+            emit_sys(GpSystemEvent::Disconnected {
+                name: dev.name,
+                id: dev.id,
+                backend: PadBackend::LinuxEvdev,
+                initial: false,
+            });
+        }
+
+        for event in hotplug {
+            match event {
+                HotplugEvent::Add(spec) => {
+                    add_dev_if_new(spec, &mut devs, &mut next_id, false, &mut emit_sys)
+                }
+                HotplugEvent::Remove(path) => remove_dev_by_path(&path, &mut devs, &mut emit_sys),
+            }
+        }
+        if fallback_refresh {
+            refresh_fallback(&mut devs, &mut next_id, &mut emit_sys);
         }
     }
 }
