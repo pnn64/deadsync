@@ -32,6 +32,20 @@ use glutin::context::{ContextApi, GlProfile, Version};
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
 
+#[inline(always)]
+fn disable_framebuffer_srgb(gl: &glow::Context, api: GlApi) {
+    if api != GlApi::Desktop {
+        return;
+    }
+    unsafe {
+        // Keep raw OpenGL aligned with the Vulkan/wgpu UNORM path. Some Linux
+        // drivers expose an sRGB-capable default framebuffer and enable this,
+        // which makes bright flashes look blown out relative to the other
+        // backends.
+        gl.disable(glow::FRAMEBUFFER_SRGB);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GlApi {
     Desktop,
@@ -173,6 +187,7 @@ pub fn init(
     let (gl_surface, gl_context, gl, api) =
         create_opengl_context(&window, vsync_enabled, gfx_debug_enabled)?;
     info!("OpenGL context API: {}", api.label());
+    disable_framebuffer_srgb(&gl, api);
     log_opengl_driver_info(&gl);
     let shaders = api.shaders();
     let (program, mvp_location, texture_location) =
@@ -706,6 +721,7 @@ pub fn draw(
     let backend_record_started = Instant::now();
     unsafe {
         let gl = &state.gl;
+        disable_framebuffer_srgb(gl, state.api);
 
         let c = render_list.clear_color;
         gl.clear_color(c[0], c[1], c[2], c[3]);
