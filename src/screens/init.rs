@@ -323,11 +323,11 @@ fn loading_progress_values(loading: &LoadingState) -> (usize, usize, f32) {
 }
 
 fn refresh_loading_count_text(loading: &mut LoadingState) {
-    let (done, total, progress) = loading_progress_values(loading);
+    let (done, total, _) = loading_progress_values(loading);
     loading.count_text = if total == 0 {
         EMPTY_TEXT.clone()
     } else {
-        Arc::<str>::from(format!("{done}/{total} ({:.1}%)", 100.0 * progress))
+        Arc::<str>::from(crate::screens::progress_count_text(done, total))
     };
     *loading.speed_text_cache.borrow_mut() = None;
 }

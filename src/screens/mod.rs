@@ -86,3 +86,17 @@ pub enum Screen {
     EvaluationSummary,
     PlayerOptions,
 }
+
+#[inline(always)]
+pub(crate) fn progress_percent_tenths(done: usize, total: usize) -> u32 {
+    if total == 0 {
+        return 0;
+    }
+    (((done.min(total) as u128) * 1000) / total as u128) as u32
+}
+
+#[inline(always)]
+pub(crate) fn progress_count_text(done: usize, total: usize) -> String {
+    let pct = progress_percent_tenths(done, total);
+    format!("{done}/{total} ({}.{:01}%)", pct / 10, pct % 10)
+}

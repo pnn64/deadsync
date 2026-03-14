@@ -4826,8 +4826,7 @@ fn build_reload_overlay_actors(reload: &ReloadUiState, active_color_index: i32) 
     let count_text = if total == 0 {
         String::new()
     } else {
-        let pct = 100.0 * progress;
-        format!("{done}/{total} ({pct:.1}%)")
+        crate::screens::progress_count_text(done, total)
     };
     let show_speed_row = total > 0;
     let speed_text = if elapsed > 0.0 && show_speed_row {

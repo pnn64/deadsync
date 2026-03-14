@@ -1114,6 +1114,114 @@ fn merge_pack_scans(mut packs: Vec<PackScan>) -> Vec<PackScan> {
     merged
 }
 
+#[inline(always)]
+fn report_load_progress<F>(
+    progress: &mut Option<&mut F>,
+    done: usize,
+    total: usize,
+    group: &str,
+    item: &str,
+) where
+    F: FnMut(usize, usize, &str, &str),
+{
+    if let Some(cb) = progress.as_mut() {
+        cb(done, total, group, item);
+    }
+}
+
+#[inline(always)]
+fn song_pack_progress_name(pack: &SongPack) -> &str {
+    pack.directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(pack.group_name.as_str())
+}
+
+#[inline(always)]
+fn song_progress_name(path: &Path) -> &str {
+    path.parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+        })
+}
+
+#[inline(always)]
+fn course_progress_names<'a>(path: &'a Path, root: &'a str) -> (&'a str, &'a str) {
+    let group = path
+        .parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(root);
+    let course = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_default();
+    (group, course)
+}
+
+type SongParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
+
+fn reap_song_parse<F>(
+    rx: Option<&std::sync::mpsc::Receiver<SongParseMsg>>,
+    in_flight: &mut usize,
+    loaded_packs: &mut Vec<SongPack>,
+    songs_failed: &mut usize,
+    songs_cache_hits: &mut usize,
+    songs_parsed: &mut usize,
+    songs_done: &mut usize,
+    total_songs: usize,
+    progress: &mut Option<&mut F>,
+) where
+    F: FnMut(usize, usize, &str, &str),
+{
+    let Some(rx) = rx else {
+        return;
+    };
+    match rx.recv() {
+        Ok((pack_idx, simfile_path, result)) => {
+            *in_flight = in_flight.saturating_sub(1);
+            match result {
+                Ok((song_data, is_hit)) => {
+                    if is_hit {
+                        *songs_cache_hits += 1;
+                    } else {
+                        *songs_parsed += 1;
+                    }
+                    if let Some(pack) = loaded_packs.get_mut(pack_idx) {
+                        pack.songs.push(song_data);
+                    }
+                }
+                Err(e) => {
+                    *songs_failed += 1;
+                    warn!("Failed to load '{simfile_path:?}': {e}")
+                }
+            }
+            *songs_done = songs_done.saturating_add(1);
+            let pack_display = loaded_packs
+                .get(pack_idx)
+                .map_or("", song_pack_progress_name);
+            report_load_progress(
+                progress,
+                *songs_done,
+                total_songs,
+                pack_display,
+                song_progress_name(&simfile_path),
+            );
+        }
+        Err(_) => {
+            *in_flight = 0;
+        }
+    }
+}
+
 fn scan_and_load_songs_impl<F>(root_path_str: &'static str, mut progress: Option<&mut F>)
 where
     F: FnMut(usize, usize, &str, &str),
@@ -1170,52 +1278,13 @@ where
     }
     packs = merge_pack_scans(packs);
     let total_songs = packs.iter().map(|pack| pack.songs.len()).sum::<usize>();
-    let mut songs_seen = 0usize;
-
-    // (pack_idx, simfile_path, result(song_data, is_cache_hit))
-    type ParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
+    let mut songs_done = 0usize;
+    report_load_progress(&mut progress, 0, total_songs, "", "");
 
     let mut runtime: Option<tokio::runtime::Runtime> = None;
-    let mut tx_opt: Option<std::sync::mpsc::Sender<ParseMsg>> = None;
-    let mut rx_opt: Option<std::sync::mpsc::Receiver<ParseMsg>> = None;
+    let mut tx_opt: Option<std::sync::mpsc::Sender<SongParseMsg>> = None;
+    let mut rx_opt: Option<std::sync::mpsc::Receiver<SongParseMsg>> = None;
     let mut in_flight = 0usize;
-
-    fn reap_one(
-        rx: Option<&std::sync::mpsc::Receiver<ParseMsg>>,
-        in_flight: &mut usize,
-        loaded_packs: &mut Vec<SongPack>,
-        songs_failed: &mut usize,
-        songs_cache_hits: &mut usize,
-        songs_parsed: &mut usize,
-    ) {
-        let Some(rx) = rx else {
-            return;
-        };
-        match rx.recv() {
-            Ok((pack_idx, simfile_path, result)) => {
-                *in_flight = in_flight.saturating_sub(1);
-                match result {
-                    Ok((song_data, is_hit)) => {
-                        if is_hit {
-                            *songs_cache_hits += 1;
-                        } else {
-                            *songs_parsed += 1;
-                        }
-                        if let Some(pack) = loaded_packs.get_mut(pack_idx) {
-                            pack.songs.push(song_data);
-                        }
-                    }
-                    Err(e) => {
-                        *songs_failed += 1;
-                        warn!("Failed to load '{simfile_path:?}': {e}")
-                    }
-                }
-            }
-            Err(_) => {
-                *in_flight = 0;
-            }
-        }
-    }
 
     for pack in packs {
         let pack_display = pack
@@ -1244,21 +1313,7 @@ where
 
         for song in pack.songs {
             let simfile_path = song.simfile;
-            songs_seen = songs_seen.saturating_add(1);
-            if let Some(cb) = progress.as_mut() {
-                let song_display = simfile_path
-                    .parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| {
-                        simfile_path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or_default()
-                    });
-                cb(songs_seen, total_songs, pack_display.as_str(), song_display);
-            }
+            let song_display = song_progress_name(&simfile_path);
 
             if parallel_parsing {
                 let rt = runtime.get_or_insert_with(|| {
@@ -1268,19 +1323,22 @@ where
                         .unwrap()
                 });
                 if tx_opt.is_none() || rx_opt.is_none() {
-                    let (tx, rx) = std::sync::mpsc::channel::<ParseMsg>();
+                    let (tx, rx) = std::sync::mpsc::channel::<SongParseMsg>();
                     tx_opt = Some(tx);
                     rx_opt = Some(rx);
                 }
 
                 while in_flight >= parse_threads {
-                    reap_one(
+                    reap_song_parse(
                         rx_opt.as_ref(),
                         &mut in_flight,
                         &mut loaded_packs,
                         &mut songs_failed,
                         &mut songs_cache_hits,
                         &mut songs_parsed,
+                        &mut songs_done,
+                        total_songs,
+                        &mut progress,
                     );
                 }
 
@@ -1305,6 +1363,14 @@ where
                             warn!("Failed to load '{simfile_path:?}': {e}")
                         }
                     }
+                    songs_done = songs_done.saturating_add(1);
+                    report_load_progress(
+                        &mut progress,
+                        songs_done,
+                        total_songs,
+                        pack_display.as_str(),
+                        song_display,
+                    );
                     continue;
                 };
 
@@ -1344,18 +1410,29 @@ where
                         warn!("Failed to load '{simfile_path:?}': {e}")
                     }
                 }
+                songs_done = songs_done.saturating_add(1);
+                report_load_progress(
+                    &mut progress,
+                    songs_done,
+                    total_songs,
+                    pack_display.as_str(),
+                    song_display,
+                );
             }
         }
     }
 
     while in_flight > 0 {
-        reap_one(
+        reap_song_parse(
             rx_opt.as_ref(),
             &mut in_flight,
             &mut loaded_packs,
             &mut songs_failed,
             &mut songs_cache_hits,
             &mut songs_parsed,
+            &mut songs_done,
+            total_songs,
+            &mut progress,
         );
     }
 
@@ -1664,29 +1741,29 @@ fn scan_and_load_courses_impl<F>(
     };
     let course_paths = collect_course_paths(courses_root);
     let total_courses = course_paths.len();
-    let mut courses_seen = 0usize;
+    let mut courses_done = 0usize;
+    report_load_progress(&mut progress, 0, total_courses, "", "");
 
     for course_path in course_paths {
-        courses_seen = courses_seen.saturating_add(1);
-        if let Some(cb) = progress.as_mut() {
-            let group_display = course_path
-                .parent()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or(courses_root_str);
-            let course_display = course_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or_default();
-            cb(courses_seen, total_courses, group_display, course_display);
-        }
+        let (group_display, course_display) = course_progress_names(&course_path, courses_root_str);
+        let group_display = group_display.to_owned();
+        let course_display = course_display.to_owned();
+        let mut report_done = || {
+            courses_done = courses_done.saturating_add(1);
+            report_load_progress(
+                &mut progress,
+                courses_done,
+                total_courses,
+                &group_display,
+                &course_display,
+            );
+        };
         let data = match fs::read(&course_path) {
             Ok(d) => d,
             Err(e) => {
                 courses_failed += 1;
                 warn!("Failed to read course '{}': {}", course_path.display(), e);
+                report_done();
                 continue;
             }
         };
@@ -1696,6 +1773,7 @@ fn scan_and_load_courses_impl<F>(
             Err(e) => {
                 courses_failed += 1;
                 warn!("Failed to parse course '{}': {}", course_path.display(), e);
+                report_done();
                 continue;
             }
         };
@@ -1810,6 +1888,7 @@ fn scan_and_load_courses_impl<F>(
         } else {
             courses_failed += 1;
         }
+        report_done();
     }
 
     let autogen_courses = autogen_nonstop_group_courses();
