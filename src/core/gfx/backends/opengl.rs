@@ -10,7 +10,7 @@ use crate::core::space::ortho_for_window;
 use cgmath::Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
 use glutin::{
-    config::{Api as ConfigApi, ColorBufferType, Config, ConfigSurfaceTypes, ConfigTemplateBuilder, GlConfig},
+    config::{Api as ConfigApi, Config, ConfigTemplateBuilder},
     context::{
         ContextApi, ContextAttributes, ContextAttributesBuilder, GlProfile, PossiblyCurrentContext,
         Version,
@@ -705,8 +705,13 @@ pub fn draw(
         let gl = &state.gl;
 
         let c = render_list.clear_color;
-        gl.clear_color(c[0], c[1], c[2], c[3]);
+        gl.color_mask(true, true, true, true);
+        gl.clear_color(c[0], c[1], c[2], 1.0);
         gl.clear(glow::COLOR_BUFFER_BIT);
+        // Keep the presented window surface opaque even when EGL hands us an
+        // alpha-bearing default framebuffer. Otherwise Linux compositors can
+        // treat the game as translucent and the whole scene looks ghosted.
+        gl.color_mask(true, true, true, false);
 
         gl.enable(glow::BLEND);
         gl.blend_equation(glow::FUNC_ADD);
@@ -1713,75 +1718,17 @@ fn find_config(
     api: ConfigApi,
     label: &str,
 ) -> Result<Config, Box<dyn Error>> {
-    #[inline(always)]
-    fn config_score(config: &Config) -> (u8, u8, u8, u16, u16, u16, u16, u16, u8) {
-        let (r, g, b) = match config.color_buffer_type() {
-            Some(ColorBufferType::Rgb {
-                r_size,
-                g_size,
-                b_size,
-            }) => (r_size, g_size, b_size),
-            Some(ColorBufferType::Luminance(luma)) => (luma, 0, 0),
-            None => (0, 0, 0),
-        };
-        let rgb_penalty =
-            (r.abs_diff(8) as u16) + (g.abs_diff(8) as u16) + (b.abs_diff(8) as u16);
-        let alpha_penalty = config.alpha_size().abs_diff(8) as u16;
-        (
-            config.hardware_accelerated() as u8,
-            (!config.float_pixels()) as u8,
-            (!config.srgb_capable()) as u8,
-            u16::MAX - rgb_penalty,
-            u16::MAX - alpha_penalty,
-            u16::MAX - config.depth_size() as u16,
-            u16::MAX - config.stencil_size() as u16,
-            u16::MAX - config.num_samples() as u16,
-            config
-                .config_surface_types()
-                .contains(ConfigSurfaceTypes::WINDOW) as u8,
-        )
-    }
-
     let template = ConfigTemplateBuilder::new()
         .with_api(api)
-        .with_alpha_size(8)
+        .with_alpha_size(0)
         .with_depth_size(0)
         .with_stencil_size(0)
         .with_transparency(false)
         .compatible_with_native_window(raw_window_handle)
         .build();
-    let configs = unsafe { display.find_configs(template)? }.collect::<Vec<_>>();
-    let Some(config) = configs.into_iter().max_by_key(config_score) else {
-        return Err(std::io::Error::other(format!(
-            "Failed to find a suitable {label} config"
-        ))
-        .into());
-    };
-
-    let color = match config.color_buffer_type() {
-        Some(ColorBufferType::Rgb {
-            r_size,
-            g_size,
-            b_size,
-        }) => format!("{r_size}/{g_size}/{b_size}"),
-        Some(ColorBufferType::Luminance(luma)) => format!("luma/{luma}"),
-        None => "unknown".to_string(),
-    };
-    info!(
-        "Selected {label} config: api={:?} color={} alpha={} depth={} stencil={} samples={} srgb={} float={} accel={} transparency={:?} surface={:?}",
-        config.api(),
-        color,
-        config.alpha_size(),
-        config.depth_size(),
-        config.stencil_size(),
-        config.num_samples(),
-        config.srgb_capable(),
-        config.float_pixels(),
-        config.hardware_accelerated(),
-        config.supports_transparency(),
-        config.config_surface_types(),
-    );
-    Ok(config)
+    unsafe { display.find_configs(template)?.next() }
+        .ok_or_else(|| std::io::Error::other(format!("Failed to find a suitable {label} config")))
+        .map_err(Into::into)
 }
 
 fn create_window_surface_context(

@@ -1,5 +1,5 @@
 #version 300 es
-precision highp float;
+precision mediump float;
 
 in vec2 v_tex_coord;
 in vec2 v_quad;
