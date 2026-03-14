@@ -2288,6 +2288,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         song_has_edit_ptrs: None,
         show_music_wheel_grades: true,
         show_music_wheel_lamps: true,
+        new_pack_names: None,
     }));
 
     if !matches!(selected_entry, Some(MusicWheelEntry::Song(_))) {

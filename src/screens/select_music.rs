@@ -9,6 +9,7 @@ use crate::core::space::{
 };
 use crate::game::chart::ChartData;
 use crate::game::parsing::simfile as song_loading;
+use crate::game::known_packs;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
@@ -830,6 +831,7 @@ pub struct State {
     meter_pack_song_counts: HashMap<String, usize>,
     popularity_pack_song_counts: HashMap<String, usize>,
     recent_pack_song_counts: HashMap<String, usize>,
+    new_pack_names: HashSet<String>,
 }
 
 pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usize) -> bool {
@@ -1921,7 +1923,7 @@ pub fn init() -> State {
         pack_total_seconds_by_index,
         song_has_edit_ptrs,
         pack_song_counts: pack_song_counts.clone(),
-        group_pack_song_counts: pack_song_counts,
+        group_pack_song_counts: pack_song_counts.clone(),
         title_pack_song_counts,
         artist_pack_song_counts,
         bpm_pack_song_counts,
@@ -1929,6 +1931,10 @@ pub fn init() -> State {
         meter_pack_song_counts,
         popularity_pack_song_counts,
         recent_pack_song_counts,
+        new_pack_names: {
+            let scanned_names: Vec<String> = pack_song_counts.keys().cloned().collect();
+            known_packs::sync_known_packs(&scanned_names)
+        },
     };
 
     let built_entries_len = state.all_entries.len();
@@ -2105,6 +2111,7 @@ pub fn init_placeholder() -> State {
         meter_pack_song_counts: HashMap::new(),
         popularity_pack_song_counts: HashMap::new(),
         recent_pack_song_counts: HashMap::new(),
+        new_pack_names: HashSet::new(),
     }
 }
 
@@ -4715,6 +4722,9 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
         Some(MusicWheelEntry::PackHeader { name, .. }) => {
             audio::play_sfx("assets/sounds/expand.ogg");
             let target = name.clone();
+            if state.new_pack_names.remove(&target) {
+                known_packs::mark_pack_known(&target);
+            }
             if state.expanded_pack_name.as_ref() == Some(&target) {
                 state.expanded_pack_name = None;
             } else {
@@ -6571,6 +6581,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
         show_music_wheel_grades: cfg.show_music_wheel_grades,
         show_music_wheel_lamps: cfg.show_music_wheel_lamps,
+        new_pack_names: Some(&state.new_pack_names),
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 
