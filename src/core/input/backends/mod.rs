@@ -5,16 +5,14 @@ pub(super) use super::{
 };
 
 #[cfg(target_os = "freebsd")]
-pub(super) mod freebsd_devd;
+pub(super) mod devd;
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+pub(super) mod evdev;
 #[cfg(target_os = "freebsd")]
-pub(super) mod freebsd_evdev;
-#[cfg(target_os = "freebsd")]
-pub(super) mod freebsd_hidraw;
-#[cfg(target_os = "linux")]
-pub(super) mod linux_evdev;
+pub(super) mod hidraw;
 #[cfg(target_os = "macos")]
-pub(super) mod macos_iohid;
+pub(super) mod iohid;
 #[cfg(windows)]
-pub(super) mod windows_raw_input;
+pub(super) mod w32_raw_input;
 #[cfg(windows)]
-pub(super) mod windows_wgi;
+pub(super) mod wgi;

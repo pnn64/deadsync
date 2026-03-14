@@ -1,4 +1,4 @@
-use super::freebsd_devd::{DevdEvent, DevdWatch};
+use super::devd::{DevdEvent, DevdWatch};
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
 use crate::core::host_time::now_nanos;
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};

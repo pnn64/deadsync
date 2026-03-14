@@ -226,23 +226,23 @@ pub fn run_pad_backend(
     #[cfg(windows)]
     match win_backend {
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
-            backends::windows_raw_input::run(emit_pad, emit_sys, |_| {})
+            backends::w32_raw_input::run(emit_pad, emit_sys, |_| {})
         }
-        WindowsPadBackend::Wgi => backends::windows_wgi::run(emit_pad, emit_sys),
+        WindowsPadBackend::Wgi => backends::wgi::run(emit_pad, emit_sys),
     }
     #[cfg(target_os = "linux")]
-    return backends::linux_evdev::run(emit_pad, emit_sys);
+    return backends::evdev::run(emit_pad, emit_sys);
     #[cfg(target_os = "freebsd")]
     {
         let mut emit_pad = emit_pad;
         let mut emit_sys = emit_sys;
-        if let Err(err) = backends::freebsd_hidraw::run(&mut emit_pad, &mut emit_sys) {
+        if let Err(err) = backends::hidraw::run(&mut emit_pad, &mut emit_sys) {
             log::warn!("freebsd hidraw unavailable or unusable ({err}); falling back to evdev");
         }
-        return backends::freebsd_evdev::run(emit_pad, emit_sys);
+        return backends::evdev::run(emit_pad, emit_sys);
     }
     #[cfg(target_os = "macos")]
-    return backends::macos_iohid::run(emit_pad, emit_sys);
+    return backends::iohid::run(emit_pad, emit_sys);
 
     #[cfg(not(any(
         windows,
@@ -268,11 +268,11 @@ pub fn run_windows_backend(
 ) {
     match win_backend {
         WindowsPadBackend::Auto | WindowsPadBackend::RawInput => {
-            backends::windows_raw_input::run(emit_pad, emit_sys, emit_key);
+            backends::w32_raw_input::run(emit_pad, emit_sys, emit_key);
         }
         WindowsPadBackend::Wgi => {
-            std::thread::spawn(move || backends::windows_wgi::run(emit_pad, emit_sys));
-            backends::windows_raw_input::run_keyboard_only(emit_key);
+            std::thread::spawn(move || backends::wgi::run(emit_pad, emit_sys));
+            backends::w32_raw_input::run_keyboard_only(emit_key);
         }
     }
 }
@@ -280,13 +280,13 @@ pub fn run_windows_backend(
 #[cfg(windows)]
 #[inline(always)]
 pub fn set_raw_keyboard_window_focused(focused: bool) {
-    backends::windows_raw_input::set_window_focused(focused);
+    backends::w32_raw_input::set_window_focused(focused);
 }
 
 #[cfg(windows)]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
-    backends::windows_raw_input::set_capture_enabled(enabled);
+    backends::w32_raw_input::set_capture_enabled(enabled);
 }
 
 #[cfg(not(windows))]

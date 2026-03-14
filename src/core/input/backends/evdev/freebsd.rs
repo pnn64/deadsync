@@ -1,5 +1,7 @@
-use super::freebsd_devd::{DevdEvent, DevdWatch};
-use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
+use super::{
+    DevdEvent, DevdWatch, GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId,
+    uuid_from_bytes,
+};
 use crate::core::host_time::{instant_nanos, now_nanos};
 use log::{debug, warn};
 use std::ffi::c_void;
