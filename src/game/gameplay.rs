@@ -3460,7 +3460,7 @@ pub struct State {
     active_attack_appearance_mask: [u8; MAX_PLAYERS],
     active_attack_speed_multiplier: [f32; MAX_PLAYERS],
     active_attack_mini_percent_delta: [f32; MAX_PLAYERS],
-    pub noteskin: [Option<Noteskin>; MAX_PLAYERS],
+    pub noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
     pub active_color_index: i32,
     pub player_color: [f32; 4],
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -4887,12 +4887,12 @@ pub fn init(
         num_players: 1,
     };
 
-    let noteskin: [Option<Noteskin>; MAX_PLAYERS] = std::array::from_fn(|player| {
+    let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return None;
         }
         let skin = player_profiles[player].noteskin.to_string();
-        noteskin::load_itg_skin(&style, &skin).ok()
+        noteskin::load_itg_skin_cached(&style, &skin).ok()
     });
     let notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] =
         std::array::from_fn(|player| {
@@ -5502,10 +5502,13 @@ pub fn init(
     let density_graph_graph_w = if density_graph_enabled {
         let mut sidepane_width = sw * 0.5_f32;
         if !is_ultrawide && note_field_is_centered && wide {
-            let nf_width =
-                step_stats_notefield_width(noteskin[0].as_ref(), cols_per_player, field_zoom[0])
-                    .unwrap_or(256.0_f32)
-                    .max(1.0_f32);
+            let nf_width = step_stats_notefield_width(
+                noteskin[0].as_ref().map(Arc::as_ref),
+                cols_per_player,
+                field_zoom[0],
+            )
+            .unwrap_or(256.0_f32)
+            .max(1.0_f32);
             sidepane_width = ((sw - nf_width) * 0.5_f32).max(1.0_f32);
         }
         if is_ultrawide && num_players > 1 {

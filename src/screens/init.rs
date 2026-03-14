@@ -8,7 +8,7 @@ use crate::screens::components::shared::heart_bg;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use log::{info, warn};
+use log::info;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -44,6 +44,7 @@ enum LoadingPhase {
     Songs,
     Courses,
     Artwork,
+    Noteskins,
 }
 
 enum LoadingMsg {
@@ -66,6 +67,12 @@ enum LoadingMsg {
         line2: String,
         line3: String,
     },
+    Noteskins {
+        done: usize,
+        total: usize,
+        skin: String,
+        status: String,
+    },
     Done,
 }
 
@@ -87,6 +94,8 @@ struct LoadingState {
     courses_total: usize,
     artwork_done: usize,
     artwork_total: usize,
+    noteskins_done: usize,
+    noteskins_total: usize,
     done: bool,
     started_at: Instant,
     rx: mpsc::Receiver<LoadingMsg>,
@@ -106,6 +115,8 @@ impl LoadingState {
             courses_total: 0,
             artwork_done: 0,
             artwork_total: 0,
+            noteskins_done: 0,
+            noteskins_total: 0,
             done: false,
             started_at: Instant::now(),
             rx,
@@ -124,6 +135,8 @@ static COURSES_PHASE_TEXT: LazyLock<Arc<str>> =
     LazyLock::new(|| Arc::<str>::from("Loading courses..."));
 static ARTWORK_PHASE_TEXT: LazyLock<Arc<str>> =
     LazyLock::new(|| Arc::<str>::from("Caching artwork..."));
+static NOTESKINS_PHASE_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("Compiling noteskins..."));
 
 /* ----------------------- auto-advance ----------------------- */
 #[inline(always)]
@@ -283,6 +296,7 @@ fn arc_phase_label(phase: LoadingPhase) -> Arc<str> {
         LoadingPhase::Songs => SONGS_PHASE_TEXT.clone(),
         LoadingPhase::Courses => COURSES_PHASE_TEXT.clone(),
         LoadingPhase::Artwork => ARTWORK_PHASE_TEXT.clone(),
+        LoadingPhase::Noteskins => NOTESKINS_PHASE_TEXT.clone(),
     }
 }
 
@@ -292,6 +306,7 @@ fn loading_progress_values(loading: &LoadingState) -> (usize, usize, f32) {
         LoadingPhase::Songs => (loading.songs_done, loading.songs_total),
         LoadingPhase::Courses => (loading.courses_done, loading.courses_total),
         LoadingPhase::Artwork => (loading.artwork_done, loading.artwork_total),
+        LoadingPhase::Noteskins => (loading.noteskins_done, loading.noteskins_total),
     };
     if total < done {
         total = done;
@@ -398,11 +413,25 @@ fn start_loading_thread(state: &mut State) {
             &mut on_artwork,
         );
         info!("Init loading: artwork cache prewarm complete.");
-        std::thread::spawn(|| {
-            if std::panic::catch_unwind(noteskin::prewarm_itg_preview_cache).is_err() {
-                warn!("noteskin prewarm thread panicked; first-use preview hitches may occur");
-            }
-        });
+
+        let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Noteskins));
+        info!("Init loading: compiling noteskin cache before UI...");
+        let mut on_noteskin = |done: usize, total: usize, skin: &str, status: &str| {
+            let _ = tx.send(LoadingMsg::Noteskins {
+                done,
+                total,
+                skin: skin.to_owned(),
+                status: status.to_owned(),
+            });
+        };
+        let noteskin_summary = noteskin::compile_all_itg_caches_with_progress(&mut on_noteskin);
+        info!(
+            "Init loading: noteskin cache compile complete (total={}, built={}, reused={}, failed={}).",
+            noteskin_summary.total,
+            noteskin_summary.built,
+            noteskin_summary.reused,
+            noteskin_summary.failed
+        );
         let _ = tx.send(LoadingMsg::Done);
     });
 }
@@ -453,6 +482,19 @@ fn poll_loading_state(loading: &mut LoadingState) {
                 loading.artwork_total = total;
                 loading.line2 = Arc::<str>::from(line2);
                 loading.line3 = Arc::<str>::from(line3);
+                refresh_loading_count_text(loading);
+            }
+            LoadingMsg::Noteskins {
+                done,
+                total,
+                skin,
+                status,
+            } => {
+                loading.phase = LoadingPhase::Noteskins;
+                loading.noteskins_done = done;
+                loading.noteskins_total = total;
+                loading.line2 = Arc::<str>::from(skin);
+                loading.line3 = Arc::<str>::from(status);
                 refresh_loading_count_text(loading);
             }
             LoadingMsg::Done => {
@@ -589,7 +631,10 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_
     let (done, total, progress) = loading_progress(loading);
     let show_speed_row = matches!(
         phase,
-        LoadingPhase::Songs | LoadingPhase::Courses | LoadingPhase::Artwork
+        LoadingPhase::Songs
+            | LoadingPhase::Courses
+            | LoadingPhase::Artwork
+            | LoadingPhase::Noteskins
     ) && total > 0;
     let speed_text = loading
         .filter(|_| show_speed_row)

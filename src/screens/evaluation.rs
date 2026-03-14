@@ -558,7 +558,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
         let cols_per_player = gs.cols_per_player;
         for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
-            let noteskin = gs.noteskin[player_idx].take().map(Arc::new);
+            let noteskin = gs.noteskin[player_idx].take();
             let (start, end) = gs.note_ranges[player_idx];
             let notes = &gs.notes[start..end];
             let note_times = &gs.note_time_cache[start..end];
