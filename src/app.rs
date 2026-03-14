@@ -2677,7 +2677,7 @@ impl App {
         self.sync_gameplay_background();
         let compose_started = Instant::now();
         let (actors, clear_color) = self.get_current_actors();
-        self.update_fps_title(&window, redraw_started);
+        self.update_fps_stats(redraw_started);
         let active_banner_video_paths = self.active_banner_video_paths();
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
@@ -5332,14 +5332,13 @@ impl App {
     }
 
     #[inline(always)]
-    fn update_fps_title(&mut self, window: &Window, now: Instant) {
+    fn update_fps_stats(&mut self, now: Instant) {
         self.state.shell.frame_count += 1;
         let elapsed = now.duration_since(self.state.shell.last_title_update);
         if elapsed.as_secs_f32() >= 1.0 {
             let fps = self.state.shell.frame_count as f32 / elapsed.as_secs_f32();
             self.state.shell.last_fps = fps;
             self.state.shell.last_vpf = self.state.shell.current_frame_vpf;
-            window.set_title("DeadSync");
             self.state.shell.frame_count = 0;
             self.state.shell.last_title_update = now;
         }
