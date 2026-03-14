@@ -10,8 +10,11 @@ use crate::core::space::ortho_for_window;
 use cgmath::Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
 use glutin::{
-    config::{Api as ConfigApi, Config, ConfigTemplateBuilder},
-    context::{ContextAttributes, ContextAttributesBuilder, PossiblyCurrentContext},
+    config::{Api as ConfigApi, ColorBufferType, Config, ConfigSurfaceTypes, ConfigTemplateBuilder, GlConfig},
+    context::{
+        ContextApi, ContextAttributes, ContextAttributesBuilder, GlProfile, PossiblyCurrentContext,
+        Version,
+    },
     display::{Display, DisplayApiPreference},
     prelude::*,
     surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
@@ -26,30 +29,12 @@ use std::{
 use twox_hash::XxHash64;
 use winit::window::Window;
 
-#[cfg(all(unix, not(target_os = "macos")))]
-use glutin::context::{ContextApi, GlProfile, Version};
-
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
-
-#[inline(always)]
-fn disable_framebuffer_srgb(gl: &glow::Context, api: GlApi) {
-    if api != GlApi::Desktop {
-        return;
-    }
-    unsafe {
-        // Keep raw OpenGL aligned with the Vulkan/wgpu UNORM path. Some Linux
-        // drivers expose an sRGB-capable default framebuffer and enable this,
-        // which makes bright flashes look blown out relative to the other
-        // backends.
-        gl.disable(glow::FRAMEBUFFER_SRGB);
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GlApi {
     Desktop,
-    #[cfg(all(unix, not(target_os = "macos")))]
     Gles,
 }
 
@@ -57,7 +42,6 @@ impl GlApi {
     const fn label(self) -> &'static str {
         match self {
             Self::Desktop => "desktop OpenGL",
-            #[cfg(all(unix, not(target_os = "macos")))]
             Self::Gles => "OpenGL ES",
         }
     }
@@ -72,7 +56,6 @@ impl GlApi {
                 tmesh_vert: include_str!("../shaders/opengl_tmesh.vert"),
                 tmesh_frag: include_str!("../shaders/opengl_tmesh.frag"),
             },
-            #[cfg(all(unix, not(target_os = "macos")))]
             Self::Gles => ShaderSet {
                 sprite_vert: include_str!("../shaders/opengl_shader_gles.vert"),
                 sprite_frag: include_str!("../shaders/opengl_shader_gles.frag"),
@@ -187,7 +170,6 @@ pub fn init(
     let (gl_surface, gl_context, gl, api) =
         create_opengl_context(&window, vsync_enabled, gfx_debug_enabled)?;
     info!("OpenGL context API: {}", api.label());
-    disable_framebuffer_srgb(&gl, api);
     log_opengl_driver_info(&gl);
     let shaders = api.shaders();
     let (program, mvp_location, texture_location) =
@@ -721,7 +703,6 @@ pub fn draw(
     let backend_record_started = Instant::now();
     unsafe {
         let gl = &state.gl;
-        disable_framebuffer_srgb(gl, state.api);
 
         let c = render_list.clear_color;
         gl.clear_color(c[0], c[1], c[2], c[3]);
@@ -1119,7 +1100,6 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
         state.gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
         state.gl.read_buffer(match state.api {
             GlApi::Desktop => glow::FRONT,
-            #[cfg(all(unix, not(target_os = "macos")))]
             GlApi::Gles => glow::BACK,
         });
         state.gl.read_pixels(
@@ -1733,6 +1713,35 @@ fn find_config(
     api: ConfigApi,
     label: &str,
 ) -> Result<Config, Box<dyn Error>> {
+    #[inline(always)]
+    fn config_score(config: &Config) -> (u8, u8, u8, u16, u16, u16, u16, u16, u8) {
+        let (r, g, b) = match config.color_buffer_type() {
+            Some(ColorBufferType::Rgb {
+                r_size,
+                g_size,
+                b_size,
+            }) => (r_size, g_size, b_size),
+            Some(ColorBufferType::Luminance(luma)) => (luma, 0, 0),
+            None => (0, 0, 0),
+        };
+        let rgb_penalty =
+            (r.abs_diff(8) as u16) + (g.abs_diff(8) as u16) + (b.abs_diff(8) as u16);
+        let alpha_penalty = config.alpha_size().abs_diff(8) as u16;
+        (
+            config.hardware_accelerated() as u8,
+            (!config.float_pixels()) as u8,
+            (!config.srgb_capable()) as u8,
+            u16::MAX - rgb_penalty,
+            u16::MAX - alpha_penalty,
+            u16::MAX - config.depth_size() as u16,
+            u16::MAX - config.stencil_size() as u16,
+            u16::MAX - config.num_samples() as u16,
+            config
+                .config_surface_types()
+                .contains(ConfigSurfaceTypes::WINDOW) as u8,
+        )
+    }
+
     let template = ConfigTemplateBuilder::new()
         .with_api(api)
         .with_alpha_size(8)
@@ -1741,9 +1750,38 @@ fn find_config(
         .with_transparency(false)
         .compatible_with_native_window(raw_window_handle)
         .build();
-    unsafe { display.find_configs(template)?.next() }
-        .ok_or_else(|| std::io::Error::other(format!("Failed to find a suitable {label} config")))
-        .map_err(Into::into)
+    let configs = unsafe { display.find_configs(template)? }.collect::<Vec<_>>();
+    let Some(config) = configs.into_iter().max_by_key(config_score) else {
+        return Err(std::io::Error::other(format!(
+            "Failed to find a suitable {label} config"
+        ))
+        .into());
+    };
+
+    let color = match config.color_buffer_type() {
+        Some(ColorBufferType::Rgb {
+            r_size,
+            g_size,
+            b_size,
+        }) => format!("{r_size}/{g_size}/{b_size}"),
+        Some(ColorBufferType::Luminance(luma)) => format!("luma/{luma}"),
+        None => "unknown".to_string(),
+    };
+    info!(
+        "Selected {label} config: api={:?} color={} alpha={} depth={} stencil={} samples={} srgb={} float={} accel={} transparency={:?} surface={:?}",
+        config.api(),
+        color,
+        config.alpha_size(),
+        config.depth_size(),
+        config.stencil_size(),
+        config.num_samples(),
+        config.srgb_capable(),
+        config.float_pixels(),
+        config.hardware_accelerated(),
+        config.supports_transparency(),
+        config.config_surface_types(),
+    );
+    Ok(config)
 }
 
 fn create_window_surface_context(
