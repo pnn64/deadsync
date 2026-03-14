@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::thread::LocalKey;
 
 const TEXT_CACHE_LIMIT: usize = 4096;
+const DEBUG_OVERLAY_Z: i16 = 32020;
 type TextCache<K> = HashMap<K, Arc<str>>;
 
 thread_local! {
@@ -181,7 +182,7 @@ pub fn build(backend: BackendType, fps: f32, vpf: u32, timing: Option<TimingHeal
         font("miso"):
         settext(stats_text): // Use the new multi-line string
         horizalign(right):   // Align each line of text to the right within the block
-        z(200)
+        z(DEBUG_OVERLAY_Z)
     ));
     if let Some(timing) = timing {
         let timing_text = timing_text(timing);
@@ -193,7 +194,7 @@ pub fn build(backend: BackendType, fps: f32, vpf: u32, timing: Option<TimingHeal
             font("miso"):
             settext(timing_text):
             horizalign(right):
-            z(200)
+            z(DEBUG_OVERLAY_Z)
         ));
     }
     actors
@@ -235,7 +236,6 @@ pub fn build_stutter(events: &[StutterEvent]) -> Vec<Actor> {
     const SKIP_SLOTS: usize = 5;
     const EDGE_PAD_Y: f32 = 10.0;
     const TEXT_ZOOM: f32 = 1.0;
-    const Z: i32 = 200;
     let w = screen_width();
     let h = screen_height();
     let skip_x = w - SKIP_X_FROM_RIGHT;
@@ -249,7 +249,7 @@ pub fn build_stutter(events: &[StutterEvent]) -> Vec<Actor> {
         xy(skip_x - SKIP_WIDTH * 0.5, top):
         zoomto(SKIP_WIDTH, bottom - top):
         diffuse(0.0, 0.0, 0.0, 0.4):
-        z(Z)
+        z(DEBUG_OVERLAY_Z)
     ));
     let visible = events.len().min(SKIP_SLOTS);
     let line_top = top + EDGE_PAD_Y;
@@ -287,7 +287,7 @@ pub fn build_stutter(events: &[StutterEvent]) -> Vec<Actor> {
             font("miso"):
             settext(line):
             horizalign(center):
-            z(Z + 1)
+            z(DEBUG_OVERLAY_Z + 1)
         ));
     }
     actors
