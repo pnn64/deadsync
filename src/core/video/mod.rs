@@ -379,17 +379,25 @@ fn read_frame(stdout: &mut ChildStdout, buf: &mut [u8]) -> io::Result<bool> {
 }
 
 fn tool_command(name: &str) -> Command {
-    bundled_tool_path(name)
+    resolve_tool_path(name)
         .map(Command::new)
         .unwrap_or_else(|| Command::new(name))
 }
 
-fn bundled_tool_path(name: &str) -> Option<PathBuf> {
-    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
-    let bin_dir = exe_dir.join("bin");
+fn resolve_tool_path(name: &str) -> Option<PathBuf> {
+    let runtime_bin = std::env::current_dir().ok().map(|dir| dir.join("bin"));
+    resolve_tool_path_in_dirs(name, runtime_bin.as_deref())
+}
+
+fn resolve_tool_path_in_dirs(name: &str, runtime_bin: Option<&Path>) -> Option<PathBuf> {
+    tool_path_in_dir(name, runtime_bin)
+}
+
+fn tool_path_in_dir(name: &str, dir: Option<&Path>) -> Option<PathBuf> {
+    let dir = dir?;
     bundled_tool_candidates(name)
         .into_iter()
-        .map(|candidate| bin_dir.join(candidate))
+        .map(|candidate| dir.join(candidate))
         .find(|path| path.is_file())
 }
 
@@ -475,7 +483,47 @@ struct ProbeFormat {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_duration, parse_rate};
+    use super::{bundled_tool_candidates, parse_duration, parse_rate, resolve_tool_path_in_dirs};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let stamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "deadsync-video-{name}-{}-{stamp}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn write_tool(dir: &Path, name: &str) -> PathBuf {
+        let path = dir.join(&bundled_tool_candidates(name)[0]);
+        fs::write(&path, []).unwrap();
+        path
+    }
 
     #[test]
     fn parse_rate_handles_fraction() {
@@ -491,5 +539,24 @@ mod tests {
     #[test]
     fn parse_duration_rejects_negative() {
         assert!(parse_duration(Some("-1")).is_none());
+    }
+
+    #[test]
+    fn resolve_tool_path_prefers_runtime_bin() {
+        let runtime = TempDir::new("runtime");
+        let runtime_bin = runtime.path().join("bin");
+        fs::create_dir_all(&runtime_bin).unwrap();
+        let runtime_tool = write_tool(&runtime_bin, "ffmpeg");
+        let resolved = resolve_tool_path_in_dirs("ffmpeg", Some(runtime_bin.as_path()));
+        assert_eq!(resolved.as_deref(), Some(runtime_tool.as_path()));
+    }
+
+    #[test]
+    fn resolve_tool_path_returns_none_without_runtime_bin_tool() {
+        let runtime = TempDir::new("runtime-miss");
+        let runtime_bin = runtime.path().join("bin");
+        fs::create_dir_all(&runtime_bin).unwrap();
+        let resolved = resolve_tool_path_in_dirs("ffprobe", Some(runtime_bin.as_path()));
+        assert!(resolved.is_none());
     }
 }
