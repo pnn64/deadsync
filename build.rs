@@ -4,12 +4,25 @@ use std::{
     error::Error,
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Rerun on shader or asset changes
     println!("cargo:rerun-if-changed=src/core/gfx/shaders");
     println!("cargo:rerun-if-changed=assets");
+    println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
+    println!("cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR");
+    println!("cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_PIPEWIRE_AUDIO");
+    println!("cargo:rustc-check-cfg=cfg(has_jack_audio)");
+    println!("cargo:rustc-check-cfg=cfg(has_pipewire_audio)");
+    println!("cargo:rustc-check-cfg=cfg(has_pulse_audio)");
+
+    detect_jack_audio();
+    detect_pipewire_audio();
+    detect_pulse_audio();
+    emit_build_info();
 
     embed_windows_icon()?;
 
@@ -26,6 +39,49 @@ fn main() -> Result<(), Box<dyn Error>> {
     copy_assets(&target_dir)?;
 
     Ok(())
+}
+
+fn detect_jack_audio() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "linux" {
+        return;
+    }
+    let Ok(status) = Command::new("pkg-config")
+        .args(["--exists", "jack"])
+        .status()
+    else {
+        return;
+    };
+    if status.success() {
+        println!("cargo:rustc-cfg=has_jack_audio");
+    }
+}
+
+fn detect_pipewire_audio() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "linux" {
+        return;
+    }
+    if std::env::var_os("CARGO_FEATURE_PIPEWIRE_AUDIO").is_none() {
+        return;
+    }
+    println!("cargo:rustc-cfg=has_pipewire_audio");
+}
+
+fn detect_pulse_audio() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "linux" {
+        return;
+    }
+    let Ok(status) = Command::new("pkg-config")
+        .args(["--exists", "libpulse-simple"])
+        .status()
+    else {
+        return;
+    };
+    if status.success() {
+        println!("cargo:rustc-cfg=has_pulse_audio");
+    }
 }
 
 #[cfg(windows)]
@@ -153,4 +209,38 @@ fn copy_assets(target_dir: &Path) -> Result<(), Box<dyn Error>> {
         copy("assets", target_dir, &options)?;
     }
     Ok(())
+}
+
+fn emit_build_info() {
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string()));
+    let hash = git_output(&manifest_dir, &["rev-parse", "--short=10", "HEAD"])
+        .unwrap_or_else(|| "unknown".to_string());
+    let stamp = git_output(
+        &manifest_dir,
+        &[
+            "log",
+            "-1",
+            "--date=format-local:%Y%m%d @ %H:%M:%S",
+            "--format=%cd",
+            "HEAD",
+        ],
+    )
+    .unwrap_or_else(|| "unknown".to_string());
+    println!("cargo:rustc-env=DEADSYNC_BUILD_HASH={hash}");
+    println!("cargo:rustc-env=DEADSYNC_BUILD_STAMP={stamp}");
+}
+
+fn git_output(cwd: &Path, args: &[&str]) -> Option<String> {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8(output.stdout).ok()?;
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }

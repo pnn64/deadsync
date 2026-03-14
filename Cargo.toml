@@ -12,6 +12,10 @@ keywords = ["deadsync", "stepmania", "itg", "inthegroove", "rhythmgame", "vulkan
 name = "compose_bench"
 path = "tests/compose/bench.rs"
 
+[[bin]]
+name = "draw_bench"
+path = "tests/draw/bench.rs"
+
 [features]
 pipewire-audio = ["dep:pipewire"]
 
@@ -25,6 +29,7 @@ serde_json = "1.0.149"
 rand = "0.10.0"
 chrono = "0.4.43"
 qrcodegen = "1.8.0"
+mlua = { version = "0.11.4", features = ["lua54", "vendored"] }
 
 # rssp and nod
 rssp = { git = "https://github.com/pnn64/rssp", rev = "302a0fb" }
