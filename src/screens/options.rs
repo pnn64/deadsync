@@ -6,8 +6,8 @@ use crate::core::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, SelectMusicPatternInfoMode, SimpleIni,
-    SyncGraphMode,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SimpleIni, SyncGraphMode,
 };
 use crate::core::audio;
 #[cfg(target_os = "windows")]
@@ -605,6 +605,7 @@ const SELECT_MUSIC_ROW_PREVIEW_MARKER: &str = "Preview Marker";
 const SELECT_MUSIC_ROW_PREVIEW_LOOP: &str = "Loop Music";
 const SELECT_MUSIC_ROW_GAMEPLAY_TIMER: &str = "Show Gameplay Timer";
 const SELECT_MUSIC_ROW_SHOW_RIVALS: &str = "Show GS Box";
+const SELECT_MUSIC_ROW_SCOREBOX_PLACEMENT: &str = "GS Box Placement";
 const SELECT_MUSIC_ROW_SCOREBOX_CYCLE: &str = "GS Box Leaderboards";
 const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
 const MACHINE_ROW_SELECT_PROFILE: &str = "Select Profile";
@@ -888,9 +889,10 @@ const SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX: usize = 1;
 const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 2;
 const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 3;
 const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 10;
-const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 11;
-const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 13;
-const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 14;
+const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 12;
+const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 14;
+const SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX: usize = 15;
+const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 16;
 const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
 const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
 const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
@@ -1611,6 +1613,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: SELECT_MUSIC_ROW_SCOREBOX_PLACEMENT,
+        choices: &["Auto", "Step Pane"],
+        inline: true,
+    },
+    SubRow {
         label: SELECT_MUSIC_ROW_SCOREBOX_CYCLE,
         choices: &SELECT_MUSIC_SCOREBOX_CYCLE_CHOICES,
         inline: true,
@@ -1698,6 +1705,13 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Show GS box in Select Music pane/scorebox areas when available.",
             "GS box will not show unless GrooveStats/BoogieStats/ArrowCloud is enabled and connected.",
+        ],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_SCOREBOX_PLACEMENT,
+        help: &[
+            "Auto keeps the current placement rules.",
+            "Step Pane always anchors the GS box over the step pane when shown.",
         ],
     },
     Item {
@@ -2307,6 +2321,8 @@ fn submenu_visible_row_indices(
                     } else if idx == SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX && !show_breakdown {
                         None
                     } else if idx == SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX && !show_previews {
+                        None
+                    } else if idx == SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX && !show_scorebox {
                         None
                     } else if idx == SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX && !show_scorebox {
                         None
@@ -3638,6 +3654,22 @@ const fn select_music_pattern_info_from_choice(idx: usize) -> SelectMusicPattern
     }
 }
 
+const fn select_music_scorebox_placement_choice_index(
+    placement: SelectMusicScoreboxPlacement,
+) -> usize {
+    match placement {
+        SelectMusicScoreboxPlacement::Auto => 0,
+        SelectMusicScoreboxPlacement::StepPane => 1,
+    }
+}
+
+const fn select_music_scorebox_placement_from_choice(idx: usize) -> SelectMusicScoreboxPlacement {
+    match idx {
+        1 => SelectMusicScoreboxPlacement::StepPane,
+        _ => SelectMusicScoreboxPlacement::Auto,
+    }
+}
+
 const fn machine_preferred_style_choice_index(style: MachinePreferredPlayStyle) -> usize {
     match style {
         MachinePreferredPlayStyle::Single => 0,
@@ -4319,6 +4351,12 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_SHOW_RIVALS,
         yes_no_choice_index(cfg.show_select_music_scorebox),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_SCOREBOX_PLACEMENT,
+        select_music_scorebox_placement_choice_index(cfg.select_music_scorebox_placement),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -5749,6 +5787,10 @@ fn apply_submenu_choice_delta(
             config::update_show_select_music_gameplay_timer(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_SHOW_RIVALS {
             config::update_show_select_music_scorebox(yes_no_from_choice(new_index));
+        } else if row.label == SELECT_MUSIC_ROW_SCOREBOX_PLACEMENT {
+            config::update_select_music_scorebox_placement(
+                select_music_scorebox_placement_from_choice(new_index),
+            );
         }
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];
@@ -6462,6 +6504,7 @@ const fn select_music_parent_row(actual_idx: usize) -> Option<usize> {
         SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX => Some(SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX),
         SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX => Some(SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX),
         SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX => Some(SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX),
+        SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX => Some(SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX),
         SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX => Some(SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX),
         _ => None,
     }

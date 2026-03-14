@@ -1,6 +1,8 @@
 use crate::act;
 use crate::assets::{self, AssetManager, DensityGraphSlot, DensityGraphSource};
-use crate::config::{self, BreakdownStyle, SelectMusicPatternInfoMode, SyncGraphMode};
+use crate::config::{
+    self, BreakdownStyle, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SyncGraphMode,
+};
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
@@ -6816,8 +6818,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.extend(sl_select_music_wheel_cascade_mask());
 
     // GrooveStats scorebox placement.
-    // Keep solo→versus transitions symmetric regardless of which side started.
-    // In both-GS versus, render smaller scoreboxes over each pane's far-right side.
+    // Auto keeps the current layout, including pane placement for both-GS versus.
+    // StepPane forces the scorebox into the pane area whenever it is shown.
     if is_wide() {
         let scorebox_zoom = widescale(0.95, 1.0);
         let scorebox_side_inset = 320.0;
@@ -6832,6 +6834,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let p1_gs = scores::is_gs_active_for_side(profile::PlayerSide::P1);
         let p2_gs = scores::is_gs_active_for_side(profile::PlayerSide::P2);
         let both_gs_versus = is_versus && p1_gs && p2_gs;
+        let force_step_pane =
+            cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
         let mut push_scorebox = |side: profile::PlayerSide,
                                  steps_idx: usize,
                                  center_x: f32,
@@ -6872,33 +6876,51 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 });
             }
         };
+        let pane_scorebox_zoom = widescale(0.60, 0.64);
+        let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
+        let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
+        let pane_right_inset = 4.0;
+        let pane_box_center_x = |pane_cx: f32| {
+            pane_cx + pane_layout.pane_width * 0.5 - pane_scorebox_width * 0.5 - pane_right_inset
+        };
 
-        if both_gs_versus {
-            let pane_scorebox_zoom = widescale(0.60, 0.64);
-            let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
-            let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
-            let pane_right_inset = 4.0;
-            let pane_box_center_x = |pane_cx: f32| {
-                pane_cx + pane_layout.pane_width * 0.5
-                    - pane_scorebox_width * 0.5
-                    - pane_right_inset
-            };
-            push_scorebox(
-                profile::PlayerSide::P1,
-                state.selected_steps_index,
-                pane_box_center_x(screen_width() * 0.25 - 5.0),
-                pane_scorebox_center_y,
-                pane_scorebox_zoom,
-                60,
-            );
-            push_scorebox(
-                profile::PlayerSide::P2,
-                state.p2_selected_steps_index,
-                pane_box_center_x(screen_width() * 0.75 + 5.0),
-                pane_scorebox_center_y,
-                pane_scorebox_zoom,
-                60,
-            );
+        if both_gs_versus || force_step_pane {
+            if is_versus {
+                push_scorebox(
+                    profile::PlayerSide::P1,
+                    state.selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.25 - 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+                push_scorebox(
+                    profile::PlayerSide::P2,
+                    state.p2_selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.75 + 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+            } else if is_p2_single {
+                push_scorebox(
+                    profile::PlayerSide::P2,
+                    state.p2_selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.75 + 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+            } else {
+                push_scorebox(
+                    profile::PlayerSide::P1,
+                    state.selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.25 - 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+            }
         } else if is_versus {
             let incumbent = profile::get_session_player_side();
             if incumbent == profile::PlayerSide::P2 {

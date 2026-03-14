@@ -189,6 +189,39 @@ impl FromStr for SelectMusicPatternInfoMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicScoreboxPlacement {
+    Auto,
+    StepPane,
+}
+
+impl SelectMusicScoreboxPlacement {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::StepPane => "StepPane",
+        }
+    }
+}
+
+impl FromStr for SelectMusicScoreboxPlacement {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "auto" => Ok(Self::Auto),
+            "steppane" | "pane" => Ok(Self::StepPane),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncGraphMode {
     Frequency,
     BeatIndex,
@@ -582,6 +615,7 @@ pub struct Config {
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
+    pub select_music_scorebox_placement: SelectMusicScoreboxPlacement,
     pub select_music_scorebox_cycle_itg: bool,
     pub select_music_scorebox_cycle_ex: bool,
     pub select_music_scorebox_cycle_hard_ex: bool,
@@ -681,6 +715,7 @@ impl Default for Config {
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
+            select_music_scorebox_placement: SelectMusicScoreboxPlacement::Auto,
             select_music_scorebox_cycle_itg: true,
             select_music_scorebox_cycle_ex: true,
             select_music_scorebox_cycle_hard_ex: true,
@@ -1271,6 +1306,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicScoreboxPlacement={}\n",
+        default.select_music_scorebox_placement.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicScoreboxCycleItg={}\n",
         if default.select_music_scorebox_cycle_itg {
             "1"
@@ -1807,6 +1846,10 @@ pub fn load() {
                     .get("Options", "SelectMusicScorebox")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_scorebox, |v| v != 0);
+                cfg.select_music_scorebox_placement = conf
+                    .get("Options", "SelectMusicScoreboxPlacement")
+                    .and_then(|v| SelectMusicScoreboxPlacement::from_str(&v).ok())
+                    .unwrap_or(default.select_music_scorebox_placement);
                 cfg.select_music_scorebox_cycle_itg = conf
                     .get("Options", "SelectMusicScoreboxCycleItg")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -3145,6 +3188,10 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicScoreboxPlacement={}\n",
+        cfg.select_music_scorebox_placement.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicScoreboxCycleItg={}\n",
         if cfg.select_music_scorebox_cycle_itg {
             "1"
@@ -3929,6 +3976,17 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
             return;
         }
         cfg.show_select_music_scorebox = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_scorebox_placement(mode: SelectMusicScoreboxPlacement) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_scorebox_placement == mode {
+            return;
+        }
+        cfg.select_music_scorebox_placement = mode;
     }
     save_without_keymaps();
 }
