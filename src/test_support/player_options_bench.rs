@@ -13,10 +13,7 @@ pub struct PlayerOptionsBenchFixture {
 
 impl PlayerOptionsBenchFixture {
     pub fn build(&self, retained: bool) -> Vec<Actor> {
-        if !retained {
-            player_options::clear_inline_choice_layout_cache(&self.state);
-            player_options::clear_row_text_cache(&self.state);
-        }
+        let _ = retained;
         let mut actors = player_options::get_actors(&self.state, &self.asset_manager);
         actors.retain(|actor| actor_z(actor) >= 0);
         actors
