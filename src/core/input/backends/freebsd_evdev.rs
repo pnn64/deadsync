@@ -1,3 +1,4 @@
+use super::freebsd_devd::{DevdEvent, DevdWatch};
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
 use crate::core::host_time::{instant_nanos, now_nanos};
 use log::{debug, warn};
@@ -8,13 +9,53 @@ use std::os::unix::io::AsRawFd;
 use std::time::{Duration, Instant};
 
 const POLLIN: i16 = 0x0001;
+const POLLERR: i16 = 0x0008;
+const POLLHUP: i16 = 0x0010;
+const POLLNVAL: i16 = 0x0020;
 
+const EV_SYN: u16 = 0x00;
 const EV_KEY: u16 = 0x01;
 const EV_ABS: u16 = 0x03;
-const EV_SYN: u16 = 0x00;
 
+const ABS_X: u16 = 0x00;
+const ABS_Y: u16 = 0x01;
+const ABS_RX: u16 = 0x03;
+const ABS_RY: u16 = 0x04;
 const ABS_HAT0X: u16 = 0x10;
 const ABS_HAT0Y: u16 = 0x11;
+
+const BTN_TRIGGER: u16 = 0x120;
+const BTN_JOYSTICK_LAST: u16 = 0x12f;
+const BTN_GAMEPAD: u16 = 0x130;
+const BTN_GAMEPAD_LAST: u16 = 0x13f;
+const BTN_SELECT: u16 = 0x13a;
+const BTN_START: u16 = 0x13b;
+const BTN_DPAD_UP: u16 = 0x220;
+const BTN_DPAD_RIGHT: u16 = 0x223;
+const BTN_TRIGGER_HAPPY1: u16 = 0x2c0;
+const BTN_TRIGGER_HAPPY4: u16 = 0x2c3;
+
+const EV_MAX: u16 = 0x1f;
+const KEY_MAX: u16 = 0x2ff;
+const ABS_MAX: u16 = 0x3f;
+
+const EV_BITS_LEN: usize = (EV_MAX as usize + 8) / 8;
+const KEY_BITS_LEN: usize = (KEY_MAX as usize + 8) / 8;
+const ABS_BITS_LEN: usize = (ABS_MAX as usize + 8) / 8;
+
+const EVDEV_FUTURE_TOLERANCE_NS: u64 = 5_000_000;
+const EVDEV_REGRESSION_TOLERANCE_NS: u64 = 1_000_000;
+const EVDEV_MAX_INVALID_SAMPLES: u32 = 4;
+
+const IOC_NRBITS: u32 = 8;
+const IOC_TYPEBITS: u32 = 8;
+const IOC_SIZEBITS: u32 = 14;
+const IOC_NRSHIFT: u32 = 0;
+const IOC_TYPESHIFT: u32 = IOC_NRSHIFT + IOC_NRBITS;
+const IOC_SIZESHIFT: u32 = IOC_TYPESHIFT + IOC_TYPEBITS;
+const IOC_DIRSHIFT: u32 = IOC_SIZESHIFT + IOC_SIZEBITS;
+const IOC_WRITE: u32 = 1;
+const IOC_READ: u32 = 2;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -34,6 +75,15 @@ struct InputEventRaw {
     value: i32,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct InputId {
+    bustype: u16,
+    vendor: u16,
+    product: u16,
+    version: u16,
+}
+
 unsafe extern "C" {
     fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
     fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
@@ -42,6 +92,7 @@ unsafe extern "C" {
 struct Dev {
     id: PadId,
     uuid: [u8; 16],
+    name: String,
     path: String,
     file: std::fs::File,
     monotonic_timestamps: bool,
@@ -51,16 +102,57 @@ struct Dev {
     dir: [bool; 4],
 }
 
+struct DevSpec {
+    path: String,
+    name: String,
+    vendor_id: Option<u16>,
+    product_id: Option<u16>,
+}
+
 #[derive(Clone, Copy)]
 struct ClockSample {
     instant: Instant,
     monotonic_nanos: u64,
 }
 
+#[derive(Default)]
+struct CapabilityBits(Vec<u64>);
+
 struct EvdevClockHealth {
     kernel_trusted: bool,
     invalid_samples: u32,
     last_event_nanos: u64,
+}
+
+impl CapabilityBits {
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let mut words = Vec::with_capacity(bytes.len().div_ceil(8));
+        for chunk in bytes.chunks(8) {
+            let mut word = 0u64;
+            for (shift, byte) in chunk.iter().enumerate() {
+                word |= u64::from(*byte) << (shift * 8);
+            }
+            words.push(word);
+        }
+        Self(words)
+    }
+
+    #[inline(always)]
+    fn has(&self, bit: u16) -> bool {
+        let word = (bit as usize) >> 6;
+        word < self.0.len() && ((self.0[word] >> (bit as usize & 63)) & 1) != 0
+    }
+
+    fn has_range(&self, start: u16, end: u16) -> bool {
+        let mut bit = start;
+        while bit <= end {
+            if self.has(bit) {
+                return true;
+            }
+            bit = bit.saturating_add(1);
+        }
+        false
+    }
 }
 
 impl EvdevClockHealth {
@@ -101,19 +193,6 @@ impl EvdevClockHealth {
     }
 }
 
-const EVDEV_FUTURE_TOLERANCE_NS: u64 = 5_000_000;
-const EVDEV_REGRESSION_TOLERANCE_NS: u64 = 1_000_000;
-const EVDEV_MAX_INVALID_SAMPLES: u32 = 4;
-
-const IOC_NRBITS: u32 = 8;
-const IOC_TYPEBITS: u32 = 8;
-const IOC_SIZEBITS: u32 = 14;
-const IOC_NRSHIFT: u32 = 0;
-const IOC_TYPESHIFT: u32 = IOC_NRSHIFT + IOC_NRBITS;
-const IOC_SIZESHIFT: u32 = IOC_TYPESHIFT + IOC_TYPEBITS;
-const IOC_DIRSHIFT: u32 = IOC_SIZESHIFT + IOC_SIZEBITS;
-const IOC_WRITE: u32 = 1;
-
 const fn ioc(dir: u32, type_: u32, nr: u32, size: u32) -> libc::c_ulong {
     ((dir << IOC_DIRSHIFT)
         | (type_ << IOC_TYPESHIFT)
@@ -121,11 +200,26 @@ const fn ioc(dir: u32, type_: u32, nr: u32, size: u32) -> libc::c_ulong {
         | (size << IOC_SIZESHIFT)) as libc::c_ulong
 }
 
+const fn ior(type_: u8, nr: u8, size: usize) -> libc::c_ulong {
+    ioc(IOC_READ, type_ as u32, nr as u32, size as u32)
+}
+
 const fn iow(type_: u8, nr: u8, size: usize) -> libc::c_ulong {
     ioc(IOC_WRITE, type_ as u32, nr as u32, size as u32)
 }
 
 const EVIOCSCLOCKID: libc::c_ulong = iow(b'E', 0xA0, size_of::<libc::c_int>());
+const EVIOCGID: libc::c_ulong = ior(b'E', 0x02, size_of::<InputId>());
+
+#[inline(always)]
+const fn eviocgname(len: usize) -> libc::c_ulong {
+    ioc(IOC_READ, b'E' as u32, 0x06, len as u32)
+}
+
+#[inline(always)]
+const fn eviocgbit(ev: u8, len: usize) -> libc::c_ulong {
+    ioc(IOC_READ, b'E' as u32, 0x20 + ev as u32, len as u32)
+}
 
 #[inline(always)]
 fn current_monotonic_nanos() -> Option<u64> {
@@ -227,71 +321,211 @@ fn code_u32(type_: u16, code: u16) -> u32 {
     ((type_ as u32) << 16) | (code as u32)
 }
 
-pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystemEvent)) {
-    let mut devs: Vec<Dev> = Vec::new();
+#[inline(always)]
+fn event_name_from_path(path: &str) -> Option<&str> {
+    let name = path.rsplit('/').next()?;
+    (name.starts_with("event")
+        && name.len() > 5
+        && name[5..].bytes().all(|byte| byte.is_ascii_digit()))
+    .then_some(name)
+}
 
-    if let Ok(entries) = fs::read_dir("/dev/input") {
-        for e in entries.flatten() {
-            let name_os = e.file_name();
-            let name = name_os.to_string_lossy();
-            if !name.starts_with("event") {
-                continue;
-            }
-            let path = e.path();
-            let Ok(file) = std::fs::File::open(&path) else {
-                continue;
-            };
-            let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
-            let path_s = path.to_string_lossy().to_string();
-            if monotonic_timestamps {
-                debug!("freebsd evdev '{path_s}' enabled CLOCK_MONOTONIC event timestamps");
+#[inline(always)]
+fn is_event_path(path: &str) -> bool {
+    event_name_from_path(path).is_some()
+}
+
+#[inline(always)]
+fn ioctl_read_buffer(fd: i32, request: libc::c_ulong, buf: &mut [u8]) -> bool {
+    unsafe { libc::ioctl(fd, request, buf.as_mut_ptr()) >= 0 }
+}
+
+fn raw_dev_name(file: &std::fs::File) -> Option<String> {
+    let mut buf = [0u8; 256];
+    let rc = unsafe { libc::ioctl(file.as_raw_fd(), eviocgname(buf.len()), buf.as_mut_ptr()) };
+    if rc < 0 {
+        return None;
+    }
+    let len = buf.iter().position(|byte| *byte == 0).unwrap_or(buf.len());
+    std::str::from_utf8(&buf[..len]).ok().map(str::to_owned)
+}
+
+fn raw_dev_info(file: &std::fs::File) -> (Option<u16>, Option<u16>) {
+    let mut info = InputId::default();
+    let rc = unsafe { libc::ioctl(file.as_raw_fd(), EVIOCGID, &mut info) };
+    if rc < 0 {
+        return (None, None);
+    }
+    (Some(info.vendor), Some(info.product))
+}
+
+fn evdev_bits(fd: i32, ev: u8, len: usize) -> CapabilityBits {
+    let mut buf = vec![0u8; len];
+    if !ioctl_read_buffer(fd, eviocgbit(ev, len), &mut buf) {
+        return CapabilityBits::default();
+    }
+    CapabilityBits::from_bytes(&buf)
+}
+
+#[inline(always)]
+fn looks_like_controller(ev: &CapabilityBits, key: &CapabilityBits, abs: &CapabilityBits) -> bool {
+    if !ev.has(EV_KEY) {
+        return false;
+    }
+    let face = key.has_range(BTN_GAMEPAD, BTN_GAMEPAD_LAST);
+    let joystick = key.has_range(BTN_TRIGGER, BTN_JOYSTICK_LAST);
+    let dpad = key.has_range(BTN_DPAD_UP, BTN_DPAD_RIGHT)
+        || key.has_range(BTN_TRIGGER_HAPPY1, BTN_TRIGGER_HAPPY4);
+    let menu = key.has(BTN_START) || key.has(BTN_SELECT);
+    let sticks = abs.has(ABS_X) || abs.has(ABS_Y) || abs.has(ABS_RX) || abs.has(ABS_RY);
+    let hats = abs.has(ABS_HAT0X) || abs.has(ABS_HAT0Y);
+    (face || joystick) && (dpad || menu || sticks || hats)
+}
+
+fn spec_from_path(path: &str, noisy: bool) -> Option<DevSpec> {
+    if !is_event_path(path) {
+        return None;
+    }
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(err) => {
+            let msg = format!("freebsd evdev could not open candidate '{path}': {err}");
+            if noisy {
+                warn!("{msg}");
             } else {
-                warn!(
-                    "freebsd evdev '{path_s}' could not enable CLOCK_MONOTONIC event timestamps; using receipt-time fallback"
-                );
+                debug!("{msg}");
             }
-            let uuid = uuid_from_bytes(path_s.as_bytes());
-            let id = PadId(devs.len() as u32);
-            let dev_name = format!("evdev:{path_s}");
+            return None;
+        }
+    };
+    let ev = evdev_bits(file.as_raw_fd(), 0, EV_BITS_LEN);
+    let key = evdev_bits(file.as_raw_fd(), EV_KEY as u8, KEY_BITS_LEN);
+    let abs = evdev_bits(file.as_raw_fd(), EV_ABS as u8, ABS_BITS_LEN);
+    if !looks_like_controller(&ev, &key, &abs) {
+        return None;
+    }
+    let name = raw_dev_name(&file).unwrap_or_else(|| format!("evdev:{path}"));
+    let (vendor_id, product_id) = raw_dev_info(&file);
+    Some(DevSpec {
+        path: path.to_owned(),
+        name,
+        vendor_id,
+        product_id,
+    })
+}
 
-            emit_sys(GpSystemEvent::Connected {
-                name: dev_name,
-                id,
-                vendor_id: None,
-                product_id: None,
-                backend: PadBackend::FreeBsdEvdev,
-                initial: true,
-            });
-
-            devs.push(Dev {
-                id,
-                uuid,
-                path: path_s,
-                file,
-                monotonic_timestamps,
-                clock_health: EvdevClockHealth::new(monotonic_timestamps),
-                hat_x: 0,
-                hat_y: 0,
-                dir: [false; 4],
-            });
+fn scan_event_specs() -> Vec<DevSpec> {
+    let mut out = Vec::new();
+    let Ok(entries) = fs::read_dir("/dev/input") else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path().to_string_lossy().to_string();
+        if let Some(spec) = spec_from_path(&path, false) {
+            out.push(spec);
         }
     }
+    out.sort_unstable_by(|a, b| a.path.cmp(&b.path));
+    out
+}
 
+fn open_dev(
+    spec: DevSpec,
+    id: PadId,
+    initial: bool,
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+) -> Option<Dev> {
+    let file = match std::fs::File::open(&spec.path) {
+        Ok(file) => file,
+        Err(err) => {
+            warn!(
+                "freebsd evdev could not reopen controller candidate '{}' at '{}': {err}",
+                spec.name, spec.path
+            );
+            return None;
+        }
+    };
+    let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
+    if monotonic_timestamps {
+        debug!(
+            "freebsd evdev '{}' enabled CLOCK_MONOTONIC event timestamps",
+            spec.path
+        );
+    } else {
+        warn!(
+            "freebsd evdev '{}' could not enable CLOCK_MONOTONIC event timestamps; using receipt-time fallback",
+            spec.path
+        );
+    }
+    emit_sys(GpSystemEvent::Connected {
+        name: spec.name.clone(),
+        id,
+        vendor_id: spec.vendor_id,
+        product_id: spec.product_id,
+        backend: PadBackend::FreeBsdEvdev,
+        initial,
+    });
+    Some(Dev {
+        id,
+        uuid: uuid_from_bytes(spec.path.as_bytes()),
+        name: spec.name,
+        path: spec.path,
+        file,
+        monotonic_timestamps,
+        clock_health: EvdevClockHealth::new(monotonic_timestamps),
+        hat_x: 0,
+        hat_y: 0,
+        dir: [false; 4],
+    })
+}
+
+fn add_dev_if_new(
+    path: String,
+    devs: &mut Vec<Dev>,
+    next_id: &mut u32,
+    initial: bool,
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+) {
+    if devs.iter().any(|dev| dev.path == path) {
+        return;
+    }
+    let Some(spec) = spec_from_path(&path, !initial) else {
+        return;
+    };
+    let id = PadId(*next_id);
+    if let Some(dev) = open_dev(spec, id, initial, emit_sys) {
+        *next_id = next_id.saturating_add(1);
+        devs.push(dev);
+    }
+}
+
+fn remove_dev_by_path(path: &str, devs: &mut Vec<Dev>, emit_sys: &mut impl FnMut(GpSystemEvent)) {
+    if let Some(idx) = devs.iter().position(|dev| dev.path == path) {
+        let dev = devs.swap_remove(idx);
+        emit_sys(GpSystemEvent::Disconnected {
+            name: dev.name,
+            id: dev.id,
+            backend: PadBackend::FreeBsdEvdev,
+            initial: false,
+        });
+    }
+}
+
+pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystemEvent)) {
+    let watch = DevdWatch::new();
+    let mut devs = Vec::new();
+    let mut next_id = 0u32;
+    for spec in scan_event_specs() {
+        let path = spec.path.clone();
+        let id = PadId(next_id);
+        if let Some(dev) = open_dev(spec, id, true, &mut emit_sys) {
+            next_id = next_id.saturating_add(1);
+            devs.push(dev);
+        } else {
+            debug!("freebsd evdev skipped '{path}' during startup");
+        }
+    }
     emit_sys(GpSystemEvent::StartupComplete);
-    if devs.is_empty() {
-        loop {
-            std::thread::park();
-        }
-    }
-
-    let mut pollfds: Vec<PollFd> = devs
-        .iter()
-        .map(|d| PollFd {
-            fd: d.file.as_raw_fd(),
-            events: POLLIN,
-            revents: 0,
-        })
-        .collect();
 
     let mut buf: [MaybeUninit<InputEventRaw>; 64] = [MaybeUninit::uninit(); 64];
     let buf_bytes = unsafe {
@@ -300,31 +534,69 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
             buf.len() * size_of::<InputEventRaw>(),
         )
     };
+    let mut pollfds = Vec::with_capacity(9);
 
     loop {
-        for p in &mut pollfds {
-            p.revents = 0;
-        }
+        pollfds.clear();
+        let watch_offset = if let Some(watch) = &watch {
+            pollfds.push(PollFd {
+                fd: watch.fd(),
+                events: POLLIN,
+                revents: 0,
+            });
+            1usize
+        } else {
+            0usize
+        };
+        pollfds.extend(devs.iter().map(|dev| PollFd {
+            fd: dev.file.as_raw_fd(),
+            events: POLLIN,
+            revents: 0,
+        }));
 
-        let rc = unsafe { poll(pollfds.as_mut_ptr(), pollfds.len(), -1) };
-        if rc <= 0 {
+        let poll_ptr = if pollfds.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            pollfds.as_mut_ptr()
+        };
+        let rc = unsafe { poll(poll_ptr, pollfds.len(), -1) };
+        if rc < 0 {
             continue;
         }
 
-        for i in 0..pollfds.len() {
-            if (pollfds[i].revents & POLLIN) == 0 {
+        let mut hotplug = Vec::new();
+        if watch_offset == 1 {
+            let revents = pollfds[0].revents;
+            if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                warn!("freebsd evdev devd watcher reported poll error");
+            }
+            if (revents & POLLIN) != 0
+                && let Some(watch) = &watch
+            {
+                hotplug = watch.collect_events();
+            }
+        }
+
+        let mut remove = Vec::new();
+        for i in 0..devs.len() {
+            let revents = pollfds[i + watch_offset].revents;
+            if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                remove.push(i);
+                continue;
+            }
+            if (revents & POLLIN) == 0 {
                 continue;
             }
 
-            let fd = pollfds[i].fd;
+            let fd = pollfds[i + watch_offset].fd;
             let dev = &mut devs[i];
             let n = unsafe { read(fd, buf_bytes.as_mut_ptr().cast::<c_void>(), buf_bytes.len()) };
             if n <= 0 {
+                remove.push(i);
                 continue;
             }
 
-            let count = (n as usize) / size_of::<InputEventRaw>();
-            let count = count.min(buf.len());
+            let count = (n as usize / size_of::<InputEventRaw>()).min(buf.len());
             let clock_sample =
                 if dev.monotonic_timestamps && dev.clock_health.uses_kernel_timestamps() {
                     sample_monotonic_clock()
@@ -393,6 +665,26 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                         pressed: want[k],
                     });
                 }
+            }
+        }
+
+        remove.sort_unstable();
+        remove.dedup();
+        for &idx in remove.iter().rev() {
+            let dev = devs.swap_remove(idx);
+            emit_sys(GpSystemEvent::Disconnected {
+                name: dev.name,
+                id: dev.id,
+                backend: PadBackend::FreeBsdEvdev,
+                initial: false,
+            });
+        }
+        for event in hotplug {
+            match event {
+                DevdEvent::Create(path) => {
+                    add_dev_if_new(path, &mut devs, &mut next_id, false, &mut emit_sys)
+                }
+                DevdEvent::Destroy(path) => remove_dev_by_path(&path, &mut devs, &mut emit_sys),
             }
         }
     }

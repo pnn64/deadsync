@@ -1,13 +1,17 @@
+use super::freebsd_devd::{DevdEvent, DevdWatch};
 use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
 use crate::core::host_time::now_nanos;
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
-use log::debug;
+use log::{debug, warn};
 use std::ffi::c_void;
 use std::fs;
 use std::os::fd::AsRawFd;
 use std::time::Instant;
 
 const POLLIN: i16 = 0x0001;
+const POLLERR: i16 = 0x0008;
+const POLLHUP: i16 = 0x0010;
+const POLLNVAL: i16 = 0x0020;
 const HID_MAX_DESCRIPTOR_SIZE: usize = 4096;
 
 const IOC_NRBITS: u32 = 8;
@@ -93,6 +97,7 @@ struct Dev {
     id: PadId,
     uuid: [u8; 16],
     name: String,
+    path: String,
     vendor_id: Option<u16>,
     product_id: Option<u16>,
     file: std::fs::File,
@@ -323,72 +328,125 @@ fn raw_report_descriptor(file: &std::fs::File) -> Result<Vec<u8>, String> {
     Ok(desc.value[..(desc.size as usize).min(HID_MAX_DESCRIPTOR_SIZE)].to_vec())
 }
 
-fn enumerate_devices() -> Vec<Dev> {
+#[inline(always)]
+fn is_hidraw_path(path: &str) -> bool {
+    path.rsplit('/')
+        .next()
+        .is_some_and(|name| name.starts_with("hidraw"))
+}
+
+fn scan_hidraw_paths() -> Vec<String> {
     let mut out = Vec::new();
     let Ok(entries) = fs::read_dir("/dev") else {
         return out;
     };
-
     for entry in entries.flatten() {
-        let name_os = entry.file_name();
-        let name = name_os.to_string_lossy();
-        if !name.starts_with("hidraw") {
-            continue;
-        }
         let path = entry.path();
-        let Ok(file) = std::fs::File::open(&path) else {
-            continue;
-        };
-        let path_s = path.to_string_lossy().to_string();
-        let desc = match raw_report_descriptor(&file) {
-            Ok(desc) => desc,
-            Err(err) => {
-                debug!("freebsd hidraw '{path_s}' skipped: {err}");
-                continue;
-            }
-        };
-        let parsed = match parse_report_descriptor(&desc) {
-            Ok(parsed) => parsed,
-            Err(err) => {
-                debug!("freebsd hidraw '{path_s}' descriptor parse failed: {err:?}");
-                continue;
-            }
-        };
-        let mut reports = Vec::new();
-        for report in &parsed.input_reports {
-            if let Some(spec) = build_report_spec(report) {
-                reports.push(spec);
-            }
+        let path = path.to_string_lossy().to_string();
+        if is_hidraw_path(&path) {
+            out.push(path);
         }
-        if reports.is_empty() {
-            debug!("freebsd hidraw '{path_s}' has no controller-class input reports");
-            continue;
+    }
+    out.sort_unstable();
+    out
+}
+
+fn open_dev(
+    path: String,
+    id: PadId,
+    initial: bool,
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+) -> Option<Dev> {
+    let file = match std::fs::File::open(&path) {
+        Ok(file) => file,
+        Err(err) => {
+            warn!("freebsd hidraw could not open '{path}': {err}");
+            return None;
         }
-        let max_report_len = reports
-            .iter()
-            .map(|report| report.payload_bytes + usize::from(report.report_id.is_some()))
-            .max()
-            .unwrap_or(0);
-        if max_report_len == 0 {
-            continue;
+    };
+    let desc = match raw_report_descriptor(&file) {
+        Ok(desc) => desc,
+        Err(err) => {
+            debug!("freebsd hidraw '{path}' skipped: {err}");
+            return None;
         }
-        let (vendor_id, product_id) = raw_device_info(&file);
-        let raw_name = raw_device_name(&file).unwrap_or_else(|| path_s.clone());
-        let uuid = uuid_from_bytes(path_s.as_bytes());
-        let id = PadId(out.len() as u32);
-        out.push(Dev {
-            id,
-            uuid,
-            name: format!("hidraw:{raw_name}"),
-            vendor_id,
-            product_id,
-            file,
-            max_report_len,
-            reports,
+    };
+    let parsed = match parse_report_descriptor(&desc) {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            debug!("freebsd hidraw '{path}' descriptor parse failed: {err:?}");
+            return None;
+        }
+    };
+    let mut reports = Vec::new();
+    for report in &parsed.input_reports {
+        if let Some(spec) = build_report_spec(report) {
+            reports.push(spec);
+        }
+    }
+    if reports.is_empty() {
+        debug!("freebsd hidraw '{path}' has no controller-class input reports");
+        return None;
+    }
+    let max_report_len = reports
+        .iter()
+        .map(|report| report.payload_bytes + usize::from(report.report_id.is_some()))
+        .max()
+        .unwrap_or(0);
+    if max_report_len == 0 {
+        return None;
+    }
+    let (vendor_id, product_id) = raw_device_info(&file);
+    let raw_name = raw_device_name(&file).unwrap_or_else(|| path.clone());
+    let name = format!("hidraw:{raw_name}");
+    emit_sys(GpSystemEvent::Connected {
+        name: name.clone(),
+        id,
+        vendor_id,
+        product_id,
+        backend: PadBackend::FreeBsdHidraw,
+        initial,
+    });
+    Some(Dev {
+        id,
+        uuid: uuid_from_bytes(path.as_bytes()),
+        name,
+        path,
+        vendor_id,
+        product_id,
+        file,
+        max_report_len,
+        reports,
+    })
+}
+
+fn add_dev_if_new(
+    path: String,
+    devs: &mut Vec<Dev>,
+    next_id: &mut u32,
+    initial: bool,
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+) {
+    if !is_hidraw_path(&path) || devs.iter().any(|dev| dev.path == path) {
+        return;
+    }
+    let id = PadId(*next_id);
+    if let Some(dev) = open_dev(path, id, initial, emit_sys) {
+        *next_id = next_id.saturating_add(1);
+        devs.push(dev);
+    }
+}
+
+fn remove_dev_by_path(path: &str, devs: &mut Vec<Dev>, emit_sys: &mut impl FnMut(GpSystemEvent)) {
+    if let Some(idx) = devs.iter().position(|dev| dev.path == path) {
+        let dev = devs.swap_remove(idx);
+        emit_sys(GpSystemEvent::Disconnected {
+            name: dev.name,
+            id: dev.id,
+            backend: PadBackend::FreeBsdHidraw,
+            initial: false,
         });
     }
-
-    out
 }
 
 #[inline(always)]
@@ -519,61 +577,84 @@ pub fn run(
     emit_pad: &mut impl FnMut(PadEvent),
     emit_sys: &mut impl FnMut(GpSystemEvent),
 ) -> Result<(), String> {
-    let mut devs = enumerate_devices();
-    if devs.is_empty() {
+    let watch = DevdWatch::new();
+    let mut devs = Vec::new();
+    let mut next_id = 0u32;
+    let mut saw_hidraw = false;
+    for path in scan_hidraw_paths() {
+        saw_hidraw = true;
+        add_dev_if_new(path, &mut devs, &mut next_id, true, emit_sys);
+    }
+    if devs.is_empty() && (!saw_hidraw || watch.is_none()) {
         return Err("no usable hidraw controller devices found".to_owned());
     }
-
-    for dev in &devs {
-        emit_sys(GpSystemEvent::Connected {
-            name: dev.name.clone(),
-            id: dev.id,
-            vendor_id: dev.vendor_id,
-            product_id: dev.product_id,
-            backend: PadBackend::FreeBsdHidraw,
-            initial: true,
-        });
-    }
     emit_sys(GpSystemEvent::StartupComplete);
+    let mut pollfds = Vec::with_capacity(9);
+    let mut buf = vec![0u8; 64];
 
-    let mut pollfds: Vec<PollFd> = devs
-        .iter()
-        .map(|dev| PollFd {
+    loop {
+        pollfds.clear();
+        let watch_offset = if let Some(watch) = &watch {
+            pollfds.push(PollFd {
+                fd: watch.fd(),
+                events: POLLIN,
+                revents: 0,
+            });
+            1usize
+        } else {
+            0usize
+        };
+        pollfds.extend(devs.iter().map(|dev| PollFd {
             fd: dev.file.as_raw_fd(),
             events: POLLIN,
             revents: 0,
-        })
-        .collect();
-    let mut buf = vec![
-        0u8;
-        devs.iter()
-            .map(|dev| dev.max_report_len)
-            .max()
-            .unwrap_or(64)
-    ];
-
-    loop {
-        for pollfd in &mut pollfds {
-            pollfd.revents = 0;
-        }
-        let rc = unsafe { poll(pollfds.as_mut_ptr(), pollfds.len(), -1) };
-        if rc <= 0 {
+        }));
+        let poll_ptr = if pollfds.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            pollfds.as_mut_ptr()
+        };
+        let rc = unsafe { poll(poll_ptr, pollfds.len(), -1) };
+        if rc < 0 {
             continue;
         }
 
-        for idx in 0..pollfds.len() {
-            if (pollfds[idx].revents & POLLIN) == 0 {
+        let mut hotplug = Vec::new();
+        if watch_offset == 1 {
+            let revents = pollfds[0].revents;
+            if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                warn!("freebsd hidraw devd watcher reported poll error");
+            }
+            if (revents & POLLIN) != 0
+                && let Some(watch) = &watch
+            {
+                hotplug = watch.collect_events();
+            }
+        }
+
+        let mut remove = Vec::new();
+        for idx in 0..devs.len() {
+            let revents = pollfds[idx + watch_offset].revents;
+            if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                remove.push(idx);
+                continue;
+            }
+            if (revents & POLLIN) == 0 {
                 continue;
             }
             let dev = &mut devs[idx];
+            if dev.max_report_len > buf.len() {
+                buf.resize(dev.max_report_len, 0);
+            }
             let n = unsafe {
                 read(
-                    pollfds[idx].fd,
+                    pollfds[idx + watch_offset].fd,
                     buf.as_mut_ptr().cast::<c_void>(),
                     dev.max_report_len,
                 )
             };
             if n <= 0 {
+                remove.push(idx);
                 continue;
             }
             let timestamp = Instant::now();
@@ -603,6 +684,26 @@ pub fn run(
                     "freebsd hidraw '{}' received unsupported report size/id",
                     dev.name
                 );
+            }
+        }
+
+        remove.sort_unstable();
+        remove.dedup();
+        for &idx in remove.iter().rev() {
+            let dev = devs.swap_remove(idx);
+            emit_sys(GpSystemEvent::Disconnected {
+                name: dev.name,
+                id: dev.id,
+                backend: PadBackend::FreeBsdHidraw,
+                initial: false,
+            });
+        }
+        for event in hotplug {
+            match event {
+                DevdEvent::Create(path) => {
+                    add_dev_if_new(path, &mut devs, &mut next_id, false, emit_sys)
+                }
+                DevdEvent::Destroy(path) => remove_dev_by_path(&path, &mut devs, emit_sys),
             }
         }
     }

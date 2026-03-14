@@ -5,6 +5,8 @@ pub(super) use super::{
 };
 
 #[cfg(target_os = "freebsd")]
+pub(super) mod freebsd_devd;
+#[cfg(target_os = "freebsd")]
 pub(super) mod freebsd_evdev;
 #[cfg(target_os = "freebsd")]
 pub(super) mod freebsd_hidraw;
