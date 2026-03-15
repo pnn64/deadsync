@@ -128,6 +128,13 @@ pub struct TextLayoutFrameStats {
     pub shared_aliases: u32,
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum TextLayoutOverflowPolicy {
+    #[default]
+    PruneOwnedEntries,
+    Saturating,
+}
+
 pub struct TextLayoutCache {
     owned_entries: HashMap<TextLayoutKey, HashMap<Box<str>, OwnedLayoutEntry>>,
     shared_aliases: HashMap<TextLayoutKey, HashMap<usize, (Arc<str>, *const CachedTextLayout)>>,
@@ -137,6 +144,8 @@ pub struct TextLayoutCache {
     max_aliases: usize,
     use_tick: u64,
     frame_stats: TextLayoutFrameStats,
+    overflow_policy: TextLayoutOverflowPolicy,
+    uncached_layout: Option<Box<CachedTextLayout>>,
 }
 
 impl Default for TextLayoutCache {
@@ -147,6 +156,14 @@ impl Default for TextLayoutCache {
 
 impl TextLayoutCache {
     pub fn new(max_entries: usize) -> Self {
+        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::PruneOwnedEntries)
+    }
+
+    pub fn saturating(max_entries: usize) -> Self {
+        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::Saturating)
+    }
+
+    pub fn new_with_policy(max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) -> Self {
         let max_entries = max_entries.max(1);
         Self {
             owned_entries: HashMap::new(),
@@ -157,6 +174,8 @@ impl TextLayoutCache {
             max_aliases: max_entries.saturating_mul(8),
             use_tick: 0,
             frame_stats: TextLayoutFrameStats::default(),
+            overflow_policy,
+            uncached_layout: None,
         }
     }
 
@@ -167,6 +186,7 @@ impl TextLayoutCache {
         self.alias_count = 0;
         self.use_tick = 0;
         self.frame_stats = TextLayoutFrameStats::default();
+        self.uncached_layout = None;
     }
 
     #[inline(always)]
@@ -245,11 +265,24 @@ impl TextLayoutCache {
         text: &str,
         layout: CachedTextLayout,
         tick: u64,
-    ) -> *const CachedTextLayout {
+    ) -> (*const CachedTextLayout, bool) {
         if self.entry_count >= self.max_entries {
-            // Avoid hard-clearing the entire cache; that was causing visible
-            // compose spikes once gameplay churn hit the entry cap.
-            self.prune_owned_entries();
+            match self.overflow_policy {
+                TextLayoutOverflowPolicy::PruneOwnedEntries => {
+                    // Avoid hard-clearing the entire cache; that was causing visible
+                    // compose spikes once gameplay churn hit the entry cap.
+                    self.prune_owned_entries();
+                }
+                TextLayoutOverflowPolicy::Saturating => {
+                    self.uncached_layout = Some(Box::new(layout));
+                    return (
+                        self.uncached_layout
+                            .as_deref()
+                            .map_or(std::ptr::null(), std::ptr::from_ref),
+                        false,
+                    );
+                }
+            }
         }
         self.owned_entries.entry(key).or_default().insert(
             text.into(),
@@ -259,8 +292,11 @@ impl TextLayoutCache {
             },
         );
         self.entry_count += 1;
-        self.touch_owned_layout(key, text, tick)
-            .expect("owned text layout cache entry inserted")
+        (
+            self.touch_owned_layout(key, text, tick)
+                .expect("owned text layout cache entry inserted"),
+            true,
+        )
     }
 
     fn get_or_build(
@@ -302,7 +338,7 @@ impl TextLayoutCache {
             .frame_stats
             .built_glyphs
             .saturating_add(saturating_u32(layout.glyph_count));
-        let layout_ptr = self.insert_owned_layout(key, text, layout, tick);
+        let (layout_ptr, _) = self.insert_owned_layout(key, text, layout, tick);
         unsafe { &*layout_ptr }
     }
 
@@ -331,26 +367,34 @@ impl TextLayoutCache {
                 .remove(&text_key);
             self.alias_count = self.alias_count.saturating_sub(1);
         }
-        let layout_ptr = if let Some(layout_ptr) = self.touch_owned_layout(key, text.as_ref(), tick)
-        {
-            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
-            layout_ptr
-        } else {
-            let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
-            self.frame_stats.misses = self.frame_stats.misses.saturating_add(1);
-            self.frame_stats.built_lines = self
-                .frame_stats
-                .built_lines
-                .saturating_add(saturating_u32(layout.lines.len()));
-            self.frame_stats.built_glyphs = self
-                .frame_stats
-                .built_glyphs
-                .saturating_add(saturating_u32(layout.glyph_count));
-            self.insert_owned_layout(key, text, layout, tick)
-        };
+        let (layout_ptr, aliasable) =
+            if let Some(layout_ptr) = self.touch_owned_layout(key, text.as_ref(), tick) {
+                self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
+                (layout_ptr, true)
+            } else {
+                let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
+                self.frame_stats.misses = self.frame_stats.misses.saturating_add(1);
+                self.frame_stats.built_lines = self
+                    .frame_stats
+                    .built_lines
+                    .saturating_add(saturating_u32(layout.lines.len()));
+                self.frame_stats.built_glyphs = self
+                    .frame_stats
+                    .built_glyphs
+                    .saturating_add(saturating_u32(layout.glyph_count));
+                self.insert_owned_layout(key, text, layout, tick)
+            };
+        if !aliasable {
+            return unsafe { &*layout_ptr };
+        }
         if self.alias_count >= self.max_aliases {
-            self.shared_aliases.clear();
-            self.alias_count = 0;
+            match self.overflow_policy {
+                TextLayoutOverflowPolicy::PruneOwnedEntries => {
+                    self.shared_aliases.clear();
+                    self.alias_count = 0;
+                }
+                TextLayoutOverflowPolicy::Saturating => return unsafe { &*layout_ptr },
+            }
         }
         if self
             .shared_aliases

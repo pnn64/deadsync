@@ -51,10 +51,9 @@ impl ModelMeshCache {
             return vertices.clone();
         }
         let vertices = build();
-        if self.entries.len() >= MODEL_MESH_CACHE_LIMIT {
-            self.entries.clear();
+        if self.entries.len() < MODEL_MESH_CACHE_LIMIT {
+            self.entries.insert(key, vertices.clone());
         }
-        self.entries.insert(key, vertices.clone());
         vertices
     }
 }

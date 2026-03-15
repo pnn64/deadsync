@@ -43,12 +43,8 @@ pub struct OutputDeviceInfo {
 
 struct OutputDeviceProbe {
     info: OutputDeviceInfo,
-    #[cfg(target_os = "macos")]
-    coreaudio_uid: Option<String>,
     #[cfg(target_os = "freebsd")]
     freebsd_dsp_path: Option<String>,
-    #[cfg(windows)]
-    wasapi_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1423,7 +1419,6 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
                 is_default: device.is_default,
                 sample_rates_hz: device.sample_rates_hz.clone(),
             },
-            coreaudio_uid: Some(device.uid.clone()),
         })
         .collect();
     let output_mode = cfg.audio_output_mode;
@@ -1502,7 +1497,6 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
                 is_default: device.is_default,
                 sample_rates_hz: device.sample_rates_hz.clone(),
             },
-            wasapi_id: Some(device.id.clone()),
         })
         .collect();
     let output_mode = cfg.audio_output_mode;

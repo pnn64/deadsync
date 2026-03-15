@@ -2329,7 +2329,8 @@ pub struct App {
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
     asset_manager: AssetManager,
-    text_layout_cache: crate::ui::compose::TextLayoutCache,
+    ui_text_layout_cache: crate::ui::compose::TextLayoutCache,
+    gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache,
     state: AppState,
     #[cfg(windows)]
     raw_keyboard_ring: Arc<RawKeyboardRing>,
@@ -2777,7 +2778,12 @@ impl App {
             upload_us = elapsed_us_since(upload_started);
         }
         let fonts = self.asset_manager.fonts();
-        self.text_layout_cache.begin_frame_stats();
+        let text_layout_cache = if self.state.screens.current_screen == CurrentScreen::Gameplay {
+            &mut self.gameplay_text_layout_cache
+        } else {
+            &mut self.ui_text_layout_cache
+        };
+        text_layout_cache.begin_frame_stats();
         let build_screen_started = Instant::now();
         let mut screen = crate::ui::compose::build_screen_cached(
             &actors,
@@ -2785,10 +2791,10 @@ impl App {
             &self.state.shell.metrics,
             fonts,
             total_elapsed,
-            &mut self.text_layout_cache,
+            text_layout_cache,
         );
         let build_screen_us = elapsed_us_since(build_screen_started);
-        let text_layout = self.text_layout_cache.frame_stats();
+        let text_layout = text_layout_cache.frame_stats();
         let resolve_textures_started = Instant::now();
         self.asset_manager.resolve_render_textures(&mut screen);
         let resolve_textures_us = elapsed_us_since(resolve_textures_started);
@@ -2918,7 +2924,8 @@ impl App {
             backend: None,
             backend_type,
             asset_manager: AssetManager::new(),
-            text_layout_cache: crate::ui::compose::TextLayoutCache::default(),
+            ui_text_layout_cache: crate::ui::compose::TextLayoutCache::default(),
+            gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache::saturating(16384),
             state,
             #[cfg(windows)]
             raw_keyboard_ring: Arc::new(RawKeyboardRing::new()),
@@ -5548,7 +5555,8 @@ impl App {
         self.asset_manager.load_initial_assets(&mut backend)?;
         // Text layout cache entries borrow glyph texture keys from font storage.
         // Renderer reinit reloads fonts, so cached layouts must be dropped before compose.
-        self.text_layout_cache.clear();
+        self.ui_text_layout_cache.clear();
+        self.gameplay_text_layout_cache.clear();
 
         let now = Instant::now();
         self.state.shell.start_time = now;
