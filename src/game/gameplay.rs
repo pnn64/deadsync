@@ -3374,6 +3374,8 @@ pub struct State {
     pub stage_intro_text: Arc<str>,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
+    pub current_background_path: Option<PathBuf>,
+    pub next_background_change_ix: usize,
     pub background_texture_key: String,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub num_cols: usize,
@@ -5662,6 +5664,11 @@ pub fn init(
     }
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
     let song_offset_seconds = song.offset;
+    let next_background_change_ix = song
+        .background_changes
+        .iter()
+        .take_while(|change| change.start_beat <= init_beat)
+        .count();
 
     let mut state = State {
         song,
@@ -5669,6 +5676,8 @@ pub fn init(
         stage_intro_text,
         pack_group,
         pack_banner_path,
+        current_background_path: None,
+        next_background_change_ix,
         charts,
         background_texture_key: "__black".to_string(),
         num_cols,

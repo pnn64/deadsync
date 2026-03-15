@@ -4440,19 +4440,37 @@ impl App {
         if let Some(backend) = self.backend.as_mut() {
             let key = self.asset_manager.set_dynamic_background(backend, path_opt);
             if let Some(gs) = &mut self.state.screens.gameplay_state {
+                gs.current_background_path = path_opt;
                 gs.background_texture_key = key;
             }
         }
     }
 
     fn sync_gameplay_background(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay {
+            return;
+        }
+        let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
+            return;
+        };
+        let Some(next_change) = gs.song.background_changes.get(gs.next_background_change_ix) else {
+            return;
+        };
+        if gs.current_beat < next_change.start_beat {
+            return;
+        }
+        while let Some(change) = gs.song.background_changes.get(gs.next_background_change_ix) {
+            if gs.current_beat < change.start_beat {
+                break;
+            }
+            gs.next_background_change_ix += 1;
+        }
         let show_video_backgrounds = config::get().show_video_backgrounds;
-        let path_opt = self.state.screens.gameplay_state.as_ref().and_then(|gs| {
-            gs.song
-                .gameplay_background_path(gs.current_beat, show_video_backgrounds)
-                .cloned()
-        });
-        if path_opt.is_some() || self.state.screens.current_screen == CurrentScreen::Gameplay {
+        let path_opt = gs
+            .song
+            .gameplay_background_path(gs.current_beat, show_video_backgrounds)
+            .cloned();
+        if path_opt != gs.current_background_path {
             self.apply_dynamic_background(path_opt);
         }
     }
