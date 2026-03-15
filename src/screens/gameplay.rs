@@ -8,6 +8,8 @@ use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
+use crate::ui::compose::TextLayoutCache;
+use crate::ui::font;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -258,6 +260,66 @@ fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<
             max_samples = crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT,
         )
     })
+}
+
+pub fn prewarm_text_layout(
+    cache: &mut TextLayoutCache,
+    fonts: &HashMap<&'static str, font::Font>,
+    state: &State,
+) {
+    let cfg = crate::config::get();
+    for centi in 0..=10_000 {
+        let text = cached_score_2dp(centi as f64 / 100.0);
+        cache.prewarm_text(fonts, "wendy_monospace_numbers", text.as_ref(), None);
+    }
+    for tenths in 0..=1_000 {
+        let text = cached_life_percent_text(tenths as f32 / 10.0);
+        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    }
+    for player in 0..state.num_players {
+        let chart = &state.charts[player];
+        let meter_text = cached_meter_text(chart.meter);
+        cache.prewarm_text(fonts, "wendy", meter_text.as_ref(), None);
+        let detail = color::difficulty_display_name_for_song(
+            &chart.difficulty,
+            &state.song.title,
+            cfg.zmod_rating_box_text,
+        );
+        cache.prewarm_text(fonts, "miso", detail, None);
+        for &(_, bpm) in &chart.timing_segments.bpms {
+            let text = cached_bpm_text(
+                f64::from(bpm.max(0.0)) * f64::from(state.music_rate),
+                cfg.show_bpm_decimal,
+            );
+            cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+        }
+    }
+    cache.prewarm_text(fonts, "miso", "Assist Tick", None);
+    cache.prewarm_text(fonts, "miso", "Hit Tick", None);
+    cache.prewarm_text(fonts, "miso", "AutoSync Song", None);
+    cache.prewarm_text(fonts, "miso", "AutoSync Machine", None);
+    cache.prewarm_text(fonts, "miso", "Continue holding &START; to give up", None);
+    cache.prewarm_text(fonts, "miso", "Continue holding &BACK; to give up", None);
+    cache.prewarm_text(fonts, "miso", "Don't go back!", None);
+    if let Some(text) = state.replay_status_text.as_ref() {
+        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    }
+    if let Some(text) = state.sync_overlay_message.as_ref() {
+        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    }
+    if state.autosync_mode != crate::game::gameplay::AutosyncMode::Off {
+        let (old_offset, new_offset) =
+            if state.autosync_mode == crate::game::gameplay::AutosyncMode::Machine {
+                (
+                    state.initial_global_offset_seconds,
+                    state.global_offset_seconds,
+                )
+            } else {
+                (state.initial_song_offset_seconds, state.song_offset_seconds)
+            };
+        let text = cached_autosync_text(state, old_offset, new_offset);
+        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    }
 }
 
 // --- TRANSITIONS ---

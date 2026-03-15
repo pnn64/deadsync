@@ -8,6 +8,7 @@ use crate::game::profile;
 use crate::screens::components::shared::gs_scorebox;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
+use crate::ui::compose::TextLayoutCache;
 use crate::ui::font;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -270,6 +271,64 @@ fn step_info_label_text(index: usize) -> Arc<str> {
 #[inline(always)]
 fn holds_mines_rolls_label_text(index: usize) -> Arc<str> {
     HOLDS_MINES_ROLLS_LABEL_TEXT[index].clone()
+}
+
+pub fn prewarm_text_layout(
+    cache: &mut TextLayoutCache,
+    fonts: &HashMap<&'static str, font::Font>,
+    asset_manager: &AssetManager,
+    state: &State,
+) {
+    let mut max_count = 0u32;
+    for player in 0..state.num_players {
+        max_count = max_count
+            .max(state.total_steps[player])
+            .max(state.holds_total[player])
+            .max(state.rolls_total[player])
+            .max(state.mines_total[player]);
+    }
+    let digits = if max_count > 0 {
+        (max_count.ilog10() as usize + 1).max(4)
+    } else {
+        4
+    };
+    for count in 0..=max_count {
+        let (dim, bright) = cached_padded_runs(count, digits);
+        cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
+        cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+    }
+    let end_seconds = state
+        .music_end_time
+        .max(state.notes_end_time)
+        .ceil()
+        .max(0.0) as u32;
+    let mode = game_time_mode(end_seconds as f32);
+    for second in 0..=end_seconds {
+        let key = (second, mode);
+        let text = cached_game_time(second, mode);
+        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+        let _ = cached_game_time_width_for_key(key, asset_manager);
+    }
+    cache.prewarm_text(fonts, "miso", TIME_SONG_LEFT_TEXT.as_ref(), None);
+    cache.prewarm_text(fonts, "miso", TIME_REMAINING_LEFT_TEXT.as_ref(), None);
+    cache.prewarm_text(fonts, "miso", TIME_SONG_RIGHT_TEXT.as_ref(), None);
+    cache.prewarm_text(fonts, "miso", TIME_REMAINING_RIGHT_TEXT.as_ref(), None);
+    cache.prewarm_text(fonts, "miso", SLASH_TEXT.as_ref(), None);
+    for label in STEP_INFO_LABEL_TEXT.iter() {
+        cache.prewarm_text(fonts, "miso", label.as_ref(), None);
+    }
+    for label in HOLDS_MINES_ROLLS_LABEL_TEXT.iter() {
+        cache.prewarm_text(fonts, "miso", label.as_ref(), None);
+    }
+    for player in 0..state.num_players {
+        let chart = &state.charts[player];
+        cache.prewarm_text(fonts, "miso", state.song_full_title.as_ref(), None);
+        cache.prewarm_text(fonts, "miso", state.song.artist.as_str(), None);
+        cache.prewarm_text(fonts, "miso", state.pack_group.as_ref(), None);
+        cache.prewarm_text(fonts, "miso", chart.description.as_str(), None);
+        let peak = cached_peak_nps_text(chart.max_nps.max(0.0) as f32);
+        cache.prewarm_text(fonts, "miso", peak.as_ref(), None);
+    }
 }
 
 pub fn build(

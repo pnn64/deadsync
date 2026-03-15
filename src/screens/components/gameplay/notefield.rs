@@ -24,6 +24,8 @@ use crate::game::{
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use crate::ui::actors::Actor;
 use crate::ui::color;
+use crate::ui::compose::TextLayoutCache;
+use crate::ui::font;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
 use rssp::streams::StreamSegment;
 use std::array::from_fn;
@@ -990,6 +992,110 @@ fn zmod_combo_font_name(combo_font: profile::ComboFont) -> Option<&'static str> 
         profile::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
         profile::ComboFont::None => None,
     }
+}
+
+pub fn prewarm_text_layout(
+    cache: &mut TextLayoutCache,
+    fonts: &HashMap<&'static str, font::Font>,
+    state: &State,
+) {
+    let mut max_combo = 0u32;
+    let mut max_measure_len = 0i32;
+    let music_end_seconds = state.music_end_time.ceil().max(0.0) as i32;
+
+    for player in 0..state.num_players {
+        let profile = &state.player_profiles[player];
+        max_combo = max_combo.max(
+            state.total_steps[player]
+                .saturating_add(state.holds_total[player])
+                .saturating_add(state.rolls_total[player]),
+        );
+
+        if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
+            for value in 0..=max_combo {
+                let text = cached_int_u32(value);
+                cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+            }
+        }
+
+        let mods_text = gameplay_mods_text(state.scroll_speed[player], profile);
+        cache.prewarm_text(
+            fonts,
+            "miso",
+            mods_text.as_ref(),
+            Some(DISPLAY_MODS_WRAP_WIDTH_PX as i32),
+        );
+
+        let mc_font_name = zmod_small_combo_font(profile.combo_font);
+        let segs = &state.measure_counter_segments[player];
+        let multiplier = profile.measure_counter.multiplier();
+        for (seg_ix, seg) in segs.iter().copied().enumerate() {
+            let scaled_len = (((seg.end - seg.start) as f32) * multiplier)
+                .floor()
+                .max(0.0) as i32;
+            max_measure_len = max_measure_len.max(scaled_len);
+            if !seg.is_break {
+                let (broken_end, _) = zmod_broken_run_end(segs, seg_ix);
+                max_measure_len = max_measure_len.max((broken_end - seg.start) as i32);
+            }
+        }
+        for total in 1..=max_measure_len {
+            let total_text = cached_int_i32(total);
+            let break_text = cached_paren_i32(total);
+            cache.prewarm_text(fonts, mc_font_name, total_text.as_ref(), None);
+            cache.prewarm_text(fonts, mc_font_name, break_text.as_ref(), None);
+            for curr in 1..=total {
+                let text = cached_ratio_i32(curr, total);
+                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
+            }
+        }
+        for second in 0..=music_end_seconds {
+            let idle = cached_run_timer(second, 60, false);
+            let active = cached_run_timer(second, 59, true);
+            cache.prewarm_text(fonts, mc_font_name, idle.as_ref(), None);
+            cache.prewarm_text(fonts, mc_font_name, active.as_ref(), None);
+        }
+        if profile.measure_counter != crate::game::profile::MeasureCounter::None {
+            let countdown_max = max_measure_len.max(16);
+            for value in 0..=countdown_max {
+                let text = cached_int_i32(value);
+                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
+            }
+        }
+        if zmod_indicator_mode(profile) != profile::MiniIndicator::None {
+            for centi in 0..=10_000 {
+                let text = cached_percent2_f64(centi as f64 / 100.0);
+                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
+                let neg = cached_signed_percent2_f64(centi as f64 / 100.0, true);
+                let pos = cached_signed_percent2_f64(centi as f64 / 100.0, false);
+                cache.prewarm_text(fonts, mc_font_name, neg.as_ref(), None);
+                cache.prewarm_text(fonts, mc_font_name, pos.as_ref(), None);
+            }
+            for value in 0..=max_combo {
+                let text = cached_neg_int_u32(value);
+                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
+            }
+        }
+        if profile.error_ms_display {
+            let max_window_s = state
+                .timing_profile
+                .windows_s
+                .iter()
+                .copied()
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .fold(0.0_f32, f32::max);
+            let max_centi_ms = ((max_window_s * 1000.0 * 100.0).ceil() as i32).max(0);
+            for centi in -max_centi_ms..=max_centi_ms {
+                let text = cached_offset_ms(centi as f32 / 100.0);
+                cache.prewarm_text(fonts, "wendy", text.as_ref(), None);
+            }
+        }
+    }
+
+    cache.prewarm_text(fonts, "game", "Early", None);
+    cache.prewarm_text(fonts, "game", "Late", None);
+    cache.prewarm_text(fonts, "wendy", "EARLY", None);
+    cache.prewarm_text(fonts, "wendy", "LATE", None);
 }
 
 #[inline(always)]

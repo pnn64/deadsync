@@ -179,6 +179,18 @@ impl TextLayoutCache {
         }
     }
 
+    pub fn configure(&mut self, max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) {
+        self.max_entries = max_entries.max(1);
+        self.max_aliases = self.max_entries.saturating_mul(8);
+        self.overflow_policy = overflow_policy;
+    }
+
+    pub fn lock_growth(&mut self) {
+        self.max_entries = self.entry_count.max(1);
+        self.max_aliases = self.alias_count;
+        self.overflow_policy = TextLayoutOverflowPolicy::Saturating;
+    }
+
     pub fn clear(&mut self) {
         self.owned_entries.clear();
         self.shared_aliases.clear();
@@ -297,6 +309,23 @@ impl TextLayoutCache {
                 .expect("owned text layout cache entry inserted"),
             true,
         )
+    }
+
+    pub fn prewarm_text(
+        &mut self,
+        fonts: &HashMap<&'static str, font::Font>,
+        font_name: &'static str,
+        text: &str,
+        wrap_width_pixels: Option<i32>,
+    ) {
+        let Some(font) = fonts.get(font_name) else {
+            return;
+        };
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, fonts),
+            wrap_width_pixels: wrap_width_pixels.unwrap_or(-1),
+        };
+        let _ = self.get_or_build_owned(key, font, fonts, text);
     }
 
     fn get_or_build(

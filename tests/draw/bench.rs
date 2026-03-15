@@ -1,6 +1,6 @@
 use deadsync::core::gfx::draw_prep::{
-    self, CachedTMeshGeom, DrawOp, GlScratch, PrepareStats, SpriteInstanceRaw,
-    TexturedMeshInstanceRaw, TexturedMeshVertexRaw,
+    self, DrawOp, GlScratch, PrepareStats, SpriteInstanceRaw, TexturedMeshInstanceRaw,
+    TexturedMeshVertexRaw,
 };
 use deadsync::core::gfx::{BlendMode, MeshMode, RenderList, TextureHandle};
 use deadsync::test_support::{compose_case, compose_scenarios};
@@ -10,18 +10,12 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::hash::Hasher;
 use std::hint::black_box;
-use std::mem;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use twox_hash::XxHash64;
 
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc::new();
-
-const TMESH_CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
-const TMESH_CACHE_MIN_VERTS: usize = 32;
-const TMESH_CACHE_PROMOTE_HITS: u8 = 2;
-const TMESH_CACHE_SEEN_TTL_FRAMES: u64 = 1800;
 
 struct CountingAlloc {
     alloc_calls: AtomicU64,
@@ -112,9 +106,7 @@ enum PlanOpSnapshot {
     TexturedMesh {
         vertex_start: u32,
         vertex_count: u32,
-        dynamic_geom: bool,
         geom_key: u64,
-        cached_vertex_buffer: Option<u64>,
         instance_start: u32,
         instance_count: u32,
         mode: &'static str,
@@ -122,33 +114,6 @@ enum PlanOpSnapshot {
         texture: u64,
         camera: u8,
     },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TMeshCacheKey {
-    hash: u64,
-    len: u32,
-}
-
-struct BenchCacheEntry {
-    id: u64,
-    vertex_count: u32,
-    bytes: u64,
-    last_used_frame: u64,
-}
-
-struct BenchSeenEntry {
-    hits: u8,
-    last_seen_frame: u64,
-}
-
-#[derive(Default)]
-struct BenchTMeshCache {
-    entries: HashMap<TMeshCacheKey, BenchCacheEntry>,
-    seen: HashMap<TMeshCacheKey, BenchSeenEntry>,
-    frame: u64,
-    next_id: u64,
-    total_bytes: u64,
 }
 
 impl CountingAlloc {
@@ -249,90 +214,6 @@ unsafe impl GlobalAlloc for CountingAlloc {
             }
         }
         out
-    }
-}
-
-impl BenchTMeshCache {
-    fn begin_frame(&mut self) {
-        self.frame = self.frame.wrapping_add(1);
-        let frame = self.frame;
-        self.seen.retain(|_, seen| {
-            frame.saturating_sub(seen.last_seen_frame) <= TMESH_CACHE_SEEN_TTL_FRAMES
-        });
-    }
-
-    fn resolve(
-        &mut self,
-        vertices: &[deadsync::core::gfx::TexturedMeshVertex],
-    ) -> Option<CachedTMeshGeom<u64>> {
-        if vertices.len() < TMESH_CACHE_MIN_VERTS || vertices.is_empty() {
-            return None;
-        }
-
-        let key = tmesh_cache_key(vertices);
-        if let Some(entry) = self.entries.get_mut(&key) {
-            entry.last_used_frame = self.frame;
-            return Some(CachedTMeshGeom {
-                cache_id: entry.id,
-                vertex_count: entry.vertex_count,
-                buffer: entry.id,
-            });
-        }
-
-        let promote = {
-            let seen = self.seen.entry(key).or_insert(BenchSeenEntry {
-                hits: 0,
-                last_seen_frame: self.frame,
-            });
-            if self.frame.saturating_sub(seen.last_seen_frame) > TMESH_CACHE_SEEN_TTL_FRAMES {
-                seen.hits = 0;
-            }
-            seen.last_seen_frame = self.frame;
-            seen.hits = seen.hits.saturating_add(1);
-            seen.hits >= TMESH_CACHE_PROMOTE_HITS
-        };
-        if !promote {
-            return None;
-        }
-
-        let bytes = (vertices.len() * mem::size_of::<TexturedMeshVertexRaw>()) as u64;
-        let cache_id = self.next_id.wrapping_add(1).max(1);
-        self.next_id = cache_id;
-        self.total_bytes = self.total_bytes.saturating_add(bytes);
-        self.entries.insert(
-            key,
-            BenchCacheEntry {
-                id: cache_id,
-                vertex_count: vertices.len() as u32,
-                bytes,
-                last_used_frame: self.frame,
-            },
-        );
-        self.evict();
-        Some(CachedTMeshGeom {
-            cache_id,
-            vertex_count: vertices.len() as u32,
-            buffer: cache_id,
-        })
-    }
-
-    fn evict(&mut self) {
-        while self.total_bytes > TMESH_CACHE_MAX_BYTES {
-            let Some(oldest_key) = self
-                .entries
-                .iter()
-                .filter_map(|(key, entry)| {
-                    (entry.last_used_frame != self.frame).then_some((*key, entry.last_used_frame))
-                })
-                .min_by_key(|(_, frame)| *frame)
-                .map(|(key, _)| key)
-            else {
-                break;
-            };
-            if let Some(entry) = self.entries.remove(&oldest_key) {
-                self.total_bytes = self.total_bytes.saturating_sub(entry.bytes);
-            }
-        }
     }
 }
 
@@ -449,13 +330,8 @@ fn benchmark_draw(
         initial.snapshot.tmesh_instances.len().max(256),
         initial.snapshot.ops.len().max(64),
     );
-    let mut cache = BenchTMeshCache::default();
-
     for _ in 0..warmup {
-        cache.begin_frame();
-        let stats = draw_prep::prepare_gl(&render, &mut scratch, Some, |vertices| {
-            cache.resolve(vertices)
-        });
+        let stats = draw_prep::prepare_gl(&render, &mut scratch, Some);
         black_box(checksum_plan(&scratch, stats));
     }
 
@@ -463,10 +339,7 @@ fn benchmark_draw(
     let started = Instant::now();
     let mut checksum = 0u64;
     for _ in 0..iters {
-        cache.begin_frame();
-        let stats = draw_prep::prepare_gl(black_box(&render), &mut scratch, Some, |vertices| {
-            cache.resolve(vertices)
-        });
+        let stats = draw_prep::prepare_gl(black_box(&render), &mut scratch, Some);
         checksum = checksum
             .wrapping_mul(131)
             .wrapping_add(checksum_plan(&scratch, stats));
@@ -504,17 +377,13 @@ struct BuiltPlan {
 
 fn build_plan(render: &RenderList<'_>) -> Result<BuiltPlan, Box<dyn Error>> {
     let mut scratch = GlScratch::with_capacity(256, 1024, 256, 64);
-    let mut cache = BenchTMeshCache::default();
-    cache.begin_frame();
-    let stats = draw_prep::prepare_gl(render, &mut scratch, Some, |vertices| {
-        cache.resolve(vertices)
-    });
+    let stats = draw_prep::prepare_gl(render, &mut scratch, Some);
     Ok(BuiltPlan {
         snapshot: plan_snapshot(&scratch, stats),
     })
 }
 
-fn plan_snapshot(scratch: &GlScratch<u64, u64>, stats: PrepareStats) -> PlanSnapshot {
+fn plan_snapshot(scratch: &GlScratch<u64>, stats: PrepareStats) -> PlanSnapshot {
     PlanSnapshot {
         dynamic_upload_vertices: stats.dynamic_upload_vertices,
         sprite_instances: scratch.sprite_instances.clone(),
@@ -535,9 +404,7 @@ fn plan_snapshot(scratch: &GlScratch<u64, u64>, stats: PrepareStats) -> PlanSnap
                 DrawOp::TexturedMesh(run) => PlanOpSnapshot::TexturedMesh {
                     vertex_start: run.vertex_start,
                     vertex_count: run.vertex_count,
-                    dynamic_geom: run.dynamic_geom,
                     geom_key: run.geom_key,
-                    cached_vertex_buffer: run.cached_vertex_buffer,
                     instance_start: run.instance_start,
                     instance_count: run.instance_count,
                     mode: mesh_mode_name(run.mode),
@@ -550,7 +417,7 @@ fn plan_snapshot(scratch: &GlScratch<u64, u64>, stats: PrepareStats) -> PlanSnap
     }
 }
 
-fn checksum_plan(scratch: &GlScratch<u64, u64>, stats: PrepareStats) -> u64 {
+fn checksum_plan(scratch: &GlScratch<u64>, stats: PrepareStats) -> u64 {
     let mut sum = stats.dynamic_upload_vertices;
     sum = sum
         .wrapping_mul(131)
@@ -639,20 +506,6 @@ fn flip_ascii_case(s: &str) -> String {
         });
     }
     String::from_utf8(out).expect("ascii flip should preserve utf8")
-}
-
-fn tmesh_cache_key(vertices: &[deadsync::core::gfx::TexturedMeshVertex]) -> TMeshCacheKey {
-    let mut hasher = XxHash64::with_seed(0);
-    hasher.write(cast_slice(vertices));
-    TMeshCacheKey {
-        hash: hasher.finish(),
-        len: vertices.len() as u32,
-    }
-}
-
-fn cast_slice<T>(slice: &[T]) -> &[u8] {
-    let len = std::mem::size_of_val(slice);
-    unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<u8>(), len) }
 }
 
 fn blend_name(blend: BlendMode) -> &'static str {

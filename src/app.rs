@@ -118,6 +118,7 @@ const GAMEPLAY_EVENT_TRACE_INTERVAL: Duration = Duration::from_secs(1);
 const GAMEPLAY_EVENT_BATCH_SLOW_US: u32 = 1_000;
 const GAMEPLAY_EVENT_BATCH_BURST_KEYS: u32 = 8;
 const PENDING_INPUT_EVENT_CAPACITY: usize = 512;
+const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 131_072;
 #[cfg(windows)]
 const RAW_KEYBOARD_EVENT_CAPACITY: usize = 1024;
 
@@ -1859,6 +1860,45 @@ fn prewarm_gameplay_assets(
     crate::core::audio::preload_sfx("assets/sounds/assist_tick.ogg");
 }
 
+fn prewarm_gameplay_text_layout_cache(
+    assets: &AssetManager,
+    metrics: &Metrics,
+    cache: &mut crate::ui::compose::TextLayoutCache,
+    state: &gameplay::State,
+) {
+    let started = Instant::now();
+    cache.configure(
+        GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
+        crate::ui::compose::TextLayoutOverflowPolicy::Saturating,
+    );
+    cache.clear();
+
+    let fonts = assets.fonts();
+    let actors = gameplay::get_actors(state, assets);
+    let _ = crate::ui::compose::build_screen_cached(
+        &actors,
+        [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        0.0,
+        cache,
+    );
+    gameplay::prewarm_text_layout(cache, fonts, state);
+    crate::screens::components::gameplay::gameplay_stats::prewarm_text_layout(
+        cache, fonts, assets, state,
+    );
+    crate::screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
+    cache.lock_growth();
+
+    let stats = cache.frame_stats();
+    debug!(
+        "Gameplay text cache prewarm: entries={} aliases={} elapsed_ms={:.3}",
+        stats.owned_entries,
+        stats.shared_aliases,
+        started.elapsed().as_secs_f64() * 1000.0,
+    );
+}
+
 fn total_gameplay_elapsed(stages: &[stage_stats::StageSummary]) -> f32 {
     let mut total = 0.0;
     for stage in stages {
@@ -2925,7 +2965,9 @@ impl App {
             backend_type,
             asset_manager: AssetManager::new(),
             ui_text_layout_cache: crate::ui::compose::TextLayoutCache::default(),
-            gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache::saturating(16384),
+            gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache::saturating(
+                GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
+            ),
             state,
             #[cfg(windows)]
             raw_keyboard_ring: Arc::new(RawKeyboardRing::new()),
@@ -6854,6 +6896,12 @@ impl App {
                         self.asset_manager.ensure_texture_from_path(backend, path);
                     }
                 }
+                prewarm_gameplay_text_layout_cache(
+                    &self.asset_manager,
+                    &self.state.shell.metrics,
+                    &mut self.gameplay_text_layout_cache,
+                    &gs,
+                );
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 let show_video_backgrounds = config::get().show_video_backgrounds;
                 commands.push(Command::SetDynamicBackground(
