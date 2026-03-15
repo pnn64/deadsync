@@ -4438,7 +4438,9 @@ impl App {
 
     fn apply_dynamic_background(&mut self, path_opt: Option<PathBuf>) {
         if let Some(backend) = self.backend.as_mut() {
-            let key = self.asset_manager.set_dynamic_background(backend, path_opt);
+            let key = self
+                .asset_manager
+                .set_dynamic_background(backend, path_opt.clone());
             if let Some(gs) = &mut self.state.screens.gameplay_state {
                 gs.current_background_path = path_opt;
                 gs.background_texture_key = key;
