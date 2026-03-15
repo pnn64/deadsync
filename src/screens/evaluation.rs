@@ -226,6 +226,7 @@ pub struct ScoreInfo {
     pub show_ex_score: bool,
     pub show_hard_ex_score: bool,
     pub show_fa_plus_pane: bool,
+    pub track_early_judgments: bool,
     pub machine_records: Vec<scores::LeaderboardEntry>,
     pub machine_record_highlight_rank: Option<u32>,
     pub personal_records: Vec<scores::LeaderboardEntry>,
@@ -242,6 +243,8 @@ pub struct ColumnJudgments {
     pub w4: u32,
     pub w5: u32,
     pub miss: u32,
+    pub early_w2: u32,
+    pub early_w3: u32,
     pub early_w4: u32,
     pub early_w5: u32,
     pub held_miss: u32,
@@ -278,8 +281,18 @@ fn compute_column_judgments(
                 }
                 _ => slot.w1 = slot.w1.saturating_add(1),
             },
-            JudgeGrade::Excellent => slot.w2 = slot.w2.saturating_add(1),
-            JudgeGrade::Great => slot.w3 = slot.w3.saturating_add(1),
+            JudgeGrade::Excellent => {
+                slot.w2 = slot.w2.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w2 = slot.early_w2.saturating_add(1);
+                }
+            }
+            JudgeGrade::Great => {
+                slot.w3 = slot.w3.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w3 = slot.early_w3.saturating_add(1);
+                }
+            }
             JudgeGrade::Decent => {
                 slot.w4 = slot.w4.saturating_add(1);
                 if j.time_error_ms < 0.0 {
@@ -758,6 +771,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 show_ex_score: prof.show_ex_score,
                 show_hard_ex_score: prof.show_hard_ex_score,
                 show_fa_plus_pane: prof.show_fa_plus_pane,
+                track_early_judgments: prof.track_early_judgments,
                 machine_records,
                 machine_record_highlight_rank,
                 personal_records,

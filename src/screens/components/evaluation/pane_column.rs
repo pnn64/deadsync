@@ -202,8 +202,8 @@ pub fn build_column_judgments_pane(
             RowKind::FanCombined => (cj.w0.saturating_add(cj.w1), None),
             RowKind::FanW0 => (cj.w0, None),
             RowKind::FanW1 => (cj.w1, None),
-            RowKind::Ex => (cj.w2, None),
-            RowKind::Gr => (cj.w3, None),
+            RowKind::Ex => (cj.w2, Some(cj.early_w2)),
+            RowKind::Gr => (cj.w3, Some(cj.early_w3)),
             RowKind::Dec => (cj.w4, Some(cj.early_w4)),
             RowKind::Wo => (cj.w5, Some(cj.early_w5)),
             RowKind::Miss => (cj.miss, None),
@@ -251,12 +251,22 @@ pub fn build_column_judgments_pane(
                 let cj = score_info.column_judgments[col_idx];
                 let col_center_x = (col_idx as f32 + 1.0).mul_add(col_width, base_x);
 
-                // Measure Miss number width for this column for alignment of early/held counts.
-                let miss_str = cj.miss.to_string();
-                let miss_width = font::measure_line_width_logical(miso_font, &miss_str, all_fonts)
-                    as f32
-                    * number_zoom;
-                let right_edge_x = col_center_x - 1.0 - miss_width * 0.5;
+                // Measure the widest number across all rows for this column,
+                // so early/held sub-numbers are positioned clear of any main count.
+                let mut max_count_width: f32 = 0.0;
+                for row in &rows {
+                    let (count, _) = count_for(cj, row.kind);
+                    let w = font::measure_line_width_logical(
+                        miso_font,
+                        &count.to_string(),
+                        all_fonts,
+                    ) as f32
+                        * number_zoom;
+                    if w > max_count_width {
+                        max_count_width = w;
+                    }
+                }
+                let right_edge_x = col_center_x - 1.0 - max_count_width * 0.5;
 
                 let arrow_color = if arrow_glow_active {
                     Some(match col_idx {
@@ -488,8 +498,8 @@ pub fn build_column_judgments_pane(
                         z(101)
                     ));
 
-                    if let Some(early) = early_opt {
-                        let early_y = y - 10.0;
+                    if score_info.track_early_judgments && let Some(early) = early_opt {
+                        let early_y = y - (row_height * 0.35);
                         actors.push(act!(text: font("miso"): settext(early.to_string()):
                             align(1.0, 0.5):
                             xy(right_edge_x, early_y):

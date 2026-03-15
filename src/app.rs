@@ -1099,6 +1099,7 @@ fn score_info_from_stage(
         personal_records,
         personal_record_highlight_rank,
         show_machine_personal_split: !earned_machine_record && earned_top2_personal,
+        track_early_judgments: profile::get_for_side(side).track_early_judgments,
     })
 }
 

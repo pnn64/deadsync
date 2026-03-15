@@ -1362,6 +1362,7 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
                 "Display H.EX Score".to_string(),
                 "Display FA+ Pane".to_string(),
                 "10ms Blue Window".to_string(),
+                "Track Early Judgments".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
@@ -1999,6 +2000,9 @@ fn apply_profile_defaults(
     }
     if profile.fa_plus_10ms_blue_window {
         fa_plus_active_mask |= 1u8 << 4;
+    }
+    if profile.track_early_judgments {
+        fa_plus_active_mask |= 1u8 << 5;
     }
     if let Some(row) = rows
         .iter_mut()
@@ -4742,11 +4746,13 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     let hard_ex_enabled = (state.fa_plus_active_mask[idx] & (1u8 << 2)) != 0;
     let pane_enabled = (state.fa_plus_active_mask[idx] & (1u8 << 3)) != 0;
     let ten_ms_enabled = (state.fa_plus_active_mask[idx] & (1u8 << 4)) != 0;
+    let track_early = (state.fa_plus_active_mask[idx] & (1u8 << 5)) != 0;
     state.player_profiles[idx].show_fa_plus_window = window_enabled;
     state.player_profiles[idx].show_ex_score = ex_enabled;
     state.player_profiles[idx].show_hard_ex_score = hard_ex_enabled;
     state.player_profiles[idx].show_fa_plus_pane = pane_enabled;
     state.player_profiles[idx].fa_plus_10ms_blue_window = ten_ms_enabled;
+    state.player_profiles[idx].track_early_judgments = track_early;
     let play_style = crate::game::profile::get_session_play_style();
     let should_persist = play_style == crate::game::profile::PlayStyle::Versus
         || idx == session_persisted_player_idx();
@@ -4761,6 +4767,7 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         crate::game::profile::update_show_hard_ex_score_for_side(side, hard_ex_enabled);
         crate::game::profile::update_show_fa_plus_pane_for_side(side, pane_enabled);
         crate::game::profile::update_fa_plus_10ms_blue_window_for_side(side, ten_ms_enabled);
+        crate::game::profile::update_track_early_judgments_for_side(side, track_early);
     }
 
     audio::play_sfx("assets/sounds/change_value.ogg");
