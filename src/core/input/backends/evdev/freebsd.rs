@@ -111,6 +111,22 @@ struct DevSpec {
     product_id: Option<u16>,
 }
 
+#[derive(Default)]
+struct ScanStats {
+    event_nodes: u32,
+    permission_denied: u32,
+    open_errors: u32,
+    non_controller: u32,
+}
+
+enum ProbeResult {
+    Skip,
+    PermissionDenied,
+    OpenError,
+    NotController,
+    Controller(DevSpec),
+}
+
 #[derive(Clone, Copy)]
 struct ClockSample {
     instant: Instant,
@@ -338,6 +354,12 @@ fn is_event_path(path: &str) -> bool {
 }
 
 #[inline(always)]
+fn is_permission_error(err: &std::io::Error) -> bool {
+    err.raw_os_error()
+        .is_some_and(|code| code == libc::EACCES || code == libc::EPERM)
+}
+
+#[inline(always)]
 fn ioctl_read_buffer(fd: i32, request: libc::c_ulong, buf: &mut [u8]) -> bool {
     unsafe { libc::ioctl(fd, request, buf.as_mut_ptr()) >= 0 }
 }
@@ -384,9 +406,9 @@ fn looks_like_controller(ev: &CapabilityBits, key: &CapabilityBits, abs: &Capabi
     (face || joystick) && (dpad || menu || sticks || hats)
 }
 
-fn spec_from_path(path: &str, noisy: bool) -> Option<DevSpec> {
+fn probe_path(path: &str, noisy: bool) -> ProbeResult {
     if !is_event_path(path) {
-        return None;
+        return ProbeResult::Skip;
     }
     let file = match std::fs::File::open(path) {
         Ok(file) => file,
@@ -397,18 +419,22 @@ fn spec_from_path(path: &str, noisy: bool) -> Option<DevSpec> {
             } else {
                 debug!("{msg}");
             }
-            return None;
+            return if is_permission_error(&err) {
+                ProbeResult::PermissionDenied
+            } else {
+                ProbeResult::OpenError
+            };
         }
     };
     let ev = evdev_bits(file.as_raw_fd(), 0, EV_BITS_LEN);
     let key = evdev_bits(file.as_raw_fd(), EV_KEY as u8, KEY_BITS_LEN);
     let abs = evdev_bits(file.as_raw_fd(), EV_ABS as u8, ABS_BITS_LEN);
     if !looks_like_controller(&ev, &key, &abs) {
-        return None;
+        return ProbeResult::NotController;
     }
     let name = raw_dev_name(&file).unwrap_or_else(|| format!("evdev:{path}"));
     let (vendor_id, product_id) = raw_dev_info(&file);
-    Some(DevSpec {
+    ProbeResult::Controller(DevSpec {
         path: path.to_owned(),
         name,
         vendor_id,
@@ -416,19 +442,71 @@ fn spec_from_path(path: &str, noisy: bool) -> Option<DevSpec> {
     })
 }
 
-fn scan_event_specs() -> Vec<DevSpec> {
+fn scan_event_specs() -> (Vec<DevSpec>, ScanStats) {
     let mut out = Vec::new();
+    let mut stats = ScanStats::default();
     let Ok(entries) = fs::read_dir("/dev/input") else {
-        return out;
+        return (out, stats);
     };
     for entry in entries.flatten() {
         let path = entry.path().to_string_lossy().to_string();
-        if let Some(spec) = spec_from_path(&path, false) {
-            out.push(spec);
+        match probe_path(&path, false) {
+            ProbeResult::Skip => {}
+            ProbeResult::PermissionDenied => {
+                stats.event_nodes += 1;
+                stats.permission_denied += 1;
+            }
+            ProbeResult::OpenError => {
+                stats.event_nodes += 1;
+                stats.open_errors += 1;
+            }
+            ProbeResult::NotController => {
+                stats.event_nodes += 1;
+                stats.non_controller += 1;
+            }
+            ProbeResult::Controller(spec) => {
+                stats.event_nodes += 1;
+                out.push(spec);
+            }
         }
     }
     out.sort_unstable_by(|a, b| a.path.cmp(&b.path));
-    out
+    (out, stats)
+}
+
+fn warn_startup_scan(stats: &ScanStats) {
+    if stats.event_nodes == 0 {
+        warn!("freebsd evdev found no /dev/input/event* nodes at startup");
+        return;
+    }
+    if stats.permission_denied == stats.event_nodes {
+        warn!(
+            "freebsd evdev could not inspect any of the {} /dev/input/event* nodes due to permissions; grant read access to /dev/input/event* for non-root gamepad input",
+            stats.event_nodes
+        );
+        return;
+    }
+    if stats.permission_denied != 0 {
+        warn!(
+            "freebsd evdev could not inspect {} of {} /dev/input/event* nodes due to permissions",
+            stats.permission_denied, stats.event_nodes
+        );
+    }
+    if stats.open_errors != 0 {
+        warn!(
+            "freebsd evdev hit open errors on {} /dev/input/event* nodes during startup",
+            stats.open_errors
+        );
+    }
+    let readable = stats
+        .event_nodes
+        .saturating_sub(stats.permission_denied + stats.open_errors);
+    if readable != 0 {
+        warn!(
+            "freebsd evdev saw {} readable /dev/input/event* nodes at startup, but none looked like controllers",
+            readable
+        );
+    }
 }
 
 fn open_dev(
@@ -491,7 +569,7 @@ fn add_dev_if_new(
     if devs.iter().any(|dev| dev.path == path) {
         return;
     }
-    let Some(spec) = spec_from_path(&path, !initial) else {
+    let ProbeResult::Controller(spec) = probe_path(&path, !initial) else {
         return;
     };
     let id = PadId(*next_id);
@@ -517,7 +595,8 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
     let watch = DevdWatch::new();
     let mut devs = Vec::new();
     let mut next_id = 0u32;
-    for spec in scan_event_specs() {
+    let (startup_specs, startup_stats) = scan_event_specs();
+    for spec in startup_specs {
         let path = spec.path.clone();
         let id = PadId(next_id);
         if let Some(dev) = open_dev(spec, id, true, &mut emit_sys) {
@@ -526,6 +605,9 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
         } else {
             debug!("freebsd evdev skipped '{path}' during startup");
         }
+    }
+    if devs.is_empty() {
+        warn_startup_scan(&startup_stats);
     }
     emit_sys(GpSystemEvent::StartupComplete);
 

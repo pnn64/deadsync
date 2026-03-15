@@ -335,7 +335,14 @@ fn is_hidraw_path(path: &str) -> bool {
         .is_some_and(|name| name.starts_with("hidraw"))
 }
 
-fn scan_hidraw_paths() -> Vec<String> {
+#[inline(always)]
+fn is_uhid_path(path: &str) -> bool {
+    path.rsplit('/')
+        .next()
+        .is_some_and(|name| name.starts_with("uhid"))
+}
+
+fn scan_dev_paths(match_path: impl Fn(&str) -> bool) -> Vec<String> {
     let mut out = Vec::new();
     let Ok(entries) = fs::read_dir("/dev") else {
         return out;
@@ -343,12 +350,35 @@ fn scan_hidraw_paths() -> Vec<String> {
     for entry in entries.flatten() {
         let path = entry.path();
         let path = path.to_string_lossy().to_string();
-        if is_hidraw_path(&path) {
+        if match_path(&path) {
             out.push(path);
         }
     }
     out.sort_unstable();
     out
+}
+
+fn scan_hidraw_paths() -> Vec<String> {
+    scan_dev_paths(is_hidraw_path)
+}
+
+fn scan_uhid_paths() -> Vec<String> {
+    scan_dev_paths(is_uhid_path)
+}
+
+fn startup_error(hidraw_count: usize) -> String {
+    if hidraw_count != 0 {
+        return format!(
+            "found {hidraw_count} /dev/hidraw* nodes, but none exposed usable controller reports"
+        );
+    }
+    let uhid_count = scan_uhid_paths().len();
+    if uhid_count != 0 {
+        return format!(
+            "no /dev/hidraw* nodes found (saw {uhid_count} /dev/uhid* nodes; current backend only scans hidraw)"
+        );
+    }
+    "no /dev/hidraw* nodes found".to_owned()
 }
 
 fn open_dev(
@@ -580,13 +610,14 @@ pub fn run(
     let watch = DevdWatch::new();
     let mut devs = Vec::new();
     let mut next_id = 0u32;
-    let mut saw_hidraw = false;
-    for path in scan_hidraw_paths() {
-        saw_hidraw = true;
+    let hidraw_paths = scan_hidraw_paths();
+    let hidraw_count = hidraw_paths.len();
+    for path in hidraw_paths {
         add_dev_if_new(path, &mut devs, &mut next_id, true, emit_sys);
     }
-    if devs.is_empty() && (!saw_hidraw || watch.is_none()) {
-        return Err("no usable hidraw controller devices found".to_owned());
+    if devs.is_empty() {
+        let _ = watch;
+        return Err(startup_error(hidraw_count));
     }
     emit_sys(GpSystemEvent::StartupComplete);
     let mut pollfds = Vec::with_capacity(9);

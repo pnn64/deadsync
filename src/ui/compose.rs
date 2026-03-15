@@ -116,6 +116,18 @@ struct TextLayoutKey {
     wrap_width_pixels: i32,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TextLayoutFrameStats {
+    pub owned_hits: u32,
+    pub shared_hits: u32,
+    pub misses: u32,
+    pub built_lines: u32,
+    pub built_glyphs: u32,
+    pub prunes: u32,
+    pub owned_entries: u32,
+    pub shared_aliases: u32,
+}
+
 pub struct TextLayoutCache {
     owned_entries: HashMap<TextLayoutKey, HashMap<Box<str>, OwnedLayoutEntry>>,
     shared_aliases: HashMap<TextLayoutKey, HashMap<usize, (Arc<str>, *const CachedTextLayout)>>,
@@ -124,6 +136,7 @@ pub struct TextLayoutCache {
     max_entries: usize,
     max_aliases: usize,
     use_tick: u64,
+    frame_stats: TextLayoutFrameStats,
 }
 
 impl Default for TextLayoutCache {
@@ -143,6 +156,7 @@ impl TextLayoutCache {
             max_entries,
             max_aliases: max_entries.saturating_mul(8),
             use_tick: 0,
+            frame_stats: TextLayoutFrameStats::default(),
         }
     }
 
@@ -152,6 +166,21 @@ impl TextLayoutCache {
         self.entry_count = 0;
         self.alias_count = 0;
         self.use_tick = 0;
+        self.frame_stats = TextLayoutFrameStats::default();
+    }
+
+    #[inline(always)]
+    pub fn begin_frame_stats(&mut self) {
+        self.frame_stats = TextLayoutFrameStats::default();
+    }
+
+    #[inline(always)]
+    pub fn frame_stats(&self) -> TextLayoutFrameStats {
+        TextLayoutFrameStats {
+            owned_entries: saturating_u32(self.entry_count),
+            shared_aliases: saturating_u32(self.alias_count),
+            ..self.frame_stats
+        }
     }
 
     #[inline(always)]
@@ -192,6 +221,7 @@ impl TextLayoutCache {
             self.clear();
             return;
         }
+        self.frame_stats.prunes = self.frame_stats.prunes.saturating_add(1);
         self.entry_count = self.entry_count.saturating_sub(removed);
         self.shared_aliases.clear();
         self.alias_count = 0;
@@ -259,9 +289,19 @@ impl TextLayoutCache {
     ) -> &CachedTextLayout {
         let tick = self.next_use_tick();
         if let Some(layout_ptr) = self.touch_owned_layout(key, text, tick) {
+            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
             return unsafe { &*layout_ptr };
         }
         let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
+        self.frame_stats.misses = self.frame_stats.misses.saturating_add(1);
+        self.frame_stats.built_lines = self
+            .frame_stats
+            .built_lines
+            .saturating_add(saturating_u32(layout.lines.len()));
+        self.frame_stats.built_glyphs = self
+            .frame_stats
+            .built_glyphs
+            .saturating_add(saturating_u32(layout.glyph_count));
         let layout_ptr = self.insert_owned_layout(key, text, layout, tick);
         unsafe { &*layout_ptr }
     }
@@ -282,6 +322,7 @@ impl TextLayoutCache {
             .is_some()
         {
             if let Some(layout_ptr) = self.touch_owned_layout(key, text.as_ref(), tick) {
+                self.frame_stats.shared_hits = self.frame_stats.shared_hits.saturating_add(1);
                 return unsafe { &*layout_ptr };
             }
             self.shared_aliases
@@ -292,9 +333,19 @@ impl TextLayoutCache {
         }
         let layout_ptr = if let Some(layout_ptr) = self.touch_owned_layout(key, text.as_ref(), tick)
         {
+            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
             layout_ptr
         } else {
             let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
+            self.frame_stats.misses = self.frame_stats.misses.saturating_add(1);
+            self.frame_stats.built_lines = self
+                .frame_stats
+                .built_lines
+                .saturating_add(saturating_u32(layout.lines.len()));
+            self.frame_stats.built_glyphs = self
+                .frame_stats
+                .built_glyphs
+                .saturating_add(saturating_u32(layout.glyph_count));
             self.insert_owned_layout(key, text, layout, tick)
         };
         if self.alias_count >= self.max_aliases {
@@ -311,6 +362,15 @@ impl TextLayoutCache {
             self.alias_count += 1;
         }
         unsafe { &*layout_ptr }
+    }
+}
+
+#[inline(always)]
+const fn saturating_u32(value: usize) -> u32 {
+    if value > u32::MAX as usize {
+        u32::MAX
+    } else {
+        value as u32
     }
 }
 
