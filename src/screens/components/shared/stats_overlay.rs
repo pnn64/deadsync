@@ -145,7 +145,7 @@ fn timing_text(timing: TimingHealth) -> String {
 
         let _ = write!(
             text,
-            "\nAudio {} {}Hz req {} fb:{}\nClk {} {} sf:{} cf:{} out {} xr {}\nBuf {} pad {} q {} per {} lat {}",
+            "\nAudio {} {}Hz req {} fb:{}\nClk {} {} sf:{} cf:{} out {} xr {}\nBuf {} pad {} q {} tick {} span {}",
             audio.backend,
             audio.sample_rate_hz,
             audio.requested_output_mode.as_str(),
