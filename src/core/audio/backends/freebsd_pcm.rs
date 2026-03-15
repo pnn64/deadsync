@@ -104,13 +104,13 @@ pub(crate) fn enumerate_output_devices() -> Vec<FreeBsdPcmDevice> {
             Vec::new()
         };
     }
-    let default_index = numbered.first().map(|(index, _)| *index).unwrap_or(0);
+    let default_index = select_default_index(&numbered, has_alias, default_unit());
     numbered
         .into_iter()
         .map(|(index, name)| FreeBsdPcmDevice {
             path: format!("/dev/{name}"),
             name: format!("FreeBSD PCM {index} (/dev/{name})"),
-            is_default: index == default_index,
+            is_default: Some(index) == default_index,
         })
         .collect()
 }
@@ -122,6 +122,40 @@ fn parse_dsp_index(name: &str) -> Option<u32> {
         return None;
     }
     digits.parse().ok()
+}
+
+#[inline(always)]
+fn select_default_index(
+    numbered: &[(u32, String)],
+    has_alias: bool,
+    kernel_default: Option<u32>,
+) -> Option<u32> {
+    if let Some(index) = kernel_default.filter(|unit| numbered.iter().any(|(dev, _)| dev == unit)) {
+        return Some(index);
+    }
+    if has_alias {
+        return None;
+    }
+    numbered.first().map(|(index, _)| *index)
+}
+
+#[inline(always)]
+fn default_unit() -> Option<u32> {
+    let mut unit: c_int = -1;
+    let mut len = size_of::<c_int>();
+    let rc = unsafe {
+        libc::sysctlbyname(
+            b"hw.snd.default_unit\0".as_ptr().cast(),
+            (&mut unit as *mut c_int).cast(),
+            &mut len,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if rc != 0 || len != size_of::<c_int>() || unit < 0 {
+        return None;
+    }
+    Some(unit as u32)
 }
 
 pub(crate) struct FreeBsdPcmOutputPrep {
@@ -542,4 +576,27 @@ const fn worst_quality(a: OutputTimingQuality, b: OutputTimingQuality) -> Output
 fn suggested_period_frames(sample_rate_hz: u32) -> u32 {
     let frames = sample_rate_hz.max(1) / 200;
     frames.clamp(128, FREEBSD_PCM_FALLBACK_BUFFER_FRAMES)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::select_default_index;
+
+    #[test]
+    fn selects_kernel_default_when_present() {
+        let numbered = vec![(0, "dsp0".to_string()), (2, "dsp2".to_string())];
+        assert_eq!(select_default_index(&numbered, true, Some(2)), Some(2));
+    }
+
+    #[test]
+    fn leaves_default_unset_when_alias_exists_but_sysctl_is_missing() {
+        let numbered = vec![(0, "dsp0".to_string()), (2, "dsp2".to_string())];
+        assert_eq!(select_default_index(&numbered, true, None), None);
+    }
+
+    #[test]
+    fn falls_back_to_first_device_without_alias() {
+        let numbered = vec![(3, "dsp3".to_string()), (5, "dsp5".to_string())];
+        assert_eq!(select_default_index(&numbered, false, None), Some(3));
+    }
 }
