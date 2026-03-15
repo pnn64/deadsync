@@ -451,11 +451,7 @@ fn init(
     let caps = surface.get_capabilities(&adapter);
     let format = pick_format(&caps);
     let present_mode = pick_present_mode(&caps.present_modes, vsync_enabled, present_mode_policy);
-    let alpha_mode = caps
-        .alpha_modes
-        .first()
-        .copied()
-        .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+    let alpha_mode = pick_alpha_mode(&caps);
 
     let config = wgpu::SurfaceConfiguration {
         usage: pick_surface_usage(&caps),
@@ -1315,7 +1311,7 @@ pub fn draw(
                         r: f64::from(render_list.clear_color[0]),
                         g: f64::from(render_list.clear_color[1]),
                         b: f64::from(render_list.clear_color[2]),
-                        a: f64::from(render_list.clear_color[3]),
+                        a: 1.0,
                     }),
                     store: wgpu::StoreOp::Store,
                 },
@@ -1977,11 +1973,7 @@ fn reconfigure_surface(state: &mut State) {
         state.vsync_enabled,
         state.present_mode_policy,
     );
-    state.config.alpha_mode = caps
-        .alpha_modes
-        .first()
-        .copied()
-        .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+    state.config.alpha_mode = pick_alpha_mode(&caps);
     state.config.usage = pick_surface_usage(&caps);
     state.config.width = state.window_size.0;
     state.config.height = state.window_size.1;
@@ -2038,6 +2030,20 @@ fn pick_surface_usage(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureUsages {
         usage |= wgpu::TextureUsages::COPY_SRC;
     }
     usage
+}
+
+#[inline(always)]
+fn pick_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
+    caps.alpha_modes
+        .iter()
+        .copied()
+        .find(|mode| *mode == wgpu::CompositeAlphaMode::Opaque)
+        .unwrap_or_else(|| {
+            caps.alpha_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::CompositeAlphaMode::Opaque)
+        })
 }
 
 fn pick_present_mode(
