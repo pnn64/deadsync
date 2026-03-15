@@ -2046,6 +2046,11 @@ fn pick_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode
         })
 }
 
+#[inline(always)]
+const fn surface_write_mask() -> wgpu::ColorWrites {
+    wgpu::ColorWrites::RED.union(wgpu::ColorWrites::GREEN).union(wgpu::ColorWrites::BLUE)
+}
+
 fn pick_present_mode(
     modes: &[wgpu::PresentMode],
     vsync: bool,
@@ -2335,7 +2340,7 @@ fn build_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: blend_state(mode),
-                write_mask: wgpu::ColorWrites::ALL,
+                write_mask: surface_write_mask(),
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
@@ -2377,7 +2382,7 @@ fn build_mesh_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: blend_state(mode),
-                write_mask: wgpu::ColorWrites::ALL,
+                write_mask: surface_write_mask(),
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
@@ -2422,7 +2427,7 @@ fn build_tmesh_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: blend_state(mode),
-                write_mask: wgpu::ColorWrites::ALL,
+                write_mask: surface_write_mask(),
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
