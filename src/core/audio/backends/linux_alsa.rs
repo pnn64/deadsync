@@ -89,9 +89,10 @@ struct PhysicalOutputDevice {
 }
 
 pub(crate) fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
+    let default_pcm_id = default_hw_pcm_id();
     let mut devices = physical_output_devices()
         .into_iter()
-        .filter_map(build_output_device)
+        .map(|device| build_output_device(device, default_pcm_id.as_deref()))
         .collect::<Vec<_>>();
     if !devices.iter().any(|device| device.is_default) {
         if let Some(device) = devices.first_mut() {
@@ -99,6 +100,10 @@ pub(crate) fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
         }
     }
     devices
+}
+
+fn default_hw_pcm_id() -> Option<String> {
+    resolved_hw_pcm_id("default").or_else(|| resolved_hw_pcm_id("sysdefault"))
 }
 
 fn physical_output_devices() -> Vec<PhysicalOutputDevice> {
@@ -134,27 +139,47 @@ fn physical_output_devices() -> Vec<PhysicalOutputDevice> {
     devices
 }
 
-fn build_output_device(device: PhysicalOutputDevice) -> Option<AlsaOutputDevice> {
+fn build_output_device(
+    device: PhysicalOutputDevice,
+    default_pcm_id: Option<&str>,
+) -> AlsaOutputDevice {
     let pcm_id = format!("hw:CARD={},DEV={}", device.card_index, device.device_index);
-    let (sample_rates_hz, default_rate_hz, channels) = probe_output_device(&pcm_id)?;
-    Some(AlsaOutputDevice {
-        is_default: false,
-        name: format!("{}, {}", device.card_name, device.device_name),
+    let name = format!("{}, {}", device.card_name, device.device_name);
+    let (sample_rates_hz, default_rate_hz, channels) = match probe_output_device(&pcm_id) {
+        Ok(probed) => probed,
+        Err(err) => {
+            warn!(
+                "Failed to probe ALSA playback device '{}' ({}): {err}. Listing it with fallback defaults.",
+                name, pcm_id
+            );
+            (Vec::new(), 48_000, 2)
+        }
+    };
+    AlsaOutputDevice {
+        is_default: default_pcm_id == Some(pcm_id.as_str()),
+        name,
         pcm_id,
         sample_rates_hz,
         default_rate_hz,
         channels,
-    })
+    }
 }
 
-fn probe_output_device(pcm_id: &str) -> Option<(Vec<u32>, u32, usize)> {
-    let pcm = open_pcm(pcm_id).ok()?;
-    let hw = HwParams::any(&pcm).ok()?;
-    hw.test_access(Access::RWInterleaved).ok()?;
-    hw.test_format(Format::s16()).ok()?;
-    let channels = preferred_channels(&hw)?;
-    let default_rate_hz = preferred_rate_hz(&hw)?;
-    Some((
+fn probe_output_device(pcm_id: &str) -> Result<(Vec<u32>, u32, usize), String> {
+    let pcm = open_pcm(pcm_id)?;
+    let hw = HwParams::any(&pcm)
+        .map_err(|e| format!("failed to create ALSA hw params for '{pcm_id}': {e}"))?;
+    hw.test_access(Access::RWInterleaved)
+        .map_err(|e| format!("missing RW interleaved access for '{pcm_id}': {e}"))?;
+    hw.test_format(Format::s16())
+        .map_err(|e| format!("missing signed 16-bit format for '{pcm_id}': {e}"))?;
+    let channels = preferred_channels(&hw).ok_or_else(|| {
+        format!("failed to determine a usable channel count for ALSA PCM '{pcm_id}'")
+    })?;
+    let default_rate_hz = preferred_rate_hz(&hw).ok_or_else(|| {
+        format!("failed to determine a usable sample rate for ALSA PCM '{pcm_id}'")
+    })?;
+    Ok((
         supported_sample_rates(&hw, default_rate_hz),
         default_rate_hz,
         channels,
