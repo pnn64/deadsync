@@ -139,11 +139,11 @@ shaderc = "0.10.1"
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"
 
-#[profile.release]
-#lto = "fat"
-#codegen-units = 1
-#panic = "abort"
-#strip = true
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
