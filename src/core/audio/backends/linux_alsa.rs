@@ -302,7 +302,7 @@ fn selected_pcm_id(
         AlsaAccessMode::Shared => Ok(shared_pcm_id(&pcm_id)),
         AlsaAccessMode::Exclusive => exclusive_pcm_id(&pcm_id).ok_or_else(|| {
             format!(
-                "ALSA exclusive output for '{}' requires a direct hw/plughw device, got '{}'",
+                "ALSA exclusive output for '{}' requires a direct hw/plughw device or a resolvable hardware-backed alias, got '{}'",
                 device_name, pcm_id
             )
         }),
@@ -319,12 +319,27 @@ fn shared_pcm_id(pcm_id: &str) -> String {
 
 #[inline(always)]
 fn exclusive_pcm_id(pcm_id: &str) -> Option<String> {
+    if let Some(pcm_id) = direct_pcm_id(pcm_id) {
+        return Some(pcm_id);
+    }
+    resolved_hw_pcm_id(pcm_id)
+}
+
+#[inline(always)]
+fn direct_pcm_id(pcm_id: &str) -> Option<String> {
     if pcm_id.starts_with("hw:") {
         return Some(pcm_id.to_string());
     }
     pcm_id
         .strip_prefix("plughw:")
         .map(|rest| format!("hw:{rest}"))
+}
+
+fn resolved_hw_pcm_id(pcm_id: &str) -> Option<String> {
+    let pcm = open_pcm(pcm_id).ok()?;
+    let info = pcm.info().ok()?;
+    let card = info.get_card();
+    (card >= 0).then(|| format!("hw:CARD={card},DEV={}", info.get_device()))
 }
 
 #[inline(always)]

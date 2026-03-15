@@ -2048,7 +2048,9 @@ fn pick_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode
 
 #[inline(always)]
 const fn surface_write_mask() -> wgpu::ColorWrites {
-    wgpu::ColorWrites::RED.union(wgpu::ColorWrites::GREEN).union(wgpu::ColorWrites::BLUE)
+    wgpu::ColorWrites::RED
+        .union(wgpu::ColorWrites::GREEN)
+        .union(wgpu::ColorWrites::BLUE)
 }
 
 fn pick_present_mode(
