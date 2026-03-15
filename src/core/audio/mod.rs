@@ -5,8 +5,6 @@ mod resample;
 use crate::core::host_time::instant_nanos;
 #[cfg(windows)]
 use crate::core::windows_rt::current_qpc_nanos;
-use cpal::traits::{DeviceTrait, HostTrait};
-use cpal::{Sample, StreamConfig};
 use log::{debug, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -44,26 +42,13 @@ pub struct OutputDeviceInfo {
 }
 
 struct OutputDeviceProbe {
-    cpal_device: Option<cpal::Device>,
     info: OutputDeviceInfo,
-    #[cfg(target_os = "linux")]
-    alsa_pcm_id: Option<String>,
     #[cfg(target_os = "macos")]
     coreaudio_uid: Option<String>,
     #[cfg(target_os = "freebsd")]
     freebsd_dsp_path: Option<String>,
     #[cfg(windows)]
     wasapi_id: Option<String>,
-}
-
-#[cfg(target_os = "linux")]
-#[inline(always)]
-fn direct_alsa_pcm_rank(pcm_id: Option<&str>) -> u8 {
-    match pcm_id {
-        Some(pcm_id) if pcm_id.starts_with("hw:") => 2,
-        Some(pcm_id) if pcm_id.starts_with("plughw:") => 1,
-        _ => 0,
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -169,7 +154,6 @@ struct FreeBsdPcmBackendHint {
 
 #[derive(Clone)]
 struct AudioThreadLaunch {
-    cpal: Option<backends::cpal::CpalBackendLaunch>,
     #[cfg(target_os = "linux")]
     explicit_device_requested: bool,
     #[cfg(target_os = "linux")]
@@ -209,35 +193,33 @@ struct OutputBackendReady {
 #[repr(u8)]
 pub enum OutputTelemetryBackend {
     Unknown = 0,
-    Cpal = 1,
     #[cfg(target_os = "linux")]
-    AlsaShared = 2,
+    AlsaShared = 1,
     #[cfg(target_os = "linux")]
-    AlsaExclusive = 3,
+    AlsaExclusive = 2,
     #[cfg(windows)]
-    WasapiShared = 4,
+    WasapiShared = 1,
     #[cfg(windows)]
-    WasapiExclusive = 5,
+    WasapiExclusive = 2,
     #[cfg(target_os = "linux")]
     #[cfg(has_pulse_audio)]
-    PulseAudioShared = 6,
+    PulseAudioShared = 3,
     #[cfg(target_os = "freebsd")]
-    FreeBsdPcm = 7,
+    FreeBsdPcm = 1,
     #[cfg(target_os = "linux")]
     #[cfg(has_jack_audio)]
-    JackShared = 8,
+    JackShared = 4,
     #[cfg(target_os = "macos")]
-    CoreAudioShared = 9,
+    CoreAudioShared = 1,
     #[cfg(target_os = "linux")]
     #[cfg(has_pipewire_audio)]
-    PipeWireShared = 10,
+    PipeWireShared = 5,
 }
 
 impl OutputTelemetryBackend {
     #[inline(always)]
     fn from_backend_name(name: &'static str) -> Self {
         match name {
-            "cpal" => Self::Cpal,
             #[cfg(target_os = "linux")]
             "alsa-shared" => Self::AlsaShared,
             #[cfg(target_os = "linux")]
@@ -266,28 +248,27 @@ impl OutputTelemetryBackend {
     #[inline(always)]
     fn load() -> Self {
         match OUTPUT_TIMING_BACKEND.load(Ordering::Relaxed) {
-            1 => Self::Cpal,
             #[cfg(target_os = "linux")]
-            2 => Self::AlsaShared,
+            1 => Self::AlsaShared,
             #[cfg(target_os = "linux")]
-            3 => Self::AlsaExclusive,
+            2 => Self::AlsaExclusive,
             #[cfg(windows)]
-            4 => Self::WasapiShared,
+            1 => Self::WasapiShared,
             #[cfg(windows)]
-            5 => Self::WasapiExclusive,
+            2 => Self::WasapiExclusive,
             #[cfg(target_os = "linux")]
             #[cfg(has_pulse_audio)]
-            6 => Self::PulseAudioShared,
+            3 => Self::PulseAudioShared,
             #[cfg(target_os = "freebsd")]
-            7 => Self::FreeBsdPcm,
+            1 => Self::FreeBsdPcm,
             #[cfg(target_os = "linux")]
             #[cfg(has_jack_audio)]
-            8 => Self::JackShared,
+            4 => Self::JackShared,
             #[cfg(target_os = "macos")]
-            9 => Self::CoreAudioShared,
+            1 => Self::CoreAudioShared,
             #[cfg(target_os = "linux")]
             #[cfg(has_pipewire_audio)]
-            10 => Self::PipeWireShared,
+            5 => Self::PipeWireShared,
             _ => Self::Unknown,
         }
     }
@@ -297,7 +278,6 @@ impl std::fmt::Display for OutputTelemetryBackend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let label = match self {
             Self::Unknown => "unknown",
-            Self::Cpal => "cpal",
             #[cfg(target_os = "linux")]
             Self::AlsaShared => "alsa-shared",
             #[cfg(target_os = "linux")]
@@ -746,15 +726,20 @@ fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) 
 }
 
 #[inline(always)]
-fn output_playback_anchor(now: Instant, info: &cpal::OutputCallbackInfo) -> Instant {
-    let timestamp = info.timestamp();
-    if let Some(delay) = timestamp.playback.duration_since(&timestamp.callback) {
-        now.checked_add(delay).unwrap_or(now)
-    } else if let Some(lead) = timestamp.callback.duration_since(&timestamp.playback) {
-        now.checked_sub(lead).unwrap_or(now)
+fn f32_to_i16(sample: f32) -> i16 {
+    let sample = sample.clamp(-1.0, 1.0);
+    if sample >= 1.0 {
+        i16::MAX
+    } else if sample <= -1.0 {
+        i16::MIN
     } else {
-        now
+        (sample * (i16::MAX as f32 + 1.0)) as i16
     }
+}
+
+#[inline(always)]
+fn i16_to_f32(sample: i16) -> f32 {
+    sample as f32 / (i16::MAX as f32 + 1.0)
 }
 
 #[inline(always)]
@@ -1156,11 +1141,6 @@ impl RenderState {
         total_before
     }
 
-    #[inline(always)]
-    fn begin_callback(&mut self, anchor_at: Instant) -> u64 {
-        self.begin_callback_nanos(callback_nanos_at(anchor_at), CallbackClockSource::Instant)
-    }
-
     #[cfg(windows)]
     #[inline(always)]
     fn begin_callback_qpc(&mut self, anchor_nanos: u64) -> u64 {
@@ -1204,7 +1184,7 @@ impl RenderState {
 
         let (music_vol, sfx_vol, assist_tick_vol) = Self::mix_levels();
         for (dst, src) in self.mix_f32.iter_mut().zip(&self.mix_i16) {
-            *dst = src.to_sample::<f32>() * music_vol;
+            *dst = i16_to_f32(*src) * music_vol;
         }
 
         for new_sfx in self.sfx_receiver.try_iter() {
@@ -1218,7 +1198,7 @@ impl RenderState {
                 SfxLane::AssistTick => assist_tick_vol,
             };
             for i in 0..n {
-                let sfx_sample_f32 = data[*cursor + i].to_sample::<f32>() * lane_vol;
+                let sfx_sample_f32 = i16_to_f32(data[*cursor + i]) * lane_vol;
                 self.mix_f32[i] = (self.mix_f32[i] + sfx_sample_f32).clamp(-1.0, 1.0);
             }
             *cursor += n;
@@ -1267,21 +1247,12 @@ impl RenderState {
         }
     }
 
-    fn render_i16(&mut self, out: &mut [i16], anchor_at: Instant) {
-        let total_before = self.begin_callback(anchor_at);
-        let popped = self.mix_f32_buffer(total_before, out.len());
-        for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
-            *dst = i16::from_sample(*src);
-        }
-        self.finish_callback(total_before, out.len(), popped);
-    }
-
     #[cfg(windows)]
     fn render_i16_qpc(&mut self, out: &mut [i16], anchor_nanos: u64) {
         let total_before = self.begin_callback_qpc(anchor_nanos);
         let popped = self.mix_f32_buffer(total_before, out.len());
         for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
-            *dst = i16::from_sample(*src);
+            *dst = f32_to_i16(*src);
         }
         self.finish_callback(total_before, out.len(), popped);
     }
@@ -1291,24 +1262,8 @@ impl RenderState {
         let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
         let popped = self.mix_f32_buffer(total_before, out.len());
         for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
-            *dst = i16::from_sample(*src);
+            *dst = f32_to_i16(*src);
         }
-        self.finish_callback(total_before, out.len(), popped);
-    }
-
-    fn render_u16(&mut self, out: &mut [u16], anchor_at: Instant) {
-        let total_before = self.begin_callback(anchor_at);
-        let popped = self.mix_f32_buffer(total_before, out.len());
-        for (dst, src) in out.iter_mut().zip(&self.mix_f32) {
-            *dst = u16::from_sample(*src);
-        }
-        self.finish_callback(total_before, out.len(), popped);
-    }
-
-    fn render_f32(&mut self, out: &mut [f32], anchor_at: Instant) {
-        let total_before = self.begin_callback(anchor_at);
-        let popped = self.mix_f32_buffer(total_before, out.len());
-        out.copy_from_slice(&self.mix_f32[..out.len()]);
         self.finish_callback(total_before, out.len(), popped);
     }
 
@@ -1332,68 +1287,47 @@ impl RenderState {
     }
 }
 
-#[cfg(not(target_os = "freebsd"))]
-fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
-    let host = cpal::default_host();
-    let default_device = host
-        .default_output_device()
-        .expect("no audio output device");
-    let default_device_name = backends::cpal::device_name(&default_device);
-    let mut device_probes =
-        backends::cpal::enumerate_output_device_probes(&host, default_device_name.as_str());
-    if device_probes.is_empty() {
-        let fallback_rates = backends::cpal::collect_supported_sample_rates(&default_device);
-        device_probes.push(OutputDeviceProbe {
-            cpal_device: Some(default_device.clone()),
-            info: OutputDeviceInfo {
-                name: default_device_name.clone(),
-                is_default: true,
-                sample_rates_hz: fallback_rates,
-            },
-            #[cfg(target_os = "linux")]
-            alsa_pcm_id: backends::cpal::device_id_string(&default_device),
-            #[cfg(target_os = "macos")]
-            coreaudio_uid: backends::cpal::device_id_string(&default_device),
-            #[cfg(windows)]
-            wasapi_id: backends::cpal::device_id_string(&default_device),
-        });
-    }
+#[cfg(target_os = "linux")]
+#[inline(always)]
+fn linux_default_output_device(
+    devices: &[backends::linux_alsa::AlsaOutputDevice],
+) -> Option<&backends::linux_alsa::AlsaOutputDevice> {
+    devices
+        .iter()
+        .find(|device| device.is_default)
+        .or_else(|| devices.first())
+}
 
-    let mut device = default_device;
-    let mut device_name = default_device_name;
+#[cfg(target_os = "linux")]
+fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+    let alsa_devices = backends::linux_alsa::enumerate_output_devices();
+    if alsa_devices.is_empty() {
+        warn!(
+            "No ALSA playback devices were enumerated at startup; Linux audio will rely on backend defaults."
+        );
+    }
+    let device_probes: Vec<_> = alsa_devices
+        .iter()
+        .map(|device| OutputDeviceProbe {
+            info: OutputDeviceInfo {
+                name: device.name.clone(),
+                is_default: device.is_default,
+                sample_rates_hz: device.sample_rates_hz.clone(),
+            },
+        })
+        .collect();
     let output_mode = cfg.audio_output_mode;
-    #[cfg(target_os = "linux")]
-    let explicit_device_requested = cfg.audio_output_device_index.is_some();
-    #[cfg(target_os = "linux")]
     let linux_backend = cfg.linux_audio_backend;
-    #[cfg(target_os = "linux")]
-    let mut alsa_pcm_id = backends::cpal::device_id_string(&device);
-    let mut default_config_override: Option<cpal::SupportedStreamConfig> = None;
-    #[cfg(target_os = "macos")]
-    let mut coreaudio_device_uid = backends::cpal::device_id_string(&device);
-    #[cfg(windows)]
-    let mut wasapi_device_id = backends::cpal::device_id_string(&device);
+    let default_device = linux_default_output_device(&alsa_devices);
+    let requested_device = cfg
+        .audio_output_device_index
+        .and_then(|idx| alsa_devices.get(idx as usize));
+    let explicit_device_requested = requested_device.is_some();
     if let Some(requested_idx) = cfg.audio_output_device_index {
-        if let Some(probe) = device_probes.get(requested_idx as usize) {
-            if let Some(cpal_device) = &probe.cpal_device {
-                device = cpal_device.clone();
-            }
-            device_name = probe.info.name.clone();
-            #[cfg(target_os = "linux")]
-            {
-                alsa_pcm_id = probe.alsa_pcm_id.clone();
-            }
-            #[cfg(target_os = "macos")]
-            {
-                coreaudio_device_uid = probe.coreaudio_uid.clone();
-            }
-            #[cfg(windows)]
-            {
-                wasapi_device_id = probe.wasapi_id.clone();
-            }
+        if let Some(device) = requested_device {
             info!(
                 "Audio output device override selected: index {} '{}'.",
-                requested_idx, device_name
+                requested_idx, device.name
             );
         } else {
             warn!(
@@ -1402,119 +1336,46 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             );
         }
     }
-
-    #[cfg(target_os = "linux")]
-    if !explicit_device_requested
-        && matches!(output_mode, crate::config::AudioOutputMode::Exclusive)
-        && matches!(
-            linux_backend,
-            crate::config::LinuxAudioBackend::Auto | crate::config::LinuxAudioBackend::Alsa
-        )
-    {
-        let mut selected_probe = None;
-        for required_rank in [2u8, 1u8] {
-            for probe in &device_probes {
-                if direct_alsa_pcm_rank(probe.alsa_pcm_id.as_deref()) != required_rank {
-                    continue;
-                }
-                let Some(cpal_device) = &probe.cpal_device else {
-                    continue;
-                };
-                match cpal_device.default_output_config() {
-                    Ok(config) => {
-                        selected_probe = Some((
-                            cpal_device.clone(),
-                            probe.info.name.clone(),
-                            probe.alsa_pcm_id.clone(),
-                            config,
-                        ));
-                        break;
-                    }
-                    Err(err) => warn!(
-                        "Skipping ALSA exclusive auto-device candidate '{}': failed to query default output config: {err}",
-                        probe.info.name
-                    ),
-                }
-            }
-            if selected_probe.is_some() {
-                break;
-            }
-        }
-        if let Some((selected_device, selected_name, selected_pcm_id, selected_config)) =
-            selected_probe
-        {
-            device = selected_device;
-            device_name = selected_name;
-            alsa_pcm_id = selected_pcm_id;
-            default_config_override = Some(selected_config);
+    let selected_device = requested_device.or_else(|| {
+        (matches!(output_mode, crate::config::AudioOutputMode::Exclusive)
+            && matches!(
+                linux_backend,
+                crate::config::LinuxAudioBackend::Auto | crate::config::LinuxAudioBackend::Alsa
+            ))
+        .then_some(default_device)
+        .flatten()
+    });
+    let (device_name, alsa_pcm_id) = if let Some(device) = selected_device {
+        if !explicit_device_requested {
             info!(
                 "Audio output device auto-selected for ALSA exclusive mode: '{}' ({})",
-                device_name,
-                alsa_pcm_id.as_deref().unwrap_or("<unknown>")
-            );
-        } else {
-            warn!(
-                "ALSA exclusive auto-device selection found no direct hw/plughw output; falling back to the ALSA default alias."
+                device.name, device.pcm_id
             );
         }
-    }
-
-    let default_config = default_config_override.unwrap_or_else(|| {
-        device
-            .default_output_config()
-            .expect("no default audio config")
-    });
-    let mut stream_config: StreamConfig = default_config.clone().into();
-    let requested_rate = cfg.audio_sample_rate_hz;
-    if let Some(target_hz) = requested_rate {
-        debug!(
-            "Audio sample rate override requested: {} Hz (device default {} Hz).",
-            target_hz, stream_config.sample_rate
-        );
-        stream_config.sample_rate = target_hz;
+        (device.name.clone(), Some(device.pcm_id.clone()))
     } else {
-        debug!(
-            "Audio sample rate override: auto (using device default {} Hz).",
-            stream_config.sample_rate
-        );
-    }
+        ("Default Audio Device".to_string(), None)
+    };
+    let fallback_device = selected_device.or(default_device);
+    let native_sample_rate_hz = cfg
+        .audio_sample_rate_hz
+        .unwrap_or_else(|| fallback_device.map_or(48_000, |device| device.default_rate_hz));
+    let native_channels = fallback_device.map_or(2, |device| device.channels);
     debug!(
-        "Audio device: '{}' (sample_format={:?}, default={} Hz, channels={}).",
-        device_name,
-        default_config.sample_format(),
-        default_config.sample_rate(),
-        default_config.channels()
+        "Audio device: '{}' (native={} Hz, channels={}).",
+        device_name, native_sample_rate_hz, native_channels
     );
     debug!(
-        "Audio output stream config: {} Hz, {} ch, mode={} (may be resampled by OS/driver).",
-        stream_config.sample_rate,
-        stream_config.channels,
+        "Audio output stream config: {} Hz, {} ch, mode={} (Linux native path).",
+        native_sample_rate_hz,
+        native_channels,
         output_mode.as_str()
     );
-    #[cfg(target_os = "linux")]
-    let native_sample_rate_hz = stream_config.sample_rate;
-    #[cfg(target_os = "linux")]
-    let native_channels = stream_config.channels as usize;
-    #[cfg(target_os = "macos")]
-    let native_sample_rate_hz = stream_config.sample_rate;
-    #[cfg(target_os = "macos")]
-    let native_channels = stream_config.channels as usize;
-
     (
         device_probes,
         AudioThreadLaunch {
-            cpal: Some(backends::cpal::CpalBackendLaunch {
-                device,
-                device_name: device_name.clone(),
-                sample_format: default_config.sample_format(),
-                stream_config,
-                output_mode,
-            }),
-            #[cfg(target_os = "linux")]
             explicit_device_requested,
-            #[cfg(target_os = "linux")]
             linux_backend,
-            #[cfg(target_os = "linux")]
             alsa: Some(AlsaBackendHint {
                 pcm_id: alsa_pcm_id,
                 device_name: device_name.clone(),
@@ -1522,14 +1383,12 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
                 channels: native_channels,
                 output_mode,
             }),
-            #[cfg(target_os = "linux")]
             #[cfg(has_jack_audio)]
             jack: Some(JackBackendHint {
                 requested_device_name: explicit_device_requested.then_some(device_name.clone()),
-                requested_rate_hz: requested_rate,
+                requested_rate_hz: cfg.audio_sample_rate_hz,
                 output_mode,
             }),
-            #[cfg(target_os = "linux")]
             #[cfg(has_pipewire_audio)]
             pipewire: Some(PipeWireBackendHint {
                 requested_device_name: explicit_device_requested.then_some(device_name.clone()),
@@ -1537,29 +1396,160 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
                 channels: native_channels,
                 output_mode,
             }),
-            #[cfg(target_os = "linux")]
             #[cfg(has_pulse_audio)]
             pulse: Some(PulseBackendHint {
-                requested_device_name: explicit_device_requested.then_some(device_name.clone()),
+                requested_device_name: explicit_device_requested.then_some(device_name),
                 sample_rate_hz: native_sample_rate_hz,
                 channels: native_channels,
                 output_mode,
             }),
-            #[cfg(target_os = "macos")]
+        },
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+    let devices = backends::macos_coreaudio::enumerate_output_devices();
+    if devices.is_empty() {
+        warn!(
+            "No CoreAudio output devices were enumerated at startup; native audio will use the system default device."
+        );
+    }
+    let device_probes: Vec<_> = devices
+        .iter()
+        .map(|device| OutputDeviceProbe {
+            info: OutputDeviceInfo {
+                name: device.name.clone(),
+                is_default: device.is_default,
+                sample_rates_hz: device.sample_rates_hz.clone(),
+            },
+            coreaudio_uid: Some(device.uid.clone()),
+        })
+        .collect();
+    let output_mode = cfg.audio_output_mode;
+    let default_device = devices
+        .iter()
+        .find(|device| device.is_default)
+        .or_else(|| devices.first());
+    let requested_device = cfg
+        .audio_output_device_index
+        .and_then(|idx| devices.get(idx as usize));
+    if let Some(requested_idx) = cfg.audio_output_device_index {
+        if let Some(device) = requested_device {
+            info!(
+                "Audio output device override selected: index {} '{}'.",
+                requested_idx, device.name
+            );
+        } else {
+            warn!(
+                "Audio output device override index {} not found; using default device.",
+                requested_idx
+            );
+        }
+    }
+    let selected_device = requested_device.or(default_device);
+    let device_name = selected_device
+        .map(|device| device.name.clone())
+        .unwrap_or_else(|| "Default Audio Device".to_string());
+    let device_uid = selected_device.map(|device| device.uid.clone());
+    let native_sample_rate_hz = cfg
+        .audio_sample_rate_hz
+        .unwrap_or_else(|| selected_device.map_or(48_000, |device| device.default_rate_hz));
+    let native_channels = selected_device.map_or(2, |device| device.channels);
+    debug!(
+        "Audio device: '{}' (native={} Hz, channels={}).",
+        device_name, native_sample_rate_hz, native_channels
+    );
+    debug!(
+        "Audio output stream config: {} Hz, {} ch, mode={} (CoreAudio native path).",
+        native_sample_rate_hz,
+        native_channels,
+        output_mode.as_str()
+    );
+    (
+        device_probes,
+        AudioThreadLaunch {
             coreaudio: Some(CoreAudioBackendHint {
-                device_uid: coreaudio_device_uid,
-                device_name: device_name.clone(),
+                device_uid,
+                device_name,
                 sample_rate_hz: native_sample_rate_hz,
                 channels: native_channels,
                 output_mode,
             }),
-            #[cfg(target_os = "freebsd")]
-            freebsd_pcm: None,
-            #[cfg(windows)]
+        },
+    )
+}
+
+#[cfg(windows)]
+fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+    let devices = match backends::windows_wasapi::enumerate_output_devices() {
+        Ok(devices) => devices,
+        Err(err) => {
+            warn!("Failed to enumerate WASAPI output devices at startup: {err}");
+            Vec::new()
+        }
+    };
+    if devices.is_empty() {
+        warn!(
+            "No WASAPI output devices were enumerated at startup; native audio will use the system default device."
+        );
+    }
+    let device_probes: Vec<_> = devices
+        .iter()
+        .map(|device| OutputDeviceProbe {
+            info: OutputDeviceInfo {
+                name: device.name.clone(),
+                is_default: device.is_default,
+                sample_rates_hz: device.sample_rates_hz.clone(),
+            },
+            wasapi_id: Some(device.id.clone()),
+        })
+        .collect();
+    let output_mode = cfg.audio_output_mode;
+    let requested_rate_hz = cfg.audio_sample_rate_hz;
+    let default_device = devices
+        .iter()
+        .find(|device| device.is_default)
+        .or_else(|| devices.first());
+    let requested_device = cfg
+        .audio_output_device_index
+        .and_then(|idx| devices.get(idx as usize));
+    if let Some(requested_idx) = cfg.audio_output_device_index {
+        if let Some(device) = requested_device {
+            info!(
+                "Audio output device override selected: index {} '{}'.",
+                requested_idx, device.name
+            );
+        } else {
+            warn!(
+                "Audio output device override index {} not found; using default device.",
+                requested_idx
+            );
+        }
+    }
+    let selected_device = requested_device.or(default_device);
+    let device_name = selected_device
+        .map(|device| device.name.clone())
+        .unwrap_or_else(|| "Default Audio Device".to_string());
+    let device_id = selected_device.map(|device| device.id.clone());
+    let native_sample_rate_hz = selected_device.map_or(48_000, |device| device.mix_rate_hz);
+    let native_channels = selected_device.map_or(2, |device| device.channels);
+    debug!(
+        "Audio device: '{}' (native={} Hz, channels={}).",
+        device_name, native_sample_rate_hz, native_channels
+    );
+    debug!(
+        "Audio output stream config: {} Hz request, mode={} (WASAPI native path).",
+        requested_rate_hz.unwrap_or(native_sample_rate_hz),
+        output_mode.as_str()
+    );
+    (
+        device_probes,
+        AudioThreadLaunch {
             wasapi: Some(WasapiBackendHint {
-                device_id: wasapi_device_id,
-                device_name: device_name.clone(),
-                requested_rate_hz: requested_rate,
+                device_id,
+                device_name,
+                requested_rate_hz,
                 output_mode,
             }),
         },
@@ -1571,7 +1561,6 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
     let mut device_probes: Vec<_> = backends::freebsd_pcm::enumerate_output_devices()
         .into_iter()
         .map(|dev| OutputDeviceProbe {
-            cpal_device: None,
             info: OutputDeviceInfo {
                 name: dev.name,
                 is_default: dev.is_default,
@@ -1610,7 +1599,6 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             "No FreeBSD PCM devices were enumerated at startup; native audio will still try /dev/dsp."
         );
         device_probes.push(OutputDeviceProbe {
-            cpal_device: None,
             info: OutputDeviceInfo {
                 name: "FreeBSD PCM (/dev/dsp)".to_string(),
                 is_default: true,
@@ -1633,7 +1621,6 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
     (
         device_probes,
         AudioThreadLaunch {
-            cpal: None,
             #[cfg(target_os = "linux")]
             explicit_device_requested: false,
             #[cfg(target_os = "linux")]
@@ -1703,7 +1690,6 @@ fn init_engine_and_thread() -> AudioEngine {
 
 #[allow(dead_code)]
 enum OutputBackend {
-    Cpal(cpal::Stream),
     #[cfg(target_os = "linux")]
     Alsa(backends::linux_alsa::AlsaOutputStream),
     #[cfg(target_os = "linux")]
@@ -1875,7 +1861,6 @@ fn start_output_backend(
     music_ring: Arc<internal::SpscRingI16>,
 ) -> Result<(OutputBackend, OutputBackendReady, Sender<QueuedSfx>), String> {
     let AudioThreadLaunch {
-        cpal,
         #[cfg(target_os = "linux")]
         explicit_device_requested,
         #[cfg(target_os = "linux")]
@@ -1935,189 +1920,124 @@ fn start_output_backend(
                 None
             }
         })
-        .unwrap_or_else(|| {
-            cpal.as_ref()
-                .map(|launch| launch.output_mode)
-                .unwrap_or(crate::config::AudioOutputMode::Auto)
-        });
-    #[cfg(target_os = "freebsd")]
-    let requested_output_mode = freebsd_pcm
-        .as_ref()
-        .map(|hint| hint.output_mode)
-        .unwrap_or_else(|| {
-            cpal.as_ref()
-                .map(|launch| launch.output_mode)
-                .unwrap_or(crate::config::AudioOutputMode::Auto)
-        });
-    #[cfg(windows)]
-    let requested_output_mode = wasapi
-        .as_ref()
-        .map(|hint| hint.output_mode)
-        .unwrap_or_else(|| {
-            cpal.as_ref()
-                .map(|launch| launch.output_mode)
-                .unwrap_or(crate::config::AudioOutputMode::Auto)
-        });
-    #[cfg(target_os = "macos")]
-    let requested_output_mode = coreaudio
-        .as_ref()
-        .map(|hint| hint.output_mode)
-        .or_else(|| cpal.as_ref().map(|launch| launch.output_mode))
         .unwrap_or(crate::config::AudioOutputMode::Auto);
     #[cfg(target_os = "linux")]
-    let fallback_from_native = {
-        match linux_backend {
-            crate::config::LinuxAudioBackend::Alsa => {
+    match linux_backend {
+        crate::config::LinuxAudioBackend::Alsa => {
+            let Some(alsa) = alsa else {
+                return Err("Linux ALSA backend hint unavailable.".to_string());
+            };
+            return start_linux_alsa_backend(alsa, music_ring);
+        }
+        crate::config::LinuxAudioBackend::Jack => {
+            #[cfg(has_jack_audio)]
+            {
+                let Some(jack) = jack else {
+                    return Err("JACK backend hint unavailable.".to_string());
+                };
+                return start_linux_jack_backend(jack, music_ring);
+            }
+            #[cfg(not(has_jack_audio))]
+            {
+                return Err("JACK backend support was not built into this binary.".to_string());
+            }
+        }
+        crate::config::LinuxAudioBackend::PipeWire => {
+            #[cfg(has_pipewire_audio)]
+            {
+                let Some(pipewire) = pipewire else {
+                    return Err("PipeWire backend hint unavailable.".to_string());
+                };
+                return start_linux_pipewire_backend(pipewire, music_ring);
+            }
+            #[cfg(not(has_pipewire_audio))]
+            {
+                return Err("PipeWire backend support was not built into this binary.".to_string());
+            }
+        }
+        crate::config::LinuxAudioBackend::PulseAudio => {
+            #[cfg(has_pulse_audio)]
+            {
+                let Some(pulse) = pulse else {
+                    return Err("PulseAudio backend hint unavailable.".to_string());
+                };
+                return start_linux_pulse_backend(pulse, music_ring);
+            }
+            #[cfg(not(has_pulse_audio))]
+            {
+                return Err(
+                    "PulseAudio backend support was not built into this binary.".to_string()
+                );
+            }
+        }
+        crate::config::LinuxAudioBackend::Auto => {
+            if matches!(
+                requested_output_mode,
+                crate::config::AudioOutputMode::Exclusive
+            ) {
                 let Some(alsa) = alsa else {
-                    return Err("Linux ALSA backend hint unavailable.".to_string());
+                    return Err(
+                        "Linux ALSA backend hint unavailable for exclusive output.".to_string()
+                    );
                 };
                 return start_linux_alsa_backend(alsa, music_ring);
             }
-            crate::config::LinuxAudioBackend::Jack => {
-                #[cfg(target_os = "linux")]
-                #[cfg(has_jack_audio)]
-                {
-                    let Some(jack) = jack else {
-                        return Err("JACK backend hint unavailable.".to_string());
-                    };
-                    return start_linux_jack_backend(jack, music_ring);
-                }
-                #[cfg(not(all(target_os = "linux", has_jack_audio)))]
-                {
-                    return Err("JACK backend support was not built into this binary.".to_string());
-                }
-            }
-            crate::config::LinuxAudioBackend::PipeWire => {
-                #[cfg(target_os = "linux")]
-                #[cfg(has_pipewire_audio)]
-                {
-                    let Some(pipewire) = pipewire else {
-                        return Err("PipeWire backend hint unavailable.".to_string());
-                    };
-                    return start_linux_pipewire_backend(pipewire, music_ring);
-                }
-                #[cfg(not(all(target_os = "linux", has_pipewire_audio)))]
-                {
+            if explicit_device_requested {
+                let Some(alsa) = alsa else {
                     return Err(
-                        "PipeWire backend support was not built into this binary.".to_string()
+                        "Linux ALSA backend hint unavailable for the selected Sound Device."
+                            .to_string(),
                     );
-                }
+                };
+                return start_linux_alsa_backend(alsa, music_ring).map_err(|err| {
+                    format!(
+                        "failed to start native ALSA output for the selected Sound Device: {err}"
+                    )
+                });
             }
-            crate::config::LinuxAudioBackend::PulseAudio => {
-                #[cfg(target_os = "linux")]
-                #[cfg(has_pulse_audio)]
-                {
-                    let Some(pulse) = pulse else {
-                        return Err("PulseAudio backend hint unavailable.".to_string());
-                    };
-                    return start_linux_pulse_backend(pulse, music_ring);
-                }
-                #[cfg(not(all(target_os = "linux", has_pulse_audio)))]
-                {
-                    return Err(
-                        "PulseAudio backend support was not built into this binary.".to_string()
-                    );
-                }
-            }
-            crate::config::LinuxAudioBackend::Auto => {
-                if matches!(
-                    requested_output_mode,
-                    crate::config::AudioOutputMode::Exclusive
-                ) {
-                    let Some(alsa) = alsa else {
-                        return Err(
-                            "Linux ALSA backend hint unavailable for exclusive output.".to_string()
+            #[cfg(has_pipewire_audio)]
+            if let Some(pipewire) = pipewire {
+                match start_linux_pipewire_backend(pipewire, music_ring.clone()) {
+                    Ok(output) => return Ok(output),
+                    Err(err) => {
+                        warn!(
+                            "Failed to start native PipeWire output: {err}. Falling back to PulseAudio/ALSA."
                         );
-                    };
-                    return start_linux_alsa_backend(alsa, music_ring);
-                }
-                if explicit_device_requested {
-                    if let Some(alsa) = alsa {
-                        match start_linux_alsa_backend(alsa, music_ring.clone()) {
-                            Ok(output) => return Ok(output),
-                            Err(err) => {
-                                warn!(
-                                    "Failed to start native ALSA output for the selected Sound Device: {err}. Falling back to CPAL."
-                                );
-                            }
-                        }
-                    }
-                } else {
-                    #[cfg(target_os = "linux")]
-                    #[cfg(has_pipewire_audio)]
-                    if let Some(pipewire) = pipewire {
-                        match start_linux_pipewire_backend(pipewire, music_ring.clone()) {
-                            Ok(output) => return Ok(output),
-                            Err(err) => {
-                                warn!(
-                                    "Failed to start native PipeWire output: {err}. Falling back to PulseAudio/ALSA/CPAL."
-                                );
-                            }
-                        }
-                    }
-                    #[cfg(target_os = "linux")]
-                    #[cfg(has_pulse_audio)]
-                    if let Some(pulse) = pulse {
-                        match start_linux_pulse_backend(pulse, music_ring.clone()) {
-                            Ok(output) => return Ok(output),
-                            Err(err) => {
-                                warn!(
-                                    "Failed to start native PulseAudio output: {err}. Falling back to ALSA/CPAL."
-                                );
-                            }
-                        }
-                    }
-                    if let Some(alsa) = alsa {
-                        match start_linux_alsa_backend(alsa, music_ring.clone()) {
-                            Ok(output) => return Ok(output),
-                            Err(err) => {
-                                warn!(
-                                    "Failed to start native ALSA output: {err}. Falling back to CPAL."
-                                );
-                            }
-                        }
                     }
                 }
-                true
             }
-        }
-    };
-    #[cfg(target_os = "freebsd")]
-    let mut fallback_from_native = false;
-    #[cfg(target_os = "freebsd")]
-    if let Some(pcm) = freebsd_pcm {
-        match start_freebsd_pcm_backend(pcm.clone(), music_ring.clone()) {
-            Ok(output) => return Ok(output),
-            Err(err) => {
-                if matches!(pcm.output_mode, crate::config::AudioOutputMode::Exclusive) {
-                    return Err(err);
+            #[cfg(has_pulse_audio)]
+            if let Some(pulse) = pulse {
+                match start_linux_pulse_backend(pulse, music_ring.clone()) {
+                    Ok(output) => return Ok(output),
+                    Err(err) => {
+                        warn!(
+                            "Failed to start native PulseAudio output: {err}. Falling back to ALSA."
+                        );
+                    }
                 }
-                warn!("Failed to start native FreeBSD PCM output: {err}. Falling back to CPAL.");
-                fallback_from_native = true;
             }
+            if let Some(alsa) = alsa {
+                return start_linux_alsa_backend(alsa, music_ring)
+                    .map_err(|err| format!("failed to start native ALSA output: {err}"));
+            }
+            return Err("no native Linux audio backend hint is available.".to_string());
         }
     }
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
-    let mut fallback_from_native = false;
+    #[cfg(target_os = "freebsd")]
+    if let Some(pcm) = freebsd_pcm {
+        return start_freebsd_pcm_backend(pcm.clone(), music_ring)
+            .map_err(|err| format!("failed to start native FreeBSD PCM output: {err}"));
+    }
 
     #[cfg(target_os = "macos")]
     if let Some(coreaudio) = coreaudio {
-        match start_macos_coreaudio_backend(coreaudio.clone(), music_ring.clone()) {
-            Ok(output) => return Ok(output),
-            Err(err) => {
-                if matches!(
-                    coreaudio.output_mode,
-                    crate::config::AudioOutputMode::Exclusive
-                ) {
-                    return Err(err);
-                }
-                warn!(
-                    "Failed to start native CoreAudio output for '{}': {err}. Falling back to CPAL.",
-                    coreaudio.device_name
-                );
-                fallback_from_native = true;
-            }
-        }
+        return start_macos_coreaudio_backend(coreaudio.clone(), music_ring).map_err(|err| {
+            format!(
+                "failed to start native CoreAudio output for '{}': {err}",
+                coreaudio.device_name
+            )
+        });
     }
 
     #[cfg(windows)]
@@ -2130,66 +2050,37 @@ fn start_output_backend(
                 backends::windows_wasapi::WasapiAccessMode::Shared
             }
         };
-        match backends::windows_wasapi::prepare(
+        let prep = backends::windows_wasapi::prepare(
             wasapi.device_id.clone(),
             wasapi.device_name.clone(),
             wasapi.requested_rate_hz,
             access_mode,
-        ) {
-            Ok(prep) => {
-                let mut ready = prep.ready();
-                ready.requested_output_mode = wasapi.output_mode;
-                let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
-                match backends::windows_wasapi::start(prep, music_ring.clone(), sfx_receiver) {
-                    Ok(stream) => {
-                        return Ok((OutputBackend::Wasapi(stream), ready, sfx_sender));
-                    }
-                    Err(err) => {
-                        if matches!(
-                            wasapi.output_mode,
-                            crate::config::AudioOutputMode::Exclusive
-                        ) {
-                            return Err(format!(
-                                "failed to start native WASAPI exclusive output for '{}': {err}",
-                                wasapi.device_name
-                            ));
-                        }
-                        warn!(
-                            "Failed to start native WASAPI output for '{}': {err}. Falling back to CPAL.",
-                            wasapi.device_name
-                        );
-                        fallback_from_native = true;
-                    }
-                }
-            }
-            Err(err) => {
-                if matches!(
-                    wasapi.output_mode,
-                    crate::config::AudioOutputMode::Exclusive
-                ) {
-                    return Err(format!(
-                        "failed to prepare native WASAPI exclusive output for '{}': {err}",
-                        wasapi.device_name
-                    ));
-                }
-                warn!(
-                    "Failed to prepare native WASAPI output for '{}': {err}. Falling back to CPAL.",
+        )
+        .map_err(|err| {
+            format!(
+                "failed to prepare native WASAPI output for '{}': {err}",
+                wasapi.device_name
+            )
+        })?;
+        let mut ready = prep.ready();
+        ready.requested_output_mode = wasapi.output_mode;
+        let (sfx_sender, sfx_receiver) = channel::<QueuedSfx>();
+        let stream =
+            backends::windows_wasapi::start(prep, music_ring, sfx_receiver).map_err(|err| {
+                format!(
+                    "failed to start native WASAPI output for '{}': {err}",
                     wasapi.device_name
-                );
-                fallback_from_native = true;
-            }
-        }
+                )
+            })?;
+        return Ok((OutputBackend::Wasapi(stream), ready, sfx_sender));
     }
 
-    let Some(cpal) = cpal else {
-        return Err("no CPAL fallback backend is available on this platform build.".to_string());
-    };
-    backends::cpal::start_output(cpal, music_ring, fallback_from_native).map(
-        |(backend, mut ready, sfx_sender)| {
-            ready.requested_output_mode = requested_output_mode;
-            (backend, ready, sfx_sender)
-        },
-    )
+    #[cfg(not(target_os = "linux"))]
+    {
+        return Err(
+            "no native audio backend hint is available on this platform build.".to_string(),
+        );
+    }
 }
 
 /// Manager thread: builds the output backend, mixes SFX, and forwards music via ring.

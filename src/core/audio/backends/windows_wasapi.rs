@@ -9,11 +9,12 @@ use std::slice;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::{self, JoinHandle};
+use windows::Win32::Devices::FunctionDiscovery;
 use windows::Win32::Foundation::{self, CloseHandle, HANDLE, WAIT_FAILED};
 use windows::Win32::Media::{Audio, KernelStreaming, Multimedia};
-use windows::Win32::System::Com;
-use windows::Win32::System::Threading;
-use windows::core::PCWSTR;
+use windows::Win32::System::Com::StructuredStorage;
+use windows::Win32::System::{Com, Threading, Variant};
+use windows::core::{PCWSTR, PWSTR};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WasapiAccessMode {
@@ -93,6 +94,67 @@ impl Drop for WasapiOutputStream {
             let _ = CloseHandle(self.stop_event);
         }
     }
+}
+
+pub(crate) struct WasapiOutputDevice {
+    pub id: String,
+    pub name: String,
+    pub sample_rates_hz: Vec<u32>,
+    pub mix_rate_hz: u32,
+    pub channels: usize,
+    pub is_default: bool,
+}
+
+pub(crate) fn enumerate_output_devices() -> Result<Vec<WasapiOutputDevice>, String> {
+    let _com = ComGuard::new()?;
+    let enumerator = create_device_enumerator()?;
+    let default_device_id = unsafe {
+        enumerator
+            .GetDefaultAudioEndpoint(Audio::eRender, Audio::eConsole)
+            .ok()
+            .and_then(|device| device_id_string(&device).ok())
+    };
+    let collection = unsafe {
+        enumerator
+            .EnumAudioEndpoints(Audio::eRender, Audio::DEVICE_STATE_ACTIVE)
+            .map_err(|e| format!("failed to enumerate WASAPI output devices: {e}"))?
+    };
+    let count = unsafe {
+        collection
+            .GetCount()
+            .map_err(|e| format!("failed to query WASAPI output device count: {e}"))?
+    };
+    let mut devices = Vec::with_capacity(count as usize);
+    for index in 0..count {
+        let device = unsafe {
+            collection
+                .Item(index)
+                .map_err(|e| format!("failed to open WASAPI output device {index}: {e}"))?
+        };
+        let id = device_id_string(&device)?;
+        let name = device_friendly_name(&device).unwrap_or_else(|err| {
+            warn!("failed to query WASAPI device name for '{id}': {err}");
+            id.clone()
+        });
+        let (mix_rate_hz, channels) = device_mix_format(&device).unwrap_or_else(|err| {
+            warn!("failed to probe WASAPI mix format for '{name}': {err}");
+            (48_000, 2)
+        });
+        devices.push(WasapiOutputDevice {
+            is_default: default_device_id.as_deref() == Some(id.as_str()),
+            id,
+            name,
+            sample_rates_hz: vec![mix_rate_hz],
+            mix_rate_hz,
+            channels,
+        });
+    }
+    if !devices.iter().any(|device| device.is_default) {
+        if let Some(device) = devices.first_mut() {
+            device.is_default = true;
+        }
+    }
+    Ok(devices)
 }
 
 pub(crate) fn prepare(
@@ -556,14 +618,20 @@ impl Drop for ComGuard {
     }
 }
 
-fn open_output_device(device_id: Option<&str>) -> Result<Audio::IMMDevice, String> {
+fn create_device_enumerator() -> Result<Audio::IMMDeviceEnumerator, String> {
     unsafe {
-        let enumerator = Com::CoCreateInstance::<_, Audio::IMMDeviceEnumerator>(
+        Com::CoCreateInstance::<_, Audio::IMMDeviceEnumerator>(
             &Audio::MMDeviceEnumerator,
             None,
             Com::CLSCTX_ALL,
         )
-        .map_err(|e| format!("failed to create WASAPI device enumerator: {e}"))?;
+        .map_err(|e| format!("failed to create WASAPI device enumerator: {e}"))
+    }
+}
+
+fn open_output_device(device_id: Option<&str>) -> Result<Audio::IMMDevice, String> {
+    unsafe {
+        let enumerator = create_device_enumerator()?;
         match device_id {
             Some(device_id) => {
                 let wide = wide_null(device_id);
@@ -576,6 +644,39 @@ fn open_output_device(device_id: Option<&str>) -> Result<Audio::IMMDevice, Strin
                 .map_err(|e| format!("failed to open default WASAPI output device: {e}")),
         }
     }
+}
+
+fn device_id_string(device: &Audio::IMMDevice) -> Result<String, String> {
+    unsafe {
+        let id = device
+            .GetId()
+            .map_err(|e| format!("failed to query WASAPI device id: {e}"))?;
+        let text = pwstr_to_string(id);
+        Com::CoTaskMemFree(Some(id.0.cast()));
+        text.map_err(|e| format!("failed to decode WASAPI device id: {e}"))
+    }
+}
+
+fn device_friendly_name(device: &Audio::IMMDevice) -> Result<String, String> {
+    unsafe {
+        let store = device
+            .OpenPropertyStore(Com::STGM_READ)
+            .map_err(|e| format!("OpenPropertyStore failed: {e}"))?;
+        let mut value = store
+            .GetValue(&FunctionDiscovery::PKEY_Device_FriendlyName)
+            .map_err(|e| format!("GetValue(PKEY_Device_FriendlyName) failed: {e}"))?;
+        let name = propvariant_lpwstr(&value)
+            .ok_or_else(|| "device friendly name was not a UTF-16 string".to_string());
+        let _ = StructuredStorage::PropVariantClear(&mut value);
+        name
+    }
+}
+
+fn device_mix_format(device: &Audio::IMMDevice) -> Result<(u32, usize), String> {
+    let audio_client = build_audio_client(device)?;
+    let mix_format = get_mix_format_bytes(&audio_client)?;
+    let wave = waveformat(&mix_format);
+    Ok((wave.nSamplesPerSec.max(1), wave.nChannels.max(1) as usize))
 }
 
 fn build_audio_client(device: &Audio::IMMDevice) -> Result<Audio::IAudioClient, String> {
@@ -656,4 +757,22 @@ fn guid_eq(a: &windows::core::GUID, b: &windows::core::GUID) -> bool {
 
 fn wide_null(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+fn pwstr_to_string(value: PWSTR) -> Result<String, std::string::FromUtf16Error> {
+    unsafe { value.to_string() }
+}
+
+fn propvariant_lpwstr(value: &StructuredStorage::PROPVARIANT) -> Option<String> {
+    unsafe {
+        let inner = &value.Anonymous.Anonymous;
+        if inner.vt != Variant::VT_LPWSTR {
+            return None;
+        }
+        let text = inner.Anonymous.pwszVal;
+        if text.is_null() {
+            return None;
+        }
+        text.to_string().ok()
+    }
 }

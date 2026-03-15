@@ -11,7 +11,7 @@ use coreaudio::audio_unit::macos_helpers::{
 };
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamFormat};
-use log::info;
+use log::{info, warn};
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use objc2_core_audio::{
     AudioDeviceID, AudioObjectGetPropertyData, AudioObjectPropertyAddress,
@@ -57,6 +57,56 @@ impl Drop for CoreAudioOutputStream {
             let _ = audio_unit.stop();
         }
     }
+}
+
+pub(crate) struct CoreAudioOutputDevice {
+    pub uid: String,
+    pub name: String,
+    pub sample_rates_hz: Vec<u32>,
+    pub default_rate_hz: u32,
+    pub channels: usize,
+    pub is_default: bool,
+}
+
+pub(crate) fn enumerate_output_devices() -> Vec<CoreAudioOutputDevice> {
+    let default_device_id = get_default_device_id(false);
+    let Ok(device_ids) = get_audio_device_ids_for_scope(Scope::Output) else {
+        warn!("failed to enumerate CoreAudio output devices at startup");
+        return Vec::new();
+    };
+    let mut devices = Vec::with_capacity(device_ids.len());
+    for device_id in device_ids {
+        let uid = match device_uid(device_id) {
+            Ok(uid) => uid,
+            Err(err) => {
+                warn!("skipping CoreAudio device {device_id}: {err}");
+                continue;
+            }
+        };
+        let name =
+            get_device_name(device_id).unwrap_or_else(|| format!("CoreAudio Device {device_id}"));
+        let (default_rate_hz, channels) = match probe_device_format(device_id) {
+            Ok(format) => format,
+            Err(err) => {
+                warn!("failed to probe CoreAudio device '{name}': {err}");
+                (48_000, 2)
+            }
+        };
+        devices.push(CoreAudioOutputDevice {
+            uid,
+            name,
+            sample_rates_hz: vec![default_rate_hz],
+            default_rate_hz,
+            channels,
+            is_default: default_device_id == Some(device_id),
+        });
+    }
+    if !devices.iter().any(|device| device.is_default) {
+        if let Some(device) = devices.first_mut() {
+            device.is_default = true;
+        }
+    }
+    devices
 }
 
 #[derive(Clone, Copy)]
@@ -193,6 +243,18 @@ fn select_device_id(device_uid: Option<&str>, device_name: &str) -> Result<Audio
         return Ok(device_id);
     }
     get_default_device_id(false).ok_or_else(|| "no default CoreAudio output device".to_string())
+}
+
+fn probe_device_format(device_id: AudioDeviceID) -> Result<(u32, usize), String> {
+    let audio_unit = audio_unit_from_device_id(device_id, false)
+        .map_err(|e| format!("failed to create HAL output unit: {e}"))?;
+    let actual = audio_unit
+        .output_stream_format()
+        .map_err(|e| format!("failed to query output stream format: {e}"))?;
+    Ok((
+        actual.sample_rate.max(1.0).round() as u32,
+        actual.channels.max(1) as usize,
+    ))
 }
 
 fn configure_output_unit(

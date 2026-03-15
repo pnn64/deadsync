@@ -878,36 +878,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cpal"
-version = "0.17.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8942da362c0f0d895d7cac616263f2f9424edc5687364dfd1d25ef7eba506d7"
-dependencies = [
- "alsa",
- "coreaudio-rs",
- "dasp_sample",
- "jni",
- "js-sys",
- "libc",
- "mach2 0.5.0",
- "ndk",
- "ndk-context",
- "num-derive",
- "num-traits",
- "objc2 0.6.4",
- "objc2-audio-toolbox",
- "objc2-avf-audio",
- "objc2-core-audio",
- "objc2-core-audio-types",
- "objc2-core-foundation",
- "objc2-foundation 0.3.2",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "windows",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -969,12 +939,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
-name = "dasp_sample"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
-
-[[package]]
 name = "deadsync"
 version = "0.2.93"
 dependencies = [
@@ -986,7 +950,6 @@ dependencies = [
  "chrono",
  "claxon",
  "coreaudio-rs",
- "cpal",
  "env_logger",
  "fs_extra",
  "glob",
@@ -2531,16 +2494,6 @@ dependencies = [
  "objc2-core-audio",
  "objc2-core-audio-types",
  "objc2-core-foundation",
- "objc2-foundation 0.3.2",
-]
-
-[[package]]
-name = "objc2-avf-audio"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13a380031deed8e99db00065c45937da434ca987c034e13b87e4441f9e4090be"
-dependencies = [
- "objc2 0.6.4",
  "objc2-foundation 0.3.2",
 ]
 

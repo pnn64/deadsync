@@ -1,4 +1,3 @@
-pub mod cpal;
 #[cfg(target_os = "freebsd")]
 pub mod freebsd_pcm;
 #[cfg(target_os = "linux")]

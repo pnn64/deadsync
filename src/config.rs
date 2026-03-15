@@ -633,7 +633,7 @@ pub struct Config {
     pub music_wheel_switch_speed: u8,
     pub assist_tick_volume: u8,
     pub sfx_volume: u8,
-    // None = auto (use host default output device); Some(N) = startup CPAL output-device index.
+    // None = auto (use the backend default output route); Some(N) = startup output-device index.
     pub audio_output_device_index: Option<u16>,
     pub audio_output_mode: AudioOutputMode,
     pub linux_audio_backend: LinuxAudioBackend,

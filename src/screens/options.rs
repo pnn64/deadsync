@@ -1518,7 +1518,7 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Select which Linux backend to prefer.",
             "Backends shown in this menu depend on what this build includes.",
-            "Auto prefers PipeWire first when available, then PulseAudio, and falls back to ALSA or CPAL as needed.",
+            "Auto prefers PipeWire first when available, then PulseAudio, and falls back to ALSA as needed.",
             "PipeWire and PulseAudio are shared-output backends and currently ignore explicit Sound Device selection.",
             "JACK is an explicit low-latency backend and currently ignores Sound Device selection.",
             "ALSA is the direct Linux backend and remains the exclusive/direct path.",
