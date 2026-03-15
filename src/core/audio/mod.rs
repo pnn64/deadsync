@@ -56,6 +56,16 @@ struct OutputDeviceProbe {
     wasapi_id: Option<String>,
 }
 
+#[cfg(target_os = "linux")]
+#[inline(always)]
+fn direct_alsa_pcm_rank(pcm_id: Option<&str>) -> u8 {
+    match pcm_id {
+        Some(pcm_id) if pcm_id.starts_with("hw:") => 2,
+        Some(pcm_id) if pcm_id.starts_with("plughw:") => 1,
+        _ => 0,
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum SfxLane {
     Effect,
@@ -1351,12 +1361,14 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
 
     let mut device = default_device;
     let mut device_name = default_device_name;
+    let output_mode = cfg.audio_output_mode;
     #[cfg(target_os = "linux")]
     let explicit_device_requested = cfg.audio_output_device_index.is_some();
     #[cfg(target_os = "linux")]
     let linux_backend = cfg.linux_audio_backend;
     #[cfg(target_os = "linux")]
     let mut alsa_pcm_id = backends::cpal::device_id_string(&device);
+    let mut default_config_override: Option<cpal::SupportedStreamConfig> = None;
     #[cfg(target_os = "macos")]
     let mut coreaudio_device_uid = backends::cpal::device_id_string(&device);
     #[cfg(windows)]
@@ -1391,12 +1403,69 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
         }
     }
 
-    let default_config = device
-        .default_output_config()
-        .expect("no default audio config");
+    #[cfg(target_os = "linux")]
+    if !explicit_device_requested
+        && matches!(output_mode, crate::config::AudioOutputMode::Exclusive)
+        && matches!(
+            linux_backend,
+            crate::config::LinuxAudioBackend::Auto | crate::config::LinuxAudioBackend::Alsa
+        )
+    {
+        let mut selected_probe = None;
+        for required_rank in [2u8, 1u8] {
+            for probe in &device_probes {
+                if direct_alsa_pcm_rank(probe.alsa_pcm_id.as_deref()) != required_rank {
+                    continue;
+                }
+                let Some(cpal_device) = &probe.cpal_device else {
+                    continue;
+                };
+                match cpal_device.default_output_config() {
+                    Ok(config) => {
+                        selected_probe = Some((
+                            cpal_device.clone(),
+                            probe.info.name.clone(),
+                            probe.alsa_pcm_id.clone(),
+                            config,
+                        ));
+                        break;
+                    }
+                    Err(err) => warn!(
+                        "Skipping ALSA exclusive auto-device candidate '{}': failed to query default output config: {err}",
+                        probe.info.name
+                    ),
+                }
+            }
+            if selected_probe.is_some() {
+                break;
+            }
+        }
+        if let Some((selected_device, selected_name, selected_pcm_id, selected_config)) =
+            selected_probe
+        {
+            device = selected_device;
+            device_name = selected_name;
+            alsa_pcm_id = selected_pcm_id;
+            default_config_override = Some(selected_config);
+            info!(
+                "Audio output device auto-selected for ALSA exclusive mode: '{}' ({})",
+                device_name,
+                alsa_pcm_id.as_deref().unwrap_or("<unknown>")
+            );
+        } else {
+            warn!(
+                "ALSA exclusive auto-device selection found no direct hw/plughw output; falling back to the ALSA default alias."
+            );
+        }
+    }
+
+    let default_config = default_config_override.unwrap_or_else(|| {
+        device
+            .default_output_config()
+            .expect("no default audio config")
+    });
     let mut stream_config: StreamConfig = default_config.clone().into();
     let requested_rate = cfg.audio_sample_rate_hz;
-    let output_mode = cfg.audio_output_mode;
     if let Some(target_hz) = requested_rate {
         debug!(
             "Audio sample rate override requested: {} Hz (device default {} Hz).",
