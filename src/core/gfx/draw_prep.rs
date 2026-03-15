@@ -1,6 +1,5 @@
 use crate::core::gfx::{
     BlendMode, INVALID_TEXTURE_HANDLE, MeshMode, ObjectType, RenderList, TextureHandle,
-    TexturedMeshVertex,
 };
 use cgmath::Matrix4;
 use std::collections::HashMap;
@@ -41,13 +40,6 @@ pub struct TexturedMeshInstanceRaw {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CachedTMeshGeom<Buffer> {
-    pub cache_id: u64,
-    pub vertex_count: u32,
-    pub buffer: Buffer,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpriteRun<Tex> {
     pub instance_start: u32,
     pub instance_count: u32,
@@ -57,12 +49,10 @@ pub struct SpriteRun<Tex> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TexturedMeshRun<Tex, Buffer> {
+pub struct TexturedMeshRun<Tex> {
     pub vertex_start: u32,
     pub vertex_count: u32,
-    pub dynamic_geom: bool,
     pub geom_key: u64,
-    pub cached_vertex_buffer: Option<Buffer>,
     pub instance_start: u32,
     pub instance_count: u32,
     pub mode: MeshMode,
@@ -72,19 +62,19 @@ pub struct TexturedMeshRun<Tex, Buffer> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DrawOp<Tex, Buffer> {
+pub enum DrawOp<Tex> {
     Sprite(SpriteRun<Tex>),
     Mesh(usize),
-    TexturedMesh(TexturedMeshRun<Tex, Buffer>),
+    TexturedMesh(TexturedMeshRun<Tex>),
 }
 
 #[derive(Debug, Default)]
-pub struct GlScratch<Tex, Buffer> {
+pub struct GlScratch<Tex> {
     pub sprite_instances: Vec<SpriteInstanceRaw>,
     pub tmesh_vertices: Vec<TexturedMeshVertexRaw>,
     pub tmesh_instances: Vec<TexturedMeshInstanceRaw>,
-    pub ops: Vec<DrawOp<Tex, Buffer>>,
-    tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom<Buffer>>,
+    pub ops: Vec<DrawOp<Tex>>,
+    tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -99,15 +89,12 @@ struct TMeshGeomKey {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FrameTMeshGeom<Buffer> {
-    Dynamic {
-        vertex_start: u32,
-        vertex_count: u32,
-    },
-    Cached(CachedTMeshGeom<Buffer>),
+struct FrameTMeshGeom {
+    vertex_start: u32,
+    vertex_count: u32,
 }
 
-impl<Tex, Buffer> GlScratch<Tex, Buffer> {
+impl<Tex> GlScratch<Tex> {
     #[inline(always)]
     pub fn with_capacity(
         sprite_instances: usize,
@@ -176,26 +163,20 @@ fn textured_instance_raw(
 }
 
 #[inline(always)]
-fn flush_sprite_run<Tex, Buffer>(
-    sprite_run: &mut Option<SpriteRun<Tex>>,
-    ops: &mut Vec<DrawOp<Tex, Buffer>>,
-) {
+fn flush_sprite_run<Tex>(sprite_run: &mut Option<SpriteRun<Tex>>, ops: &mut Vec<DrawOp<Tex>>) {
     if let Some(run) = sprite_run.take() {
         ops.push(DrawOp::Sprite(run));
     }
 }
 
-pub fn prepare_gl<Tex, Buffer, ResolveTexture, ResolveCachedGeom>(
+pub fn prepare_gl<Tex, ResolveTexture>(
     render_list: &RenderList<'_>,
-    scratch: &mut GlScratch<Tex, Buffer>,
+    scratch: &mut GlScratch<Tex>,
     mut resolve_texture: ResolveTexture,
-    mut resolve_cached_geom: ResolveCachedGeom,
 ) -> PrepareStats
 where
     Tex: Copy + Eq,
-    Buffer: Copy,
     ResolveTexture: FnMut(TextureHandle) -> Option<Tex>,
-    ResolveCachedGeom: FnMut(&[TexturedMeshVertex]) -> Option<CachedTMeshGeom<Buffer>>,
 {
     let objects_len = render_list.objects.len();
     let mut last_texture_handle = INVALID_TEXTURE_HANDLE;
@@ -334,51 +315,29 @@ where
                 let geom = if let Some(geom) = scratch.tmesh_geom.get(&geom_key).copied() {
                     geom
                 } else {
-                    let geom = if let Some(cached) = resolve_cached_geom(vertices.as_ref()) {
-                        FrameTMeshGeom::Cached(cached)
-                    } else {
-                        let vertex_start = scratch.tmesh_vertices.len() as u32;
-                        scratch.tmesh_vertices.reserve(vertices.len());
-                        for v in vertices.iter() {
-                            scratch.tmesh_vertices.push(TexturedMeshVertexRaw {
-                                pos: v.pos,
-                                uv: v.uv,
-                                color: v.color,
-                                tex_matrix_scale: v.tex_matrix_scale,
-                            });
-                        }
-                        stats.dynamic_upload_vertices = stats
-                            .dynamic_upload_vertices
-                            .saturating_add(vertices.len() as u64);
-                        FrameTMeshGeom::Dynamic {
-                            vertex_start,
-                            vertex_count: vertices.len() as u32,
-                        }
+                    let vertex_start = scratch.tmesh_vertices.len() as u32;
+                    scratch.tmesh_vertices.reserve(vertices.len());
+                    for v in vertices.iter() {
+                        scratch.tmesh_vertices.push(TexturedMeshVertexRaw {
+                            pos: v.pos,
+                            uv: v.uv,
+                            color: v.color,
+                            tex_matrix_scale: v.tex_matrix_scale,
+                        });
+                    }
+                    stats.dynamic_upload_vertices = stats
+                        .dynamic_upload_vertices
+                        .saturating_add(vertices.len() as u64);
+                    let geom = FrameTMeshGeom {
+                        vertex_start,
+                        vertex_count: vertices.len() as u32,
                     };
                     scratch.tmesh_geom.insert(geom_key, geom);
                     geom
                 };
-
-                let (vertex_start, vertex_count, dynamic_geom, geom_run_key, cached_vertex_buffer) =
-                    match geom {
-                        FrameTMeshGeom::Dynamic {
-                            vertex_start,
-                            vertex_count,
-                        } => (
-                            vertex_start,
-                            vertex_count,
-                            true,
-                            (1u64 << 63) | u64::from(vertex_start),
-                            None,
-                        ),
-                        FrameTMeshGeom::Cached(cached) => (
-                            0,
-                            cached.vertex_count,
-                            false,
-                            cached.cache_id,
-                            Some(cached.buffer),
-                        ),
-                    };
+                let vertex_start = geom.vertex_start;
+                let vertex_count = geom.vertex_count;
+                let geom_run_key = ((vertex_start as u64) << 32) | u64::from(vertex_count);
 
                 let instance_start = scratch.tmesh_instances.len() as u32;
                 scratch.tmesh_instances.push(textured_instance_raw(
@@ -393,8 +352,8 @@ where
                     && last.blend == obj.blend
                     && last.camera == obj.camera
                     && last.mode == *mode
-                    && last.dynamic_geom == dynamic_geom
                     && last.geom_key == geom_run_key
+                    && last.vertex_count == vertex_count
                     && last.instance_start + last.instance_count == instance_start
                 {
                     last.instance_count += 1;
@@ -404,9 +363,7 @@ where
                 scratch.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
                     vertex_start,
                     vertex_count,
-                    dynamic_geom,
                     geom_key: geom_run_key,
-                    cached_vertex_buffer,
                     instance_start,
                     instance_count: 1,
                     mode: *mode,

@@ -2,8 +2,7 @@ use crate::core::gfx::{
     BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
     SamplerWrap, Texture as RendererTexture, TextureHandle,
     draw_prep::{
-        self, CachedTMeshGeom, DrawOp, GlScratch, SpriteInstanceRaw, TexturedMeshInstanceRaw,
-        TexturedMeshVertexRaw,
+        self, DrawOp, GlScratch, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertexRaw,
     },
 };
 use crate::core::space::ortho_for_window;
@@ -20,10 +19,8 @@ use image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
 use std::{
-    collections::HashMap, error::Error, ffi::CStr, hash::Hasher, mem, num::NonZeroU32, sync::Arc,
-    time::Instant,
+    collections::HashMap, error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant,
 };
-use twox_hash::XxHash64;
 use winit::window::Window;
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -93,44 +90,6 @@ struct ShaderSet {
 #[derive(Debug, Clone, Copy)]
 pub struct Texture(pub glow::Texture);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TMeshCacheKey {
-    hash: u64,
-    len: u32,
-}
-
-struct TMeshCacheEntry {
-    id: u64,
-    vertex_count: u32,
-    bytes: u64,
-    last_used_frame: u64,
-    buffer: glow::Buffer,
-}
-
-struct TMeshSeenEntry {
-    hits: u8,
-    last_seen_frame: u64,
-}
-
-#[derive(Clone, Copy, Default)]
-struct TMeshFrameDebug {
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
-}
-
-#[derive(Default)]
-struct TMeshDebugAccum {
-    frames: u32,
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
-}
-
 pub struct State {
     pub gl: glow::Context,
     gl_surface: Surface<WindowSurface>,
@@ -157,14 +116,7 @@ pub struct State {
     tmesh_vao: glow::VertexArray,
     tmesh_vbo: glow::Buffer,
     tmesh_instance_vbo: glow::Buffer,
-    prep: GlScratch<glow::Texture, glow::Buffer>,
-    tmesh_cache_entries: HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    tmesh_cache_seen: HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    tmesh_cache_frame: u64,
-    tmesh_cache_total_bytes: u64,
-    next_tmesh_cache_id: u64,
-    tmesh_debug_enabled: bool,
-    tmesh_debug_accum: TMeshDebugAccum,
+    prep: GlScratch<glow::Texture>,
     vsync_enabled: bool,
 }
 
@@ -459,13 +411,6 @@ pub fn init(
         tmesh_vbo,
         tmesh_instance_vbo,
         prep: GlScratch::with_capacity(256, 1024, 256, 64),
-        tmesh_cache_entries: HashMap::new(),
-        tmesh_cache_seen: HashMap::new(),
-        tmesh_cache_frame: 0,
-        tmesh_cache_total_bytes: 0,
-        next_tmesh_cache_id: 1,
-        tmesh_debug_enabled: gfx_debug_enabled,
-        tmesh_debug_accum: TMeshDebugAccum::default(),
         vsync_enabled,
     };
 
@@ -660,51 +605,15 @@ pub fn draw(
         *last = Some(want);
     }
 
-    state.tmesh_cache_frame = state.tmesh_cache_frame.wrapping_add(1);
-    prune_tmesh_seen_entries(&mut state.tmesh_cache_seen, state.tmesh_cache_frame);
-    let mut tmesh_debug_frame = TMeshFrameDebug::default();
-    tmesh_debug_frame.cache_evictions =
-        tmesh_debug_frame
-            .cache_evictions
-            .saturating_add(evict_tmesh_cache_entries(
-                &state.gl,
-                &mut state.tmesh_cache_entries,
-                &mut state.tmesh_cache_total_bytes,
-                state.tmesh_cache_frame,
-            ) as u64);
-
     let backend_prepare_started = Instant::now();
     {
-        let cache_frame = state.tmesh_cache_frame;
-        let gl = &state.gl;
         let prep = &mut state.prep;
-        let tmesh_cache_entries = &mut state.tmesh_cache_entries;
-        let tmesh_cache_seen = &mut state.tmesh_cache_seen;
-        let next_tmesh_cache_id = &mut state.next_tmesh_cache_id;
-        let tmesh_cache_total_bytes = &mut state.tmesh_cache_total_bytes;
-        let prep_stats = draw_prep::prepare_gl(
-            render_list,
-            prep,
-            |texture_handle| match textures.get(&texture_handle) {
-                Some(RendererTexture::OpenGL(gl_tex)) => Some(gl_tex.0),
-                _ => None,
-            },
-            |vertices| {
-                try_get_or_promote_cached_tmesh_geom(
-                    gl,
-                    tmesh_cache_entries,
-                    tmesh_cache_seen,
-                    next_tmesh_cache_id,
-                    tmesh_cache_total_bytes,
-                    &mut tmesh_debug_frame,
-                    cache_frame,
-                    vertices,
-                )
-            },
-        );
-        tmesh_debug_frame.dynamic_upload_vertices = tmesh_debug_frame
-            .dynamic_upload_vertices
-            .saturating_add(prep_stats.dynamic_upload_vertices);
+        let _prep_stats = draw_prep::prepare_gl(render_list, prep, |texture_handle| match textures
+            .get(&texture_handle)
+        {
+            Some(RendererTexture::OpenGL(gl_tex)) => Some(gl_tex.0),
+            _ => None,
+        });
     }
     let mut stats = DrawStats::default();
     stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
@@ -935,15 +844,7 @@ pub fn draw(
 
                     if last_tmesh_geom_key != Some(run.geom_key) {
                         let stride = std::mem::size_of::<TexturedMeshVertexRaw>() as i32;
-                        let vertex_buffer = if run.dynamic_geom {
-                            Some(state.tmesh_vbo)
-                        } else {
-                            run.cached_vertex_buffer
-                        };
-                        let Some(buffer) = vertex_buffer else {
-                            continue;
-                        };
-                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
                         gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
                         gl.vertex_attrib_pointer_f32(
                             1,
@@ -1050,14 +951,9 @@ pub fn draw(
                     let prim = match run.mode {
                         MeshMode::Triangles => glow::TRIANGLES,
                     };
-                    let draw_start = if run.dynamic_geom {
-                        run.vertex_start as i32
-                    } else {
-                        0
-                    };
                     gl.draw_arrays_instanced(
                         prim,
-                        draw_start,
+                        run.vertex_start as i32,
                         run.vertex_count as i32,
                         run.instance_count as i32,
                     );
@@ -1098,7 +994,6 @@ pub fn draw(
         );
     }
     stats.vertices = vertices;
-    push_tmesh_debug_sample(state, tmesh_debug_frame);
     Ok(stats)
 }
 
@@ -1147,186 +1042,6 @@ fn flip_rows_rgba_in_place(width: usize, height: usize, pixels: &mut [u8]) {
     }
 }
 
-#[inline(always)]
-fn tmesh_cache_key(vertices: &[crate::core::gfx::TexturedMeshVertex]) -> TMeshCacheKey {
-    let mut hasher = XxHash64::with_seed(0);
-    hasher.write(bytemuck::cast_slice(vertices));
-    TMeshCacheKey {
-        hash: hasher.finish(),
-        len: vertices.len() as u32,
-    }
-}
-
-#[inline(always)]
-fn build_tmesh_vertex_raw(
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Vec<TexturedMeshVertexRaw> {
-    let mut out = Vec::with_capacity(vertices.len());
-    for v in vertices {
-        out.push(TexturedMeshVertexRaw {
-            pos: v.pos,
-            uv: v.uv,
-            tex_matrix_scale: v.tex_matrix_scale,
-            color: v.color,
-        });
-    }
-    out
-}
-
-fn try_get_or_promote_cached_tmesh_geom(
-    gl: &glow::Context,
-    cache_entries: &mut HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    next_cache_id: &mut u64,
-    cache_total_bytes: &mut u64,
-    debug_frame: &mut TMeshFrameDebug,
-    frame: u64,
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Option<CachedTMeshGeom<glow::Buffer>> {
-    if vertices.len() < TMESH_CACHE_MIN_VERTS || vertices.is_empty() {
-        return None;
-    }
-
-    let cache_key = tmesh_cache_key(vertices);
-    if let Some(entry) = cache_entries.get_mut(&cache_key) {
-        entry.last_used_frame = frame;
-        debug_frame.cache_hits = debug_frame.cache_hits.saturating_add(1);
-        return Some(CachedTMeshGeom {
-            cache_id: entry.id,
-            vertex_count: entry.vertex_count,
-            buffer: entry.buffer,
-        });
-    }
-    debug_frame.cache_misses = debug_frame.cache_misses.saturating_add(1);
-
-    let promote = {
-        let seen = cache_seen.entry(cache_key).or_insert(TMeshSeenEntry {
-            hits: 0,
-            last_seen_frame: frame,
-        });
-        if frame.saturating_sub(seen.last_seen_frame) > TMESH_CACHE_SEEN_TTL_FRAMES {
-            seen.hits = 0;
-        }
-        seen.last_seen_frame = frame;
-        seen.hits = seen.hits.saturating_add(1);
-        seen.hits >= TMESH_CACHE_PROMOTE_HITS
-    };
-    if !promote {
-        return None;
-    }
-    debug_frame.cache_promotions = debug_frame.cache_promotions.saturating_add(1);
-
-    let raw = build_tmesh_vertex_raw(vertices);
-    let bytes = (raw.len() * std::mem::size_of::<TexturedMeshVertexRaw>()) as u64;
-    let buffer = match unsafe { gl.create_buffer() } {
-        Ok(buffer) => buffer,
-        Err(err) => {
-            warn!("OpenGL textured mesh cache allocation failed: {err}");
-            return None;
-        }
-    };
-    unsafe {
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            bytemuck::cast_slice(raw.as_slice()),
-            glow::STATIC_DRAW,
-        );
-    }
-
-    let cache_id = *next_cache_id;
-    *next_cache_id = (*next_cache_id).wrapping_add(1).max(1);
-    *cache_total_bytes = cache_total_bytes.saturating_add(bytes);
-    cache_entries.insert(
-        cache_key,
-        TMeshCacheEntry {
-            id: cache_id,
-            vertex_count: raw.len() as u32,
-            bytes,
-            last_used_frame: frame,
-            buffer,
-        },
-    );
-    debug_frame.cache_evictions =
-        debug_frame
-            .cache_evictions
-            .saturating_add(
-                evict_tmesh_cache_entries(gl, cache_entries, cache_total_bytes, frame) as u64,
-            );
-    Some(CachedTMeshGeom {
-        cache_id,
-        vertex_count: raw.len() as u32,
-        buffer,
-    })
-}
-
-fn evict_tmesh_cache_entries(
-    gl: &glow::Context,
-    cache_entries: &mut HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    cache_total_bytes: &mut u64,
-    frame: u64,
-) -> u32 {
-    let mut evicted: u32 = 0;
-    while *cache_total_bytes > TMESH_CACHE_MAX_BYTES {
-        let Some(oldest_key) = cache_entries
-            .iter()
-            .filter_map(|(key, entry)| (entry.last_used_frame != frame).then_some((*key, entry)))
-            .min_by_key(|(_, entry)| entry.last_used_frame)
-            .map(|(key, _)| key)
-        else {
-            break;
-        };
-        if let Some(entry) = cache_entries.remove(&oldest_key) {
-            *cache_total_bytes = cache_total_bytes.saturating_sub(entry.bytes);
-            unsafe {
-                gl.delete_buffer(entry.buffer);
-            }
-            evicted = evicted.saturating_add(1);
-        }
-    }
-    evicted
-}
-
-fn prune_tmesh_seen_entries(cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>, frame: u64) {
-    cache_seen.retain(|_, seen| {
-        frame.saturating_sub(seen.last_seen_frame) <= TMESH_CACHE_SEEN_TTL_FRAMES
-    });
-}
-
-fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
-    if !state.tmesh_debug_enabled {
-        return;
-    }
-    let accum = &mut state.tmesh_debug_accum;
-    accum.frames = accum.frames.saturating_add(1);
-    accum.cache_hits = accum.cache_hits.saturating_add(frame.cache_hits);
-    accum.cache_misses = accum.cache_misses.saturating_add(frame.cache_misses);
-    accum.cache_promotions = accum
-        .cache_promotions
-        .saturating_add(frame.cache_promotions);
-    accum.cache_evictions = accum.cache_evictions.saturating_add(frame.cache_evictions);
-    accum.dynamic_upload_vertices = accum
-        .dynamic_upload_vertices
-        .saturating_add(frame.dynamic_upload_vertices);
-
-    if accum.frames < TMESH_DEBUG_LOG_EVERY_FRAMES {
-        return;
-    }
-    let frames = u64::from(accum.frames).max(1);
-    let dyn_avg = accum.dynamic_upload_vertices / frames;
-    debug!(
-        "OpenGL tmesh-cache: hit={} miss={} promote={} evict={} dyn_upload_vtx/frame={} cache_entries={} cache_mb={:.2}",
-        accum.cache_hits,
-        accum.cache_misses,
-        accum.cache_promotions,
-        accum.cache_evictions,
-        dyn_avg,
-        state.tmesh_cache_entries.len(),
-        (state.tmesh_cache_total_bytes as f64) / (1024.0 * 1024.0)
-    );
-    *accum = TMeshDebugAccum::default();
-}
-
 pub fn resize(state: &mut State, width: u32, height: u32) {
     if width == 0 || height == 0 {
         warn!("Ignoring resize to zero dimensions.");
@@ -1346,11 +1061,6 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up OpenGL resources...");
     unsafe {
-        for (_, entry) in state.tmesh_cache_entries.drain() {
-            state.gl.delete_buffer(entry.buffer);
-        }
-        state.tmesh_cache_seen.clear();
-        state.tmesh_cache_total_bytes = 0;
         state.gl.delete_program(state.program);
         state.gl.delete_program(state.mesh_program);
         state.gl.delete_program(state.tmesh_program);
@@ -1366,12 +1076,6 @@ pub fn cleanup(state: &mut State) {
     }
     info!("OpenGL resources cleaned up.");
 }
-
-const TMESH_CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
-const TMESH_CACHE_MIN_VERTS: usize = 32;
-const TMESH_CACHE_PROMOTE_HITS: u8 = 2;
-const TMESH_CACHE_SEEN_TTL_FRAMES: u64 = 1800;
-const TMESH_DEBUG_LOG_EVERY_FRAMES: u32 = 300;
 
 fn create_opengl_context(
     window: &Window,

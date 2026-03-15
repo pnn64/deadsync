@@ -13,8 +13,7 @@ use ash::{
 use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
 use log::{debug, error, info, warn};
-use std::{collections::HashMap, error::Error, ffi, hash::Hasher, mem, sync::Arc, time::Instant};
-use twox_hash::XxHash64;
+use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc, time::Instant};
 #[cfg(windows)]
 use windows::Win32::System::Performance;
 use winit::{
@@ -80,55 +79,10 @@ struct TMeshGeomKey {
     len: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TMeshCacheKey {
-    hash: u64,
-    len: u32,
-}
-
 #[derive(Clone, Copy)]
-enum FrameTMeshGeom {
-    Dynamic {
-        vertex_start: u32,
-        vertex_count: u32,
-    },
-    Cached {
-        cache_id: u64,
-        vertex_count: u32,
-        buffer: vk::Buffer,
-    },
-}
-
-struct TMeshCacheEntry {
-    id: u64,
+struct FrameTMeshGeom {
+    vertex_start: u32,
     vertex_count: u32,
-    bytes: u64,
-    last_used_frame: u64,
-    buffer: BufferResource,
-}
-
-struct TMeshSeenEntry {
-    hits: u8,
-    last_seen_frame: u64,
-}
-
-#[derive(Clone, Copy, Default)]
-struct TMeshFrameDebug {
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
-}
-
-#[derive(Default)]
-struct TMeshDebugAccum {
-    frames: u32,
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
 }
 
 struct PipelinePair {
@@ -283,14 +237,7 @@ pub struct State {
     tmesh_instance_ring_ptr: *mut TexturedMeshInstanceGpu, // persistently mapped pointer
     tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
-    tmesh_cache_entries: HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    tmesh_cache_seen: HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    tmesh_cache_frame: u64,
-    tmesh_cache_total_bytes: u64,
-    next_tmesh_cache_id: u64,
     scratch_tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom>,
-    tmesh_debug_enabled: bool,
-    tmesh_debug_accum: TMeshDebugAccum,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
     present_telemetry: PresentTelemetryState,
@@ -433,14 +380,7 @@ pub fn init(
         tmesh_instance_ring_ptr: std::ptr::null_mut(),
         tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
-        tmesh_cache_entries: HashMap::new(),
-        tmesh_cache_seen: HashMap::new(),
-        tmesh_cache_frame: 0,
-        tmesh_cache_total_bytes: 0,
-        next_tmesh_cache_id: 1,
         scratch_tmesh_geom: HashMap::new(),
-        tmesh_debug_enabled: gfx_debug_enabled,
-        tmesh_debug_accum: TMeshDebugAccum::default(),
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
         present_telemetry,
@@ -1419,10 +1359,6 @@ pub fn draw(
         (center, [sx, sy], [sin_t, cos_t])
     }
 
-    state.tmesh_cache_frame = state.tmesh_cache_frame.wrapping_add(1);
-    prune_tmesh_seen_entries(&mut state.tmesh_cache_seen, state.tmesh_cache_frame);
-    let mut tmesh_debug_frame = TMeshFrameDebug::default();
-
     let (needed_instances, needed_mesh_vertices, needed_tmesh_vertices, needed_tmesh_instances) = {
         let mut inst: usize = 0;
         let mut mesh: usize = 0;
@@ -1488,9 +1424,7 @@ pub fn draw(
         set: vk::DescriptorSet,
         vertex_start: u32,
         vertex_count: u32,
-        dynamic_geom: bool,
         geom_key: u64,
-        cached_vertex_buffer: Option<vk::Buffer>,
         instance_start: u32,
         instance_count: u32,
         camera: u8,
@@ -1519,9 +1453,6 @@ pub fn draw(
         stats.gpu_wait_us = stats
             .gpu_wait_us
             .saturating_add(elapsed_us_since(wait_started));
-        tmesh_debug_frame.cache_evictions = tmesh_debug_frame
-            .cache_evictions
-            .saturating_add(evict_tmesh_cache_entries(state, state.tmesh_cache_frame) as u64);
 
         let acquire_started = Instant::now();
         let (image_index, acquired_suboptimal) = match state
@@ -1578,11 +1509,6 @@ pub fn draw(
         let tmesh_instance_base_ptr = base_first_tmesh_instance.map_or(std::ptr::null_mut(), |b| {
             state.tmesh_instance_ring_ptr.add(b as usize)
         });
-        let cache_frame = state.tmesh_cache_frame;
-        let tmesh_cache_entries = &mut state.tmesh_cache_entries;
-        let tmesh_cache_seen = &mut state.tmesh_cache_seen;
-        let next_tmesh_cache_id = &mut state.next_tmesh_cache_id;
-        let tmesh_cache_total_bytes = &mut state.tmesh_cache_total_bytes;
         let tmesh_geom = &mut state.scratch_tmesh_geom;
         tmesh_geom.clear();
         if tmesh_geom.capacity() < needed_tmesh_instances {
@@ -1704,68 +1630,30 @@ pub fn draw(
                     let geom = if let Some(&geom) = tmesh_geom.get(&geom_key) {
                         geom
                     } else {
-                        let geom = if let Some(cached) = try_get_or_promote_cached_tmesh_geom(
-                            &state.instance,
-                            device.as_ref(),
-                            state.pdevice,
-                            tmesh_cache_entries,
-                            tmesh_cache_seen,
-                            next_tmesh_cache_id,
-                            tmesh_cache_total_bytes,
-                            &mut tmesh_debug_frame,
-                            cache_frame,
-                            vertices,
-                        ) {
-                            cached
-                        } else {
-                            debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
-                            let start = tmesh_written;
-                            for v in vertices.iter() {
-                                std::ptr::write(
-                                    tmesh_base_ptr.add(tmesh_written as usize),
-                                    TexturedMeshVertexGpu {
-                                        pos: v.pos,
-                                        uv: v.uv,
-                                        color: v.color,
-                                        tex_matrix_scale: v.tex_matrix_scale,
-                                    },
-                                );
-                                tmesh_written += 1;
-                            }
-                            tmesh_debug_frame.dynamic_upload_vertices = tmesh_debug_frame
-                                .dynamic_upload_vertices
-                                .saturating_add((tmesh_written - start) as u64);
-                            FrameTMeshGeom::Dynamic {
-                                vertex_start: start,
-                                vertex_count: tmesh_written - start,
-                            }
+                        debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
+                        let start = tmesh_written;
+                        for v in vertices.iter() {
+                            std::ptr::write(
+                                tmesh_base_ptr.add(tmesh_written as usize),
+                                TexturedMeshVertexGpu {
+                                    pos: v.pos,
+                                    uv: v.uv,
+                                    color: v.color,
+                                    tex_matrix_scale: v.tex_matrix_scale,
+                                },
+                            );
+                            tmesh_written += 1;
+                        }
+                        let geom = FrameTMeshGeom {
+                            vertex_start: start,
+                            vertex_count: tmesh_written - start,
                         };
                         tmesh_geom.insert(geom_key, geom);
                         geom
                     };
-                    let (
-                        vertex_start,
-                        vertex_count,
-                        dynamic_geom,
-                        geom_run_key,
-                        cached_vertex_buffer,
-                    ) = match geom {
-                        FrameTMeshGeom::Dynamic {
-                            vertex_start,
-                            vertex_count,
-                        } => (
-                            vertex_start,
-                            vertex_count,
-                            true,
-                            (1u64 << 63) | u64::from(vertex_start),
-                            None,
-                        ),
-                        FrameTMeshGeom::Cached {
-                            cache_id,
-                            vertex_count,
-                            buffer,
-                        } => (0, vertex_count, false, cache_id, Some(buffer)),
-                    };
+                    let vertex_start = geom.vertex_start;
+                    let vertex_count = geom.vertex_count;
+                    let geom_run_key = ((vertex_start as u64) << 32) | u64::from(vertex_count);
                     let instance_start = tmesh_instance_written;
                     let model: [[f32; 4]; 4] = obj.transform.into();
                     std::ptr::write(
@@ -1785,8 +1673,8 @@ pub fn draw(
                     if let Some(Op::TexturedMesh(run)) = ops.last_mut()
                         && run.set == set
                         && run.camera == obj.camera
-                        && run.dynamic_geom == dynamic_geom
                         && run.geom_key == geom_run_key
+                        && run.vertex_count == vertex_count
                         && run.instance_start + run.instance_count == instance_start
                     {
                         run.instance_count += 1;
@@ -1795,9 +1683,7 @@ pub fn draw(
                             set,
                             vertex_start,
                             vertex_count,
-                            dynamic_geom,
                             geom_key: geom_run_key,
-                            cached_vertex_buffer,
                             instance_start,
                             instance_count: 1,
                             camera: obj.camera,
@@ -1955,12 +1841,7 @@ pub fn draw(
                     }
 
                     if last_tmesh_geom_key != Some(draw.geom_key) {
-                        let vertex_buffer = if draw.dynamic_geom {
-                            state.tmesh_ring.as_ref().map(|ring| ring.buffer)
-                        } else {
-                            draw.cached_vertex_buffer
-                        };
-                        let Some(vb) = vertex_buffer else {
+                        let Some(vb) = state.tmesh_ring.as_ref().map(|ring| ring.buffer) else {
                             continue;
                         };
                         device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
@@ -1996,11 +1877,7 @@ pub fn draw(
                         last_set = draw.set;
                     }
 
-                    let first_vertex = if draw.dynamic_geom {
-                        base_first_tmesh_vertex.unwrap_or(0) + draw.vertex_start
-                    } else {
-                        0
-                    };
+                    let first_vertex = base_first_tmesh_vertex.unwrap_or(0) + draw.vertex_start;
                     let first_instance =
                         base_first_tmesh_instance.unwrap_or(0) + draw.instance_start;
                     device.cmd_draw(
@@ -2240,191 +2117,9 @@ pub fn draw(
         stats.present_stats.applied_back_pressure = back_pressure_waited;
         stats.present_stats.queue_idle_waited = queue_idle_waited;
         state.current_frame = (state.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
-        push_tmesh_debug_sample(state, tmesh_debug_frame);
         stats.vertices = vertices_drawn;
         Ok(stats)
     }
-}
-
-#[inline(always)]
-fn tmesh_cache_key(vertices: &[crate::core::gfx::TexturedMeshVertex]) -> TMeshCacheKey {
-    let mut hasher = XxHash64::with_seed(0);
-    let bytes = unsafe {
-        std::slice::from_raw_parts(
-            vertices.as_ptr().cast::<u8>(),
-            std::mem::size_of_val(vertices),
-        )
-    };
-    hasher.write(bytes);
-    TMeshCacheKey {
-        hash: hasher.finish(),
-        len: vertices.len() as u32,
-    }
-}
-
-#[inline(always)]
-fn build_tmesh_vertex_raw(
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Vec<TexturedMeshVertexGpu> {
-    let mut out = Vec::with_capacity(vertices.len());
-    for v in vertices {
-        out.push(TexturedMeshVertexGpu {
-            pos: v.pos,
-            uv: v.uv,
-            color: v.color,
-            tex_matrix_scale: v.tex_matrix_scale,
-        });
-    }
-    out
-}
-
-fn try_get_or_promote_cached_tmesh_geom(
-    instance: &Instance,
-    device: &Device,
-    pdevice: vk::PhysicalDevice,
-    cache_entries: &mut HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    next_cache_id: &mut u64,
-    cache_total_bytes: &mut u64,
-    debug_frame: &mut TMeshFrameDebug,
-    frame: u64,
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Option<FrameTMeshGeom> {
-    if vertices.len() < TMESH_CACHE_MIN_VERTS || vertices.is_empty() {
-        return None;
-    }
-
-    let cache_key = tmesh_cache_key(vertices);
-    if let Some(entry) = cache_entries.get_mut(&cache_key) {
-        entry.last_used_frame = frame;
-        debug_frame.cache_hits = debug_frame.cache_hits.saturating_add(1);
-        return Some(FrameTMeshGeom::Cached {
-            cache_id: entry.id,
-            vertex_count: entry.vertex_count,
-            buffer: entry.buffer.buffer,
-        });
-    }
-    debug_frame.cache_misses = debug_frame.cache_misses.saturating_add(1);
-
-    let promote = {
-        let seen = cache_seen.entry(cache_key).or_insert(TMeshSeenEntry {
-            hits: 0,
-            last_seen_frame: frame,
-        });
-        if frame.saturating_sub(seen.last_seen_frame) > TMESH_CACHE_SEEN_TTL_FRAMES {
-            seen.hits = 0;
-        }
-        seen.last_seen_frame = frame;
-        seen.hits = seen.hits.saturating_add(1);
-        seen.hits >= TMESH_CACHE_PROMOTE_HITS
-    };
-    if !promote {
-        return None;
-    }
-    debug_frame.cache_promotions = debug_frame.cache_promotions.saturating_add(1);
-
-    let raw = build_tmesh_vertex_raw(vertices);
-    let bytes = (raw.len() * mem::size_of::<TexturedMeshVertexGpu>()) as u64;
-    let buffer = match create_host_visible_buffer(
-        instance,
-        device,
-        pdevice,
-        vk::BufferUsageFlags::VERTEX_BUFFER,
-        raw.as_slice(),
-    ) {
-        Ok(buffer) => buffer,
-        Err(err) => {
-            warn!("Vulkan textured mesh cache allocation failed: {err}");
-            return None;
-        }
-    };
-
-    let cache_id = *next_cache_id;
-    *next_cache_id = (*next_cache_id).wrapping_add(1).max(1);
-    *cache_total_bytes = cache_total_bytes.saturating_add(bytes);
-    let vertex_count = raw.len() as u32;
-    let handle = buffer.buffer;
-    cache_entries.insert(
-        cache_key,
-        TMeshCacheEntry {
-            id: cache_id,
-            vertex_count,
-            bytes,
-            last_used_frame: frame,
-            buffer,
-        },
-    );
-    Some(FrameTMeshGeom::Cached {
-        cache_id,
-        vertex_count,
-        buffer: handle,
-    })
-}
-
-fn evict_tmesh_cache_entries(state: &mut State, frame: u64) -> u32 {
-    let mut evicted: u32 = 0;
-    while state.tmesh_cache_total_bytes > TMESH_CACHE_MAX_BYTES {
-        let Some(oldest_key) = state
-            .tmesh_cache_entries
-            .iter()
-            .filter_map(|(key, entry)| {
-                let age = frame.saturating_sub(entry.last_used_frame);
-                (entry.last_used_frame != frame && age >= TMESH_CACHE_EVICT_SAFE_FRAMES)
-                    .then_some((*key, entry.last_used_frame))
-            })
-            .min_by_key(|(_, last_used_frame)| *last_used_frame)
-            .map(|(key, _)| key)
-        else {
-            break;
-        };
-        if let Some(entry) = state.tmesh_cache_entries.remove(&oldest_key) {
-            state.tmesh_cache_total_bytes =
-                state.tmesh_cache_total_bytes.saturating_sub(entry.bytes);
-            destroy_buffer(state.device.as_ref().unwrap(), &entry.buffer);
-            evicted = evicted.saturating_add(1);
-        }
-    }
-    evicted
-}
-
-fn prune_tmesh_seen_entries(cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>, frame: u64) {
-    cache_seen.retain(|_, seen| {
-        frame.saturating_sub(seen.last_seen_frame) <= TMESH_CACHE_SEEN_TTL_FRAMES
-    });
-}
-
-fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
-    if !state.tmesh_debug_enabled {
-        return;
-    }
-    let accum = &mut state.tmesh_debug_accum;
-    accum.frames = accum.frames.saturating_add(1);
-    accum.cache_hits = accum.cache_hits.saturating_add(frame.cache_hits);
-    accum.cache_misses = accum.cache_misses.saturating_add(frame.cache_misses);
-    accum.cache_promotions = accum
-        .cache_promotions
-        .saturating_add(frame.cache_promotions);
-    accum.cache_evictions = accum.cache_evictions.saturating_add(frame.cache_evictions);
-    accum.dynamic_upload_vertices = accum
-        .dynamic_upload_vertices
-        .saturating_add(frame.dynamic_upload_vertices);
-
-    if accum.frames < TMESH_DEBUG_LOG_EVERY_FRAMES {
-        return;
-    }
-    let frames = u64::from(accum.frames).max(1);
-    let dyn_avg = accum.dynamic_upload_vertices / frames;
-    debug!(
-        "Vulkan tmesh-cache: hit={} miss={} promote={} evict={} dyn_upload_vtx/frame={} cache_entries={} cache_mb={:.2}",
-        accum.cache_hits,
-        accum.cache_misses,
-        accum.cache_promotions,
-        accum.cache_evictions,
-        dyn_avg,
-        state.tmesh_cache_entries.len(),
-        (state.tmesh_cache_total_bytes as f64) / (1024.0 * 1024.0)
-    );
-    *accum = TMeshDebugAccum::default();
 }
 
 pub fn cleanup(state: &mut State) {
@@ -2498,12 +2193,6 @@ pub fn cleanup(state: &mut State) {
             }
             destroy_buffer(state.device.as_ref().unwrap(), &ring);
         }
-        for (_, entry) in state.tmesh_cache_entries.drain() {
-            destroy_buffer(state.device.as_ref().unwrap(), &entry.buffer);
-        }
-        state.tmesh_cache_seen.clear();
-        state.tmesh_cache_total_bytes = 0;
-
         for sampler in state.sampler_cache.values() {
             state
                 .device
@@ -3090,30 +2779,6 @@ fn create_buffer<T: Copy>(
     }
 }
 
-fn create_host_visible_buffer<T: Copy>(
-    instance: &Instance,
-    device: &Device,
-    pdevice: vk::PhysicalDevice,
-    usage: vk::BufferUsageFlags,
-    data: &[T],
-) -> Result<BufferResource, Box<dyn Error>> {
-    let buffer_size = mem::size_of_val(data) as vk::DeviceSize;
-    let (buffer, memory) = create_gpu_buffer(
-        instance,
-        device,
-        pdevice,
-        buffer_size,
-        usage,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-    )?;
-    unsafe {
-        let mapped = device.map_memory(memory, 0, buffer_size, vk::MemoryMapFlags::empty())?;
-        std::ptr::copy_nonoverlapping(data.as_ptr(), mapped.cast::<T>(), data.len());
-        device.unmap_memory(memory);
-    }
-    Ok(BufferResource { buffer, memory })
-}
-
 fn copy_buffer(
     device: &Device,
     pool: vk::CommandPool,
@@ -3181,13 +2846,6 @@ fn find_memory_type(
         })
         .expect("Failed to find suitable memory type!")
 }
-
-const TMESH_CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
-const TMESH_CACHE_MIN_VERTS: usize = 32;
-const TMESH_CACHE_PROMOTE_HITS: u8 = 2;
-const TMESH_CACHE_SEEN_TTL_FRAMES: u64 = 1800;
-const TMESH_CACHE_EVICT_SAFE_FRAMES: u64 = MAX_FRAMES_IN_FLIGHT as u64;
-const TMESH_DEBUG_LOG_EVERY_FRAMES: u32 = 300;
 
 const VALIDATION_LAYER_NAME: &ffi::CStr = c"VK_LAYER_KHRONOS_validation";
 
