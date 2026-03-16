@@ -1,11 +1,14 @@
 use crate::act;
 use crate::assets::{self, AssetManager, DensityGraphSlot, DensityGraphSource};
-use crate::config::{self, BreakdownStyle, SelectMusicPatternInfoMode, SyncGraphMode};
+use crate::config::{
+    self, BreakdownStyle, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SyncGraphMode,
+};
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
 use crate::core::space::{
-    is_wide, screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+    current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+    widescale,
 };
 use crate::game::chart::ChartData;
 use crate::game::parsing::simfile as song_loading;
@@ -14,8 +17,8 @@ use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
-    gs_scorebox, heart_bg, music_wheel, profile_boxes, select_pane, select_shared, sort_menu,
-    step_artist_bar, test_input,
+    select_music::{music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar},
+    shared::{gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input, timers},
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource};
@@ -113,6 +116,10 @@ rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 // --- Timing & Logic Constants ---
 // ITGmania WheelBase::Move() uses `m_TimeBeforeMovingBegins = 1/4.0f` before auto-scrolling.
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
+// ScreenSelectMusic inherits Screen's default menu repeat timing via InputFilter:
+// 0.375s before repeating, then 8 repeats/sec.
+const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
+const OVERLAY_NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(125);
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 // ITGmania InputQueue: g_fSimultaneousThreshold = 0.05f.
 const CHORD_SIMULTANEOUS_WINDOW: Duration = Duration::from_millis(50);
@@ -458,6 +465,72 @@ fn preview_song_sec(state: &State) -> Option<f64> {
 }
 
 #[inline(always)]
+fn preview_marker(
+    displayed: Option<&DisplayedChart>,
+    preview_sec: Option<f64>,
+    graph_left: f32,
+    graph_w: f32,
+) -> Option<PreviewMarker> {
+    let displayed = displayed?;
+    let preview_sec = preview_sec?;
+    let chart = displayed.song.charts.get(displayed.chart_ix)?;
+    if graph_w <= 0.0 || !preview_sec.is_finite() {
+        return None;
+    }
+    let first_second = 0.0_f32.min(chart.timing.get_time_for_beat(0.0));
+    let last_second = displayed
+        .song
+        .precise_last_second()
+        .max(first_second + 0.001);
+    let (window_w_px, _) = current_window_px();
+    let px_per_unit = window_w_px as f32 / screen_width().max(1.0);
+    let unit_per_px = if px_per_unit.is_finite() && px_per_unit > 0.0 {
+        1.0 / px_per_unit
+    } else {
+        1.0
+    };
+    let width_px = 2.0_f32;
+    let width_units = width_px * unit_per_px;
+    let max_x = (graph_w - width_units).max(0.0);
+    let x = (((preview_sec as f32 - first_second) / (last_second - first_second)).clamp(0.0, 1.0)
+        * max_x)
+        .clamp(0.0, max_x);
+    let left_px = (graph_left + x) * px_per_unit;
+    let right_px = left_px + width_px;
+    let start_px = left_px.floor() as i32;
+    let end_px = right_px.ceil() as i32;
+    let mut marker = PreviewMarker::default();
+    for px in start_px..end_px {
+        if marker.len == marker.cols.len() {
+            break;
+        }
+        let overlap = (right_px.min(px as f32 + 1.0) - left_px.max(px as f32)).clamp(0.0, 1.0);
+        if overlap <= 0.0 {
+            continue;
+        }
+        let col_x = (px as f32 * unit_per_px - graph_left).clamp(0.0, graph_w - unit_per_px);
+        marker.cols[marker.len] = PreviewMarkerCol {
+            x: col_x,
+            a: overlap,
+        };
+        marker.len += 1;
+    }
+    (marker.len > 0).then_some(marker)
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PreviewMarkerCol {
+    x: f32,
+    a: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PreviewMarker {
+    cols: [PreviewMarkerCol; 4],
+    len: usize,
+}
+
+#[inline(always)]
 fn sl_selection_anim_beat(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
     match entry_opt {
         Some(MusicWheelEntry::Song(song)) => preview_song_sec(state).map_or(
@@ -568,7 +641,7 @@ fn cached_music_rate_banner_text(rate: f32) -> Arc<str> {
     })
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum NavDirection {
     Left,
     Right,
@@ -778,7 +851,7 @@ pub struct State {
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
-    banner_high_quality_requested: bool,
+    pub(crate) banner_high_quality_requested: bool,
     cdtitle_spin_elapsed: f32,
     cdtitle_anim_elapsed: f32,
     last_requested_chart_hash: Option<String>,
@@ -802,6 +875,9 @@ pub struct State {
     last_steps_nav_time_p2: Option<Instant>,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
+    overlay_nav_held_direction: Option<NavDirection>,
+    overlay_nav_held_since: Option<Instant>,
+    overlay_nav_last_scrolled_at: Option<Instant>,
     sort_menu_prev_selected_index: usize,
     sort_menu_focus_anim_elapsed: f32,
     currently_playing_preview_path: Option<PathBuf>,
@@ -1900,6 +1976,9 @@ pub fn init() -> State {
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_since: None,
+        overlay_nav_held_direction: None,
+        overlay_nav_held_since: None,
+        overlay_nav_last_scrolled_at: None,
         sort_menu_prev_selected_index: 0,
         sort_menu_focus_anim_elapsed: sort_menu::FOCUS_TWEEN_SECONDS,
         currently_playing_preview_path: None,
@@ -2076,6 +2155,9 @@ pub fn init_placeholder() -> State {
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_since: None,
+        overlay_nav_held_direction: None,
+        overlay_nav_held_since: None,
+        overlay_nav_last_scrolled_at: None,
         sort_menu_prev_selected_index: 0,
         sort_menu_focus_anim_elapsed: sort_menu::FOCUS_TWEEN_SECONDS,
         currently_playing_preview_path: None,
@@ -2230,6 +2312,59 @@ fn clear_p2_ud_chord(state: &mut State) {
 }
 
 #[inline(always)]
+fn clear_overlay_nav_hold(state: &mut State) {
+    state.overlay_nav_held_direction = None;
+    state.overlay_nav_held_since = None;
+    state.overlay_nav_last_scrolled_at = None;
+}
+
+#[inline(always)]
+fn start_overlay_nav_hold(state: &mut State, dir: NavDirection) {
+    let now = Instant::now();
+    state.overlay_nav_held_direction = Some(dir);
+    state.overlay_nav_held_since = Some(now);
+    state.overlay_nav_last_scrolled_at = Some(now);
+}
+
+#[inline(always)]
+fn release_overlay_nav_hold(state: &mut State, dir: NavDirection) {
+    if state.overlay_nav_held_direction == Some(dir) {
+        clear_overlay_nav_hold(state);
+    }
+}
+
+#[inline(always)]
+const fn overlay_nav_delta(dir: NavDirection) -> isize {
+    match dir {
+        NavDirection::Left => -1,
+        NavDirection::Right => 1,
+    }
+}
+
+#[inline(always)]
+const fn overlay_nav_dir(action: VirtualAction) -> Option<NavDirection> {
+    match action {
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => Some(NavDirection::Left),
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(NavDirection::Right),
+        _ => None,
+    }
+}
+
+#[inline(always)]
 fn show_sort_menu(state: &mut State) {
     state.sort_menu = sort_menu::State::Visible {
         page: sort_menu::Page::Main,
@@ -2237,6 +2372,7 @@ fn show_sort_menu(state: &mut State) {
     };
     state.sort_menu_prev_selected_index = 0;
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
@@ -2248,6 +2384,7 @@ fn show_sort_menu(state: &mut State) {
 fn hide_sort_menu(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
 }
@@ -2363,6 +2500,7 @@ fn show_test_input_overlay(state: &mut State) {
     state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.test_input_overlay_visible = true;
@@ -2383,6 +2521,7 @@ fn start_song_search_prompt(state: &mut State) {
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.song_search = sort_menu::begin_song_search_prompt();
@@ -2400,6 +2539,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -2429,20 +2569,24 @@ fn restore_sort_menu_after_profile_overlay(state: &mut State) {
     };
     state.sort_menu_prev_selected_index = selected_index;
     state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
+    clear_overlay_nav_hold(state);
 }
 
 #[inline(always)]
 fn close_song_search(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
+    clear_overlay_nav_hold(state);
 }
 
 #[inline(always)]
 fn cancel_song_search(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
+    clear_overlay_nav_hold(state);
     state.song_search_ignore_next_back_select = true;
 }
 
 fn start_song_search_results(state: &mut State, search_text: String) {
+    clear_overlay_nav_hold(state);
     state.song_search = sort_menu::begin_song_search_results(&state.group_entries, search_text);
 }
 
@@ -2516,6 +2660,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -2634,8 +2779,7 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
     let count_text = if total == 0 {
         String::new()
     } else {
-        let pct = 100.0 * progress;
-        format!("{done}/{total} ({pct:.1}%)")
+        crate::screens::progress_count_text(done, total)
     };
     let show_speed_row = total > 0;
     let speed_text = if elapsed > 0.0 && show_speed_row {
@@ -3546,22 +3690,22 @@ fn refresh_after_reload(state: &mut State) {
     *state = refreshed;
 }
 
-fn sort_menu_move(state: &mut State, delta: isize) {
+fn sort_menu_move(state: &mut State, delta: isize) -> bool {
     let (page, selected_index) = match state.sort_menu {
         sort_menu::State::Visible {
             page,
             selected_index,
         } => (page, selected_index),
-        sort_menu::State::Hidden => return,
+        sort_menu::State::Hidden => return false,
     };
     let len = sort_menu_items(state, page).len();
     if len == 0 {
-        return;
+        return false;
     }
     let old = selected_index.min(len - 1);
     let next = ((old as isize + delta).rem_euclid(len as isize)) as usize;
     if next == old {
-        return;
+        return false;
     }
     state.sort_menu_prev_selected_index = old;
     if let sort_menu::State::Visible { selected_index, .. } = &mut state.sort_menu {
@@ -3569,6 +3713,48 @@ fn sort_menu_move(state: &mut State, delta: isize) {
     }
     state.sort_menu_focus_anim_elapsed = 0.0;
     audio::play_sfx("assets/sounds/change.ogg");
+    true
+}
+
+fn update_overlay_nav_hold(state: &mut State) {
+    let Some(dir) = state.overlay_nav_held_direction else {
+        return;
+    };
+    let Some(held_since) = state.overlay_nav_held_since else {
+        clear_overlay_nav_hold(state);
+        return;
+    };
+    let Some(last_at) = state.overlay_nav_last_scrolled_at else {
+        clear_overlay_nav_hold(state);
+        return;
+    };
+
+    let overlay_active = state.sort_menu != sort_menu::State::Hidden
+        || matches!(state.song_search, sort_menu::SongSearchState::Results(_));
+    if !overlay_active {
+        clear_overlay_nav_hold(state);
+        return;
+    }
+
+    let now = Instant::now();
+    if now.duration_since(held_since) < OVERLAY_NAV_INITIAL_HOLD_DELAY
+        || now.duration_since(last_at) < OVERLAY_NAV_REPEAT_SCROLL_INTERVAL
+    {
+        return;
+    }
+
+    let moved = if let sort_menu::SongSearchState::Results(results) = &mut state.song_search {
+        if results.input_lock > 0.0 {
+            false
+        } else {
+            sort_menu::song_search_move(results, overlay_nav_delta(dir))
+        }
+    } else {
+        sort_menu_move(state, overlay_nav_delta(dir))
+    };
+    if moved {
+        state.overlay_nav_last_scrolled_at = Some(now);
+    }
 }
 
 #[inline(always)]
@@ -3765,6 +3951,7 @@ fn show_sync_overlay(state: &mut State) {
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -4153,6 +4340,7 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
 }
 
 fn sort_menu_activate(state: &mut State) -> ScreenAction {
+    clear_overlay_nav_hold(state);
     let (page, selected_index) = match state.sort_menu {
         sort_menu::State::Visible {
             page,
@@ -4267,127 +4455,136 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
 }
 
 fn handle_sort_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-    match ev.action {
-        VirtualAction::p1_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p1_left
-        | VirtualAction::p1_menu_left
-        | VirtualAction::p2_up
-        | VirtualAction::p2_menu_up
-        | VirtualAction::p2_left
-        | VirtualAction::p2_menu_left => sort_menu_move(state, -1),
-        VirtualAction::p1_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p1_right
-        | VirtualAction::p1_menu_right
-        | VirtualAction::p2_down
-        | VirtualAction::p2_menu_down
-        | VirtualAction::p2_right
-        | VirtualAction::p2_menu_right => sort_menu_move(state, 1),
-        VirtualAction::p1_start | VirtualAction::p2_start => return sort_menu_activate(state),
-        VirtualAction::p1_back
-        | VirtualAction::p2_back
-        | VirtualAction::p1_select
-        | VirtualAction::p2_select => {
-            audio::play_sfx("assets/sounds/start.ogg");
-            match state.sort_menu {
-                sort_menu::State::Visible {
-                    page: sort_menu::Page::Sorts,
-                    ..
-                } => {
-                    state.sort_menu = sort_menu::State::Visible {
-                        page: sort_menu::Page::Main,
-                        selected_index: 0,
-                    };
-                    state.sort_menu_prev_selected_index = 0;
-                    state.sort_menu_focus_anim_elapsed = 0.0;
-                }
-                _ => hide_sort_menu(state),
-            }
+    let Some(dir) = overlay_nav_dir(ev.action) else {
+        if !ev.pressed {
+            return ScreenAction::None;
         }
-        _ => {}
-    }
-    ScreenAction::None
-}
-
-fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-
-    let mut prompt_start: Option<String> = None;
-    let mut prompt_close = false;
-    match &mut state.song_search {
-        sort_menu::SongSearchState::TextEntry(entry) => match ev.action {
-            VirtualAction::p1_start | VirtualAction::p2_start => {
-                prompt_start = Some(entry.query.clone());
-            }
+        clear_overlay_nav_hold(state);
+        return match ev.action {
+            VirtualAction::p1_start | VirtualAction::p2_start => sort_menu_activate(state),
             VirtualAction::p1_back
             | VirtualAction::p2_back
             | VirtualAction::p1_select
             | VirtualAction::p2_select => {
-                prompt_close = true;
-            }
-            _ => {}
-        },
-        sort_menu::SongSearchState::Results(results) => {
-            if results.input_lock > 0.0 {
-                return ScreenAction::None;
-            }
-            match ev.action {
-                VirtualAction::p1_up
-                | VirtualAction::p1_menu_up
-                | VirtualAction::p1_left
-                | VirtualAction::p1_menu_left
-                | VirtualAction::p2_up
-                | VirtualAction::p2_menu_up
-                | VirtualAction::p2_left
-                | VirtualAction::p2_menu_left => {
-                    let _ = sort_menu::song_search_move(results, -1);
-                }
-                VirtualAction::p1_down
-                | VirtualAction::p1_menu_down
-                | VirtualAction::p1_right
-                | VirtualAction::p1_menu_right
-                | VirtualAction::p2_down
-                | VirtualAction::p2_menu_down
-                | VirtualAction::p2_right
-                | VirtualAction::p2_menu_right => {
-                    let _ = sort_menu::song_search_move(results, 1);
-                }
-                VirtualAction::p1_start | VirtualAction::p2_start => {
-                    let picked =
-                        sort_menu::song_search_focused_candidate(results).map(|c| c.song.clone());
-                    close_song_search(state);
-                    if let Some(song) = picked {
-                        focus_song_from_search(state, &song);
-                        refresh_after_reload(state);
+                audio::play_sfx("assets/sounds/start.ogg");
+                match state.sort_menu {
+                    sort_menu::State::Visible {
+                        page: sort_menu::Page::Sorts,
+                        ..
+                    } => {
+                        state.sort_menu = sort_menu::State::Visible {
+                            page: sort_menu::Page::Main,
+                            selected_index: 0,
+                        };
+                        state.sort_menu_prev_selected_index = 0;
+                        state.sort_menu_focus_anim_elapsed = 0.0;
                     }
+                    _ => hide_sort_menu(state),
+                }
+                ScreenAction::None
+            }
+            _ => ScreenAction::None,
+        };
+    };
+
+    if !ev.pressed {
+        release_overlay_nav_hold(state, dir);
+        return ScreenAction::None;
+    }
+
+    let _ = sort_menu_move(state, overlay_nav_delta(dir));
+    start_overlay_nav_hold(state, dir);
+    ScreenAction::None
+}
+
+fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if matches!(state.song_search, sort_menu::SongSearchState::Hidden) {
+        return ScreenAction::None;
+    }
+
+    if matches!(state.song_search, sort_menu::SongSearchState::TextEntry(_)) {
+        if !ev.pressed {
+            return ScreenAction::None;
+        }
+
+        let mut prompt_start = None;
+        let mut prompt_close = false;
+        if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
+            match ev.action {
+                VirtualAction::p1_start | VirtualAction::p2_start => {
+                    prompt_start = Some(entry.query.clone());
                 }
                 VirtualAction::p1_back
                 | VirtualAction::p2_back
                 | VirtualAction::p1_select
                 | VirtualAction::p2_select => {
-                    cancel_song_search(state);
+                    prompt_close = true;
                 }
                 _ => {}
             }
         }
-        sort_menu::SongSearchState::Hidden => {}
-    }
 
-    if let Some(search_text) = prompt_start {
-        start_song_search_results(state, search_text);
-        return ScreenAction::None;
-    }
-    if prompt_close {
-        cancel_song_search(state);
+        if let Some(search_text) = prompt_start {
+            start_song_search_results(state, search_text);
+        } else if prompt_close {
+            cancel_song_search(state);
+        }
         return ScreenAction::None;
     }
 
+    if let Some(dir) = overlay_nav_dir(ev.action) {
+        if !ev.pressed {
+            release_overlay_nav_hold(state, dir);
+            return ScreenAction::None;
+        }
+
+        if let sort_menu::SongSearchState::Results(results) = &state.song_search
+            && results.input_lock > 0.0
+        {
+            return ScreenAction::None;
+        }
+
+        start_overlay_nav_hold(state, dir);
+        if let sort_menu::SongSearchState::Results(results) = &mut state.song_search
+            && results.input_lock <= 0.0
+        {
+            let _ = sort_menu::song_search_move(results, overlay_nav_delta(dir));
+        }
+        return ScreenAction::None;
+    }
+
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
+
+    if let sort_menu::SongSearchState::Results(results) = &state.song_search
+        && results.input_lock > 0.0
+    {
+        return ScreenAction::None;
+    }
+
+    clear_overlay_nav_hold(state);
+    match ev.action {
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            let picked = if let sort_menu::SongSearchState::Results(results) = &state.song_search {
+                sort_menu::song_search_focused_candidate(results).map(|c| c.song.clone())
+            } else {
+                None
+            };
+            close_song_search(state);
+            if let Some(song) = picked {
+                focus_song_from_search(state, &song);
+                refresh_after_reload(state);
+            }
+        }
+        VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => {
+            cancel_song_search(state);
+        }
+        _ => {}
+    }
     ScreenAction::None
 }
 
@@ -5033,6 +5230,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     if sort_menu::update_song_search(&mut state.song_search, dt) {
+        update_overlay_nav_hold(state);
         return ScreenAction::None;
     }
     if let SyncOverlayState::Visible(overlay) = &mut state.sync_overlay {
@@ -5103,6 +5301,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.sort_menu_focus_anim_elapsed =
                 (state.sort_menu_focus_anim_elapsed + dt).min(sort_menu::FOCUS_TWEEN_SECONDS);
         }
+    }
+    if state.sort_menu != sort_menu::State::Hidden {
+        update_overlay_nav_hold(state);
     }
 
     let now = Instant::now();
@@ -5621,7 +5822,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(select_shared::build_screen_bars("SELECT MUSIC"));
+    actors.extend(screen_bars::build("SELECT MUSIC"));
 
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
@@ -5668,19 +5869,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Timer (zmod parity: optional gameplay timer to the right of session timer).
-    actors.push(select_shared::build_session_timer(format_session_time(
+    actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
     if cfg.show_select_music_gameplay_timer {
-        actors.push(select_shared::build_gameplay_timer(format_session_time(
+        actors.push(timers::build_gameplay(format_session_time(
             state.gameplay_elapsed,
         )));
     }
 
     // Pads
     {
-        actors.push(select_shared::build_mode_pad_text(score_mode_text.as_str()));
-        actors.extend(select_shared::build_mode_pads());
+        actors.push(mode_pads::build_label(score_mode_text.as_str()));
+        actors.extend(mode_pads::build());
     }
 
     // Banner
@@ -5697,7 +5898,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.push(act!(sprite(banner_key): align(0.5, 0.5): xy(banner_cx, banner_cy): setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT): zoom(banner_zoom): z(51)));
     if cfg.show_select_music_cdtitles
         && let Some(cdtitle_key) = state.current_cdtitle_key.as_ref()
-        && asset_manager.textures.contains_key(cdtitle_key)
+        && asset_manager.has_texture_key(cdtitle_key)
         && let Some(tex) = crate::assets::texture_dims(cdtitle_key)
     {
         let (cols, rows) = crate::assets::sprite_sheet_dims(cdtitle_key);
@@ -5900,16 +6101,43 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
+    let graph_h = 64.0_f32;
+    let graph_body_h = 47.0_f32;
     let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
+    let graph_left = chart_info_cx - 0.5 * panel_w;
+    let (window_w_px, _) = current_window_px();
+    let marker_col_w = if window_w_px > 0 {
+        screen_width() / window_w_px as f32
+    } else {
+        1.0
+    };
     let breakdown_style = cfg.select_music_breakdown_style;
     let pattern_info_mode = cfg.select_music_pattern_info_mode;
+    let preview_sec = if cfg.show_select_music_preview_marker {
+        preview_song_sec(state)
+    } else {
+        None
+    };
+    let preview_marker_p1 = preview_marker(
+        state.displayed_chart_p1.as_ref(),
+        preview_sec,
+        graph_left,
+        panel_w,
+    );
+    let preview_marker_p2 = preview_marker(
+        state.displayed_chart_p2.as_ref(),
+        preview_sec,
+        graph_left,
+        panel_w,
+    );
     let build_breakdown_panel = |graph_cy: f32,
                                  is_p2_layout: bool,
                                  graph_key: &String,
                                  graph_mesh: Option<Arc<[MeshVertex]>>,
+                                 preview_marker: Option<PreviewMarker>,
                                  chart: Option<&ChartData>| {
         let mut graph_kids = vec![
-            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
+            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
         ];
 
         if let Some(c) = chart {
@@ -5966,7 +6194,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 graph_kids.push(Actor::Mesh {
                     align: [0.0, 0.0],
                     offset: [0.0, 0.0],
-                    size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
+                    size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
                     vertices: mesh,
                     mode: MeshMode::Triangles,
                     visible: true,
@@ -5975,18 +6203,29 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 });
             } else if graph_key != "__white" {
                 graph_kids.push(act!(sprite(graph_key.clone()):
-                    align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)
+                    align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h)
                 ));
             }
-            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
-            graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, 47.0): setsize(panel_w, 17.0): diffuse(0.0, 0.0, 0.0, 0.5)));
-            graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w)));
+            if let Some(marker) = preview_marker {
+                for col in marker.cols.iter().take(marker.len) {
+                    graph_kids.push(act!(quad:
+                        align(0.0, 0.0):
+                        xy(col.x, 0.0):
+                        setsize(marker_col_w, graph_h):
+                        diffuse(1.0, 1.0, 1.0, col.a):
+                        z(1)
+                    ));
+                }
+            }
+            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0): z(2)));
+            graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, graph_body_h): setsize(panel_w, graph_h - graph_body_h): diffuse(0.0, 0.0, 0.0, 0.5): z(2)));
+            graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w): z(2)));
         }
 
         Actor::Frame {
             align: [0.0, 0.0],
-            offset: [chart_info_cx - 0.5 * panel_w, graph_cy - 32.0],
-            size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
+            offset: [graph_left, graph_cy - 32.0],
+            size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
             background: None,
             z: 51,
             children: graph_kids,
@@ -6000,6 +6239,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 false,
                 &state.current_graph_key,
                 state.current_graph_mesh.clone(),
+                preview_marker_p1,
                 disp_chart_p1,
             ));
             actors.push(build_breakdown_panel(
@@ -6007,6 +6247,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 true,
                 &state.current_graph_key_p2,
                 state.current_graph_mesh_p2.clone(),
+                preview_marker_p2,
                 disp_chart_p2,
             ));
         } else {
@@ -6016,6 +6257,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 is_p2_single,
                 &state.current_graph_key,
                 state.current_graph_mesh.clone(),
+                preview_marker_p1,
                 disp_chart_p1,
             ));
         }
@@ -6569,8 +6811,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors.extend(sl_select_music_wheel_cascade_mask());
 
     // GrooveStats scorebox placement.
-    // Keep solo→versus transitions symmetric regardless of which side started.
-    // In both-GS versus, render smaller scoreboxes over each pane's far-right side.
+    // Auto keeps the current layout, including pane placement for both-GS versus.
+    // StepPane forces the scorebox into the pane area whenever it is shown.
     if is_wide() {
         let scorebox_zoom = widescale(0.95, 1.0);
         let scorebox_side_inset = 320.0;
@@ -6585,6 +6827,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let p1_gs = scores::is_gs_active_for_side(profile::PlayerSide::P1);
         let p2_gs = scores::is_gs_active_for_side(profile::PlayerSide::P2);
         let both_gs_versus = is_versus && p1_gs && p2_gs;
+        let force_step_pane =
+            cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
         let mut push_scorebox = |side: profile::PlayerSide,
                                  steps_idx: usize,
                                  center_x: f32,
@@ -6625,33 +6869,51 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 });
             }
         };
+        let pane_scorebox_zoom = widescale(0.60, 0.64);
+        let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
+        let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
+        let pane_right_inset = 4.0;
+        let pane_box_center_x = |pane_cx: f32| {
+            pane_cx + pane_layout.pane_width * 0.5 - pane_scorebox_width * 0.5 - pane_right_inset
+        };
 
-        if both_gs_versus {
-            let pane_scorebox_zoom = widescale(0.60, 0.64);
-            let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
-            let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
-            let pane_right_inset = 4.0;
-            let pane_box_center_x = |pane_cx: f32| {
-                pane_cx + pane_layout.pane_width * 0.5
-                    - pane_scorebox_width * 0.5
-                    - pane_right_inset
-            };
-            push_scorebox(
-                profile::PlayerSide::P1,
-                state.selected_steps_index,
-                pane_box_center_x(screen_width() * 0.25 - 5.0),
-                pane_scorebox_center_y,
-                pane_scorebox_zoom,
-                60,
-            );
-            push_scorebox(
-                profile::PlayerSide::P2,
-                state.p2_selected_steps_index,
-                pane_box_center_x(screen_width() * 0.75 + 5.0),
-                pane_scorebox_center_y,
-                pane_scorebox_zoom,
-                60,
-            );
+        if both_gs_versus || force_step_pane {
+            if is_versus {
+                push_scorebox(
+                    profile::PlayerSide::P1,
+                    state.selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.25 - 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+                push_scorebox(
+                    profile::PlayerSide::P2,
+                    state.p2_selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.75 + 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+            } else if is_p2_single {
+                push_scorebox(
+                    profile::PlayerSide::P2,
+                    state.p2_selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.75 + 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+            } else {
+                push_scorebox(
+                    profile::PlayerSide::P1,
+                    state.selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.25 - 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+            }
         } else if is_versus {
             let incumbent = profile::get_session_player_side();
             if incumbent == profile::PlayerSide::P2 {

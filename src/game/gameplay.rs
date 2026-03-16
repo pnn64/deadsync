@@ -21,11 +21,15 @@ use crate::game::{
     profile,
     scroll::ScrollSpeedSetting,
 };
-use crate::screens::components::density_graph::DensityHistCache;
+use crate::screens::components::shared::{
+    density_graph::{self, DensityHistCache},
+    noteskin_model::ModelMeshCache,
+};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
 use log::{debug, trace, warn};
 use rssp::streams::StreamSegment;
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
@@ -3198,6 +3202,46 @@ pub struct ReplayOffsetSnapshot {
     pub beat0_time_seconds: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct SongClockSnapshot {
+    song_time: f32,
+    seconds_per_second: f32,
+    valid_at: Instant,
+    valid_at_host_nanos: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FrameStableDisplayClock {
+    current_time_sec: f32,
+    target_time_sec: f32,
+    catching_up: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DisplayClockHealth {
+    pub error_seconds: f32,
+    pub catching_up: bool,
+}
+
+impl FrameStableDisplayClock {
+    #[inline(always)]
+    const fn new(time_sec: f32) -> Self {
+        Self {
+            current_time_sec: time_sec,
+            target_time_sec: time_sec,
+            catching_up: false,
+        }
+    }
+
+    #[inline(always)]
+    fn reset(&mut self, time_sec: f32) -> f32 {
+        self.current_time_sec = time_sec;
+        self.target_time_sec = time_sec;
+        self.catching_up = false;
+        time_sec
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct GameplayUpdatePhaseTimings {
     pre_notes_us: u32,
@@ -3330,6 +3374,8 @@ pub struct State {
     pub stage_intro_text: Arc<str>,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
+    pub current_background_path: Option<PathBuf>,
+    pub next_background_change_ix: usize,
     pub background_texture_key: String,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
     pub num_cols: usize,
@@ -3344,6 +3390,9 @@ pub struct State {
     pub audio_lead_in_seconds: f32,
     pub current_beat: f32,
     pub current_music_time: f32,
+    pub current_beat_display: f32,
+    pub current_music_time_display: f32,
+    display_clock: FrameStableDisplayClock,
     pub note_spawn_cursor: [usize; MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     pub arrows: [Vec<Arrow>; MAX_COLS],
@@ -3413,12 +3462,13 @@ pub struct State {
     active_attack_appearance_mask: [u8; MAX_PLAYERS],
     active_attack_speed_multiplier: [f32; MAX_PLAYERS],
     active_attack_mini_percent_delta: [f32; MAX_PLAYERS],
-    pub noteskin: [Option<Noteskin>; MAX_PLAYERS],
+    pub noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
     pub active_color_index: i32,
     pub player_color: [f32; 4],
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     pub scroll_reference_bpm: f32,
     pub field_zoom: [f32; MAX_PLAYERS],
+    pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     pub scroll_pixels_per_second: [f32; MAX_PLAYERS],
     pub scroll_travel_time: [f32; MAX_PLAYERS],
     pub draw_distance_before_targets: [f32; MAX_PLAYERS],
@@ -3441,8 +3491,8 @@ pub struct State {
 
     pub total_elapsed_in_screen: f32,
 
-    pub sync_overlay_message: Option<String>,
-    pub replay_status_text: Option<String>,
+    pub sync_overlay_message: Option<Arc<str>>,
+    pub replay_status_text: Option<Arc<str>>,
     danger_fx: [DangerFx; MAX_PLAYERS],
 
     pub density_graph_first_second: f32,
@@ -3490,7 +3540,6 @@ pub struct State {
     replay_cursor: usize,
     pub replay_edges: Vec<RecordedLaneEdge>,
 
-    log_timer: f32,
     update_trace: GameplayUpdateTraceState,
 }
 
@@ -4057,6 +4106,14 @@ pub fn toggle_flash_text(state: &State) -> Option<(&'static str, f32)> {
 }
 
 #[inline(always)]
+pub fn display_clock_health(state: &State) -> DisplayClockHealth {
+    DisplayClockHealth {
+        error_seconds: state.display_clock.target_time_sec - state.display_clock.current_time_sec,
+        catching_up: state.display_clock.catching_up,
+    }
+}
+
+#[inline(always)]
 fn autoplay_blocks_scoring(state: &State) -> bool {
     state.autoplay_enabled && !state.replay_mode
 }
@@ -4237,61 +4294,6 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
     points.drain(0..(first_visible - 1));
 }
 
-fn build_density_life_mesh(
-    points: &[[f32; 2]],
-    offset: f32,
-    width: f32,
-    thickness: f32,
-    color: [f32; 4],
-) -> Vec<MeshVertex> {
-    if points.len() < 2 || width <= 0.0_f32 || thickness <= 0.0_f32 {
-        return Vec::new();
-    }
-
-    let right = offset + width;
-    let start = points.partition_point(|p| p[0] < offset);
-    let end = points.partition_point(|p| p[0] <= right);
-    let visible = end.saturating_sub(start);
-    if visible < 2 {
-        return Vec::new();
-    }
-
-    let half = thickness * 0.5_f32;
-    let mut out: Vec<MeshVertex> = Vec::with_capacity((visible - 1) * 6);
-    let mut prev: Option<[f32; 2]> = None;
-    for i in start..end {
-        let p = [points[i][0] - offset, points[i][1]];
-        let Some(a) = prev else {
-            prev = Some(p);
-            continue;
-        };
-        let dx = p[0] - a[0];
-        let dy = p[1] - a[1];
-        let len_sq = dx.mul_add(dx, dy * dy);
-        if len_sq <= 0.000_000_01_f32 {
-            continue;
-        }
-        let inv_len = len_sq.sqrt().recip();
-        let nx = -dy * inv_len * half;
-        let ny = dx * inv_len * half;
-        let l0 = [a[0] + nx, a[1] + ny];
-        let r0 = [a[0] - nx, a[1] - ny];
-        let l1 = [p[0] + nx, p[1] + ny];
-        let r1 = [p[0] - nx, p[1] - ny];
-
-        out.push(MeshVertex { pos: l0, color });
-        out.push(MeshVertex { pos: r0, color });
-        out.push(MeshVertex { pos: l1, color });
-
-        out.push(MeshVertex { pos: r0, color });
-        out.push(MeshVertex { pos: r1, color });
-        out.push(MeshVertex { pos: l1, color });
-        prev = Some(p);
-    }
-
-    out
-}
-
 fn update_density_graph(
     state: &mut State,
     current_music_time: f32,
@@ -4424,18 +4426,14 @@ fn update_density_graph(
             }
 
             let mesh_started = Instant::now();
-            let verts = build_density_life_mesh(
+            density_graph::update_density_life_mesh(
+                &mut state.density_graph_life_mesh[player],
                 &state.density_graph_life_points[player],
                 offset_px_f,
                 graph_w,
                 2.0_f32,
                 [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
             );
-            state.density_graph_life_mesh[player] = if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            };
             add_elapsed_us(&mut phase_timings.density_life_mesh_us, mesh_started);
         } else {
             if should_clip {
@@ -4445,18 +4443,14 @@ fn update_density_graph(
                 state.density_graph_life_mesh[player] = None;
                 continue;
             }
-            let verts = build_density_life_mesh(
+            density_graph::update_density_life_mesh(
+                &mut state.density_graph_life_mesh[player],
                 &state.density_graph_life_points[player],
                 offset_px_f,
                 graph_w,
                 2.0_f32,
                 [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
             );
-            state.density_graph_life_mesh[player] = if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            };
         }
     }
 }
@@ -4532,6 +4526,7 @@ pub fn queue_input_edge(
     lane: Lane,
     pressed: bool,
     timestamp: Instant,
+    timestamp_host_nanos: u64,
     stored_at: Instant,
     emitted_at: Instant,
 ) {
@@ -4564,32 +4559,132 @@ pub fn queue_input_edge(
     }
 
     let queued_at = Instant::now();
-    let event_music_time = music_time_from_captured_instant(state, timestamp);
     push_input_edge_timed(
         state,
         source,
         lane,
         pressed,
         timestamp,
+        timestamp_host_nanos,
         stored_at,
         emitted_at,
         queued_at,
-        event_music_time,
+        f32::NAN,
         true,
     );
 }
 
 #[inline(always)]
 fn current_music_time_from_stream(state: &State) -> f32 {
-    stream_pos_to_music_time(state, audio::get_music_stream_position_seconds())
+    current_song_clock_snapshot(state).song_time
 }
 
 #[inline(always)]
-fn music_time_from_captured_instant(state: &State, captured_at: Instant) -> f32 {
-    stream_pos_to_music_time(
-        state,
-        audio::get_music_stream_position_seconds_at(captured_at),
-    )
+fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
+    let stream_clock = audio::get_music_stream_clock_snapshot();
+    let fallback_rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    if stream_clock.has_music_mapping {
+        SongClockSnapshot {
+            song_time: stream_clock.music_seconds,
+            seconds_per_second: if stream_clock.music_seconds_per_second.is_finite()
+                && stream_clock.music_seconds_per_second > 0.0
+            {
+                stream_clock.music_seconds_per_second
+            } else {
+                fallback_rate
+            },
+            valid_at: stream_clock.valid_at,
+            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+        }
+    } else {
+        SongClockSnapshot {
+            song_time: stream_pos_to_music_time(state, stream_clock.stream_seconds),
+            seconds_per_second: fallback_rate,
+            valid_at: stream_clock.valid_at,
+            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+        }
+    }
+}
+
+#[inline(always)]
+fn music_time_from_song_clock(
+    snapshot: SongClockSnapshot,
+    captured_at: Instant,
+    captured_host_nanos: u64,
+) -> f32 {
+    let slope = if snapshot.seconds_per_second.is_finite() && snapshot.seconds_per_second > 0.0 {
+        snapshot.seconds_per_second
+    } else {
+        1.0
+    };
+    if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
+        let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
+        return snapshot.song_time + (dt_nanos as f64 * 1e-9 * slope as f64) as f32;
+    }
+    if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at) {
+        snapshot.song_time - age.as_secs_f32() * slope
+    } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
+        snapshot.song_time + lead.as_secs_f32() * slope
+    } else {
+        snapshot.song_time
+    }
+}
+
+const DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S: f32 = 0.012;
+const DISPLAY_CLOCK_MAX_LAG_S: f32 = 0.020;
+const DISPLAY_CLOCK_MAX_LEAD_S: f32 = 0.006;
+const DISPLAY_CLOCK_RESET_ERROR_S: f32 = 0.100;
+const DISPLAY_CLOCK_MAX_STEP_S: f32 = 1.0 / 60.0;
+
+#[inline(always)]
+fn frame_stable_display_music_time(
+    display_clock: &mut FrameStableDisplayClock,
+    target_display_time_sec: f32,
+    delta_time: f32,
+    seconds_per_second: f32,
+    first_update: bool,
+) -> f32 {
+    display_clock.target_time_sec = target_display_time_sec;
+    if first_update
+        || !display_clock.current_time_sec.is_finite()
+        || !target_display_time_sec.is_finite()
+        || !delta_time.is_finite()
+        || delta_time <= 0.0
+    {
+        return display_clock.reset(target_display_time_sec);
+    }
+
+    let slope = if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
+        seconds_per_second
+    } else {
+        1.0
+    };
+    let previous_display_time_sec = display_clock.current_time_sec;
+    let max_error = DISPLAY_CLOCK_RESET_ERROR_S * slope;
+    if (target_display_time_sec - previous_display_time_sec).abs() > max_error {
+        return display_clock.reset(target_display_time_sec);
+    }
+
+    let advanced = previous_display_time_sec + delta_time * slope;
+    let correction_alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
+    let mut corrected = advanced + (target_display_time_sec - advanced) * correction_alpha;
+    let max_step = DISPLAY_CLOCK_MAX_STEP_S * slope;
+    let step = corrected - previous_display_time_sec;
+    if step.abs() > max_step * 1.2 {
+        corrected = previous_display_time_sec + step.signum() * max_step;
+    }
+    let min_allowed = target_display_time_sec - DISPLAY_CLOCK_MAX_LAG_S * slope;
+    let max_allowed = target_display_time_sec + DISPLAY_CLOCK_MAX_LEAD_S * slope;
+    let corrected = corrected
+        .clamp(min_allowed, max_allowed)
+        .max(previous_display_time_sec);
+    display_clock.current_time_sec = corrected;
+    display_clock.catching_up = (target_display_time_sec - corrected).abs() > max_step * 0.5;
+    corrected
 }
 
 #[inline(always)]
@@ -4620,6 +4715,7 @@ fn push_input_edge(
         lane,
         pressed,
         now,
+        0,
         now,
         now,
         now,
@@ -4635,6 +4731,7 @@ fn push_input_edge_timed(
     lane: Lane,
     pressed: bool,
     captured_at: Instant,
+    captured_host_nanos: u64,
     stored_at: Instant,
     emitted_at: Instant,
     queued_at: Instant,
@@ -4648,7 +4745,9 @@ fn push_input_edge_timed(
         lane,
         pressed,
         source,
+        record_replay,
         captured_at,
+        captured_host_nanos,
         stored_at,
         emitted_at,
         queued_at,
@@ -4663,15 +4762,6 @@ fn push_input_edge_timed(
             );
         }
     }
-    if !record_replay {
-        return;
-    }
-    state.replay_edges.push(RecordedLaneEdge {
-        lane_index: lane.index() as u8,
-        pressed,
-        source,
-        event_music_time,
-    });
 }
 
 #[inline(always)]
@@ -4758,7 +4848,7 @@ pub fn init(
     mut player_profiles: [profile::Profile; MAX_PLAYERS],
     replay_edges: Option<Vec<ReplayInputEdge>>,
     replay_offsets: Option<ReplayOffsetSnapshot>,
-    replay_status_text: Option<String>,
+    replay_status_text: Option<Arc<str>>,
     stage_intro_text: Arc<str>,
     lead_in_timing: Option<LeadInTiming>,
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
@@ -4799,13 +4889,21 @@ pub fn init(
         num_players: 1,
     };
 
-    let noteskin: [Option<Noteskin>; MAX_PLAYERS] = std::array::from_fn(|player| {
+    let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return None;
         }
         let skin = player_profiles[player].noteskin.to_string();
-        noteskin::load_itg_skin(&style, &skin).ok()
+        noteskin::load_itg_skin_cached(&style, &skin).ok()
     });
+    let notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            RefCell::new(if player < num_players {
+                ModelMeshCache::with_capacity(96)
+            } else {
+                ModelMeshCache::default()
+            })
+        });
 
     let field_zoom: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -5272,6 +5370,7 @@ pub fn init(
         ms as f32 / 1000.0
     });
     let init_music_time = -start_delay;
+    let init_beat = timing.get_beat_for_time(init_music_time);
     let current_music_time_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         init_music_time - global_visual_delay_seconds - player_visual_delay_seconds[player]
     });
@@ -5405,10 +5504,13 @@ pub fn init(
     let density_graph_graph_w = if density_graph_enabled {
         let mut sidepane_width = sw * 0.5_f32;
         if !is_ultrawide && note_field_is_centered && wide {
-            let nf_width =
-                step_stats_notefield_width(noteskin[0].as_ref(), cols_per_player, field_zoom[0])
-                    .unwrap_or(256.0_f32)
-                    .max(1.0_f32);
+            let nf_width = step_stats_notefield_width(
+                noteskin[0].as_ref().map(Arc::as_ref),
+                cols_per_player,
+                field_zoom[0],
+            )
+            .unwrap_or(256.0_f32)
+            .max(1.0_f32);
             sidepane_width = ((sw - nf_width) * 0.5_f32).max(1.0_f32);
         }
         if is_ultrawide && num_players > 1 {
@@ -5472,19 +5574,20 @@ pub fn init(
                 return None;
             }
             let chart = charts[p].as_ref();
-            let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
-                &chart.measure_nps_vec,
-                chart.max_nps,
-                &timing,
-                density_graph_first_second,
-                density_graph_last_second,
-                graph_w,
-                graph_h,
-                0.0,
-                graph_w,
-                None,
-                1.0,
-            );
+            let verts =
+                crate::screens::components::shared::density_graph::build_density_histogram_mesh(
+                    &chart.measure_nps_vec,
+                    chart.max_nps,
+                    &timing,
+                    density_graph_first_second,
+                    density_graph_last_second,
+                    graph_w,
+                    graph_h,
+                    0.0,
+                    graph_w,
+                    None,
+                    1.0,
+                );
             if verts.is_empty() {
                 None
             } else {
@@ -5497,7 +5600,7 @@ pub fn init(
             return None;
         }
         let chart = charts[p].as_ref();
-        crate::screens::components::density_graph::build_density_histogram_cache(
+        crate::screens::components::shared::density_graph::build_density_histogram_cache(
             &chart.measure_nps_vec,
             chart.max_nps,
             &timing,
@@ -5561,6 +5664,11 @@ pub fn init(
     }
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
     let song_offset_seconds = song.offset;
+    let next_background_change_ix = song
+        .background_changes
+        .iter()
+        .take_while(|change| change.start_beat <= init_beat)
+        .count();
 
     let mut state = State {
         song,
@@ -5568,6 +5676,8 @@ pub fn init(
         stage_intro_text,
         pack_group,
         pack_banner_path,
+        current_background_path: None,
+        next_background_change_ix,
         charts,
         background_texture_key: "__black".to_string(),
         num_cols,
@@ -5580,8 +5690,11 @@ pub fn init(
         notes,
         note_ranges,
         audio_lead_in_seconds: start_delay,
-        current_beat: 0.0,
-        current_music_time: -start_delay,
+        current_beat: init_beat,
+        current_music_time: init_music_time,
+        current_beat_display: init_beat,
+        current_music_time_display: init_music_time,
+        display_clock: FrameStableDisplayClock::new(init_music_time),
         note_spawn_cursor: note_range_start,
         judged_row_cursor: [0; MAX_PLAYERS],
         arrows: std::array::from_fn(|col| {
@@ -5657,6 +5770,7 @@ pub fn init(
         scroll_speed,
         scroll_reference_bpm: reference_bpm,
         field_zoom,
+        notefield_model_cache,
         scroll_pixels_per_second: pixels_per_second,
         scroll_travel_time: travel_time,
         draw_distance_before_targets,
@@ -5722,7 +5836,6 @@ pub fn init(
         replay_input,
         replay_cursor: 0,
         replay_edges: Vec::with_capacity(4096),
-        log_timer: 0.0,
         update_trace: GameplayUpdateTraceState::default(),
     };
     state.update_trace = GameplayUpdateTraceState::from_state(&state);
@@ -7429,6 +7542,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             lane,
             ev.pressed,
             ev.timestamp,
+            ev.timestamp_host_nanos,
             ev.stored_at,
             ev.emitted_at,
         );
@@ -7981,7 +8095,7 @@ fn refresh_sync_overlay_message(state: &mut State) {
     if message.is_empty() {
         state.sync_overlay_message = None;
     } else {
-        state.sync_overlay_message = Some(message);
+        state.sync_overlay_message = Some(Arc::<str>::from(message));
     }
 }
 
@@ -8029,30 +8143,21 @@ fn apply_song_offset_delta(state: &mut State, delta: f32) -> bool {
     true
 }
 
-pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
-    use winit::event::ElementState;
-    use winit::keyboard::PhysicalKey;
-
-    if key.state != ElementState::Pressed {
+pub fn handle_raw_keycode_event(
+    state: &mut State,
+    code: KeyCode,
+    pressed: bool,
+    shift_held: bool,
+) -> ScreenAction {
+    if !pressed {
         return ScreenAction::None;
     }
-
-    let PhysicalKey::Code(code) = key.physical_key else {
-        return ScreenAction::None;
-    };
-
     if code == KeyCode::F6 {
-        if key.repeat {
-            return ScreenAction::None;
-        }
         cycle_autosync_mode(state);
         return ScreenAction::None;
     }
 
     if code == KeyCode::F7 {
-        if key.repeat {
-            return ScreenAction::None;
-        }
         let now_music_time = current_music_time_from_stream(state);
         set_tick_mode(state, next_tick_mode(state.tick_mode), now_music_time);
         return ScreenAction::None;
@@ -8078,6 +8183,25 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
         let _ = apply_song_offset_delta(state, delta);
     }
     ScreenAction::None
+}
+
+pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
+    use winit::event::ElementState;
+    use winit::keyboard::PhysicalKey;
+
+    if key.state != ElementState::Pressed {
+        return ScreenAction::None;
+    }
+
+    let PhysicalKey::Code(code) = key.physical_key else {
+        return ScreenAction::None;
+    };
+
+    if key.repeat && matches!(code, KeyCode::F6 | KeyCode::F7) {
+        return ScreenAction::None;
+    }
+
+    handle_raw_keycode_event(state, code, true, shift_held)
 }
 
 fn finalize_row_judgment(
@@ -8296,6 +8420,7 @@ fn process_input_edges(
     state: &mut State,
     trace_enabled: bool,
     phase_timings: &mut GameplayUpdatePhaseTimings,
+    song_clock: SongClockSnapshot,
 ) {
     if state.pending_edges.is_empty() {
         return;
@@ -8310,10 +8435,22 @@ fn process_input_edges(
         std::mem::swap(&mut pending, &mut state.pending_edges);
     }
 
-    while let Some(edge) = pending.pop_front() {
+    while let Some(mut edge) = pending.pop_front() {
         let lane_idx = edge.lane.index();
         if lane_idx >= state.num_cols {
             continue;
+        }
+        if !edge.event_music_time.is_finite() {
+            edge.event_music_time =
+                music_time_from_song_clock(song_clock, edge.captured_at, edge.captured_host_nanos);
+        }
+        if edge.record_replay && edge.event_music_time.is_finite() {
+            state.replay_edges.push(RecordedLaneEdge {
+                lane_index: lane_idx as u8,
+                pressed: edge.pressed,
+                source: edge.source,
+                event_music_time: edge.event_music_time,
+            });
         }
         if trace_enabled {
             let processed_at = Instant::now();
@@ -9123,21 +9260,13 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    let trace_enabled =
-        log::log_enabled!(log::Level::Debug) || log::log_enabled!(log::Level::Trace);
+    let trace_enabled = log::log_enabled!(log::Level::Trace);
     let frame_trace_started = if trace_enabled {
         Some(Instant::now())
     } else {
         None
     };
     let mut phase_timings = GameplayUpdatePhaseTimings::default();
-
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
-    let anchor = -state.global_offset_seconds;
 
     if let Some(at) = state.hold_to_exit_aborted_at
         && at.elapsed().as_secs_f32() >= GIVE_UP_ABORT_TEXT_SECONDS
@@ -9147,22 +9276,32 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
 
     // Music time driven directly by the audio device clock, interpolated
     // between callbacks for smooth, continuous motion.
-    let stream_pos = crate::core::audio::get_music_stream_position_seconds();
+    let mut song_clock = current_song_clock_snapshot(state);
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let previous_music_time = state.current_music_time;
-    let mut music_time_sec = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
+    let mut music_time_sec = song_clock.song_time;
     let is_first_update = state.total_elapsed_in_screen <= f32::EPSILON;
     if is_first_update {
         const STARTUP_MAX_FORWARD_JUMP_S: f32 = 1.0;
         let jump_s = music_time_sec - previous_music_time;
         if jump_s > STARTUP_MAX_FORWARD_JUMP_S {
             warn!(
-                "Discarding anomalous first-frame music time jump ({jump_s:.3}s): prev={previous_music_time:.3}, now={music_time_sec:.3}, stream_pos={stream_pos:.3}, lead_in={lead_in:.3}"
+                "Discarding anomalous first-frame music time jump ({jump_s:.3}s): prev={previous_music_time:.3}, now={music_time_sec:.3}, lead_in={lead_in:.3}"
             );
             music_time_sec = previous_music_time;
         }
     }
+    song_clock.song_time = music_time_sec;
     state.current_music_time = music_time_sec;
+    let target_display_music_time_sec = music_time_sec;
+    let display_music_time_sec = frame_stable_display_music_time(
+        &mut state.display_clock,
+        target_display_music_time_sec,
+        delta_time,
+        song_clock.seconds_per_second,
+        is_first_update,
+    );
+    state.current_music_time_display = display_music_time_sec;
 
     if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
         let hold_s = match key {
@@ -9205,6 +9344,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             .timing
             .get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
         state.current_beat = beat_info.beat;
+        state.current_beat_display = state.timing.get_beat_for_time(display_music_time_sec);
         state.is_in_freeze = beat_info.is_in_freeze;
         state.is_in_delay = beat_info.is_in_delay;
         let song_row = assist_row_no_offset(state, music_time_sec);
@@ -9213,7 +9353,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         for player in 0..state.num_players {
             let delay =
                 state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
-            let visible_time = music_time_sec - delay;
+            let visible_time = display_music_time_sec - delay;
             state.current_music_time_visible[player] = visible_time;
             state.current_beat_visible[player] =
                 state.timing_players[player].get_beat_for_time(visible_time);
@@ -9310,7 +9450,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     } else {
         None
     };
-    process_input_edges(state, trace_enabled, &mut phase_timings);
+    process_input_edges(state, trace_enabled, &mut phase_timings, song_clock);
     if let Some(started) = input_started {
         phase_timings.input_edges_us = elapsed_us_since(started);
     }
@@ -9467,19 +9607,6 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::Navigate(Screen::Evaluation);
     }
 
-    state.log_timer += delta_time;
-    if state.log_timer >= 1.0 {
-        let active_arrows: usize = state.arrows.iter().map(std::vec::Vec::len).sum();
-        log::debug!(
-            "Beat: {:.2}, Time: {:.2}, Combo: {}, Misses: {}, Active Arrows: {}",
-            state.current_beat,
-            music_time_sec,
-            state.players[0].combo,
-            state.players[0].miss_combo,
-            active_arrows
-        );
-        state.log_timer -= 1.0;
-    }
     debug_validate_hot_state(state, delta_time, music_time_sec);
     finalize_update_trace(
         state,
@@ -9551,7 +9678,11 @@ fn update_danger_fx(state: &mut State) {
 
 #[cfg(test)]
 mod tests {
-    use super::{TickMode, next_tick_mode, tick_mode_status_line};
+    use super::{
+        SongClockSnapshot, TickMode, music_time_from_song_clock, next_tick_mode,
+        tick_mode_status_line,
+    };
+    use std::time::{Duration, Instant};
 
     #[test]
     fn tick_mode_cycles() {
@@ -9566,5 +9697,68 @@ mod tests {
         assert_eq!(tick_mode_status_line(TickMode::Off), None);
         assert_eq!(tick_mode_status_line(TickMode::Assist), Some("Assist Tick"));
         assert_eq!(tick_mode_status_line(TickMode::Hit), Some("Hit Tick"));
+    }
+
+    #[test]
+    fn song_clock_reconstructs_past_edge_time() {
+        let base = Instant::now();
+        let snapshot = SongClockSnapshot {
+            song_time: 120.0,
+            seconds_per_second: 1.5,
+            valid_at: base + Duration::from_millis(24),
+            valid_at_host_nanos: 0,
+        };
+        let edge_time = music_time_from_song_clock(snapshot, base, 0);
+        assert!((edge_time - 119.964).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn song_clock_handles_future_edge_time() {
+        let base = Instant::now();
+        let snapshot = SongClockSnapshot {
+            song_time: 64.0,
+            seconds_per_second: 2.0,
+            valid_at: base,
+            valid_at_host_nanos: 0,
+        };
+        let edge_time = music_time_from_song_clock(snapshot, base + Duration::from_millis(5), 0);
+        assert!((edge_time - 64.01).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn song_clock_prefers_host_clock_when_available() {
+        let snapshot = SongClockSnapshot {
+            song_time: 32.0,
+            seconds_per_second: 1.0,
+            valid_at: Instant::now(),
+            valid_at_host_nanos: 2_000_000_000,
+        };
+        let edge_time = music_time_from_song_clock(snapshot, Instant::now(), 1_997_000_000);
+        assert!((edge_time - 31.997).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn display_clock_snaps_on_first_update() {
+        let mut display_clock = FrameStableDisplayClock::new(10.0);
+        let display_time =
+            frame_stable_display_music_time(&mut display_clock, 12.5, 0.001, 1.0, true);
+        assert!((display_time - 12.5).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn display_clock_advances_smoothly_toward_target() {
+        let mut display_clock = FrameStableDisplayClock::new(100.0);
+        let display_time =
+            frame_stable_display_music_time(&mut display_clock, 100.004, 0.001, 1.0, false);
+        assert!(display_time > 100.0);
+        assert!(display_time < 100.004);
+    }
+
+    #[test]
+    fn display_clock_snaps_back_when_far_from_target() {
+        let mut display_clock = FrameStableDisplayClock::new(100.0);
+        let display_time =
+            frame_stable_display_music_time(&mut display_clock, 100.250, 0.001, 1.0, false);
+        assert!((display_time - 100.250).abs() < 0.000_5);
     }
 }

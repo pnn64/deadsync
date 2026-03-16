@@ -6,7 +6,7 @@ use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::stage_stats;
-use crate::screens::components::heart_bg;
+use crate::screens::components::shared::heart_bg;
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;

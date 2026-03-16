@@ -90,6 +90,7 @@ pub enum Actor {
         scale: [f32; 2],
         fit_width: Option<f32>,
         fit_height: Option<f32>,
+        wrap_width_pixels: Option<i32>,
         max_width: Option<f32>,
         max_height: Option<f32>,
         max_w_pre_zoom: bool,

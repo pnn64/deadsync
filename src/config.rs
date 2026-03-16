@@ -1,4 +1,4 @@
-use crate::core::gfx::{BackendType, UncappedMode};
+use crate::core::gfx::{BackendType, PresentModePolicy};
 use crate::core::input::{
     GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction, WindowsPadBackend,
 };
@@ -290,6 +290,39 @@ impl FromStr for SelectMusicPatternInfoMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicScoreboxPlacement {
+    Auto,
+    StepPane,
+}
+
+impl SelectMusicScoreboxPlacement {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::StepPane => "StepPane",
+        }
+    }
+}
+
+impl FromStr for SelectMusicScoreboxPlacement {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "auto" => Ok(Self::Auto),
+            "steppane" | "pane" => Ok(Self::StepPane),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncGraphMode {
     Frequency,
     BeatIndex,
@@ -530,12 +563,78 @@ pub enum DisplayMode {
     Fullscreen(FullscreenType),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioOutputMode {
+    Auto,
+    Shared,
+    Exclusive,
+}
+
+impl AudioOutputMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Shared => "Shared",
+            Self::Exclusive => "Exclusive",
+        }
+    }
+}
+
+impl FromStr for AudioOutputMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "shared" => Ok(Self::Shared),
+            "exclusive" => Ok(Self::Exclusive),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinuxAudioBackend {
+    Auto,
+    PipeWire,
+    PulseAudio,
+    Jack,
+    Alsa,
+}
+
+impl LinuxAudioBackend {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::PipeWire => "PipeWire",
+            Self::PulseAudio => "PulseAudio",
+            Self::Jack => "JACK",
+            Self::Alsa => "ALSA",
+        }
+    }
+}
+
+impl FromStr for LinuxAudioBackend {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "pipewire" | "pipe-wire" | "pw" => Ok(Self::PipeWire),
+            "pulseaudio" | "pulse" => Ok(Self::PulseAudio),
+            "jack" => Ok(Self::Jack),
+            "alsa" => Ok(Self::Alsa),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
-    /// Stored MaxFPS cap value. Used when `uncapped_mode == MaxFps`; 0 means unset/legacy.
+    /// Stored MaxFPS cap value. `0` means "off".
     pub max_fps: u16,
-    pub uncapped_mode: UncappedMode,
+    pub present_mode_policy: PresentModePolicy,
     pub windowed: bool,
     pub fullscreen_type: FullscreenType,
     pub display_monitor: usize,
@@ -557,8 +656,6 @@ pub struct Config {
     pub banner_cache: bool,
     /// Cache Select Music CDTitles as raw RGBA blobs on disk.
     pub cdtitle_cache: bool,
-    /// Cache gameplay/eval backgrounds as raw RGBA blobs on disk.
-    pub background_cache: bool,
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
@@ -578,14 +675,18 @@ pub struct Config {
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
     pub show_select_music_banners: bool,
+    pub show_select_music_video_banners: bool,
     pub show_select_music_breakdown: bool,
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
     pub show_select_music_previews: bool,
+    pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart.
     pub keyboard_features: bool,
+    /// Enable or disable animated gameplay background videos.
+    pub show_video_backgrounds: bool,
     /// Startup flow: show Select Profile before continuing.
     pub machine_show_select_profile: bool,
     /// Startup flow: show Select Color before continuing.
@@ -615,6 +716,7 @@ pub struct Config {
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
+    pub select_music_scorebox_placement: SelectMusicScoreboxPlacement,
     /// Which scorebox leaderboard panes are enabled in Select Music.
     pub scorebox_cycle: ScoreboxCycleFlags,
     pub show_random_courses: bool,
@@ -630,8 +732,10 @@ pub struct Config {
     pub music_wheel_switch_speed: u8,
     pub assist_tick_volume: u8,
     pub sfx_volume: u8,
-    // None = auto (use host default output device); Some(N) = startup CPAL output-device index.
+    // None = auto (use the backend default output route); Some(N) = startup output-device index.
     pub audio_output_device_index: Option<u16>,
+    pub audio_output_mode: AudioOutputMode,
+    pub linux_audio_backend: LinuxAudioBackend,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
     pub auto_populate_gs_scores: bool,
@@ -645,6 +749,9 @@ pub struct Config {
     pub smooth_histogram: bool,
     /// ITGmania InputFilter parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
+    /// Gameplay-only release debounce window in seconds. A shorter value keeps
+    /// tap releases from lingering as long as the general input debounce.
+    pub gameplay_release_debounce_seconds: f32,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
@@ -657,7 +764,7 @@ impl Default for Config {
         Self {
             vsync: false,
             max_fps: 0,
-            uncapped_mode: UncappedMode::Balanced,
+            present_mode_policy: PresentModePolicy::Immediate,
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
@@ -673,24 +780,26 @@ impl Default for Config {
             center_1player_notefield: false,
             banner_cache: true,
             cdtitle_cache: true,
-            background_cache: true,
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
             gfx_debug: false,
-            windows_gamepad_backend: WindowsPadBackend::Wgi,
+            windows_gamepad_backend: WindowsPadBackend::RawInput,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
             show_select_music_banners: true,
+            show_select_music_video_banners: true,
             show_select_music_breakdown: true,
             show_select_music_cdtitles: true,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
             show_select_music_previews: true,
+            show_select_music_preview_marker: false,
             select_music_preview_loop: true,
             keyboard_features: true,
+            show_video_backgrounds: true,
             machine_show_select_profile: true,
             machine_show_select_color: true,
             machine_show_select_style: true,
@@ -707,6 +816,7 @@ impl Default for Config {
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
+            select_music_scorebox_placement: SelectMusicScoreboxPlacement::Auto,
             scorebox_cycle: ScoreboxCycleFlags::all(),
             show_random_courses: true,
             show_most_played_courses: true,
@@ -721,6 +831,8 @@ impl Default for Config {
             assist_tick_volume: 100,
             sfx_volume: 100,
             audio_output_device_index: None,
+            audio_output_mode: AudioOutputMode::Auto,
+            linux_audio_backend: LinuxAudioBackend::Auto,
             audio_sample_rate_hz: None,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: true,
@@ -731,6 +843,7 @@ impl Default for Config {
             cachesongs: true,
             smooth_histogram: true,
             input_debounce_seconds: 0.02,
+            gameplay_release_debounce_seconds: 0.005,
             only_dedicated_menu_buttons: false,
             auto_screenshot_eval: AutoScreenshotFlags::empty(),
         }
@@ -1057,6 +1170,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     // [Options] section - keys in alphabetical order
     content.push_str("[Options]\n");
     content.push_str("AudioOutputDevice=Auto\n");
+    content.push_str("AudioOutputMode=Auto\n");
     content.push_str("AudioSampleRateHz=Auto\n");
     content.push_str("AdditionalSongFolders=\n");
     content.push_str(&format!(
@@ -1072,10 +1186,6 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         auto_screenshot_flags_to_str(default.auto_screenshot_eval)
     ));
     content.push_str(&format!("BGBrightness={}\n", default.bg_brightness));
-    content.push_str(&format!(
-        "BackgroundCache={}\n",
-        if default.background_cache { "1" } else { "0" }
-    ));
     content.push_str(&format!(
         "BannerCache={}\n",
         if default.banner_cache { "1" } else { "0" }
@@ -1175,8 +1285,15 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "LogToFile={}\n",
         if default.log_to_file { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "LinuxAudioBackend={}\n",
+        default.linux_audio_backend.as_str()
+    ));
     content.push_str(&format!("MaxFps={}\n", default.max_fps));
-    content.push_str(&format!("UncappedMode={}\n", default.uncapped_mode));
+    content.push_str(&format!(
+        "PresentModePolicy={}\n",
+        default.present_mode_policy
+    ));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         default.visual_delay_seconds
@@ -1210,6 +1327,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "SelectMusicShowBanners={}\n",
         if default.show_select_music_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicShowVideoBanners={}\n",
+        if default.show_select_music_video_banners {
             "1"
         } else {
             "0"
@@ -1256,6 +1381,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicPreviewMarker={}\n",
+        if default.show_select_music_preview_marker {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviewLoop={}\n",
         if default.select_music_preview_loop {
             "1"
@@ -1276,6 +1409,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicScoreboxPlacement={}\n",
+        default.select_music_scorebox_placement.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicScoreboxCycle={}\n",
         scorebox_cycle_flags_to_str(default.scorebox_cycle)
     ));
@@ -1289,7 +1426,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     ));
     content.push_str(&format!(
         "ShowStatsMode={}\n",
-        default.show_stats_mode.min(2)
+        default.show_stats_mode.min(3)
     ));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
@@ -1298,6 +1435,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "InputDebounceTime={:.3}\n",
         default.input_debounce_seconds
+    ));
+    content.push_str(&format!(
+        "GameplayReleaseDebounceTime={:.3}\n",
+        default.gameplay_release_debounce_seconds
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
@@ -1372,6 +1513,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "KeyboardFeatures={}\n",
         if default.keyboard_features { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "VideoBackgrounds={}\n",
+        if default.show_video_backgrounds {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!(
         "MachineShowEvalSummary={}\n",
@@ -1497,10 +1646,21 @@ pub fn load() {
                     .get("Options", "MaxFps")
                     .and_then(|v| v.parse::<u16>().ok())
                     .unwrap_or(default.max_fps);
-                cfg.uncapped_mode = conf
-                    .get("Options", "UncappedMode")
-                    .and_then(|s| UncappedMode::from_str(&s).ok())
-                    .unwrap_or(default.uncapped_mode);
+                cfg.present_mode_policy = conf
+                    .get("Options", "PresentModePolicy")
+                    .and_then(|s| PresentModePolicy::from_str(&s).ok())
+                    .or_else(|| {
+                        conf.get("Options", "UncappedMode").and_then(|s| {
+                            match s.trim().to_ascii_lowercase().as_str() {
+                                "balanced" => Some(PresentModePolicy::Mailbox),
+                                "unhinged" | "maxfps" | "max_fps" | "max-fps" => {
+                                    Some(PresentModePolicy::Immediate)
+                                }
+                                _ => None,
+                            }
+                        })
+                    })
+                    .unwrap_or(default.present_mode_policy);
                 cfg.windowed = conf
                     .get("Options", "Windowed")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1544,7 +1704,7 @@ pub fn load() {
                 cfg.show_stats_mode = conf
                     .get("Options", "ShowStatsMode")
                     .and_then(|v| v.parse::<u8>().ok())
-                    .map(|v| v.min(2))
+                    .map(|v| v.min(3))
                     .or_else(|| {
                         conf.get("Options", "ShowStats")
                             .and_then(|v| v.parse::<u8>().ok())
@@ -1615,10 +1775,6 @@ pub fn load() {
                     .get("Options", "BannerCache")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.banner_cache, |v| v != 0);
-                cfg.background_cache = conf
-                    .get("Options", "BackgroundCache")
-                    .and_then(|v| v.parse::<u8>().ok())
-                    .map_or(default.background_cache, |v| v != 0);
                 cfg.cdtitle_cache = conf
                     .get("Options", "CDTitleCache")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1659,6 +1815,10 @@ pub fn load() {
                     .get("Options", "LogToFile")
                     .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.log_to_file);
+                cfg.linux_audio_backend = conf
+                    .get("Options", "LinuxAudioBackend")
+                    .and_then(|v| LinuxAudioBackend::from_str(&v).ok())
+                    .unwrap_or(default.linux_audio_backend);
                 cfg.visual_delay_seconds = conf
                     .get("Options", "VisualDelaySeconds")
                     .and_then(|v| v.parse().ok())
@@ -1698,6 +1858,10 @@ pub fn load() {
                         }
                     })
                     .or(default.audio_output_device_index);
+                cfg.audio_output_mode = conf
+                    .get("Options", "AudioOutputMode")
+                    .and_then(|s| AudioOutputMode::from_str(&s).ok())
+                    .unwrap_or(default.audio_output_mode);
                 cfg.audio_sample_rate_hz = conf
                     .get("Options", "AudioSampleRateHz")
                     .map(|v| v.trim().to_string())
@@ -1721,6 +1885,10 @@ pub fn load() {
                     .get("Options", "SelectMusicShowBanners")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_banners, |v| v != 0);
+                cfg.show_select_music_video_banners = conf
+                    .get("Options", "SelectMusicShowVideoBanners")
+                    .and_then(|v| parse_bool_str(&v))
+                    .unwrap_or(default.show_select_music_video_banners);
                 cfg.show_select_music_breakdown = conf
                     .get("Options", "SelectMusicShowBreakdown")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1741,6 +1909,10 @@ pub fn load() {
                     .get("Options", "SelectMusicPreviews")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_previews, |v| v != 0);
+                cfg.show_select_music_preview_marker = conf
+                    .get("Options", "SelectMusicPreviewMarker")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_select_music_preview_marker, |v| v != 0);
                 cfg.select_music_preview_loop = conf
                     .get("Options", "SelectMusicPreviewLoop")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1753,6 +1925,10 @@ pub fn load() {
                     .get("Options", "SelectMusicScorebox")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_scorebox, |v| v != 0);
+                cfg.select_music_scorebox_placement = conf
+                    .get("Options", "SelectMusicScoreboxPlacement")
+                    .and_then(|v| SelectMusicScoreboxPlacement::from_str(&v).ok())
+                    .unwrap_or(default.select_music_scorebox_placement);
                 // New unified key.
                 cfg.scorebox_cycle = conf
                     .get("Options", "SelectMusicScoreboxCycle")
@@ -1830,6 +2006,27 @@ pub fn load() {
                         })
                     })
                     .unwrap_or(default.input_debounce_seconds);
+                cfg.gameplay_release_debounce_seconds = conf
+                    .get("Options", "GameplayReleaseDebounceTime")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            return None;
+                        }
+                        let lower = v.to_ascii_lowercase();
+                        if let Some(ms) = lower.strip_suffix("ms") {
+                            return ms
+                                .trim()
+                                .parse::<f32>()
+                                .ok()
+                                .map(|n| (n / 1000.0).clamp(0.0, 0.2));
+                        }
+                        v.parse::<f32>().ok().map(|n| {
+                            let secs = if n > 1.0 { n / 1000.0 } else { n };
+                            secs.clamp(0.0, 0.2)
+                        })
+                    })
+                    .unwrap_or(default.gameplay_release_debounce_seconds);
                 cfg.only_dedicated_menu_buttons = conf
                     .get("Options", "OnlyDedicatedMenuButtons")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1876,45 +2073,15 @@ pub fn load() {
                     .unwrap_or(default.show_select_music_gameplay_timer);
                 cfg.keyboard_features = conf
                     .get("Theme", "KeyboardFeatures")
-                    .map(|v| v.trim().to_string())
-                    .and_then(|v| {
-                        if v.is_empty() {
-                            None
-                        } else if v.eq_ignore_ascii_case("true")
-                            || v.eq_ignore_ascii_case("yes")
-                            || v.eq_ignore_ascii_case("on")
-                        {
-                            Some(true)
-                        } else if v.eq_ignore_ascii_case("false")
-                            || v.eq_ignore_ascii_case("no")
-                            || v.eq_ignore_ascii_case("off")
-                        {
-                            Some(false)
-                        } else {
-                            v.parse::<u8>().ok().map(|n| n != 0)
-                        }
-                    })
+                    .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.keyboard_features);
+                cfg.show_video_backgrounds = conf
+                    .get("Theme", "VideoBackgrounds")
+                    .and_then(|v| parse_bool_str(&v))
+                    .unwrap_or(default.show_video_backgrounds);
                 cfg.machine_show_eval_summary = conf
                     .get("Theme", "MachineShowEvalSummary")
-                    .map(|v| v.trim().to_string())
-                    .and_then(|v| {
-                        if v.is_empty() {
-                            None
-                        } else if v.eq_ignore_ascii_case("true")
-                            || v.eq_ignore_ascii_case("yes")
-                            || v.eq_ignore_ascii_case("on")
-                        {
-                            Some(true)
-                        } else if v.eq_ignore_ascii_case("false")
-                            || v.eq_ignore_ascii_case("no")
-                            || v.eq_ignore_ascii_case("off")
-                        {
-                            Some(false)
-                        } else {
-                            v.parse::<u8>().ok().map(|n| n != 0)
-                        }
-                    })
+                    .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.machine_show_eval_summary);
                 cfg.machine_show_name_entry = conf
                     .get("Theme", "MachineShowNameEntry")
@@ -2108,12 +2275,12 @@ pub fn load() {
                 let mut miss = false;
                 let options_keys = [
                     "AudioOutputDevice",
+                    "AudioOutputMode",
                     "AudioSampleRateHz",
                     "AdditionalSongFolders",
                     "AutoPopulateGrooveStatsScores",
                     "AutoScreenshotEval",
                     "BGBrightness",
-                    "BackgroundCache",
                     "BannerCache",
                     "CacheSongs",
                     "CDTitleCache",
@@ -2138,6 +2305,7 @@ pub fn load() {
                     "Language",
                     "LogLevel",
                     "LogToFile",
+                    "LinuxAudioBackend",
                     "MaxFps",
                     "MasterVolume",
                     "MenuMusic",
@@ -2148,6 +2316,7 @@ pub fn load() {
                     "RateModPreservesPitch",
                     "SelectMusicBreakdown",
                     "SelectMusicShowBanners",
+                    "SelectMusicShowVideoBanners",
                     "SelectMusicShowBreakdown",
                     "SelectMusicShowCDTitles",
                     "SelectMusicWheelGrades",
@@ -2166,6 +2335,7 @@ pub fn load() {
                     "ShowStatsMode",
                     "SmoothHistogram",
                     "InputDebounceTime",
+                    "GameplayReleaseDebounceTime",
                     "OnlyDedicatedMenuButtons",
                     "AssistTickVolume",
                     "SFXVolume",
@@ -2190,6 +2360,9 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "KeyboardFeatures") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "VideoBackgrounds") {
                     miss = true;
                 }
                 if !miss && !has("Theme", "MachineShowEvalSummary") {
@@ -2250,6 +2423,9 @@ pub fn load() {
     }
     crate::core::input::set_only_dedicated_menu_buttons(dedicated);
     crate::core::input::set_input_debounce_seconds(get().input_debounce_seconds);
+    crate::core::input::set_gameplay_release_debounce_seconds(
+        get().gameplay_release_debounce_seconds,
+    );
 }
 
 // --- Keymap defaults and parsing (kept in config to avoid coupling input.rs to config) ---
@@ -2875,6 +3051,10 @@ fn save_without_keymaps() {
         .audio_output_device_index
         .map_or_else(|| "Auto".to_string(), |idx| idx.to_string());
     content.push_str(&format!("AudioOutputDevice={audio_output_device}\n"));
+    content.push_str(&format!(
+        "AudioOutputMode={}\n",
+        cfg.audio_output_mode.as_str()
+    ));
     let audio_rate_str = match cfg.audio_sample_rate_hz {
         None => "Auto".to_string(),
         Some(hz) => hz.to_string(),
@@ -2898,10 +3078,6 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "BGBrightness={}\n",
         cfg.bg_brightness.clamp(0.0, 1.0)
-    ));
-    content.push_str(&format!(
-        "BackgroundCache={}\n",
-        if cfg.background_cache { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "BannerCache={}\n",
@@ -2998,8 +3174,12 @@ fn save_without_keymaps() {
         "LogToFile={}\n",
         if cfg.log_to_file { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "LinuxAudioBackend={}\n",
+        cfg.linux_audio_backend.as_str()
+    ));
     content.push_str(&format!("MaxFps={}\n", cfg.max_fps));
-    content.push_str(&format!("UncappedMode={}\n", cfg.uncapped_mode));
+    content.push_str(&format!("PresentModePolicy={}\n", cfg.present_mode_policy));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         cfg.visual_delay_seconds
@@ -3033,6 +3213,14 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "SelectMusicShowBanners={}\n",
         if cfg.show_select_music_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicShowVideoBanners={}\n",
+        if cfg.show_select_music_video_banners {
             "1"
         } else {
             "0"
@@ -3075,6 +3263,14 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicPreviewMarker={}\n",
+        if cfg.show_select_music_preview_marker {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviewLoop={}\n",
         if cfg.select_music_preview_loop {
             "1"
@@ -3095,6 +3291,10 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicScoreboxPlacement={}\n",
+        cfg.select_music_scorebox_placement.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicScoreboxCycle={}\n",
         scorebox_cycle_flags_to_str(cfg.scorebox_cycle)
     ));
@@ -3102,7 +3302,7 @@ fn save_without_keymaps() {
         "ShowStats={}\n",
         if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
-    content.push_str(&format!("ShowStatsMode={}\n", cfg.show_stats_mode.min(2)));
+    content.push_str(&format!("ShowStatsMode={}\n", cfg.show_stats_mode.min(3)));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
         if cfg.smooth_histogram { "1" } else { "0" }
@@ -3110,6 +3310,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "InputDebounceTime={:.3}\n",
         cfg.input_debounce_seconds
+    ));
+    content.push_str(&format!(
+        "GameplayReleaseDebounceTime={:.3}\n",
+        cfg.gameplay_release_debounce_seconds
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
@@ -3166,6 +3370,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "KeyboardFeatures={}\n",
         if cfg.keyboard_features { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "VideoBackgrounds={}\n",
+        if cfg.show_video_backgrounds { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "MachineShowEvalSummary={}\n",
@@ -3403,19 +3611,19 @@ pub fn update_max_fps(max_fps: u16) {
     save_without_keymaps();
 }
 
-pub fn update_uncapped_mode(mode: UncappedMode) {
+pub fn update_present_mode_policy(mode: PresentModePolicy) {
     {
         let mut cfg = lock_config();
-        if cfg.uncapped_mode == mode {
+        if cfg.present_mode_policy == mode {
             return;
         }
-        cfg.uncapped_mode = mode;
+        cfg.present_mode_policy = mode;
     }
     save_without_keymaps();
 }
 
 pub fn update_show_stats_mode(mode: u8) {
-    let mode = mode.min(2);
+    let mode = mode.min(3);
     {
         let mut cfg = lock_config();
         if cfg.show_stats_mode == mode {
@@ -3503,17 +3711,6 @@ pub fn update_cdtitle_cache(enabled: bool) {
             return;
         }
         cfg.cdtitle_cache = enabled;
-    }
-    save_without_keymaps();
-}
-
-pub fn update_background_cache(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.background_cache == enabled {
-            return;
-        }
-        cfg.background_cache = enabled;
     }
     save_without_keymaps();
 }
@@ -3647,6 +3844,29 @@ pub fn update_audio_output_device(index: Option<u16>) {
     save_without_keymaps();
 }
 
+pub fn update_audio_output_mode(mode: AudioOutputMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.audio_output_mode == mode {
+            return;
+        }
+        cfg.audio_output_mode = mode;
+    }
+    save_without_keymaps();
+}
+
+#[cfg(target_os = "linux")]
+pub fn update_linux_audio_backend(backend: LinuxAudioBackend) {
+    {
+        let mut cfg = lock_config();
+        if cfg.linux_audio_backend == backend {
+            return;
+        }
+        cfg.linux_audio_backend = backend;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_mine_hit_sound(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3725,6 +3945,17 @@ pub fn update_show_select_music_banners(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_select_music_video_banners(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_video_banners == enabled {
+            return;
+        }
+        cfg.show_select_music_video_banners = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_cdtitles(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3769,6 +4000,17 @@ pub fn update_show_select_music_previews(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_select_music_preview_marker(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_preview_marker == enabled {
+            return;
+        }
+        cfg.show_select_music_preview_marker = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_preview_loop(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3809,6 +4051,17 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
             return;
         }
         cfg.show_select_music_scorebox = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_scorebox_placement(mode: SelectMusicScoreboxPlacement) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_scorebox_placement == mode {
+            return;
+        }
+        cfg.select_music_scorebox_placement = mode;
     }
     save_without_keymaps();
 }
@@ -3955,6 +4208,17 @@ pub fn update_machine_show_select_profile(enabled: bool) {
             return;
         }
         cfg.machine_show_select_profile = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_video_backgrounds(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_video_backgrounds == enabled {
+            return;
+        }
+        cfg.show_video_backgrounds = enabled;
     }
     save_without_keymaps();
 }
