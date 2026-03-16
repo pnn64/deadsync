@@ -739,6 +739,7 @@ fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) 
     }
 }
 
+#[cfg(any(windows, target_os = "linux", target_os = "freebsd"))]
 #[inline(always)]
 fn f32_to_i16(sample: f32) -> i16 {
     let sample = sample.clamp(-1.0, 1.0);
@@ -1271,7 +1272,7 @@ impl RenderState {
         self.finish_callback(total_before, out.len(), popped);
     }
 
-    #[cfg(unix)]
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     fn render_i16_host_nanos(&mut self, out: &mut [i16], anchor_nanos: u64) {
         let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
         let popped = self.mix_f32_buffer(total_before, out.len());
