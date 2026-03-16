@@ -612,6 +612,8 @@ fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
             | "mov"
             | "webm"
             | "mkv"
+            | "mpg"
+            | "mpeg"
     )
 }
 
@@ -622,7 +624,7 @@ fn is_dynamic_video_path(path: &Path) -> bool {
     };
     matches!(
         ext.to_ascii_lowercase().as_str(),
-        "mp4" | "avi" | "m4v" | "mov" | "webm" | "mkv"
+        "mp4" | "avi" | "m4v" | "mov" | "webm" | "mkv" | "mpg" | "mpeg"
     )
 }
 

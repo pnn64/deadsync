@@ -89,9 +89,34 @@ impl SongData {
             .is_some_and(|ext| {
                 matches!(
                     ext.to_ascii_lowercase().as_str(),
-                    "mp4" | "avi" | "m4v" | "mov" | "webm" | "mkv"
+                    "mp4" | "avi" | "m4v" | "mov" | "webm" | "mkv" | "mpg" | "mpeg"
                 )
             })
+    }
+
+    #[inline(always)]
+    fn active_background_change(&self, beat: f32) -> Option<&SongBackgroundChange> {
+        let mut active = None;
+        for change in &self.background_changes {
+            if change.start_beat > beat {
+                break;
+            }
+            active = Some(change);
+        }
+        active
+    }
+
+    #[inline(always)]
+    fn fallback_background_path(&self, allow_video: bool) -> Option<&PathBuf> {
+        let path = self.background_path.as_ref()?;
+        if !path.is_file() {
+            return None;
+        }
+        if allow_video || !Self::is_video_path(path) {
+            Some(path)
+        } else {
+            None
+        }
     }
 
     #[inline(always)]
@@ -220,14 +245,10 @@ impl SongData {
     }
 
     pub fn active_background_path(&self, beat: f32) -> Option<&PathBuf> {
-        let mut active = None;
-        for change in &self.background_changes {
-            if change.start_beat > beat {
-                break;
-            }
-            active = Some(change);
-        }
-        match active.map(|change| &change.target) {
+        match self
+            .active_background_change(beat)
+            .map(|change| &change.target)
+        {
             Some(SongBackgroundChangeTarget::File(path)) => Some(path),
             Some(SongBackgroundChangeTarget::NoSongBg) => None,
             Some(SongBackgroundChangeTarget::Random) => None,
@@ -236,13 +257,22 @@ impl SongData {
     }
 
     pub fn gameplay_background_path(&self, beat: f32, allow_video: bool) -> Option<&PathBuf> {
-        let path = self.active_background_path(beat)?;
-        if allow_video || !Self::is_video_path(path) {
-            return Some(path);
+        let fallback = self.fallback_background_path(allow_video);
+        match self
+            .active_background_change(beat)
+            .map(|change| &change.target)
+        {
+            Some(SongBackgroundChangeTarget::File(path)) => {
+                let exists = path.is_file();
+                if exists && (allow_video || !Self::is_video_path(path)) {
+                    Some(path)
+                } else {
+                    fallback.or(exists.then_some(path))
+                }
+            }
+            Some(SongBackgroundChangeTarget::Random) => fallback,
+            Some(SongBackgroundChangeTarget::NoSongBg) => None,
+            None => fallback,
         }
-        self.background_path
-            .as_ref()
-            .filter(|fallback| !Self::is_video_path(fallback))
-            .or(Some(path))
     }
 }
