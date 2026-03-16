@@ -89,7 +89,7 @@ impl SongData {
             .is_some_and(|ext| {
                 matches!(
                     ext.to_ascii_lowercase().as_str(),
-                    "mp4" | "m4v" | "mov" | "webm" | "mkv"
+                    "mp4" | "avi" | "m4v" | "mov" | "webm" | "mkv"
                 )
             })
     }
