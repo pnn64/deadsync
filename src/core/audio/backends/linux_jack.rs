@@ -146,7 +146,7 @@ fn load_jack_api() -> Result<JackApi, String> {
 fn load_library(names: &[&str]) -> Result<Library, String> {
     let mut last_err = None;
     for name in names {
-        match unsafe { Library::new(name) } {
+        match unsafe { Library::new(*name) } {
             Ok(lib) => return Ok(lib),
             Err(err) => last_err = Some(format!("{name}: {err}")),
         }
