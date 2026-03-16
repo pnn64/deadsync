@@ -1,7 +1,7 @@
 use crate::assets::AssetManager;
 use crate::core::input::InputEvent;
 use crate::screens::ScreenAction;
-use crate::screens::components::profile_boxes;
+use crate::screens::components::shared::profile_boxes;
 use crate::ui::actors::Actor;
 
 pub type State = profile_boxes::State;

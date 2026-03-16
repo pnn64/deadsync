@@ -1261,94 +1261,148 @@ fn bin_index_ms(v_ms: f32) -> i32 {
     (v_ms / HIST_BIN_MS).floor() as i32
 }
 
+#[derive(Copy, Clone, Debug)]
+struct HistMeta {
+    max_abs: f32,
+    worst_window_ix: usize,
+    worst_observed_bin_abs: i32,
+}
+
+#[derive(Clone, Debug, Default)]
+struct HistCounts {
+    bins: Vec<(i32, u32)>,
+    dense: Vec<u32>,
+    min_bin: i32,
+    max_count: u32,
+}
+
+const MAX_DENSE_HIST_SPAN: i32 = 4096;
+
 #[inline(always)]
-pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
-    use std::collections::HashMap;
-    let mut counts: HashMap<i32, u32> = HashMap::new();
-    let mut max_count: u32 = 0;
-    let mut max_abs: f32 = 0.0;
-    // Determine worst timing window seen (at least W3 per Simply Love histogram)
-    let mut worst_window_index = 3; // 1=W1..5=W5
-    let mut worst_observed_bin_abs: i32 = 0;
-
-    for n in notes {
-        let Some(j) = n.result.as_ref() else {
-            continue;
-        };
-        if j.grade == JudgeGrade::Miss {
-            continue;
-        }
-        if matches!(n.note_type, NoteType::Mine) {
-            continue;
-        }
-        if n.is_fake {
-            continue;
-        }
-        let e = j.time_error_ms;
-        let b = bin_index_ms(e);
-        let c = counts.entry(b).or_insert(0);
-        *c = c.saturating_add(1);
-        if *c > max_count {
-            max_count = *c;
-        }
-        let a = e.abs();
-        if a > max_abs {
-            max_abs = a;
-        }
-        if b.abs() > worst_observed_bin_abs {
-            worst_observed_bin_abs = b.abs();
-        }
-
-        match j.grade {
-            JudgeGrade::WayOff => worst_window_index = worst_window_index.max(5),
-            JudgeGrade::Decent => worst_window_index = worst_window_index.max(4),
-            JudgeGrade::Great => worst_window_index = worst_window_index.max(3),
-            JudgeGrade::Excellent => worst_window_index = worst_window_index.max(2),
-            JudgeGrade::Fantastic => worst_window_index = worst_window_index.max(1),
-            JudgeGrade::Miss => {}
-        }
+const fn hist_window_ix(grade: JudgeGrade) -> usize {
+    match grade {
+        JudgeGrade::Fantastic => 0,
+        JudgeGrade::Excellent => 1,
+        JudgeGrade::Great => 2,
+        JudgeGrade::Decent => 3,
+        JudgeGrade::WayOff => 4,
+        JudgeGrade::Miss => 2,
     }
+}
 
-    let mut bins: Vec<(i32, u32)> = counts.into_iter().collect();
-    bins.sort_unstable_by_key(|(bin, _)| *bin);
-
-    let eff = effective_windows_ms();
-    let worst_window_ms: f32 = match worst_window_index {
-        1 => eff[0],
-        2 => eff[1],
-        3 => eff[2],
-        4 => eff[3],
-        _ => eff[4],
+fn collect_hist_bins(notes: &[Note]) -> (Vec<i32>, HistMeta) {
+    let mut bins = Vec::with_capacity(notes.len());
+    let mut meta = HistMeta {
+        max_abs: 0.0,
+        worst_window_ix: hist_window_ix(JudgeGrade::Great),
+        worst_observed_bin_abs: 0,
     };
 
-    // Build smoothed distribution across the whole timing window range (1ms steps)
-    let worst_window_bin = (worst_window_ms / HIST_BIN_MS).round() as i32;
-    let mut smoothed: Vec<(i32, f32)> =
-        Vec::with_capacity((worst_window_bin * 2 + 1).max(1) as usize);
-
-    // Rebuild a fast lookup for counts
-    let mut count_map: HashMap<i32, u32> = HashMap::with_capacity(bins.len());
-    for (bin, c) in &bins {
-        count_map.insert(*bin, *c);
-    }
-
-    for i in -worst_window_bin..=worst_window_bin {
-        let mut y = 0.0_f32;
-        for (j, w) in GAUSS7.iter().enumerate() {
-            let offset = j as i32 - 3; // -3..+3
-            let k = (i + offset).clamp(-worst_window_bin, worst_window_bin);
-            let c = *count_map.get(&k).unwrap_or(&0) as f32;
-            y += c * *w;
+    for note in notes {
+        let Some(judgment) = note.result.as_ref() else {
+            continue;
+        };
+        if judgment.grade == JudgeGrade::Miss
+            || matches!(note.note_type, NoteType::Mine)
+            || note.is_fake
+        {
+            continue;
         }
-        smoothed.push((i, y));
+
+        let bin = bin_index_ms(judgment.time_error_ms);
+        bins.push(bin);
+        meta.max_abs = meta.max_abs.max(judgment.time_error_ms.abs());
+        meta.worst_window_ix = meta.worst_window_ix.max(hist_window_ix(judgment.grade));
+        meta.worst_observed_bin_abs = meta.worst_observed_bin_abs.max(bin.abs());
     }
+
+    (bins, meta)
+}
+
+fn pack_hist_counts(mut seen_bins: Vec<i32>) -> HistCounts {
+    if seen_bins.is_empty() {
+        return HistCounts::default();
+    }
+
+    seen_bins.sort_unstable();
+    let min_bin = seen_bins[0];
+    let max_bin = *seen_bins.last().unwrap_or(&min_bin);
+    let span = max_bin - min_bin + 1;
+    let mut counts = HistCounts {
+        bins: Vec::with_capacity(seen_bins.len().min(span as usize)),
+        dense: if span <= MAX_DENSE_HIST_SPAN {
+            vec![0; span as usize]
+        } else {
+            Vec::new()
+        },
+        min_bin,
+        max_count: 0,
+    };
+
+    let mut prev = min_bin;
+    let mut run_count = 0u32;
+    for bin in seen_bins {
+        if !counts.dense.is_empty() {
+            counts.dense[(bin - min_bin) as usize] += 1;
+        }
+        if bin == prev {
+            run_count += 1;
+            continue;
+        }
+        counts.max_count = counts.max_count.max(run_count);
+        counts.bins.push((prev, run_count));
+        prev = bin;
+        run_count = 1;
+    }
+
+    counts.max_count = counts.max_count.max(run_count);
+    counts.bins.push((prev, run_count));
+    counts
+}
+
+#[inline(always)]
+fn hist_count_at(counts: &HistCounts, bin: i32) -> u32 {
+    if !counts.dense.is_empty() {
+        let idx = bin - counts.min_bin;
+        if idx >= 0 && (idx as usize) < counts.dense.len() {
+            return counts.dense[idx as usize];
+        }
+        return 0;
+    }
+
+    counts
+        .bins
+        .binary_search_by_key(&bin, |(key, _)| *key)
+        .map_or(0, |idx| counts.bins[idx].1)
+}
+
+fn smooth_hist_counts(counts: &HistCounts, worst_window_bin: i32) -> Vec<(i32, f32)> {
+    let mut smoothed = Vec::with_capacity((worst_window_bin * 2 + 1).max(1) as usize);
+    for bin in -worst_window_bin..=worst_window_bin {
+        let mut y = 0.0_f32;
+        for (offset, weight) in (-3..=3).zip(GAUSS7) {
+            let sample = (bin + offset).clamp(-worst_window_bin, worst_window_bin);
+            y += hist_count_at(counts, sample) as f32 * weight;
+        }
+        smoothed.push((bin, y));
+    }
+    smoothed
+}
+
+#[inline(always)]
+pub fn build_histogram_ms(notes: &[Note]) -> HistogramMs {
+    let (seen_bins, meta) = collect_hist_bins(notes);
+    let counts = pack_hist_counts(seen_bins);
+    let worst_window_ms = effective_windows_ms()[meta.worst_window_ix];
+    let worst_window_bin = (worst_window_ms / HIST_BIN_MS).round() as i32;
+    let smoothed = smooth_hist_counts(&counts, worst_window_bin);
 
     HistogramMs {
-        bins,
+        bins: counts.bins,
         smoothed,
-        max_count,
-        worst_observed_ms: (worst_observed_bin_abs as f32) * HIST_BIN_MS,
-        worst_window_ms: worst_window_ms.max(max_abs),
+        max_count: counts.max_count,
+        worst_observed_ms: (meta.worst_observed_bin_abs as f32) * HIST_BIN_MS,
+        worst_window_ms: worst_window_ms.max(meta.max_abs),
     }
 }
 
@@ -1464,5 +1518,51 @@ mod tests {
         assert!((stats.mean_abs_ms - 10.0).abs() < 0.0001);
         assert!((stats.max_abs_ms - 10.0).abs() < 0.0001);
         assert!(stats.stddev_ms.abs() < 0.0001);
+    }
+
+    #[test]
+    fn histogram_ms_packs_sorted_bins_and_ignores_non_scored_notes() {
+        let mut notes = vec![
+            test_note(10, 0, JudgeGrade::Fantastic, -10.0),
+            test_note(11, 0, JudgeGrade::Fantastic, -10.0),
+            test_note(12, 0, JudgeGrade::Excellent, 30.0),
+            test_note(13, 0, JudgeGrade::Excellent, 30.0),
+            test_note(14, 0, JudgeGrade::Excellent, 30.0),
+            test_note(15, 0, JudgeGrade::WayOff, 170.0),
+        ];
+        notes.push(test_note(16, 0, JudgeGrade::Miss, 0.0));
+
+        let mut mine = test_note(17, 0, JudgeGrade::Fantastic, 12.0);
+        mine.note_type = NoteType::Mine;
+        notes.push(mine);
+
+        let mut fake = test_note(18, 0, JudgeGrade::Fantastic, 18.0);
+        fake.is_fake = true;
+        notes.push(fake);
+
+        let hist = build_histogram_ms(&notes);
+        assert_eq!(hist.bins, vec![(-10, 2), (30, 3), (170, 1)]);
+        assert_eq!(hist.max_count, 3);
+        assert!((hist.worst_observed_ms - 170.0).abs() < 0.0001);
+        assert!((hist.worst_window_ms - effective_windows_ms()[4]).abs() < 0.0001);
+        assert_eq!(
+            hist.smoothed.len(),
+            ((effective_windows_ms()[4] / HIST_BIN_MS).round() as usize * 2) + 1
+        );
+    }
+
+    #[test]
+    fn histogram_ms_empty_input_still_builds_zero_window_curve() {
+        let hist = build_histogram_ms(&[]);
+        let expected_window = effective_windows_ms()[hist_window_ix(JudgeGrade::Great)];
+        assert!(hist.bins.is_empty());
+        assert_eq!(hist.max_count, 0);
+        assert_eq!(hist.worst_observed_ms, 0.0);
+        assert!((hist.worst_window_ms - expected_window).abs() < 0.0001);
+        assert_eq!(
+            hist.smoothed.len(),
+            ((expected_window / HIST_BIN_MS).round() as usize * 2) + 1
+        );
+        assert!(hist.smoothed.iter().all(|(_, value)| value.abs() < 0.0001));
     }
 }

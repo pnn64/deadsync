@@ -4,16 +4,18 @@ use crate::core::gfx::{BlendMode, MeshMode};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
-use crate::screens::components::screen_bar::{self, AvatarParams, ScreenBarParams};
-use crate::screens::components::{gameplay_stats, notefield};
+use crate::screens::components::gameplay::{gameplay_stats, notefield};
+use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
+use crate::ui::compose::TextLayoutCache;
+use crate::ui::font;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use std::thread::LocalKey;
 
-const TEXT_CACHE_LIMIT: usize = 2048;
+const TEXT_CACHE_LIMIT: usize = 8192;
 type TextCache<K> = HashMap<K, Arc<str>>;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 
@@ -24,9 +26,43 @@ use crate::game::gameplay::{
 };
 
 thread_local! {
-    static SCORE_2DP_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
+    static SCORE_2DP_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
     static RATE_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
     static BPM_TEXT_CACHE: RefCell<TextCache<(u64, bool)>> = RefCell::new(HashMap::with_capacity(512));
+    static LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
+        RefCell::new(HashMap::with_capacity(1024));
+    static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(64));
+    static SYNC_OVERLAY_CACHE: RefCell<TextCache<SyncOverlayTextKey>> =
+        RefCell::new(HashMap::with_capacity(256));
+    static AUTOSYNC_TEXT_CACHE: RefCell<TextCache<AutosyncTextKey>> =
+        RefCell::new(HashMap::with_capacity(256));
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct SyncOverlayTextKey {
+    replay_tag: u8,
+    replay_ptr: usize,
+    replay_len: usize,
+    timing_ptr: usize,
+    timing_len: usize,
+    autosync_ptr: usize,
+    autosync_len: usize,
+    message_ptr: usize,
+    message_len: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct AutosyncTextKey {
+    mode: u8,
+    old_offset_bits: u32,
+    new_offset_bits: u32,
+    stddev_bits: u32,
+    sample_count: u16,
+}
+
+#[inline(always)]
+fn str_key(line: &str) -> (usize, usize) {
+    (line.as_ptr() as usize, line.len())
 }
 
 #[inline(always)]
@@ -55,8 +91,31 @@ where
 }
 
 #[inline(always)]
+fn quantize_centi_u32(value: f64) -> u32 {
+    let value = if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
+    };
+    ((value * 100.0).round()).clamp(0.0, u32::MAX as f64) as u32
+}
+
+#[inline(always)]
+fn quantize_tenths_u32(value: f32) -> u32 {
+    let value = if value.is_finite() {
+        value.max(0.0)
+    } else {
+        0.0
+    };
+    ((value * 10.0).round()).clamp(0.0, u32::MAX as f32) as u32
+}
+
+#[inline(always)]
 fn cached_score_2dp(value: f64) -> Arc<str> {
-    cached_text(&SCORE_2DP_CACHE, value.to_bits(), || format!("{value:.2}"))
+    let key = quantize_centi_u32(value);
+    cached_text(&SCORE_2DP_CACHE, key, || {
+        format!("{:.2}", key as f64 / 100.0)
+    })
 }
 
 #[inline(always)]
@@ -90,6 +149,177 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
             format!("{rounded_tenth:.1}")
         }
     })
+}
+
+#[inline(always)]
+fn cached_life_percent_text(life_percent: f32) -> Arc<str> {
+    let key = quantize_tenths_u32(life_percent);
+    cached_text(&LIFE_PERCENT_TEXT_CACHE, key, || {
+        format!("{:.1}%", key as f32 / 10.0)
+    })
+}
+
+#[inline(always)]
+fn cached_meter_text(meter: u32) -> Arc<str> {
+    cached_text(&METER_TEXT_CACHE, meter, || meter.to_string())
+}
+
+fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
+    let mut lines = [""; 4];
+    let mut line_count = 0usize;
+    let mut total_len = 0usize;
+    if state.autoplay_enabled {
+        let line = state.replay_status_text.as_deref().unwrap_or("AutoPlay");
+        lines[line_count] = line;
+        line_count += 1;
+        total_len += line.len();
+    }
+    if let Some(line) = timing_tick_status_line(state) {
+        lines[line_count] = line;
+        line_count += 1;
+        total_len += line.len();
+    }
+    if let Some(line) = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode) {
+        lines[line_count] = line;
+        line_count += 1;
+        total_len += line.len();
+    }
+    if let Some(line) = state.sync_overlay_message.as_deref() {
+        lines[line_count] = line;
+        line_count += 1;
+        total_len += line.len();
+    }
+    if line_count == 0 {
+        return None;
+    }
+    let replay_line = if state.autoplay_enabled {
+        Some(state.replay_status_text.as_deref().unwrap_or("AutoPlay"))
+    } else {
+        None
+    };
+    let timing_line = timing_tick_status_line(state);
+    let autosync_line = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode);
+    let message_line = state.sync_overlay_message.as_deref();
+    let (replay_ptr, replay_len, replay_tag) = if let Some(line) = replay_line {
+        let (ptr, len) = str_key(line);
+        (
+            ptr,
+            len,
+            if state.replay_status_text.is_some() {
+                2
+            } else {
+                1
+            },
+        )
+    } else {
+        (0, 0, 0)
+    };
+    let (timing_ptr, timing_len) = timing_line.map_or((0, 0), str_key);
+    let (autosync_ptr, autosync_len) = autosync_line.map_or((0, 0), str_key);
+    let (message_ptr, message_len) = message_line.map_or((0, 0), str_key);
+    let key = SyncOverlayTextKey {
+        replay_tag,
+        replay_ptr,
+        replay_len,
+        timing_ptr,
+        timing_len,
+        autosync_ptr,
+        autosync_len,
+        message_ptr,
+        message_len,
+    };
+    let text = cached_text(&SYNC_OVERLAY_CACHE, key, || {
+        let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
+        out.push_str(lines[0]);
+        for line in &lines[1..line_count] {
+            out.push('\n');
+            out.push_str(line);
+        }
+        out
+    });
+    Some((text, line_count))
+}
+
+#[inline(always)]
+fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<str> {
+    let key = AutosyncTextKey {
+        mode: state.autosync_mode as u8,
+        old_offset_bits: old_offset.to_bits(),
+        new_offset_bits: new_offset.to_bits(),
+        stddev_bits: state.autosync_standard_deviation.to_bits(),
+        sample_count: state.autosync_offset_sample_count.min(u16::MAX as usize) as u16,
+    };
+    cached_text(&AUTOSYNC_TEXT_CACHE, key, || {
+        let collecting_sample = state
+            .autosync_offset_sample_count
+            .saturating_add(1)
+            .min(crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT);
+        format!(
+            "Old offset: {old_offset:0.3}\nNew offset: {new_offset:0.3}\nStandard deviation: {stddev:0.3}\nCollecting sample: {collecting_sample} / {max_samples}",
+            stddev = state.autosync_standard_deviation,
+            max_samples = crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT,
+        )
+    })
+}
+
+pub fn prewarm_text_layout(
+    cache: &mut TextLayoutCache,
+    fonts: &HashMap<&'static str, font::Font>,
+    state: &State,
+) {
+    let cfg = crate::config::get();
+    for centi in 0..=10_000 {
+        let text = cached_score_2dp(centi as f64 / 100.0);
+        cache.prewarm_text(fonts, "wendy_monospace_numbers", text.as_ref(), None);
+    }
+    for tenths in 0..=1_000 {
+        let text = cached_life_percent_text(tenths as f32 / 10.0);
+        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    }
+    for player in 0..state.num_players {
+        let chart = &state.charts[player];
+        let meter_text = cached_meter_text(chart.meter);
+        cache.prewarm_text(fonts, "wendy", meter_text.as_ref(), None);
+        let detail = color::difficulty_display_name_for_song(
+            &chart.difficulty,
+            &state.song.title,
+            cfg.zmod_rating_box_text,
+        );
+        cache.prewarm_text(fonts, "miso", detail, None);
+        for &(_, bpm) in &chart.timing_segments.bpms {
+            let text = cached_bpm_text(
+                f64::from(bpm.max(0.0)) * f64::from(state.music_rate),
+                cfg.show_bpm_decimal,
+            );
+            cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+        }
+    }
+    cache.prewarm_text(fonts, "miso", "Assist Tick", None);
+    cache.prewarm_text(fonts, "miso", "Hit Tick", None);
+    cache.prewarm_text(fonts, "miso", "AutoSync Song", None);
+    cache.prewarm_text(fonts, "miso", "AutoSync Machine", None);
+    cache.prewarm_text(fonts, "miso", "Continue holding &START; to give up", None);
+    cache.prewarm_text(fonts, "miso", "Continue holding &BACK; to give up", None);
+    cache.prewarm_text(fonts, "miso", "Don't go back!", None);
+    if let Some(text) = state.replay_status_text.as_ref() {
+        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    }
+    if let Some(text) = state.sync_overlay_message.as_ref() {
+        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    }
+    if state.autosync_mode != crate::game::gameplay::AutosyncMode::Off {
+        let (old_offset, new_offset) =
+            if state.autosync_mode == crate::game::gameplay::AutosyncMode::Machine {
+                (
+                    state.initial_global_offset_seconds,
+                    state.global_offset_seconds,
+                )
+            } else {
+                (state.initial_song_offset_seconds, state.song_offset_seconds)
+            };
+        let text = cached_autosync_text(state, old_offset, new_offset);
+        cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    }
 }
 
 // --- TRANSITIONS ---
@@ -204,7 +434,7 @@ fn build_background(state: &State, bg_brightness: f32) -> Actor {
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let cfg = crate::config::get();
     let hud_snapshot = profile::gameplay_hud_snapshot();
-    let mut actors = Vec::new();
+    let mut actors = Vec::with_capacity(96);
     let play_style = hud_snapshot.play_style;
     let player_side = hud_snapshot.player_side;
     let is_p2_single =
@@ -236,28 +466,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // ITGmania/Simply Love parity: ScreenSyncOverlay status text.
     {
-        let mut status_lines: Vec<String> = Vec::with_capacity(4);
-        if state.autoplay_enabled {
-            if let Some(replay_text) = &state.replay_status_text {
-                status_lines.push(replay_text.clone());
-            } else {
-                status_lines.push("AutoPlay".to_string());
-            }
-        }
-        if let Some(line) = timing_tick_status_line(state) {
-            status_lines.push(line.to_string());
-        }
-        if let Some(line) = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode) {
-            status_lines.push(line.to_string());
-        }
-        if let Some(msg) = &state.sync_overlay_message {
-            status_lines.push(msg.clone());
-        }
-
-        if !status_lines.is_empty() {
+        let status_line_count = if let Some((status_text, line_count)) = sync_overlay_text(state) {
             actors.push(act!(text:
                 font("miso"):
-                settext(status_lines.join("\n")):
+                settext(status_text):
                 align(0.5, 0.5):
                 xy(screen_center_x(), screen_center_y() + 150.0):
                 shadowlength(2.0):
@@ -265,13 +477,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 diffuse(1.0, 1.0, 1.0, 1.0):
                 z(901)
             ));
-        }
+            line_count
+        } else {
+            0
+        };
 
         if let Some((flash, alpha)) = toggle_flash_text(state) {
-            let y = if status_lines.is_empty() {
+            let y = if status_line_count == 0 {
                 screen_center_y() + 150.0
             } else {
-                screen_center_y() + 150.0 + 20.0 * status_lines.len() as f32
+                screen_center_y() + 150.0 + 20.0 * status_line_count as f32
             };
             actors.push(act!(text:
                 font("miso"):
@@ -295,15 +510,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     (state.initial_song_offset_seconds, state.song_offset_seconds)
                 };
-            let collecting_sample = state
-                .autosync_offset_sample_count
-                .saturating_add(1)
-                .min(crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT);
-            let adjustments = format!(
-                "Old offset: {old_offset:0.3}\nNew offset: {new_offset:0.3}\nStandard deviation: {stddev:0.3}\nCollecting sample: {collecting_sample} / {max_samples}",
-                stddev = state.autosync_standard_deviation,
-                max_samples = crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT,
-            );
+            let adjustments = cached_autosync_text(state, old_offset, new_offset);
             actors.push(act!(text:
                 font("miso"):
                 settext(adjustments):
@@ -515,6 +722,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
+    actors.reserve(p1_actors.len() + p2_actors.as_ref().map_or(0, Vec::len) + 48);
     if let Some(p2_actors) = p2_actors {
         actors.extend(p2_actors);
     }
@@ -525,53 +733,55 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
     let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
 
-    let mut players: Vec<(usize, profile::PlayerSide, f32, f32, f32, f32)> =
-        Vec::with_capacity(state.num_players);
-    match play_style {
+    let mut players = [(0usize, profile::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
+    let player_count = match play_style {
         profile::PlayStyle::Versus => {
-            players.push((
+            players[0] = (
                 0,
                 profile::PlayerSide::P1,
                 per_player_fields[0].1,
                 diff_x_p1,
                 score_x_p1,
                 score_x_p2,
-            ));
-            players.push((
+            );
+            players[1] = (
                 1,
                 profile::PlayerSide::P2,
                 per_player_fields[1].1,
                 diff_x_p2,
                 score_x_p2,
                 score_x_p1,
-            ));
+            );
+            2
         }
         _ if is_p2_single => {
-            players.push((
+            players[0] = (
                 0,
                 profile::PlayerSide::P2,
                 per_player_fields[0].1,
                 diff_x_p2,
                 score_x_p2,
                 score_x_p1,
-            ));
+            );
+            1
         }
         _ => {
-            players.push((
+            players[0] = (
                 0,
                 profile::PlayerSide::P1,
                 per_player_fields[0].1,
                 diff_x_p1,
                 score_x_p1,
                 score_x_p2,
-            ));
+            );
+            1
         }
-    }
+    };
 
     let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
     let graph_center_shift = widescale(45.0, 95.0);
 
-    for &(player_idx, player_side, field_x, _, _, _) in &players {
+    for &(player_idx, player_side, field_x, _, _, _) in &players[..player_count] {
         if !state.player_profiles[player_idx].nps_graph_at_top {
             continue;
         }
@@ -622,9 +832,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
         let duration =
             (state.density_graph_last_second - state.density_graph_first_second).max(0.001_f32);
-        let progress_w =
-            (((state.current_music_time - state.density_graph_first_second) / duration) * graph_w)
-                .clamp(0.0, graph_w);
+        let progress_w = (((state.current_music_time_display - state.density_graph_first_second)
+            / duration)
+            * graph_w)
+            .clamp(0.0, graph_w);
         if progress_w > 0.0 {
             actors.push(act!(quad:
                 align(0.0, 0.0): xy(x, y_top):
@@ -635,10 +846,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
-    for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in &players {
+    for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
+        &players[..player_count]
+    {
         let chart = &state.charts[player_idx];
         let difficulty_color = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-        let meter_text = chart.meter.to_string();
+        let meter_text = cached_meter_text(chart.meter as u32);
         let meter_detail_text =
             color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
 
@@ -651,7 +864,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
         let meter_y = if cfg.zmod_rating_box_text { -4.0 } else { 0.0 };
         diff_children.push(act!(text:
-            font("wendy"): settext(meter_text.clone()): align(0.5, 0.5): xy(0.0, meter_y):
+            font("wendy"): settext(meter_text): align(0.5, 0.5): xy(0.0, meter_y):
             zoom(0.4): diffuse(0.0, 0.0, 0.0, 1.0)
         ));
         if cfg.zmod_rating_box_text {
@@ -757,7 +970,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
     // Current BPM Display (1:1 with Simply Love)
     {
-        let base_bpm = state.timing.get_bpm_for_beat(state.current_beat);
+        let base_bpm = state.timing.get_bpm_for_beat(state.current_beat_display);
         let rate = if state.music_rate.is_finite() {
             state.music_rate as f64
         } else {
@@ -816,12 +1029,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let h = 22.0;
         let box_cx = screen_center_x();
         let box_cy = 20.0;
-        let mut frame_children = Vec::new();
+        let mut frame_children = Vec::with_capacity(4);
         frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w, h): diffuse(1.0, 1.0, 1.0, 1.0): z(0) ));
         frame_children.push(act!(quad: align(0.5, 0.5): xy(w / 2.0, h / 2.0): zoomto(w - 4.0, h - 4.0): diffuse(0.0, 0.0, 0.0, 1.0): z(1) ));
-        if state.song.total_length_seconds > 0 && state.current_music_time >= 0.0 {
-            let progress =
-                (state.current_music_time / state.song.total_length_seconds as f32).clamp(0.0, 1.0);
+        if state.song.total_length_seconds > 0 && state.current_music_time_display >= 0.0 {
+            let progress = (state.current_music_time_display
+                / state.song.total_length_seconds as f32)
+                .clamp(0.0, 1.0);
             frame_children.push(act!(quad:
                 align(0.0, 0.5): xy(2.0, h / 2.0): zoomto((w - 4.0) * progress, h - 4.0):
                 diffuse(player_color[0], player_color[1], player_color[2], 1.0): z(2)
@@ -895,15 +1109,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
         let show_standard_life_percent = screen_width() / screen_height().max(1.0) >= (16.0 / 9.0);
 
-        let players: &[(usize, profile::PlayerSide)] = match play_style {
+        let mut life_players = [(0usize, profile::PlayerSide::P1); 2];
+        let life_player_count = match play_style {
             profile::PlayStyle::Versus => {
-                &[(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)]
+                life_players[0] = (0, profile::PlayerSide::P1);
+                life_players[1] = (1, profile::PlayerSide::P2);
+                2
             }
-            _ if is_p2_single => &[(0, profile::PlayerSide::P2)],
-            _ => &[(0, profile::PlayerSide::P1)],
+            _ if is_p2_single => {
+                life_players[0] = (0, profile::PlayerSide::P2);
+                1
+            }
+            _ => {
+                life_players[0] = (0, profile::PlayerSide::P1);
+                1
+            }
         };
 
-        for &(player_idx, side) in players {
+        for &(player_idx, side) in &life_players[..life_player_count] {
             if state.player_profiles[player_idx].hide_lifebar {
                 continue;
             }
@@ -919,7 +1142,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let is_hot = !dead && life_for_render >= 1.0;
             let life_color = fill_life_color(player_idx, life_for_render, dead);
             let life_percent = life_for_render * 100.0;
-            let life_percent_text = format!("{life_percent:.1}%");
+            let life_percent_text = cached_life_percent_text(life_percent);
 
             match state.player_profiles[player_idx].lifemeter_type {
                 profile::LifeMeterType::Standard => {
@@ -954,7 +1177,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         // Logic Parity:
                         // velocity = -(songposition:GetCurBPS() * 0.5)
                         // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-                        let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+                        let bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
                         let velocity_x = if state.is_in_freeze || state.is_in_delay {
                             0.0
                         } else {
@@ -1137,7 +1360,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
                     // MeterSwoosh
                     if filled_h > 0.0 && !dead {
-                        let bps = state.timing.get_bpm_for_beat(state.current_beat) / 60.0;
+                        let bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
                         let velocity_x = if state.is_in_freeze || state.is_in_delay {
                             0.0
                         } else {
