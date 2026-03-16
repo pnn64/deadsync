@@ -8868,6 +8868,11 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
 }
 
 #[inline(always)]
+fn partition_notes_before_time(note_times: &[f32], lookahead_time: f32) -> usize {
+    note_times.partition_point(|note_time| *note_time < lookahead_time)
+}
+
+#[inline(always)]
 fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
     for player in 0..state.num_players {
         let timing = &state.timing_players[player];
@@ -8878,8 +8883,14 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
         match scroll_speed {
             ScrollSpeedSetting::CMod(_) => {
                 let lookahead_time = spawn_time + state.scroll_travel_time[player];
-                let lookahead_beat = timing.get_beat_for_time(lookahead_time);
-                while cursor < note_end && state.notes[cursor].beat < lookahead_beat {
+                // C-mod note travel is time-based. Beat lookahead freezes inside stops,
+                // which stalls spawning until the note is effectively due.
+                let spawn_limit = cursor
+                    + partition_notes_before_time(
+                        &state.note_time_cache[cursor..note_end],
+                        lookahead_time,
+                    );
+                while cursor < spawn_limit {
                     let note = &state.notes[cursor];
                     if note.column < state.num_cols {
                         state.arrows[note.column].push(Arrow {
@@ -9801,9 +9812,10 @@ mod tests {
     use super::{
         FrameStableDisplayClock, SongClockSnapshot, TickMode, build_assist_clap_rows,
         frame_stable_display_music_time, music_time_from_song_clock, next_tick_mode,
-        tick_mode_status_line,
+        partition_notes_before_time, tick_mode_status_line,
     };
     use crate::game::note::{Note, NoteType};
+    use crate::game::timing::{StopSegment, TimingData, TimingSegments};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -9900,5 +9912,30 @@ mod tests {
             can_be_judged: true,
         }];
         assert_eq!(build_assist_clap_rows(&notes, (0, 1)), vec![48]);
+    }
+
+    #[test]
+    fn cmod_stop_lookahead_uses_time_not_frozen_beat() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 185.0)],
+                stops: vec![StopSegment {
+                    beat: 32.0,
+                    duration: 0.973,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let stop_beat = 32.0;
+        let note_time = timing.get_time_for_beat(stop_beat);
+        let lookahead_time = note_time + 0.5;
+        let lookahead_beat = timing.get_beat_for_time(lookahead_time);
+
+        assert!((lookahead_beat - stop_beat).abs() < 0.000_5);
+        assert_eq!(partition_notes_before_time(&[note_time], lookahead_time), 1);
+        assert!(!(stop_beat < lookahead_beat));
     }
 }
