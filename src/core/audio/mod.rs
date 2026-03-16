@@ -635,6 +635,24 @@ pub fn startup_output_devices() -> Vec<OutputDeviceInfo> {
     ENGINE.startup_output_devices.clone()
 }
 
+#[cfg(target_os = "linux")]
+pub fn available_linux_backends() -> Vec<crate::config::LinuxAudioBackend> {
+    let mut backends = Vec::with_capacity(5);
+    backends.push(crate::config::LinuxAudioBackend::Auto);
+    #[cfg(has_pipewire_audio)]
+    backends.push(crate::config::LinuxAudioBackend::PipeWire);
+    #[cfg(has_pulse_audio)]
+    if backends::linux_pulse::is_available() {
+        backends.push(crate::config::LinuxAudioBackend::PulseAudio);
+    }
+    backends.push(crate::config::LinuxAudioBackend::Alsa);
+    #[cfg(has_jack_audio)]
+    if backends::linux_jack::is_available() {
+        backends.push(crate::config::LinuxAudioBackend::Jack);
+    }
+    backends
+}
+
 /// Plays a sound effect from the given path (cached after first load).
 pub fn play_sfx(path: &str) {
     play_sfx_on_lane(path, SfxLane::Effect);
@@ -2001,19 +2019,38 @@ fn start_output_backend(
                 }
             }
             #[cfg(has_pulse_audio)]
-            if let Some(pulse) = pulse {
+            if backends::linux_pulse::is_available()
+                && let Some(pulse) = pulse
+            {
                 match start_linux_pulse_backend(pulse, music_ring.clone()) {
                     Ok(output) => return Ok(output),
                     Err(err) => {
                         warn!(
-                            "Failed to start native PulseAudio output: {err}. Falling back to ALSA."
+                            "Failed to start native PulseAudio output: {err}. Falling back to ALSA/JACK."
                         );
                     }
                 }
             }
             if let Some(alsa) = alsa {
-                return start_linux_alsa_backend(alsa, music_ring)
-                    .map_err(|err| format!("failed to start native ALSA output: {err}"));
+                match start_linux_alsa_backend(alsa, music_ring.clone()) {
+                    Ok(output) => return Ok(output),
+                    Err(err) => {
+                        #[cfg(has_jack_audio)]
+                        if backends::linux_jack::is_available()
+                            && let Some(jack) = jack
+                        {
+                            match start_linux_jack_backend(jack, music_ring) {
+                                Ok(output) => return Ok(output),
+                                Err(jack_err) => {
+                                    return Err(format!(
+                                        "failed to start native ALSA output: {err}; JACK fallback also failed: {jack_err}"
+                                    ));
+                                }
+                            }
+                        }
+                        return Err(format!("failed to start native ALSA output: {err}"));
+                    }
+                }
             }
             return Err("no native Linux audio backend hint is available.".to_string());
         }

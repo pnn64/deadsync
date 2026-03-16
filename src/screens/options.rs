@@ -665,62 +665,8 @@ const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
 const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;
 const SCORE_IMPORT_ROW_ONLY_MISSING_INDEX: usize = 3;
 
-#[cfg(all(
-    target_os = "linux",
-    has_pipewire_audio,
-    has_pulse_audio,
-    has_jack_audio
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "PulseAudio", "JACK", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    has_pipewire_audio,
-    has_pulse_audio,
-    not(has_jack_audio)
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "PulseAudio", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    has_pipewire_audio,
-    not(has_pulse_audio),
-    has_jack_audio
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "JACK", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    has_pipewire_audio,
-    not(has_pulse_audio),
-    not(has_jack_audio)
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    not(has_pipewire_audio),
-    has_pulse_audio,
-    has_jack_audio
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PulseAudio", "JACK", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    not(has_pipewire_audio),
-    has_pulse_audio,
-    not(has_jack_audio)
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PulseAudio", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    not(has_pipewire_audio),
-    not(has_pulse_audio),
-    has_jack_audio
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "JACK", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    not(has_pipewire_audio),
-    not(has_pulse_audio),
-    not(has_jack_audio)
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "ALSA"];
+#[cfg(target_os = "linux")]
+const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto"];
 
 fn discover_system_noteskin_choices() -> Vec<String> {
     let mut names = noteskin_parser::discover_itg_skins("dance");
@@ -755,6 +701,26 @@ fn build_sound_device_options() -> Vec<SoundDeviceOption> {
         });
     }
     options
+}
+
+#[cfg(target_os = "linux")]
+#[inline(always)]
+const fn linux_backend_label(backend: config::LinuxAudioBackend) -> &'static str {
+    match backend {
+        config::LinuxAudioBackend::Auto => "Auto",
+        config::LinuxAudioBackend::PipeWire => "PipeWire",
+        config::LinuxAudioBackend::PulseAudio => "PulseAudio",
+        config::LinuxAudioBackend::Jack => "JACK",
+        config::LinuxAudioBackend::Alsa => "ALSA",
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn build_linux_backend_choices() -> Vec<String> {
+    audio::available_linux_backends()
+        .into_iter()
+        .map(|backend| linux_backend_label(backend).to_string())
+        .collect()
 }
 
 pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
@@ -3172,6 +3138,15 @@ fn row_choices<'a>(
                 })
                 .collect();
         }
+        #[cfg(target_os = "linux")]
+        if row.label == SOUND_ROW_LINUX_BACKEND {
+            return state
+                .linux_backend_choices
+                .iter()
+                .cloned()
+                .map(Cow::Owned)
+                .collect();
+        }
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::ScoreImport)
@@ -3486,25 +3461,21 @@ fn audio_output_mode_from_choice(idx: usize) -> config::AudioOutputMode {
 }
 
 #[cfg(target_os = "linux")]
-fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
-    let target = match backend {
-        config::LinuxAudioBackend::Auto => "Auto",
-        config::LinuxAudioBackend::PipeWire => "PipeWire",
-        config::LinuxAudioBackend::PulseAudio => "PulseAudio",
-        config::LinuxAudioBackend::Jack => "JACK",
-        config::LinuxAudioBackend::Alsa => "ALSA",
-    };
-    SOUND_LINUX_BACKEND_CHOICES
+fn linux_audio_backend_choice_index(state: &State, backend: config::LinuxAudioBackend) -> usize {
+    let target = linux_backend_label(backend);
+    state
+        .linux_backend_choices
         .iter()
-        .position(|&choice| choice == target)
+        .position(|choice| choice == target)
         .unwrap_or(0)
 }
 
 #[cfg(target_os = "linux")]
-fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
-    match SOUND_LINUX_BACKEND_CHOICES
+fn linux_audio_backend_from_choice(state: &State, idx: usize) -> config::LinuxAudioBackend {
+    match state
+        .linux_backend_choices
         .get(idx)
-        .copied()
+        .map(String::as_str)
         .unwrap_or("Auto")
     {
         "PipeWire" => config::LinuxAudioBackend::PipeWire,
@@ -3855,6 +3826,8 @@ pub struct State {
     score_import_pack_choices: Vec<String>,
     score_import_pack_filters: Vec<Option<String>>,
     sound_device_options: Vec<SoundDeviceOption>,
+    #[cfg(target_os = "linux")]
+    linux_backend_choices: Vec<String>,
     master_volume_pct: i32,
     sfx_volume_pct: i32,
     assist_tick_volume_pct: i32,
@@ -3908,6 +3881,8 @@ pub fn init() -> State {
     let max_fps_choices = build_max_fps_choices();
     let max_fps_labels = max_fps_choice_labels(&max_fps_choices);
     let sound_device_options = build_sound_device_options();
+    #[cfg(target_os = "linux")]
+    let linux_backend_choices = build_linux_backend_choices();
     let machine_noteskin = profile::machine_default_noteskin();
     let machine_noteskin_idx = system_noteskin_choices
         .iter()
@@ -3974,6 +3949,8 @@ pub fn init() -> State {
         score_import_pack_choices: vec![SCORE_IMPORT_ALL_PACKS.to_string()],
         score_import_pack_filters: vec![None],
         sound_device_options,
+        #[cfg(target_os = "linux")]
+        linux_backend_choices,
         master_volume_pct: i32::from(cfg.master_volume.clamp(0, 100)),
         sfx_volume_pct: i32::from(cfg.sfx_volume.clamp(0, 100)),
         assist_tick_volume_pct: i32::from(cfg.assist_tick_volume.clamp(0, 100)),
@@ -4317,11 +4294,9 @@ pub fn init() -> State {
         audio_output_mode_choice_index(cfg.audio_output_mode),
     );
     #[cfg(target_os = "linux")]
-    set_sound_choice_index(
-        &mut state,
-        SOUND_ROW_LINUX_BACKEND,
-        linux_audio_backend_choice_index(cfg.linux_audio_backend),
-    );
+    let linux_backend_idx = linux_audio_backend_choice_index(&state, cfg.linux_audio_backend);
+    #[cfg(target_os = "linux")]
+    set_sound_choice_index(&mut state, SOUND_ROW_LINUX_BACKEND, linux_backend_idx);
     let sound_rate_idx = sample_rate_choice_index(&state, cfg.audio_sample_rate_hz);
     set_sound_choice_index(&mut state, SOUND_ROW_SAMPLE_RATE, sound_rate_idx);
     set_choice_by_label(
@@ -5811,7 +5786,9 @@ fn apply_submenu_choice_delta(
             }
             #[cfg(target_os = "linux")]
             SOUND_ROW_LINUX_BACKEND => {
-                config::update_linux_audio_backend(linux_audio_backend_from_choice(new_index));
+                config::update_linux_audio_backend(linux_audio_backend_from_choice(
+                    state, new_index,
+                ));
             }
             SOUND_ROW_SAMPLE_RATE => {
                 let rate = sample_rate_from_choice(state, new_index);
