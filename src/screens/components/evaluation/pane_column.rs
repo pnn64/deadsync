@@ -4,7 +4,7 @@ use crate::core::gfx::{BlendMode, SamplerDesc};
 use crate::core::space::screen_center_y;
 use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization};
 use crate::game::profile;
-use crate::screens::components::notefield::noteskin_model_actor;
+use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
 use crate::ui::actors::Actor;
 use crate::ui::color;

@@ -2,10 +2,10 @@ use crate::act;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 // Screen navigation handled in app.rs
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::{heart_bg, screen_bar};
+use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::ui::actors::Actor;
 use crate::ui::color;
 // Keyboard handling is centralized in app.rs via virtual actions

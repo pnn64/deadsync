@@ -1,9 +1,13 @@
+use crate::core::audio::decode;
 use crate::game::{
     chart::{ChartData, StaminaCounts},
     course::set_course_cache,
     note::NoteType,
     parsing::notes::ParsedNote,
-    song::{SongData, SongPack, get_song_cache, set_song_cache},
+    song::{
+        SongBackgroundChange, SongBackgroundChangeTarget, SongData, SongPack, get_song_cache,
+        set_song_cache,
+    },
     timing::{
         DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
         TimingSegments, WarpSegment,
@@ -19,18 +23,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use bincode::{Decode, Encode};
-use lewton::inside_ogg::OggStreamReader;
-use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 use std::hash::Hasher;
-use std::io::{BufReader, Cursor, Read, Write};
+use std::io::{Read, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
 // Bump when the serialized song payload changes or resolved asset semantics change.
-const SONG_CACHE_VERSION: u8 = 1;
+const SONG_CACHE_VERSION: u8 = 2;
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 
@@ -536,6 +538,55 @@ impl From<SerializableChartData> for ChartData {
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+enum SerializableSongBackgroundChangeTarget {
+    File(String),
+    NoSongBg,
+    Random,
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct SerializableSongBackgroundChange {
+    start_beat: f32,
+    target: SerializableSongBackgroundChangeTarget,
+}
+
+impl From<&SongBackgroundChange> for SerializableSongBackgroundChange {
+    fn from(change: &SongBackgroundChange) -> Self {
+        let target = match &change.target {
+            SongBackgroundChangeTarget::File(path) => {
+                SerializableSongBackgroundChangeTarget::File(path.to_string_lossy().into_owned())
+            }
+            SongBackgroundChangeTarget::NoSongBg => {
+                SerializableSongBackgroundChangeTarget::NoSongBg
+            }
+            SongBackgroundChangeTarget::Random => SerializableSongBackgroundChangeTarget::Random,
+        };
+        Self {
+            start_beat: change.start_beat,
+            target,
+        }
+    }
+}
+
+impl From<SerializableSongBackgroundChange> for SongBackgroundChange {
+    fn from(change: SerializableSongBackgroundChange) -> Self {
+        let target = match change.target {
+            SerializableSongBackgroundChangeTarget::File(path) => {
+                SongBackgroundChangeTarget::File(PathBuf::from(path))
+            }
+            SerializableSongBackgroundChangeTarget::NoSongBg => {
+                SongBackgroundChangeTarget::NoSongBg
+            }
+            SerializableSongBackgroundChangeTarget::Random => SongBackgroundChangeTarget::Random,
+        };
+        Self {
+            start_beat: change.start_beat,
+            target,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 struct SerializableSongData {
     simfile_path: String,
     title: String,
@@ -545,6 +596,7 @@ struct SerializableSongData {
     artist: String,
     banner_path: Option<String>,
     background_path: Option<String>,
+    background_changes: Vec<SerializableSongBackgroundChange>,
     cdtitle_path: Option<String>,
     music_path: Option<String>,
     display_bpm: String,
@@ -582,6 +634,11 @@ impl From<&SongData> for SerializableSongData {
                 .background_path
                 .as_ref()
                 .map(|p| p.to_string_lossy().into_owned()),
+            background_changes: song
+                .background_changes
+                .iter()
+                .map(SerializableSongBackgroundChange::from)
+                .collect(),
             cdtitle_path: song
                 .cdtitle_path
                 .as_ref()
@@ -625,6 +682,11 @@ impl From<SerializableSongData> for SongData {
             artist: song.artist,
             banner_path: song.banner_path.map(PathBuf::from),
             background_path: song.background_path.map(PathBuf::from),
+            background_changes: song
+                .background_changes
+                .into_iter()
+                .map(SongBackgroundChange::from)
+                .collect(),
             cdtitle_path: song.cdtitle_path.map(PathBuf::from),
             music_path: song.music_path.map(PathBuf::from),
             display_bpm: song.display_bpm,
@@ -729,8 +791,17 @@ fn cached_path_exists(path_opt: Option<&str>) -> bool {
 #[inline(always)]
 fn cached_song_paths_exist(song: &CachedSong) -> bool {
     let data = &song.data;
+    let bgchange_paths_ok = data
+        .background_changes
+        .iter()
+        .all(|change| match &change.target {
+            SerializableSongBackgroundChangeTarget::File(path) => cached_path_exists(Some(path)),
+            SerializableSongBackgroundChangeTarget::NoSongBg
+            | SerializableSongBackgroundChangeTarget::Random => true,
+        });
     cached_path_exists(data.banner_path.as_deref())
         && cached_path_exists(data.background_path.as_deref())
+        && bgchange_paths_ok
         && cached_path_exists(data.cdtitle_path.as_deref())
         && cached_path_exists(data.music_path.as_deref())
 }
@@ -1043,6 +1114,114 @@ fn merge_pack_scans(mut packs: Vec<PackScan>) -> Vec<PackScan> {
     merged
 }
 
+#[inline(always)]
+fn report_load_progress<F>(
+    progress: &mut Option<&mut F>,
+    done: usize,
+    total: usize,
+    group: &str,
+    item: &str,
+) where
+    F: FnMut(usize, usize, &str, &str),
+{
+    if let Some(cb) = progress.as_mut() {
+        cb(done, total, group, item);
+    }
+}
+
+#[inline(always)]
+fn song_pack_progress_name(pack: &SongPack) -> &str {
+    pack.directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(pack.group_name.as_str())
+}
+
+#[inline(always)]
+fn song_progress_name(path: &Path) -> &str {
+    path.parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+        })
+}
+
+#[inline(always)]
+fn course_progress_names<'a>(path: &'a Path, root: &'a str) -> (&'a str, &'a str) {
+    let group = path
+        .parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(root);
+    let course = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_default();
+    (group, course)
+}
+
+type SongParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
+
+fn reap_song_parse<F>(
+    rx: Option<&std::sync::mpsc::Receiver<SongParseMsg>>,
+    in_flight: &mut usize,
+    loaded_packs: &mut Vec<SongPack>,
+    songs_failed: &mut usize,
+    songs_cache_hits: &mut usize,
+    songs_parsed: &mut usize,
+    songs_done: &mut usize,
+    total_songs: usize,
+    progress: &mut Option<&mut F>,
+) where
+    F: FnMut(usize, usize, &str, &str),
+{
+    let Some(rx) = rx else {
+        return;
+    };
+    match rx.recv() {
+        Ok((pack_idx, simfile_path, result)) => {
+            *in_flight = in_flight.saturating_sub(1);
+            match result {
+                Ok((song_data, is_hit)) => {
+                    if is_hit {
+                        *songs_cache_hits += 1;
+                    } else {
+                        *songs_parsed += 1;
+                    }
+                    if let Some(pack) = loaded_packs.get_mut(pack_idx) {
+                        pack.songs.push(song_data);
+                    }
+                }
+                Err(e) => {
+                    *songs_failed += 1;
+                    warn!("Failed to load '{simfile_path:?}': {e}")
+                }
+            }
+            *songs_done = songs_done.saturating_add(1);
+            let pack_display = loaded_packs
+                .get(pack_idx)
+                .map_or("", song_pack_progress_name);
+            report_load_progress(
+                progress,
+                *songs_done,
+                total_songs,
+                pack_display,
+                song_progress_name(&simfile_path),
+            );
+        }
+        Err(_) => {
+            *in_flight = 0;
+        }
+    }
+}
+
 fn scan_and_load_songs_impl<F>(root_path_str: &'static str, mut progress: Option<&mut F>)
 where
     F: FnMut(usize, usize, &str, &str),
@@ -1099,52 +1278,13 @@ where
     }
     packs = merge_pack_scans(packs);
     let total_songs = packs.iter().map(|pack| pack.songs.len()).sum::<usize>();
-    let mut songs_seen = 0usize;
-
-    // (pack_idx, simfile_path, result(song_data, is_cache_hit))
-    type ParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
+    let mut songs_done = 0usize;
+    report_load_progress(&mut progress, 0, total_songs, "", "");
 
     let mut runtime: Option<tokio::runtime::Runtime> = None;
-    let mut tx_opt: Option<std::sync::mpsc::Sender<ParseMsg>> = None;
-    let mut rx_opt: Option<std::sync::mpsc::Receiver<ParseMsg>> = None;
+    let mut tx_opt: Option<std::sync::mpsc::Sender<SongParseMsg>> = None;
+    let mut rx_opt: Option<std::sync::mpsc::Receiver<SongParseMsg>> = None;
     let mut in_flight = 0usize;
-
-    fn reap_one(
-        rx: Option<&std::sync::mpsc::Receiver<ParseMsg>>,
-        in_flight: &mut usize,
-        loaded_packs: &mut Vec<SongPack>,
-        songs_failed: &mut usize,
-        songs_cache_hits: &mut usize,
-        songs_parsed: &mut usize,
-    ) {
-        let Some(rx) = rx else {
-            return;
-        };
-        match rx.recv() {
-            Ok((pack_idx, simfile_path, result)) => {
-                *in_flight = in_flight.saturating_sub(1);
-                match result {
-                    Ok((song_data, is_hit)) => {
-                        if is_hit {
-                            *songs_cache_hits += 1;
-                        } else {
-                            *songs_parsed += 1;
-                        }
-                        if let Some(pack) = loaded_packs.get_mut(pack_idx) {
-                            pack.songs.push(song_data);
-                        }
-                    }
-                    Err(e) => {
-                        *songs_failed += 1;
-                        warn!("Failed to load '{simfile_path:?}': {e}")
-                    }
-                }
-            }
-            Err(_) => {
-                *in_flight = 0;
-            }
-        }
-    }
 
     for pack in packs {
         let pack_display = pack
@@ -1173,21 +1313,7 @@ where
 
         for song in pack.songs {
             let simfile_path = song.simfile;
-            songs_seen = songs_seen.saturating_add(1);
-            if let Some(cb) = progress.as_mut() {
-                let song_display = simfile_path
-                    .parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| {
-                        simfile_path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or_default()
-                    });
-                cb(songs_seen, total_songs, pack_display.as_str(), song_display);
-            }
+            let song_display = song_progress_name(&simfile_path);
 
             if parallel_parsing {
                 let rt = runtime.get_or_insert_with(|| {
@@ -1197,19 +1323,22 @@ where
                         .unwrap()
                 });
                 if tx_opt.is_none() || rx_opt.is_none() {
-                    let (tx, rx) = std::sync::mpsc::channel::<ParseMsg>();
+                    let (tx, rx) = std::sync::mpsc::channel::<SongParseMsg>();
                     tx_opt = Some(tx);
                     rx_opt = Some(rx);
                 }
 
                 while in_flight >= parse_threads {
-                    reap_one(
+                    reap_song_parse(
                         rx_opt.as_ref(),
                         &mut in_flight,
                         &mut loaded_packs,
                         &mut songs_failed,
                         &mut songs_cache_hits,
                         &mut songs_parsed,
+                        &mut songs_done,
+                        total_songs,
+                        &mut progress,
                     );
                 }
 
@@ -1234,6 +1363,14 @@ where
                             warn!("Failed to load '{simfile_path:?}': {e}")
                         }
                     }
+                    songs_done = songs_done.saturating_add(1);
+                    report_load_progress(
+                        &mut progress,
+                        songs_done,
+                        total_songs,
+                        pack_display.as_str(),
+                        song_display,
+                    );
                     continue;
                 };
 
@@ -1273,18 +1410,29 @@ where
                         warn!("Failed to load '{simfile_path:?}': {e}")
                     }
                 }
+                songs_done = songs_done.saturating_add(1);
+                report_load_progress(
+                    &mut progress,
+                    songs_done,
+                    total_songs,
+                    pack_display.as_str(),
+                    song_display,
+                );
             }
         }
     }
 
     while in_flight > 0 {
-        reap_one(
+        reap_song_parse(
             rx_opt.as_ref(),
             &mut in_flight,
             &mut loaded_packs,
             &mut songs_failed,
             &mut songs_cache_hits,
             &mut songs_parsed,
+            &mut songs_done,
+            total_songs,
+            &mut progress,
         );
     }
 
@@ -1593,29 +1741,29 @@ fn scan_and_load_courses_impl<F>(
     };
     let course_paths = collect_course_paths(courses_root);
     let total_courses = course_paths.len();
-    let mut courses_seen = 0usize;
+    let mut courses_done = 0usize;
+    report_load_progress(&mut progress, 0, total_courses, "", "");
 
     for course_path in course_paths {
-        courses_seen = courses_seen.saturating_add(1);
-        if let Some(cb) = progress.as_mut() {
-            let group_display = course_path
-                .parent()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or(courses_root_str);
-            let course_display = course_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or_default();
-            cb(courses_seen, total_courses, group_display, course_display);
-        }
+        let (group_display, course_display) = course_progress_names(&course_path, courses_root_str);
+        let group_display = group_display.to_owned();
+        let course_display = course_display.to_owned();
+        let mut report_done = || {
+            courses_done = courses_done.saturating_add(1);
+            report_load_progress(
+                &mut progress,
+                courses_done,
+                total_courses,
+                &group_display,
+                &course_display,
+            );
+        };
         let data = match fs::read(&course_path) {
             Ok(d) => d,
             Err(e) => {
                 courses_failed += 1;
                 warn!("Failed to read course '{}': {}", course_path.display(), e);
+                report_done();
                 continue;
             }
         };
@@ -1625,6 +1773,7 @@ fn scan_and_load_courses_impl<F>(
             Err(e) => {
                 courses_failed += 1;
                 warn!("Failed to parse course '{}': {}", course_path.display(), e);
+                report_done();
                 continue;
             }
         };
@@ -1739,6 +1888,7 @@ fn scan_and_load_courses_impl<F>(
         } else {
             courses_failed += 1;
         }
+        report_done();
     }
 
     let autogen_courses = autogen_nonstop_group_courses();
@@ -2008,6 +2158,20 @@ fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<
     collapsed_path.is_file().then_some(collapsed_path)
 }
 
+fn convert_background_change(
+    change: rssp::assets::ResolvedBackgroundChange,
+) -> SongBackgroundChange {
+    let target = match change.target {
+        rssp::assets::BackgroundChangeTarget::File(path) => SongBackgroundChangeTarget::File(path),
+        rssp::assets::BackgroundChangeTarget::NoSongBg => SongBackgroundChangeTarget::NoSongBg,
+        rssp::assets::BackgroundChangeTarget::Random => SongBackgroundChangeTarget::Random,
+    };
+    SongBackgroundChange {
+        start_beat: change.start_beat,
+        target,
+    }
+}
+
 /// The original parsing logic, now separated to be called on a cache miss.
 fn parse_and_process_song_file(
     path: &Path,
@@ -2088,6 +2252,11 @@ fn parse_and_process_song_file(
         &summary.banner_path,
         &summary.background_path,
     );
+    let background_changes =
+        rssp::assets::resolve_background_changes_like_itg(simfile_dir, &simfile_data)
+            .into_iter()
+            .map(convert_background_change)
+            .collect();
     let cdtitle_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.cdtitle_path);
 
     let music_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.music_path)
@@ -2121,6 +2290,7 @@ fn parse_and_process_song_file(
             artist: summary.artist_str,
             banner_path, // Keep original logic for banner
             background_path: background_path_opt,
+            background_changes,
             cdtitle_path,
             display_bpm: summary.display_bpm_str,
             offset: summary.offset as f32,
@@ -2152,155 +2322,19 @@ fn parse_and_process_song_file(
     ))
 }
 
-/// Computes the length of the music file in seconds, if it is a readable OGG file.
+/// Computes the length of the music file in seconds when the decode layer supports it.
 /// Returns 0.0 on failure or if no music path is provided.
 fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
     let Some(path) = music_path else {
         return 0.0;
     };
-
-    let ext_is_ogg = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .is_some_and(|ext| {
-            let ext_lower = ext.to_ascii_lowercase();
-            ext_lower == "ogg" || ext_lower == "oga"
-        });
-    if !ext_is_ogg {
-        return 0.0;
-    }
-
-    match ogg_length_seconds(path) {
+    match decode::file_length_seconds(path) {
         Ok(sec) => sec,
         Err(e) => {
-            warn!("Failed to compute OGG length for {path:?}: {e}");
+            warn!("Failed to compute audio length for {path:?}: {e}");
             0.0
         }
     }
-}
-
-/// Fast OGG length detection: use lewton only for headers (sample rate) and
-/// scan backwards through the file to find the last valid granule position.
-fn ogg_length_seconds(path: &Path) -> Result<f32, String> {
-    let file = fs::File::open(path).map_err(|e| format!("Cannot open file: {e}"))?;
-
-    // Safe wrapper around the unsafe memmap2 API.
-    let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {e}"))?;
-
-    let sample_rate_hz = ogg_sample_rate_hz(&mmap)?;
-
-    let total_samples = find_last_granule_backwards(&mmap)?;
-    Ok((total_samples as f64 / sample_rate_hz) as f32)
-}
-
-fn ogg_sample_rate_hz(data: &[u8]) -> Result<f64, String> {
-    match ogg_sample_rate_hz_lewton(data) {
-        Ok(rate) => Ok(rate),
-        Err(lewton_err) => ogg_sample_rate_hz_ident_packet(data).ok_or_else(|| {
-            format!("lewton header error: {lewton_err}; fallback OGG ident parse failed")
-        }),
-    }
-}
-
-fn ogg_sample_rate_hz_lewton(data: &[u8]) -> Result<f64, String> {
-    let cursor = Cursor::new(data);
-    let reader = OggStreamReader::new(BufReader::new(cursor)).map_err(|e| format!("{e}"))?;
-    let rate = reader.ident_hdr.audio_sample_rate;
-    if rate == 0 {
-        return Err("Invalid sample rate (0)".into());
-    }
-    Ok(f64::from(rate))
-}
-
-fn ogg_sample_rate_hz_ident_packet(data: &[u8]) -> Option<f64> {
-    const PAGE_HEADER: usize = 27;
-    const MIN_RATE_HZ: u32 = 8_000;
-    const MAX_RATE_HZ: u32 = 384_000;
-
-    let mut pos = 0usize;
-    let mut packet = Vec::with_capacity(64);
-
-    while pos + PAGE_HEADER <= data.len() {
-        if &data[pos..pos + 4] != b"OggS" {
-            pos += 1;
-            continue;
-        }
-
-        let seg_count = data[pos + 26] as usize;
-        let header_end = pos.checked_add(PAGE_HEADER + seg_count)?;
-        if header_end > data.len() {
-            return None;
-        }
-
-        let seg_table = &data[pos + PAGE_HEADER..header_end];
-        let mut body_pos = header_end;
-
-        for &seg_len_u8 in seg_table {
-            let seg_len = seg_len_u8 as usize;
-            let seg_end = body_pos.checked_add(seg_len)?;
-            if seg_end > data.len() {
-                return None;
-            }
-            packet.extend_from_slice(&data[body_pos..seg_end]);
-            body_pos = seg_end;
-
-            if seg_len < 255 {
-                if packet.len() < 16 || packet[0] != 0x01 || &packet[1..7] != b"vorbis" {
-                    return None;
-                }
-                let rate = u32::from_le_bytes(packet[12..16].try_into().ok()?);
-                if !(MIN_RATE_HZ..=MAX_RATE_HZ).contains(&rate) {
-                    return None;
-                }
-                return Some(f64::from(rate));
-            }
-        }
-
-        pos = body_pos;
-    }
-
-    None
-}
-
-fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {
-    const PAGE_HEADER: usize = 27;
-    const CHUNK: usize = 64 * 1024;
-
-    let mut pos = data.len();
-    let mut best_granule: Option<u64> = None;
-
-    while pos > PAGE_HEADER {
-        let start = pos.saturating_sub(CHUNK);
-        let chunk = &data[start..pos];
-
-        let mut i = chunk.len().saturating_sub(PAGE_HEADER);
-        while i > 0 {
-            if &chunk[i..i + 4] == b"OggS" {
-                let granule = u64::from_le_bytes(
-                    chunk[i + 6..i + 14]
-                        .try_into()
-                        .map_err(|_| "Failed to read granule position".to_string())?,
-                );
-
-                if granule != u64::MAX && best_granule.is_none_or(|prev| granule > prev) {
-                    best_granule = Some(granule);
-                }
-
-                // Jump back far enough to definitely get past this page.
-                i = i.saturating_sub(27 + 255 * 255);
-            } else {
-                i -= 1;
-            }
-        }
-
-        if best_granule.is_some() {
-            // In almost all real-world files, the final granule is on the last page.
-            break;
-        }
-        pos = start;
-    }
-
-    best_granule.ok_or_else(|| "No valid granule position found".into())
 }
 
 #[cfg(test)]
