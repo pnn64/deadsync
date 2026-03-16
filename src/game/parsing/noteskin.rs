@@ -1125,6 +1125,7 @@ pub struct Style {
 pub struct Noteskin {
     pub notes: Vec<SpriteSlot>,
     pub note_layers: Vec<Arc<[SpriteSlot]>>,
+    pub lift_note_layers: Vec<Arc<[SpriteSlot]>>,
     pub receptor_off: Vec<SpriteSlot>,
     pub receptor_glow: Vec<Option<SpriteSlot>>,
     pub mines: Vec<Option<SpriteSlot>>,
@@ -1151,6 +1152,11 @@ impl Noteskin {
             visit(slot.texture_key());
         }
         for layer in &self.note_layers {
+            for slot in layer.iter() {
+                visit(slot.texture_key());
+            }
+        }
+        for layer in &self.lift_note_layers {
             for slot in layer.iter() {
                 visit(slot.texture_key());
             }
@@ -1922,6 +1928,8 @@ fn load_itg_sprite_noteskin_compiled(
 
     let mut notes = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
     let mut note_layers = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
+    let mut lift_note_layers: Vec<Arc<[SpriteSlot]>> =
+        Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
     let mut receptor_off = Vec::with_capacity(style.num_cols);
     let mut receptor_glow = Vec::with_capacity(style.num_cols);
     let mut mines = Vec::with_capacity(style.num_cols);
@@ -2002,6 +2010,26 @@ fn load_itg_sprite_noteskin_compiled(
             let primary = layers.first().cloned().unwrap_or_else(|| note_base.clone());
             notes.push(primary);
             note_layers.push(Arc::from(layers));
+        }
+
+        let lift_sprites =
+            itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Lift")
+                .into_iter()
+                .map(|mut s| {
+                    let (draw, timeline, effect) = itg_model_draw_program(&s.commands);
+                    s.slot.model_draw = draw;
+                    s.slot.model_timeline = timeline;
+                    s.slot.model_effect = effect;
+                    s.slot
+                })
+                .collect::<Vec<_>>();
+        let lift_layers_for_col: Arc<[SpriteSlot]> = if lift_sprites.is_empty() {
+            Arc::from(note_sprites.clone())
+        } else {
+            Arc::from(lift_sprites)
+        };
+        for _ in 0..NUM_QUANTIZATIONS {
+            lift_note_layers.push(Arc::clone(&lift_layers_for_col));
         }
 
         let receptor_sprites =
@@ -2566,6 +2594,7 @@ fn load_itg_sprite_noteskin_compiled(
     Ok(Noteskin {
         notes,
         note_layers,
+        lift_note_layers,
         receptor_off,
         receptor_glow,
         tap_explosions,
@@ -5956,6 +5985,18 @@ mod tests {
             circle_layers, 4,
             "default tap note should keep four circle layers"
         );
+    }
+
+    #[test]
+    fn default_exposes_lift_layers_for_each_quantization() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        assert_eq!(ns.lift_note_layers.len(), ns.note_layers.len());
+        assert!(ns.lift_note_layers.iter().all(|layers| !layers.is_empty()));
     }
 
     #[test]

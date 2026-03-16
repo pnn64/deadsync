@@ -388,6 +388,7 @@ const fn top_cap_rotation_deg(lane_reverse: bool, body_flipped: bool) -> f32 {
 const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
     match note_type {
         NoteType::Fake => NoteAnimPart::Fake,
+        NoteType::Lift => NoteAnimPart::Lift,
         _ => NoteAnimPart::Tap,
     }
 }
@@ -3520,29 +3521,30 @@ pub fn build(
                         .tap_row_hold_roll_flags
                         .get_unchecked(arrow.note_index)
                 };
-                let tap_replacement_roll = if note.note_type == NoteType::Tap {
-                    let same_row_has_hold = tap_row_flags & 0b01 != 0;
-                    let same_row_has_roll = tap_row_flags & 0b10 != 0;
-                    if same_row_has_hold && same_row_has_roll {
-                        if draw_hold_same_row && draw_roll_same_row {
-                            Some(!tap_same_row_means_hold)
-                        } else if draw_hold_same_row {
+                let tap_replacement_roll =
+                    if matches!(note.note_type, NoteType::Tap | NoteType::Lift) {
+                        let same_row_has_hold = tap_row_flags & 0b01 != 0;
+                        let same_row_has_roll = tap_row_flags & 0b10 != 0;
+                        if same_row_has_hold && same_row_has_roll {
+                            if draw_hold_same_row && draw_roll_same_row {
+                                Some(!tap_same_row_means_hold)
+                            } else if draw_hold_same_row {
+                                Some(false)
+                            } else if draw_roll_same_row {
+                                Some(true)
+                            } else {
+                                None
+                            }
+                        } else if same_row_has_hold && draw_hold_same_row {
                             Some(false)
-                        } else if draw_roll_same_row {
+                        } else if same_row_has_roll && draw_roll_same_row {
                             Some(true)
                         } else {
                             None
                         }
-                    } else if same_row_has_hold && draw_hold_same_row {
-                        Some(false)
-                    } else if same_row_has_roll && draw_roll_same_row {
-                        Some(true)
                     } else {
                         None
-                    }
-                } else {
-                    None
-                };
+                    };
                 if let Some(use_roll_head) = tap_replacement_roll {
                     let visuals = ns.hold_visuals_for_col(col_idx, use_roll_head);
                     if let Some(head_slot) = visuals
@@ -3605,7 +3607,12 @@ pub fn build(
                 }
                 let note_idx = col_idx * NUM_QUANTIZATIONS + note.quantization_idx as usize;
                 let tap_note_translation = ns.part_uv_translation(tap_note_part, note.beat, false);
-                if let Some(note_slots) = ns.note_layers.get(note_idx) {
+                let lift_layers = if note.note_type == NoteType::Lift {
+                    ns.lift_note_layers.get(note_idx)
+                } else {
+                    None
+                };
+                if let Some(note_slots) = lift_layers.or_else(|| ns.note_layers.get(note_idx)) {
                     let note_center = [column_center_x, y_pos];
                     let note_uv_phase =
                         ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
@@ -4844,11 +4851,13 @@ mod tests {
     use super::{
         Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, bottom_cap_uv_window, clipped_hold_body_bounds,
         hold_head_render_flags, hold_tail_cap_bounds, maybe_mirror_uv_horiz_for_reverse_flipped,
-        note_scale_height, offset_center, top_cap_rotation_deg,
+        note_scale_height, offset_center, tap_part_for_note_type, top_cap_rotation_deg,
     };
     use crate::game::gameplay::ActiveHold;
     use crate::game::note::NoteType;
-    use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization, Style, load_itg_skin};
+    use crate::game::parsing::noteskin::{
+        NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
+    };
 
     #[test]
     fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
@@ -4996,6 +5005,14 @@ mod tests {
         assert!((top_cap_rotation_deg(true, true) - 180.0).abs() <= f32::EPSILON);
         assert!((top_cap_rotation_deg(true, false) - 0.0).abs() <= f32::EPSILON);
         assert!((top_cap_rotation_deg(false, true) - 0.0).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn lift_notes_use_lift_animation_part() {
+        assert!(matches!(
+            tap_part_for_note_type(NoteType::Lift),
+            NoteAnimPart::Lift
+        ));
     }
 
     #[test]
