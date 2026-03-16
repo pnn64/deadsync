@@ -32,7 +32,7 @@ use twox_hash::XxHash64;
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
 // Bump when the serialized song payload changes or resolved asset semantics change.
-const SONG_CACHE_VERSION: u8 = 2;
+const SONG_CACHE_VERSION: u8 = 1;
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 

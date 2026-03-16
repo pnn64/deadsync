@@ -79,3 +79,19 @@ pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<Parsed
 
     notes
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_chart_notes;
+    use crate::game::note::NoteType;
+
+    #[test]
+    fn parse_chart_notes_recognizes_lifts() {
+        let notes = parse_chart_notes(b"0000\nL000\n0000\n0000\n", 4);
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].row_index, 1);
+        assert_eq!(notes[0].column, 0);
+        assert_eq!(notes[0].note_type, NoteType::Lift);
+        assert_eq!(notes[0].tail_row_index, None);
+    }
+}
