@@ -829,7 +829,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             scatter_mesh_hard_ex[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let hard_ex_worst_window = si.scatter_worst_window_ms
+                let hard_ex_worst_window = si
+                    .scatter_worst_window_ms
                     .min(timing_stats::effective_windows_ms()[1]);
                 let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
