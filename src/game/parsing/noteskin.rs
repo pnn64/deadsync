@@ -205,6 +205,35 @@ fn neg_rot_sin_cos(rotation_deg: i32) -> [f32; 2] {
     }
 }
 
+#[inline(always)]
+fn frame_duration_total(durations: &[f32], frames: usize) -> Option<f32> {
+    let total = durations.iter().take(frames).fold(0.0, |sum, duration| {
+        if *duration > f32::EPSILON {
+            sum + *duration
+        } else {
+            sum
+        }
+    });
+    (total > f32::EPSILON && total.is_finite()).then_some(total)
+}
+
+#[inline(always)]
+fn duration_frame_index(durations: &[f32], frames: usize, mut position: f32) -> Option<usize> {
+    let mut last = None;
+    for (idx, duration) in durations.iter().take(frames).enumerate() {
+        let span = (*duration).max(0.0);
+        if span <= f32::EPSILON {
+            continue;
+        }
+        last = Some(idx);
+        if position < span {
+            return Some(idx);
+        }
+        position -= span;
+    }
+    last
+}
+
 impl SpriteSlot {
     #[inline(always)]
     pub fn set_rotation_deg(&mut self, rotation_deg: i32) {
@@ -285,32 +314,11 @@ impl SpriteSlot {
                         AnimationRate::FramesPerSecond(_) => time,
                         AnimationRate::FramesPerBeat(_) => beat,
                     };
-                    let mut total = 0.0f32;
-                    for duration in durations.iter().take(frames) {
-                        if *duration > f32::EPSILON {
-                            total += *duration;
-                        }
-                    }
-                    if total > f32::EPSILON && total.is_finite() {
-                        let mut phase = clock.rem_euclid(total);
-                        for (idx, duration) in durations.iter().take(frames).enumerate() {
-                            let d = (*duration).max(0.0);
-                            if d <= f32::EPSILON {
-                                continue;
-                            }
-                            if phase < d {
-                                return idx;
-                            }
-                            phase -= d;
-                        }
-                        if let Some(last_idx) = durations
-                            .iter()
-                            .take(frames)
-                            .enumerate()
-                            .rfind(|(_, duration)| **duration > f32::EPSILON)
-                            .map(|(idx, _)| idx)
+                    if let Some(total) = frame_duration_total(durations, frames) {
+                        if let Some(idx) =
+                            duration_frame_index(durations, frames, clock.rem_euclid(total))
                         {
-                            return last_idx;
+                            return idx;
                         }
                     }
                 }
@@ -340,32 +348,9 @@ impl SpriteSlot {
                 frame_durations, ..
             } => {
                 if let Some(durations) = frame_durations.as_ref() {
-                    let mut total = 0.0f32;
-                    for duration in durations.iter().take(frames) {
-                        if *duration > f32::EPSILON {
-                            total += *duration;
-                        }
-                    }
-                    if total > f32::EPSILON && total.is_finite() {
-                        let mut target = p * total;
-                        for (idx, duration) in durations.iter().take(frames).enumerate() {
-                            let d = (*duration).max(0.0);
-                            if d <= f32::EPSILON {
-                                continue;
-                            }
-                            if target < d {
-                                return idx;
-                            }
-                            target -= d;
-                        }
-                        if let Some(last_idx) = durations
-                            .iter()
-                            .take(frames)
-                            .enumerate()
-                            .rfind(|(_, duration)| **duration > f32::EPSILON)
-                            .map(|(idx, _)| idx)
-                        {
-                            return last_idx;
+                    if let Some(total) = frame_duration_total(durations, frames) {
+                        if let Some(idx) = duration_frame_index(durations, frames, p * total) {
+                            return idx;
                         }
                     }
                 }
@@ -6445,6 +6430,26 @@ mod tests {
         assert_eq!(slot.frame_index(0.0, 0.25), 1);
         assert_eq!(slot.frame_index(0.0, 0.95), 1);
         assert_eq!(slot.frame_index(0.0, 1.05), 0);
+    }
+
+    #[test]
+    fn ddr_note_receptor_phase_index_uses_weighted_delays() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "ddr-note")
+            .expect("dance/ddr-note should load from assets/noteskins");
+        let slot = ns
+            .receptor_off
+            .first()
+            .expect("ddr-note should define receptor_off for first column");
+        assert_eq!(slot.frame_index_from_phase(0.00), 0);
+        assert_eq!(slot.frame_index_from_phase(0.19), 0);
+        assert_eq!(slot.frame_index_from_phase(0.20), 1);
+        assert_eq!(slot.frame_index_from_phase(0.95), 1);
+        assert_eq!(slot.frame_index_from_phase(1.05), 0);
+        assert_eq!(slot.frame_index_from_phase(-0.05), 1);
     }
 
     #[test]
