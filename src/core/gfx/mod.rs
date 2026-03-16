@@ -1,6 +1,10 @@
 mod backends;
 
-use crate::core::gfx::backends::{opengl, software, vulkan, wgpu_core};
+pub mod draw_prep;
+
+#[cfg(not(target_pointer_width = "32"))]
+use crate::core::gfx::backends::vulkan;
+use crate::core::gfx::backends::{opengl, software, wgpu_core};
 use cgmath::Matrix4;
 use glow::HasContext;
 use image::RgbaImage;
@@ -8,6 +12,9 @@ use std::{borrow::Cow, collections::HashMap, error::Error, str::FromStr, sync::A
 use winit::window::Window;
 
 // --- Public Data Contract ---
+pub type TextureHandle = u64;
+pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
+
 #[derive(Clone)]
 pub struct RenderList<'a> {
     pub clear_color: [f32; 4],
@@ -17,6 +24,7 @@ pub struct RenderList<'a> {
 #[derive(Clone)]
 pub struct RenderObject<'a> {
     pub object_type: ObjectType<'a>,
+    pub texture_handle: TextureHandle,
     pub transform: Matrix4<f32>,
     pub blend: BlendMode,
     pub z: i16,
@@ -25,14 +33,14 @@ pub struct RenderObject<'a> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct MeshVertex {
     pub pos: [f32; 2],
     pub color: [f32; 4],
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TexturedMeshVertex {
     pub pos: [f32; 2],
     pub uv: [f32; 2],
@@ -123,10 +131,86 @@ pub enum BlendMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UncappedMode {
-    Balanced,
-    Unhinged,
-    MaxFps,
+pub enum PresentModePolicy {
+    Mailbox,
+    Immediate,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum PresentModeTrace {
+    #[default]
+    Unknown,
+    Fifo,
+    FifoRelaxed,
+    Mailbox,
+    Immediate,
+}
+
+impl PresentModeTrace {
+    #[inline(always)]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Fifo => "fifo",
+            Self::FifoRelaxed => "fifo_relaxed",
+            Self::Mailbox => "mailbox",
+            Self::Immediate => "immediate",
+        }
+    }
+}
+
+impl core::fmt::Display for PresentModeTrace {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ClockDomainTrace {
+    #[default]
+    Unknown,
+    Device,
+    Monotonic,
+    MonotonicRaw,
+    Qpc,
+}
+
+impl ClockDomainTrace {
+    #[inline(always)]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Device => "device",
+            Self::Monotonic => "monotonic",
+            Self::MonotonicRaw => "monotonic_raw",
+            Self::Qpc => "qpc",
+        }
+    }
+}
+
+impl core::fmt::Display for ClockDomainTrace {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PresentStats {
+    pub mode: PresentModeTrace,
+    pub display_clock: ClockDomainTrace,
+    pub host_clock: ClockDomainTrace,
+    pub in_flight_images: u8,
+    pub waited_for_image: bool,
+    pub applied_back_pressure: bool,
+    pub queue_idle_waited: bool,
+    pub suboptimal: bool,
+    pub submitted_present_id: u32,
+    pub completed_present_id: u32,
+    pub refresh_ns: u64,
+    pub actual_interval_ns: u64,
+    pub present_margin_ns: u64,
+    pub host_present_ns: u64,
+    pub calibration_error_ns: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -135,14 +219,20 @@ pub struct DrawStats {
     pub acquire_us: u32,
     pub submit_us: u32,
     pub present_us: u32,
+    pub present_stats: PresentStats,
     pub gpu_wait_us: u32,
+    pub backend_setup_us: u32,
+    pub backend_prepare_us: u32,
+    pub backend_record_us: u32,
 }
 
 // --- Public API Facade ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendType {
+    #[cfg(not(target_pointer_width = "32"))]
     Vulkan,
+    #[cfg(not(target_pointer_width = "32"))]
     VulkanWgpu,
     OpenGL,
     OpenGLWgpu,
@@ -153,7 +243,9 @@ pub enum BackendType {
 
 // A handle to a backend-specific texture resource.
 pub enum Texture {
+    #[cfg(not(target_pointer_width = "32"))]
     Vulkan(vulkan::Texture),
+    #[cfg(not(target_pointer_width = "32"))]
     VulkanWgpu(wgpu_core::Texture),
     OpenGL(opengl::Texture),
     OpenGLWgpu(wgpu_core::Texture),
@@ -164,7 +256,9 @@ pub enum Texture {
 
 // An internal enum to hold the state for the active rendering backend.
 enum BackendImpl {
+    #[cfg(not(target_pointer_width = "32"))]
     Vulkan(vulkan::State),
+    #[cfg(not(target_pointer_width = "32"))]
     VulkanWgpu(wgpu_core::State),
     OpenGL(opengl::State),
     OpenGLWgpu(wgpu_core::State),
@@ -181,13 +275,15 @@ impl Backend {
     pub fn draw(
         &mut self,
         render_list: &RenderList<'_>,
-        textures: &HashMap<String, Texture>,
+        textures: &HashMap<TextureHandle, Texture>,
         apply_present_back_pressure: bool,
     ) -> Result<DrawStats, Box<dyn Error>> {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => {
                 vulkan::draw(state, render_list, textures, apply_present_back_pressure)
             }
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {
                 wgpu_core::draw(state, render_list, textures, apply_present_back_pressure)
             }
@@ -209,7 +305,9 @@ impl Backend {
 
     pub fn request_screenshot(&mut self) {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => vulkan::request_screenshot(state),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::request_screenshot(state),
             BackendImpl::OpenGL(state) => opengl::request_screenshot(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::request_screenshot(state),
@@ -222,7 +320,9 @@ impl Backend {
     pub fn capture_frame(&mut self) -> Result<RgbaImage, Box<dyn Error>> {
         match &mut self.0 {
             BackendImpl::OpenGL(state) => opengl::capture_frame(state),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => vulkan::capture_frame(state),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::capture_frame(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::capture_frame(state),
             BackendImpl::Software(_) => Err(std::io::Error::other(
@@ -242,7 +342,9 @@ impl Backend {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => vulkan::resize(state, width, height),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::resize(state, width, height),
             BackendImpl::OpenGL(state) => opengl::resize(state, width, height),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::resize(state, width, height),
@@ -254,7 +356,9 @@ impl Backend {
 
     pub fn cleanup(&mut self) {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => vulkan::cleanup(state),
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => wgpu_core::cleanup(state),
             BackendImpl::OpenGL(state) => opengl::cleanup(state),
             BackendImpl::OpenGLWgpu(state) => wgpu_core::cleanup(state),
@@ -270,10 +374,12 @@ impl Backend {
         sampler: SamplerDesc,
     ) -> Result<Texture, Box<dyn Error>> {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => {
                 let tex = vulkan::create_texture(state, image, sampler)?;
                 Ok(Texture::Vulkan(tex))
             }
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {
                 let tex = wgpu_core::create_texture(state, image, sampler)?;
                 Ok(Texture::VulkanWgpu(tex))
@@ -298,15 +404,49 @@ impl Backend {
         }
     }
 
-    pub fn dispose_textures(&mut self, textures: &mut HashMap<String, Texture>) {
+    pub fn update_texture(
+        &mut self,
+        texture: &mut Texture,
+        image: &RgbaImage,
+    ) -> Result<(), Box<dyn Error>> {
+        match (&mut self.0, texture) {
+            #[cfg(not(target_pointer_width = "32"))]
+            (BackendImpl::Vulkan(state), Texture::Vulkan(texture)) => {
+                vulkan::update_texture(state, texture, image)
+            }
+            #[cfg(not(target_pointer_width = "32"))]
+            (BackendImpl::VulkanWgpu(state), Texture::VulkanWgpu(texture)) => {
+                wgpu_core::update_texture(state, texture, image)
+            }
+            (BackendImpl::OpenGL(state), Texture::OpenGL(texture)) => {
+                opengl::update_texture(&state.gl, texture, image)?;
+                Ok(())
+            }
+            (BackendImpl::OpenGLWgpu(state), Texture::OpenGLWgpu(texture)) => {
+                wgpu_core::update_texture(state, texture, image)
+            }
+            (BackendImpl::Software(_state), Texture::Software(texture)) => {
+                software::update_texture(texture, image)
+            }
+            #[cfg(target_os = "windows")]
+            (BackendImpl::DirectX(state), Texture::DirectX(texture)) => {
+                wgpu_core::update_texture(state, texture, image)
+            }
+            _ => Err(std::io::Error::other("texture/backend mismatch").into()),
+        }
+    }
+
+    pub fn dispose_textures(&mut self, textures: &mut HashMap<TextureHandle, Texture>) {
         self.wait_for_idle();
 
         let old_textures = std::mem::take(textures);
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(_) => {
                 // Vulkan textures are cleaned up by their Drop implementation.
                 drop(old_textures);
             }
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(_) => {
                 drop(old_textures);
             }
@@ -332,6 +472,7 @@ impl Backend {
 
     pub fn wait_for_idle(&mut self) {
         match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::Vulkan(state) => {
                 let _ = vulkan::flush_pending_uploads(state);
                 if let Some(device) = &state.device {
@@ -340,6 +481,7 @@ impl Backend {
                     }
                 }
             }
+            #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {
                 let _ = state.device.poll(wgpu::PollType::Wait {
                     submission_index: None,
@@ -374,15 +516,22 @@ pub fn create_backend(
     backend_type: BackendType,
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<Backend, Box<dyn Error>> {
     let backend_impl = match backend_type {
-        BackendType::Vulkan => {
-            BackendImpl::Vulkan(vulkan::init(&window, vsync_enabled, gfx_debug_enabled)?)
-        }
+        #[cfg(not(target_pointer_width = "32"))]
+        BackendType::Vulkan => BackendImpl::Vulkan(vulkan::init(
+            &window,
+            vsync_enabled,
+            present_mode_policy,
+            gfx_debug_enabled,
+        )?),
+        #[cfg(not(target_pointer_width = "32"))]
         BackendType::VulkanWgpu => BackendImpl::VulkanWgpu(wgpu_core::init_vulkan(
             window,
             vsync_enabled,
+            present_mode_policy,
             gfx_debug_enabled,
         )?),
         BackendType::OpenGL => {
@@ -391,6 +540,7 @@ pub fn create_backend(
         BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(wgpu_core::init_opengl(
             window,
             vsync_enabled,
+            present_mode_policy,
             gfx_debug_enabled,
         )?),
         BackendType::Software => BackendImpl::Software(software::init(window, vsync_enabled)?),
@@ -398,17 +548,48 @@ pub fn create_backend(
         BackendType::DirectX => BackendImpl::DirectX(wgpu_core::init_dx12(
             window,
             vsync_enabled,
+            present_mode_policy,
             gfx_debug_enabled,
         )?),
     };
     Ok(Backend(backend_impl))
 }
 
+impl Backend {
+    pub fn set_present_config(
+        &mut self,
+        vsync_enabled: bool,
+        present_mode_policy: PresentModePolicy,
+    ) {
+        match &mut self.0 {
+            #[cfg(not(target_pointer_width = "32"))]
+            BackendImpl::Vulkan(state) => {
+                vulkan::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
+            #[cfg(not(target_pointer_width = "32"))]
+            BackendImpl::VulkanWgpu(state) => {
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
+            BackendImpl::OpenGL(state) => opengl::set_vsync_enabled(state, vsync_enabled),
+            BackendImpl::OpenGLWgpu(state) => {
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
+            BackendImpl::Software(_) => {}
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(state) => {
+                wgpu_core::set_present_config(state, vsync_enabled, present_mode_policy)
+            }
+        }
+    }
+}
+
 // -- Boilerplate impls --
 impl core::fmt::Display for BackendType {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            #[cfg(not(target_pointer_width = "32"))]
             Self::Vulkan => write!(f, "Vulkan"),
+            #[cfg(not(target_pointer_width = "32"))]
             Self::VulkanWgpu => write!(f, "Vulkan (wgpu)"),
             Self::OpenGL => write!(f, "OpenGL"),
             Self::OpenGLWgpu => write!(f, "OpenGL (wgpu)"),
@@ -422,7 +603,9 @@ impl FromStr for BackendType {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            #[cfg(not(target_pointer_width = "32"))]
             "vulkan" => Ok(Self::Vulkan),
+            #[cfg(not(target_pointer_width = "32"))]
             "vulkan-wgpu" | "vulkan_wgpu" | "wgpu-vulkan" | "vulkan (wgpu)" => Ok(Self::VulkanWgpu),
             "opengl" => Ok(Self::OpenGL),
             "opengl-wgpu" | "opengl_wgpu" | "wgpu-opengl" | "opengl (wgpu)" => Ok(Self::OpenGLWgpu),
@@ -434,32 +617,30 @@ impl FromStr for BackendType {
     }
 }
 
-impl UncappedMode {
+impl PresentModePolicy {
     #[inline(always)]
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Balanced => "balanced",
-            Self::Unhinged => "unhinged",
-            Self::MaxFps => "maxfps",
+            Self::Mailbox => "mailbox",
+            Self::Immediate => "immediate",
         }
     }
 }
 
-impl core::fmt::Display for UncappedMode {
+impl core::fmt::Display for PresentModePolicy {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl FromStr for UncappedMode {
+impl FromStr for PresentModePolicy {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
-            "balanced" => Ok(Self::Balanced),
-            "unhinged" => Ok(Self::Unhinged),
-            "maxfps" | "max_fps" | "max-fps" => Ok(Self::MaxFps),
-            other => Err(format!("'{other}' is not a valid uncapped mode")),
+            "mailbox" | "balanced" => Ok(Self::Mailbox),
+            "immediate" | "unhinged" => Ok(Self::Immediate),
+            other => Err(format!("'{other}' is not a valid present mode policy")),
         }
     }
 }

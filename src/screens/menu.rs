@@ -4,13 +4,15 @@ use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::network::{self, ArrowCloudConnectionStatus, ConnectionStatus};
 use crate::game::course::get_course_cache;
 use crate::game::song::get_song_cache;
-use crate::screens::components::logo::{self, LogoParams};
-use crate::screens::components::menu_list::{self};
-use crate::screens::components::menu_splash;
-use crate::screens::components::{heart_bg, screen_bar};
+use crate::screens::components::menu::logo::{self, LogoParams};
+use crate::screens::components::menu::menu_list::{self};
+use crate::screens::components::menu::menu_splash;
+use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::Actor;
+use crate::ui::actors::{Actor, TextAlign};
 use crate::ui::color;
+use std::cell::RefCell;
+use std::sync::{Arc, LazyLock};
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
 
@@ -36,12 +38,76 @@ const INFO_PX: f32 = 15.0;
 const INFO_GAP: f32 = 5.0;
 const INFO_MARGIN_ABOVE: f32 = 20.0;
 
+#[derive(Clone)]
+struct StatusTextCache<K, const N: usize> {
+    key: K,
+    main: Arc<str>,
+    lines: [Option<Arc<str>>; N],
+    line_count: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GrooveErrorKind {
+    MachineOffline,
+    CannotConnect,
+    TimedOut,
+    Disabled,
+    FailedToLoad,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GrooveStatusKey {
+    Disabled,
+    Pending { boogie: bool },
+    Error { boogie: bool, kind: GrooveErrorKind },
+    Connected { boogie: bool, disabled_mask: u8 },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ArrowCloudStatusKey {
+    Disabled,
+    Pending,
+    Connected,
+    TimedOut,
+    HostBlocked,
+    CannotConnect,
+}
+
+static DISABLED_LINE_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("Disabled"));
+static FAILED_TO_LOAD_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("Failed to Load 😞"));
+static MACHINE_OFFLINE_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("Machine Offline"));
+static CANNOT_CONNECT_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("Cannot Connect"));
+static TIMED_OUT_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("Timed Out"));
+static HOST_BLOCKED_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("Host Blocked"));
+static GROOVESTATS_DISABLED_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("❌ GrooveStats"));
+static GROOVESTATS_WARN_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("⚠ GrooveStats"));
+static GET_SCORES_DISABLED_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("❌ Get Scores"));
+static LEADERBOARD_DISABLED_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("❌ Leaderboard"));
+static AUTO_SUBMIT_DISABLED_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("❌ Auto-Submit"));
+static ARROW_CLOUD_DISABLED_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("❌ Arrow Cloud"));
+static ARROW_CLOUD_PENDING_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("     Arrow Cloud"));
+static ARROW_CLOUD_CONNECTED_TEXT: LazyLock<Arc<str>> =
+    LazyLock::new(|| Arc::<str>::from("✔ Arrow Cloud"));
+
 pub struct State {
     pub selected_index: usize,
     pub active_color_index: i32,
     pub rainbow_mode: bool,
     pub started_by_p2: bool,
     bg: heart_bg::State,
+    info_text_cache: RefCell<Option<Arc<str>>>,
+    groovestats_text_cache: RefCell<Option<StatusTextCache<GrooveStatusKey, 3>>>,
+    arrowcloud_text_cache: RefCell<Option<StatusTextCache<ArrowCloudStatusKey, 1>>>,
 }
 
 pub fn init() -> State {
@@ -51,6 +117,9 @@ pub fn init() -> State {
         rainbow_mode: false,
         started_by_p2: false,
         bg: heart_bg::State::new(),
+        info_text_cache: RefCell::new(None),
+        groovestats_text_cache: RefCell::new(None),
+        arrowcloud_text_cache: RefCell::new(None),
     }
 }
 
@@ -103,6 +172,239 @@ pub fn out_transition(active_color_index: i32) -> (Vec<Actor>, f32) {
     (actors, TRANSITION_OUT_DURATION)
 }
 
+pub fn clear_render_cache(state: &State) {
+    *state.info_text_cache.borrow_mut() = None;
+    *state.groovestats_text_cache.borrow_mut() = None;
+    *state.arrowcloud_text_cache.borrow_mut() = None;
+}
+
+#[inline(always)]
+fn menu_info_text(state: &State) -> Arc<str> {
+    if let Some(text) = state.info_text_cache.borrow().as_ref() {
+        return text.clone();
+    }
+
+    let version = env!("CARGO_PKG_VERSION");
+    let song_cache = get_song_cache();
+    let num_packs = song_cache.len();
+    let num_songs: usize = song_cache.iter().map(|pack| pack.songs.len()).sum();
+    let num_courses = get_course_cache().len();
+    let text = Arc::<str>::from(format!(
+        "DeadSync {version}\n{num_songs} songs in {num_packs} groups, {num_courses} courses"
+    ));
+    *state.info_text_cache.borrow_mut() = Some(text.clone());
+    text
+}
+
+#[inline(always)]
+fn groove_service_name(boogie: bool) -> &'static str {
+    if boogie { "BoogieStats" } else { "GrooveStats" }
+}
+
+#[inline(always)]
+fn groove_error_kind(msg: &str) -> GrooveErrorKind {
+    match msg {
+        "Machine Offline" => GrooveErrorKind::MachineOffline,
+        "Cannot Connect" => GrooveErrorKind::CannotConnect,
+        "Timed Out" => GrooveErrorKind::TimedOut,
+        "Disabled" => GrooveErrorKind::Disabled,
+        _ => GrooveErrorKind::FailedToLoad,
+    }
+}
+
+#[inline(always)]
+fn groove_status_key() -> GrooveStatusKey {
+    let cfg = crate::config::get();
+    if !cfg.enable_groovestats {
+        return GrooveStatusKey::Disabled;
+    }
+    let boogie = network::is_boogiestats_active();
+    match network::get_status() {
+        ConnectionStatus::Pending => GrooveStatusKey::Pending { boogie },
+        ConnectionStatus::Error(msg) => GrooveStatusKey::Error {
+            boogie,
+            kind: groove_error_kind(msg.as_str()),
+        },
+        ConnectionStatus::Connected(services) => GrooveStatusKey::Connected {
+            boogie,
+            disabled_mask: (!services.get_scores) as u8
+                | (((!services.leaderboard) as u8) << 1)
+                | (((!services.auto_submit) as u8) << 2),
+        },
+    }
+}
+
+#[inline(always)]
+fn groove_error_text(kind: GrooveErrorKind) -> Arc<str> {
+    match kind {
+        GrooveErrorKind::MachineOffline => MACHINE_OFFLINE_TEXT.clone(),
+        GrooveErrorKind::CannotConnect => CANNOT_CONNECT_TEXT.clone(),
+        GrooveErrorKind::TimedOut => TIMED_OUT_TEXT.clone(),
+        GrooveErrorKind::Disabled => DISABLED_LINE_TEXT.clone(),
+        GrooveErrorKind::FailedToLoad => FAILED_TO_LOAD_TEXT.clone(),
+    }
+}
+
+fn build_groovestats_text(key: GrooveStatusKey) -> StatusTextCache<GrooveStatusKey, 3> {
+    let mut lines = [None, None, None];
+    let (main, line_count) = match key {
+        GrooveStatusKey::Disabled => {
+            lines[0] = Some(DISABLED_LINE_TEXT.clone());
+            (GROOVESTATS_DISABLED_TEXT.clone(), 1)
+        }
+        GrooveStatusKey::Pending { boogie } => (
+            Arc::<str>::from(format!("     {}", groove_service_name(boogie))),
+            0,
+        ),
+        GrooveStatusKey::Error { boogie, kind } => {
+            lines[0] = Some(groove_error_text(kind));
+            (
+                Arc::<str>::from(format!("{} not connected", groove_service_name(boogie))),
+                1,
+            )
+        }
+        GrooveStatusKey::Connected {
+            boogie,
+            disabled_mask,
+        } => {
+            if disabled_mask == 0 {
+                (
+                    Arc::<str>::from(format!("✔ {}", groove_service_name(boogie))),
+                    0,
+                )
+            } else if disabled_mask == 0b111 {
+                (GROOVESTATS_DISABLED_TEXT.clone(), 0)
+            } else {
+                let mut line_count = 0;
+                if disabled_mask & 0b001 != 0 {
+                    lines[line_count] = Some(GET_SCORES_DISABLED_TEXT.clone());
+                    line_count += 1;
+                }
+                if disabled_mask & 0b010 != 0 {
+                    lines[line_count] = Some(LEADERBOARD_DISABLED_TEXT.clone());
+                    line_count += 1;
+                }
+                if disabled_mask & 0b100 != 0 {
+                    lines[line_count] = Some(AUTO_SUBMIT_DISABLED_TEXT.clone());
+                    line_count += 1;
+                }
+                (GROOVESTATS_WARN_TEXT.clone(), line_count)
+            }
+        }
+    };
+    StatusTextCache {
+        key,
+        main,
+        lines,
+        line_count,
+    }
+}
+
+fn groovestats_text(state: &State) -> StatusTextCache<GrooveStatusKey, 3> {
+    let key = groove_status_key();
+    if let Some(cache) = state.groovestats_text_cache.borrow().as_ref()
+        && cache.key == key
+    {
+        return cache.clone();
+    }
+    let cache = build_groovestats_text(key);
+    *state.groovestats_text_cache.borrow_mut() = Some(cache.clone());
+    cache
+}
+
+#[inline(always)]
+fn arrowcloud_status_key() -> ArrowCloudStatusKey {
+    if !crate::config::get().enable_arrowcloud {
+        return ArrowCloudStatusKey::Disabled;
+    }
+    match network::get_arrowcloud_status() {
+        ArrowCloudConnectionStatus::Pending => ArrowCloudStatusKey::Pending,
+        ArrowCloudConnectionStatus::Connected => ArrowCloudStatusKey::Connected,
+        ArrowCloudConnectionStatus::Error(msg) => {
+            let low = msg.to_ascii_lowercase();
+            if low.contains("timed out") {
+                ArrowCloudStatusKey::TimedOut
+            } else if low.contains("blocked") {
+                ArrowCloudStatusKey::HostBlocked
+            } else {
+                ArrowCloudStatusKey::CannotConnect
+            }
+        }
+    }
+}
+
+fn build_arrowcloud_text(key: ArrowCloudStatusKey) -> StatusTextCache<ArrowCloudStatusKey, 1> {
+    let mut lines = [None];
+    let (main, line_count) = match key {
+        ArrowCloudStatusKey::Disabled => {
+            lines[0] = Some(DISABLED_LINE_TEXT.clone());
+            (ARROW_CLOUD_DISABLED_TEXT.clone(), 1)
+        }
+        ArrowCloudStatusKey::Pending => (ARROW_CLOUD_PENDING_TEXT.clone(), 0),
+        ArrowCloudStatusKey::Connected => (ARROW_CLOUD_CONNECTED_TEXT.clone(), 0),
+        ArrowCloudStatusKey::TimedOut => {
+            lines[0] = Some(TIMED_OUT_TEXT.clone());
+            (ARROW_CLOUD_DISABLED_TEXT.clone(), 1)
+        }
+        ArrowCloudStatusKey::HostBlocked => {
+            lines[0] = Some(HOST_BLOCKED_TEXT.clone());
+            (ARROW_CLOUD_DISABLED_TEXT.clone(), 1)
+        }
+        ArrowCloudStatusKey::CannotConnect => {
+            lines[0] = Some(CANNOT_CONNECT_TEXT.clone());
+            (ARROW_CLOUD_DISABLED_TEXT.clone(), 1)
+        }
+    };
+    StatusTextCache {
+        key,
+        main,
+        lines,
+        line_count,
+    }
+}
+
+fn arrowcloud_text(state: &State) -> StatusTextCache<ArrowCloudStatusKey, 1> {
+    let key = arrowcloud_status_key();
+    if let Some(cache) = state.arrowcloud_text_cache.borrow().as_ref()
+        && cache.key == key
+    {
+        return cache.clone();
+    }
+    let cache = build_arrowcloud_text(key);
+    *state.arrowcloud_text_cache.borrow_mut() = Some(cache.clone());
+    cache
+}
+
+#[inline(always)]
+fn status_text_actor(
+    text: Arc<str>,
+    align_x: f32,
+    x: f32,
+    y: f32,
+    zoom: f32,
+    alpha: f32,
+    align_text: TextAlign,
+) -> Actor {
+    let mut actor = act!(text:
+        font("miso"):
+        settext(text):
+        align(align_x, 0.0):
+        xy(x, y):
+        zoom(zoom):
+        z(200)
+    );
+    if let Actor::Text {
+        color,
+        align_text: text_align,
+        ..
+    } = &mut actor
+    {
+        color[3] = alpha;
+        *text_align = align_text;
+    }
+    actor
+}
+
 // Signature changed to accept the alpha_multiplier
 pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let lp = LogoParams::default();
@@ -142,23 +444,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     let mut info_color = [1.0, 1.0, 1.0, 1.0];
     info_color[3] *= alpha_multiplier;
 
-    // --- DYNAMICALLY CALCULATE AND DISPLAY SONG/PACK COUNT ---
-    let version = env!("CARGO_PKG_VERSION");
-    let (num_packs, num_songs) = {
-        let song_cache = get_song_cache();
-        let num_packs = song_cache.len();
-        let num_songs: usize = song_cache.iter().map(|pack| pack.songs.len()).sum();
-        (num_packs, num_songs)
-    };
-    let num_courses = { get_course_cache().len() };
-    let song_info_text = format!("{num_songs} songs in {num_packs} groups, {num_courses} courses");
-
-    // --- Create a single multi-line string and pass it to one text actor ---
-    let combined_text = format!("DeadSync {version}\n{song_info_text}");
-
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), info1_y_tl): zoom(0.8):
-        font("miso"): settext(combined_text): horizalign(center):
+        font("miso"): settext(menu_info_text(state)): horizalign(center):
         diffuse(info_color[0], info_color[1], info_color[2], info_color[3])
     ));
 
@@ -199,125 +487,62 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     }));
 
     // --- GrooveStats Info Pane (top-left) ---
-    let mut groovestats_actors = Vec::new();
-    let status = network::get_status();
-    let gs_enabled = crate::config::get().enable_groovestats;
-    let gs_service_name = network::groovestats_service_name();
-
-    // Mimic the ActorFrame's zoom(0.8) which affects both size and position offsets.
     let frame_zoom = 0.8;
     let base_x = 10.0;
     let base_y = 15.0;
-
-    let (main_text, services_to_list) = if !gs_enabled {
-        ("❌ GrooveStats".to_string(), vec!["Disabled".to_string()])
-    } else {
-        match status {
-            ConnectionStatus::Pending => (format!("     {gs_service_name}"), Vec::new()),
-            ConnectionStatus::Error(msg) => {
-                let simplified_msg = match msg.as_str() {
-                    "Machine Offline" => "Machine Offline".to_string(),
-                    "Cannot Connect" => "Cannot Connect".to_string(),
-                    "Timed Out" => "Timed Out".to_string(),
-                    "Disabled" => "Disabled".to_string(),
-                    _ => "Failed to Load 😞".to_string(),
-                };
-                // When there is a connection error, SL shows the error message in Service1 and "❌ GrooveStats" as main text.
-                (
-                    format!("{gs_service_name} not connected"),
-                    vec![simplified_msg],
-                )
-            }
-            ConnectionStatus::Connected(services) => {
-                let mut disabled_services = Vec::new();
-                if !services.get_scores {
-                    disabled_services.push("❌ Get Scores".to_string());
-                }
-                if !services.leaderboard {
-                    disabled_services.push("❌ Leaderboard".to_string());
-                }
-                if !services.auto_submit {
-                    disabled_services.push("❌ Auto-Submit".to_string());
-                }
-
-                let text = if disabled_services.is_empty() {
-                    format!("✔ {gs_service_name}")
-                } else if disabled_services.len() == 3 {
-                    "❌ GrooveStats".to_string()
-                } else {
-                    "⚠ GrooveStats".to_string()
-                };
-
-                let services_to_show = if disabled_services.len() == 3 {
-                    Vec::new()
-                } else {
-                    disabled_services
-                };
-
-                (text, services_to_show)
-            }
-        }
-    };
-
-    // Main status text
-    groovestats_actors.push(act!(text: font("miso"): settext(main_text): align(0.0, 0.0): xy(base_x, base_y): zoom(frame_zoom): horizalign(left): z(200) ));
-
-    // List of disabled/error services
+    let gs_text = groovestats_text(state);
+    actors.push(status_text_actor(
+        gs_text.main.clone(),
+        0.0,
+        base_x,
+        base_y,
+        frame_zoom,
+        alpha_multiplier,
+        TextAlign::Left,
+    ));
     let line_height_offset = 18.0;
-    for (i, service_text) in services_to_list.iter().enumerate() {
-        groovestats_actors.push(act!(text: font("miso"): settext(service_text.clone()): align(0.0, 0.0): xy(base_x, (line_height_offset * (i as f32 + 1.0)).mul_add(frame_zoom, base_y)): zoom(frame_zoom): horizalign(left): z(200)));
-    }
-
-    for actor in &mut groovestats_actors {
-        if let Actor::Text { color, .. } = actor {
-            color[3] *= alpha_multiplier;
+    for line_idx in 0..gs_text.line_count {
+        if let Some(text) = gs_text.lines[line_idx].as_ref() {
+            actors.push(status_text_actor(
+                text.clone(),
+                0.0,
+                base_x,
+                (line_height_offset * (line_idx as f32 + 1.0)).mul_add(frame_zoom, base_y),
+                frame_zoom,
+                alpha_multiplier,
+                TextAlign::Left,
+            ));
         }
     }
-    actors.extend(groovestats_actors);
 
     // --- Arrow Cloud Info Pane (top-right) ---
-    let mut arrowcloud_actors = Vec::new();
-    let ac_status = network::get_arrowcloud_status();
-    let ac_enabled = crate::config::get().enable_arrowcloud;
-
-    // Match the GrooveStats frame zoom for parity.
     let ac_frame_zoom = 0.8;
     let ac_base_x = screen_width() - 10.0;
     let ac_base_y = 15.0;
-
-    let (ac_main_text, ac_lines): (String, Vec<String>) = if !ac_enabled {
-        ("❌ Arrow Cloud".to_string(), vec!["Disabled".to_string()])
-    } else {
-        match ac_status {
-            ArrowCloudConnectionStatus::Pending => ("     Arrow Cloud".to_string(), Vec::new()),
-            ArrowCloudConnectionStatus::Connected => ("✔ Arrow Cloud".to_string(), Vec::new()),
-            ArrowCloudConnectionStatus::Error(msg) => {
-                let low = msg.to_ascii_lowercase();
-                let line = if low.contains("timed out") {
-                    "Timed Out"
-                } else if low.contains("blocked") {
-                    "Host Blocked"
-                } else {
-                    "Cannot Connect"
-                };
-                ("❌ Arrow Cloud".to_string(), vec![line.to_string()])
-            }
-        }
-    };
-
-    arrowcloud_actors.push(act!(text: font("miso"): settext(ac_main_text): align(1.0, 0.0): xy(ac_base_x, ac_base_y): zoom(ac_frame_zoom): horizalign(right): z(200) ));
-
+    let ac_text = arrowcloud_text(state);
+    actors.push(status_text_actor(
+        ac_text.main.clone(),
+        1.0,
+        ac_base_x,
+        ac_base_y,
+        ac_frame_zoom,
+        alpha_multiplier,
+        TextAlign::Right,
+    ));
     let ac_line_height_offset = 18.0;
-    for (i, line_text) in ac_lines.iter().enumerate() {
-        arrowcloud_actors.push(act!(text: font("miso"): settext(line_text.clone()): align(1.0, 0.0): xy(ac_base_x, (ac_line_height_offset * (i as f32 + 1.0)).mul_add(ac_frame_zoom, ac_base_y)): zoom(ac_frame_zoom): horizalign(right): z(200)));
-    }
-
-    for actor in &mut arrowcloud_actors {
-        if let Actor::Text { color, .. } = actor {
-            color[3] *= alpha_multiplier;
+    for line_idx in 0..ac_text.line_count {
+        if let Some(text) = ac_text.lines[line_idx].as_ref() {
+            actors.push(status_text_actor(
+                text.clone(),
+                1.0,
+                ac_base_x,
+                (ac_line_height_offset * (line_idx as f32 + 1.0)).mul_add(ac_frame_zoom, ac_base_y),
+                ac_frame_zoom,
+                alpha_multiplier,
+                TextAlign::Right,
+            ));
         }
     }
-    actors.extend(arrowcloud_actors);
 
     actors
 }
