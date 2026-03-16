@@ -3,10 +3,10 @@ use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_center_y};
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::{heart_bg, screen_bar};
+use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
