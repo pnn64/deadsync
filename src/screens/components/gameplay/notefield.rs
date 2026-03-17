@@ -1019,6 +1019,35 @@ fn note_x_extra(
 }
 
 #[inline(always)]
+fn receptor_row_center(
+    playfield_center_x: f32,
+    local_col: usize,
+    receptor_y_lane: f32,
+    elapsed: f32,
+    beat_factor: f32,
+    visual: VisualEffects,
+    col_offsets: &[f32],
+    invert_distances: &[f32],
+    tornado_bounds: &[TornadoBounds],
+) -> [f32; 2] {
+    [
+        playfield_center_x
+            + col_offsets[local_col]
+            + note_x_extra(
+                local_col,
+                0.0,
+                elapsed,
+                beat_factor,
+                visual,
+                col_offsets,
+                invert_distances,
+                tornado_bounds,
+            ),
+        receptor_y_lane + tipsy_y_extra(local_col, elapsed, visual),
+    ]
+}
+
+#[inline(always)]
 fn note_world_z(y: f32, visual: VisualEffects) -> f32 {
     if visual.bumpy <= f32::EPSILON {
         return 0.0;
@@ -2779,8 +2808,18 @@ pub fn build(
         // Receptors + glow
         for i in 0..num_cols {
             let col = col_start + i;
-            let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
             let receptor_y_lane = column_receptor_ys[i];
+            let receptor_center = receptor_row_center(
+                playfield_center_x,
+                i,
+                receptor_y_lane,
+                elapsed_screen,
+                beat_push,
+                visual,
+                &col_offsets[..num_cols],
+                &invert_distances[..num_cols],
+                &tornado_bounds[..num_cols],
+            );
             if !profile.hide_targets && receptor_alpha > f32::EPSILON {
                 let bop_timer = state.receptor_bop_timers[col];
                 let bop_zoom = if bop_timer > 0.0 {
@@ -2803,7 +2842,7 @@ pub fn build(
                 if alpha > f32::EPSILON {
                     actors.push(act!(sprite(receptor_slot.texture_key_shared()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        xy(receptor_center[0], receptor_center[1]):
                         setsize(receptor_size[0], receptor_size[1]):
                         zoom(bop_zoom):
                         diffuse(
@@ -2859,7 +2898,7 @@ pub fn build(
                 let base_rotation = hold_slot.def.rotation_deg as f32;
                 let final_rotation =
                     base_rotation + receptor_rotation - draw.rot[2] - confusion_receptor_rot;
-                let center = [playfield_center_x + col_x_offset, receptor_y_lane];
+                let center = receptor_center;
                 let color = draw.tint;
                 let glow = hold_slot.model_glow_with_draw(
                     draw,
@@ -2966,7 +3005,7 @@ pub fn build(
                         if behavior.blend_add {
                             actors.push(act!(sprite(glow_slot.texture_key_shared()):
                                 align(0.5, 0.5):
-                                xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                                xy(receptor_center[0], receptor_center[1]):
                                 setsize(width, height):
                                 rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
                                 customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
@@ -2977,7 +3016,7 @@ pub fn build(
                         } else {
                             actors.push(act!(sprite(glow_slot.texture_key_shared()):
                                 align(0.5, 0.5):
-                                xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                                xy(receptor_center[0], receptor_center[1]):
                                 setsize(width, height):
                                 rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
                                 customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
@@ -2997,8 +3036,18 @@ pub fn build(
             if let Some(active) = state.tap_explosions[col].as_ref()
                 && let Some(explosion) = ns.tap_explosions.get(&active.window)
             {
-                let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
                 let receptor_y_lane = column_receptor_ys[i];
+                let receptor_center = receptor_row_center(
+                    playfield_center_x,
+                    i,
+                    receptor_y_lane,
+                    elapsed_screen,
+                    beat_push,
+                    visual,
+                    &col_offsets[..num_cols],
+                    &invert_distances[..num_cols],
+                    &tornado_bounds[..num_cols],
+                );
                 let anim_time = active.elapsed;
                 let slot = &explosion.slot;
                 let beat_for_anim = if slot.source.is_beat_based() {
@@ -3009,8 +3058,8 @@ pub fn build(
                 let frame = slot.frame_index(anim_time, beat_for_anim);
                 let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
                 let size = scale_explosion(logical_slot_size(slot));
-                let visual = explosion.animation.state_at(active.elapsed);
-                if !visual.visible {
+                let explosion_visual = explosion.animation.state_at(active.elapsed);
+                if !explosion_visual.visible {
                     continue;
                 }
                 let rotation_deg = ns
@@ -3018,20 +3067,20 @@ pub fn build(
                     .get(i)
                     .map(|slot| slot.def.rotation_deg)
                     .unwrap_or(0);
-                let glow = visual.glow;
+                let glow = explosion_visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
                 if explosion.animation.blend_add {
                     actors.push(act!(sprite(slot.texture_key_shared()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
-                        zoom(visual.zoom):
+                        zoom(explosion_visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                         diffuse(
-                            visual.diffuse[0],
-                            visual.diffuse[1],
-                            visual.diffuse[2],
-                            visual.diffuse[3]
+                            explosion_visual.diffuse[0],
+                            explosion_visual.diffuse[1],
+                            explosion_visual.diffuse[2],
+                            explosion_visual.diffuse[3]
                         ):
                         rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                         blend(add):
@@ -3040,9 +3089,9 @@ pub fn build(
                     if glow_strength > f32::EPSILON {
                         actors.push(act!(sprite(slot.texture_key_shared()):
                             align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                            xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
-                            zoom(visual.zoom):
+                            zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
                             rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
@@ -3053,15 +3102,15 @@ pub fn build(
                 } else {
                     actors.push(act!(sprite(slot.texture_key_shared()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
-                        zoom(visual.zoom):
+                        zoom(explosion_visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                         diffuse(
-                            visual.diffuse[0],
-                            visual.diffuse[1],
-                            visual.diffuse[2],
-                            visual.diffuse[3]
+                            explosion_visual.diffuse[0],
+                            explosion_visual.diffuse[1],
+                            explosion_visual.diffuse[2],
+                            explosion_visual.diffuse[3]
                         ):
                         rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                         blend(normal):
@@ -3070,9 +3119,9 @@ pub fn build(
                     if glow_strength > f32::EPSILON {
                         actors.push(act!(sprite(slot.texture_key_shared()):
                             align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                            xy(receptor_center[0], receptor_center[1]):
                             setsize(size[0], size[1]):
-                            zoom(visual.zoom):
+                            zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
                             rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
@@ -3093,30 +3142,40 @@ pub fn build(
                 continue;
             };
             let slot = &explosion.slot;
-            let visual = explosion.animation.state_at(active.elapsed);
-            if !visual.visible {
+            let explosion_visual = explosion.animation.state_at(active.elapsed);
+            if !explosion_visual.visible {
                 continue;
             }
-            let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
             let receptor_y_lane = column_receptor_ys[i];
+            let receptor_center = receptor_row_center(
+                playfield_center_x,
+                i,
+                receptor_y_lane,
+                elapsed_screen,
+                beat_push,
+                visual,
+                &col_offsets[..num_cols],
+                &invert_distances[..num_cols],
+                &tornado_bounds[..num_cols],
+            );
             let frame = slot.frame_index(active.elapsed, current_beat);
             let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
             let size = scale_explosion(logical_slot_size(slot));
-            let glow = visual.glow;
+            let glow = explosion_visual.glow;
             let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
             if explosion.animation.blend_add {
                 actors.push(act!(sprite(slot.texture_key_shared()):
                     align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                    xy(receptor_center[0], receptor_center[1]):
                     setsize(size[0], size[1]):
-                    zoom(visual.zoom):
+                    zoom(explosion_visual.zoom):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    rotationz(-visual.rotation_z):
+                    rotationz(-explosion_visual.rotation_z):
                     diffuse(
-                        visual.diffuse[0],
-                        visual.diffuse[1],
-                        visual.diffuse[2],
-                        visual.diffuse[3]
+                        explosion_visual.diffuse[0],
+                        explosion_visual.diffuse[1],
+                        explosion_visual.diffuse[2],
+                        explosion_visual.diffuse[3]
                     ):
                     blend(add):
                     z(Z_MINE_EXPLOSION)
@@ -3124,11 +3183,11 @@ pub fn build(
                 if glow_strength > f32::EPSILON {
                     actors.push(act!(sprite(slot.texture_key_shared()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
-                        zoom(visual.zoom):
+                        zoom(explosion_visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        rotationz(-visual.rotation_z):
+                        rotationz(-explosion_visual.rotation_z):
                         diffuse(glow[0], glow[1], glow[2], glow[3]):
                         blend(add):
                         z(Z_MINE_EXPLOSION)
@@ -3137,16 +3196,16 @@ pub fn build(
             } else {
                 actors.push(act!(sprite(slot.texture_key_shared()):
                     align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                    xy(receptor_center[0], receptor_center[1]):
                     setsize(size[0], size[1]):
-                    zoom(visual.zoom):
+                    zoom(explosion_visual.zoom):
                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    rotationz(-visual.rotation_z):
+                    rotationz(-explosion_visual.rotation_z):
                     diffuse(
-                        visual.diffuse[0],
-                        visual.diffuse[1],
-                        visual.diffuse[2],
-                        visual.diffuse[3]
+                        explosion_visual.diffuse[0],
+                        explosion_visual.diffuse[1],
+                        explosion_visual.diffuse[2],
+                        explosion_visual.diffuse[3]
                     ):
                     blend(normal):
                     z(Z_MINE_EXPLOSION)
@@ -3154,11 +3213,11 @@ pub fn build(
                 if glow_strength > f32::EPSILON {
                     actors.push(act!(sprite(slot.texture_key_shared()):
                         align(0.5, 0.5):
-                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        xy(receptor_center[0], receptor_center[1]):
                         setsize(size[0], size[1]):
-                        zoom(visual.zoom):
+                        zoom(explosion_visual.zoom):
                         customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                        rotationz(-visual.rotation_z):
+                        rotationz(-explosion_visual.rotation_z):
                         diffuse(glow[0], glow[1], glow[2], glow[3]):
                         blend(normal):
                         z(Z_MINE_EXPLOSION)
@@ -3220,6 +3279,19 @@ pub fn build(
             let col_dir = column_dirs[local_col];
             let dir = col_dir;
             let lane_receptor_y = column_receptor_ys[local_col];
+            let receptor_center = receptor_row_center(
+                playfield_center_x,
+                local_col,
+                lane_receptor_y,
+                elapsed_screen,
+                beat_push,
+                visual,
+                &col_offsets[..num_cols],
+                &invert_distances[..num_cols],
+                &tornado_bounds[..num_cols],
+            );
+            let receptor_draw_y = receptor_center[1];
+            let receptor_center_x = receptor_center[0];
 
             let head_travel_offset = if is_head_dynamic {
                 match scroll_speed {
@@ -3268,10 +3340,10 @@ pub fn build(
             };
             if engaged {
                 if lane_reverse {
-                    hold_end_y = lane_receptor_y;
+                    hold_end_y = receptor_draw_y;
                     hold_end_travel = 0.0;
                 } else {
-                    hold_start_y = lane_receptor_y;
+                    hold_start_y = receptor_draw_y;
                     hold_start_travel = 0.0;
                 }
             }
@@ -3819,7 +3891,7 @@ pub fn build(
             }
             let should_draw_hold_head = true;
             let head_draw_y = head_anchor_y;
-            let head_draw_delta = (head_draw_y - lane_receptor_y) * dir;
+            let head_draw_delta = (head_draw_y - receptor_draw_y) * dir;
             if should_draw_hold_head
                 && head_draw_delta >= -draw_distance_after_targets
                 && head_draw_delta <= draw_distance_before_targets
@@ -3830,8 +3902,8 @@ pub fn build(
                 }
                 let hold_head_rot = calc_note_rotation_z(visual, note.beat, current_beat, true);
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
-                let head_center_x = if (head_draw_y - lane_receptor_y).abs() <= 0.5 {
-                    base_column_center_x
+                let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
+                    receptor_center_x
                 } else {
                     lane_center_x_from_travel(local_col, head_anchor_travel)
                 };
@@ -5674,8 +5746,9 @@ mod tests {
         append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hold_head_render_flags, hold_tail_cap_bounds, hud_y,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_scale_height, note_world_z,
-        note_x_extra, offset_center, push_transform_parts, tap_part_for_note_type,
-        top_cap_rotation_deg, turn_option_bits, turn_option_name,
+        note_x_extra, offset_center, push_transform_parts, receptor_row_center,
+        tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits,
+        turn_option_name,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::note::NoteType;
@@ -5921,6 +5994,66 @@ mod tests {
             },
         );
         assert!((z - 40.0).abs() <= 1e-4);
+    }
+
+    #[test]
+    fn receptor_center_uses_zero_travel_x_effects() {
+        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
+        let invert = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        let center = receptor_row_center(
+            320.0,
+            1,
+            240.0,
+            1.0,
+            0.0,
+            VisualEffects {
+                drunk: 1.0,
+                ..VisualEffects::default()
+            },
+            &col_offsets,
+            &invert,
+            &tornado,
+        );
+        let expected_x = 320.0
+            + col_offsets[1]
+            + note_x_extra(
+                1,
+                0.0,
+                1.0,
+                0.0,
+                VisualEffects {
+                    drunk: 1.0,
+                    ..VisualEffects::default()
+                },
+                &col_offsets,
+                &invert,
+                &tornado,
+            );
+        assert!((center[0] - expected_x).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn receptor_center_uses_tipsy_y_offset() {
+        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
+        let invert = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        let visual = VisualEffects {
+            tipsy: 1.0,
+            ..VisualEffects::default()
+        };
+        let center = receptor_row_center(
+            320.0,
+            2,
+            240.0,
+            1.25,
+            0.0,
+            visual,
+            &col_offsets,
+            &invert,
+            &tornado,
+        );
+        assert!((center[1] - (240.0 + tipsy_y_extra(2, 1.25, visual))).abs() <= 1e-6);
     }
 
     #[test]
