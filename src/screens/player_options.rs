@@ -4740,7 +4740,7 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 5 {
+    let bit = if choice_index < 6 {
         1u8 << (choice_index as u8)
     } else {
         0
