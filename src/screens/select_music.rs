@@ -18,7 +18,10 @@ use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar},
-    shared::{gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input, timers},
+    shared::{
+        banner as shared_banner, gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input,
+        timers,
+    },
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource};
@@ -5902,7 +5905,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         fallback_banner_key(state.active_color_index)
     };
-    actors.push(act!(sprite(banner_key): align(0.5, 0.5): xy(banner_cx, banner_cy): setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT): zoom(banner_zoom): z(51)));
+    actors.push(shared_banner::sprite(
+        banner_key,
+        banner_cx,
+        banner_cy,
+        BANNER_NATIVE_WIDTH,
+        BANNER_NATIVE_HEIGHT,
+        banner_zoom,
+        51,
+    ));
     if cfg.show_select_music_cdtitles
         && let Some(cdtitle_key) = state.current_cdtitle_key.as_ref()
         && asset_manager.has_texture_key(cdtitle_key)
