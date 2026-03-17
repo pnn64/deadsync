@@ -1,6 +1,7 @@
 pub(crate) mod flac;
 pub(crate) mod mp3;
 pub(crate) mod ogg_vorbis;
+pub(crate) mod opus;
 
 use lewton::inside_ogg::OggStreamReader;
 use std::fs::File;
@@ -17,6 +18,7 @@ pub(crate) enum Reader {
     Flac(flac::Reader),
     Mp3(mp3::Reader<BufReader<File>>),
     Ogg(OggStreamReader<BufReader<File>>),
+    Opus(opus::Reader),
 }
 
 impl Reader {
@@ -27,6 +29,7 @@ impl Reader {
             Self::Flac(reader) => reader.read_dec_packet_itl(),
             Self::Mp3(reader) => reader.read_dec_packet_itl(),
             Self::Ogg(reader) => Ok(reader.read_dec_packet_itl()?),
+            Self::Opus(reader) => reader.read_dec_packet_itl(),
         }
     }
 
@@ -41,6 +44,7 @@ impl Reader {
                 reader.seek_absgp_pg(frame)?;
                 Ok(())
             }
+            Self::Opus(reader) => reader.seek_frame(frame),
         }
     }
 }
@@ -63,7 +67,22 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
             sample_rate_hz: opened.sample_rate_hz,
         });
     }
+    if opus::path_is_opus(path) {
+        let opened = opus::open_file(path)?;
+        return Ok(OpenFile {
+            reader: Reader::Opus(opened.reader),
+            channels: opened.channels,
+            sample_rate_hz: opened.sample_rate_hz,
+        });
+    }
     if ogg_vorbis::path_is_ogg_vorbis(path) {
+        if let Ok(opened) = opus::open_file(path) {
+            return Ok(OpenFile {
+                reader: Reader::Opus(opened.reader),
+                channels: opened.channels,
+                sample_rate_hz: opened.sample_rate_hz,
+            });
+        }
         let opened = ogg_vorbis::open_file(path)?;
         return Ok(OpenFile {
             reader: Reader::Ogg(opened.reader),
@@ -82,7 +101,13 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     if mp3::path_is_mp3(path) {
         return mp3::file_length_seconds(path);
     }
+    if opus::path_is_opus(path) {
+        return opus::file_length_seconds(path);
+    }
     if ogg_vorbis::path_is_ogg_vorbis(path) {
+        if let Ok(sec) = opus::file_length_seconds(path) {
+            return Ok(sec);
+        }
         return ogg_vorbis::file_length_seconds(path);
     }
     Err(format!("unsupported audio format for '{}'", path.display()))
