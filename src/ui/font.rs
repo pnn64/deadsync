@@ -458,9 +458,12 @@ pub fn replace_markers(text: &str) -> Cow<'_, str> {
 pub struct Glyph {
     pub texture_key: String,
     pub tex_rect: [f32; 4], // px: [x0, y0, x1, y1] (texture space)
-    pub size: [f32; 2],     // draw units (SM authored units)
-    pub offset: [f32; 2],   // draw units: [x_off_from_pen, y_off_from_baseline]
-    pub advance: f32,       // draw units: pen advance
+    pub uv_scale: [f32; 2],
+    pub uv_offset: [f32; 2],
+    pub size: [f32; 2],   // draw units (SM authored units)
+    pub offset: [f32; 2], // draw units: [x_off_from_pen, y_off_from_baseline]
+    pub advance: f32,     // draw units: pen advance
+    pub advance_i32: i32, // draw units: StepMania ties-to-even pen advance
 }
 
 #[derive(Debug, Clone)]
@@ -2367,13 +2370,24 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
                 tex_rect_right,
                 frame_top_px + actual_frame_h,
             ];
+            let uv_scale = [
+                (tex_rect[2] - tex_rect[0]) / tex_dims.0 as f32,
+                (tex_rect[3] - tex_rect[1]) / tex_dims.1 as f32,
+            ];
+            let uv_offset = [
+                tex_rect[0] / tex_dims.0 as f32,
+                tex_rect[1] / tex_dims.1 as f32,
+            ];
 
             let glyph = Glyph {
                 texture_key: texture_key.clone(),
                 tex_rect,
+                uv_scale,
+                uv_offset,
                 size: glyph_size,
                 offset: glyph_offset,
                 advance,
+                advance_i32: advance.round_ties_even() as i32,
             };
 
             for (&ch, &frame_idx) in &char_to_frame {
@@ -2465,6 +2479,13 @@ pub fn find_glyph<'a>(
     c: char,
     all_fonts: &'a HashMap<&'static str, Font>,
 ) -> Option<&'a Glyph> {
+    if start_font.fallback_font_name.is_none() {
+        return start_font
+            .glyph_map
+            .get(&c)
+            .or(start_font.default_glyph.as_ref());
+    }
+
     let mut current_font = Some(start_font);
     while let Some(font) = current_font {
         // Check the current font's glyph map.
@@ -2487,10 +2508,7 @@ pub fn measure_line_width_logical(
     all_fonts: &HashMap<&'static str, Font>,
 ) -> i32 {
     text.chars()
-        .map(|c| {
-            let g = find_glyph(font, c, all_fonts);
-            g.map_or(0, |glyph| glyph.advance as i32)
-        })
+        .map(|c| find_glyph(font, c, all_fonts).map_or(0, |glyph| glyph.advance_i32))
         .sum()
 }
 

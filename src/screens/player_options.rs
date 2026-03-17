@@ -10,9 +10,9 @@ use crate::game::parsing::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization,
 };
 use crate::game::song::SongData;
-use crate::screens::components::heart_bg;
-use crate::screens::components::notefield::noteskin_model_actor;
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::heart_bg;
+use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
+use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::{Screen, ScreenAction};
@@ -2521,12 +2521,27 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 fn session_active_players() -> [bool; PLAYER_SLOTS] {
     let play_style = crate::game::profile::get_session_play_style();
     let side = crate::game::profile::get_session_player_side();
+    let joined = [
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1),
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2),
+    ];
+    let joined_count = usize::from(joined[P1]) + usize::from(joined[P2]);
     match play_style {
-        crate::game::profile::PlayStyle::Versus => [true, true],
+        crate::game::profile::PlayStyle::Versus => {
+            if joined_count > 0 {
+                joined
+            } else {
+                [true, true]
+            }
+        }
         crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Double => {
-            match side {
-                crate::game::profile::PlayerSide::P1 => [true, false],
-                crate::game::profile::PlayerSide::P2 => [false, true],
+            if joined_count == 1 {
+                joined
+            } else {
+                match side {
+                    crate::game::profile::PlayerSide::P1 => [true, false],
+                    crate::game::profile::PlayerSide::P2 => [false, true],
+                }
             }
         }
     }
@@ -5483,9 +5498,8 @@ pub fn handle_input(
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
-    let play_style = crate::game::profile::get_session_play_style();
-    let show_p2 = play_style == crate::game::profile::PlayStyle::Versus;
     let active = session_active_players();
+    let show_p2 = active[P1] && active[P2];
     let pane_alpha = state.pane_transition.alpha();
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -5727,14 +5741,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if row.name.contains('\n') {
             let lines: Vec<&str> = row.name.split('\n').collect();
             if lines.len() == 2 {
-                // First line (e.g., "Music Rate")
                 actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
                     align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(title_max_w):
                     z(101)
                 ));
-                // Second line (e.g., "bpm: 120") - smaller and slightly below
                 actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
                     align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
@@ -5742,7 +5754,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     z(101)
                 ));
             } else {
-                // Fallback for unexpected multi-line format
                 actors.push(act!(text: font("miso"): settext(row.name.clone()):
                     align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
@@ -5751,7 +5762,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ));
             }
         } else {
-            // Single-line title (normal case)
             actors.push(act!(text: font("miso"): settext(row.name.clone()):
                 align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                 diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
@@ -5837,7 +5847,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // The active option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
             let spacing = 15.75;
-            // First pass: measure widths to lay out options inline
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
             let mut text_h: f32 = 16.0;
             asset_manager.with_fonts(|all_fonts| {
@@ -5856,7 +5865,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 });
             });
-            // Build x positions for each option
             let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
             {
                 let mut x = choice_inner_left;

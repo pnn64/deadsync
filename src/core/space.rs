@@ -46,6 +46,11 @@ pub fn set_current_window_px(px_w: u32, px_h: u32) {
     CURRENT_PIXEL.with(|c| c.set((px_w, px_h)));
 }
 
+#[inline(always)]
+pub fn current_window_px() -> (u32, u32) {
+    CURRENT_PIXEL.with(|c| c.get())
+}
+
 #[allow(dead_code)]
 #[inline(always)]
 pub fn screen_width() -> f32 {

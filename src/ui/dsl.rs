@@ -46,6 +46,9 @@ pub enum Mod<'a> {
     ZoomToWidth(f32),
     ZoomToHeight(f32),
 
+    // StepMania BitmapText word wrapping in source pixels.
+    WrapWidthPixels(f32),
+
     // NEW: max constraints (only shrink, preserve aspect)
     MaxWidth(f32),
     MaxHeight(f32),
@@ -446,6 +449,7 @@ fn build_sprite_like<'a>(
             Mod::Font(_)
             | Mod::Content(_)
             | Mod::TAlign(_)
+            | Mod::WrapWidthPixels(_)
             | Mod::MaxWidth(_)
             | Mod::MaxHeight(_) => {}
             Mod::Tween(steps) => {
@@ -745,6 +749,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
     // zoom + optional fit targets
     let (mut sx, mut sy) = (1.0_f32, 1.0_f32);
     let (mut fit_w, mut fit_h): (Option<f32>, Option<f32>) = (None, None);
+    let mut wrap_width_pixels: Option<i32> = None;
     let (mut max_w, mut max_h): (Option<f32>, Option<f32>) = (None, None);
 
     // PARITY[StepMania Actor]: track command order for maxwidth/maxheight vs zoom.
@@ -859,6 +864,10 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
             }
             Mod::ZoomToHeight(h) => {
                 fit_h = Some(*h);
+            }
+            Mod::WrapWidthPixels(w) => {
+                let wrap = *w as i32;
+                wrap_width_pixels = (wrap >= 0).then_some(wrap);
             }
 
             // max constraints — reset the pre/post decision window
@@ -988,6 +997,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         scale: [sx, sy],
         fit_width: fit_w,
         fit_height: fit_h,
+        wrap_width_pixels,
         max_width: max_w,
         max_height: max_h,
         max_w_pre_zoom,
@@ -1380,6 +1390,9 @@ macro_rules! __dsl_apply_one {
     }};
     (zoomtoheight ($h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         $mods.push($crate::ui::dsl::Mod::ZoomToHeight(($h) as f32));
+    }};
+    (wrapwidthpixels ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
+        $mods.push($crate::ui::dsl::Mod::WrapWidthPixels(($w) as f32));
     }};
     // --- NEW: max constraints for text -------------------------------
     (maxwidth ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
