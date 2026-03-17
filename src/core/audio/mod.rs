@@ -600,13 +600,19 @@ impl PlaybackPosMap {
             let start_dist = (stream_frame - start).abs();
             if start_dist < closest_dist {
                 closest_dist = start_dist;
-                closest = Some((seg.music_start_sec, seg.music_sec_per_frame));
+                closest = Some((
+                    seg.music_start_sec + (stream_frame - start) * seg.music_sec_per_frame,
+                    seg.music_sec_per_frame,
+                ));
             }
             let end_music = seg.music_start_sec + seg.music_sec_per_frame * seg.frames as f64;
             let end_dist = (stream_frame - end).abs();
             if end_dist < closest_dist {
                 closest_dist = end_dist;
-                closest = Some((end_music, seg.music_sec_per_frame));
+                closest = Some((
+                    end_music + (stream_frame - end) * seg.music_sec_per_frame,
+                    seg.music_sec_per_frame,
+                ));
             }
         }
         closest
@@ -755,6 +761,29 @@ fn f32_to_i16(sample: f32) -> i16 {
 #[inline(always)]
 fn i16_to_f32(sample: i16) -> f32 {
     sample as f32 / (i16::MAX as f32 + 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MusicMapSeg, PlaybackPosMap};
+
+    #[test]
+    fn playback_pos_map_extrapolates_past_last_segment() {
+        let mut map = PlaybackPosMap::default();
+        map.insert(MusicMapSeg {
+            stream_frame_start: 0,
+            frames: 48_000,
+            music_start_sec: 0.0,
+            music_sec_per_frame: 1.0 / 48_000.0,
+        });
+
+        let (music_sec, sec_per_frame) = map.search(60_000.0).unwrap();
+        assert!((music_sec - 1.25).abs() <= 1e-9, "music_sec={music_sec}");
+        assert!(
+            (sec_per_frame - (1.0 / 48_000.0)).abs() <= 1e-12,
+            "sec_per_frame={sec_per_frame}"
+        );
+    }
 }
 
 #[inline(always)]
