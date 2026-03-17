@@ -3591,7 +3591,12 @@ pub fn build(
             // body segments are visible.
             let mut rendered_body_top: Option<f32> = None;
             let mut rendered_body_bottom: Option<f32> = None;
+            let mut body_head_row: Option<[[f32; 2]; 2]> = None;
             let mut body_tail_row: Option<[[f32; 2]; 2]> = None;
+            let use_legacy_hold_sprites = visual.bumpy <= f32::EPSILON
+                && visual.drunk <= f32::EPSILON
+                && visual.tornado <= f32::EPSILON
+                && visual.beat <= f32::EPSILON;
             // ITG draws hold bodies from y_head to y_tail (top-to-bottom in screen space).
             // If noteskin offsets invert the interval for ultra-short holds, skip body draw
             // and rely on tail-cap clipping.
@@ -3640,52 +3645,150 @@ pub fn build(
                     let natural_bottom = y_tail;
                     let hold_length = natural_bottom - natural_top;
                     const SEGMENT_PHASE_EPS: f32 = 1e-4;
-                    let body_slice_step = if visual.bumpy > f32::EPSILON {
-                        4.0
-                    } else {
-                        16.0
-                    };
-                    let use_body_mesh = body_slot.model.is_none() && visual.bumpy <= f32::EPSILON;
-                    let mut body_mesh_vertices = use_body_mesh.then(|| Vec::with_capacity(96));
-                    let mut prev_body_row: Option<[TexturedMeshVertex; 2]> = None;
                     let max_segments = 2048;
-                    'body_draw: {
-                        if hold_length > f32::EPSILON {
-                            let Some((clipped_top, clipped_bottom)) = clipped_hold_body_bounds(
-                                body_top,
-                                body_bottom,
-                                natural_top,
-                                natural_bottom,
-                            ) else {
-                                // Keep caps/head visible when the body fully collapses.
-                                break 'body_draw;
-                            };
-                            let visible_top_distance = clipped_top - natural_top;
-                            let visible_bottom_distance = clipped_bottom - natural_top;
-                            let anchor_to_top =
-                                lane_reverse && note_display.top_hold_anchor_when_reverse;
-                            let phase_offset = if !anchor_to_top {
-                                let total_phase = hold_length / segment_height;
-                                if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
-                                    let fractional = total_phase.fract();
-                                    if fractional > SEGMENT_PHASE_EPS
-                                        && (1.0 - fractional) > SEGMENT_PHASE_EPS
-                                    {
-                                        1.0 - fractional
-                                    } else {
-                                        0.0
-                                    }
+                    if hold_length > f32::EPSILON {
+                        let Some((clipped_top, clipped_bottom)) = clipped_hold_body_bounds(
+                            body_top,
+                            body_bottom,
+                            natural_top,
+                            natural_bottom,
+                        ) else {
+                            continue;
+                        };
+                        let visible_top_distance = clipped_top - natural_top;
+                        let visible_bottom_distance = clipped_bottom - natural_top;
+                        let anchor_to_top =
+                            lane_reverse && note_display.top_hold_anchor_when_reverse;
+                        let phase_offset = if !anchor_to_top {
+                            let total_phase = hold_length / segment_height;
+                            if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
+                                let fractional = total_phase.fract();
+                                if fractional > SEGMENT_PHASE_EPS
+                                    && (1.0 - fractional) > SEGMENT_PHASE_EPS
+                                {
+                                    1.0 - fractional
                                 } else {
                                     0.0
                                 }
                             } else {
                                 0.0
-                            };
+                            }
+                        } else {
+                            0.0
+                        };
 
-                            let mut phase = visible_top_distance / segment_height + phase_offset;
-                            let phase_end_adjusted =
-                                visible_bottom_distance / segment_height + phase_offset;
-                            let mut emitted = 0;
+                        let mut phase = visible_top_distance / segment_height + phase_offset;
+                        let phase_end_adjusted =
+                            visible_bottom_distance / segment_height + phase_offset;
+                        let mut emitted = 0;
+
+                        if use_legacy_hold_sprites {
+                            while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
+                                && emitted < max_segments
+                            {
+                                let mut next_phase = (phase.floor() + 1.0).min(phase_end_adjusted);
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    next_phase = phase_end_adjusted;
+                                }
+                                if next_phase - phase < SEGMENT_PHASE_EPS {
+                                    break;
+                                }
+
+                                let distance_start = (phase - phase_offset) * segment_height;
+                                let distance_end = (next_phase - phase_offset) * segment_height;
+                                let y_start = natural_top + distance_start;
+                                let y_end = natural_top + distance_end;
+                                let segment_top = y_start.max(body_top);
+                                let segment_bottom = y_end.min(body_bottom);
+
+                                if segment_bottom - segment_top <= f32::EPSILON {
+                                    phase = next_phase;
+                                    continue;
+                                }
+
+                                let base_floor = phase.floor();
+                                let start_fraction = (phase - base_floor).clamp(0.0, 1.0);
+                                let end_fraction = (next_phase - base_floor).clamp(0.0, 1.0);
+                                let mut v0 = v_top + v_range * start_fraction;
+                                let mut v1 = v_top + v_range * end_fraction;
+
+                                let segment_size = segment_bottom - segment_top;
+                                let portion = (segment_size / segment_height).clamp(0.0, 1.0);
+                                let tail_gap = (natural_bottom - body_bottom).max(0.0);
+                                let body_reaches_tail = tail_gap <= segment_height + 1.0;
+                                let is_last_visible_segment = (body_bottom - segment_bottom).abs()
+                                    <= 0.5
+                                    || next_phase >= phase_end_adjusted - SEGMENT_PHASE_EPS;
+
+                                if body_reaches_tail && is_last_visible_segment {
+                                    if v_range >= 0.0 {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom - v_range.abs() * portion;
+                                    } else {
+                                        v1 = v_bottom;
+                                        v0 = v_bottom + v_range.abs() * portion;
+                                    }
+                                }
+
+                                let segment_center_screen = (segment_top + segment_bottom) * 0.5;
+                                let segment_center_travel = adjusted_travel_from_screen_y(
+                                    local_col,
+                                    lane_receptor_y,
+                                    dir,
+                                    segment_center_screen,
+                                );
+                                let segment_alpha = note_alpha(
+                                    segment_center_travel + tipsy_y_for_col(local_col),
+                                    elapsed_screen,
+                                    mini,
+                                    appearance,
+                                );
+                                if segment_alpha > f32::EPSILON {
+                                    let segment_center_x = lane_center_x_from_adjusted_travel(
+                                        local_col,
+                                        segment_center_travel,
+                                    );
+                                    rendered_body_top = Some(match rendered_body_top {
+                                        None => segment_top,
+                                        Some(v) => v.min(segment_top),
+                                    });
+                                    rendered_body_bottom = Some(match rendered_body_bottom {
+                                        None => segment_bottom,
+                                        Some(v) => v.max(segment_bottom),
+                                    });
+                                    actors.push(actor_with_world_z(
+                                        act!(sprite(body_slot.texture_key_shared()):
+                                            align(0.5, 0.5):
+                                            xy(segment_center_x, segment_center_screen):
+                                            setsize(body_width, segment_size):
+                                            rotationz(0.0):
+                                            customtexturerect(u0, v0, u1, v1):
+                                            diffuse(
+                                                hold_diffuse[0],
+                                                hold_diffuse[1],
+                                                hold_diffuse[2],
+                                                hold_diffuse[3] * segment_alpha
+                                            ):
+                                            z(Z_HOLD_BODY)
+                                        ),
+                                        world_z_for_adjusted_travel(segment_center_travel),
+                                    ));
+                                }
+
+                                phase = next_phase;
+                                emitted += 1;
+                            }
+                        } else {
+                            let body_slice_step = if visual.bumpy > f32::EPSILON {
+                                4.0
+                            } else {
+                                16.0
+                            };
+                            let use_body_mesh =
+                                body_slot.model.is_none() && visual.bumpy <= f32::EPSILON;
+                            let mut body_mesh_vertices =
+                                use_body_mesh.then(|| Vec::with_capacity(96));
+                            let mut prev_body_row: Option<[[f32; 2]; 2]> = None;
 
                             while phase + SEGMENT_PHASE_EPS < phase_end_adjusted
                                 && emitted < max_segments
@@ -3762,6 +3865,7 @@ pub fn build(
                                         appearance,
                                     );
                                     if slice_alpha <= f32::EPSILON {
+                                        prev_body_row = None;
                                         slice_top = slice_bottom;
                                         continue;
                                     }
@@ -3797,10 +3901,6 @@ pub fn build(
                                     let slice_world_z =
                                         world_z_for_adjusted_travel(slice_center_travel);
 
-                                    // ITG DrawHoldPart samples hold strips every 16px
-                                    // (or 4px for z-buffered bumpy parts), not once per
-                                    // texture repeat. Keep body slices tangent to the lane
-                                    // so Drunk/Tornado/Beat don't expose tile seams.
                                     rendered_body_top = Some(match rendered_body_top {
                                         None => slice_top,
                                         Some(v) => v.min(slice_top),
@@ -3829,7 +3929,7 @@ pub fn build(
                                         ];
                                         let half_width = body_width * 0.5;
                                         let top_row = prev_body_row.unwrap_or_else(|| {
-                                            hold_strip_row(
+                                            let row = hold_strip_row(
                                                 [slice_top_x, slice_top],
                                                 slice_forward,
                                                 half_width,
@@ -3842,8 +3942,25 @@ pub fn build(
                                                     hold_diffuse[2],
                                                     hold_diffuse[3] * top_alpha,
                                                 ],
-                                            )
+                                            );
+                                            [row[0].pos, row[1].pos]
                                         });
+                                        let top_row = hold_strip_row_from_positions(
+                                            top_row[0],
+                                            top_row[1],
+                                            u0,
+                                            u1,
+                                            slice_v0,
+                                            [
+                                                hold_diffuse[0],
+                                                hold_diffuse[1],
+                                                hold_diffuse[2],
+                                                hold_diffuse[3] * top_alpha,
+                                            ],
+                                        );
+                                        if body_head_row.is_none() {
+                                            body_head_row = Some([top_row[0].pos, top_row[1].pos]);
+                                        }
                                         let bottom_row = hold_strip_row(
                                             [slice_bottom_x, slice_bottom],
                                             slice_forward,
@@ -3861,7 +3978,8 @@ pub fn build(
                                         push_hold_strip_quad(mesh_vertices, top_row, bottom_row);
                                         body_tail_row =
                                             Some([bottom_row[0].pos, bottom_row[1].pos]);
-                                        prev_body_row = Some(bottom_row);
+                                        prev_body_row =
+                                            Some([bottom_row[0].pos, bottom_row[1].pos]);
                                     } else {
                                         actors.push(actor_with_world_z(
                                             act!(sprite(body_slot.texture_key_shared()):
@@ -3884,20 +4002,20 @@ pub fn build(
                                     slice_top = slice_bottom;
                                 }
 
-                                prev_body_row = None;
                                 phase = next_phase;
                                 emitted += 1;
                             }
+
+                            if let Some(vertices) = body_mesh_vertices
+                                && !vertices.is_empty()
+                            {
+                                actors.push(hold_strip_actor(
+                                    body_slot.texture_key_shared(),
+                                    Arc::from(vertices),
+                                    Z_HOLD_BODY as i16,
+                                ));
+                            }
                         }
-                    }
-                    if let Some(vertices) = body_mesh_vertices
-                        && !vertices.is_empty()
-                    {
-                        actors.push(hold_strip_actor(
-                            body_slot.texture_key_shared(),
-                            Arc::from(vertices),
-                            Z_HOLD_BODY as i16,
-                        ));
                     }
                 }
             }
@@ -3979,26 +4097,100 @@ pub fn build(
                         if cap_draw_height <= f32::EPSILON {
                             continue;
                         }
-                        let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
-                        let cap_rotation =
-                            cap_path_rotation + top_cap_rotation_deg(lane_reverse, body_flipped);
-                        actors.push(actor_with_world_z(
-                            act!(sprite(cap_slot.texture_key_shared()):
-                                align(0.5, 0.5):
-                                xy(cap_center_xy[0], cap_center_xy[1]):
-                                setsize(cap_width, cap_draw_height):
-                                customtexturerect(u0, v0, u1, v1):
-                                diffuse(
+                        let use_top_cap_mesh = !use_legacy_hold_sprites
+                            && cap_slot.model.is_none()
+                            && visual.bumpy <= f32::EPSILON;
+                        if use_top_cap_mesh {
+                            let top_alpha = note_alpha(
+                                cap_top_travel + tipsy_y_for_col(local_col),
+                                elapsed_screen,
+                                mini,
+                                appearance,
+                            );
+                            let bottom_alpha = note_alpha(
+                                cap_bottom_travel + tipsy_y_for_col(local_col),
+                                elapsed_screen,
+                                mini,
+                                appearance,
+                            );
+                            let cap_forward = [cap_bottom_x - cap_top_x, cap_bottom - cap_top];
+                            let half_width = cap_width * 0.5;
+                            let top_row = hold_strip_row(
+                                [cap_top_x, cap_top],
+                                cap_forward,
+                                half_width,
+                                u0,
+                                u1,
+                                v0,
+                                [
                                     hold_diffuse[0],
                                     hold_diffuse[1],
                                     hold_diffuse[2],
-                                    hold_diffuse[3] * cap_alpha
-                                ):
-                                rotationz(cap_rotation):
-                                z(Z_HOLD_CAP)
-                            ),
-                            cap_world_z,
-                        ));
+                                    hold_diffuse[3] * top_alpha,
+                                ],
+                            );
+                            let bottom_row = if let Some(body_head_row) = body_head_row
+                                && rendered_body_top
+                                    .is_some_and(|body_top| (body_top - cap_bottom).abs() <= 2.0)
+                            {
+                                hold_strip_row_from_positions(
+                                    body_head_row[0],
+                                    body_head_row[1],
+                                    u0,
+                                    u1,
+                                    v1,
+                                    [
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3] * bottom_alpha,
+                                    ],
+                                )
+                            } else {
+                                hold_strip_row(
+                                    [cap_bottom_x, cap_bottom],
+                                    cap_forward,
+                                    half_width,
+                                    u0,
+                                    u1,
+                                    v1,
+                                    [
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3] * bottom_alpha,
+                                    ],
+                                )
+                            };
+                            let mut cap_vertices = Vec::with_capacity(6);
+                            push_hold_strip_quad(&mut cap_vertices, top_row, bottom_row);
+                            actors.push(hold_strip_actor(
+                                cap_slot.texture_key_shared(),
+                                Arc::from(cap_vertices),
+                                Z_HOLD_CAP as i16,
+                            ));
+                        } else {
+                            let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
+                            let cap_rotation = cap_path_rotation
+                                + top_cap_rotation_deg(lane_reverse, body_flipped);
+                            actors.push(actor_with_world_z(
+                                act!(sprite(cap_slot.texture_key_shared()):
+                                    align(0.5, 0.5):
+                                    xy(cap_center_xy[0], cap_center_xy[1]):
+                                    setsize(cap_width, cap_draw_height):
+                                    customtexturerect(u0, v0, u1, v1):
+                                    diffuse(
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3] * cap_alpha
+                                    ):
+                                    rotationz(cap_rotation):
+                                    z(Z_HOLD_CAP)
+                                ),
+                                cap_world_z,
+                            ));
+                        }
                     }
                 }
             }
@@ -4102,8 +4294,10 @@ pub fn build(
                         if cap_draw_height <= f32::EPSILON {
                             continue;
                         }
-                        let use_bottom_cap_mesh =
-                            cap_slot.model.is_none() && visual.bumpy <= f32::EPSILON;
+                        let use_bottom_cap_mesh = !use_legacy_hold_sprites
+                            && cap_slot.model.is_none()
+                            && visual.bumpy <= f32::EPSILON
+                            && !lane_reverse;
                         if use_bottom_cap_mesh {
                             let top_alpha = note_alpha(
                                 cap_top_travel + tipsy_y_for_col(local_col),
