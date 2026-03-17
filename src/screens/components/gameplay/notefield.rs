@@ -2,14 +2,18 @@ use crate::act;
 use crate::core::gfx::BlendMode;
 use crate::core::space::*;
 use crate::game::gameplay::{
-    COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind,
-    HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TRANSITION_IN_DURATION,
+    AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
+    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS,
+    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TRANSITION_IN_DURATION,
+    VisualEffects,
 };
 use crate::game::gameplay::{
-    active_hold_is_engaged, effective_attack_mini_percent_delta_for_player,
-    effective_scroll_speed_for_player, effective_visual_mask_for_player,
-    receptor_glow_visual_for_col,
+    active_chart_attack_effects_for_player, active_hold_is_engaged,
+    effective_accel_effects_for_player, effective_appearance_effects_for_player,
+    effective_mini_percent_for_player, effective_perspective_effects_for_player,
+    effective_scroll_effects_for_player, effective_scroll_speed_for_player,
+    effective_visibility_effects_for_player, effective_visual_effects_for_player,
+    receptor_glow_visual_for_col, scroll_receptor_y,
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
@@ -115,9 +119,40 @@ const Z_ERROR_BAR_TICK_BACK: i16 = 89;
 const Z_ERROR_BAR_TEXT_FRONT: i16 = 184;
 const Z_ERROR_BAR_TEXT_BACK: i16 = 90;
 
-const VISUAL_MASK_DIZZY: u16 = 1 << 1;
-const VISUAL_MASK_CONFUSION: u16 = 1 << 2;
-const VISUAL_MASK_BIG: u16 = 1 << 3;
+const BLINK_MOD_FREQUENCY: f32 = 0.3333;
+const BOOST_MOD_MIN_CLAMP: f32 = -400.0;
+const BOOST_MOD_MAX_CLAMP: f32 = 400.0;
+const BRAKE_MOD_MIN_CLAMP: f32 = -400.0;
+const BRAKE_MOD_MAX_CLAMP: f32 = 400.0;
+const WAVE_MOD_MAGNITUDE: f32 = 20.0;
+const WAVE_MOD_HEIGHT: f32 = 38.0;
+const EXPAND_MULTIPLIER_FREQUENCY: f32 = 3.0;
+const EXPAND_MULTIPLIER_SCALE_FROM_LOW: f32 = -1.0;
+const EXPAND_MULTIPLIER_SCALE_FROM_HIGH: f32 = 1.0;
+const EXPAND_MULTIPLIER_SCALE_TO_LOW: f32 = 0.75;
+const EXPAND_MULTIPLIER_SCALE_TO_HIGH: f32 = 1.75;
+const EXPAND_SPEED_SCALE_FROM_LOW: f32 = 0.0;
+const EXPAND_SPEED_SCALE_FROM_HIGH: f32 = 1.0;
+const EXPAND_SPEED_SCALE_TO_LOW: f32 = 1.0;
+const TIPSY_TIMER_FREQUENCY: f32 = 1.2;
+const TIPSY_COLUMN_FREQUENCY: f32 = 1.8;
+const TIPSY_ARROW_MAGNITUDE: f32 = 0.4;
+const DRUNK_COLUMN_FREQUENCY: f32 = 0.2;
+const DRUNK_OFFSET_FREQUENCY: f32 = 10.0;
+const DRUNK_ARROW_MAGNITUDE: f32 = 0.5;
+const BUMPY_Z_MAGNITUDE: f32 = 40.0;
+const BUMPY_Z_ANGLE_DIVISOR: f32 = 16.0;
+const TORNADO_X_OFFSET_FREQUENCY: f32 = 6.0;
+const BEAT_OFFSET_HEIGHT: f32 = 15.0;
+const BEAT_PI_HEIGHT: f32 = 2.0;
+const CENTER_LINE_Y: f32 = 160.0;
+const FADE_DIST_Y: f32 = 40.0;
+
+#[derive(Clone, Copy, Debug, Default)]
+struct TornadoBounds {
+    min_x: f32,
+    max_x: f32,
+}
 type TextCache<K> = HashMap<K, Arc<str>, BuildHasherDefault<XxHash64>>;
 
 thread_local! {
@@ -159,7 +194,7 @@ thread_local! {
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
     static GAMEPLAY_MODS_CACHE: RefCell<TextCache<GameplayModsTextKey>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(128, BuildHasherDefault::default()),
+        HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
     );
 }
 
@@ -167,11 +202,22 @@ thread_local! {
 struct GameplayModsTextKey {
     speed_tag: u8,
     speed_bits: u32,
-    scroll_bits: u8,
-    turn: u8,
-    perspective: u8,
+    insert_mask: u8,
+    remove_mask: u8,
+    holds_mask: u8,
+    turn_bits: u16,
+    attack_mode: u8,
     mini_percent: i16,
     visual_delay_ms: i16,
+    accel: [i16; 5],
+    visual: [i16; 9],
+    appearance: [i16; 5],
+    scroll: [i16; 5],
+    perspective_tilt: i16,
+    perspective_skew: i16,
+    dark: i16,
+    blind: i16,
+    cover: i16,
 }
 
 #[inline(always)]
@@ -297,31 +343,218 @@ fn cached_run_timer(seconds: i32, minute_threshold: i32, trailing_space: bool) -
 }
 
 #[inline(always)]
-const fn scroll_option_bits(scroll: profile::ScrollOption) -> u8 {
-    let mut bits = 0u8;
-    if scroll.contains(profile::ScrollOption::Reverse) {
-        bits |= 1 << 0;
-    }
-    if scroll.contains(profile::ScrollOption::Split) {
-        bits |= 1 << 1;
-    }
-    if scroll.contains(profile::ScrollOption::Alternate) {
-        bits |= 1 << 2;
-    }
-    if scroll.contains(profile::ScrollOption::Cross) {
-        bits |= 1 << 3;
-    }
-    if scroll.contains(profile::ScrollOption::Centered) {
-        bits |= 1 << 4;
-    }
-    bits
+fn mod_percent_key(level: f32) -> i16 {
+    let value = if level.is_finite() { level } else { 0.0 };
+    (value * 100.0)
+        .round()
+        .clamp(i16::MIN as f32, i16::MAX as f32) as i16
 }
 
 #[inline(always)]
-fn gameplay_mods_text_key(
-    scroll_speed: ScrollSpeedSetting,
-    profile: &profile::Profile,
-) -> GameplayModsTextKey {
+fn clamp_rounded_i16(value: f32) -> i16 {
+    let value = if value.is_finite() { value } else { 0.0 };
+    value.round().clamp(i16::MIN as f32, i16::MAX as f32) as i16
+}
+
+#[inline(always)]
+fn append_mod_part(parts: &mut Vec<String>, percent: i16, name: &str) {
+    if percent == 0 {
+        return;
+    }
+    if percent == 100 {
+        parts.push(name.to_string());
+    } else {
+        parts.push(format!("{percent}% {name}"));
+    }
+}
+
+#[inline(always)]
+fn append_mini_part(parts: &mut Vec<String>, mini_percent: i16) {
+    if mini_percent != 0 {
+        parts.push(format!("{mini_percent}% Mini"));
+    }
+}
+
+#[inline(always)]
+fn append_perspective_parts(parts: &mut Vec<String>, tilt: i16, skew: i16) {
+    if tilt == 0 && skew == 0 {
+        parts.push("Overhead".to_string());
+        return;
+    }
+    if skew == 0 {
+        if tilt > 0 {
+            append_mod_part(parts, tilt, "Distant");
+        } else {
+            append_mod_part(parts, -tilt, "Hallway");
+        }
+        return;
+    }
+    if skew == tilt {
+        append_mod_part(parts, skew, "Space");
+        return;
+    }
+    if skew == -tilt {
+        append_mod_part(parts, skew, "Incoming");
+        return;
+    }
+    append_mod_part(parts, skew, "Skew");
+    append_mod_part(parts, tilt, "Tilt");
+}
+
+#[inline(always)]
+fn turn_option_name(turn: profile::TurnOption) -> Option<&'static str> {
+    match turn {
+        profile::TurnOption::None => None,
+        profile::TurnOption::Mirror => Some("Mirror"),
+        profile::TurnOption::Left => Some("Left"),
+        profile::TurnOption::Right => Some("Right"),
+        profile::TurnOption::LRMirror => Some("LR-Mirror"),
+        profile::TurnOption::UDMirror => Some("UD-Mirror"),
+        profile::TurnOption::Shuffle => Some("Shuffle"),
+        profile::TurnOption::Blender => Some("Blender"),
+        profile::TurnOption::Random => Some("Random"),
+    }
+}
+
+#[inline(always)]
+const fn turn_option_bits(turn: profile::TurnOption) -> u16 {
+    match turn {
+        profile::TurnOption::None => 0,
+        profile::TurnOption::Mirror => 1 << 0,
+        profile::TurnOption::Left => 1 << 1,
+        profile::TurnOption::Right => 1 << 2,
+        profile::TurnOption::LRMirror => 1 << 3,
+        profile::TurnOption::UDMirror => 1 << 4,
+        profile::TurnOption::Shuffle => 1 << 5,
+        profile::TurnOption::Blender => 1 << 6,
+        profile::TurnOption::Random => 1 << 7,
+    }
+}
+
+#[inline(always)]
+fn append_turn_parts(parts: &mut Vec<String>, bits: u16) {
+    for turn in [
+        profile::TurnOption::Mirror,
+        profile::TurnOption::Left,
+        profile::TurnOption::Right,
+        profile::TurnOption::LRMirror,
+        profile::TurnOption::UDMirror,
+        profile::TurnOption::Shuffle,
+        profile::TurnOption::Blender,
+        profile::TurnOption::Random,
+    ] {
+        if (bits & turn_option_bits(turn)) != 0
+            && let Some(name) = turn_option_name(turn)
+        {
+            parts.push(name.to_string());
+        }
+    }
+}
+
+#[inline(always)]
+fn attack_mode_name(mode: profile::AttackMode) -> Option<&'static str> {
+    match mode {
+        profile::AttackMode::Off => Some("NoAttacks"),
+        profile::AttackMode::On => None,
+        profile::AttackMode::Random => Some("RandomAttacks"),
+    }
+}
+
+#[inline(always)]
+fn push_transform_parts(parts: &mut Vec<String>, insert_mask: u8, remove_mask: u8, holds_mask: u8) {
+    if (remove_mask & (1 << 2)) != 0 {
+        parts.push("NoHolds".to_string());
+    }
+    if (holds_mask & (1 << 3)) != 0 {
+        parts.push("NoRolls".to_string());
+    }
+    if (remove_mask & (1 << 1)) != 0 {
+        parts.push("NoMines".to_string());
+    }
+    if (remove_mask & (1 << 0)) != 0 {
+        parts.push("Little".to_string());
+    }
+    if (insert_mask & (1 << 0)) != 0 {
+        parts.push("Wide".to_string());
+    }
+    if (insert_mask & (1 << 1)) != 0 {
+        parts.push("Big".to_string());
+    }
+    if (insert_mask & (1 << 2)) != 0 {
+        parts.push("Quick".to_string());
+    }
+    if (insert_mask & (1 << 3)) != 0 {
+        parts.push("BMRize".to_string());
+    }
+    if (insert_mask & (1 << 4)) != 0 {
+        parts.push("Skippy".to_string());
+    }
+    if (insert_mask & (1 << 7)) != 0 {
+        parts.push("Mines".to_string());
+    }
+    if (insert_mask & (1 << 5)) != 0 {
+        parts.push("Echo".to_string());
+    }
+    if (insert_mask & (1 << 6)) != 0 {
+        parts.push("Stomp".to_string());
+    }
+    if (holds_mask & (1 << 0)) != 0 {
+        parts.push("Planted".to_string());
+    }
+    if (holds_mask & (1 << 1)) != 0 {
+        parts.push("Floored".to_string());
+    }
+    if (holds_mask & (1 << 2)) != 0 {
+        parts.push("Twister".to_string());
+    }
+    if (holds_mask & (1 << 4)) != 0 {
+        parts.push("HoldsToRolls".to_string());
+    }
+    if (remove_mask & (1 << 3)) != 0 {
+        parts.push("NoJumps".to_string());
+    }
+    if (remove_mask & (1 << 4)) != 0 {
+        parts.push("NoHands".to_string());
+    }
+    if (remove_mask & (1 << 6)) != 0 {
+        parts.push("NoLifts".to_string());
+    }
+    if (remove_mask & (1 << 7)) != 0 {
+        parts.push("NoFakes".to_string());
+    }
+    if (remove_mask & (1 << 5)) != 0 {
+        parts.push("NoQuads".to_string());
+    }
+}
+
+#[inline(always)]
+fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextKey {
+    let profile = &state.player_profiles[player_idx];
+    let chart_attack = active_chart_attack_effects_for_player(state, player_idx);
+    let scroll_speed = effective_scroll_speed_for_player(state, player_idx);
+    let accel = effective_accel_effects_for_player(state, player_idx);
+    let visual = effective_visual_effects_for_player(state, player_idx);
+    let appearance = effective_appearance_effects_for_player(state, player_idx);
+    let visibility = effective_visibility_effects_for_player(state, player_idx);
+    let scroll = effective_scroll_effects_for_player(state, player_idx);
+    let perspective = effective_perspective_effects_for_player(state, player_idx);
+    let display_mini = (effective_mini_percent_for_player(state, player_idx)
+        - if visual.big > f32::EPSILON {
+            100.0 * visual.big
+        } else {
+            0.0
+        })
+    .clamp(-100.0, 150.0);
+    let dark = if profile.hide_targets {
+        1.0
+    } else {
+        visibility.dark
+    };
+    let cover = if profile.hide_song_bg {
+        1.0
+    } else {
+        visibility.cover
+    };
     let (speed_tag, speed_bits) = match scroll_speed {
         ScrollSpeedSetting::CMod(value) => (0, value.to_bits()),
         ScrollSpeedSetting::XMod(value) => (1, value.to_bits()),
@@ -330,13 +563,55 @@ fn gameplay_mods_text_key(
     GameplayModsTextKey {
         speed_tag,
         speed_bits,
-        scroll_bits: scroll_option_bits(profile.scroll_option),
-        turn: profile.turn_option as u8,
-        perspective: profile.perspective as u8,
-        mini_percent: profile.mini_percent.clamp(i16::MIN as i32, i16::MAX as i32) as i16,
+        insert_mask: profile::normalize_insert_mask(profile.insert_active_mask)
+            | chart_attack.insert_mask,
+        remove_mask: profile::normalize_remove_mask(profile.remove_active_mask)
+            | chart_attack.remove_mask,
+        holds_mask: profile::normalize_holds_mask(profile.holds_active_mask)
+            | chart_attack.holds_mask,
+        turn_bits: turn_option_bits(profile.turn_option) | chart_attack.turn_bits,
+        attack_mode: profile.attack_mode as u8,
+        mini_percent: clamp_rounded_i16(display_mini),
         visual_delay_ms: profile
             .visual_delay_ms
             .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
+        accel: [
+            mod_percent_key(accel.boost),
+            mod_percent_key(accel.brake),
+            mod_percent_key(accel.wave),
+            mod_percent_key(accel.expand),
+            mod_percent_key(accel.boomerang),
+        ],
+        visual: [
+            mod_percent_key(visual.drunk),
+            mod_percent_key(visual.dizzy),
+            mod_percent_key(visual.confusion),
+            mod_percent_key(visual.flip),
+            mod_percent_key(visual.invert),
+            mod_percent_key(visual.tornado),
+            mod_percent_key(visual.tipsy),
+            mod_percent_key(visual.bumpy),
+            mod_percent_key(visual.beat),
+        ],
+        appearance: [
+            mod_percent_key(appearance.hidden),
+            mod_percent_key(appearance.sudden),
+            mod_percent_key(appearance.stealth),
+            mod_percent_key(appearance.blink),
+            mod_percent_key(appearance.random_vanish),
+        ],
+        scroll: [
+            mod_percent_key(scroll.reverse),
+            mod_percent_key(scroll.split),
+            mod_percent_key(scroll.alternate),
+            mod_percent_key(scroll.cross),
+            mod_percent_key(scroll.centered),
+        ],
+        perspective_tilt: mod_percent_key(perspective.tilt),
+        perspective_skew: mod_percent_key(perspective.skew),
+        dark: mod_percent_key(dark),
+        blind: mod_percent_key(visibility.blind),
+        cover: mod_percent_key(cover),
     }
 }
 
@@ -484,17 +759,300 @@ fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
 }
 
 #[inline(always)]
-fn calc_note_rotation_z(mask: u16, note_beat: f32, song_beat: f32, is_hold_head: bool) -> f32 {
-    let mut r = 0.0;
-    if (mask & VISUAL_MASK_CONFUSION) != 0 {
-        let mut conf = song_beat;
-        conf = conf.rem_euclid(2.0 * std::f32::consts::PI);
-        r += conf * (-180.0 / std::f32::consts::PI);
+fn quantize_step(v: f32, step: f32) -> f32 {
+    ((v + step * 0.5) / step).trunc() * step
+}
+
+#[inline(always)]
+fn beat_factor(song_beat: f32) -> f32 {
+    let accel_time = 0.2_f32;
+    let total_time = 0.5_f32;
+    let mut beat = song_beat + accel_time;
+    let even_beat = (beat as i32 % 2) != 0;
+    if beat < 0.0 {
+        return 0.0;
     }
-    if (mask & VISUAL_MASK_DIZZY) != 0 && !is_hold_head {
-        let mut dizzy = note_beat - song_beat;
-        dizzy = dizzy.rem_euclid(2.0 * std::f32::consts::PI);
-        r += dizzy * (180.0 / std::f32::consts::PI);
+    beat -= beat.trunc();
+    beat += 1.0;
+    beat -= beat.trunc();
+    if beat >= total_time {
+        return 0.0;
+    }
+    let mut factor = if beat < accel_time {
+        let t = sm_scale(beat, 0.0, accel_time, 0.0, 1.0);
+        t * t
+    } else {
+        let t = sm_scale(beat, accel_time, total_time, 1.0, 0.0);
+        1.0 - (1.0 - t) * (1.0 - t)
+    };
+    if even_beat {
+        factor *= -1.0;
+    }
+    factor * 20.0
+}
+
+#[inline(always)]
+fn field_effect_height(tilt: f32) -> f32 {
+    screen_height() + tilt.abs() * 200.0
+}
+
+#[inline(always)]
+fn apply_accel_y(
+    raw_y: f32,
+    elapsed: f32,
+    current_beat: f32,
+    effect_height: f32,
+    accel: AccelEffects,
+) -> f32 {
+    if raw_y < 0.0 {
+        return raw_y;
+    }
+    let mut y = raw_y;
+    if accel.boost > f32::EPSILON {
+        let new_y = y * 1.5 / ((y + effect_height / 1.2) / effect_height);
+        let mut adjust = accel.boost * (new_y - y);
+        adjust = adjust.clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
+        y += adjust;
+    }
+    if accel.brake > f32::EPSILON {
+        let scale = sm_scale(y, 0.0, effect_height, 0.0, 1.0);
+        let new_y = y * scale;
+        let mut adjust = accel.brake * (new_y - y);
+        adjust = adjust.clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
+        y += adjust;
+    }
+    if accel.wave > f32::EPSILON {
+        y += accel.wave * WAVE_MOD_MAGNITUDE * (y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin();
+    }
+    if accel.boomerang > f32::EPSILON {
+        y = (-y * y / screen_height()) + 1.5 * y;
+    }
+    if accel.expand > f32::EPSILON {
+        let seconds = elapsed.rem_euclid((std::f32::consts::PI * 2.0).max(f32::EPSILON));
+        let multiplier = sm_scale(
+            (seconds * EXPAND_MULTIPLIER_FREQUENCY).cos(),
+            EXPAND_MULTIPLIER_SCALE_FROM_LOW,
+            EXPAND_MULTIPLIER_SCALE_FROM_HIGH,
+            EXPAND_MULTIPLIER_SCALE_TO_LOW,
+            EXPAND_MULTIPLIER_SCALE_TO_HIGH,
+        );
+        y *= sm_scale(
+            accel.expand,
+            EXPAND_SPEED_SCALE_FROM_LOW,
+            EXPAND_SPEED_SCALE_FROM_HIGH,
+            EXPAND_SPEED_SCALE_TO_LOW,
+            multiplier,
+        );
+    }
+    let _ = current_beat;
+    y
+}
+
+#[inline(always)]
+fn tipsy_y_extra(local_col: usize, elapsed: f32, visual: VisualEffects) -> f32 {
+    if visual.tipsy <= f32::EPSILON {
+        return 0.0;
+    }
+    let col = local_col as f32;
+    let angle = elapsed * TIPSY_TIMER_FREQUENCY + col * TIPSY_COLUMN_FREQUENCY;
+    visual.tipsy * angle.cos() * ScrollSpeedSetting::ARROW_SPACING * TIPSY_ARROW_MAGNITUDE
+}
+
+#[inline(always)]
+fn beat_x_extra(y: f32, beat_factor: f32, visual: VisualEffects) -> f32 {
+    if visual.beat <= f32::EPSILON {
+        return 0.0;
+    }
+    let shift =
+        beat_factor * (y / BEAT_OFFSET_HEIGHT + std::f32::consts::PI / BEAT_PI_HEIGHT).sin();
+    visual.beat * shift
+}
+
+#[inline(always)]
+fn drunk_x_extra(local_col: usize, y: f32, elapsed: f32, visual: VisualEffects) -> f32 {
+    if visual.drunk <= f32::EPSILON {
+        return 0.0;
+    }
+    let col = local_col as f32;
+    let angle =
+        elapsed + col * DRUNK_COLUMN_FREQUENCY + y * DRUNK_OFFSET_FREQUENCY / screen_height();
+    visual.drunk * angle.cos() * ScrollSpeedSetting::ARROW_SPACING * DRUNK_ARROW_MAGNITUDE
+}
+
+#[inline(always)]
+fn tornado_x_extra(
+    local_col: usize,
+    y: f32,
+    base_x: f32,
+    bounds: TornadoBounds,
+    visual: VisualEffects,
+) -> f32 {
+    if visual.tornado <= f32::EPSILON {
+        return 0.0;
+    }
+    let position_between = sm_scale(base_x, bounds.min_x, bounds.max_x, -1.0, 1.0).clamp(-1.0, 1.0);
+    let radians = position_between.acos() + y * TORNADO_X_OFFSET_FREQUENCY / screen_height();
+    let adjusted = sm_scale(radians.cos(), -1.0, 1.0, bounds.min_x, bounds.max_x);
+    let _ = local_col;
+    (adjusted - base_x) * visual.tornado
+}
+
+#[inline(always)]
+fn note_alpha(y_no_reverse: f32, elapsed: f32, mini: f32, appearance: AppearanceEffects) -> f32 {
+    if y_no_reverse < 0.0 {
+        return 1.0;
+    }
+    let zoom = (1.0 - mini * 0.5).abs().max(0.01);
+    let center_line = CENTER_LINE_Y / zoom;
+    let hidden_sudden = appearance.hidden * appearance.sudden;
+    let hidden_end = center_line + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, -1.0, -1.25);
+    let hidden_start = center_line + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, -0.25);
+    let sudden_end = center_line + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, 0.25);
+    let sudden_start = center_line + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 1.0, 1.25);
+    let mut visible_adjust = 0.0;
+    if appearance.hidden > f32::EPSILON {
+        visible_adjust += appearance.hidden
+            * sm_scale(y_no_reverse, hidden_start, hidden_end, 0.0, -1.0).clamp(-1.0, 0.0);
+    }
+    if appearance.sudden > f32::EPSILON {
+        visible_adjust += appearance.sudden
+            * sm_scale(y_no_reverse, sudden_start, sudden_end, -1.0, 0.0).clamp(-1.0, 0.0);
+    }
+    if appearance.stealth > f32::EPSILON {
+        visible_adjust -= appearance.stealth;
+    }
+    if appearance.blink > f32::EPSILON {
+        let blink = quantize_step((elapsed * 10.0).sin(), BLINK_MOD_FREQUENCY);
+        visible_adjust += sm_scale(blink, 0.0, 1.0, -1.0, 0.0);
+    }
+    if appearance.random_vanish > f32::EPSILON {
+        let dist = (y_no_reverse - center_line).abs();
+        visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * appearance.random_vanish;
+    }
+    (1.0 + visible_adjust).clamp(0.0, 1.0)
+}
+
+#[inline(always)]
+fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
+    let num_cols = col_offsets.len();
+    if num_cols == 0 {
+        return;
+    }
+    let num_sides = if num_cols > 4 { 2 } else { 1 };
+    let cols_per_side = (num_cols / num_sides).max(1);
+    for i in 0..num_cols {
+        let side = i / cols_per_side;
+        let on_side = i % cols_per_side;
+        let left_mid = (cols_per_side - 1) / 2;
+        let right_mid = (cols_per_side + 1) / 2;
+        let (first, last) = if on_side <= left_mid {
+            (0, left_mid)
+        } else if on_side >= right_mid {
+            (right_mid, cols_per_side - 1)
+        } else {
+            (on_side / 2, on_side / 2)
+        };
+        let new_on_side = if first == last {
+            0
+        } else {
+            sm_scale(
+                on_side as f32,
+                first as f32,
+                last as f32,
+                last as f32,
+                first as f32,
+            )
+            .round() as usize
+        };
+        let new_col = side * cols_per_side + new_on_side.min(num_cols.saturating_sub(1));
+        out[i] = col_offsets[new_col] - col_offsets[i];
+    }
+}
+
+#[inline(always)]
+fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
+    let num_cols = col_offsets.len();
+    let width = if num_cols > 4 { 2 } else { 3 };
+    for i in 0..num_cols {
+        let start = i.saturating_sub(width);
+        let end = (i + width).min(num_cols.saturating_sub(1));
+        let mut min_x = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        for x in &col_offsets[start..=end] {
+            min_x = min_x.min(*x);
+            max_x = max_x.max(*x);
+        }
+        out[i] = TornadoBounds { min_x, max_x };
+    }
+}
+
+#[inline(always)]
+fn note_x_extra(
+    local_col: usize,
+    y: f32,
+    elapsed: f32,
+    beat_factor: f32,
+    visual: VisualEffects,
+    col_offsets: &[f32],
+    invert_distances: &[f32],
+    tornado_bounds: &[TornadoBounds],
+) -> f32 {
+    let mut r = 0.0;
+    let base_x = col_offsets[local_col];
+    if visual.tornado > f32::EPSILON {
+        r += tornado_x_extra(local_col, y, base_x, tornado_bounds[local_col], visual);
+    }
+    if visual.drunk > f32::EPSILON {
+        r += drunk_x_extra(local_col, y, elapsed, visual);
+    }
+    if visual.flip > f32::EPSILON {
+        let mirrored = col_offsets[col_offsets.len().saturating_sub(1) - local_col];
+        r += (mirrored - base_x) * visual.flip;
+    }
+    if visual.invert > f32::EPSILON {
+        r += invert_distances[local_col] * visual.invert;
+    }
+    if visual.beat > f32::EPSILON {
+        r += beat_x_extra(y, beat_factor, visual);
+    }
+    r
+}
+
+#[inline(always)]
+fn note_world_z(y: f32, visual: VisualEffects) -> f32 {
+    if visual.bumpy <= f32::EPSILON {
+        return 0.0;
+    }
+    visual.bumpy * BUMPY_Z_MAGNITUDE * (y / BUMPY_Z_ANGLE_DIVISOR).sin()
+}
+
+#[inline(always)]
+fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
+    if world_z.abs() <= f32::EPSILON {
+        return actor;
+    }
+    match &mut actor {
+        Actor::Sprite { world_z: z, .. } | Actor::TexturedMesh { world_z: z, .. } => *z = world_z,
+        _ => {}
+    }
+    actor
+}
+
+#[inline(always)]
+fn calc_note_rotation_z(
+    visual: VisualEffects,
+    note_beat: f32,
+    song_beat: f32,
+    is_hold_head: bool,
+) -> f32 {
+    let mut r = 0.0;
+    if visual.confusion > f32::EPSILON {
+        let conf = song_beat.rem_euclid(2.0 * std::f32::consts::PI);
+        r += conf * (-180.0 / std::f32::consts::PI) * visual.confusion;
+    }
+    if visual.dizzy > f32::EPSILON && !is_hold_head {
+        let dizzy = (note_beat - song_beat).rem_euclid(2.0 * std::f32::consts::PI);
+        r += dizzy * (180.0 / std::f32::consts::PI) * visual.dizzy;
     }
     r
 }
@@ -508,20 +1066,19 @@ fn smoothstep01(t: f32) -> f32 {
 #[inline(always)]
 fn effective_mini_value(
     profile: &profile::Profile,
-    visual_mask: u16,
-    attack_mini_percent_delta: f32,
+    visual: VisualEffects,
+    mini_percent: f32,
 ) -> f32 {
-    let attack_delta = if attack_mini_percent_delta.is_finite() {
-        attack_mini_percent_delta
+    let mut mini = if mini_percent.is_finite() {
+        mini_percent
     } else {
-        0.0
+        profile.mini_percent as f32
     };
-    let mut mini = (profile.mini_percent as f32 + attack_delta).clamp(-100.0, 150.0);
-    if (visual_mask & VISUAL_MASK_BIG) != 0 {
+    if visual.big > f32::EPSILON {
         // ITG _fallback/ArrowCloud map Effect Big to mod,-100% mini.
         mini -= 100.0;
     }
-    mini / 100.0
+    mini.clamp(-100.0, 150.0) / 100.0
 }
 
 #[inline(always)]
@@ -559,11 +1116,11 @@ fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
         }
         ScrollSpeedSetting::MMod(bpm) => {
             if (bpm - bpm.round()).abs() <= 0.000_1 {
-                let mut out = String::from("M");
+                let mut out = String::from("m");
                 out.push_str(&(bpm.round() as i32).to_string());
                 out
             } else {
-                let mut out = String::from("M");
+                let mut out = String::from("m");
                 out.push_str(&fmt_float(bpm));
                 out
             }
@@ -572,41 +1129,63 @@ fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
 }
 
 #[inline(always)]
-fn gameplay_mods_text(scroll_speed: ScrollSpeedSetting, profile: &profile::Profile) -> Arc<str> {
-    let key = gameplay_mods_text_key(scroll_speed, profile);
+fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
+    let key = gameplay_mods_text_key(state, player_idx);
     cached_text(&GAMEPLAY_MODS_CACHE, key, || {
-        let mut parts = Vec::with_capacity(10);
-        parts.push(format_speed_mod_for_display(scroll_speed));
-        let scroll = profile.scroll_option;
-        if scroll.contains(profile::ScrollOption::Reverse) {
-            parts.push("Reverse".to_string());
+        let mut parts = Vec::with_capacity(32);
+        parts.push(format_speed_mod_for_display(
+            effective_scroll_speed_for_player(state, player_idx),
+        ));
+
+        for (percent, name) in
+            key.accel
+                .into_iter()
+                .zip(["Boost", "Brake", "Wave", "Expand", "Boomerang"])
+        {
+            append_mod_part(&mut parts, percent, name);
         }
-        if scroll.contains(profile::ScrollOption::Split) {
-            parts.push("Split".to_string());
+        for (percent, name) in key.visual.into_iter().zip([
+            "Drunk",
+            "Dizzy",
+            "Confusion",
+            "Flip",
+            "Invert",
+            "Tornado",
+            "Tipsy",
+            "Bumpy",
+            "Beat",
+        ]) {
+            append_mod_part(&mut parts, percent, name);
         }
-        if scroll.contains(profile::ScrollOption::Alternate) {
-            parts.push("Alternate".to_string());
+        append_mini_part(&mut parts, key.mini_percent);
+        for (percent, name) in
+            key.appearance
+                .into_iter()
+                .zip(["Hidden", "Sudden", "Stealth", "Blink", "RandomVanish"])
+        {
+            append_mod_part(&mut parts, percent, name);
         }
-        if scroll.contains(profile::ScrollOption::Cross) {
-            parts.push("Cross".to_string());
+        for (percent, name) in
+            key.scroll
+                .into_iter()
+                .zip(["Reverse", "Split", "Alternate", "Cross", "Centered"])
+        {
+            append_mod_part(&mut parts, percent, name);
         }
-        if scroll.contains(profile::ScrollOption::Centered) {
-            parts.push("Centered".to_string());
+        append_mod_part(&mut parts, key.dark, "Dark");
+        append_mod_part(&mut parts, key.blind, "Blind");
+        append_mod_part(&mut parts, key.cover, "Cover");
+
+        if let Some(name) = attack_mode_name(state.player_profiles[player_idx].attack_mode) {
+            parts.push(name.to_string());
         }
-        if !matches!(profile.turn_option, profile::TurnOption::None) {
-            parts.push(profile.turn_option.to_string());
+        append_turn_parts(&mut parts, key.turn_bits);
+        push_transform_parts(&mut parts, key.insert_mask, key.remove_mask, key.holds_mask);
+        append_perspective_parts(&mut parts, key.perspective_tilt, key.perspective_skew);
+        if key.visual_delay_ms != 0 {
+            parts.push(format!("{}ms VisualDelay", key.visual_delay_ms));
         }
-        if profile.mini_percent != 0 {
-            let mut part = profile.mini_percent.to_string();
-            part.push_str("% Mini");
-            parts.push(part);
-        }
-        parts.push(profile.perspective.to_string());
-        if profile.visual_delay_ms != 0 {
-            let mut part = profile.visual_delay_ms.to_string();
-            part.push_str("ms VisualDelay");
-            parts.push(part);
-        }
+
         parts.join(", ")
     })
 }
@@ -754,6 +1333,24 @@ struct ZmodLayoutYs {
     combo_y: f32,
     measure_counter_y: Option<f32>,
     subtractive_scoring_y: f32,
+}
+
+#[inline(always)]
+fn hud_y(
+    normal_y: f32,
+    reverse_y: f32,
+    centered_y: f32,
+    reverse: bool,
+    centered_percent: f32,
+) -> f32 {
+    let base_y = if reverse { reverse_y } else { normal_y };
+    sm_scale(
+        centered_percent.clamp(0.0, 1.0),
+        0.0,
+        1.0,
+        base_y,
+        centered_y,
+    )
 }
 
 #[inline(always)]
@@ -1019,7 +1616,7 @@ pub fn prewarm_text_layout(
             }
         }
 
-        let mods_text = gameplay_mods_text(state.scroll_speed[player], profile);
+        let mods_text = gameplay_mods_text(state, player);
         cache.prewarm_text(
             fonts,
             "miso",
@@ -1694,11 +2291,16 @@ pub fn build(
     let receptor_y_normal = screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + notefield_offset_y;
     let receptor_y_reverse =
         screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE + notefield_offset_y;
-
-    let is_centered = profile
-        .scroll_option
-        .contains(profile::ScrollOption::Centered);
+    let scroll = effective_scroll_effects_for_player(state, player_idx);
+    let perspective = effective_perspective_effects_for_player(state, player_idx);
+    let centered_percent = scroll.centered.clamp(0.0, 1.0);
     let receptor_y_centered = screen_center_y() + notefield_offset_y;
+    let column_reverse_percent: [f32; MAX_COLS] = from_fn(|i| {
+        if i >= num_cols {
+            return 0.0;
+        }
+        scroll.reverse_percent_for_column(i, num_cols)
+    });
     let column_dirs: [f32; MAX_COLS] = from_fn(|i| {
         if i >= num_cols {
             return 1.0;
@@ -1709,38 +2311,45 @@ pub fn build(
         if i >= num_cols {
             return receptor_y_normal;
         }
-        if is_centered {
-            receptor_y_centered
-        } else if column_dirs[i] >= 0.0 {
-            receptor_y_normal
-        } else {
-            receptor_y_reverse
-        }
+        scroll_receptor_y(
+            column_reverse_percent[i],
+            scroll.centered,
+            receptor_y_normal,
+            receptor_y_reverse,
+            receptor_y_centered,
+        )
     });
 
     let elapsed_screen = state.total_elapsed_in_screen;
-    let visual_mask = effective_visual_mask_for_player(state, player_idx);
-    let attack_mini_delta = effective_attack_mini_percent_delta_for_player(state, player_idx);
-    let mini = effective_mini_value(profile, visual_mask, attack_mini_delta);
+    let accel = effective_accel_effects_for_player(state, player_idx);
+    let visual = effective_visual_effects_for_player(state, player_idx);
+    let appearance = effective_appearance_effects_for_player(state, player_idx);
+    let visibility = effective_visibility_effects_for_player(state, player_idx);
+    let mini_percent = effective_mini_percent_for_player(state, player_idx);
+    let mini = effective_mini_value(profile, visual, mini_percent);
     let reverse_scroll = state.reverse_scroll[player_idx];
-    let judgment_y = if is_centered {
-        receptor_y_centered + 95.0
-    } else if reverse_scroll {
-        screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
-    } else {
-        screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y
-    };
-    let combo_y_base = if is_centered {
-        receptor_y_centered + 155.0
-    } else if reverse_scroll {
-        screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-    } else {
-        screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y
-    };
-    let zmod_layout = zmod_layout_ys(profile, judgment_y, combo_y_base, reverse_scroll);
+    let hud_reverse = column_reverse_percent[0] >= 0.999_9;
+    let judgment_y = hud_y(
+        screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y,
+        screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y,
+        receptor_y_centered + 95.0,
+        hud_reverse,
+        centered_percent,
+    );
+    let combo_y_base = hud_y(
+        screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y,
+        screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y,
+        receptor_y_centered + 155.0,
+        hud_reverse,
+        centered_percent,
+    );
+    let zmod_layout = zmod_layout_ys(profile, judgment_y, combo_y_base, hud_reverse);
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
     // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0); deadsync currently supports Mini.
     let judgment_zoom_mod = mini_judgment_zoom(mini);
+    let effect_height = field_effect_height(perspective.tilt);
+    let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
+    let blind_active = visibility.blind > f32::EPSILON;
 
     if let Some(ns) = &state.noteskin[player_idx] {
         let timing = &state.timing_players[player_idx];
@@ -1799,12 +2408,21 @@ pub fn build(
         };
         let current_time = state.current_music_time_visible[player_idx];
         let current_beat = state.current_beat_visible[player_idx];
-        let confusion_receptor_rot = if (visual_mask & VISUAL_MASK_CONFUSION) != 0 {
+        let confusion_receptor_rot = if visual.confusion > f32::EPSILON {
             let beat = current_beat.rem_euclid(2.0 * std::f32::consts::PI);
-            beat * (-180.0 / std::f32::consts::PI)
+            beat * (-180.0 / std::f32::consts::PI) * visual.confusion
         } else {
             0.0
         };
+        let beat_push = beat_factor(current_beat);
+        let mut col_offsets = [0.0_f32; MAX_COLS];
+        for i in 0..num_cols {
+            col_offsets[i] = ns.column_xs[i] as f32 * field_zoom;
+        }
+        let mut invert_distances = [0.0_f32; MAX_COLS];
+        compute_invert_distances(&col_offsets[..num_cols], &mut invert_distances[..num_cols]);
+        let mut tornado_bounds = [TornadoBounds::default(); MAX_COLS];
+        compute_tornado_bounds(&col_offsets[..num_cols], &mut tornado_bounds[..num_cols]);
         // ITG NoteField currently advances NoteDisplay resources twice per frame for
         // the master field (and once per additional field), so model/tween time in
         // NoteDisplay actors runs faster than wall-clock elapsed.
@@ -1858,13 +2476,60 @@ pub fn build(
                 }
             }
         };
-        let adjusted_travel_offset = |travel_offset: f32| -> f32 { travel_offset };
+        let adjusted_travel_offset = |travel_offset: f32| -> f32 {
+            apply_accel_y(
+                travel_offset,
+                elapsed_screen,
+                current_beat,
+                effect_height,
+                accel,
+            )
+        };
+        let tipsy_y_for_col =
+            |local_col: usize| -> f32 { tipsy_y_extra(local_col, elapsed_screen, visual) };
         let lane_y_from_travel =
             |local_col: usize, receptor_y_lane: f32, dir: f32, travel_offset: f32| -> f32 {
-                let dir = if dir >= 0.0 { 1.0 } else { -1.0 };
-                let _ = local_col;
-                receptor_y_lane + dir * adjusted_travel_offset(travel_offset)
+                receptor_y_lane
+                    + dir * adjusted_travel_offset(travel_offset)
+                    + tipsy_y_for_col(local_col)
             };
+        let lane_center_x_from_travel = |local_col: usize, travel_offset: f32| -> f32 {
+            playfield_center_x
+                + col_offsets[local_col]
+                + note_x_extra(
+                    local_col,
+                    adjusted_travel_offset(travel_offset),
+                    elapsed_screen,
+                    beat_push,
+                    visual,
+                    &col_offsets[..num_cols],
+                    &invert_distances[..num_cols],
+                    &tornado_bounds[..num_cols],
+                )
+        };
+        let adjusted_travel_from_screen_y =
+            |local_col: usize, receptor_y_lane: f32, dir: f32, y_pos: f32| -> f32 {
+                let dir = if dir.abs() <= 0.000_1 {
+                    if dir < 0.0 { -0.000_1 } else { 0.000_1 }
+                } else {
+                    dir
+                };
+                (y_pos - receptor_y_lane - tipsy_y_for_col(local_col)) / dir
+            };
+        let alpha_for_travel = |local_col: usize, travel_offset: f32| -> f32 {
+            let adjusted = adjusted_travel_offset(travel_offset);
+            note_alpha(
+                adjusted + tipsy_y_for_col(local_col),
+                elapsed_screen,
+                mini,
+                appearance,
+            )
+        };
+        let world_z_for_raw_travel = |travel_offset: f32| -> f32 {
+            note_world_z(adjusted_travel_offset(travel_offset), visual)
+        };
+        let world_z_for_adjusted_travel =
+            |travel_offset: f32| -> f32 { note_world_z(travel_offset, visual) };
         // For dynamic values (e.g., last_held_beat while letting go), fall back to timing for that beat.
         // Direction and receptor row are per-lane: upwards lanes anchor to the normal receptor row,
         // downwards lanes anchor to the reverse row.
@@ -2116,7 +2781,7 @@ pub fn build(
             let col = col_start + i;
             let col_x_offset = ns.column_xs[i] as f32 * field_zoom;
             let receptor_y_lane = column_receptor_ys[i];
-            if !profile.hide_targets {
+            if !profile.hide_targets && receptor_alpha > f32::EPSILON {
                 let bop_timer = state.receptor_bop_timers[col];
                 let bop_zoom = if bop_timer > 0.0 {
                     let t = (0.11 - bop_timer) / 0.11;
@@ -2134,26 +2799,29 @@ pub fn build(
                 // dance/default) instead of being normalized to arrow height.
                 let receptor_size = scale_explosion(logical_slot_size(receptor_slot));
                 let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
-                actors.push(act!(sprite(receptor_slot.texture_key_shared()):
-                    align(0.5, 0.5):
-                    xy(playfield_center_x + col_x_offset, receptor_y_lane):
-                    setsize(receptor_size[0], receptor_size[1]):
-                    zoom(bop_zoom):
-                    diffuse(
-                        receptor_color[0],
-                        receptor_color[1],
-                        receptor_color[2],
-                        receptor_color[3]
-                    ):
-                    rotationz(-receptor_slot.def.rotation_deg as f32 + confusion_receptor_rot):
-                    customtexturerect(
-                        receptor_uv[0],
-                        receptor_uv[1],
-                        receptor_uv[2],
-                        receptor_uv[3]
-                    ):
-                    z(Z_RECEPTOR)
-                ));
+                let alpha = receptor_color[3] * receptor_alpha;
+                if alpha > f32::EPSILON {
+                    actors.push(act!(sprite(receptor_slot.texture_key_shared()):
+                        align(0.5, 0.5):
+                        xy(playfield_center_x + col_x_offset, receptor_y_lane):
+                        setsize(receptor_size[0], receptor_size[1]):
+                        zoom(bop_zoom):
+                        diffuse(
+                            receptor_color[0],
+                            receptor_color[1],
+                            receptor_color[2],
+                            alpha
+                        ):
+                        rotationz(-receptor_slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                        customtexturerect(
+                            receptor_uv[0],
+                            receptor_uv[1],
+                            receptor_uv[2],
+                            receptor_uv[3]
+                        ):
+                        z(Z_RECEPTOR)
+                    ));
+                }
             }
             let hold_slot = if let Some(active) = state.active_holds[col]
                 .as_ref()
@@ -2281,17 +2949,18 @@ pub fn build(
                     }
                 }
             }
-            if !profile.hide_targets {
+            if !profile.hide_targets && receptor_alpha > f32::EPSILON {
                 if let Some((alpha, zoom)) = receptor_glow_visual_for_col(state, col)
                     && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
                 {
-                    let glow_frame =
-                        glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-                    let glow_uv =
-                        glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
-                    let glow_size = scale_explosion(logical_slot_size(glow_slot));
-                    let behavior = ns.receptor_glow_behavior;
+                    let alpha = alpha * receptor_alpha;
                     if alpha > f32::EPSILON {
+                        let glow_frame =
+                            glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
+                        let glow_uv =
+                            glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
+                        let glow_size = scale_explosion(logical_slot_size(glow_slot));
+                        let behavior = ns.receptor_glow_behavior;
                         let width = glow_size[0] * zoom;
                         let height = glow_size[1] * zoom;
                         if behavior.blend_add {
@@ -2587,11 +3256,23 @@ pub fn build(
             // ITG swaps hold start/end for reverse before applying hold-body offsets.
             let mut hold_start_y = if lane_reverse { tail_y } else { head_y };
             let mut hold_end_y = if lane_reverse { head_y } else { tail_y };
+            let mut hold_start_travel = if lane_reverse {
+                tail_travel_offset
+            } else {
+                head_travel_offset
+            };
+            let mut hold_end_travel = if lane_reverse {
+                head_travel_offset
+            } else {
+                tail_travel_offset
+            };
             if engaged {
                 if lane_reverse {
                     hold_end_y = lane_receptor_y;
+                    hold_end_travel = 0.0;
                 } else {
                     hold_start_y = lane_receptor_y;
+                    hold_start_travel = 0.0;
                 }
             }
             // ITG swaps hold start/end offsets for reverse before applying
@@ -2614,7 +3295,8 @@ pub fn build(
             top = top.max(-400.0);
             bottom = bottom.min(screen_height() + 400.0);
             draw_body_or_cap &= bottom > top;
-            let col_x_offset = ns.column_xs[local_col] as f32 * field_zoom;
+            let base_column_center_x =
+                playfield_center_x + ns.column_xs[local_col] as f32 * field_zoom;
             let let_go_gray = ns.hold_let_go_gray_percent.clamp(0.0, 1.0);
             let hold_life = hold.life.clamp(0.0, 1.0);
             let hold_color_scale = let_go_gray + (1.0 - let_go_gray) * hold_life;
@@ -2626,6 +3308,11 @@ pub fn build(
                 hold_end_y
             } else {
                 hold_start_y
+            };
+            let head_anchor_travel = if flip_head_and_tail {
+                hold_end_travel
+            } else {
+                hold_start_travel
             };
             let visuals =
                 ns.hold_visuals_for_col(local_col, matches!(note.note_type, NoteType::Roll));
@@ -2859,7 +3546,34 @@ pub fn build(
                                 let segment_size_screen = segment_size;
                                 let seg_top_screen = segment_top;
                                 let seg_bottom_screen = segment_bottom;
-
+                                let segment_travel = adjusted_travel_from_screen_y(
+                                    local_col,
+                                    lane_receptor_y,
+                                    dir,
+                                    segment_center_screen,
+                                );
+                                let segment_alpha = note_alpha(
+                                    segment_travel + tipsy_y_for_col(local_col),
+                                    elapsed_screen,
+                                    mini,
+                                    appearance,
+                                );
+                                if segment_alpha <= f32::EPSILON {
+                                    phase = next_phase;
+                                    continue;
+                                }
+                                let segment_center_x = base_column_center_x
+                                    + note_x_extra(
+                                        local_col,
+                                        segment_travel,
+                                        elapsed_screen,
+                                        beat_push,
+                                        visual,
+                                        &col_offsets[..num_cols],
+                                        &invert_distances[..num_cols],
+                                        &tornado_bounds[..num_cols],
+                                    );
+                                let segment_world_z = world_z_for_adjusted_travel(segment_travel);
                                 let rotation = 0.0;
 
                                 // Track rendered bounds in screen space
@@ -2872,19 +3586,22 @@ pub fn build(
                                     Some(v) => v.max(seg_bottom_screen),
                                 });
 
-                                actors.push(act!(sprite(body_slot.texture_key_shared()):
-                                    align(0.5, 0.5):
-                                    xy(playfield_center_x + col_x_offset, segment_center_screen):
-                                    setsize(body_width, segment_size_screen):
-                                    rotationz(rotation):
-                                    customtexturerect(u0, v0, u1, v1):
-                                    diffuse(
-                                        hold_diffuse[0],
-                                        hold_diffuse[1],
-                                        hold_diffuse[2],
-                                        hold_diffuse[3]
-                                    ):
-                                    z(Z_HOLD_BODY)
+                                actors.push(actor_with_world_z(
+                                    act!(sprite(body_slot.texture_key_shared()):
+                                        align(0.5, 0.5):
+                                        xy(segment_center_x, segment_center_screen):
+                                        setsize(body_width, segment_size_screen):
+                                        rotationz(rotation):
+                                        customtexturerect(u0, v0, u1, v1):
+                                        diffuse(
+                                            hold_diffuse[0],
+                                            hold_diffuse[1],
+                                            hold_diffuse[2],
+                                            hold_diffuse[3] * segment_alpha
+                                        ):
+                                        z(Z_HOLD_BODY)
+                                    ),
+                                    segment_world_z,
                                 ));
 
                                 phase = next_phase;
@@ -2940,20 +3657,50 @@ pub fn build(
                     }
                     if cap_height > f32::EPSILON {
                         let cap_center = (cap_top + cap_bottom) * 0.5;
+                        let cap_travel = adjusted_travel_from_screen_y(
+                            local_col,
+                            lane_receptor_y,
+                            dir,
+                            cap_center,
+                        );
+                        let cap_alpha = note_alpha(
+                            cap_travel + tipsy_y_for_col(local_col),
+                            elapsed_screen,
+                            mini,
+                            appearance,
+                        );
+                        if cap_alpha <= f32::EPSILON {
+                            continue;
+                        }
+                        let cap_center_x = base_column_center_x
+                            + note_x_extra(
+                                local_col,
+                                cap_travel,
+                                elapsed_screen,
+                                beat_push,
+                                visual,
+                                &col_offsets[..num_cols],
+                                &invert_distances[..num_cols],
+                                &tornado_bounds[..num_cols],
+                            );
+                        let cap_world_z = world_z_for_adjusted_travel(cap_travel);
                         let cap_rotation = top_cap_rotation_deg(lane_reverse, body_flipped);
-                        actors.push(act!(sprite(cap_slot.texture_key_shared()):
-                            align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset, cap_center):
-                            setsize(cap_width, cap_height):
-                            customtexturerect(u0, v0, u1, v1):
-                            diffuse(
-                                hold_diffuse[0],
-                                hold_diffuse[1],
-                                hold_diffuse[2],
-                                hold_diffuse[3]
-                            ):
-                            rotationz(cap_rotation):
-                            z(Z_HOLD_CAP)
+                        actors.push(actor_with_world_z(
+                            act!(sprite(cap_slot.texture_key_shared()):
+                                align(0.5, 0.5):
+                                xy(cap_center_x, cap_center):
+                                setsize(cap_width, cap_height):
+                                customtexturerect(u0, v0, u1, v1):
+                                diffuse(
+                                    hold_diffuse[0],
+                                    hold_diffuse[1],
+                                    hold_diffuse[2],
+                                    hold_diffuse[3] * cap_alpha
+                                ):
+                                rotationz(cap_rotation):
+                                z(Z_HOLD_CAP)
+                            ),
+                            cap_world_z,
                         ));
                     }
                 }
@@ -3023,19 +3770,49 @@ pub fn build(
                     let cap_center = (draw_top + draw_bottom) * 0.5;
                     let cap_height = draw_height;
                     if cap_height > f32::EPSILON {
-                        actors.push(act!(sprite(cap_slot.texture_key_shared()):
-                            align(0.5, 0.5):
-                            xy(playfield_center_x + col_x_offset, cap_center):
-                            setsize(cap_width, cap_height):
-                            customtexturerect(u0, v0, u1, v1):
-                            diffuse(
-                                hold_diffuse[0],
-                                hold_diffuse[1],
-                                hold_diffuse[2],
-                                hold_diffuse[3]
-                            ):
-                            rotationz(0.0):
-                            z(Z_HOLD_CAP)
+                        let cap_travel = adjusted_travel_from_screen_y(
+                            local_col,
+                            lane_receptor_y,
+                            dir,
+                            cap_center,
+                        );
+                        let cap_alpha = note_alpha(
+                            cap_travel + tipsy_y_for_col(local_col),
+                            elapsed_screen,
+                            mini,
+                            appearance,
+                        );
+                        if cap_alpha <= f32::EPSILON {
+                            continue;
+                        }
+                        let cap_center_x = base_column_center_x
+                            + note_x_extra(
+                                local_col,
+                                cap_travel,
+                                elapsed_screen,
+                                beat_push,
+                                visual,
+                                &col_offsets[..num_cols],
+                                &invert_distances[..num_cols],
+                                &tornado_bounds[..num_cols],
+                            );
+                        let cap_world_z = world_z_for_adjusted_travel(cap_travel);
+                        actors.push(actor_with_world_z(
+                            act!(sprite(cap_slot.texture_key_shared()):
+                                align(0.5, 0.5):
+                                xy(cap_center_x, cap_center):
+                                setsize(cap_width, cap_height):
+                                customtexturerect(u0, v0, u1, v1):
+                                diffuse(
+                                    hold_diffuse[0],
+                                    hold_diffuse[1],
+                                    hold_diffuse[2],
+                                    hold_diffuse[3] * cap_alpha
+                                ):
+                                rotationz(0.0):
+                                z(Z_HOLD_CAP)
+                            ),
+                            cap_world_z,
                         ));
                     }
                 }
@@ -3047,11 +3824,19 @@ pub fn build(
                 && head_draw_delta >= -draw_distance_after_targets
                 && head_draw_delta <= draw_distance_before_targets
             {
-                let head_alpha = 1.0;
-                let hold_head_rot =
-                    calc_note_rotation_z(visual_mask, note.beat, current_beat, true);
+                let head_alpha = alpha_for_travel(local_col, head_anchor_travel);
+                if head_alpha <= f32::EPSILON {
+                    continue;
+                }
+                let hold_head_rot = calc_note_rotation_z(visual, note.beat, current_beat, true);
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
-                let head_center = [playfield_center_x + col_x_offset, head_draw_y];
+                let head_center_x = if (head_draw_y - lane_receptor_y).abs() <= 0.5 {
+                    base_column_center_x
+                } else {
+                    lane_center_x_from_travel(local_col, head_anchor_travel)
+                };
+                let head_center = [head_center_x, head_draw_y];
+                let head_world_z = world_z_for_raw_travel(head_anchor_travel);
                 let elapsed = state.total_elapsed_in_screen;
                 let head_slot = if use_active {
                     visuals
@@ -3135,11 +3920,11 @@ pub fn build(
                         Z_TAP_NOTE as i16,
                         &mut model_cache,
                     ) {
-                        actors.push(model_actor);
+                        actors.push(actor_with_world_z(model_actor, head_world_z));
                     } else if draw.blend_add {
                         let sprite_center =
                             offset_center(head_center, local_offset, local_offset_rot_sin_cos);
-                        actors.push(
+                        actors.push(actor_with_world_z(
                             act!(sprite(head_slot.texture_key_shared()):
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
@@ -3150,11 +3935,12 @@ pub fn build(
                                 blend(add):
                                 z(Z_TAP_NOTE)
                             ),
-                        );
+                            head_world_z,
+                        ));
                     } else {
                         let sprite_center =
                             offset_center(head_center, local_offset, local_offset_rot_sin_cos);
-                        actors.push(
+                        actors.push(actor_with_world_z(
                             act!(sprite(head_slot.texture_key_shared()):
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
@@ -3165,7 +3951,8 @@ pub fn build(
                                 blend(normal):
                                 z(Z_TAP_NOTE)
                             ),
-                        );
+                            head_world_z,
+                        ));
                     }
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let primary_h = note_slots.first().map(note_scale_height).unwrap_or(1.0);
@@ -3234,11 +4021,11 @@ pub fn build(
                             layer_z as i16,
                             &mut model_cache,
                         ) {
-                            actors.push(model_actor);
+                            actors.push(actor_with_world_z(model_actor, head_world_z));
                         } else if draw.blend_add {
                             let sprite_center =
                                 offset_center(head_center, local_offset, local_offset_rot_sin_cos);
-                            actors.push(
+                            actors.push(actor_with_world_z(
                                 act!(sprite(note_slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
@@ -3249,11 +4036,12 @@ pub fn build(
                                     blend(add):
                                     z(layer_z)
                                 ),
-                            );
+                                head_world_z,
+                            ));
                         } else {
                             let sprite_center =
                                 offset_center(head_center, local_offset, local_offset_rot_sin_cos);
-                            actors.push(
+                            actors.push(actor_with_world_z(
                                 act!(sprite(note_slot.texture_key_shared()):
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
@@ -3264,7 +4052,8 @@ pub fn build(
                                     blend(normal):
                                     z(layer_z)
                                 ),
-                            );
+                                head_world_z,
+                            ));
                         }
                     }
                 } else if let Some(note_slot) = ns.notes.get(note_idx) {
@@ -3297,21 +4086,24 @@ pub fn build(
                         Z_TAP_NOTE as i16,
                         &mut model_cache,
                     ) {
-                        actors.push(model_actor);
+                        actors.push(actor_with_world_z(model_actor, head_world_z));
                     } else {
-                        actors.push(act!(sprite(note_slot.texture_key_shared()):
-                            align(0.5, 0.5):
-                            xy(head_center[0], head_center[1]):
-                            setsize(size[0], size[1]):
-                            rotationz(-note_slot.def.rotation_deg as f32 + hold_head_rot):
-                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                            diffuse(
-                                hold_diffuse[0],
-                                hold_diffuse[1],
-                                hold_diffuse[2],
-                                hold_diffuse[3] * head_alpha
-                            ):
-                            z(Z_TAP_NOTE)
+                        actors.push(actor_with_world_z(
+                            act!(sprite(note_slot.texture_key_shared()):
+                                align(0.5, 0.5):
+                                xy(head_center[0], head_center[1]):
+                                setsize(size[0], size[1]):
+                                rotationz(-note_slot.def.rotation_deg as f32 + hold_head_rot):
+                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                diffuse(
+                                    hold_diffuse[0],
+                                    hold_diffuse[1],
+                                    hold_diffuse[2],
+                                    hold_diffuse[3] * head_alpha
+                                ):
+                                z(Z_TAP_NOTE)
+                            ),
+                            head_world_z,
                         ));
                     }
                 }
@@ -3329,8 +4121,6 @@ pub fn build(
             let column_arrows = &state.arrows[col];
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
-            let col_x_offset = ns.column_xs[col_idx] as f32 * field_zoom;
-            let column_center_x = playfield_center_x + col_x_offset;
             let fill_slot = ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
             let fill_gradient_slot = ns
                 .mine_fill_slots
@@ -3338,7 +4128,7 @@ pub fn build(
                 .and_then(|slot| slot.as_ref());
             let frame_slot = ns.mine_frames.get(col_idx).and_then(|slot| slot.as_ref());
             for arrow in column_arrows {
-                let travel_offset = match scroll_speed {
+                let raw_travel_offset = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                         let note_time_chart =
@@ -3357,18 +4147,24 @@ pub fn build(
                             * beatmod_multiplier
                     }
                 };
-                let y_pos = lane_y_from_travel(col_idx, receptor_y_lane, dir, travel_offset);
-                let delta = (y_pos - receptor_y_lane) * dir;
+                let travel_offset = adjusted_travel_offset(raw_travel_offset);
+                let y_pos = lane_y_from_travel(col_idx, receptor_y_lane, dir, raw_travel_offset);
+                let delta = travel_offset;
                 if delta < -draw_distance_after_targets || delta > draw_distance_before_targets {
                     continue;
                 }
-                let note_alpha = 1.0;
                 if matches!(arrow.note_type, NoteType::Hold | NoteType::Roll) {
                     continue;
                 }
                 // `state.arrows` stores indices produced from `state.notes`, so these are in-bounds.
                 let note = unsafe { state.notes.get_unchecked(arrow.note_index) };
-                let note_rot = calc_note_rotation_z(visual_mask, note.beat, current_beat, false);
+                let note_alpha = alpha_for_travel(col_idx, raw_travel_offset);
+                if note_alpha <= f32::EPSILON {
+                    continue;
+                }
+                let column_center_x = lane_center_x_from_travel(col_idx, raw_travel_offset);
+                let note_world_z = world_z_for_adjusted_travel(travel_offset);
+                let note_rot = calc_note_rotation_z(visual, note.beat, current_beat, false);
                 if matches!(arrow.note_type, NoteType::Mine) {
                     if fill_slot.is_none() && frame_slot.is_none() {
                         continue;
@@ -3395,13 +4191,16 @@ pub fn build(
                             if width > 0.0 && height > 0.0 {
                                 let frame = gradient_slot.frame_index_from_phase(mine_fill_phase);
                                 let uv = gradient_slot.uv_for_frame_at(frame, elapsed);
-                                actors.push(act!(sprite(gradient_slot.texture_key_shared()):
-                                    align(0.5, 0.5):
-                                    xy(column_center_x, y_pos):
-                                    setsize(width, height):
-                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                    diffuse(1.0, 1.0, 1.0, note_alpha):
-                                    z(Z_TAP_NOTE - 2)
+                                actors.push(actor_with_world_z(
+                                    act!(sprite(gradient_slot.texture_key_shared()):
+                                        align(0.5, 0.5):
+                                        xy(column_center_x, y_pos):
+                                        setsize(width, height):
+                                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                        diffuse(1.0, 1.0, 1.0, note_alpha):
+                                        z(Z_TAP_NOTE - 2)
+                                    ),
+                                    note_world_z,
                                 ));
                             }
                         } else {
@@ -3445,16 +4244,19 @@ pub fn build(
                                     (Z_TAP_NOTE - 1) as i16,
                                     &mut model_cache,
                                 ) {
-                                    actors.push(model_actor);
+                                    actors.push(actor_with_world_z(model_actor, note_world_z));
                                 } else {
-                                    actors.push(act!(sprite(slot.texture_key_shared()):
-                                        align(0.5, 0.5):
-                                        xy(center[0], center[1]):
-                                        setsize(width, height):
-                                        rotationz(sprite_rotation):
-                                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                        diffuse(1.0, 1.0, 1.0, 0.9 * note_alpha):
-                                        z(Z_TAP_NOTE - 1)
+                                    actors.push(actor_with_world_z(
+                                        act!(sprite(slot.texture_key_shared()):
+                                            align(0.5, 0.5):
+                                            xy(center[0], center[1]):
+                                            setsize(width, height):
+                                            rotationz(sprite_rotation):
+                                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                            diffuse(1.0, 1.0, 1.0, 0.9 * note_alpha):
+                                            z(Z_TAP_NOTE - 1)
+                                        ),
+                                        note_world_z,
                                     ));
                                 }
                             }
@@ -3500,16 +4302,19 @@ pub fn build(
                             Z_TAP_NOTE as i16,
                             &mut model_cache,
                         ) {
-                            actors.push(model_actor);
+                            actors.push(actor_with_world_z(model_actor, note_world_z));
                         } else {
-                            actors.push(act!(sprite(slot.texture_key_shared()):
-                                align(0.5, 0.5):
-                                xy(center[0], center[1]):
-                                setsize(size[0], size[1]):
-                                rotationz(sprite_rotation):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(1.0, 1.0, 1.0, note_alpha):
-                                z(Z_TAP_NOTE)
+                            actors.push(actor_with_world_z(
+                                act!(sprite(slot.texture_key_shared()):
+                                    align(0.5, 0.5):
+                                    xy(center[0], center[1]):
+                                    setsize(size[0], size[1]):
+                                    rotationz(sprite_rotation):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(1.0, 1.0, 1.0, note_alpha):
+                                    z(Z_TAP_NOTE)
+                                ),
+                                note_world_z,
                             ));
                         }
                     }
@@ -3590,16 +4395,19 @@ pub fn build(
                             Z_TAP_NOTE as i16,
                             &mut model_cache,
                         ) {
-                            actors.push(model_actor);
+                            actors.push(actor_with_world_z(model_actor, note_world_z));
                         } else {
-                            actors.push(act!(sprite(head_slot.texture_key_shared()):
-                                align(0.5, 0.5):
-                                xy(center[0], center[1]):
-                                setsize(note_size[0], note_size[1]):
-                                rotationz(-head_slot.def.rotation_deg as f32 + note_rot):
-                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                                diffuse(1.0, 1.0, 1.0, note_alpha):
-                                z(Z_TAP_NOTE)
+                            actors.push(actor_with_world_z(
+                                act!(sprite(head_slot.texture_key_shared()):
+                                    align(0.5, 0.5):
+                                    xy(center[0], center[1]):
+                                    setsize(note_size[0], note_size[1]):
+                                    rotationz(-head_slot.def.rotation_deg as f32 + note_rot):
+                                    customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                    diffuse(1.0, 1.0, 1.0, note_alpha):
+                                    z(Z_TAP_NOTE)
+                                ),
+                                note_world_z,
                             ));
                         }
                         continue;
@@ -3682,31 +4490,37 @@ pub fn build(
                             layer_z as i16,
                             &mut model_cache,
                         ) {
-                            actors.push(model_actor);
+                            actors.push(actor_with_world_z(model_actor, note_world_z));
                         } else {
                             let sprite_center =
                                 offset_center(note_center, local_offset, local_offset_rot_sin_cos);
                             if draw.blend_add {
-                                actors.push(act!(sprite(note_slot.texture_key_shared()):
-                                    align(0.5, 0.5):
-                                    xy(sprite_center[0], sprite_center[1]):
-                                    setsize(note_size[0], note_size[1]):
-                                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
-                                    customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                                    diffuse(color[0], color[1], color[2], color[3]):
-                                    blend(add):
-                                    z(layer_z)
+                                actors.push(actor_with_world_z(
+                                    act!(sprite(note_slot.texture_key_shared()):
+                                        align(0.5, 0.5):
+                                        xy(sprite_center[0], sprite_center[1]):
+                                        setsize(note_size[0], note_size[1]):
+                                        rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
+                                        customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                        diffuse(color[0], color[1], color[2], color[3]):
+                                        blend(add):
+                                        z(layer_z)
+                                    ),
+                                    note_world_z,
                                 ));
                             } else {
-                                actors.push(act!(sprite(note_slot.texture_key_shared()):
-                                    align(0.5, 0.5):
-                                    xy(sprite_center[0], sprite_center[1]):
-                                    setsize(note_size[0], note_size[1]):
-                                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
-                                    customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                                    diffuse(color[0], color[1], color[2], color[3]):
-                                    blend(normal):
-                                    z(layer_z)
+                                actors.push(actor_with_world_z(
+                                    act!(sprite(note_slot.texture_key_shared()):
+                                        align(0.5, 0.5):
+                                        xy(sprite_center[0], sprite_center[1]):
+                                        setsize(note_size[0], note_size[1]):
+                                        rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
+                                        customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                        diffuse(color[0], color[1], color[2], color[3]):
+                                        blend(normal):
+                                        z(layer_z)
+                                    ),
+                                    note_world_z,
                                 ));
                             }
                         }
@@ -3739,16 +4553,19 @@ pub fn build(
                         Z_TAP_NOTE as i16,
                         &mut model_cache,
                     ) {
-                        actors.push(model_actor);
+                        actors.push(actor_with_world_z(model_actor, note_world_z));
                     } else {
-                        actors.push(act!(sprite(note_slot.texture_key_shared()):
-                            align(0.5, 0.5):
-                            xy(center[0], center[1]):
-                            setsize(note_size[0], note_size[1]):
-                            rotationz(-note_slot.def.rotation_deg as f32 + note_rot):
-                            customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                            diffuse(1.0, 1.0, 1.0, note_alpha):
-                            z(Z_TAP_NOTE)
+                        actors.push(actor_with_world_z(
+                            act!(sprite(note_slot.texture_key_shared()):
+                                align(0.5, 0.5):
+                                xy(center[0], center[1]):
+                                setsize(note_size[0], note_size[1]):
+                                rotationz(-note_slot.def.rotation_deg as f32 + note_rot):
+                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
+                                diffuse(1.0, 1.0, 1.0, note_alpha):
+                                z(Z_TAP_NOTE)
+                            ),
+                            note_world_z,
                         ));
                     }
                 }
@@ -3779,7 +4596,7 @@ pub fn build(
         };
 
         if alpha > 0.0 {
-            let mods_text = gameplay_mods_text(state.scroll_speed[player_idx], profile);
+            let mods_text = gameplay_mods_text(state, player_idx);
             if !mods_text.is_empty() {
                 let y = screen_height() * 0.25 * 1.3 + 15.0 + notefield_offset_y;
                 hud_actors.push(act!(text:
@@ -3796,7 +4613,11 @@ pub fn build(
     }
 
     // Combo Milestone Explosions (100 / 1000 combo)
-    if !profile.hide_combo && !profile.hide_combo_explosions && !p.combo_milestones.is_empty() {
+    if !blind_active
+        && !profile.hide_combo
+        && !profile.hide_combo_explosions
+        && !p.combo_milestones.is_empty()
+    {
         let combo_center_x = playfield_center_x;
         let combo_center_y = zmod_layout.combo_y;
         let player_color = state.player_color;
@@ -3886,7 +4707,7 @@ pub fn build(
         }
     }
     // Combo
-    if !profile.hide_combo {
+    if !blind_active && !profile.hide_combo {
         let combo_y = zmod_layout.combo_y;
         let combo_font_name = zmod_combo_font_name(profile.combo_font);
         if p.miss_combo >= SHOW_COMBO_AT {
@@ -4030,7 +4851,8 @@ pub fn build(
     };
 
     // zmod ExtraAesthetics: offset indicator text (ErrorMSDisplay).
-    if profile.error_ms_display
+    if !blind_active
+        && profile.error_ms_display
         && let Some(text) = p.offset_indicator_text
     {
         let age = elapsed_screen - text.started_at;
@@ -4054,7 +4876,7 @@ pub fn build(
     }
 
     // Error Bar (Simply Love parity)
-    if show_error_bar {
+    if !blind_active && show_error_bar {
         let mut styles = [profile::ErrorBarStyle::None; 4];
         let mut style_count = 0usize;
         if show_error_bar_colorful {
@@ -4669,7 +5491,7 @@ pub fn build(
     }
 
     // Judgment Sprite (tap judgments)
-    if let Some(render_info) = &p.last_judgment {
+    if !blind_active && let Some(render_info) = &p.last_judgment {
         if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
             // Player chose to hide tap judgment graphics.
             // Still keep life/score effects; only suppress the visual sprite.
@@ -4771,6 +5593,9 @@ pub fn build(
     }
     for i in 0..num_cols {
         let col = col_start + i;
+        if blind_active {
+            continue;
+        }
         let Some(render_info) = state.hold_judgments[col].as_ref() else {
             continue;
         };
@@ -4791,16 +5616,13 @@ pub fn build(
             HoldResult::LetGo => 1,
         } as u32;
         if let Some(texture) = hold_judgment_texture {
-            let dir = column_dirs[i];
-            let receptor_y_lane = column_receptor_ys[i];
-            let hold_judgment_y = if dir >= 0.0 {
-                // Non-reverse lane: match Simply Love's baseline offset below receptors.
-                receptor_y_lane + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
-            } else {
-                // Reverse lane: mirror around the receptor so the hold judgment
-                // appears just above the receptors instead of near screen center.
-                receptor_y_lane - HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR
-            };
+            let hold_judgment_y = sm_scale(
+                column_reverse_percent[i],
+                0.0,
+                1.0,
+                receptor_y_normal + HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR,
+                receptor_y_reverse - HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR,
+            );
             let column_offset = state.noteskin[player_idx]
                 .as_ref()
                 .and_then(|ns| ns.column_xs.get(i))
@@ -4817,10 +5639,9 @@ pub fn build(
         }
     }
 
-    let (tilt, skew) = profile.perspective.tilt_skew();
-    if (tilt != 0.0 || skew != 0.0) && !actors.is_empty() {
+    let (tilt, skew) = (perspective.tilt, perspective.skew);
+    if !actors.is_empty() {
         let center_y = 0.5 * (receptor_y_normal + receptor_y_reverse);
-        let reverse = column_dirs[0] < 0.0;
         if let Some(view_proj) = notefield_view_proj(
             screen_width(),
             screen_height(),
@@ -4828,7 +5649,7 @@ pub fn build(
             center_y,
             tilt,
             skew,
-            reverse,
+            reverse_scroll,
         ) {
             actors = vec![Actor::Camera {
                 view_proj,
@@ -4849,15 +5670,19 @@ pub fn build(
 #[cfg(test)]
 mod tests {
     use super::{
-        Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, bottom_cap_uv_window, clipped_hold_body_bounds,
-        hold_head_render_flags, hold_tail_cap_bounds, maybe_mirror_uv_horiz_for_reverse_flipped,
-        note_scale_height, offset_center, tap_part_for_note_type, top_cap_rotation_deg,
+        TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, append_mini_part,
+        append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
+        clipped_hold_body_bounds, hold_head_render_flags, hold_tail_cap_bounds, hud_y,
+        maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_scale_height, note_world_z,
+        note_x_extra, offset_center, push_transform_parts, tap_part_for_note_type,
+        top_cap_rotation_deg, turn_option_bits, turn_option_name,
     };
-    use crate::game::gameplay::ActiveHold;
+    use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::note::NoteType;
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
+    use crate::game::profile;
 
     #[test]
     fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
@@ -5040,6 +5865,134 @@ mod tests {
     fn bottom_cap_uv_window_rejects_degenerate_inputs() {
         assert_eq!(bottom_cap_uv_window(0.0, 1.0, 0.0, 24.0, false), None);
         assert_eq!(bottom_cap_uv_window(0.0, 1.0, 24.0, 0.0, false), None);
+    }
+
+    #[test]
+    fn blink_alpha_matches_itg_boolean_behavior() {
+        let partial = note_alpha(
+            100.0,
+            0.0,
+            0.0,
+            AppearanceEffects {
+                blink: 0.3,
+                ..AppearanceEffects::default()
+            },
+        );
+        let full = note_alpha(
+            100.0,
+            0.0,
+            0.0,
+            AppearanceEffects {
+                blink: 1.0,
+                ..AppearanceEffects::default()
+            },
+        );
+        assert!((partial - full).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn flip_note_x_extra_moves_to_mirrored_column() {
+        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
+        let invert = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        let delta = note_x_extra(
+            0,
+            64.0,
+            0.0,
+            0.0,
+            VisualEffects {
+                flip: 1.0,
+                ..VisualEffects::default()
+            },
+            &col_offsets,
+            &invert,
+            &tornado,
+        );
+        assert!((delta - 192.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn bumpy_world_z_matches_itg_default_wave() {
+        let z = note_world_z(
+            8.0 * std::f32::consts::PI,
+            VisualEffects {
+                bumpy: 1.0,
+                ..VisualEffects::default()
+            },
+        );
+        assert!((z - 40.0).abs() <= 1e-4);
+    }
+
+    #[test]
+    fn display_mods_mini_keeps_full_percent() {
+        let mut parts = Vec::new();
+        append_mini_part(&mut parts, 100);
+        assert_eq!(parts, vec!["100% Mini".to_string()]);
+    }
+
+    #[test]
+    fn display_mods_use_simply_love_turn_names() {
+        assert_eq!(
+            turn_option_name(profile::TurnOption::LRMirror),
+            Some("LR-Mirror")
+        );
+        assert_eq!(
+            turn_option_name(profile::TurnOption::UDMirror),
+            Some("UD-Mirror")
+        );
+    }
+
+    #[test]
+    fn display_mods_append_all_active_turns_in_itg_order() {
+        let mut parts = Vec::new();
+        append_turn_parts(
+            &mut parts,
+            turn_option_bits(profile::TurnOption::Mirror)
+                | turn_option_bits(profile::TurnOption::Random),
+        );
+        assert_eq!(parts, vec!["Mirror".to_string(), "Random".to_string()]);
+    }
+
+    #[test]
+    fn display_mods_transform_order_matches_itg() {
+        let mut parts = Vec::new();
+        push_transform_parts(
+            &mut parts,
+            (1 << 0) | (1 << 1) | (1 << 7),
+            (1 << 0) | (1 << 1),
+            1 << 3,
+        );
+        assert_eq!(
+            parts,
+            vec![
+                "NoRolls".to_string(),
+                "NoMines".to_string(),
+                "Little".to_string(),
+                "Wide".to_string(),
+                "Big".to_string(),
+                "Mines".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn display_mods_perspective_names_match_itg_rules() {
+        let mut parts = Vec::new();
+        append_perspective_parts(&mut parts, 0, 0);
+        assert_eq!(parts, vec!["Overhead".to_string()]);
+
+        let mut parts = Vec::new();
+        append_perspective_parts(&mut parts, -100, 100);
+        assert_eq!(parts, vec!["Incoming".to_string()]);
+    }
+
+    #[test]
+    fn hud_y_only_uses_reverse_branch_for_full_reverse() {
+        let normal_y = 100.0;
+        let reverse_y = 200.0;
+        let centered_y = 300.0;
+        assert!((hud_y(normal_y, reverse_y, centered_y, false, 0.3) - 160.0).abs() <= 1e-6);
+        assert!((hud_y(normal_y, reverse_y, centered_y, true, 0.3) - 230.0).abs() <= 1e-6);
     }
 
     #[test]

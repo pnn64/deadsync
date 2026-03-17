@@ -22,7 +22,8 @@ const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand 
 pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{
     TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION,
-    TRANSITION_OUT_FADE_DURATION, timing_tick_status_line, toggle_flash_text,
+    TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player, timing_tick_status_line,
+    toggle_flash_text,
 };
 
 thread_local! {
@@ -448,20 +449,49 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         state.player_color
     };
     // --- Background and Filter ---
-    let hide_song_bg = state
-        .player_profiles
-        .iter()
-        .take(state.num_players)
-        .any(|p| p.hide_song_bg);
-    if hide_song_bg {
-        actors.push(act!(quad:
-            align(0.0, 0.0): xy(0.0, 0.0):
-            zoomto(screen_width(), screen_height()):
-            diffuse(0.0, 0.0, 0.0, 1.0):
-            z(-100)
-        ));
+    actors.push(build_background(state, cfg.bg_brightness));
+    let cover_alpha = |player_idx: usize| -> f32 {
+        if player_idx >= state.num_players {
+            return 0.0;
+        }
+        let profile_cover = f32::from(state.player_profiles[player_idx].hide_song_bg);
+        profile_cover
+            .max(effective_visibility_effects_for_player(state, player_idx).cover)
+            .clamp(0.0, 1.0)
+    };
+    let left_cover = cover_alpha(0);
+    let right_cover = if state.num_players > 1 {
+        cover_alpha(1)
     } else {
-        actors.push(build_background(state, cfg.bg_brightness));
+        left_cover
+    };
+    let sw = screen_width();
+    let sh = screen_height();
+    let cx = screen_center_x();
+    if left_cover > 0.0 || right_cover > 0.0 {
+        if (left_cover - right_cover).abs() <= 0.001 {
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(0.0, 0.0):
+                zoomto(sw, sh):
+                diffuse(0.0, 0.0, 0.0, left_cover.max(right_cover)):
+                z(-99)
+            ));
+        } else {
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(0.0, 0.0):
+                zoomto(cx, sh):
+                faderight(0.1):
+                diffuse(0.0, 0.0, 0.0, left_cover):
+                z(-99)
+            ));
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(cx, 0.0):
+                zoomto(sw - cx, sh):
+                fadeleft(0.1):
+                diffuse(0.0, 0.0, 0.0, right_cover):
+                z(-99)
+            ));
+        }
     }
 
     // ITGmania/Simply Love parity: ScreenSyncOverlay status text.

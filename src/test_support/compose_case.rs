@@ -796,6 +796,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             state_delay,
             scale,
             effect,
+            ..
         } => ActorSnapshot::Sprite {
             align: *align,
             offset: *offset,
@@ -907,6 +908,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             visible,
             blend,
             z,
+            ..
         } => ActorSnapshot::TexturedMesh {
             align: *align,
             offset: *offset,
@@ -991,6 +993,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
         } => Actor::Sprite {
             align: *align,
             offset: *offset,
+            world_z: 0.0,
             size: size.map(SizeSpec::from),
             source: SpriteSource::from(source),
             tint: *tint,
@@ -1104,6 +1107,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
         } => Actor::TexturedMesh {
             align: *align,
             offset: *offset,
+            world_z: 0.0,
             size: size.map(SizeSpec::from),
             texture: Arc::from(texture.as_str()),
             vertices: Arc::from(vertices.clone()),

@@ -40,16 +40,16 @@ struct ProjPush {
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct InstanceData {
-    // 88 bytes total
-    center: [f32; 2],                   // offset 0
-    size: [f32; 2],                     // offset 8
-    rot_sin_cos: [f32; 2],              // offset 16  (sin, cos)
-    tint: [f32; 4],                     // offset 24
-    uv_scale: [f32; 2],                 // offset 40
-    uv_offset: [f32; 2],                // offset 48
-    local_offset: [f32; 2],             // offset 56
-    local_offset_rot_sin_cos: [f32; 2], // offset 64
-    edge_fade: [f32; 4],                // offset 72
+    // 96 bytes total
+    center: [f32; 4],                   // offset 0
+    size: [f32; 2],                     // offset 16
+    rot_sin_cos: [f32; 2],              // offset 24  (sin, cos)
+    tint: [f32; 4],                     // offset 32
+    uv_scale: [f32; 2],                 // offset 48
+    uv_offset: [f32; 2],                // offset 56
+    local_offset: [f32; 2],             // offset 64
+    local_offset_rot_sin_cos: [f32; 2], // offset 72
+    edge_fade: [f32; 4],                // offset 80
 }
 
 #[repr(C)]
@@ -1348,8 +1348,8 @@ pub fn draw(
     stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
     #[inline(always)]
-    fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-        let center = [m[3][0], m[3][1]];
+    fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 4], [f32; 2], [f32; 2]) {
+        let center = [m[3][0], m[3][1], m[3][2], 0.0];
         let c0 = [m[0][0], m[0][1]];
         let c1 = [m[1][0], m[1][1]];
         let sx = c0[0].hypot(c0[1]).max(1e-12);
@@ -2505,48 +2505,48 @@ fn vertex_input_descriptions_textured_instanced() -> (
     let i_center = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(2)
-        .format(vk::Format::R32G32_SFLOAT)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(0);
     let i_size = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(3)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(8);
+        .offset(16);
     let i_rot = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(4)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(16);
+        .offset(24);
     let i_tint = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(5)
         .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(24);
+        .offset(32);
     let i_uvs = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(6)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(40);
+        .offset(48);
     let i_uvo = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(7)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(48);
+        .offset(56);
     let i_local_offset = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(8)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(56);
+        .offset(64);
     let i_local_offset_rot = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(9)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(64);
+        .offset(72);
     let i_fade = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(10)
         .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(72);
+        .offset(80);
 
     (
         [b0, b1],

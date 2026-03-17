@@ -7,7 +7,7 @@ use std::collections::HashMap;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SpriteInstanceRaw {
-    pub center: [f32; 2],
+    pub center: [f32; 4],
     pub size: [f32; 2],
     pub rot_sin_cos: [f32; 2],
     pub tint: [f32; 4],
@@ -113,8 +113,8 @@ impl<Tex> GlScratch<Tex> {
 }
 
 #[inline(always)]
-pub fn decompose_2d(m: &Matrix4<f32>) -> ([f32; 2], [f32; 2], [f32; 2]) {
-    let center = [m.w.x, m.w.y];
+pub fn decompose_2d(m: &Matrix4<f32>) -> ([f32; 4], [f32; 2], [f32; 2]) {
+    let center = [m.w.x, m.w.y, m.w.z, 0.0];
     let c0 = [m.x.x, m.x.y];
     let c1 = [m.y.x, m.y.y];
     let sx = c0[0].hypot(c0[1]).max(1e-12);

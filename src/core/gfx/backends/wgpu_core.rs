@@ -67,7 +67,7 @@ struct Vertex {
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct InstanceRaw {
-    center: [f32; 2],
+    center: [f32; 4],
     size: [f32; 2],
     rot_sin_cos: [f32; 2],
     tint: [f32; 4],
@@ -864,8 +864,8 @@ pub fn update_texture(
 }
 
 #[inline(always)]
-fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-    let center = [m[3][0], m[3][1]];
+fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 4], [f32; 2], [f32; 2]) {
+    let center = [m[3][0], m[3][1], m[3][2], 0.0];
     let c0 = [m[0][0], m[0][1]];
     let c1 = [m[1][0], m[1][1]];
     let sx = c0[0].hypot(c0[1]).max(1e-12);
@@ -2232,7 +2232,7 @@ const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
-    2 => Float32x2, // center
+    2 => Float32x4, // center xyz + pad
     3 => Float32x2, // size
     4 => Float32x2, // sin/cos
     5 => Float32x4, // tint
