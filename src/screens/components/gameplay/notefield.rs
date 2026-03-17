@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::gfx::BlendMode;
+use crate::core::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::core::space::*;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
@@ -26,7 +26,7 @@ use crate::game::{
     scroll::ScrollSpeedSetting,
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
-use crate::ui::actors::Actor;
+use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
 use crate::ui::compose::TextLayoutCache;
 use crate::ui::font;
@@ -1045,6 +1045,105 @@ fn receptor_row_center(
             ),
         receptor_y_lane + tipsy_y_extra(local_col, elapsed, visual),
     ]
+}
+
+#[inline(always)]
+fn hold_segment_pose(top: [f32; 2], bottom: [f32; 2]) -> ([f32; 2], f32, f32) {
+    let dx = bottom[0] - top[0];
+    let dy = bottom[1] - top[1];
+    let length = dx.hypot(dy);
+    let rotation_deg = if length <= f32::EPSILON {
+        0.0
+    } else {
+        dx.atan2(dy).to_degrees()
+    };
+    (
+        [(top[0] + bottom[0]) * 0.5, (top[1] + bottom[1]) * 0.5],
+        length,
+        rotation_deg,
+    )
+}
+
+#[inline(always)]
+fn hold_strip_row(
+    center: [f32; 2],
+    forward: [f32; 2],
+    half_width: f32,
+    u0: f32,
+    u1: f32,
+    v: f32,
+    color: [f32; 4],
+) -> [TexturedMeshVertex; 2] {
+    let len = forward[0].hypot(forward[1]).max(f32::EPSILON);
+    let nx = -forward[1] / len * half_width;
+    let ny = forward[0] / len * half_width;
+    [
+        TexturedMeshVertex {
+            pos: [center[0] + nx, center[1] + ny],
+            uv: [u0, v],
+            tex_matrix_scale: [1.0, 1.0],
+            color,
+        },
+        TexturedMeshVertex {
+            pos: [center[0] - nx, center[1] - ny],
+            uv: [u1, v],
+            tex_matrix_scale: [1.0, 1.0],
+            color,
+        },
+    ]
+}
+
+#[inline(always)]
+fn hold_strip_row_from_positions(
+    left: [f32; 2],
+    right: [f32; 2],
+    u0: f32,
+    u1: f32,
+    v: f32,
+    color: [f32; 4],
+) -> [TexturedMeshVertex; 2] {
+    [
+        TexturedMeshVertex {
+            pos: left,
+            uv: [u0, v],
+            tex_matrix_scale: [1.0, 1.0],
+            color,
+        },
+        TexturedMeshVertex {
+            pos: right,
+            uv: [u1, v],
+            tex_matrix_scale: [1.0, 1.0],
+            color,
+        },
+    ]
+}
+
+#[inline(always)]
+fn push_hold_strip_quad(
+    out: &mut Vec<TexturedMeshVertex>,
+    top: [TexturedMeshVertex; 2],
+    bottom: [TexturedMeshVertex; 2],
+) {
+    out.extend_from_slice(&[top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]);
+}
+
+#[inline(always)]
+fn hold_strip_actor(texture: Arc<str>, vertices: Arc<[TexturedMeshVertex]>, z: i16) -> Actor {
+    Actor::TexturedMesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        world_z: 0.0,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        texture,
+        vertices,
+        mode: MeshMode::Triangles,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
+        visible: true,
+        blend: BlendMode::Alpha,
+        z,
+    }
 }
 
 #[inline(always)]
@@ -2536,6 +2635,20 @@ pub fn build(
                     &tornado_bounds[..num_cols],
                 )
         };
+        let lane_center_x_from_adjusted_travel = |local_col: usize, adjusted_travel: f32| -> f32 {
+            playfield_center_x
+                + col_offsets[local_col]
+                + note_x_extra(
+                    local_col,
+                    adjusted_travel,
+                    elapsed_screen,
+                    beat_push,
+                    visual,
+                    &col_offsets[..num_cols],
+                    &invert_distances[..num_cols],
+                    &tornado_bounds[..num_cols],
+                )
+        };
         let adjusted_travel_from_screen_y =
             |local_col: usize, receptor_y_lane: f32, dir: f32, y_pos: f32| -> f32 {
                 let dir = if dir.abs() <= 0.000_1 {
@@ -3367,8 +3480,6 @@ pub fn build(
             top = top.max(-400.0);
             bottom = bottom.min(screen_height() + 400.0);
             draw_body_or_cap &= bottom > top;
-            let base_column_center_x =
-                playfield_center_x + ns.column_xs[local_col] as f32 * field_zoom;
             let let_go_gray = ns.hold_let_go_gray_percent.clamp(0.0, 1.0);
             let hold_life = hold.life.clamp(0.0, 1.0);
             let hold_color_scale = let_go_gray + (1.0 - let_go_gray) * hold_life;
@@ -3480,6 +3591,7 @@ pub fn build(
             // body segments are visible.
             let mut rendered_body_top: Option<f32> = None;
             let mut rendered_body_bottom: Option<f32> = None;
+            let mut body_tail_row: Option<[[f32; 2]; 2]> = None;
             // ITG draws hold bodies from y_head to y_tail (top-to-bottom in screen space).
             // If noteskin offsets invert the interval for ultra-short holds, skip body draw
             // and rely on tail-cap clipping.
@@ -3528,6 +3640,14 @@ pub fn build(
                     let natural_bottom = y_tail;
                     let hold_length = natural_bottom - natural_top;
                     const SEGMENT_PHASE_EPS: f32 = 1e-4;
+                    let body_slice_step = if visual.bumpy > f32::EPSILON {
+                        4.0
+                    } else {
+                        16.0
+                    };
+                    let use_body_mesh = body_slot.model.is_none() && visual.bumpy <= f32::EPSILON;
+                    let mut body_mesh_vertices = use_body_mesh.then(|| Vec::with_capacity(96));
+                    let mut prev_body_row: Option<[TexturedMeshVertex; 2]> = None;
                     let max_segments = 2048;
                     'body_draw: {
                         if hold_length > f32::EPSILON {
@@ -3614,72 +3734,170 @@ pub fn build(
                                         v0 = v_bottom + v_range.abs() * portion;
                                     }
                                 }
-                                let segment_center_screen = (segment_top + segment_bottom) * 0.5;
-                                let segment_size_screen = segment_size;
-                                let seg_top_screen = segment_top;
-                                let seg_bottom_screen = segment_bottom;
-                                let segment_travel = adjusted_travel_from_screen_y(
-                                    local_col,
-                                    lane_receptor_y,
-                                    dir,
-                                    segment_center_screen,
-                                );
-                                let segment_alpha = note_alpha(
-                                    segment_travel + tipsy_y_for_col(local_col),
-                                    elapsed_screen,
-                                    mini,
-                                    appearance,
-                                );
-                                if segment_alpha <= f32::EPSILON {
-                                    phase = next_phase;
-                                    continue;
-                                }
-                                let segment_center_x = base_column_center_x
-                                    + note_x_extra(
+                                let mut slice_top = segment_top;
+                                while slice_top + f32::EPSILON < segment_bottom {
+                                    let slice_bottom =
+                                        (slice_top + body_slice_step).min(segment_bottom);
+                                    let slice_size = slice_bottom - slice_top;
+                                    if slice_size <= f32::EPSILON {
+                                        break;
+                                    }
+                                    let slice_t0 =
+                                        ((slice_top - segment_top) / segment_size).clamp(0.0, 1.0);
+                                    let slice_t1 = ((slice_bottom - segment_top) / segment_size)
+                                        .clamp(0.0, 1.0);
+                                    let slice_v0 = (v1 - v0).mul_add(slice_t0, v0);
+                                    let slice_v1 = (v1 - v0).mul_add(slice_t1, v0);
+                                    let slice_center_screen = (slice_top + slice_bottom) * 0.5;
+                                    let slice_center_travel = adjusted_travel_from_screen_y(
                                         local_col,
-                                        segment_travel,
-                                        elapsed_screen,
-                                        beat_push,
-                                        visual,
-                                        &col_offsets[..num_cols],
-                                        &invert_distances[..num_cols],
-                                        &tornado_bounds[..num_cols],
+                                        lane_receptor_y,
+                                        dir,
+                                        slice_center_screen,
                                     );
-                                let segment_world_z = world_z_for_adjusted_travel(segment_travel);
-                                let rotation = 0.0;
+                                    let slice_alpha = note_alpha(
+                                        slice_center_travel + tipsy_y_for_col(local_col),
+                                        elapsed_screen,
+                                        mini,
+                                        appearance,
+                                    );
+                                    if slice_alpha <= f32::EPSILON {
+                                        slice_top = slice_bottom;
+                                        continue;
+                                    }
+                                    let slice_top_travel = adjusted_travel_from_screen_y(
+                                        local_col,
+                                        lane_receptor_y,
+                                        dir,
+                                        slice_top,
+                                    );
+                                    let slice_bottom_travel = adjusted_travel_from_screen_y(
+                                        local_col,
+                                        lane_receptor_y,
+                                        dir,
+                                        slice_bottom,
+                                    );
+                                    let slice_top_x = lane_center_x_from_adjusted_travel(
+                                        local_col,
+                                        slice_top_travel,
+                                    );
+                                    let slice_bottom_x = lane_center_x_from_adjusted_travel(
+                                        local_col,
+                                        slice_bottom_travel,
+                                    );
+                                    let (slice_center, slice_height, slice_rotation) =
+                                        hold_segment_pose(
+                                            [slice_top_x, slice_top],
+                                            [slice_bottom_x, slice_bottom],
+                                        );
+                                    if slice_height <= f32::EPSILON {
+                                        slice_top = slice_bottom;
+                                        continue;
+                                    }
+                                    let slice_world_z =
+                                        world_z_for_adjusted_travel(slice_center_travel);
 
-                                // Track rendered bounds in screen space
-                                rendered_body_top = Some(match rendered_body_top {
-                                    None => seg_top_screen,
-                                    Some(v) => v.min(seg_top_screen),
-                                });
-                                rendered_body_bottom = Some(match rendered_body_bottom {
-                                    None => seg_bottom_screen,
-                                    Some(v) => v.max(seg_bottom_screen),
-                                });
+                                    // ITG DrawHoldPart samples hold strips every 16px
+                                    // (or 4px for z-buffered bumpy parts), not once per
+                                    // texture repeat. Keep body slices tangent to the lane
+                                    // so Drunk/Tornado/Beat don't expose tile seams.
+                                    rendered_body_top = Some(match rendered_body_top {
+                                        None => slice_top,
+                                        Some(v) => v.min(slice_top),
+                                    });
+                                    rendered_body_bottom = Some(match rendered_body_bottom {
+                                        None => slice_bottom,
+                                        Some(v) => v.max(slice_bottom),
+                                    });
 
-                                actors.push(actor_with_world_z(
-                                    act!(sprite(body_slot.texture_key_shared()):
-                                        align(0.5, 0.5):
-                                        xy(segment_center_x, segment_center_screen):
-                                        setsize(body_width, segment_size_screen):
-                                        rotationz(rotation):
-                                        customtexturerect(u0, v0, u1, v1):
-                                        diffuse(
-                                            hold_diffuse[0],
-                                            hold_diffuse[1],
-                                            hold_diffuse[2],
-                                            hold_diffuse[3] * segment_alpha
-                                        ):
-                                        z(Z_HOLD_BODY)
-                                    ),
-                                    segment_world_z,
-                                ));
+                                    if let Some(mesh_vertices) = body_mesh_vertices.as_mut() {
+                                        let top_alpha = note_alpha(
+                                            slice_top_travel + tipsy_y_for_col(local_col),
+                                            elapsed_screen,
+                                            mini,
+                                            appearance,
+                                        );
+                                        let bottom_alpha = note_alpha(
+                                            slice_bottom_travel + tipsy_y_for_col(local_col),
+                                            elapsed_screen,
+                                            mini,
+                                            appearance,
+                                        );
+                                        let slice_forward = [
+                                            slice_bottom_x - slice_top_x,
+                                            slice_bottom - slice_top,
+                                        ];
+                                        let half_width = body_width * 0.5;
+                                        let top_row = prev_body_row.unwrap_or_else(|| {
+                                            hold_strip_row(
+                                                [slice_top_x, slice_top],
+                                                slice_forward,
+                                                half_width,
+                                                u0,
+                                                u1,
+                                                slice_v0,
+                                                [
+                                                    hold_diffuse[0],
+                                                    hold_diffuse[1],
+                                                    hold_diffuse[2],
+                                                    hold_diffuse[3] * top_alpha,
+                                                ],
+                                            )
+                                        });
+                                        let bottom_row = hold_strip_row(
+                                            [slice_bottom_x, slice_bottom],
+                                            slice_forward,
+                                            half_width,
+                                            u0,
+                                            u1,
+                                            slice_v1,
+                                            [
+                                                hold_diffuse[0],
+                                                hold_diffuse[1],
+                                                hold_diffuse[2],
+                                                hold_diffuse[3] * bottom_alpha,
+                                            ],
+                                        );
+                                        push_hold_strip_quad(mesh_vertices, top_row, bottom_row);
+                                        body_tail_row =
+                                            Some([bottom_row[0].pos, bottom_row[1].pos]);
+                                        prev_body_row = Some(bottom_row);
+                                    } else {
+                                        actors.push(actor_with_world_z(
+                                            act!(sprite(body_slot.texture_key_shared()):
+                                                align(0.5, 0.5):
+                                                xy(slice_center[0], slice_center[1]):
+                                                setsize(body_width, slice_height):
+                                                rotationz(slice_rotation):
+                                                customtexturerect(u0, slice_v0, u1, slice_v1):
+                                                diffuse(
+                                                    hold_diffuse[0],
+                                                    hold_diffuse[1],
+                                                    hold_diffuse[2],
+                                                    hold_diffuse[3] * slice_alpha
+                                                ):
+                                                z(Z_HOLD_BODY)
+                                            ),
+                                            slice_world_z,
+                                        ));
+                                    }
+                                    slice_top = slice_bottom;
+                                }
 
+                                prev_body_row = None;
                                 phase = next_phase;
                                 emitted += 1;
                             }
                         }
+                    }
+                    if let Some(vertices) = body_mesh_vertices
+                        && !vertices.is_empty()
+                    {
+                        actors.push(hold_strip_actor(
+                            body_slot.texture_key_shared(),
+                            Arc::from(vertices),
+                            Z_HOLD_BODY as i16,
+                        ));
                     }
                 }
             }
@@ -3729,14 +3947,14 @@ pub fn build(
                     }
                     if cap_height > f32::EPSILON {
                         let cap_center = (cap_top + cap_bottom) * 0.5;
-                        let cap_travel = adjusted_travel_from_screen_y(
+                        let cap_center_travel = adjusted_travel_from_screen_y(
                             local_col,
                             lane_receptor_y,
                             dir,
                             cap_center,
                         );
                         let cap_alpha = note_alpha(
-                            cap_travel + tipsy_y_for_col(local_col),
+                            cap_center_travel + tipsy_y_for_col(local_col),
                             elapsed_screen,
                             mini,
                             appearance,
@@ -3744,24 +3962,31 @@ pub fn build(
                         if cap_alpha <= f32::EPSILON {
                             continue;
                         }
-                        let cap_center_x = base_column_center_x
-                            + note_x_extra(
-                                local_col,
-                                cap_travel,
-                                elapsed_screen,
-                                beat_push,
-                                visual,
-                                &col_offsets[..num_cols],
-                                &invert_distances[..num_cols],
-                                &tornado_bounds[..num_cols],
-                            );
-                        let cap_world_z = world_z_for_adjusted_travel(cap_travel);
-                        let cap_rotation = top_cap_rotation_deg(lane_reverse, body_flipped);
+                        let cap_top_travel =
+                            adjusted_travel_from_screen_y(local_col, lane_receptor_y, dir, cap_top);
+                        let cap_bottom_travel = adjusted_travel_from_screen_y(
+                            local_col,
+                            lane_receptor_y,
+                            dir,
+                            cap_bottom,
+                        );
+                        let cap_top_x =
+                            lane_center_x_from_adjusted_travel(local_col, cap_top_travel);
+                        let cap_bottom_x =
+                            lane_center_x_from_adjusted_travel(local_col, cap_bottom_travel);
+                        let (cap_center_xy, cap_draw_height, cap_path_rotation) =
+                            hold_segment_pose([cap_top_x, cap_top], [cap_bottom_x, cap_bottom]);
+                        if cap_draw_height <= f32::EPSILON {
+                            continue;
+                        }
+                        let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
+                        let cap_rotation =
+                            cap_path_rotation + top_cap_rotation_deg(lane_reverse, body_flipped);
                         actors.push(actor_with_world_z(
                             act!(sprite(cap_slot.texture_key_shared()):
                                 align(0.5, 0.5):
-                                xy(cap_center_x, cap_center):
-                                setsize(cap_width, cap_height):
+                                xy(cap_center_xy[0], cap_center_xy[1]):
+                                setsize(cap_width, cap_draw_height):
                                 customtexturerect(u0, v0, u1, v1):
                                 diffuse(
                                     hold_diffuse[0],
@@ -3840,16 +4065,15 @@ pub fn build(
                         continue;
                     };
                     let cap_center = (draw_top + draw_bottom) * 0.5;
-                    let cap_height = draw_height;
-                    if cap_height > f32::EPSILON {
-                        let cap_travel = adjusted_travel_from_screen_y(
+                    if draw_height > f32::EPSILON {
+                        let cap_center_travel = adjusted_travel_from_screen_y(
                             local_col,
                             lane_receptor_y,
                             dir,
                             cap_center,
                         );
                         let cap_alpha = note_alpha(
-                            cap_travel + tipsy_y_for_col(local_col),
+                            cap_center_travel + tipsy_y_for_col(local_col),
                             elapsed_screen,
                             mini,
                             appearance,
@@ -3857,35 +4081,115 @@ pub fn build(
                         if cap_alpha <= f32::EPSILON {
                             continue;
                         }
-                        let cap_center_x = base_column_center_x
-                            + note_x_extra(
-                                local_col,
-                                cap_travel,
+                        let cap_top_travel = adjusted_travel_from_screen_y(
+                            local_col,
+                            lane_receptor_y,
+                            dir,
+                            draw_top,
+                        );
+                        let cap_bottom_travel = adjusted_travel_from_screen_y(
+                            local_col,
+                            lane_receptor_y,
+                            dir,
+                            draw_bottom,
+                        );
+                        let cap_top_x =
+                            lane_center_x_from_adjusted_travel(local_col, cap_top_travel);
+                        let cap_bottom_x =
+                            lane_center_x_from_adjusted_travel(local_col, cap_bottom_travel);
+                        let (cap_center_xy, cap_draw_height, cap_rotation) =
+                            hold_segment_pose([cap_top_x, draw_top], [cap_bottom_x, draw_bottom]);
+                        if cap_draw_height <= f32::EPSILON {
+                            continue;
+                        }
+                        let use_bottom_cap_mesh =
+                            cap_slot.model.is_none() && visual.bumpy <= f32::EPSILON;
+                        if use_bottom_cap_mesh {
+                            let top_alpha = note_alpha(
+                                cap_top_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
-                                beat_push,
-                                visual,
-                                &col_offsets[..num_cols],
-                                &invert_distances[..num_cols],
-                                &tornado_bounds[..num_cols],
+                                mini,
+                                appearance,
                             );
-                        let cap_world_z = world_z_for_adjusted_travel(cap_travel);
-                        actors.push(actor_with_world_z(
-                            act!(sprite(cap_slot.texture_key_shared()):
-                                align(0.5, 0.5):
-                                xy(cap_center_x, cap_center):
-                                setsize(cap_width, cap_height):
-                                customtexturerect(u0, v0, u1, v1):
-                                diffuse(
+                            let bottom_alpha = note_alpha(
+                                cap_bottom_travel + tipsy_y_for_col(local_col),
+                                elapsed_screen,
+                                mini,
+                                appearance,
+                            );
+                            let cap_forward = [cap_bottom_x - cap_top_x, draw_bottom - draw_top];
+                            let half_width = cap_width * 0.5;
+                            let top_row = if let Some(body_tail_row) = body_tail_row {
+                                hold_strip_row_from_positions(
+                                    body_tail_row[0],
+                                    body_tail_row[1],
+                                    u0,
+                                    u1,
+                                    v0,
+                                    [
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3] * top_alpha,
+                                    ],
+                                )
+                            } else {
+                                hold_strip_row(
+                                    [cap_top_x, draw_top],
+                                    cap_forward,
+                                    half_width,
+                                    u0,
+                                    u1,
+                                    v0,
+                                    [
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3] * top_alpha,
+                                    ],
+                                )
+                            };
+                            let bottom_row = hold_strip_row(
+                                [cap_bottom_x, draw_bottom],
+                                cap_forward,
+                                half_width,
+                                u0,
+                                u1,
+                                v1,
+                                [
                                     hold_diffuse[0],
                                     hold_diffuse[1],
                                     hold_diffuse[2],
-                                    hold_diffuse[3] * cap_alpha
-                                ):
-                                rotationz(0.0):
-                                z(Z_HOLD_CAP)
-                            ),
-                            cap_world_z,
-                        ));
+                                    hold_diffuse[3] * bottom_alpha,
+                                ],
+                            );
+                            let mut cap_vertices = Vec::with_capacity(6);
+                            push_hold_strip_quad(&mut cap_vertices, top_row, bottom_row);
+                            actors.push(hold_strip_actor(
+                                cap_slot.texture_key_shared(),
+                                Arc::from(cap_vertices),
+                                Z_HOLD_CAP as i16,
+                            ));
+                        } else {
+                            let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
+                            actors.push(actor_with_world_z(
+                                act!(sprite(cap_slot.texture_key_shared()):
+                                    align(0.5, 0.5):
+                                    xy(cap_center_xy[0], cap_center_xy[1]):
+                                    setsize(cap_width, cap_draw_height):
+                                    customtexturerect(u0, v0, u1, v1):
+                                    diffuse(
+                                        hold_diffuse[0],
+                                        hold_diffuse[1],
+                                        hold_diffuse[2],
+                                        hold_diffuse[3] * cap_alpha
+                                    ):
+                                    rotationz(cap_rotation):
+                                    z(Z_HOLD_CAP)
+                                ),
+                                cap_world_z,
+                            ));
+                        }
                     }
                 }
             }
@@ -5744,9 +6048,9 @@ mod tests {
     use super::{
         TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, append_mini_part,
         append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
-        clipped_hold_body_bounds, hold_head_render_flags, hold_tail_cap_bounds, hud_y,
-        maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_scale_height, note_world_z,
-        note_x_extra, offset_center, push_transform_parts, receptor_row_center,
+        clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
+        hud_y, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_scale_height,
+        note_world_z, note_x_extra, offset_center, push_transform_parts, receptor_row_center,
         tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits,
         turn_option_name,
     };
@@ -5994,6 +6298,22 @@ mod tests {
             },
         );
         assert!((z - 40.0).abs() <= 1e-4);
+    }
+
+    #[test]
+    fn hold_segment_pose_keeps_vertical_segments_unrotated() {
+        let (center, length, rotation) = hold_segment_pose([32.0, 100.0], [32.0, 180.0]);
+        assert_eq!(center, [32.0, 140.0]);
+        assert!((length - 80.0).abs() <= 1e-6);
+        assert!(rotation.abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hold_segment_pose_uses_diagonal_length_and_rotation() {
+        let (center, length, rotation) = hold_segment_pose([0.0, 0.0], [30.0, 40.0]);
+        assert_eq!(center, [15.0, 20.0]);
+        assert!((length - 50.0).abs() <= 1e-6);
+        assert!((rotation - 36.869_896).abs() <= 1e-5);
     }
 
     #[test]
