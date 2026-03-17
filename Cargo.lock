@@ -964,7 +964,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "deadsync"
-version = "0.3.22"
+version = "0.3.23"
 dependencies = [
  "alsa",
  "ash",
@@ -1004,7 +1004,7 @@ dependencies = [
  "qrcodegen",
  "rand 0.10.0",
  "raw-window-handle",
- "rssp",
+ "rssp 0.3.60",
  "rubato",
  "serde",
  "serde_json",
@@ -2324,7 +2324,7 @@ dependencies = [
  "lewton",
  "md5",
  "png",
- "rssp",
+ "rssp 0.3.59",
  "rustfft",
  "serde",
  "serde_json",
@@ -3476,6 +3476,15 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 name = "rssp"
 version = "0.3.59"
 source = "git+https://github.com/pnn64/rssp?rev=302a0fb#302a0fb87ed43f39f0bc09c0498f38963bd92061"
+dependencies = [
+ "png",
+ "serde_json",
+]
+
+[[package]]
+name = "rssp"
+version = "0.3.60"
+source = "git+https://github.com/pnn64/rssp?rev=fa18b15#fa18b15f6013a45f52da8844362077948bb69829"
 dependencies = [
  "png",
  "serde_json",

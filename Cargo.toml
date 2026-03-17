@@ -32,8 +32,8 @@ qrcodegen = "1.8.0"
 mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
 
 # rssp and nod
-rssp = { git = "https://github.com/pnn64/rssp", rev = "302a0fb" }
-nod = { git = "https://github.com/pnn64/nod", rev = "19cd27b" }
+rssp = { git = "https://github.com/pnn64/rssp", rev = "fa18b15" }
+nod = { git = "https://github.com/pnn64/nod", rev = "4a8d6a7" }
 
 # Software renderer
 softbuffer = "0.4.8"
