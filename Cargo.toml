@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.18"
+version = "0.3.19"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -49,8 +49,10 @@ pollster = "0.4.0"
 
 # Audio
 lewton = "0.10.2"
+ogg = "0.8.0"
 minimp3 = "0.6.1"
 claxon = "0.4.3"
+opusic-c = "1.5.4"
 rubato = "0.16.2"
 memmap2 = "0.9.10"
 
@@ -81,15 +83,11 @@ windows = { version = "0.62.2", features = [
     "Win32_Devices_Display",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_System_Kernel",
-    "Win32_System_Memory",
     "Win32_System_Performance",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell_PropertiesSystem",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Threading",
-    "Win32_Storage_FileSystem",
     "Win32_System_LibraryLoader",
     "Win32_System_Variant",
     "Win32_System_WinRT",
