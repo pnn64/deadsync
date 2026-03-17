@@ -4,6 +4,7 @@ use crate::core::gfx::{BlendMode, MeshMode};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
+use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::ui::actors::{Actor, SizeSpec};
@@ -401,35 +402,20 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 fn build_background(state: &State, bg_brightness: f32) -> Actor {
     let sw = screen_width();
     let sh = screen_height();
-    let screen_aspect = if sh > 0.0 { sw / sh } else { 16.0 / 9.0 };
     let bg_brightness = bg_brightness.clamp(0.0, 1.0);
-
-    let (tex_w, tex_h) =
-        if let Some(meta) = crate::assets::texture_dims(&state.background_texture_key) {
-            (meta.w as f32, meta.h as f32)
-        } else {
-            (1.0, 1.0) // fallback, will just fill screen
-        };
-
-    let tex_aspect = if tex_h > 0.0 { tex_w / tex_h } else { 1.0 };
-
-    if screen_aspect > tex_aspect {
-        // screen is wider, match width to cover
-        act!(sprite(state.background_texture_key.clone()):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoomtowidth(sw):
-            diffuse(bg_brightness, bg_brightness, bg_brightness, 1.0):
-            z(-100)
-        )
-    } else {
-        // screen is taller/equal, match height to cover
-        act!(sprite(state.background_texture_key.clone()):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoomtoheight(sh):
-            diffuse(bg_brightness, bg_brightness, bg_brightness, 1.0):
-            z(-100)
-        )
+    let mut actor = shared_banner::cover_sprite(
+        state.background_texture_key.clone(),
+        screen_center_x(),
+        screen_center_y(),
+        sw,
+        sh,
+        1.0,
+        -100,
+    );
+    if let Actor::Sprite { tint, .. } = &mut actor {
+        *tint = [bg_brightness, bg_brightness, bg_brightness, 1.0];
     }
+    actor
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
