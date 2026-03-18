@@ -251,14 +251,8 @@ struct RawKeyboardRing {
 }
 
 #[cfg(windows)]
-// SAFETY: `RawKeyboardRing` is a single-producer/single-consumer ring. Slot
-// ownership is synchronized with the `head`/`tail` atomics, so moving the ring
-// between threads does not create unsynchronized aliasing of initialized items.
 unsafe impl Send for RawKeyboardRing {}
 #[cfg(windows)]
-// SAFETY: readers and writers coordinate exclusively through atomics and only
-// touch disjoint slots at any instant. Shared references are therefore safe as
-// long as callers preserve the intended SPSC usage.
 unsafe impl Sync for RawKeyboardRing {}
 
 #[cfg(windows)]
@@ -296,9 +290,6 @@ impl RawKeyboardRing {
             return;
         }
         let slot = tail % RAW_KEYBOARD_EVENT_CAPACITY;
-        // SAFETY: `tail - head < capacity` guarantees this slot is not currently
-        // visible to the consumer. The write happens-before publication via the
-        // following Release store to `tail`.
         unsafe { (*self.slots[slot].get()).write(ev) };
         self.tail.store(tail.wrapping_add(1), Ordering::Release);
     }
@@ -311,9 +302,6 @@ impl RawKeyboardRing {
             return None;
         }
         let slot = head % RAW_KEYBOARD_EVENT_CAPACITY;
-        // SAFETY: `head != tail` means the producer has already initialized this
-        // slot and published it with a Release store to `tail`. The Acquire load
-        // above pairs with that store before we read the item out exactly once.
         let ev = unsafe { (*self.slots[slot].get()).assume_init_read() };
         self.head.store(head.wrapping_add(1), Ordering::Release);
         Some(ev)
@@ -888,15 +876,11 @@ fn set_macos_app_icon() {
         "assets/graphics/icon/icon-512.png",
     ];
 
-    // SAFETY: AppKit requires a main-thread marker here. This helper runs from the
-    // application initialization path on the UI thread that owns `NSApplication`.
     let app = NSApplication::sharedApplication(unsafe { MainThreadMarker::new_unchecked() });
     for path in MACOS_APP_ICON_PATHS {
         let ns_path = NSString::from_str(path);
         let icon_image = NSImage::initWithContentsOfFile(NSImage::alloc(), &ns_path);
         if let Some(icon_image) = icon_image {
-            // SAFETY: `app` and `icon_image` are valid AppKit objects on the main
-            // thread, which is the required calling context for this setter.
             unsafe {
                 app.setApplicationIconImage(Some(&icon_image));
             }
