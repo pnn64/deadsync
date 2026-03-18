@@ -34,23 +34,8 @@ thread_local! {
     static LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
         RefCell::new(HashMap::with_capacity(1024));
     static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(64));
-    static SYNC_OVERLAY_CACHE: RefCell<TextCache<SyncOverlayTextKey>> =
-        RefCell::new(HashMap::with_capacity(256));
     static AUTOSYNC_TEXT_CACHE: RefCell<TextCache<AutosyncTextKey>> =
         RefCell::new(HashMap::with_capacity(256));
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct SyncOverlayTextKey {
-    replay_tag: u8,
-    replay_ptr: usize,
-    replay_len: usize,
-    timing_ptr: usize,
-    timing_len: usize,
-    autosync_ptr: usize,
-    autosync_len: usize,
-    message_ptr: usize,
-    message_len: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -60,11 +45,6 @@ struct AutosyncTextKey {
     new_offset_bits: u32,
     stddev_bits: u32,
     sample_count: u16,
-}
-
-#[inline(always)]
-fn str_key(line: &str) -> (usize, usize) {
-    (line.as_ptr() as usize, line.len())
 }
 
 #[inline(always)]
@@ -194,52 +174,16 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
     if line_count == 0 {
         return None;
     }
-    let replay_line = if state.autoplay_enabled {
-        Some(state.replay_status_text.as_deref().unwrap_or("AutoPlay"))
-    } else {
-        None
-    };
-    let timing_line = timing_tick_status_line(state);
-    let autosync_line = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode);
-    let message_line = state.sync_overlay_message.as_deref();
-    let (replay_ptr, replay_len, replay_tag) = if let Some(line) = replay_line {
-        let (ptr, len) = str_key(line);
-        (
-            ptr,
-            len,
-            if state.replay_status_text.is_some() {
-                2
-            } else {
-                1
-            },
-        )
-    } else {
-        (0, 0, 0)
-    };
-    let (timing_ptr, timing_len) = timing_line.map_or((0, 0), str_key);
-    let (autosync_ptr, autosync_len) = autosync_line.map_or((0, 0), str_key);
-    let (message_ptr, message_len) = message_line.map_or((0, 0), str_key);
-    let key = SyncOverlayTextKey {
-        replay_tag,
-        replay_ptr,
-        replay_len,
-        timing_ptr,
-        timing_len,
-        autosync_ptr,
-        autosync_len,
-        message_ptr,
-        message_len,
-    };
-    let text = cached_text(&SYNC_OVERLAY_CACHE, key, || {
-        let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
-        out.push_str(lines[0]);
-        for line in &lines[1..line_count] {
-            out.push('\n');
-            out.push_str(line);
-        }
-        out
-    });
-    Some((text, line_count))
+    // Do not cache this string by pointer identity. `sync_overlay_message` is rebuilt
+    // during live offset tweaks, and allocator address reuse can otherwise return a
+    // stale overlay line with the wrong numbers.
+    let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
+    out.push_str(lines[0]);
+    for line in &lines[1..line_count] {
+        out.push('\n');
+        out.push_str(line);
+    }
+    Some((Arc::<str>::from(out), line_count))
 }
 
 #[inline(always)]
