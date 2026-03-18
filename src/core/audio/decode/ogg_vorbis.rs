@@ -4,6 +4,9 @@ use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::path::Path;
 
+const OGG_PAGE_HEADER_LEN: usize = 27;
+const OGG_SCAN_CHUNK_BYTES: usize = 64 * 1024;
+
 pub(crate) struct OpenFile {
     pub reader: OggStreamReader<BufReader<File>>,
     pub channels: usize,
@@ -14,7 +17,7 @@ pub(crate) struct OpenFile {
 pub(crate) fn path_is_ogg_vorbis(path: &Path) -> bool {
     path.extension()
         .and_then(|s| s.to_str())
-        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "ogg" | "oga"))
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("ogg") || ext.eq_ignore_ascii_case("oga"))
 }
 
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
@@ -55,23 +58,22 @@ fn sample_rate_hz_lewton(data: &[u8]) -> Result<f64, String> {
 }
 
 fn sample_rate_hz_ident_packet(data: &[u8]) -> Option<f64> {
-    const PAGE_HEADER: usize = 27;
     const MIN_RATE_HZ: u32 = 8_000;
     const MAX_RATE_HZ: u32 = 384_000;
 
     let mut pos = 0usize;
     let mut packet = Vec::with_capacity(64);
-    while pos + PAGE_HEADER <= data.len() {
+    while pos + OGG_PAGE_HEADER_LEN <= data.len() {
         if &data[pos..pos + 4] != b"OggS" {
             pos += 1;
             continue;
         }
         let seg_count = data[pos + 26] as usize;
-        let header_end = pos.checked_add(PAGE_HEADER + seg_count)?;
+        let header_end = pos.checked_add(OGG_PAGE_HEADER_LEN + seg_count)?;
         if header_end > data.len() {
             return None;
         }
-        let seg_table = &data[pos + PAGE_HEADER..header_end];
+        let seg_table = &data[pos + OGG_PAGE_HEADER_LEN..header_end];
         let mut body_pos = header_end;
         for &seg_len_u8 in seg_table {
             let seg_len = seg_len_u8 as usize;
@@ -98,34 +100,42 @@ fn sample_rate_hz_ident_packet(data: &[u8]) -> Option<f64> {
 }
 
 fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {
-    const PAGE_HEADER: usize = 27;
-    const CHUNK: usize = 64 * 1024;
-
     let mut pos = data.len();
-    let mut best_granule: Option<u64> = None;
-    while pos > PAGE_HEADER {
-        let start = pos.saturating_sub(CHUNK);
-        let chunk = &data[start..pos];
-        let mut i = chunk.len().saturating_sub(PAGE_HEADER);
-        while i > 0 {
-            if &chunk[i..i + 4] == b"OggS" {
-                let granule = u64::from_le_bytes(
-                    chunk[i + 6..i + 14]
-                        .try_into()
-                        .map_err(|_| "Failed to read granule position".to_string())?,
-                );
-                if granule != u64::MAX && best_granule.is_none_or(|prev| granule > prev) {
-                    best_granule = Some(granule);
-                }
-                i = i.saturating_sub(27 + 255 * 255);
-            } else {
-                i -= 1;
-            }
+    while pos >= OGG_PAGE_HEADER_LEN {
+        let start = pos.saturating_sub(OGG_SCAN_CHUNK_BYTES);
+        if let Some(granule) = find_last_chunk_granule(&data[start..pos]) {
+            return Ok(granule);
         }
-        if best_granule.is_some() {
+        if start == 0 {
             break;
         }
-        pos = start;
+        pos = start + OGG_PAGE_HEADER_LEN - 1;
     }
-    best_granule.ok_or_else(|| "No valid granule position found".into())
+    Err("No valid granule position found".into())
+}
+
+fn find_last_chunk_granule(chunk: &[u8]) -> Option<u64> {
+    if chunk.len() < OGG_PAGE_HEADER_LEN {
+        return None;
+    }
+    let mut i = chunk.len() - OGG_PAGE_HEADER_LEN;
+    loop {
+        if has_ogg_page_header(chunk, i) {
+            let mut granule_bytes = [0; 8];
+            granule_bytes.copy_from_slice(&chunk[i + 6..i + 14]);
+            let granule = u64::from_le_bytes(granule_bytes);
+            if granule != u64::MAX {
+                return Some(granule);
+            }
+        }
+        if i == 0 {
+            return None;
+        }
+        i -= 1;
+    }
+}
+
+#[inline(always)]
+fn has_ogg_page_header(chunk: &[u8], at: usize) -> bool {
+    &chunk[at..at + 4] == b"OggS" && chunk[at + 4] == 0
 }

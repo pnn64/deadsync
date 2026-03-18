@@ -43,9 +43,9 @@ enum Encoding {
 
 #[inline(always)]
 pub(crate) fn path_is_wav(path: &Path) -> bool {
-    path.extension().and_then(|s| s.to_str()).is_some_and(|ext| {
-        ext.eq_ignore_ascii_case("wav") || ext.eq_ignore_ascii_case("wave")
-    })
+    path.extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("wav") || ext.eq_ignore_ascii_case("wave"))
 }
 
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
@@ -106,8 +106,9 @@ impl Reader {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let clamped = target_frame.min(self.spec.frames_total);
         let byte_offset = clamped.saturating_mul(self.spec.block_align as u64);
-        self.reader
-            .seek(SeekFrom::Start(self.spec.data_offset.saturating_add(byte_offset)))?;
+        self.reader.seek(SeekFrom::Start(
+            self.spec.data_offset.saturating_add(byte_offset),
+        ))?;
         self.pending = None;
         self.cursor_frames = clamped;
         Ok(())
@@ -128,7 +129,9 @@ impl Reader {
     }
 }
 
-fn parse_spec(reader: &mut BufReader<File>) -> Result<Spec, Box<dyn std::error::Error + Send + Sync>> {
+fn parse_spec(
+    reader: &mut BufReader<File>,
+) -> Result<Spec, Box<dyn std::error::Error + Send + Sync>> {
     let mut riff = [0u8; 12];
     reader.read_exact(&mut riff)?;
     if &riff[..4] != b"RIFF" || &riff[8..12] != b"WAVE" {
@@ -212,7 +215,9 @@ fn parse_format_chunk(
     let encoding = match format_tag {
         WAVE_FORMAT_PCM => parse_pcm_format(bytes_per_sample)?,
         WAVE_FORMAT_IEEE_FLOAT => parse_float_format(bytes_per_sample)?,
-        WAVE_FORMAT_EXTENSIBLE => parse_extensible_encoding(&fmt, bytes_per_sample, bits_per_sample)?,
+        WAVE_FORMAT_EXTENSIBLE => {
+            parse_extensible_encoding(&fmt, bytes_per_sample, bits_per_sample)?
+        }
         _ => return Err(format!("unsupported WAV format tag 0x{format_tag:04x}").into()),
     };
 
@@ -310,8 +315,7 @@ fn float_to_i16(sample: &[u8]) -> Result<i16, Box<dyn std::error::Error + Send +
     let value = match sample.len() {
         4 => f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64,
         8 => f64::from_le_bytes([
-            sample[0], sample[1], sample[2], sample[3], sample[4], sample[5], sample[6],
-            sample[7],
+            sample[0], sample[1], sample[2], sample[3], sample[4], sample[5], sample[6], sample[7],
         ]),
         n => return Err(format!("unsupported WAV float sample width ({n} bytes)").into()),
     };
@@ -321,20 +325,14 @@ fn float_to_i16(sample: &[u8]) -> Result<i16, Box<dyn std::error::Error + Send +
     Ok((value * 32767.0).round().clamp(-32768.0, 32767.0) as i16)
 }
 
-fn le_u16(
-    data: &[u8],
-    offset: usize,
-) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
+fn le_u16(data: &[u8], offset: usize) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
     let bytes = data
         .get(offset..offset + 2)
         .ok_or("WAV chunk ended unexpectedly")?;
     Ok(u16::from_le_bytes([bytes[0], bytes[1]]))
 }
 
-fn le_u32(
-    data: &[u8],
-    offset: usize,
-) -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
+fn le_u32(data: &[u8], offset: usize) -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
     let bytes = data
         .get(offset..offset + 4)
         .ok_or("WAV chunk ended unexpectedly")?;
