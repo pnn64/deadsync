@@ -2949,6 +2949,109 @@ fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Player
     totals
 }
 
+#[inline(always)]
+fn chart_has_attacks(chart: &ChartData) -> bool {
+    chart
+        .chart_attacks
+        .as_deref()
+        .is_some_and(|attacks| !attacks.trim().is_empty())
+}
+
+fn chart_has_significant_timing_changes(chart: &ChartData) -> bool {
+    let timing = &chart.timing_segments;
+    if !timing.stops.is_empty()
+        || !timing.delays.is_empty()
+        || !timing.warps.is_empty()
+        || !timing.speeds.is_empty()
+        || !timing.scrolls.is_empty()
+    {
+        return true;
+    }
+
+    let mut min_bpm = f32::INFINITY;
+    let mut max_bpm = 0.0_f32;
+    for &(_, bpm) in &timing.bpms {
+        if !bpm.is_finite() || bpm <= 0.0 {
+            continue;
+        }
+        min_bpm = min_bpm.min(bpm);
+        max_bpm = max_bpm.max(bpm);
+    }
+
+    min_bpm.is_finite() && max_bpm - min_bpm > 3.0
+}
+
+fn score_valid_for_chart(
+    chart: &ChartData,
+    profile: &profile::Profile,
+    scroll_speed: ScrollSpeedSetting,
+    music_rate: f32,
+) -> bool {
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    if rate < 1.0 {
+        return false;
+    }
+
+    if matches!(scroll_speed, ScrollSpeedSetting::CMod(_))
+        && chart_has_significant_timing_changes(chart)
+    {
+        return false;
+    }
+
+    let remove_mask = profile::normalize_remove_mask(profile.remove_active_mask);
+    if (remove_mask & REMOVE_MASK_BIT_NO_HOLDS) != 0 && chart.stats.holds > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_MINES) != 0 && chart.mines_nonfake > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_JUMPS) != 0 && chart.stats.jumps > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_HANDS) != 0 && chart.stats.hands > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_QUADS) != 0 && chart.stats.hands > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 && chart.stats.lifts > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_FAKES) != 0 && chart.stats.fakes > 0 {
+        return false;
+    }
+
+    let holds_mask = profile::normalize_holds_mask(profile.holds_active_mask);
+    if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 && chart.stats.rolls > 0 {
+        return false;
+    }
+
+    if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
+        return false;
+    }
+
+    let insert_mask = profile::normalize_insert_mask(profile.insert_active_mask);
+    if (insert_mask & INSERT_MASK_BIT_ECHO) != 0 {
+        return false;
+    }
+
+    if (holds_mask & (HOLDS_MASK_BIT_PLANTED | HOLDS_MASK_BIT_FLOORED | HOLDS_MASK_BIT_TWISTER))
+        != 0
+    {
+        return false;
+    }
+
+    match profile.attack_mode {
+        profile::AttackMode::Off => !chart_has_attacks(chart),
+        profile::AttackMode::On => true,
+        profile::AttackMode::Random => false,
+    }
+}
+
 fn compute_end_times(
     notes: &[Note],
     note_time_cache: &[f32],
@@ -4067,6 +4170,7 @@ pub struct State {
     pub song_completed_naturally: bool,
     pub autoplay_enabled: bool,
     pub autoplay_used: bool,
+    pub score_valid: [bool; MAX_PLAYERS],
     replay_mode: bool,
     pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     pub course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
@@ -6072,6 +6176,16 @@ pub fn init(
         attack_song_length_seconds,
     );
 
+    let mut score_valid = [true; MAX_PLAYERS];
+    for player in 0..num_players {
+        score_valid[player] = score_valid_for_chart(
+            &charts[player],
+            &player_profiles[player],
+            scroll_speed[player],
+            rate,
+        );
+    }
+
     let mut total_steps = [0u32; MAX_PLAYERS];
     let mut jumps_total = [0u32; MAX_PLAYERS];
     let mut hands_total = [0u32; MAX_PLAYERS];
@@ -6138,6 +6252,7 @@ pub fn init(
         total_steps[1] = total_steps[0];
         jumps_total[1] = jumps_total[0];
         hands_total[1] = hands_total[0];
+        score_valid[1] = score_valid[0];
         note_ranges[1] = note_ranges[0];
     }
 
@@ -6708,6 +6823,7 @@ pub fn init(
         song_completed_naturally: false,
         autoplay_enabled: replay_mode,
         autoplay_used: replay_mode,
+        score_valid,
         replay_mode,
         course_display_carry,
         course_display_totals,
@@ -10740,11 +10856,14 @@ mod tests {
         build_attack_mask_windows_for_player, frame_stable_display_music_time,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals,
-        scored_hold_totals_with_carry, tick_mode_status_line, turn_option_bits,
+        score_valid_for_chart, scored_hold_totals_with_carry, tick_mode_status_line,
+        turn_option_bits,
     };
+    use crate::game::chart::{ChartData, StaminaCounts};
     use crate::game::note::{HoldData, Note, NoteType};
     use crate::game::profile;
     use crate::game::timing::{ROWS_PER_BEAT, StopSegment, TimingData, TimingSegments};
+    use rssp::{TechCounts, stats::ArrowStats};
     use std::time::{Duration, Instant};
 
     fn test_row_to_beat(last_row: usize) -> Vec<f32> {
@@ -10782,6 +10901,51 @@ mod tests {
             last_held_beat: row_index as f32 / ROWS_PER_BEAT as f32,
         });
         note
+    }
+
+    fn test_chart(
+        stats: ArrowStats,
+        timing_segments: TimingSegments,
+        chart_attacks: Option<&str>,
+    ) -> ChartData {
+        let mines_nonfake = stats.mines;
+        let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &[]);
+        ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: "Challenge".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 10,
+            step_artist: String::new(),
+            notes: Vec::new(),
+            parsed_notes: Vec::new(),
+            row_to_beat: Vec::new(),
+            timing_segments,
+            timing,
+            short_hash: String::new(),
+            stats,
+            tech_counts: TechCounts::default(),
+            mines_nonfake,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            chart_attacks: chart_attacks.map(str::to_string),
+            chart_bpms: None,
+            chart_stops: None,
+            chart_delays: None,
+            chart_warps: None,
+            chart_speeds: None,
+            chart_scrolls: None,
+            chart_fakes: None,
+        }
     }
 
     #[test]
@@ -10914,6 +11078,80 @@ mod tests {
         assert_eq!(totals.steps, 2);
         assert_eq!(totals.jumps, 1);
         assert_eq!(totals.hands, 1);
+    }
+
+    #[test]
+    fn score_valid_rejects_nohands_when_chart_has_hands() {
+        let mut profile = profile::Profile::default();
+        profile.remove_active_mask = super::REMOVE_MASK_BIT_NO_HANDS;
+        let chart = test_chart(
+            ArrowStats {
+                hands: 4,
+                ..ArrowStats::default()
+            },
+            TimingSegments::default(),
+            None,
+        );
+
+        assert!(!score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn score_valid_keeps_turn_options_rankable() {
+        let mut profile = profile::Profile::default();
+        profile.turn_option = profile::TurnOption::Mirror;
+        let chart = test_chart(ArrowStats::default(), TimingSegments::default(), None);
+
+        assert!(score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn score_valid_rejects_cmod_on_significant_timing_changes() {
+        let mut profile = profile::Profile::default();
+        profile.scroll_speed = ScrollSpeedSetting::CMod(600.0);
+        let chart = test_chart(
+            ArrowStats::default(),
+            TimingSegments {
+                bpms: vec![(0.0, 120.0), (32.0, 128.5)],
+                ..TimingSegments::default()
+            },
+            None,
+        );
+
+        assert!(!score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn score_valid_rejects_disabled_chart_attacks() {
+        let mut profile = profile::Profile::default();
+        profile.attack_mode = profile::AttackMode::Off;
+        let chart = test_chart(
+            ArrowStats::default(),
+            TimingSegments::default(),
+            Some("TIME=1.0:LEN=2.0:MODS=mirror"),
+        );
+
+        assert!(!score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
     }
 
     #[test]
