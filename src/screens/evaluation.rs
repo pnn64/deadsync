@@ -3,11 +3,12 @@ use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::Screen;
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::{
-    eval_grades, evaluation as eval_panes, heart_bg, screen_bar, select_shared,
+    evaluation::{self as eval_panes, eval_grades},
+    shared::{banner as shared_banner, heart_bg, mode_pads, screen_bar, timers},
 };
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -227,6 +228,7 @@ pub struct ScoreInfo {
     pub show_ex_score: bool,
     pub show_hard_ex_score: bool,
     pub show_fa_plus_pane: bool,
+    pub track_early_judgments: bool,
     pub machine_records: Vec<scores::LeaderboardEntry>,
     pub machine_record_highlight_rank: Option<u32>,
     pub personal_records: Vec<scores::LeaderboardEntry>,
@@ -243,15 +245,52 @@ pub struct ColumnJudgments {
     pub w4: u32,
     pub w5: u32,
     pub miss: u32,
+    pub early_w1: u32,
+    pub early_w2: u32,
+    pub early_w3: u32,
     pub early_w4: u32,
     pub early_w5: u32,
+    pub early_total_w0: u32,
+    pub early_total_w1: u32,
+    pub early_total_w2: u32,
+    pub early_total_w3: u32,
+    pub early_total_w4: u32,
+    pub early_total_w5: u32,
     pub held_miss: u32,
+}
+
+#[inline(always)]
+fn add_early_total(
+    slot: &mut ColumnJudgments,
+    judgment: &crate::game::judgment::Judgment,
+    include_bad: bool,
+) {
+    if matches!(
+        judgment.window,
+        Some(crate::game::judgment::TimingWindow::W0)
+    ) {
+        slot.early_total_w0 = slot.early_total_w0.saturating_add(1);
+        return;
+    }
+    match judgment.grade {
+        JudgeGrade::Fantastic => slot.early_total_w1 = slot.early_total_w1.saturating_add(1),
+        JudgeGrade::Excellent => slot.early_total_w2 = slot.early_total_w2.saturating_add(1),
+        JudgeGrade::Great => slot.early_total_w3 = slot.early_total_w3.saturating_add(1),
+        JudgeGrade::Decent if include_bad => {
+            slot.early_total_w4 = slot.early_total_w4.saturating_add(1)
+        }
+        JudgeGrade::WayOff if include_bad => {
+            slot.early_total_w5 = slot.early_total_w5.saturating_add(1)
+        }
+        _ => {}
+    }
 }
 
 fn compute_column_judgments(
     notes: &[crate::game::note::Note],
     cols_per_player: usize,
     col_offset: usize,
+    show_fa_plus_window: bool,
 ) -> Vec<ColumnJudgments> {
     let cols = cols_per_player.max(0);
     let mut out = vec![ColumnJudgments::default(); cols];
@@ -277,10 +316,25 @@ fn compute_column_judgments(
                 Some(crate::game::judgment::TimingWindow::W0) => {
                     slot.w0 = slot.w0.saturating_add(1)
                 }
-                _ => slot.w1 = slot.w1.saturating_add(1),
+                _ => {
+                    slot.w1 = slot.w1.saturating_add(1);
+                    if show_fa_plus_window && j.time_error_ms < 0.0 {
+                        slot.early_w1 = slot.early_w1.saturating_add(1);
+                    }
+                }
             },
-            JudgeGrade::Excellent => slot.w2 = slot.w2.saturating_add(1),
-            JudgeGrade::Great => slot.w3 = slot.w3.saturating_add(1),
+            JudgeGrade::Excellent => {
+                slot.w2 = slot.w2.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w2 = slot.early_w2.saturating_add(1);
+                }
+            }
+            JudgeGrade::Great => {
+                slot.w3 = slot.w3.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w3 = slot.early_w3.saturating_add(1);
+                }
+            }
             JudgeGrade::Decent => {
                 slot.w4 = slot.w4.saturating_add(1);
                 if j.time_error_ms < 0.0 {
@@ -300,9 +354,93 @@ fn compute_column_judgments(
                 }
             }
         }
+
+        if let Some(early) = note.early_result.as_ref() {
+            add_early_total(slot, j, false);
+            add_early_total(slot, early, true);
+        }
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_column_judgments;
+    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use crate::game::note::{Note, NoteType};
+
+    fn tap_note(column: usize, result: Judgment, early_result: Option<Judgment>) -> Note {
+        Note {
+            beat: 0.0,
+            quantization_idx: 0,
+            column,
+            note_type: NoteType::Tap,
+            row_index: 0,
+            result: Some(result),
+            early_result,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    fn judgment(grade: JudgeGrade, window: Option<TimingWindow>, time_error_ms: f32) -> Judgment {
+        Judgment {
+            time_error_ms,
+            grade,
+            window,
+            miss_because_held: false,
+        }
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_split_white_early_fantastics() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Fantastic, Some(TimingWindow::W1), -8.0),
+            None,
+        )];
+
+        let with_fa = compute_column_judgments(&notes, 1, 0, true);
+        let without_fa = compute_column_judgments(&notes, 1, 0, false);
+
+        assert_eq!(with_fa[0].w1, 1);
+        assert_eq!(with_fa[0].early_w1, 1);
+        assert_eq!(without_fa[0].early_w1, 0);
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_rescored_early_totals() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Excellent, Some(TimingWindow::W2), -18.0),
+            Some(judgment(JudgeGrade::WayOff, Some(TimingWindow::W5), -18.0)),
+        )];
+
+        let out = compute_column_judgments(&notes, 1, 0, false);
+
+        assert_eq!(out[0].w2, 1);
+        assert_eq!(out[0].early_w2, 1);
+        assert_eq!(out[0].early_total_w2, 1);
+        assert_eq!(out[0].early_total_w5, 1);
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_w0_rescore_target() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Fantastic, Some(TimingWindow::W0), -4.0),
+            Some(judgment(JudgeGrade::Decent, Some(TimingWindow::W4), -16.0)),
+        )];
+
+        let out = compute_column_judgments(&notes, 1, 0, true);
+
+        assert_eq!(out[0].w0, 1);
+        assert_eq!(out[0].early_total_w0, 1);
+        assert_eq!(out[0].early_total_w4, 1);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -558,7 +696,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
         let cols_per_player = gs.cols_per_player;
         for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
-            let noteskin = gs.noteskin[player_idx].take().map(Arc::new);
+            let noteskin = gs.noteskin[player_idx].take();
             let (start, end) = gs.note_ranges[player_idx];
             let notes = &gs.notes[start..end];
             let note_times = &gs.note_time_cache[start..end];
@@ -693,7 +831,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 grade = scores::Grade::Quint;
             }
 
-            let column_judgments = compute_column_judgments(notes, cols_per_player, col_offset);
+            let column_judgments = compute_column_judgments(
+                notes,
+                cols_per_player,
+                col_offset,
+                prof.show_fa_plus_window,
+            );
 
             score_info[player_idx] = Some(ScoreInfo {
                 song: gs.song.clone(),
@@ -760,6 +903,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 show_ex_score: prof.show_ex_score,
                 show_hard_ex_score: prof.show_hard_ex_score,
                 show_fa_plus_pane: prof.show_fa_plus_pane,
+                track_early_judgments: prof.track_early_judgments,
                 machine_records,
                 machine_record_highlight_rank,
                 personal_records,
@@ -783,88 +927,92 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             density_graph_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
                 let last_second = si.song.total_length_seconds.max(0) as f32;
-                let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
-                    &si.chart.measure_nps_vec,
-                    si.chart.max_nps,
-                    &si.chart.timing,
-                    si.graph_first_second,
-                    last_second,
-                    graph_width,
-                    GRAPH_H,
-                    0.0,
-                    graph_width,
-                    Some(0.5),
-                    0.5,
-                );
+                let verts =
+                    crate::screens::components::shared::density_graph::build_density_histogram_mesh(
+                        &si.chart.measure_nps_vec,
+                        si.chart.max_nps,
+                        &si.chart.timing,
+                        si.graph_first_second,
+                        last_second,
+                        graph_width,
+                        GRAPH_H,
+                        0.0,
+                        graph_width,
+                        Some(0.5),
+                        0.5,
+                    );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_itg[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Itg,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Itg,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_ex[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Ex,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Ex,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_hard_ex[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let hard_ex_worst_window = si
+                    .scatter_worst_window_ms
+                    .min(timing_stats::effective_windows_ms()[1]);
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
-                    si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::HardEx,
+                    hard_ex_worst_window,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_arrow[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Arrow,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Arrow,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_foot[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Foot,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Foot,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -876,12 +1024,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Itg,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Itg,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -894,12 +1042,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Ex,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Ex,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -912,12 +1060,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::HardEx,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::HardEx,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -1468,11 +1616,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }));
 
     // Header timers (zmod parity): session timer + optional cumulative gameplay timer.
-    actors.push(select_shared::build_session_timer(format_session_time(
+    actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
     if cfg.show_select_music_gameplay_timer {
-        actors.push(select_shared::build_gameplay_timer(format_session_time(
+        actors.push(timers::build_gameplay(format_session_time(
             state.gameplay_elapsed,
         )));
     }
@@ -1544,7 +1692,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             offset: [screen_center_x(), 46.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             children: vec![
-                act!(sprite(banner_key): align(0.5, 0.5): xy(0.0, 66.0): setsize(418.0, 164.0): zoom(0.7): z(0)),
+                shared_banner::sprite(banner_key, 0.0, 66.0, 418.0, 164.0, 0.7, 0),
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 25.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, 1.0): z(1)),
                 act!(text: font("miso"): settext(full_title): align(0.5, 0.5): xy(0.0, 0.0): maxwidth(418.0 * 0.7): z(2)),
             ],
@@ -2049,19 +2197,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     si,
                     state.timing_hist_mesh[player_idx].as_ref(),
                     controller,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Itg,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Itg,
                 )),
                 EvalPane::TimingEx => actors.extend(eval_panes::build_timing_pane(
                     si,
                     state.timing_hist_mesh_ex[player_idx].as_ref(),
                     controller,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Ex,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Ex,
                 )),
                 EvalPane::TimingHardEx => actors.extend(eval_panes::build_timing_pane(
                     si,
                     state.timing_hist_mesh_hard_ex[player_idx].as_ref(),
                     controller,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::HardEx,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::HardEx,
                 )),
                 EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(si, controller)),
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
@@ -2537,7 +2685,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
         actors.push(act!(text: font("wendy"): settext("ITG"): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
-        actors.extend(select_shared::build_mode_pads());
+        actors.extend(mode_pads::build());
     }
 
     // 3. Bottom Bar
