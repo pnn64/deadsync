@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.43"
+version = "0.3.44"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -40,6 +40,7 @@ softbuffer = "0.4.8"
 
 # Math
 cgmath = "0.18.0"
+bytemuck = { version = "1.25.0", features = ["derive"] }
 
 # OpenGL Dependencies
 glow = "0.17.0"

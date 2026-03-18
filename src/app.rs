@@ -888,9 +888,8 @@ fn set_macos_app_icon() {
         "assets/graphics/icon/icon-512.png",
     ];
 
-    // SAFETY: AppKit requires a main-thread marker here. This helper runs from the
-    // application initialization path on the UI thread that owns `NSApplication`.
-    let app = NSApplication::sharedApplication(unsafe { MainThreadMarker::new_unchecked() });
+    let mtm = MainThreadMarker::new().expect("AppKit icon setup requires the main thread");
+    let app = NSApplication::sharedApplication(mtm);
     for path in MACOS_APP_ICON_PATHS {
         let ns_path = NSString::from_str(path);
         let icon_image = NSImage::initWithContentsOfFile(NSImage::alloc(), &ns_path);

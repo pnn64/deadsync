@@ -33,8 +33,9 @@ static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(
 // --- Structs ---
 
 #[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct ProjPush {
-    proj: Matrix4<f32>,
+    proj: [[f32; 4]; 4],
 }
 
 #[repr(C)]
@@ -564,11 +565,6 @@ fn create_sprite_pipeline(
     let dynamic_state =
         vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-    // Push constant: projection only
-    #[repr(C)]
-    struct ProjPush {
-        proj: Matrix4<f32>,
-    }
     let push_constant_range = vk::PushConstantRange::default()
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .offset(0)
@@ -1356,20 +1352,6 @@ pub fn update_texture(
 }
 
 #[inline(always)]
-// SAFETY: Callers must ensure `v` is fully initialized and may be viewed as a byte slice for the
-// returned lifetime.
-const unsafe fn bytes_of<T>(v: &T) -> &[u8] {
-    // SAFETY: The caller guarantees `v` may be viewed as a fully initialized byte slice for the
-    // returned lifetime.
-    unsafe {
-        std::slice::from_raw_parts(
-            std::ptr::from_ref::<T>(v) as *const u8,
-            std::mem::size_of::<T>(),
-        )
-    }
-}
-
-#[inline(always)]
 pub fn request_screenshot(state: &mut State) {
     state.screenshot_requested = true;
 }
@@ -1826,13 +1808,13 @@ pub fn draw(
                             .get(run.camera as usize)
                             .copied()
                             .unwrap_or(state.projection);
-                        let pc = ProjPush { proj: vp };
+                        let pc = ProjPush { proj: vp.into() };
                         device.cmd_push_constants(
                             cmd,
                             state.sprite_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytes_of(&pc),
+                            bytemuck::bytes_of(&pc),
                         );
                         last_camera = Some(run.camera);
                     }
@@ -1873,13 +1855,13 @@ pub fn draw(
                             .get(draw.camera as usize)
                             .copied()
                             .unwrap_or(state.projection);
-                        let pc = ProjPush { proj: vp };
+                        let pc = ProjPush { proj: vp.into() };
                         device.cmd_push_constants(
                             cmd,
                             state.mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytes_of(&pc),
+                            bytemuck::bytes_of(&pc),
                         );
                         last_camera = Some(draw.camera);
                     }
@@ -1917,13 +1899,13 @@ pub fn draw(
                             .get(draw.camera as usize)
                             .copied()
                             .unwrap_or(state.projection);
-                        let pc = ProjPush { proj: vp };
+                        let pc = ProjPush { proj: vp.into() };
                         device.cmd_push_constants(
                             cmd,
                             state.textured_mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytes_of(&pc),
+                            bytemuck::bytes_of(&pc),
                         );
                         last_camera = Some(draw.camera);
                     }

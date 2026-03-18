@@ -295,10 +295,8 @@ fn density_life_vertex_count(points: &[[f32; 2]], start: usize, end: usize) -> u
 }
 
 #[inline(always)]
-// SAFETY: Callers must ensure `dst` points to writable storage for at least the maximum vertex
-// count implied by `points[start..end]`, and that `start..end` is in bounds of `points`.
-unsafe fn write_density_life_vertices(
-    mut dst: *mut MeshVertex,
+fn fill_density_life_vertices(
+    dst: &mut [MeshVertex],
     points: &[[f32; 2]],
     start: usize,
     end: usize,
@@ -310,8 +308,8 @@ unsafe fn write_density_life_vertices(
 
     let mut prev: Option<[f32; 2]> = None;
     let mut written = 0usize;
-    for i in start..end {
-        let p = [points[i][0] - offset, points[i][1]];
+    for &point in &points[start..end] {
+        let p = [point[0] - offset, point[1]];
         let Some(a) = prev else {
             prev = Some(p);
             continue;
@@ -330,24 +328,15 @@ unsafe fn write_density_life_vertices(
         let l1 = [p[0] + nx, p[1] + ny];
         let r1 = [p[0] - nx, p[1] - ny];
 
-        // SAFETY: the caller guarantees `dst` points to enough writable
-        // uninitialized storage for every segment in `points[start..end]`. This
-        // branch emits exactly six vertices for one non-degenerate segment and then
-        // advances `dst` by the same count.
-        unsafe {
-            dst.write(MeshVertex { pos: l0, color });
-            dst = dst.add(1);
-            dst.write(MeshVertex { pos: r0, color });
-            dst = dst.add(1);
-            dst.write(MeshVertex { pos: l1, color });
-            dst = dst.add(1);
-            dst.write(MeshVertex { pos: r0, color });
-            dst = dst.add(1);
-            dst.write(MeshVertex { pos: r1, color });
-            dst = dst.add(1);
-            dst.write(MeshVertex { pos: l1, color });
-            dst = dst.add(1);
-        }
+        let verts = [
+            MeshVertex { pos: l0, color },
+            MeshVertex { pos: r0, color },
+            MeshVertex { pos: l1, color },
+            MeshVertex { pos: r0, color },
+            MeshVertex { pos: r1, color },
+            MeshVertex { pos: l1, color },
+        ];
+        dst[written..written + verts.len()].copy_from_slice(&verts);
         written += 6;
         prev = Some(p);
     }
@@ -385,45 +374,15 @@ pub(crate) fn update_density_life_mesh(
     if let Some(existing) = mesh.as_mut().and_then(Arc::get_mut)
         && existing.len() == len
     {
-        // SAFETY: `existing` has exactly `len` initialized slots and
-        // `write_density_life_vertices` writes exactly that many vertices for this
-        // `(points, start, end)` range.
-        let written = unsafe {
-            write_density_life_vertices(
-                existing.as_mut_ptr(),
-                points,
-                start,
-                end,
-                offset,
-                half,
-                color,
-            )
-        };
+        let written = fill_density_life_vertices(existing, points, start, end, offset, half, color);
         debug_assert_eq!(written, len);
         return;
     }
 
-    let mut verts = Arc::<[MeshVertex]>::new_uninit_slice(len);
-    // SAFETY: `verts` was just allocated with exactly `len` uninitialized slots,
-    // and the writer fills all of them before we call `assume_init()`.
-    let written = unsafe {
-        write_density_life_vertices(
-            Arc::get_mut(&mut verts)
-                .expect("new arc should be unique")
-                .as_mut_ptr()
-                .cast(),
-            points,
-            start,
-            end,
-            offset,
-            half,
-            color,
-        )
-    };
+    let mut verts = vec![MeshVertex::default(); len];
+    let written = fill_density_life_vertices(&mut verts, points, start, end, offset, half, color);
     debug_assert_eq!(written, len);
-    // SAFETY: `written == len` means every element of `verts` was initialized by
-    // `write_density_life_vertices`.
-    *mesh = Some(unsafe { verts.assume_init() });
+    *mesh = Some(Arc::from(verts.into_boxed_slice()));
 }
 
 pub fn build_density_histogram_mesh(

@@ -499,9 +499,9 @@ mod platform {
     use objc2_foundation::{NSNumber, NSString};
 
     fn friendly_name(display_id: CGDirectDisplayID) -> Option<String> {
-        // SAFETY: AppKit requires a main-thread marker for `NSScreen::screens`.
-        // Display enumeration is only performed from the UI path that owns AppKit.
-        let screens = NSScreen::screens(unsafe { MainThreadMarker::new_unchecked() });
+        let mtm =
+            MainThreadMarker::new().expect("AppKit display enumeration requires the main thread");
+        let screens = NSScreen::screens(mtm);
         for screen in screens {
             let device_description = screen.deviceDescription();
             let screen_number =

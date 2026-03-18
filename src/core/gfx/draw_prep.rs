@@ -5,7 +5,16 @@ use cgmath::Matrix4;
 use std::collections::HashMap;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
+)]
 pub struct SpriteInstanceRaw {
     pub center: [f32; 4],
     pub size: [f32; 2],
@@ -19,7 +28,16 @@ pub struct SpriteInstanceRaw {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
+)]
 pub struct TexturedMeshVertexRaw {
     pub pos: [f32; 2],
     pub uv: [f32; 2],
@@ -28,7 +46,16 @@ pub struct TexturedMeshVertexRaw {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Pod,
+    bytemuck::Zeroable,
+)]
 pub struct TexturedMeshInstanceRaw {
     pub model_col0: [f32; 4],
     pub model_col1: [f32; 4],

@@ -1524,18 +1524,3 @@ fn create_window_surface_context(
         unsafe { display.create_context(config, &context_attributes)? }.make_current(&surface)?;
     Ok((surface, context))
 }
-
-mod bytemuck {
-    #[inline(always)]
-    pub fn cast_slice<T, U>(slice: &[T]) -> &[U] {
-        // SAFETY: callers only use this helper for POD-style vertex/uniform data.
-        // `align_to` splits the slice without moving data, and the debug assert
-        // below guarantees there is no prefix/suffix misalignment in debug builds.
-        let (prefix, mid, suffix) = unsafe { slice.align_to::<U>() };
-        debug_assert!(
-            prefix.is_empty() && suffix.is_empty(),
-            "cast_slice: misaligned cast"
-        );
-        mid
-    }
-}
