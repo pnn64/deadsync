@@ -8,16 +8,15 @@ use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::cache::{TextCache, cached_text};
 use crate::ui::color;
 use crate::ui::compose::TextLayoutCache;
 use crate::ui::font;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use std::thread::LocalKey;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
-type TextCache<K> = HashMap<K, Arc<str>>;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 
 pub use crate::game::gameplay::{State, init, update};
@@ -54,25 +53,6 @@ fn empty_text() -> Arc<str> {
 }
 
 #[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
-    })
-}
-
-#[inline(always)]
 fn quantize_centi_u32(value: f64) -> u32 {
     let value = if value.is_finite() {
         value.max(0.0)
@@ -95,7 +75,7 @@ fn quantize_tenths_u32(value: f32) -> u32 {
 #[inline(always)]
 fn cached_score_2dp(value: f64) -> Arc<str> {
     let key = quantize_centi_u32(value);
-    cached_text(&SCORE_2DP_CACHE, key, || {
+    cached_text(&SCORE_2DP_CACHE, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}", key as f64 / 100.0)
     })
 }
@@ -105,7 +85,7 @@ fn cached_rate_text(rate: f32) -> Arc<str> {
     if (rate - 1.0).abs() <= 0.001 {
         return empty_text();
     }
-    cached_text(&RATE_TEXT_CACHE, rate.to_bits(), || {
+    cached_text(&RATE_TEXT_CACHE, rate.to_bits(), TEXT_CACHE_LIMIT, || {
         format!("{rate:.2}x rate")
     })
 }
@@ -118,12 +98,14 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
     if !show_decimal {
         let rounded = bpm.round().max(0.0);
         let key = (rounded.to_bits(), false);
-        return cached_text(&BPM_TEXT_CACHE, key, || format!("{rounded:.0}"));
+        return cached_text(&BPM_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
+            format!("{rounded:.0}")
+        });
     }
     let rounded_tenth = (bpm * 10.0).round() / 10.0;
     let rounded_tenth = rounded_tenth.max(0.0);
     let key = (rounded_tenth.to_bits(), true);
-    cached_text(&BPM_TEXT_CACHE, key, || {
+    cached_text(&BPM_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
         let nearest_int = rounded_tenth.round();
         if (rounded_tenth - nearest_int).abs() <= 0.001 {
             format!("{nearest_int:.0}")
@@ -136,14 +118,16 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
 #[inline(always)]
 fn cached_life_percent_text(life_percent: f32) -> Arc<str> {
     let key = quantize_tenths_u32(life_percent);
-    cached_text(&LIFE_PERCENT_TEXT_CACHE, key, || {
+    cached_text(&LIFE_PERCENT_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
         format!("{:.1}%", key as f32 / 10.0)
     })
 }
 
 #[inline(always)]
 fn cached_meter_text(meter: u32) -> Arc<str> {
-    cached_text(&METER_TEXT_CACHE, meter, || meter.to_string())
+    cached_text(&METER_TEXT_CACHE, meter, TEXT_CACHE_LIMIT, || {
+        meter.to_string()
+    })
 }
 
 fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
@@ -195,7 +179,7 @@ fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<
         stddev_bits: state.autosync_standard_deviation.to_bits(),
         sample_count: state.autosync_offset_sample_count.min(u16::MAX as usize) as u16,
     };
-    cached_text(&AUTOSYNC_TEXT_CACHE, key, || {
+    cached_text(&AUTOSYNC_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
         let collecting_sample = state
             .autosync_offset_sample_count
             .saturating_add(1)

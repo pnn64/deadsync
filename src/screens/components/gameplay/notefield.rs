@@ -27,6 +27,7 @@ use crate::game::{
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::cache::{TextCache, cached_text};
 use crate::ui::color;
 use crate::ui::compose::TextLayoutCache;
 use crate::ui::font;
@@ -37,7 +38,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::sync::Arc;
-use std::thread::LocalKey;
 use twox_hash::XxHash64;
 
 // --- CONSTANTS ---
@@ -153,47 +153,47 @@ struct TornadoBounds {
     min_x: f32,
     max_x: f32,
 }
-type TextCache<K> = HashMap<K, Arc<str>, BuildHasherDefault<XxHash64>>;
+type FastTextCache<K> = TextCache<K, BuildHasherDefault<XxHash64>>;
 
 thread_local! {
-    static FMT2_CACHE_F32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static FMT2_CACHE_F32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static PERCENT2_CACHE_F64: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static PERCENT2_CACHE_F64: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static SIGNED_PERCENT2_CACHE_F64: RefCell<TextCache<(u32, bool)>> = RefCell::new(
+    static SIGNED_PERCENT2_CACHE_F64: RefCell<FastTextCache<(u32, bool)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
     );
-    static NEG_INT_CACHE_U32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static NEG_INT_CACHE_U32: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         256,
         BuildHasherDefault::default(),
     ));
-    static PAREN_INT_CACHE_I32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static PAREN_INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static INT_CACHE_I32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static INT_CACHE_U32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static INT_CACHE_U32: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static RATIO_CACHE_I32: RefCell<TextCache<(i32, i32)>> = RefCell::new(
+    static RATIO_CACHE_I32: RefCell<FastTextCache<(i32, i32)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
-    static OFFSET_MS_CACHE_F32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static OFFSET_MS_CACHE_F32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static RUN_TIMER_CACHE: RefCell<TextCache<(i32, i32, bool)>> = RefCell::new(
+    static RUN_TIMER_CACHE: RefCell<FastTextCache<(i32, i32, bool)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
-    static GAMEPLAY_MODS_CACHE: RefCell<TextCache<GameplayModsTextKey>> = RefCell::new(
+    static GAMEPLAY_MODS_CACHE: RefCell<FastTextCache<GameplayModsTextKey>> = RefCell::new(
         HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
     );
 }
@@ -221,25 +221,6 @@ struct GameplayModsTextKey {
 }
 
 #[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
-    })
-}
-
-#[inline(always)]
 fn quantize_centi_i32(value: f64) -> i32 {
     (if value.is_finite() { value } else { 0.0 } * 100.0)
         .round()
@@ -259,7 +240,7 @@ fn quantize_centi_u32(value: f64) -> u32 {
 #[inline(always)]
 fn cached_fmt2_f32(value: f32) -> Arc<str> {
     let key = quantize_centi_i32(f64::from(value));
-    cached_text(&FMT2_CACHE_F32, key, || {
+    cached_text(&FMT2_CACHE_F32, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}", key as f64 / 100.0)
     })
 }
@@ -267,7 +248,7 @@ fn cached_fmt2_f32(value: f32) -> Arc<str> {
 #[inline(always)]
 fn cached_percent2_f64(value: f64) -> Arc<str> {
     let key = quantize_centi_u32(value);
-    cached_text(&PERCENT2_CACHE_F64, key, || {
+    cached_text(&PERCENT2_CACHE_F64, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}%", key as f64 / 100.0)
     })
 }
@@ -275,38 +256,51 @@ fn cached_percent2_f64(value: f64) -> Arc<str> {
 #[inline(always)]
 fn cached_signed_percent2_f64(value: f64, neg: bool) -> Arc<str> {
     let key = quantize_centi_u32(value);
-    cached_text(&SIGNED_PERCENT2_CACHE_F64, (key, neg), || {
-        if neg {
-            format!("-{:.2}%", key as f64 / 100.0)
-        } else {
-            format!("+{:.2}%", key as f64 / 100.0)
-        }
-    })
+    cached_text(
+        &SIGNED_PERCENT2_CACHE_F64,
+        (key, neg),
+        TEXT_CACHE_LIMIT,
+        || {
+            if neg {
+                format!("-{:.2}%", key as f64 / 100.0)
+            } else {
+                format!("+{:.2}%", key as f64 / 100.0)
+            }
+        },
+    )
 }
 
 #[inline(always)]
 fn cached_neg_int_u32(value: u32) -> Arc<str> {
-    cached_text(&NEG_INT_CACHE_U32, value, || format!("-{value}"))
+    cached_text(&NEG_INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
+        format!("-{value}")
+    })
 }
 
 #[inline(always)]
 fn cached_paren_i32(value: i32) -> Arc<str> {
-    cached_text(&PAREN_INT_CACHE_I32, value, || format!("({value})"))
+    cached_text(&PAREN_INT_CACHE_I32, value, TEXT_CACHE_LIMIT, || {
+        format!("({value})")
+    })
 }
 
 #[inline(always)]
 fn cached_int_i32(value: i32) -> Arc<str> {
-    cached_text(&INT_CACHE_I32, value, || value.to_string())
+    cached_text(&INT_CACHE_I32, value, TEXT_CACHE_LIMIT, || {
+        value.to_string()
+    })
 }
 
 #[inline(always)]
 fn cached_int_u32(value: u32) -> Arc<str> {
-    cached_text(&INT_CACHE_U32, value, || value.to_string())
+    cached_text(&INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
+        value.to_string()
+    })
 }
 
 #[inline(always)]
 fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
-    cached_text(&RATIO_CACHE_I32, (curr, total), || {
+    cached_text(&RATIO_CACHE_I32, (curr, total), TEXT_CACHE_LIMIT, || {
         format!("{curr}/{total}")
     })
 }
@@ -314,7 +308,7 @@ fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
 #[inline(always)]
 fn cached_offset_ms(value: f32) -> Arc<str> {
     let key = quantize_centi_i32(f64::from(value));
-    cached_text(&OFFSET_MS_CACHE_F32, key, || {
+    cached_text(&OFFSET_MS_CACHE_F32, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}ms", key as f64 / 100.0)
     })
 }
@@ -324,6 +318,7 @@ fn cached_run_timer(seconds: i32, minute_threshold: i32, trailing_space: bool) -
     cached_text(
         &RUN_TIMER_CACHE,
         (seconds, minute_threshold, trailing_space),
+        TEXT_CACHE_LIMIT,
         || {
             let mut s = if seconds < 10 {
                 format!("0.0{seconds}")
@@ -1259,7 +1254,7 @@ fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
 #[inline(always)]
 fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
     let key = gameplay_mods_text_key(state, player_idx);
-    cached_text(&GAMEPLAY_MODS_CACHE, key, || {
+    cached_text(&GAMEPLAY_MODS_CACHE, key, TEXT_CACHE_LIMIT, || {
         let mut parts = Vec::with_capacity(32);
         parts.push(format_speed_mod_for_display(
             effective_scroll_speed_for_player(state, player_idx),
