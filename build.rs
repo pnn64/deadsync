@@ -4,12 +4,23 @@ use std::{
     error::Error,
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Rerun on shader or asset changes
     println!("cargo:rerun-if-changed=src/core/gfx/shaders");
     println!("cargo:rerun-if-changed=assets");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_PIPEWIRE_AUDIO");
+    println!("cargo:rustc-check-cfg=cfg(has_jack_audio)");
+    println!("cargo:rustc-check-cfg=cfg(has_pipewire_audio)");
+    println!("cargo:rustc-check-cfg=cfg(has_pulse_audio)");
+
+    detect_jack_audio();
+    detect_pipewire_audio();
+    detect_pulse_audio();
+    configure_windows_stack();
+    emit_build_info();
 
     embed_windows_icon()?;
 
@@ -18,14 +29,53 @@ fn main() -> Result<(), Box<dyn Error>> {
     // OUT_DIR used by include_bytes! in Vulkan source
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
 
-    // Compile Vulkan shaders with optimization based on the build profile.
-    compile_vulkan_shaders(&mut compiler, &out_dir)?;
+    // 32-bit targets compile without Vulkan backends, so skip the shader pass there.
+    if std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH").as_deref() != Ok("32") {
+        compile_vulkan_shaders(&mut compiler, &out_dir)?;
+    }
 
     // Copy assets into target/<profile>
     let target_dir = compute_target_dir()?;
     copy_assets(&target_dir)?;
 
     Ok(())
+}
+
+fn detect_jack_audio() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os == "linux" {
+        println!("cargo:rustc-cfg=has_jack_audio");
+    }
+}
+
+fn detect_pipewire_audio() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "linux" {
+        return;
+    }
+    if std::env::var_os("CARGO_FEATURE_PIPEWIRE_AUDIO").is_none() {
+        return;
+    }
+    println!("cargo:rustc-cfg=has_pipewire_audio");
+}
+
+fn detect_pulse_audio() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os == "linux" {
+        println!("cargo:rustc-cfg=has_pulse_audio");
+    }
+}
+
+fn configure_windows_stack() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "windows" {
+        return;
+    }
+    // Gameplay/notefield construction currently uses a large main-thread stack
+    // frame in debug builds. Windows binaries default to a 1 MiB stack reserve,
+    // which is smaller than the reserve we effectively get on Unix and has
+    // started overflowing when entering gameplay.
+    println!("cargo:rustc-link-arg-bins=/STACK:8388608");
 }
 
 #[cfg(windows)]
@@ -153,4 +203,38 @@ fn copy_assets(target_dir: &Path) -> Result<(), Box<dyn Error>> {
         copy("assets", target_dir, &options)?;
     }
     Ok(())
+}
+
+fn emit_build_info() {
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string()));
+    let hash = git_output(&manifest_dir, &["rev-parse", "--short=10", "HEAD"])
+        .unwrap_or_else(|| "unknown".to_string());
+    let stamp = git_output(
+        &manifest_dir,
+        &[
+            "log",
+            "-1",
+            "--date=format-local:%Y%m%d @ %H:%M:%S",
+            "--format=%cd",
+            "HEAD",
+        ],
+    )
+    .unwrap_or_else(|| "unknown".to_string());
+    println!("cargo:rustc-env=DEADSYNC_BUILD_HASH={hash}");
+    println!("cargo:rustc-env=DEADSYNC_BUILD_STAMP={stamp}");
+}
+
+fn git_output(cwd: &Path, args: &[&str]) -> Option<String> {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8(output.stdout).ok()?;
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }

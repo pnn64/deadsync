@@ -1,6 +1,7 @@
 use crate::core::gfx::{
-    BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, Texture as RendererTexture,
+    BlendMode, ClockDomainTrace, DrawStats, MeshMode, ObjectType, PresentModePolicy,
+    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    Texture as RendererTexture, TextureHandle,
 };
 use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
@@ -13,17 +14,19 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     error::Error,
-    hash::Hasher,
     mem,
     sync::{Arc, mpsc},
     time::Instant,
 };
-use twox_hash::XxHash64;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
+const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Api {
+    #[cfg(not(target_pointer_width = "32"))]
     Vulkan,
     OpenGL,
     #[cfg(target_os = "windows")]
@@ -34,6 +37,7 @@ impl Api {
     #[inline(always)]
     const fn name(self) -> &'static str {
         match self {
+            #[cfg(not(target_pointer_width = "32"))]
             Self::Vulkan => "Vulkan",
             Self::OpenGL => "OpenGL",
             #[cfg(target_os = "windows")]
@@ -44,6 +48,7 @@ impl Api {
     #[inline(always)]
     const fn backends(self) -> wgpu::Backends {
         match self {
+            #[cfg(not(target_pointer_width = "32"))]
             Self::Vulkan => wgpu::Backends::VULKAN,
             Self::OpenGL => wgpu::Backends::GL,
             #[cfg(target_os = "windows")]
@@ -62,7 +67,7 @@ struct Vertex {
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct InstanceRaw {
-    center: [f32; 2],
+    center: [f32; 4],
     size: [f32; 2],
     rot_sin_cos: [f32; 2],
     tint: [f32; 4],
@@ -164,9 +169,7 @@ struct SpriteRun {
 struct TexturedMeshRun {
     vertex_start: u32,
     vertex_count: u32,
-    dynamic_geom: bool,
     geom_key: u64,
-    cached_vertex_buffer: Option<wgpu::Buffer>,
     instance_start: u32,
     instance_count: u32,
     mode: MeshMode,
@@ -182,55 +185,17 @@ struct TMeshGeomKey {
     len: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TMeshCacheKey {
-    hash: u64,
-    len: u32,
-}
-
-#[derive(Clone)]
-enum FrameTMeshGeom {
-    Dynamic {
-        vertex_start: u32,
-        vertex_count: u32,
-    },
-    Cached {
-        cache_id: u64,
-        vertex_count: u32,
-        buffer: wgpu::Buffer,
-    },
-}
-
-struct TMeshCacheEntry {
-    id: u64,
+#[derive(Clone, Copy)]
+struct FrameTMeshGeom {
+    vertex_start: u32,
     vertex_count: u32,
-    bytes: u64,
-    last_used_frame: u64,
-    buffer: wgpu::Buffer,
 }
 
-struct TMeshSeenEntry {
-    hits: u8,
-    last_seen_frame: u64,
-}
-
-#[derive(Clone, Copy, Default)]
-struct TMeshFrameDebug {
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
-}
-
-#[derive(Default)]
-struct TMeshDebugAccum {
-    frames: u32,
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
+#[derive(Clone, Copy, Debug, Default)]
+struct PresentCompletion {
+    present_id: u32,
+    host_ns: u64,
+    interval_ns: u64,
 }
 
 enum Op {
@@ -295,49 +260,72 @@ pub struct State {
     tmesh_vertex_capacity: usize,
     tmesh_instance_buffer: wgpu::Buffer,
     tmesh_instance_capacity: usize,
-    tmesh_cache_entries: HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    tmesh_cache_seen: HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    tmesh_cache_frame: u64,
-    tmesh_cache_total_bytes: u64,
-    next_tmesh_cache_id: u64,
-    tmesh_debug_enabled: bool,
-    tmesh_debug_accum: TMeshDebugAccum,
     window_size: (u32, u32),
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     next_texture_id: u64,
+    next_present_id: u32,
+    present_done_tx: mpsc::Sender<PresentCompletion>,
+    present_done_rx: mpsc::Receiver<PresentCompletion>,
+    last_completed_present_id: u32,
+    last_host_present_ns: u64,
+    last_present_interval_ns: u64,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
 }
 
+#[cfg(not(target_pointer_width = "32"))]
 pub fn init_vulkan(
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
-    init(Api::Vulkan, window, vsync_enabled, gfx_debug_enabled)
+    init(
+        Api::Vulkan,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
 }
 
 pub fn init_opengl(
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
-    init(Api::OpenGL, window, vsync_enabled, gfx_debug_enabled)
+    init(
+        Api::OpenGL,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
 }
 
 #[cfg(target_os = "windows")]
 pub fn init_dx12(
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
-    init(Api::DirectX, window, vsync_enabled, gfx_debug_enabled)
+    init(
+        Api::DirectX,
+        window,
+        vsync_enabled,
+        present_mode_policy,
+        gfx_debug_enabled,
+    )
 }
 
 fn init(
     api: Api,
     window: Arc<Window>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
     info!("Initializing {} (wgpu) backend...", api.name());
@@ -369,7 +357,10 @@ fn init(
     .map_err(|e| format!("No suitable {} adapter found: {e}", api.name()))?;
     log_wgpu_adapter_info(api, &adapter);
 
+    #[cfg(not(target_pointer_width = "32"))]
     let want_immediates = matches!(api, Api::Vulkan);
+    #[cfg(target_pointer_width = "32")]
+    let want_immediates = false;
     let use_immediates = want_immediates && adapter.features().contains(wgpu::Features::IMMEDIATES);
     if want_immediates && !use_immediates {
         warn!(
@@ -403,12 +394,8 @@ fn init(
     let size = window.inner_size();
     let caps = surface.get_capabilities(&adapter);
     let format = pick_format(&caps);
-    let present_mode = pick_present_mode(&caps.present_modes, vsync_enabled);
-    let alpha_mode = caps
-        .alpha_modes
-        .first()
-        .copied()
-        .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+    let present_mode = pick_present_mode(&caps.present_modes, vsync_enabled, present_mode_policy);
+    let alpha_mode = pick_alpha_mode(&caps);
 
     let config = wgpu::SurfaceConfiguration {
         usage: pick_surface_usage(&caps),
@@ -518,6 +505,7 @@ fn init(
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    let (present_done_tx, present_done_rx) = mpsc::channel();
 
     info!("{} (wgpu) backend initialized.", api.name());
 
@@ -558,19 +546,101 @@ fn init(
         tmesh_vertex_capacity,
         tmesh_instance_buffer,
         tmesh_instance_capacity,
-        tmesh_cache_entries: HashMap::new(),
-        tmesh_cache_seen: HashMap::new(),
-        tmesh_cache_frame: 0,
-        tmesh_cache_total_bytes: 0,
-        next_tmesh_cache_id: 1,
-        tmesh_debug_enabled: gfx_debug_enabled,
-        tmesh_debug_accum: TMeshDebugAccum::default(),
         window_size: (size.width, size.height),
         vsync_enabled,
+        present_mode_policy,
         next_texture_id: 1,
+        next_present_id: 1,
+        present_done_tx,
+        present_done_rx,
+        last_completed_present_id: 0,
+        last_host_present_ns: 0,
+        last_present_interval_ns: 0,
         screenshot_requested: false,
         captured_frame: None,
     })
+}
+
+#[cfg(target_os = "windows")]
+#[inline(always)]
+fn current_host_nanos() -> u64 {
+    crate::core::windows_rt::current_host_nanos()
+}
+
+#[cfg(not(target_os = "windows"))]
+#[inline(always)]
+const fn current_host_nanos() -> u64 {
+    0
+}
+
+#[cfg(target_os = "windows")]
+#[inline(always)]
+const fn host_clock_trace() -> ClockDomainTrace {
+    ClockDomainTrace::Qpc
+}
+
+#[cfg(not(target_os = "windows"))]
+#[inline(always)]
+const fn host_clock_trace() -> ClockDomainTrace {
+    ClockDomainTrace::Unknown
+}
+
+#[inline(always)]
+const fn wgpu_present_mode_trace(mode: wgpu::PresentMode) -> PresentModeTrace {
+    match mode {
+        wgpu::PresentMode::Fifo | wgpu::PresentMode::AutoVsync => PresentModeTrace::Fifo,
+        wgpu::PresentMode::FifoRelaxed => PresentModeTrace::FifoRelaxed,
+        wgpu::PresentMode::Mailbox => PresentModeTrace::Mailbox,
+        wgpu::PresentMode::Immediate | wgpu::PresentMode::AutoNoVsync => {
+            PresentModeTrace::Immediate
+        }
+    }
+}
+
+#[inline(always)]
+fn next_present_id(state: &mut State) -> u32 {
+    let id = state.next_present_id.max(1);
+    state.next_present_id = state.next_present_id.wrapping_add(1);
+    if state.next_present_id == 0 {
+        state.next_present_id = 1;
+    }
+    id
+}
+
+#[inline(always)]
+fn drain_present_completions(state: &mut State) -> PresentCompletion {
+    let mut latest = PresentCompletion {
+        present_id: state.last_completed_present_id,
+        host_ns: state.last_host_present_ns,
+        interval_ns: 0,
+    };
+    while let Ok(done) = state.present_done_rx.try_recv() {
+        if done.present_id == 0 {
+            continue;
+        }
+        if done.host_ns != 0
+            && state.last_host_present_ns != 0
+            && done.present_id != state.last_completed_present_id
+        {
+            let interval_ns = done.host_ns.saturating_sub(state.last_host_present_ns);
+            latest.interval_ns = interval_ns;
+            if interval_ns != 0 {
+                state.last_present_interval_ns = if state.last_present_interval_ns == 0 {
+                    interval_ns
+                } else {
+                    ((state.last_present_interval_ns.saturating_mul(3)).saturating_add(interval_ns))
+                        / 4
+                };
+            }
+        }
+        state.last_completed_present_id = done.present_id;
+        if done.host_ns != 0 {
+            state.last_host_present_ns = done.host_ns;
+        }
+        latest.present_id = state.last_completed_present_id;
+        latest.host_ns = state.last_host_present_ns;
+    }
+    latest
 }
 
 #[inline(always)]
@@ -765,9 +835,37 @@ pub fn create_texture(
     })
 }
 
+pub fn update_texture(
+    state: &mut State,
+    texture: &mut Texture,
+    image: &RgbaImage,
+) -> Result<(), Box<dyn Error>> {
+    let size = wgpu::Extent3d {
+        width: image.width(),
+        height: image.height(),
+        depth_or_array_layers: 1,
+    };
+    state.queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture._texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        image.as_raw(),
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * size.width),
+            rows_per_image: Some(size.height),
+        },
+        size,
+    );
+    Ok(())
+}
+
 #[inline(always)]
-fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-    let center = [m[3][0], m[3][1]];
+fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 4], [f32; 2], [f32; 2]) {
+    let center = [m[3][0], m[3][1], m[3][2], 0.0];
     let c0 = [m[0][0], m[0][1]];
     let c1 = [m[1][0], m[1][1]];
     let sx = c0[0].hypot(c0[1]).max(1e-12);
@@ -780,25 +878,13 @@ fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
 #[inline(always)]
 fn pick_tex<'a>(api: Api, tex: &'a RendererTexture) -> Option<&'a Texture> {
     match (api, tex) {
+        #[cfg(not(target_pointer_width = "32"))]
         (Api::Vulkan, RendererTexture::VulkanWgpu(t)) => Some(t),
         (Api::OpenGL, RendererTexture::OpenGLWgpu(t)) => Some(t),
         #[cfg(target_os = "windows")]
         (Api::DirectX, RendererTexture::DirectX(t)) => Some(t),
         _ => None,
     }
-}
-
-#[inline(always)]
-fn lookup_texture_case_insensitive<'a>(
-    textures: &'a HashMap<String, RendererTexture>,
-    key: &str,
-) -> Option<&'a RendererTexture> {
-    if let Some(tex) = textures.get(key) {
-        return Some(tex);
-    }
-    textures
-        .iter()
-        .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
 }
 
 #[inline(always)]
@@ -816,7 +902,7 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<String, RendererTexture>,
+    textures: &HashMap<TextureHandle, RendererTexture>,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]
@@ -837,18 +923,8 @@ pub fn draw(
 
     let api = state.api;
     let objects_len = render_list.objects.len();
-    state.tmesh_cache_frame = state.tmesh_cache_frame.wrapping_add(1);
-    prune_tmesh_seen_entries(&mut state.tmesh_cache_seen, state.tmesh_cache_frame);
-    let mut tmesh_debug_frame = TMeshFrameDebug::default();
 
     {
-        let cache_frame = state.tmesh_cache_frame;
-        let device = &state.device;
-        let tmesh_cache_entries = &mut state.tmesh_cache_entries;
-        let tmesh_cache_seen = &mut state.tmesh_cache_seen;
-        let next_tmesh_cache_id = &mut state.next_tmesh_cache_id;
-        let tmesh_cache_total_bytes = &mut state.tmesh_cache_total_bytes;
-
         let instances = &mut state.scratch_instances;
         instances.clear();
         if instances.capacity() < objects_len {
@@ -885,15 +961,16 @@ pub fn draw(
         for obj in &render_list.objects {
             match &obj.object_type {
                 ObjectType::Sprite {
-                    texture_id,
                     tint,
                     uv_scale,
                     uv_offset,
                     local_offset,
                     local_offset_rot_sin_cos,
                     edge_fade,
+                    ..
                 } => {
-                    let tex = lookup_texture_case_insensitive(textures, texture_id.as_ref())
+                    let tex = textures
+                        .get(&obj.texture_handle)
                         .and_then(|t| pick_tex(api, t));
                     let Some(tex) = tex else {
                         continue;
@@ -955,17 +1032,18 @@ pub fn draw(
                     });
                 }
                 ObjectType::TexturedMesh {
-                    texture_id,
                     vertices,
                     mode,
                     uv_scale,
                     uv_offset,
                     uv_tex_shift,
+                    ..
                 } => {
                     if vertices.is_empty() {
                         continue;
                     }
-                    let tex = lookup_texture_case_insensitive(textures, texture_id.as_ref())
+                    let tex = textures
+                        .get(&obj.texture_handle)
                         .and_then(|t| pick_tex(api, t));
                     let Some(tex) = tex else {
                         continue;
@@ -975,66 +1053,29 @@ pub fn draw(
                         len: vertices.len(),
                     };
                     let resolved_geom = if let Some(geom) = tmesh_geom.get(&geom_key) {
-                        geom.clone()
+                        *geom
                     } else {
-                        let geom = if let Some(cached) = try_get_or_promote_cached_tmesh_geom(
-                            device,
-                            tmesh_cache_entries,
-                            tmesh_cache_seen,
-                            next_tmesh_cache_id,
-                            tmesh_cache_total_bytes,
-                            &mut tmesh_debug_frame,
-                            cache_frame,
-                            vertices.as_ref(),
-                        ) {
-                            cached
-                        } else {
-                            let start = tmesh_vertices.len() as u32;
-                            let count = vertices.len() as u32;
-                            tmesh_vertices.reserve(vertices.len());
-                            for v in vertices.iter() {
-                                tmesh_vertices.push(TexturedMeshVertexRaw {
-                                    pos: v.pos,
-                                    uv: v.uv,
-                                    tex_matrix_scale: v.tex_matrix_scale,
-                                    color: v.color,
-                                });
-                            }
-                            tmesh_debug_frame.dynamic_upload_vertices = tmesh_debug_frame
-                                .dynamic_upload_vertices
-                                .saturating_add(count as u64);
-                            FrameTMeshGeom::Dynamic {
-                                vertex_start: start,
-                                vertex_count: count,
-                            }
+                        let start = tmesh_vertices.len() as u32;
+                        let count = vertices.len() as u32;
+                        tmesh_vertices.reserve(vertices.len());
+                        for v in vertices.iter() {
+                            tmesh_vertices.push(TexturedMeshVertexRaw {
+                                pos: v.pos,
+                                uv: v.uv,
+                                tex_matrix_scale: v.tex_matrix_scale,
+                                color: v.color,
+                            });
+                        }
+                        let geom = FrameTMeshGeom {
+                            vertex_start: start,
+                            vertex_count: count,
                         };
-                        tmesh_geom.insert(geom_key, geom.clone());
+                        tmesh_geom.insert(geom_key, geom);
                         geom
                     };
-                    let (
-                        vertex_start,
-                        vertex_count,
-                        dynamic_geom,
-                        geom_run_key,
-                        cached_vertex_buffer,
-                    ) = match resolved_geom {
-                        FrameTMeshGeom::Dynamic {
-                            vertex_start,
-                            vertex_count,
-                        } => {
-                            let key = (((vertex_start as u64) << 32) | (vertex_count as u64))
-                                .wrapping_shl(1);
-                            (vertex_start, vertex_count, true, key, None)
-                        }
-                        FrameTMeshGeom::Cached {
-                            cache_id,
-                            vertex_count,
-                            buffer,
-                        } => {
-                            let key = cache_id.wrapping_shl(1) | 1;
-                            (0, vertex_count, false, key, Some(buffer))
-                        }
-                    };
+                    let vertex_start = resolved_geom.vertex_start;
+                    let vertex_count = resolved_geom.vertex_count;
+                    let geom_run_key = ((vertex_start as u64) << 32) | (vertex_count as u64);
                     let instance_start = tmesh_instances.len() as u32;
                     let model: [[f32; 4]; 4] = obj.transform.into();
                     tmesh_instances.push(TexturedMeshInstanceRaw {
@@ -1052,7 +1093,6 @@ pub fn draw(
                         && last.blend == obj.blend
                         && last.camera == obj.camera
                         && last.mode == *mode
-                        && last.dynamic_geom == dynamic_geom
                         && last.geom_key == geom_run_key
                         && last.vertex_count == vertex_count
                         && last.instance_start + last.instance_count == instance_start
@@ -1064,9 +1104,7 @@ pub fn draw(
                     ops.push(Op::TexturedMesh(TexturedMeshRun {
                         vertex_start,
                         vertex_count,
-                        dynamic_geom,
                         geom_key: geom_run_key,
-                        cached_vertex_buffer,
                         instance_start,
                         instance_count: 1,
                         mode: *mode,
@@ -1137,6 +1175,8 @@ pub fn draw(
         }
     };
     stats.acquire_us = elapsed_us_since(acquire_started);
+    let waited_for_image = stats.acquire_us >= WGPU_IMAGE_WAIT_THRESHOLD_US;
+    let suboptimal = frame.suboptimal;
     let view = frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
@@ -1158,7 +1198,7 @@ pub fn draw(
                         r: f64::from(render_list.clear_color[0]),
                         g: f64::from(render_list.clear_color[1]),
                         b: f64::from(render_list.clear_color[2]),
-                        a: f64::from(render_list.clear_color[3]),
+                        a: 1.0,
                     }),
                     store: wgpu::StoreOp::Store,
                 },
@@ -1288,20 +1328,10 @@ pub fn draw(
                         last_bind = Some(run.key);
                     }
                     if last_tmesh_geom_key != Some(run.geom_key) {
-                        if run.dynamic_geom {
-                            pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
-                        } else if let Some(buffer) = run.cached_vertex_buffer.as_ref() {
-                            pass.set_vertex_buffer(0, buffer.slice(..));
-                        } else {
-                            continue;
-                        }
+                        pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
                         last_tmesh_geom_key = Some(run.geom_key);
                     }
-                    let draw_start = if run.dynamic_geom {
-                        run.vertex_start
-                    } else {
-                        0
-                    };
+                    let draw_start = run.vertex_start;
                     let draw_end = draw_start + run.vertex_count;
                     match run.mode {
                         MeshMode::Triangles => pass.draw(
@@ -1370,12 +1400,22 @@ pub fn draw(
         None
     };
 
+    let submitted_present_id = next_present_id(state);
     let submit_started = Instant::now();
     let submission_index = state.queue.submit(Some(encoder.finish()));
     stats.submit_us = elapsed_us_since(submit_started);
+    let present_done_tx = state.present_done_tx.clone();
+    state.queue.on_submitted_work_done(move || {
+        let _ = present_done_tx.send(PresentCompletion {
+            present_id: submitted_present_id,
+            host_ns: current_host_nanos(),
+            interval_ns: 0,
+        });
+    });
     let present_started = Instant::now();
     frame.present();
     stats.present_us = elapsed_us_since(present_started);
+    let mut back_pressure_waited = false;
     if apply_present_back_pressure && screenshot_readback.is_none() {
         // Uncapped wgpu submission can otherwise keep the CPU hot by queuing
         // work continuously; wait for this frame to retire before proceeding.
@@ -1384,10 +1424,11 @@ pub fn draw(
             submission_index: Some(submission_index),
             timeout: None,
         });
-        stats.gpu_wait_us = stats
-            .gpu_wait_us
-            .saturating_add(elapsed_us_since(wait_started));
+        let wait_us = elapsed_us_since(wait_started);
+        stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+        back_pressure_waited = wait_us >= WGPU_BACK_PRESSURE_THRESHOLD_US;
     }
+    let mut queue_idle_waited = false;
     if let Some((readback_buffer, width, height, padded_row_bytes, format)) = screenshot_readback {
         let slice = readback_buffer.slice(..);
         let (tx, rx) = mpsc::channel();
@@ -1399,9 +1440,9 @@ pub fn draw(
             submission_index: None,
             timeout: None,
         });
-        stats.gpu_wait_us = stats
-            .gpu_wait_us
-            .saturating_add(elapsed_us_since(wait_started));
+        let wait_us = elapsed_us_since(wait_started);
+        stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+        queue_idle_waited = wait_us != 0;
         if rx.recv().is_ok_and(|res| res.is_ok()) {
             let data = slice.get_mapped_range();
             let row_bytes = width * 4;
@@ -1440,7 +1481,37 @@ pub fn draw(
             warn!("wgpu screenshot readback failed: map_async returned error");
         }
     }
-    push_tmesh_debug_sample(state, tmesh_debug_frame);
+    let completion = drain_present_completions(state);
+    let in_flight_images = if completion.present_id == 0 {
+        1
+    } else if submitted_present_id >= completion.present_id {
+        submitted_present_id
+            .saturating_sub(completion.present_id)
+            .min(u32::from(u8::MAX)) as u8
+    } else {
+        0
+    };
+    stats.present_stats = PresentStats {
+        mode: wgpu_present_mode_trace(state.config.present_mode),
+        display_clock: ClockDomainTrace::Unknown,
+        host_clock: if completion.host_ns != 0 {
+            host_clock_trace()
+        } else {
+            ClockDomainTrace::Unknown
+        },
+        in_flight_images,
+        waited_for_image,
+        applied_back_pressure: back_pressure_waited,
+        queue_idle_waited,
+        suboptimal,
+        submitted_present_id,
+        completed_present_id: completion.present_id,
+        refresh_ns: state.last_present_interval_ns,
+        actual_interval_ns: completion.interval_ns,
+        present_margin_ns: 0,
+        host_present_ns: completion.host_ns,
+        calibration_error_ns: 0,
+    };
 
     let mut tmesh_vpf = 0u32;
     for op in &state.scratch_ops {
@@ -1454,167 +1525,6 @@ pub fn draw(
 }
 
 #[inline(always)]
-fn tmesh_cache_key(vertices: &[crate::core::gfx::TexturedMeshVertex]) -> TMeshCacheKey {
-    let mut hasher = XxHash64::with_seed(0);
-    hasher.write(cast_slice(vertices));
-    TMeshCacheKey {
-        hash: hasher.finish(),
-        len: vertices.len() as u32,
-    }
-}
-
-#[inline(always)]
-fn build_tmesh_vertex_raw(
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Vec<TexturedMeshVertexRaw> {
-    let mut out = Vec::with_capacity(vertices.len());
-    for v in vertices {
-        out.push(TexturedMeshVertexRaw {
-            pos: v.pos,
-            uv: v.uv,
-            tex_matrix_scale: v.tex_matrix_scale,
-            color: v.color,
-        });
-    }
-    out
-}
-
-fn try_get_or_promote_cached_tmesh_geom(
-    device: &wgpu::Device,
-    cache_entries: &mut HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    next_cache_id: &mut u64,
-    cache_total_bytes: &mut u64,
-    debug_frame: &mut TMeshFrameDebug,
-    frame: u64,
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Option<FrameTMeshGeom> {
-    if vertices.len() < TMESH_CACHE_MIN_VERTS || vertices.is_empty() {
-        return None;
-    }
-
-    let cache_key = tmesh_cache_key(vertices);
-    if let Some(entry) = cache_entries.get_mut(&cache_key) {
-        entry.last_used_frame = frame;
-        debug_frame.cache_hits = debug_frame.cache_hits.saturating_add(1);
-        return Some(FrameTMeshGeom::Cached {
-            cache_id: entry.id,
-            vertex_count: entry.vertex_count,
-            buffer: entry.buffer.clone(),
-        });
-    }
-    debug_frame.cache_misses = debug_frame.cache_misses.saturating_add(1);
-
-    let promote = {
-        let seen = cache_seen.entry(cache_key).or_insert(TMeshSeenEntry {
-            hits: 0,
-            last_seen_frame: frame,
-        });
-        if frame.saturating_sub(seen.last_seen_frame) > TMESH_CACHE_SEEN_TTL_FRAMES {
-            seen.hits = 0;
-        }
-        seen.last_seen_frame = frame;
-        seen.hits = seen.hits.saturating_add(1);
-        seen.hits >= TMESH_CACHE_PROMOTE_HITS
-    };
-    if !promote {
-        return None;
-    }
-
-    let raw = build_tmesh_vertex_raw(vertices);
-    let vertex_count = raw.len() as u32;
-    let bytes = (raw.len() * mem::size_of::<TexturedMeshVertexRaw>()) as u64;
-    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("wgpu textured-mesh cached vertices"),
-        contents: cast_slice(raw.as_slice()),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
-    debug_frame.cache_promotions = debug_frame.cache_promotions.saturating_add(1);
-    let cache_id = *next_cache_id;
-    *next_cache_id = (*next_cache_id).wrapping_add(1).max(1);
-    *cache_total_bytes = cache_total_bytes.saturating_add(bytes);
-    cache_entries.insert(
-        cache_key,
-        TMeshCacheEntry {
-            id: cache_id,
-            vertex_count,
-            bytes,
-            last_used_frame: frame,
-            buffer: buffer.clone(),
-        },
-    );
-    debug_frame.cache_evictions = debug_frame
-        .cache_evictions
-        .saturating_add(evict_tmesh_cache_entries(cache_entries, cache_total_bytes) as u64);
-    Some(FrameTMeshGeom::Cached {
-        cache_id,
-        vertex_count,
-        buffer,
-    })
-}
-
-fn evict_tmesh_cache_entries(
-    cache_entries: &mut HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    cache_total_bytes: &mut u64,
-) -> u32 {
-    let mut evicted: u32 = 0;
-    while *cache_total_bytes > TMESH_CACHE_MAX_BYTES {
-        let Some(oldest_key) = cache_entries
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_used_frame)
-            .map(|(key, _)| *key)
-        else {
-            break;
-        };
-        if let Some(entry) = cache_entries.remove(&oldest_key) {
-            *cache_total_bytes = cache_total_bytes.saturating_sub(entry.bytes);
-            evicted = evicted.saturating_add(1);
-        }
-    }
-    evicted
-}
-
-fn prune_tmesh_seen_entries(cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>, frame: u64) {
-    cache_seen.retain(|_, seen| {
-        frame.saturating_sub(seen.last_seen_frame) <= TMESH_CACHE_SEEN_TTL_FRAMES
-    });
-}
-
-fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
-    if !state.tmesh_debug_enabled {
-        return;
-    }
-    let accum = &mut state.tmesh_debug_accum;
-    accum.frames = accum.frames.saturating_add(1);
-    accum.cache_hits = accum.cache_hits.saturating_add(frame.cache_hits);
-    accum.cache_misses = accum.cache_misses.saturating_add(frame.cache_misses);
-    accum.cache_promotions = accum
-        .cache_promotions
-        .saturating_add(frame.cache_promotions);
-    accum.cache_evictions = accum.cache_evictions.saturating_add(frame.cache_evictions);
-    accum.dynamic_upload_vertices = accum
-        .dynamic_upload_vertices
-        .saturating_add(frame.dynamic_upload_vertices);
-
-    if accum.frames < TMESH_DEBUG_LOG_EVERY_FRAMES {
-        return;
-    }
-    let frames = u64::from(accum.frames).max(1);
-    let dyn_avg = accum.dynamic_upload_vertices / frames;
-    debug!(
-        "{} (wgpu) tmesh-cache: hit={} miss={} promote={} evict={} dyn_upload_vtx/frame={} cache_entries={} cache_mb={:.2}",
-        state.api.name(),
-        accum.cache_hits,
-        accum.cache_misses,
-        accum.cache_promotions,
-        accum.cache_evictions,
-        dyn_avg,
-        state.tmesh_cache_entries.len(),
-        (state.tmesh_cache_total_bytes as f64) / (1024.0 * 1024.0)
-    );
-    *accum = TMeshDebugAccum::default();
-}
-
 fn upload_projections(state: &mut State, cameras: &[Matrix4<f32>]) {
     let ProjState::Uniform { .. } = state.proj else {
         return;
@@ -1773,12 +1683,12 @@ fn reconfigure_surface(state: &mut State) {
     let new_format = pick_format(&caps);
     let format_changed = new_format != state.config.format;
     state.config.format = new_format;
-    state.config.present_mode = pick_present_mode(&caps.present_modes, state.vsync_enabled);
-    state.config.alpha_mode = caps
-        .alpha_modes
-        .first()
-        .copied()
-        .unwrap_or(wgpu::CompositeAlphaMode::Opaque);
+    state.config.present_mode = pick_present_mode(
+        &caps.present_modes,
+        state.vsync_enabled,
+        state.present_mode_policy,
+    );
+    state.config.alpha_mode = pick_alpha_mode(&caps);
     state.config.usage = pick_surface_usage(&caps);
     state.config.width = state.window_size.0;
     state.config.height = state.window_size.1;
@@ -1837,18 +1747,49 @@ fn pick_surface_usage(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureUsages {
     usage
 }
 
-fn pick_present_mode(modes: &[wgpu::PresentMode], vsync: bool) -> wgpu::PresentMode {
+#[inline(always)]
+fn pick_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
+    caps.alpha_modes
+        .iter()
+        .copied()
+        .find(|mode| *mode == wgpu::CompositeAlphaMode::Opaque)
+        .unwrap_or_else(|| {
+            caps.alpha_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::CompositeAlphaMode::Opaque)
+        })
+}
+
+#[inline(always)]
+const fn surface_write_mask() -> wgpu::ColorWrites {
+    wgpu::ColorWrites::RED
+        .union(wgpu::ColorWrites::GREEN)
+        .union(wgpu::ColorWrites::BLUE)
+}
+
+fn pick_present_mode(
+    modes: &[wgpu::PresentMode],
+    vsync: bool,
+    present_mode_policy: PresentModePolicy,
+) -> wgpu::PresentMode {
     let preferred = if vsync {
         [
             wgpu::PresentMode::AutoVsync,
             wgpu::PresentMode::Fifo,
             wgpu::PresentMode::FifoRelaxed,
         ]
+    } else if present_mode_policy == PresentModePolicy::Immediate {
+        [
+            wgpu::PresentMode::Immediate,
+            wgpu::PresentMode::AutoNoVsync,
+            wgpu::PresentMode::Mailbox,
+        ]
     } else {
         [
+            wgpu::PresentMode::Mailbox,
             wgpu::PresentMode::AutoNoVsync,
             wgpu::PresentMode::Immediate,
-            wgpu::PresentMode::Mailbox,
         ]
     };
 
@@ -1857,6 +1798,19 @@ fn pick_present_mode(modes: &[wgpu::PresentMode], vsync: bool) -> wgpu::PresentM
         .copied()
         .find(|p| modes.contains(p))
         .unwrap_or_else(|| modes[0])
+}
+
+pub fn set_present_config(
+    state: &mut State,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+) {
+    if state.vsync_enabled == vsync_enabled && state.present_mode_policy == present_mode_policy {
+        return;
+    }
+    state.vsync_enabled = vsync_enabled;
+    state.present_mode_policy = present_mode_policy;
+    reconfigure_surface(state);
 }
 
 fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
@@ -2103,7 +2057,7 @@ fn build_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: blend_state(mode),
-                write_mask: wgpu::ColorWrites::ALL,
+                write_mask: surface_write_mask(),
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
@@ -2145,7 +2099,7 @@ fn build_mesh_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: blend_state(mode),
-                write_mask: wgpu::ColorWrites::ALL,
+                write_mask: surface_write_mask(),
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
@@ -2190,7 +2144,7 @@ fn build_tmesh_pipeline(
             targets: &[Some(wgpu::ColorTargetState {
                 format,
                 blend: blend_state(mode),
-                write_mask: wgpu::ColorWrites::ALL,
+                write_mask: surface_write_mask(),
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
@@ -2278,7 +2232,7 @@ const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
-    2 => Float32x2, // center
+    2 => Float32x4, // center xyz + pad
     3 => Float32x2, // size
     4 => Float32x2, // sin/cos
     5 => Float32x4, // tint
@@ -2290,11 +2244,6 @@ const INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
 ];
 
 const PROJ_BYTES: u64 = mem::size_of::<[[f32; 4]; 4]>() as u64;
-const TMESH_CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
-const TMESH_CACHE_MIN_VERTS: usize = 32;
-const TMESH_CACHE_PROMOTE_HITS: u8 = 2;
-const TMESH_CACHE_SEEN_TTL_FRAMES: u64 = 1800;
-const TMESH_DEBUG_LOG_EVERY_FRAMES: u32 = 300;
 
 #[inline(always)]
 const fn cast_slice<T>(data: &[T]) -> &[u8] {

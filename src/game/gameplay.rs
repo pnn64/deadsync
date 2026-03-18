@@ -2894,6 +2894,7 @@ fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Player
             continue;
         }
         match note.note_type {
+<<<<<<< adstep/main/jump-recalc-fix
             NoteType::Tap => row_cells.push((note.row_index, note.column)),
             NoteType::Hold => {
                 totals.holds = totals.holds.saturating_add(1);
@@ -2913,6 +2914,12 @@ fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Player
             }
             NoteType::Mine => totals.mines = totals.mines.saturating_add(1),
             NoteType::Lift | NoteType::Fake => {}
+=======
+            NoteType::Hold => holds = holds.saturating_add(1),
+            NoteType::Roll => rolls = rolls.saturating_add(1),
+            NoteType::Mine => mines = mines.saturating_add(1),
+            NoteType::Tap | NoteType::Lift | NoteType::Fake => {}
+>>>>>>> main
         }
     }
 
@@ -4732,6 +4739,7 @@ fn refresh_active_attack_masks(state: &mut State) {
                     perspective = PerspectiveOverrides::default();
                     scroll_speed = None;
                     mini_percent = None;
+<<<<<<< adstep/main/jump-recalc-fix
                 }
                 chart.insert_mask |= window.chart.insert_mask;
                 chart.remove_mask |= window.chart.remove_mask;
@@ -4830,6 +4838,106 @@ fn refresh_active_attack_masks(state: &mut State) {
                 if let Some(mini) = window.mini_percent.filter(|v| v.is_finite()) {
                     mini_percent = Some(mini.clamp(-100.0, 150.0));
                 }
+=======
+                }
+                chart.insert_mask |= window.chart.insert_mask;
+                chart.remove_mask |= window.chart.remove_mask;
+                chart.holds_mask |= window.chart.holds_mask;
+                chart.turn_bits |= window.chart.turn_bits;
+                if let Some(v) = window.accel.boost {
+                    accel.boost = Some(v);
+                }
+                if let Some(v) = window.accel.brake {
+                    accel.brake = Some(v);
+                }
+                if let Some(v) = window.accel.wave {
+                    accel.wave = Some(v);
+                }
+                if let Some(v) = window.accel.expand {
+                    accel.expand = Some(v);
+                }
+                if let Some(v) = window.accel.boomerang {
+                    accel.boomerang = Some(v);
+                }
+                if let Some(v) = window.visual.drunk {
+                    visual.drunk = Some(v);
+                }
+                if let Some(v) = window.visual.dizzy {
+                    visual.dizzy = Some(v);
+                }
+                if let Some(v) = window.visual.confusion {
+                    visual.confusion = Some(v);
+                }
+                if let Some(v) = window.visual.flip {
+                    visual.flip = Some(v);
+                }
+                if let Some(v) = window.visual.invert {
+                    visual.invert = Some(v);
+                }
+                if let Some(v) = window.visual.tornado {
+                    visual.tornado = Some(v);
+                }
+                if let Some(v) = window.visual.tipsy {
+                    visual.tipsy = Some(v);
+                }
+                if let Some(v) = window.visual.bumpy {
+                    visual.bumpy = Some(v);
+                }
+                if let Some(v) = window.visual.beat {
+                    visual.beat = Some(v);
+                }
+                if let Some(v) = window.appearance.hidden {
+                    appearance.hidden = Some(v);
+                }
+                if let Some(v) = window.appearance.sudden {
+                    appearance.sudden = Some(v);
+                }
+                if let Some(v) = window.appearance.stealth {
+                    appearance.stealth = Some(v);
+                }
+                if let Some(v) = window.appearance.blink {
+                    appearance.blink = Some(v);
+                }
+                if let Some(v) = window.appearance.random_vanish {
+                    appearance.random_vanish = Some(v);
+                }
+                if let Some(v) = window.visibility.dark {
+                    visibility.dark = Some(v);
+                }
+                if let Some(v) = window.visibility.blind {
+                    visibility.blind = Some(v);
+                }
+                if let Some(v) = window.visibility.cover {
+                    visibility.cover = Some(v);
+                }
+                if let Some(v) = window.scroll.reverse {
+                    scroll.reverse = Some(v);
+                }
+                if let Some(v) = window.scroll.split {
+                    scroll.split = Some(v);
+                }
+                if let Some(v) = window.scroll.alternate {
+                    scroll.alternate = Some(v);
+                }
+                if let Some(v) = window.scroll.cross {
+                    scroll.cross = Some(v);
+                }
+                if let Some(v) = window.scroll.centered {
+                    scroll.centered = Some(v);
+                }
+                if let Some(v) = window.perspective.tilt {
+                    perspective.tilt = Some(v);
+                }
+                if let Some(v) = window.perspective.skew {
+                    perspective.skew = Some(v);
+                }
+                if let Some(speed) = window.scroll_speed {
+                    scroll_speed = Some(speed);
+                }
+                if let Some(mini) = window.mini_percent.filter(|v| v.is_finite()) {
+                    mini_percent = Some(mini.clamp(-100.0, 150.0));
+                }
+>>>>>>> main
             }
         }
         state.active_attack_clear_all[player] = clear_all;
@@ -4842,6 +4950,7 @@ fn refresh_active_attack_masks(state: &mut State) {
         state.active_attack_perspective[player] = perspective;
         state.active_attack_scroll_speed[player] = scroll_speed;
         state.active_attack_mini_percent[player] = mini_percent;
+<<<<<<< adstep/main/jump-recalc-fix
     }
 }
 
@@ -4878,6 +4987,128 @@ pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> A
 }
 
 #[inline(always)]
+pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> VisualEffects {
+    if player_idx >= state.num_players {
+        return VisualEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        VisualEffects::default()
+    } else {
+        VisualEffects::from_mask(profile::normalize_visual_effects_mask(
+            state.player_profiles[player_idx].visual_effects_active_mask,
+        ))
+    };
+    let attack = state.active_attack_visual[player_idx];
+    VisualEffects {
+        drunk: merge_attack_value(base.drunk, attack.drunk),
+        dizzy: merge_attack_value(base.dizzy, attack.dizzy),
+        confusion: merge_attack_value(base.confusion, attack.confusion),
+        big: base.big,
+        flip: merge_attack_value(base.flip, attack.flip),
+        invert: merge_attack_value(base.invert, attack.invert),
+        tornado: merge_attack_value(base.tornado, attack.tornado),
+        tipsy: merge_attack_value(base.tipsy, attack.tipsy),
+        bumpy: merge_attack_value(base.bumpy, attack.bumpy),
+        beat: merge_attack_value(base.beat, attack.beat),
+=======
+    }
+}
+
+#[inline(always)]
+fn merge_attack_value(base: f32, attack: Option<f32>) -> f32 {
+    attack.filter(|v| v.is_finite()).unwrap_or(base)
+}
+
+#[inline(always)]
+fn player_attack_base_cleared(state: &State, player_idx: usize) -> bool {
+    player_idx < state.num_players && state.active_attack_clear_all[player_idx]
+}
+
+#[inline(always)]
+pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> AccelEffects {
+    if player_idx >= state.num_players {
+        return AccelEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        AccelEffects::default()
+    } else {
+        AccelEffects::from_mask(profile::normalize_accel_effects_mask(
+            state.player_profiles[player_idx].accel_effects_active_mask,
+        ))
+    };
+    let attack = state.active_attack_accel[player_idx];
+    AccelEffects {
+        boost: merge_attack_value(base.boost, attack.boost),
+        brake: merge_attack_value(base.brake, attack.brake),
+        wave: merge_attack_value(base.wave, attack.wave),
+        expand: merge_attack_value(base.expand, attack.expand),
+        boomerang: merge_attack_value(base.boomerang, attack.boomerang),
+>>>>>>> main
+    }
+}
+
+#[inline(always)]
+<<<<<<< adstep/main/jump-recalc-fix
+pub fn effective_appearance_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> AppearanceEffects {
+    if player_idx >= state.num_players {
+        return AppearanceEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        AppearanceEffects::default()
+    } else {
+        AppearanceEffects::from_mask(profile::normalize_appearance_effects_mask(
+            state.player_profiles[player_idx].appearance_effects_active_mask,
+        ))
+    };
+    let attack = state.active_attack_appearance[player_idx];
+    AppearanceEffects {
+        hidden: merge_attack_value(base.hidden, attack.hidden),
+        sudden: merge_attack_value(base.sudden, attack.sudden),
+        stealth: merge_attack_value(base.stealth, attack.stealth),
+        blink: merge_attack_value(base.blink, attack.blink),
+        random_vanish: merge_attack_value(base.random_vanish, attack.random_vanish),
+    }
+}
+
+#[inline(always)]
+pub fn effective_visibility_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> VisibilityEffects {
+    if player_idx >= state.num_players {
+        return VisibilityEffects::default();
+    }
+    let attack = state.active_attack_visibility[player_idx];
+    VisibilityEffects {
+        dark: merge_attack_value(0.0, attack.dark),
+        blind: merge_attack_value(0.0, attack.blind),
+        cover: merge_attack_value(0.0, attack.cover),
+    }
+}
+
+#[inline(always)]
+pub fn active_chart_attack_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> ChartAttackEffects {
+    if player_idx >= state.num_players {
+        return ChartAttackEffects::default();
+    }
+    state.active_attack_chart[player_idx]
+}
+
+#[inline(always)]
+pub fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> ScrollEffects {
+    if player_idx >= state.num_players {
+        return ScrollEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        ScrollEffects::default()
+    } else {
+=======
 pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> VisualEffects {
     if player_idx >= state.num_players {
         return VisualEffects::default();
@@ -4964,6 +5195,7 @@ pub fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> 
     let base = if player_attack_base_cleared(state, player_idx) {
         ScrollEffects::default()
     } else {
+>>>>>>> main
         ScrollEffects::from_option(state.player_profiles[player_idx].scroll_option)
     };
     let attack = state.active_attack_scroll[player_idx];
@@ -8671,6 +8903,111 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
     true
 }
 
+/// Judge lift notes on button release. Mirrors judge_a_tap but only matches
+/// NoteType::Lift and judges a single note (no row-wide all-pressed check).
+pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool {
+    let windows = state.timing_profile.windows_s;
+    let way_off_window = windows[4];
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    let timing_hit_log = timing_hit_log_enabled();
+    let player = player_for_col(state, column);
+    let scoring_blocked = autoplay_blocks_scoring(state);
+    let way_off_window_music = way_off_window * rate;
+    let search_start_time = current_time - way_off_window_music;
+    let search_end_time = current_time + way_off_window_music;
+
+    let mut best: Option<(usize, usize, f32)> = None;
+    for (idx, arrow) in state.arrows[column].iter().enumerate() {
+        let note_index = arrow.note_index;
+        let n = &state.notes[note_index];
+        if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type != NoteType::Lift {
+            continue;
+        }
+        let note_time = state.note_time_cache[note_index];
+        if note_time < search_start_time {
+            continue;
+        }
+        if note_time > search_end_time {
+            break;
+        }
+        let abs_err_music = (current_time - note_time).abs();
+        if abs_err_music <= way_off_window_music {
+            match best {
+                Some((_, _, best_err)) if abs_err_music >= best_err => {}
+                _ => best = Some((idx, note_index, abs_err_music)),
+            }
+        }
+    }
+
+    let Some((_arrow_list_index, note_index, _)) = best else {
+        return false;
+    };
+
+    let note_time = state.note_time_cache[note_index];
+    let time_error_music = current_time - note_time;
+    let time_error_real = time_error_music / rate;
+    let abs_time_error = time_error_real.abs();
+    if abs_time_error > way_off_window {
+        return false;
+    }
+
+    let mut timing_profile = state.timing_profile;
+    timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
+    let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
+    let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
+        (
+            state.song_offset_seconds,
+            state.global_offset_seconds,
+            state.audio_lead_in_seconds.max(0.0),
+            audio::get_music_stream_position_seconds(),
+        )
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+
+    let note_col = state.notes[note_index].column;
+    let note_row_index = state.notes[note_index].row_index;
+    let note_beat = state.notes[note_index].beat;
+    let judgment = Judgment {
+        time_error_ms: time_error_real * 1000.0,
+        grade,
+        window: Some(window),
+        miss_because_held: false,
+    };
+    if !scoring_blocked {
+        error_bar_register_tap(state, player, &judgment, current_time);
+    }
+    state.notes[note_index].result = Some(judgment);
+
+    log_timing_hit_detail(
+        timing_hit_log,
+        stream_pos_s,
+        grade,
+        note_row_index,
+        note_col,
+        note_beat,
+        song_offset_s,
+        global_offset_s,
+        note_time,
+        current_time,
+        state.current_music_time,
+        rate,
+        lead_in_s,
+    );
+
+    let col_arrows = &mut state.arrows[note_col];
+    if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
+        col_arrows.remove(pos);
+    }
+    trigger_receptor_glow_pulse(state, note_col);
+    trigger_tap_explosion(state, note_col, grade);
+    true
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if state.exit_transition.is_some() {
         return ScreenAction::None;
@@ -10855,6 +11192,7 @@ mod tests {
         SongClockSnapshot, TickMode, apply_mines_insert, build_assist_clap_rows,
         build_attack_mask_windows_for_player, frame_stable_display_music_time,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
+<<<<<<< adstep/main/jump-recalc-fix
         player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals,
         score_valid_for_chart, scored_hold_totals_with_carry, tick_mode_status_line,
         turn_option_bits,
@@ -10864,6 +11202,14 @@ mod tests {
     use crate::game::profile;
     use crate::game::timing::{ROWS_PER_BEAT, StopSegment, TimingData, TimingSegments};
     use rssp::{TechCounts, stats::ArrowStats};
+=======
+        player_draw_scale_for_tilt_with_visual_mask, scored_hold_totals_with_carry,
+        tick_mode_status_line, turn_option_bits,
+    };
+    use crate::game::note::{HoldData, Note, NoteType};
+    use crate::game::profile;
+    use crate::game::timing::{ROWS_PER_BEAT, StopSegment, TimingData, TimingSegments};
+>>>>>>> main
     use std::time::{Duration, Instant};
 
     fn test_row_to_beat(last_row: usize) -> Vec<f32> {
@@ -10872,6 +11218,7 @@ mod tests {
             .collect()
     }
 
+<<<<<<< adstep/main/jump-recalc-fix
     fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
         Note {
             beat: row_index as f32 / ROWS_PER_BEAT as f32,
@@ -10948,6 +11295,8 @@ mod tests {
         }
     }
 
+=======
+>>>>>>> main
     #[test]
     fn tick_mode_cycles() {
         let mode = next_tick_mode(TickMode::Off);
@@ -11050,6 +11399,7 @@ mod tests {
     }
 
     #[test]
+<<<<<<< adstep/main/jump-recalc-fix
     fn recompute_totals_count_three_note_row_as_jump_and_hand() {
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
@@ -11155,6 +11505,8 @@ mod tests {
     }
 
     #[test]
+=======
+>>>>>>> main
     fn cmod_stop_lookahead_uses_time_not_frozen_beat() {
         let timing = TimingData::from_segments(
             0.0,

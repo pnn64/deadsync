@@ -10,7 +10,8 @@ use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
-    gs_scorebox, heart_bg, music_wheel, select_pane, select_shared, step_artist_bar,
+    select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
+    shared::{banner as shared_banner, gs_scorebox, heart_bg, mode_pads, timers},
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
@@ -243,7 +244,7 @@ pub struct State {
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
     last_requested_banner_path: Option<PathBuf>,
-    banner_high_quality_requested: bool,
+    pub(crate) banner_high_quality_requested: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
     out_prompt: OutPromptState,
@@ -740,6 +741,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         },
         banner_path: meta.banner_path.clone(),
         background_path: None,
+        background_changes: Vec::new(),
         cdtitle_path: None,
         music_path: None,
         display_bpm: String::new(),
@@ -1815,26 +1817,28 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(select_shared::build_screen_bars("SELECT COURSE"));
-    actors.push(select_shared::build_session_timer(format_session_time(
+    actors.extend(screen_bars::build("SELECT COURSE"));
+    actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
 
     let mode_text = gs_scorebox::select_music_mode_text(profile::PlayerSide::P1, None);
-    actors.push(select_shared::build_mode_pad_text(mode_text.as_str()));
-    actors.extend(select_shared::build_mode_pads());
+    actors.push(mode_pads::build_label(mode_text.as_str()));
+    actors.extend(mode_pads::build());
 
     let (banner_zoom, banner_cx, banner_cy) = if is_wide() {
         (0.7655, screen_center_x() - 170.0, 96.0)
     } else {
         (0.75, screen_center_x() - 166.0, 96.0)
     };
-    actors.push(act!(sprite(state.current_banner_key.clone()):
-        align(0.5, 0.5):
-        xy(banner_cx, banner_cy):
-        setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT):
-        zoom(banner_zoom):
-        z(51)
+    actors.push(shared_banner::sprite(
+        state.current_banner_key.clone(),
+        banner_cx,
+        banner_cy,
+        BANNER_NATIVE_WIDTH,
+        BANNER_NATIVE_HEIGHT,
+        banner_zoom,
+        51,
     ));
 
     let music_rate = profile::get_session_music_rate();

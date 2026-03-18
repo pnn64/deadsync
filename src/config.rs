@@ -1,4 +1,4 @@
-use crate::core::gfx::{BackendType, UncappedMode};
+use crate::core::gfx::{BackendType, PresentModePolicy};
 use crate::core::input::{
     GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction, WindowsPadBackend,
 };
@@ -183,6 +183,39 @@ impl FromStr for SelectMusicPatternInfoMode {
             "tech" => Ok(Self::Tech),
             "stamina" => Ok(Self::Stamina),
             "auto" => Ok(Self::Auto),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicScoreboxPlacement {
+    Auto,
+    StepPane,
+}
+
+impl SelectMusicScoreboxPlacement {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::StepPane => "StepPane",
+        }
+    }
+}
+
+impl FromStr for SelectMusicScoreboxPlacement {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "auto" => Ok(Self::Auto),
+            "steppane" | "pane" => Ok(Self::StepPane),
             _ => Err(()),
         }
     }
@@ -429,12 +462,78 @@ pub enum DisplayMode {
     Fullscreen(FullscreenType),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioOutputMode {
+    Auto,
+    Shared,
+    Exclusive,
+}
+
+impl AudioOutputMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Shared => "Shared",
+            Self::Exclusive => "Exclusive",
+        }
+    }
+}
+
+impl FromStr for AudioOutputMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "shared" => Ok(Self::Shared),
+            "exclusive" => Ok(Self::Exclusive),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinuxAudioBackend {
+    Auto,
+    PipeWire,
+    PulseAudio,
+    Jack,
+    Alsa,
+}
+
+impl LinuxAudioBackend {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::PipeWire => "PipeWire",
+            Self::PulseAudio => "PulseAudio",
+            Self::Jack => "JACK",
+            Self::Alsa => "ALSA",
+        }
+    }
+}
+
+impl FromStr for LinuxAudioBackend {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "pipewire" | "pipe-wire" | "pw" => Ok(Self::PipeWire),
+            "pulseaudio" | "pulse" => Ok(Self::PulseAudio),
+            "jack" => Ok(Self::Jack),
+            "alsa" => Ok(Self::Alsa),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
-    /// Stored MaxFPS cap value. Used when `uncapped_mode == MaxFps`; 0 means unset/legacy.
+    /// Stored MaxFPS cap value. `0` means "off".
     pub max_fps: u16,
-    pub uncapped_mode: UncappedMode,
+    pub present_mode_policy: PresentModePolicy,
     pub windowed: bool,
     pub fullscreen_type: FullscreenType,
     pub display_monitor: usize,
@@ -475,14 +574,18 @@ pub struct Config {
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
     pub show_select_music_banners: bool,
+    pub show_select_music_video_banners: bool,
     pub show_select_music_breakdown: bool,
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
     pub show_select_music_previews: bool,
+    pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart.
     pub keyboard_features: bool,
+    /// Enable or disable animated gameplay background videos.
+    pub show_video_backgrounds: bool,
     /// Startup flow: show Select Profile before continuing.
     pub machine_show_select_profile: bool,
     /// Startup flow: show Select Color before continuing.
@@ -512,6 +615,7 @@ pub struct Config {
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
+    pub select_music_scorebox_placement: SelectMusicScoreboxPlacement,
     pub select_music_scorebox_cycle_itg: bool,
     pub select_music_scorebox_cycle_ex: bool,
     pub select_music_scorebox_cycle_hard_ex: bool,
@@ -529,8 +633,10 @@ pub struct Config {
     pub music_wheel_switch_speed: u8,
     pub assist_tick_volume: u8,
     pub sfx_volume: u8,
-    // None = auto (use host default output device); Some(N) = startup CPAL output-device index.
+    // None = auto (use the backend default output route); Some(N) = startup output-device index.
     pub audio_output_device_index: Option<u16>,
+    pub audio_output_mode: AudioOutputMode,
+    pub linux_audio_backend: LinuxAudioBackend,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
     pub auto_populate_gs_scores: bool,
@@ -544,6 +650,9 @@ pub struct Config {
     pub smooth_histogram: bool,
     /// ITGmania InputFilter parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
+    /// Gameplay-only release debounce window in seconds. A shorter value keeps
+    /// tap releases from lingering as long as the general input debounce.
+    pub gameplay_release_debounce_seconds: f32,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
@@ -554,7 +663,7 @@ impl Default for Config {
         Self {
             vsync: false,
             max_fps: 0,
-            uncapped_mode: UncappedMode::Balanced,
+            present_mode_policy: PresentModePolicy::Immediate,
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
@@ -574,19 +683,22 @@ impl Default for Config {
             display_height: 900,
             video_renderer: BackendType::OpenGL,
             gfx_debug: false,
-            windows_gamepad_backend: WindowsPadBackend::Wgi,
+            windows_gamepad_backend: WindowsPadBackend::RawInput,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
             show_select_music_banners: true,
+            show_select_music_video_banners: true,
             show_select_music_breakdown: true,
             show_select_music_cdtitles: true,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
             show_select_music_previews: true,
+            show_select_music_preview_marker: false,
             select_music_preview_loop: true,
             keyboard_features: true,
+            show_video_backgrounds: true,
             machine_show_select_profile: true,
             machine_show_select_color: true,
             machine_show_select_style: true,
@@ -603,6 +715,7 @@ impl Default for Config {
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
+            select_music_scorebox_placement: SelectMusicScoreboxPlacement::Auto,
             select_music_scorebox_cycle_itg: true,
             select_music_scorebox_cycle_ex: true,
             select_music_scorebox_cycle_hard_ex: true,
@@ -620,6 +733,8 @@ impl Default for Config {
             assist_tick_volume: 100,
             sfx_volume: 100,
             audio_output_device_index: None,
+            audio_output_mode: AudioOutputMode::Auto,
+            linux_audio_backend: LinuxAudioBackend::Auto,
             audio_sample_rate_hz: None,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: true,
@@ -630,6 +745,7 @@ impl Default for Config {
             cachesongs: true,
             smooth_histogram: true,
             input_debounce_seconds: 0.02,
+            gameplay_release_debounce_seconds: 0.005,
             only_dedicated_menu_buttons: false,
         }
     }
@@ -955,6 +1071,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     // [Options] section - keys in alphabetical order
     content.push_str("[Options]\n");
     content.push_str("AudioOutputDevice=Auto\n");
+    content.push_str("AudioOutputMode=Auto\n");
     content.push_str("AudioSampleRateHz=Auto\n");
     content.push_str("AdditionalSongFolders=\n");
     content.push_str(&format!(
@@ -1065,8 +1182,15 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "LogToFile={}\n",
         if default.log_to_file { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "LinuxAudioBackend={}\n",
+        default.linux_audio_backend.as_str()
+    ));
     content.push_str(&format!("MaxFps={}\n", default.max_fps));
-    content.push_str(&format!("UncappedMode={}\n", default.uncapped_mode));
+    content.push_str(&format!(
+        "PresentModePolicy={}\n",
+        default.present_mode_policy
+    ));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         default.visual_delay_seconds
@@ -1100,6 +1224,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "SelectMusicShowBanners={}\n",
         if default.show_select_music_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicShowVideoBanners={}\n",
+        if default.show_select_music_video_banners {
             "1"
         } else {
             "0"
@@ -1146,6 +1278,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicPreviewMarker={}\n",
+        if default.show_select_music_preview_marker {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviewLoop={}\n",
         if default.select_music_preview_loop {
             "1"
@@ -1164,6 +1304,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxPlacement={}\n",
+        default.select_music_scorebox_placement.as_str()
     ));
     content.push_str(&format!(
         "SelectMusicScoreboxCycleItg={}\n",
@@ -1207,7 +1351,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     ));
     content.push_str(&format!(
         "ShowStatsMode={}\n",
-        default.show_stats_mode.min(2)
+        default.show_stats_mode.min(3)
     ));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
@@ -1216,6 +1360,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "InputDebounceTime={:.3}\n",
         default.input_debounce_seconds
+    ));
+    content.push_str(&format!(
+        "GameplayReleaseDebounceTime={:.3}\n",
+        default.gameplay_release_debounce_seconds
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
@@ -1290,6 +1438,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "KeyboardFeatures={}\n",
         if default.keyboard_features { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "VideoBackgrounds={}\n",
+        if default.show_video_backgrounds {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push_str(&format!(
         "MachineShowEvalSummary={}\n",
@@ -1415,10 +1571,21 @@ pub fn load() {
                     .get("Options", "MaxFps")
                     .and_then(|v| v.parse::<u16>().ok())
                     .unwrap_or(default.max_fps);
-                cfg.uncapped_mode = conf
-                    .get("Options", "UncappedMode")
-                    .and_then(|s| UncappedMode::from_str(&s).ok())
-                    .unwrap_or(default.uncapped_mode);
+                cfg.present_mode_policy = conf
+                    .get("Options", "PresentModePolicy")
+                    .and_then(|s| PresentModePolicy::from_str(&s).ok())
+                    .or_else(|| {
+                        conf.get("Options", "UncappedMode").and_then(|s| {
+                            match s.trim().to_ascii_lowercase().as_str() {
+                                "balanced" => Some(PresentModePolicy::Mailbox),
+                                "unhinged" | "maxfps" | "max_fps" | "max-fps" => {
+                                    Some(PresentModePolicy::Immediate)
+                                }
+                                _ => None,
+                            }
+                        })
+                    })
+                    .unwrap_or(default.present_mode_policy);
                 cfg.windowed = conf
                     .get("Options", "Windowed")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1458,7 +1625,7 @@ pub fn load() {
                 cfg.show_stats_mode = conf
                     .get("Options", "ShowStatsMode")
                     .and_then(|v| v.parse::<u8>().ok())
-                    .map(|v| v.min(2))
+                    .map(|v| v.min(3))
                     .or_else(|| {
                         conf.get("Options", "ShowStats")
                             .and_then(|v| v.parse::<u8>().ok())
@@ -1569,6 +1736,10 @@ pub fn load() {
                     .get("Options", "LogToFile")
                     .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.log_to_file);
+                cfg.linux_audio_backend = conf
+                    .get("Options", "LinuxAudioBackend")
+                    .and_then(|v| LinuxAudioBackend::from_str(&v).ok())
+                    .unwrap_or(default.linux_audio_backend);
                 cfg.visual_delay_seconds = conf
                     .get("Options", "VisualDelaySeconds")
                     .and_then(|v| v.parse().ok())
@@ -1608,6 +1779,10 @@ pub fn load() {
                         }
                     })
                     .or(default.audio_output_device_index);
+                cfg.audio_output_mode = conf
+                    .get("Options", "AudioOutputMode")
+                    .and_then(|s| AudioOutputMode::from_str(&s).ok())
+                    .unwrap_or(default.audio_output_mode);
                 cfg.audio_sample_rate_hz = conf
                     .get("Options", "AudioSampleRateHz")
                     .map(|v| v.trim().to_string())
@@ -1631,6 +1806,10 @@ pub fn load() {
                     .get("Options", "SelectMusicShowBanners")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_banners, |v| v != 0);
+                cfg.show_select_music_video_banners = conf
+                    .get("Options", "SelectMusicShowVideoBanners")
+                    .and_then(|v| parse_bool_str(&v))
+                    .unwrap_or(default.show_select_music_video_banners);
                 cfg.show_select_music_breakdown = conf
                     .get("Options", "SelectMusicShowBreakdown")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1651,6 +1830,10 @@ pub fn load() {
                     .get("Options", "SelectMusicPreviews")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_previews, |v| v != 0);
+                cfg.show_select_music_preview_marker = conf
+                    .get("Options", "SelectMusicPreviewMarker")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_select_music_preview_marker, |v| v != 0);
                 cfg.select_music_preview_loop = conf
                     .get("Options", "SelectMusicPreviewLoop")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1663,6 +1846,10 @@ pub fn load() {
                     .get("Options", "SelectMusicScorebox")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_scorebox, |v| v != 0);
+                cfg.select_music_scorebox_placement = conf
+                    .get("Options", "SelectMusicScoreboxPlacement")
+                    .and_then(|v| SelectMusicScoreboxPlacement::from_str(&v).ok())
+                    .unwrap_or(default.select_music_scorebox_placement);
                 cfg.select_music_scorebox_cycle_itg = conf
                     .get("Options", "SelectMusicScoreboxCycleItg")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1723,6 +1910,27 @@ pub fn load() {
                         })
                     })
                     .unwrap_or(default.input_debounce_seconds);
+                cfg.gameplay_release_debounce_seconds = conf
+                    .get("Options", "GameplayReleaseDebounceTime")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            return None;
+                        }
+                        let lower = v.to_ascii_lowercase();
+                        if let Some(ms) = lower.strip_suffix("ms") {
+                            return ms
+                                .trim()
+                                .parse::<f32>()
+                                .ok()
+                                .map(|n| (n / 1000.0).clamp(0.0, 0.2));
+                        }
+                        v.parse::<f32>().ok().map(|n| {
+                            let secs = if n > 1.0 { n / 1000.0 } else { n };
+                            secs.clamp(0.0, 0.2)
+                        })
+                    })
+                    .unwrap_or(default.gameplay_release_debounce_seconds);
                 cfg.only_dedicated_menu_buttons = conf
                     .get("Options", "OnlyDedicatedMenuButtons")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1769,45 +1977,15 @@ pub fn load() {
                     .unwrap_or(default.show_select_music_gameplay_timer);
                 cfg.keyboard_features = conf
                     .get("Theme", "KeyboardFeatures")
-                    .map(|v| v.trim().to_string())
-                    .and_then(|v| {
-                        if v.is_empty() {
-                            None
-                        } else if v.eq_ignore_ascii_case("true")
-                            || v.eq_ignore_ascii_case("yes")
-                            || v.eq_ignore_ascii_case("on")
-                        {
-                            Some(true)
-                        } else if v.eq_ignore_ascii_case("false")
-                            || v.eq_ignore_ascii_case("no")
-                            || v.eq_ignore_ascii_case("off")
-                        {
-                            Some(false)
-                        } else {
-                            v.parse::<u8>().ok().map(|n| n != 0)
-                        }
-                    })
+                    .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.keyboard_features);
+                cfg.show_video_backgrounds = conf
+                    .get("Theme", "VideoBackgrounds")
+                    .and_then(|v| parse_bool_str(&v))
+                    .unwrap_or(default.show_video_backgrounds);
                 cfg.machine_show_eval_summary = conf
                     .get("Theme", "MachineShowEvalSummary")
-                    .map(|v| v.trim().to_string())
-                    .and_then(|v| {
-                        if v.is_empty() {
-                            None
-                        } else if v.eq_ignore_ascii_case("true")
-                            || v.eq_ignore_ascii_case("yes")
-                            || v.eq_ignore_ascii_case("on")
-                        {
-                            Some(true)
-                        } else if v.eq_ignore_ascii_case("false")
-                            || v.eq_ignore_ascii_case("no")
-                            || v.eq_ignore_ascii_case("off")
-                        {
-                            Some(false)
-                        } else {
-                            v.parse::<u8>().ok().map(|n| n != 0)
-                        }
-                    })
+                    .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.machine_show_eval_summary);
                 cfg.machine_show_name_entry = conf
                     .get("Theme", "MachineShowNameEntry")
@@ -2001,6 +2179,7 @@ pub fn load() {
                 let mut miss = false;
                 let options_keys = [
                     "AudioOutputDevice",
+                    "AudioOutputMode",
                     "AudioSampleRateHz",
                     "AdditionalSongFolders",
                     "AutoPopulateGrooveStatsScores",
@@ -2029,6 +2208,7 @@ pub fn load() {
                     "Language",
                     "LogLevel",
                     "LogToFile",
+                    "LinuxAudioBackend",
                     "MaxFps",
                     "MasterVolume",
                     "MenuMusic",
@@ -2039,6 +2219,7 @@ pub fn load() {
                     "RateModPreservesPitch",
                     "SelectMusicBreakdown",
                     "SelectMusicShowBanners",
+                    "SelectMusicShowVideoBanners",
                     "SelectMusicShowBreakdown",
                     "SelectMusicShowCDTitles",
                     "SelectMusicWheelGrades",
@@ -2055,6 +2236,7 @@ pub fn load() {
                     "ShowStatsMode",
                     "SmoothHistogram",
                     "InputDebounceTime",
+                    "GameplayReleaseDebounceTime",
                     "OnlyDedicatedMenuButtons",
                     "AssistTickVolume",
                     "SFXVolume",
@@ -2079,6 +2261,9 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "KeyboardFeatures") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "VideoBackgrounds") {
                     miss = true;
                 }
                 if !miss && !has("Theme", "MachineShowEvalSummary") {
@@ -2139,6 +2324,9 @@ pub fn load() {
     }
     crate::core::input::set_only_dedicated_menu_buttons(dedicated);
     crate::core::input::set_input_debounce_seconds(get().input_debounce_seconds);
+    crate::core::input::set_gameplay_release_debounce_seconds(
+        get().gameplay_release_debounce_seconds,
+    );
 }
 
 // --- Keymap defaults and parsing (kept in config to avoid coupling input.rs to config) ---
@@ -2324,218 +2512,338 @@ fn binding_to_token(binding: InputBinding) -> String {
 }
 
 #[inline(always)]
-fn parse_binding_token(tok: &str) -> Option<InputBinding> {
-    let t = tok.trim();
-    // Keyboard
-    if let Some(rest) = t.strip_prefix("KeyCode::") {
-        let code = match rest {
-            // Special keys
-            "Enter" => KeyCode::Enter,
-            "Escape" => KeyCode::Escape,
-            "ArrowUp" => KeyCode::ArrowUp,
-            "ArrowDown" => KeyCode::ArrowDown,
-            "ArrowLeft" => KeyCode::ArrowLeft,
-            "ArrowRight" => KeyCode::ArrowRight,
-            "Slash" => KeyCode::Slash,
-            // Numpad keys
-            "Numpad0" => KeyCode::Numpad0,
-            "Numpad1" => KeyCode::Numpad1,
-            "Numpad2" => KeyCode::Numpad2,
-            "Numpad3" => KeyCode::Numpad3,
-            "Numpad4" => KeyCode::Numpad4,
-            "Numpad5" => KeyCode::Numpad5,
-            "Numpad6" => KeyCode::Numpad6,
-            "Numpad7" => KeyCode::Numpad7,
-            "Numpad8" => KeyCode::Numpad8,
-            "Numpad9" => KeyCode::Numpad9,
-            "NumpadAdd" => KeyCode::NumpadAdd,
-            "NumpadDivide" => KeyCode::NumpadDivide,
-            "NumpadDecimal" => KeyCode::NumpadDecimal,
-            "NumpadComma" => KeyCode::NumpadComma,
-            "NumpadEnter" => KeyCode::NumpadEnter,
-            "NumpadEqual" => KeyCode::NumpadEqual,
-            "NumpadMultiply" => KeyCode::NumpadMultiply,
-            "NumpadSubtract" => KeyCode::NumpadSubtract,
-            // Letter keys A-Z
-            "KeyA" => KeyCode::KeyA,
-            "KeyB" => KeyCode::KeyB,
-            "KeyC" => KeyCode::KeyC,
-            "KeyD" => KeyCode::KeyD,
-            "KeyE" => KeyCode::KeyE,
-            "KeyF" => KeyCode::KeyF,
-            "KeyG" => KeyCode::KeyG,
-            "KeyH" => KeyCode::KeyH,
-            "KeyI" => KeyCode::KeyI,
-            "KeyJ" => KeyCode::KeyJ,
-            "KeyK" => KeyCode::KeyK,
-            "KeyL" => KeyCode::KeyL,
-            "KeyM" => KeyCode::KeyM,
-            "KeyN" => KeyCode::KeyN,
-            "KeyO" => KeyCode::KeyO,
-            "KeyP" => KeyCode::KeyP,
-            "KeyQ" => KeyCode::KeyQ,
-            "KeyR" => KeyCode::KeyR,
-            "KeyS" => KeyCode::KeyS,
-            "KeyT" => KeyCode::KeyT,
-            "KeyU" => KeyCode::KeyU,
-            "KeyV" => KeyCode::KeyV,
-            "KeyW" => KeyCode::KeyW,
-            "KeyX" => KeyCode::KeyX,
-            "KeyY" => KeyCode::KeyY,
-            "KeyZ" => KeyCode::KeyZ,
-            _ => return None,
+fn parse_keycode(t: &str) -> Option<InputBinding> {
+    let name = t.strip_prefix("KeyCode::")?;
+    macro_rules! keycode_match {
+        ($input:expr, $( $name:ident ),* $(,)?) => {
+            match $input {
+                $( stringify!($name) => Some(KeyCode::$name), )*
+                _ => None,
+            }
         };
-        return Some(InputBinding::Key(code));
     }
+    keycode_match!(
+        name,
+        Backquote,
+        Backslash,
+        BracketLeft,
+        BracketRight,
+        Comma,
+        Digit0,
+        Digit1,
+        Digit2,
+        Digit3,
+        Digit4,
+        Digit5,
+        Digit6,
+        Digit7,
+        Digit8,
+        Digit9,
+        Equal,
+        IntlBackslash,
+        IntlRo,
+        IntlYen,
+        KeyA,
+        KeyB,
+        KeyC,
+        KeyD,
+        KeyE,
+        KeyF,
+        KeyG,
+        KeyH,
+        KeyI,
+        KeyJ,
+        KeyK,
+        KeyL,
+        KeyM,
+        KeyN,
+        KeyO,
+        KeyP,
+        KeyQ,
+        KeyR,
+        KeyS,
+        KeyT,
+        KeyU,
+        KeyV,
+        KeyW,
+        KeyX,
+        KeyY,
+        KeyZ,
+        Minus,
+        Period,
+        Quote,
+        Semicolon,
+        Slash,
+        AltLeft,
+        AltRight,
+        Backspace,
+        CapsLock,
+        ContextMenu,
+        ControlLeft,
+        ControlRight,
+        Enter,
+        SuperLeft,
+        SuperRight,
+        ShiftLeft,
+        ShiftRight,
+        Space,
+        Tab,
+        Convert,
+        KanaMode,
+        Lang1,
+        Lang2,
+        Lang3,
+        Lang4,
+        Lang5,
+        NonConvert,
+        Delete,
+        End,
+        Help,
+        Home,
+        Insert,
+        PageDown,
+        PageUp,
+        ArrowDown,
+        ArrowLeft,
+        ArrowRight,
+        ArrowUp,
+        NumLock,
+        Numpad0,
+        Numpad1,
+        Numpad2,
+        Numpad3,
+        Numpad4,
+        Numpad5,
+        Numpad6,
+        Numpad7,
+        Numpad8,
+        Numpad9,
+        NumpadAdd,
+        NumpadBackspace,
+        NumpadClear,
+        NumpadClearEntry,
+        NumpadComma,
+        NumpadDecimal,
+        NumpadDivide,
+        NumpadEnter,
+        NumpadEqual,
+        NumpadHash,
+        NumpadMemoryAdd,
+        NumpadMemoryClear,
+        NumpadMemoryRecall,
+        NumpadMemoryStore,
+        NumpadMemorySubtract,
+        NumpadMultiply,
+        NumpadParenLeft,
+        NumpadParenRight,
+        NumpadStar,
+        NumpadSubtract,
+        Escape,
+        Fn,
+        FnLock,
+        PrintScreen,
+        ScrollLock,
+        Pause,
+        BrowserBack,
+        BrowserFavorites,
+        BrowserForward,
+        BrowserHome,
+        BrowserRefresh,
+        BrowserSearch,
+        BrowserStop,
+        Eject,
+        LaunchApp1,
+        LaunchApp2,
+        LaunchMail,
+        MediaPlayPause,
+        MediaSelect,
+        MediaStop,
+        MediaTrackNext,
+        MediaTrackPrevious,
+        Power,
+        Sleep,
+        AudioVolumeDown,
+        AudioVolumeMute,
+        AudioVolumeUp,
+        WakeUp,
+        Meta,
+        Hyper,
+        Turbo,
+        Abort,
+        Resume,
+        Suspend,
+        Again,
+        Copy,
+        Cut,
+        Find,
+        Open,
+        Paste,
+        Props,
+        Select,
+        Undo,
+        Hiragana,
+        Katakana,
+        F1,
+        F2,
+        F3,
+        F4,
+        F5,
+        F6,
+        F7,
+        F8,
+        F9,
+        F10,
+        F11,
+        F12,
+        F13,
+        F14,
+        F15,
+        F16,
+        F17,
+        F18,
+        F19,
+        F20,
+        F21,
+        F22,
+        F23,
+        F24,
+        F25,
+        F26,
+        F27,
+        F28,
+        F29,
+        F30,
+        F31,
+        F32,
+        F33,
+        F34,
+        F35,
+    )
+    .map(InputBinding::Key)
+}
 
-    // Gamepad low-level code binding:
-    //   PadCode[0xDEADBEEF]
-    //   PadCode[0xDEADBEEF]@0
-    //   PadCode[0xDEADBEEF]#00112233AABBCCDDEEFF001122334455
-    //   PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455
-    //
-    // where 0x... or decimal is the `PadCode(u32)` shown in the Sandbox/Input screens,
-    // @N restricts to device index N,
-    // and #... restricts to a 16-byte UUID (32 hex chars, no dashes).
-    if let Some(rest) = t.strip_prefix("PadCode[")
-        && let Some(end) = rest.find(']')
+#[inline(always)]
+fn parse_pad_dir(name: &str) -> Option<PadDir> {
+    match name {
+        "Up" => Some(PadDir::Up),
+        "Down" => Some(PadDir::Down),
+        "Left" => Some(PadDir::Left),
+        "Right" => Some(PadDir::Right),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn parse_pad_code(t: &str) -> Option<InputBinding> {
+    let rest = t.strip_prefix("PadCode[")?;
+    let end = rest.find(']')?;
+    let code_str = &rest[..end];
+    let mut tail = &rest[end + 1..];
+
+    let code_u32 = if let Some(hex) = code_str
+        .strip_prefix("0x")
+        .or_else(|| code_str.strip_prefix("0X"))
     {
-        let code_str = &rest[..end];
-        let mut tail = &rest[end + 1..];
+        u32::from_str_radix(hex, 16).ok()?
+    } else {
+        u32::from_str(code_str).ok()?
+    };
 
-        let code_u32 = if let Some(hex) = code_str
-            .strip_prefix("0x")
-            .or_else(|| code_str.strip_prefix("0X"))
-        {
-            u32::from_str_radix(hex, 16).ok()?
-        } else {
-            u32::from_str(code_str).ok()?
-        };
-
-        let mut device: Option<usize> = None;
-        let mut uuid: Option<[u8; 16]> = None;
-
-        // Parse optional @device and #uuid, in any order.
-        loop {
-            if let Some(rest2) = tail.strip_prefix('@') {
-                let mut digits = String::new();
-                for ch in rest2.chars() {
-                    if ch.is_ascii_digit() {
-                        digits.push(ch);
-                    } else {
-                        break;
-                    }
-                }
-                if digits.is_empty() {
+    let mut device = None;
+    let mut uuid = None;
+    loop {
+        if let Some(rest) = tail.strip_prefix('@') {
+            let mut digits = String::new();
+            for ch in rest.chars() {
+                if ch.is_ascii_digit() {
+                    digits.push(ch);
+                } else {
                     break;
                 }
-                if let Ok(dev_idx) = usize::from_str(&digits) {
-                    device = Some(dev_idx);
-                }
-                tail = &rest2[digits.len()..];
-                continue;
             }
-
-            if let Some(rest2) = tail.strip_prefix('#') {
-                let mut hex_digits = String::new();
-                for ch in rest2.chars() {
-                    if ch.is_ascii_hexdigit() {
-                        hex_digits.push(ch);
+            if digits.is_empty() {
+                break;
+            }
+            if let Ok(dev_idx) = usize::from_str(&digits) {
+                device = Some(dev_idx);
+            }
+            tail = &rest[digits.len()..];
+            continue;
+        }
+        if let Some(rest) = tail.strip_prefix('#') {
+            let mut hex_digits = String::new();
+            for ch in rest.chars() {
+                if ch.is_ascii_hexdigit() {
+                    hex_digits.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if hex_digits.len() == 32 {
+                let mut bytes = [0u8; 16];
+                let mut ok = true;
+                for (i, byte) in bytes.iter_mut().enumerate() {
+                    let start = i * 2;
+                    let end = start + 2;
+                    if let Ok(parsed) = u8::from_str_radix(&hex_digits[start..end], 16) {
+                        *byte = parsed;
                     } else {
+                        ok = false;
                         break;
                     }
                 }
-                if hex_digits.len() == 32 {
-                    let mut bytes = [0u8; 16];
-                    let mut ok = true;
-                    for i in 0..16 {
-                        let start = i * 2;
-                        let end = start + 2;
-                        if let Ok(b) = u8::from_str_radix(&hex_digits[start..end], 16) {
-                            bytes[i] = b
-                        } else {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if ok {
-                        uuid = Some(bytes);
-                    }
+                if ok {
+                    uuid = Some(bytes);
                 }
-                tail = &rest2[hex_digits.len()..];
-                continue;
             }
-
-            break;
+            tail = &rest[hex_digits.len()..];
+            continue;
         }
-
-        return Some(InputBinding::GamepadCode(GamepadCodeBinding {
-            code_u32,
-            device,
-            uuid,
-        }));
+        break;
     }
 
-    // Gamepad (any pad): PadDir::Up
-    if let Some(rest) = t.strip_prefix("PadDir::") {
-        let dir = match rest {
-            "Up" => PadDir::Up,
-            "Down" => PadDir::Down,
-            "Left" => PadDir::Left,
-            "Right" => PadDir::Right,
-            _ => return None,
-        };
+    Some(InputBinding::GamepadCode(GamepadCodeBinding {
+        code_u32,
+        device,
+        uuid,
+    }))
+}
+
+#[inline(always)]
+fn parse_pad_device_binding(t: &str) -> Option<InputBinding> {
+    let mut parts = t.split("::");
+    let pad = parts.next()?;
+    let kind = parts.next()?;
+    let name = parts.next()?;
+    if parts.next().is_some() || kind != "Dir" {
+        return None;
+    }
+
+    let dev = pad.strip_prefix("Pad")?;
+    let dir = parse_pad_dir(name)?;
+    if dev.is_empty() {
         return Some(InputBinding::PadDir(dir));
     }
+    Some(InputBinding::PadDirOn {
+        device: dev.parse::<usize>().ok()?,
+        dir,
+    })
+}
 
-    // Gamepad (device-specific): Pad0::Dir::Up
-    // Split by "::"
-    let parts: Vec<&str> = t.split("::").collect();
-    if parts.len() == 3 {
-        let (pad_part, kind, name) = (parts[0], parts[1], parts[2]);
-        // Parse device index from PadN
-        if let Some(dev_str) = pad_part.strip_prefix("Pad") {
-            if dev_str.is_empty() {
-                // Treat as any-pad; handled at top via PadDir prefix.
-                return match kind {
-                    "Dir" => match name {
-                        "Up" => Some(InputBinding::PadDir(PadDir::Up)),
-                        "Down" => Some(InputBinding::PadDir(PadDir::Down)),
-                        "Left" => Some(InputBinding::PadDir(PadDir::Left)),
-                        "Right" => Some(InputBinding::PadDir(PadDir::Right)),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-            }
-            if let Ok(device) = dev_str.parse::<usize>() {
-                return match kind {
-                    "Dir" => match name {
-                        "Up" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Up,
-                        }),
-                        "Down" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Down,
-                        }),
-                        "Left" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Left,
-                        }),
-                        "Right" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Right,
-                        }),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-            }
-        }
-    }
+#[inline(always)]
+fn parse_pad_dir_binding(t: &str) -> Option<InputBinding> {
+    t.strip_prefix("PadDir::")
+        .and_then(parse_pad_dir)
+        .map(InputBinding::PadDir)
+        .or_else(|| parse_pad_device_binding(t))
+}
 
-    None
+#[inline(always)]
+fn parse_binding_token(tok: &str) -> Option<InputBinding> {
+    let t = tok.trim();
+    parse_keycode(t)
+        .or_else(|| parse_pad_code(t))
+        .or_else(|| parse_pad_dir_binding(t))
 }
 
 fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
@@ -2764,6 +3072,10 @@ fn save_without_keymaps() {
         .audio_output_device_index
         .map_or_else(|| "Auto".to_string(), |idx| idx.to_string());
     content.push_str(&format!("AudioOutputDevice={audio_output_device}\n"));
+    content.push_str(&format!(
+        "AudioOutputMode={}\n",
+        cfg.audio_output_mode.as_str()
+    ));
     let audio_rate_str = match cfg.audio_sample_rate_hz {
         None => "Auto".to_string(),
         Some(hz) => hz.to_string(),
@@ -2879,8 +3191,12 @@ fn save_without_keymaps() {
         "LogToFile={}\n",
         if cfg.log_to_file { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "LinuxAudioBackend={}\n",
+        cfg.linux_audio_backend.as_str()
+    ));
     content.push_str(&format!("MaxFps={}\n", cfg.max_fps));
-    content.push_str(&format!("UncappedMode={}\n", cfg.uncapped_mode));
+    content.push_str(&format!("PresentModePolicy={}\n", cfg.present_mode_policy));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         cfg.visual_delay_seconds
@@ -2914,6 +3230,14 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "SelectMusicShowBanners={}\n",
         if cfg.show_select_music_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicShowVideoBanners={}\n",
+        if cfg.show_select_music_video_banners {
             "1"
         } else {
             "0"
@@ -2956,6 +3280,14 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicPreviewMarker={}\n",
+        if cfg.show_select_music_preview_marker {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviewLoop={}\n",
         if cfg.select_music_preview_loop {
             "1"
@@ -2974,6 +3306,10 @@ fn save_without_keymaps() {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxPlacement={}\n",
+        cfg.select_music_scorebox_placement.as_str()
     ));
     content.push_str(&format!(
         "SelectMusicScoreboxCycleItg={}\n",
@@ -3011,7 +3347,7 @@ fn save_without_keymaps() {
         "ShowStats={}\n",
         if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
-    content.push_str(&format!("ShowStatsMode={}\n", cfg.show_stats_mode.min(2)));
+    content.push_str(&format!("ShowStatsMode={}\n", cfg.show_stats_mode.min(3)));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
         if cfg.smooth_histogram { "1" } else { "0" }
@@ -3019,6 +3355,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "InputDebounceTime={:.3}\n",
         cfg.input_debounce_seconds
+    ));
+    content.push_str(&format!(
+        "GameplayReleaseDebounceTime={:.3}\n",
+        cfg.gameplay_release_debounce_seconds
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
@@ -3075,6 +3415,10 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "KeyboardFeatures={}\n",
         if cfg.keyboard_features { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "VideoBackgrounds={}\n",
+        if cfg.show_video_backgrounds { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "MachineShowEvalSummary={}\n",
@@ -3312,19 +3656,19 @@ pub fn update_max_fps(max_fps: u16) {
     save_without_keymaps();
 }
 
-pub fn update_uncapped_mode(mode: UncappedMode) {
+pub fn update_present_mode_policy(mode: PresentModePolicy) {
     {
         let mut cfg = lock_config();
-        if cfg.uncapped_mode == mode {
+        if cfg.present_mode_policy == mode {
             return;
         }
-        cfg.uncapped_mode = mode;
+        cfg.present_mode_policy = mode;
     }
     save_without_keymaps();
 }
 
 pub fn update_show_stats_mode(mode: u8) {
-    let mode = mode.min(2);
+    let mode = mode.min(3);
     {
         let mut cfg = lock_config();
         if cfg.show_stats_mode == mode {
@@ -3545,6 +3889,29 @@ pub fn update_audio_output_device(index: Option<u16>) {
     save_without_keymaps();
 }
 
+pub fn update_audio_output_mode(mode: AudioOutputMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.audio_output_mode == mode {
+            return;
+        }
+        cfg.audio_output_mode = mode;
+    }
+    save_without_keymaps();
+}
+
+#[cfg(target_os = "linux")]
+pub fn update_linux_audio_backend(backend: LinuxAudioBackend) {
+    {
+        let mut cfg = lock_config();
+        if cfg.linux_audio_backend == backend {
+            return;
+        }
+        cfg.linux_audio_backend = backend;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_mine_hit_sound(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3623,6 +3990,17 @@ pub fn update_show_select_music_banners(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_select_music_video_banners(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_video_banners == enabled {
+            return;
+        }
+        cfg.show_select_music_video_banners = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_cdtitles(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3667,6 +4045,17 @@ pub fn update_show_select_music_previews(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_select_music_preview_marker(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_preview_marker == enabled {
+            return;
+        }
+        cfg.show_select_music_preview_marker = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_preview_loop(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3707,6 +4096,17 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
             return;
         }
         cfg.show_select_music_scorebox = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_scorebox_placement(mode: SelectMusicScoreboxPlacement) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_scorebox_placement == mode {
+            return;
+        }
+        cfg.select_music_scorebox_placement = mode;
     }
     save_without_keymaps();
 }
@@ -3890,6 +4290,17 @@ pub fn update_machine_show_select_profile(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_video_backgrounds(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_video_backgrounds == enabled {
+            return;
+        }
+        cfg.show_video_backgrounds = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_machine_show_select_color(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -4065,4 +4476,389 @@ pub fn update_machine_default_noteskin(noteskin: &str) {
         *current = normalized;
     }
     save_without_keymaps();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_keycode_common_keys() {
+        let cases = [
+            ("KeyCode::Enter", KeyCode::Enter),
+            ("KeyCode::Escape", KeyCode::Escape),
+            ("KeyCode::ArrowUp", KeyCode::ArrowUp),
+            ("KeyCode::ArrowDown", KeyCode::ArrowDown),
+            ("KeyCode::ArrowLeft", KeyCode::ArrowLeft),
+            ("KeyCode::ArrowRight", KeyCode::ArrowRight),
+            ("KeyCode::Slash", KeyCode::Slash),
+            ("KeyCode::KeyA", KeyCode::KeyA),
+            ("KeyCode::KeyZ", KeyCode::KeyZ),
+            ("KeyCode::Numpad0", KeyCode::Numpad0),
+            ("KeyCode::Numpad9", KeyCode::Numpad9),
+            ("KeyCode::NumpadEnter", KeyCode::NumpadEnter),
+            ("KeyCode::NumpadDecimal", KeyCode::NumpadDecimal),
+        ];
+        for (token, expected) in cases {
+            assert_eq!(
+                parse_keycode(token),
+                Some(InputBinding::Key(expected)),
+                "failed for {token}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_keycode_previously_missing_keys() {
+        let cases = [
+            ("KeyCode::Period", KeyCode::Period),
+            ("KeyCode::AltLeft", KeyCode::AltLeft),
+            ("KeyCode::AltRight", KeyCode::AltRight),
+            ("KeyCode::ControlLeft", KeyCode::ControlLeft),
+            ("KeyCode::ControlRight", KeyCode::ControlRight),
+            ("KeyCode::ShiftLeft", KeyCode::ShiftLeft),
+            ("KeyCode::ShiftRight", KeyCode::ShiftRight),
+            ("KeyCode::Space", KeyCode::Space),
+            ("KeyCode::Tab", KeyCode::Tab),
+            ("KeyCode::Backspace", KeyCode::Backspace),
+            ("KeyCode::CapsLock", KeyCode::CapsLock),
+            ("KeyCode::Delete", KeyCode::Delete),
+            ("KeyCode::Home", KeyCode::Home),
+            ("KeyCode::End", KeyCode::End),
+            ("KeyCode::PageUp", KeyCode::PageUp),
+            ("KeyCode::PageDown", KeyCode::PageDown),
+            ("KeyCode::Insert", KeyCode::Insert),
+            ("KeyCode::F1", KeyCode::F1),
+            ("KeyCode::F12", KeyCode::F12),
+            ("KeyCode::PrintScreen", KeyCode::PrintScreen),
+            ("KeyCode::Comma", KeyCode::Comma),
+            ("KeyCode::Minus", KeyCode::Minus),
+            ("KeyCode::Equal", KeyCode::Equal),
+            ("KeyCode::BracketLeft", KeyCode::BracketLeft),
+            ("KeyCode::Backquote", KeyCode::Backquote),
+            ("KeyCode::Digit0", KeyCode::Digit0),
+            ("KeyCode::Digit9", KeyCode::Digit9),
+            ("KeyCode::NumLock", KeyCode::NumLock),
+            ("KeyCode::ScrollLock", KeyCode::ScrollLock),
+            ("KeyCode::Pause", KeyCode::Pause),
+            ("KeyCode::ContextMenu", KeyCode::ContextMenu),
+            ("KeyCode::SuperLeft", KeyCode::SuperLeft),
+            ("KeyCode::AudioVolumeMute", KeyCode::AudioVolumeMute),
+            ("KeyCode::F35", KeyCode::F35),
+        ];
+        for (token, expected) in cases {
+            assert_eq!(
+                parse_keycode(token),
+                Some(InputBinding::Key(expected)),
+                "failed for {token}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_keycode_rejects_invalid() {
+        assert_eq!(parse_keycode("KeyCode::NotAKey"), None);
+        assert_eq!(parse_keycode("KeyCode::"), None);
+        assert_eq!(parse_keycode("NotKeyCode::Enter"), None);
+        assert_eq!(parse_keycode("Enter"), None);
+        assert_eq!(parse_keycode(""), None);
+    }
+
+    #[test]
+    fn parse_pad_dir_valid() {
+        assert_eq!(parse_pad_dir("Up"), Some(PadDir::Up));
+        assert_eq!(parse_pad_dir("Down"), Some(PadDir::Down));
+        assert_eq!(parse_pad_dir("Left"), Some(PadDir::Left));
+        assert_eq!(parse_pad_dir("Right"), Some(PadDir::Right));
+    }
+
+    #[test]
+    fn parse_pad_dir_invalid() {
+        assert_eq!(parse_pad_dir("up"), None);
+        assert_eq!(parse_pad_dir(""), None);
+        assert_eq!(parse_pad_dir("UpDown"), None);
+    }
+
+    #[test]
+    fn parse_pad_dir_binding_short_form() {
+        assert_eq!(
+            parse_pad_dir_binding("PadDir::Up"),
+            Some(InputBinding::PadDir(PadDir::Up))
+        );
+        assert_eq!(
+            parse_pad_dir_binding("PadDir::Right"),
+            Some(InputBinding::PadDir(PadDir::Right))
+        );
+    }
+
+    #[test]
+    fn parse_pad_device_binding_any_pad_long_form() {
+        assert_eq!(
+            parse_pad_device_binding("Pad::Dir::Down"),
+            Some(InputBinding::PadDir(PadDir::Down))
+        );
+    }
+
+    #[test]
+    fn parse_pad_device_binding_device_specific() {
+        assert_eq!(
+            parse_pad_device_binding("Pad0::Dir::Up"),
+            Some(InputBinding::PadDirOn {
+                device: 0,
+                dir: PadDir::Up,
+            })
+        );
+        assert_eq!(
+            parse_pad_device_binding("Pad3::Dir::Left"),
+            Some(InputBinding::PadDirOn {
+                device: 3,
+                dir: PadDir::Left,
+            })
+        );
+    }
+
+    #[test]
+    fn parse_pad_dir_binding_rejects_invalid() {
+        assert_eq!(parse_pad_dir_binding("PadDir::Diagonal"), None);
+        assert_eq!(parse_pad_dir_binding("Pad0::Btn::A"), None);
+        assert_eq!(parse_pad_dir_binding("Pad0::Dir"), None);
+        assert_eq!(parse_pad_dir_binding("NotPad::Dir::Up"), None);
+    }
+
+    #[test]
+    fn parse_pad_code_hex_only() {
+        assert_eq!(
+            parse_pad_code("PadCode[0xDEADBEEF]"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0xDEADBEEF,
+                device: None,
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_decimal() {
+        assert_eq!(
+            parse_pad_code("PadCode[42]"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 42,
+                device: None,
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_with_device() {
+        assert_eq!(
+            parse_pad_code("PadCode[0x00000001]@2"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 1,
+                device: Some(2),
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_with_uuid() {
+        let uuid_hex = "00112233AABBCCDDEEFF001122334455";
+        let token = format!("PadCode[0xFF]#{uuid_hex}");
+        let expected_uuid = [
+            0x00, 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33,
+            0x44, 0x55,
+        ];
+        assert_eq!(
+            parse_pad_code(&token),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0xFF,
+                device: None,
+                uuid: Some(expected_uuid),
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_with_device_and_uuid() {
+        let token = "PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455";
+        let Some(InputBinding::GamepadCode(binding)) = parse_pad_code(token) else {
+            panic!("expected gamepad code binding");
+        };
+        assert_eq!(binding.code_u32, 0xDEADBEEF);
+        assert_eq!(binding.device, Some(0));
+        assert!(binding.uuid.is_some());
+    }
+
+    #[test]
+    fn parse_pad_code_rejects_invalid() {
+        assert_eq!(parse_pad_code("PadCode[]"), None);
+        assert_eq!(parse_pad_code("PadCode[xyz]"), None);
+        assert_eq!(parse_pad_code("NotPadCode[0x01]"), None);
+        assert_eq!(parse_pad_code(""), None);
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_keycode() {
+        assert_eq!(
+            parse_binding_token("KeyCode::Period"),
+            Some(InputBinding::Key(KeyCode::Period))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_pad_dir() {
+        assert_eq!(
+            parse_binding_token("PadDir::Up"),
+            Some(InputBinding::PadDir(PadDir::Up))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_pad_device() {
+        assert_eq!(
+            parse_binding_token("Pad0::Dir::Left"),
+            Some(InputBinding::PadDirOn {
+                device: 0,
+                dir: PadDir::Left,
+            })
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_pad_code() {
+        assert_eq!(
+            parse_binding_token("PadCode[0x42]"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0x42,
+                device: None,
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_trims_whitespace() {
+        assert_eq!(
+            parse_binding_token("  KeyCode::Enter  "),
+            Some(InputBinding::Key(KeyCode::Enter))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_rejects_garbage() {
+        assert_eq!(parse_binding_token("garbage"), None);
+        assert_eq!(parse_binding_token(""), None);
+    }
+
+    #[test]
+    fn round_trip_keyboard_bindings() {
+        let keys = [
+            KeyCode::Enter,
+            KeyCode::Escape,
+            KeyCode::Period,
+            KeyCode::AltLeft,
+            KeyCode::AltRight,
+            KeyCode::Space,
+            KeyCode::Tab,
+            KeyCode::Backspace,
+            KeyCode::ArrowUp,
+            KeyCode::KeyA,
+            KeyCode::KeyZ,
+            KeyCode::Digit0,
+            KeyCode::Digit9,
+            KeyCode::Numpad0,
+            KeyCode::Numpad2,
+            KeyCode::NumpadEnter,
+            KeyCode::NumpadDecimal,
+            KeyCode::F1,
+            KeyCode::F12,
+            KeyCode::F35,
+            KeyCode::ControlLeft,
+            KeyCode::ShiftRight,
+            KeyCode::SuperLeft,
+            KeyCode::PrintScreen,
+            KeyCode::Comma,
+            KeyCode::Minus,
+            KeyCode::Slash,
+            KeyCode::Backquote,
+            KeyCode::BracketLeft,
+            KeyCode::AudioVolumeMute,
+        ];
+        for key in keys {
+            let binding = InputBinding::Key(key);
+            let token = binding_to_token(binding);
+            assert_eq!(
+                parse_binding_token(&token),
+                Some(binding),
+                "round-trip failed for {key:?}: token was {token:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn round_trip_pad_dir() {
+        for dir in [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right] {
+            let binding = InputBinding::PadDir(dir);
+            let token = binding_to_token(binding);
+            assert_eq!(
+                parse_binding_token(&token),
+                Some(binding),
+                "round-trip failed for {dir:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn round_trip_pad_dir_on() {
+        for device in [0, 1, 5] {
+            for dir in [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right] {
+                let binding = InputBinding::PadDirOn { device, dir };
+                let token = binding_to_token(binding);
+                assert_eq!(
+                    parse_binding_token(&token),
+                    Some(binding),
+                    "round-trip failed for device={device}, dir={dir:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn round_trip_gamepad_code() {
+        let cases = [
+            GamepadCodeBinding {
+                code_u32: 0xDEADBEEF,
+                device: None,
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: 42,
+                device: Some(0),
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: 0xFF,
+                device: None,
+                uuid: Some([
+                    0x00, 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22,
+                    0x33, 0x44, 0x55,
+                ]),
+            },
+            GamepadCodeBinding {
+                code_u32: 0x01,
+                device: Some(3),
+                uuid: Some([0xAB; 16]),
+            },
+        ];
+        for binding in cases {
+            let input = InputBinding::GamepadCode(binding);
+            let token = binding_to_token(input);
+            assert_eq!(
+                parse_binding_token(&token),
+                Some(input),
+                "round-trip failed for {binding:?}: token was {token:?}"
+            );
+        }
+    }
 }

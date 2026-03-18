@@ -4,8 +4,10 @@ use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_height, screen_width};
 use crate::game::profile;
-use crate::screens::components::heart_bg;
-use crate::screens::components::screen_bar::{self, ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::screens::components::shared::heart_bg;
+use crate::screens::components::shared::screen_bar::{
+    self, ScreenBarPosition, ScreenBarTitlePlacement,
+};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{self, Actor};
 use crate::ui::color;

@@ -40,6 +40,7 @@ pub enum Actor {
     Sprite {
         align: [f32; 2],
         offset: [f32; 2],
+        world_z: f32,
         size: [SizeSpec; 2],
         source: SpriteSource,
         tint: [f32; 4],
@@ -90,6 +91,7 @@ pub enum Actor {
         scale: [f32; 2],
         fit_width: Option<f32>,
         fit_height: Option<f32>,
+        wrap_width_pixels: Option<i32>,
         max_width: Option<f32>,
         max_height: Option<f32>,
         max_w_pre_zoom: bool,
@@ -116,6 +118,7 @@ pub enum Actor {
     TexturedMesh {
         align: [f32; 2],
         offset: [f32; 2],
+        world_z: f32,
         size: [SizeSpec; 2],
         texture: Arc<str>,
         vertices: Arc<[TexturedMeshVertex]>,
