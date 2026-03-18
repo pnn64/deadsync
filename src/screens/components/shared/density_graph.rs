@@ -328,18 +328,24 @@ unsafe fn write_density_life_vertices(
         let l1 = [p[0] + nx, p[1] + ny];
         let r1 = [p[0] - nx, p[1] - ny];
 
-        unsafe { dst.write(MeshVertex { pos: l0, color }) };
-        dst = unsafe { dst.add(1) };
-        unsafe { dst.write(MeshVertex { pos: r0, color }) };
-        dst = unsafe { dst.add(1) };
-        unsafe { dst.write(MeshVertex { pos: l1, color }) };
-        dst = unsafe { dst.add(1) };
-        unsafe { dst.write(MeshVertex { pos: r0, color }) };
-        dst = unsafe { dst.add(1) };
-        unsafe { dst.write(MeshVertex { pos: r1, color }) };
-        dst = unsafe { dst.add(1) };
-        unsafe { dst.write(MeshVertex { pos: l1, color }) };
-        dst = unsafe { dst.add(1) };
+        // SAFETY: the caller guarantees `dst` points to enough writable
+        // uninitialized storage for every segment in `points[start..end]`. This
+        // branch emits exactly six vertices for one non-degenerate segment and then
+        // advances `dst` by the same count.
+        unsafe {
+            dst.write(MeshVertex { pos: l0, color });
+            dst = dst.add(1);
+            dst.write(MeshVertex { pos: r0, color });
+            dst = dst.add(1);
+            dst.write(MeshVertex { pos: l1, color });
+            dst = dst.add(1);
+            dst.write(MeshVertex { pos: r0, color });
+            dst = dst.add(1);
+            dst.write(MeshVertex { pos: r1, color });
+            dst = dst.add(1);
+            dst.write(MeshVertex { pos: l1, color });
+            dst = dst.add(1);
+        }
         written += 6;
         prev = Some(p);
     }
@@ -377,6 +383,9 @@ pub(crate) fn update_density_life_mesh(
     if let Some(existing) = mesh.as_mut().and_then(Arc::get_mut)
         && existing.len() == len
     {
+        // SAFETY: `existing` has exactly `len` initialized slots and
+        // `write_density_life_vertices` writes exactly that many vertices for this
+        // `(points, start, end)` range.
         let written = unsafe {
             write_density_life_vertices(
                 existing.as_mut_ptr(),
@@ -393,6 +402,8 @@ pub(crate) fn update_density_life_mesh(
     }
 
     let mut verts = Arc::<[MeshVertex]>::new_uninit_slice(len);
+    // SAFETY: `verts` was just allocated with exactly `len` uninitialized slots,
+    // and the writer fills all of them before we call `assume_init()`.
     let written = unsafe {
         write_density_life_vertices(
             Arc::get_mut(&mut verts)
@@ -408,6 +419,8 @@ pub(crate) fn update_density_life_mesh(
         )
     };
     debug_assert_eq!(written, len);
+    // SAFETY: `written == len` means every element of `verts` was initialized by
+    // `write_density_life_vertices`.
     *mesh = Some(unsafe { verts.assume_init() });
 }
 

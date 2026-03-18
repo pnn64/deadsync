@@ -251,8 +251,14 @@ struct RawKeyboardRing {
 }
 
 #[cfg(windows)]
+// SAFETY: `RawKeyboardRing` is a single-producer/single-consumer ring. Slot
+// ownership is synchronized with the `head`/`tail` atomics, so moving the ring
+// between threads does not create unsynchronized aliasing of initialized items.
 unsafe impl Send for RawKeyboardRing {}
 #[cfg(windows)]
+// SAFETY: readers and writers coordinate exclusively through atomics and only
+// touch disjoint slots at any instant. Shared references are therefore safe as
+// long as callers preserve the intended SPSC usage.
 unsafe impl Sync for RawKeyboardRing {}
 
 #[cfg(windows)]
@@ -290,6 +296,9 @@ impl RawKeyboardRing {
             return;
         }
         let slot = tail % RAW_KEYBOARD_EVENT_CAPACITY;
+        // SAFETY: `tail - head < capacity` guarantees this slot is not currently
+        // visible to the consumer. The write happens-before publication via the
+        // following Release store to `tail`.
         unsafe { (*self.slots[slot].get()).write(ev) };
         self.tail.store(tail.wrapping_add(1), Ordering::Release);
     }
@@ -302,6 +311,9 @@ impl RawKeyboardRing {
             return None;
         }
         let slot = head % RAW_KEYBOARD_EVENT_CAPACITY;
+        // SAFETY: `head != tail` means the producer has already initialized this
+        // slot and published it with a Release store to `tail`. The Acquire load
+        // above pairs with that store before we read the item out exactly once.
         let ev = unsafe { (*self.slots[slot].get()).assume_init_read() };
         self.head.store(head.wrapping_add(1), Ordering::Release);
         Some(ev)
@@ -876,11 +888,15 @@ fn set_macos_app_icon() {
         "assets/graphics/icon/icon-512.png",
     ];
 
+    // SAFETY: AppKit requires a main-thread marker here. This helper runs from the
+    // application initialization path on the UI thread that owns `NSApplication`.
     let app = NSApplication::sharedApplication(unsafe { MainThreadMarker::new_unchecked() });
     for path in MACOS_APP_ICON_PATHS {
         let ns_path = NSString::from_str(path);
         let icon_image = NSImage::initWithContentsOfFile(NSImage::alloc(), &ns_path);
         if let Some(icon_image) = icon_image {
+            // SAFETY: `app` and `icon_image` are valid AppKit objects on the main
+            // thread, which is the required calling context for this setter.
             unsafe {
                 app.setApplicationIconImage(Some(&icon_image));
             }
@@ -1570,6 +1586,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let mut meter_sum = 0u32;
         let mut meter_count = 0u32;
         let mut any_failed = false;
+        let mut score_valid = true;
         let mut show_w0 = false;
         let mut show_fa_plus_pane = false;
         let mut show_ex = false;
@@ -1594,6 +1611,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             meter_sum = meter_sum.saturating_add(player.chart.meter);
             meter_count = meter_count.saturating_add(1);
             any_failed |= player.grade == scores::Grade::Failed;
+            score_valid &= player.score_valid;
             show_w0 |= player.show_w0;
             show_fa_plus_pane |= player.show_fa_plus_pane;
             show_ex |= player.show_ex_score;
@@ -1642,6 +1660,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         players[idx] = Some(stage_stats::PlayerStageSummary {
             profile_name: first_player.profile_name.clone(),
             chart: Arc::new(summary_chart),
+            score_valid,
             grade,
             score_percent,
             ex_score_percent,
@@ -1736,13 +1755,24 @@ fn score_info_from_stage(
         initials.as_str(),
         player.score_percent,
     );
-    let earned_machine_record = machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
-    let earned_top2_personal = personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+    let earned_machine_record =
+        player.score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
+    let earned_top2_personal =
+        player.score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+    let machine_record_highlight_rank = player
+        .score_valid
+        .then_some(machine_record_highlight_rank)
+        .flatten();
+    let personal_record_highlight_rank = player
+        .score_valid
+        .then_some(personal_record_highlight_rank)
+        .flatten();
 
     Some(evaluation::ScoreInfo {
         song: stage.song.clone(),
         chart: player.chart.clone(),
         profile_name: player.profile_name.clone(),
+        score_valid: player.score_valid,
         judgment_counts,
         score_percent: player.score_percent,
         grade: player.grade,
@@ -1946,6 +1976,7 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
     let to_player = |si: &evaluation::ScoreInfo| stage_stats::PlayerStageSummary {
         profile_name: si.profile_name.clone(),
         chart: si.chart.clone(),
+        score_valid: si.score_valid,
         grade: si.grade,
         score_percent: si.score_percent,
         ex_score_percent: si.ex_score_percent,

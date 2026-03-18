@@ -570,6 +570,8 @@ fn wrapped_text_lines(
 
 #[inline(always)]
 unsafe fn str_from_cached_ptr<'a>(ptr: *const str) -> &'a str {
+    // SAFETY: callers only pass pointers captured from cached font glyph storage
+    // that outlives the returned borrow for the duration of render-list assembly.
     unsafe { &*ptr }
 }
 
@@ -1200,6 +1202,10 @@ fn build_actor_recursive<'a>(
                                     && {
                                         // Glyph texture keys are borrowed from font storage, so this
                                         // cached byte slice stays valid across pushes after reserve().
+                                        // SAFETY: `cached_texture_ptr` and `cached_texture_len` are
+                                        // only refreshed from `texture_key.as_bytes()` values that
+                                        // live for the duration of the cached layout. The pointer is
+                                        // never used after either cached value changes.
                                         let cached_bytes = unsafe {
                                             std::slice::from_raw_parts(
                                                 cached_texture_ptr,
@@ -1917,6 +1923,9 @@ fn layout_text<'a>(
 
                 out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
+                        // SAFETY: `glyph.texture_key` was captured from cached font
+                        // storage when the layout was built and remains valid for
+                        // the lifetime of this render-list assembly pass.
                         texture_id: std::borrow::Cow::Borrowed(unsafe {
                             str_from_cached_ptr(glyph.texture_key)
                         }),

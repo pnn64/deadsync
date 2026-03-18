@@ -184,6 +184,7 @@ pub struct ScoreInfo {
     pub song: Arc<SongData>,
     pub chart: Arc<ChartData>,
     pub profile_name: String,
+    pub score_valid: bool,
     pub judgment_counts: HashMap<JudgeGrade, u32>,
     pub score_percent: f64,
     pub grade: scores::Grade,
@@ -690,7 +691,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         stage_duration_seconds = gs.total_elapsed_in_screen;
 
         // Persist one score file per play (per local profile), including fails and replay lane
-        // input, unless gameplay was disqualified (e.g., autoplay used).
+        // input, unless the run was ranking-invalid (autoplay, score-invalid modifiers, etc.).
         scores::save_local_scores_from_gameplay(&gs);
         scores::submit_arrowcloud_payloads_from_gameplay(&gs);
 
@@ -780,9 +781,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 &prof.player_initials,
                 score_percent,
             );
-            let earned_machine_record = machine_record_highlight_rank
-                .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
-            let earned_top2_personal = personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+            let score_valid = gs.score_valid[player_idx] && !gs.autoplay_used;
+            let earned_machine_record = score_valid
+                && machine_record_highlight_rank
+                    .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
+            let earned_top2_personal =
+                score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+            let machine_record_highlight_rank = score_valid
+                .then_some(machine_record_highlight_rank)
+                .flatten();
+            let personal_record_highlight_rank = score_valid
+                .then_some(personal_record_highlight_rank)
+                .flatten();
             let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
 
             let mut grade = if p.is_failing || !gs.song_completed_naturally {
@@ -842,6 +852,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 song: gs.song.clone(),
                 chart: gs.charts[player_idx].clone(),
                 profile_name: prof.display_name.clone(),
+                score_valid,
                 judgment_counts: HashMap::from([
                     (
                         JudgeGrade::Fantastic,
@@ -1780,7 +1791,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
 
             // Record Texts (Simply Love PerPlayer/Upper/RecordTexts.lua)
-            let has_recordable_score = si.score_percent >= 0.01;
+            let has_recordable_score = si.score_valid && si.score_percent >= 0.01;
             let machine_record_rank = if has_recordable_score {
                 si.machine_record_highlight_rank.filter(|rank| *rank > 0)
             } else {

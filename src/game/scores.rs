@@ -1407,6 +1407,14 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     let mines_disabled = false;
 
     for player_idx in 0..gs.num_players {
+        if !gs.score_valid[player_idx] {
+            debug!(
+                "Skipping local score save for player {}: ranking-invalid modifiers were used.",
+                player_idx + 1
+            );
+            continue;
+        }
+
         let side = if gs.num_players >= 2 {
             if player_idx == 0 {
                 profile::PlayerSide::P1
@@ -2239,6 +2247,14 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
 
     let mut jobs = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        if !gs.score_valid[player_idx] {
+            debug!(
+                "Skipping ArrowCloud submit for player {}: ranking-invalid modifiers were used.",
+                player_idx + 1
+            );
+            continue;
+        }
+
         let side = gameplay_side_for_player(gs, player_idx);
         let api_key = gs.player_profiles[player_idx].arrowcloud_api_key.trim();
         if api_key.is_empty() {
@@ -2305,6 +2321,10 @@ pub fn save_local_summary_score_for_side(
     summary: &stage_stats::PlayerStageSummary,
 ) {
     if chart_hash.trim().is_empty() {
+        return;
+    }
+    if !summary.score_valid {
+        debug!("Skipping local summary score save: ranking-invalid modifiers were used.");
         return;
     }
     let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {

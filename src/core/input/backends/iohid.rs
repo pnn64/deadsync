@@ -76,6 +76,9 @@ const KCFSTRING_ENCODING_UTF8: u32 = 0x0800_0100;
 
 fn cfstr(s: &str) -> CFStringRef {
     let c = std::ffi::CString::new(s).unwrap();
+    // SAFETY: `c` is a valid NUL-terminated UTF-8 string that remains alive for
+    // the duration of the call, and CoreFoundation copies the bytes into the new
+    // `CFString`.
     unsafe { CFStringCreateWithCString(ptr::null(), c.as_ptr(), KCFSTRING_ENCODING_UTF8) }
 }
 
@@ -84,6 +87,8 @@ fn cfnum_i32(v: CFTypeRef) -> Option<i32> {
         return None;
     }
     let mut out: i32 = 0;
+    // SAFETY: `v` was checked for null, and `out` points to writable stack
+    // storage for the requested CoreFoundation number conversion.
     let ok = unsafe { CFNumberGetValue(v, 9, ptr::addr_of_mut!(out).cast::<c_void>()) };
     ok.then_some(out)
 }
@@ -106,11 +111,15 @@ struct HostClock {
 impl HostClock {
     fn calibrate() -> Option<Self> {
         let mut info = mach_timebase_info_data_t { numer: 0, denom: 0 };
+        // SAFETY: `mach_timebase_info` writes into the provided stack local and
+        // does not retain the pointer after returning.
         let status = unsafe { mach_timebase_info(&mut info) };
         if status != 0 || info.denom == 0 {
             return None;
         }
         let host_before = now_nanos();
+        // SAFETY: `mach_absolute_time` reads the current monotonic host clock and
+        // takes no pointers or borrowed Rust data.
         let mach_now = unsafe { mach_absolute_time() };
         let host_after = now_nanos();
         let host_mid =
@@ -176,7 +185,11 @@ fn event_time(host_clock: Option<HostClock>, value: IOHIDValueRef) -> (Instant, 
     let sample = Instant::now();
     let sample_host_nanos = now_nanos();
     let host_nanos = host_clock
-        .and_then(|clock| clock.host_nanos(unsafe { IOHIDValueGetTimeStamp(value) }))
+        .and_then(|clock| {
+            // SAFETY: `value` is the live IOHID value delivered by the callback for
+            // this call frame, so querying its timestamp is valid here.
+            clock.host_nanos(unsafe { IOHIDValueGetTimeStamp(value) })
+        })
         .unwrap_or(sample_host_nanos);
     (
         timestamp_from_host_sample(host_nanos, sample_host_nanos, sample),
@@ -190,6 +203,9 @@ extern "C" fn on_match(
     _sender: *mut c_void,
     device: IOHIDDeviceRef,
 ) {
+    // SAFETY: `_ctx` was registered from a leaked `Box<Ctx>` in `run`, so it
+    // stays valid for the lifetime of the CFRunLoop. `device` is the callback's
+    // live IOHID device handle for this invocation.
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let key = device as usize;
@@ -255,6 +271,9 @@ extern "C" fn on_remove(
     _sender: *mut c_void,
     device: IOHIDDeviceRef,
 ) {
+    // SAFETY: `_ctx` was registered from a leaked `Box<Ctx>` in `run`, so it
+    // stays valid for the lifetime of the CFRunLoop. `device` is the callback's
+    // live IOHID device handle for this invocation.
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let key = device as usize;
@@ -276,6 +295,9 @@ extern "C" fn on_input(
     _sender: *mut c_void,
     value: IOHIDValueRef,
 ) {
+    // SAFETY: `_ctx` was registered from a leaked `Box<Ctx>` in `run`, so it
+    // stays valid for the lifetime of the CFRunLoop. `value` and any derived HID
+    // element/device handles are only used during this callback.
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let (timestamp, host_nanos) = event_time(ctx.host_clock, value);
@@ -353,6 +375,9 @@ pub fn run(
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
 ) {
+    // SAFETY: the manager, run loop, and callback registrations all stay within
+    // this thread; `ctx` is intentionally leaked so the callback context pointer
+    // remains valid for the life of the run loop.
     unsafe {
         let manager = IOHIDManagerCreate(ptr::null(), 0);
         if manager.is_null() {

@@ -787,6 +787,9 @@ pub fn run(
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
 ) {
     let _thread_policy = boost_current_thread(ThreadRole::Input);
+    // SAFETY: this thread initializes WinRT exactly once for multithreaded use
+    // before touching WGI APIs. Duplicate initialization is tolerated by
+    // `RoInitialize`, and shutdown is process-wide for this usage.
     let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
 
     let (tx, rx) = mpsc::channel::<Msg>();

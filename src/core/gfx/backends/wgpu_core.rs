@@ -2248,6 +2248,8 @@ const PROJ_BYTES: u64 = mem::size_of::<[[f32; 4]; 4]>() as u64;
 #[inline(always)]
 const fn cast_slice<T>(data: &[T]) -> &[u8] {
     let len = std::mem::size_of_val(data);
+    // SAFETY: `u8` has alignment 1, so every `T` slice can be viewed as a byte
+    // slice covering the exact same initialized memory range.
     unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<u8>(), len) }
 }
 

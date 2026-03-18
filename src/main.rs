@@ -13,6 +13,9 @@ impl Drop for WindowsTimingGuard {
     fn drop(&mut self) {
         use windows::Win32::Media::timeEndPeriod;
 
+        // SAFETY: `timeEndPeriod` takes only the timer-resolution value. We pass
+        // the same value we requested at startup and ignore any OS-level failure
+        // because this is best-effort cleanup during shutdown.
         unsafe {
             let _ = timeEndPeriod(self.timer_period_ms);
         }
@@ -24,6 +27,8 @@ fn boost_windows_runtime_timing() -> WindowsTimingGuard {
     use windows::Win32::Media::timeBeginPeriod;
 
     let timer_period_ms = 1u32;
+    // SAFETY: `timeBeginPeriod` takes only the requested resolution and does not
+    // retain pointers into Rust memory. We handle the return code explicitly.
     unsafe {
         let timer_result = timeBeginPeriod(timer_period_ms);
         if timer_result == 0 {

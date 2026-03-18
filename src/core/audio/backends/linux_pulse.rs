@@ -90,11 +90,18 @@ fn load_pulse_api() -> Result<PulseApi, String> {
     let simple = load_library(&["libpulse-simple.so.0", "libpulse-simple.so"])?;
     let pulse = load_library(&["libpulse.so.0", "libpulse.so"])?;
     Ok(PulseApi {
+        // SAFETY: the loaded shared object stays owned by the `PulseApi` struct for
+        // at least as long as these copied function pointers are used.
         pa_simple_new: unsafe { load_symbol(&simple, b"pa_simple_new\0")? },
+        // SAFETY: same lifetime reasoning as above for the symbol resolution.
         pa_simple_free: unsafe { load_symbol(&simple, b"pa_simple_free\0")? },
+        // SAFETY: same lifetime reasoning as above for the symbol resolution.
         pa_simple_write: unsafe { load_symbol(&simple, b"pa_simple_write\0")? },
+        // SAFETY: same lifetime reasoning as above for the symbol resolution.
         pa_simple_drain: unsafe { load_symbol(&simple, b"pa_simple_drain\0")? },
+        // SAFETY: same lifetime reasoning as above for the symbol resolution.
         pa_simple_get_latency: unsafe { load_symbol(&simple, b"pa_simple_get_latency\0")? },
+        // SAFETY: same lifetime reasoning as above for the symbol resolution.
         pa_strerror: unsafe { load_symbol(&pulse, b"pa_strerror\0")? },
         _simple: simple,
         _pulse: pulse,
@@ -104,6 +111,9 @@ fn load_pulse_api() -> Result<PulseApi, String> {
 fn load_library(names: &[&str]) -> Result<Library, String> {
     let mut last_err = None;
     for name in names {
+        // SAFETY: loading a shared object is the intended `libloading` API here;
+        // we keep the returned handle alive for the full lifetime of any symbols
+        // resolved from it.
         match unsafe { Library::new(*name) } {
             Ok(lib) => return Ok(lib),
             Err(err) => last_err = Some(format!("{name}: {err}")),
@@ -113,6 +123,8 @@ fn load_library(names: &[&str]) -> Result<Library, String> {
 }
 
 unsafe fn load_symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, String> {
+    // SAFETY: the caller chooses `T` to match the actual symbol signature, and
+    // `lib` remains alive after the copied function pointer is returned.
     unsafe { lib.get::<T>(name) }
         .map(|sym| *sym)
         .map_err(|err| {
@@ -235,6 +247,9 @@ impl PulseConnection {
             fragsize: u32::MAX,
         };
         let mut error = 0;
+        // SAFETY: all pointers passed to PulseAudio come from stack locals or
+        // owned `CString`s that remain alive for the duration of the call, and the
+        // sample/buffer descriptors are fully initialized.
         let raw = unsafe {
             (api.pa_simple_new)(
                 ptr::null(),
@@ -260,6 +275,9 @@ impl PulseConnection {
     #[inline(always)]
     fn write_i16(&self, data: &[i16]) -> Result<(), String> {
         let mut error = 0;
+        // SAFETY: `self.raw` is a live PulseAudio stream owned by this
+        // connection, and `data` is a valid contiguous i16 slice whose byte length
+        // we pass explicitly.
         let rc = unsafe {
             (self.api.pa_simple_write)(
                 self.raw,
@@ -280,12 +298,16 @@ impl PulseConnection {
     #[inline(always)]
     fn drain(&self) {
         let mut error = 0;
+        // SAFETY: `self.raw` remains a valid PulseAudio stream until `Drop`, and
+        // `error` points to writable stack storage for the call.
         let _ = unsafe { (self.api.pa_simple_drain)(self.raw, &mut error) };
     }
 
     #[inline(always)]
     fn latency_nanos(&self) -> Result<u64, String> {
         let mut error = 0;
+        // SAFETY: `self.raw` remains a valid PulseAudio stream until `Drop`, and
+        // `error` points to writable stack storage for the call.
         let latency_usec = unsafe { (self.api.pa_simple_get_latency)(self.raw, &mut error) };
         if latency_usec == u64::MAX {
             return Err(pulse_error(self.api, error));
@@ -296,6 +318,8 @@ impl PulseConnection {
 
 impl Drop for PulseConnection {
     fn drop(&mut self) {
+        // SAFETY: `raw` is allocated by `pa_simple_new` and owned uniquely by this
+        // connection, so freeing it once in `Drop` is correct.
         unsafe { (self.api.pa_simple_free)(self.raw) };
     }
 }
@@ -414,10 +438,14 @@ fn playback_timing(
 
 #[inline(always)]
 fn pulse_error(api: &PulseApi, error: c_int) -> String {
+    // SAFETY: `pa_strerror` returns either null or a valid NUL-terminated static
+    // PulseAudio error string for the duration of the call.
     let ptr = unsafe { (api.pa_strerror)(error) };
     if ptr.is_null() {
         return format!("PulseAudio error {error}");
     }
+    // SAFETY: the pointer was checked for null above and PulseAudio documents it
+    // as a valid C string.
     unsafe { CStr::from_ptr(ptr) }
         .to_string_lossy()
         .into_owned()

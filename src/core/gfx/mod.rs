@@ -450,13 +450,18 @@ impl Backend {
             BackendImpl::VulkanWgpu(_) => {
                 drop(old_textures);
             }
-            BackendImpl::OpenGL(state) => unsafe {
-                for tex in old_textures.values() {
-                    if let Texture::OpenGL(opengl::Texture(handle)) = tex {
-                        state.gl.delete_texture(*handle);
+            BackendImpl::OpenGL(state) => {
+                // SAFETY: `wait_for_idle()` above guarantees no in-flight GPU work
+                // still references these texture handles, and each handle came from
+                // this OpenGL backend.
+                unsafe {
+                    for tex in old_textures.values() {
+                        if let Texture::OpenGL(opengl::Texture(handle)) = tex {
+                            state.gl.delete_texture(*handle);
+                        }
                     }
                 }
-            },
+            }
             BackendImpl::OpenGLWgpu(_) => {
                 drop(old_textures);
             }
@@ -476,6 +481,9 @@ impl Backend {
             BackendImpl::Vulkan(state) => {
                 let _ = vulkan::flush_pending_uploads(state);
                 if let Some(device) = &state.device {
+                    // SAFETY: `device` is the live Vulkan logical device for this
+                    // backend, and we only wait for idle before tearing down or
+                    // reclaiming resources.
                     unsafe {
                         let _ = device.device_wait_idle();
                     }

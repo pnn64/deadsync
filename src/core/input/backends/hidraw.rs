@@ -284,6 +284,8 @@ fn build_report_spec(report: &Report) -> Option<ReportSpec> {
 
 fn raw_device_name(file: &std::fs::File) -> Option<String> {
     let mut buf = [0u8; 256];
+    // SAFETY: `file` is an open hidraw device, and `buf` is writable stack
+    // storage for the kernel to fill with the NUL-terminated device name.
     let rc = unsafe {
         libc::ioctl(
             file.as_raw_fd(),
@@ -300,6 +302,8 @@ fn raw_device_name(file: &std::fs::File) -> Option<String> {
 
 fn raw_device_info(file: &std::fs::File) -> (Option<u16>, Option<u16>) {
     let mut info = HidrawDevInfo::default();
+    // SAFETY: `file` is an open hidraw device, and `info` is writable stack
+    // storage for the kernel to fill.
     let rc = unsafe { libc::ioctl(file.as_raw_fd(), HIDIOCGRAWINFO, &mut info) };
     if rc < 0 {
         return (None, None);
@@ -309,6 +313,8 @@ fn raw_device_info(file: &std::fs::File) -> (Option<u16>, Option<u16>) {
 
 fn raw_report_descriptor(file: &std::fs::File) -> Result<Vec<u8>, String> {
     let mut size: libc::c_int = 0;
+    // SAFETY: `file` is an open hidraw device, and `size` is writable stack
+    // storage for the kernel to fill with the descriptor length.
     let rc = unsafe { libc::ioctl(file.as_raw_fd(), HIDIOCGRDESCSIZE, &mut size) };
     if rc < 0 {
         return Err("HIDIOCGRDESCSIZE failed".to_owned());
@@ -321,6 +327,8 @@ fn raw_report_descriptor(file: &std::fs::File) -> Result<Vec<u8>, String> {
         size: size as u32,
         value: [0; HID_MAX_DESCRIPTOR_SIZE],
     };
+    // SAFETY: `desc` is fully initialized and writable, and `file` is an open
+    // hidraw device that understands `HIDIOCGRDESC`.
     let rc = unsafe { libc::ioctl(file.as_raw_fd(), HIDIOCGRDESC, &mut desc) };
     if rc < 0 {
         return Err("HIDIOCGRDESC failed".to_owned());
@@ -645,6 +653,9 @@ pub fn run(
         } else {
             pollfds.as_mut_ptr()
         };
+        // SAFETY: `poll_ptr` is either null for an empty set or points to the
+        // first element of `pollfds`, which remains allocated and unchanged for the
+        // duration of the call.
         let rc = unsafe { poll(poll_ptr, pollfds.len(), -1) };
         if rc < 0 {
             continue;
@@ -677,6 +688,9 @@ pub fn run(
             if dev.max_report_len > buf.len() {
                 buf.resize(dev.max_report_len, 0);
             }
+            // SAFETY: `buf` is a writable byte buffer with at least
+            // `dev.max_report_len` bytes, and the fd came from the matching open
+            // hidraw device stored in `dev`.
             let n = unsafe {
                 read(
                     pollfds[idx + watch_offset].fd,

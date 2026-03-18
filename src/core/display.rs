@@ -283,6 +283,9 @@ mod platform {
         _: *mut RECT,
         state: LPARAM,
     ) -> BOOL {
+        // SAFETY: `state` is created from `&mut handles as isize` in `displays()`,
+        // and `EnumDisplayMonitors` does not outlive that call. The callback is
+        // therefore allowed to cast it back to the original `Vec<HMONITOR>`.
         let monitors = unsafe { &mut *(state.0 as *mut Vec<HMONITOR>) };
         monitors.push(h_monitor);
         BOOL(1)
@@ -296,6 +299,8 @@ mod platform {
     fn friendly_name_from_config(monitor_info_ex: &MONITORINFOEXW) -> Option<String> {
         let mut path_count = 0;
         let mut mode_count = 0;
+        // SAFETY: the Win32 API writes the path/mode counts into valid stack
+        // locals passed by mutable pointer and does not retain those pointers.
         unsafe {
             if GetDisplayConfigBufferSizes(
                 QDC_ONLY_ACTIVE_PATHS,
@@ -311,6 +316,9 @@ mod platform {
         let mut paths = vec![DISPLAYCONFIG_PATH_INFO::default(); path_count as usize];
         let mut modes = vec![DISPLAYCONFIG_MODE_INFO::default(); mode_count as usize];
 
+        // SAFETY: `paths` and `modes` are preallocated to the sizes requested by
+        // `GetDisplayConfigBufferSizes`, and the API only writes into the provided
+        // buffers for the duration of this call.
         unsafe {
             if QueryDisplayConfig(
                 QDC_ONLY_ACTIVE_PATHS,
@@ -337,6 +345,9 @@ mod platform {
                 ..Default::default()
             };
 
+            // SAFETY: `source.header` is fully initialized with the struct size and
+            // identifiers required by `DisplayConfigGetDeviceInfo`, and the API
+            // writes only into this stack-allocated structure.
             unsafe {
                 if DisplayConfigGetDeviceInfo(&raw mut source.header) != 0 {
                     continue;
@@ -357,6 +368,9 @@ mod platform {
                 ..Default::default()
             };
 
+            // SAFETY: `target.header` is fully initialized with the struct size and
+            // identifiers required by `DisplayConfigGetDeviceInfo`, and the API
+            // writes only into this stack-allocated structure.
             unsafe {
                 if DisplayConfigGetDeviceInfo(&raw mut target.header) != 0 {
                     continue;
@@ -373,6 +387,8 @@ mod platform {
     }
 
     fn device_string(monitor_info_ex: &MONITORINFOEXW) -> Option<String> {
+        // SAFETY: `display_device` is initialized with its required `cb` size and
+        // passed by mutable reference for the duration of the Win32 call only.
         unsafe {
             let mut display_device = windows::Win32::Graphics::Gdi::DISPLAY_DEVICEW {
                 cb: mem::size_of::<windows::Win32::Graphics::Gdi::DISPLAY_DEVICEW>() as u32,
@@ -397,6 +413,9 @@ mod platform {
         let mut info_ex = MONITORINFOEXW::default();
         info_ex.monitorInfo.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
         let ptr = &raw mut info_ex as *mut MONITORINFO;
+        // SAFETY: `MONITORINFOEXW` begins with `MONITORINFO`, `cbSize` is set to
+        // the concrete struct size, and `ptr` stays valid for the duration of the
+        // API call.
         unsafe {
             GetMonitorInfoW(h_monitor, ptr)
                 .ok()
@@ -407,6 +426,8 @@ mod platform {
             dmSize: mem::size_of::<windows::Win32::Graphics::Gdi::DEVMODEW>() as u16,
             ..Default::default()
         };
+        // SAFETY: `dev_mode` has its required size field set and is passed by
+        // mutable reference for the duration of the Win32 call only.
         unsafe {
             EnumDisplaySettingsW(
                 PCWSTR(info_ex.szDevice.as_ptr()),
@@ -417,6 +438,8 @@ mod platform {
             .map_err(|e| format!("EnumDisplaySettingsW failed: {e:?}"))?;
         }
 
+        // SAFETY: `EnumDisplaySettingsW` initialized `dev_mode`, so reading the
+        // active union arm containing `dmPosition` is valid here.
         let pos = unsafe { dev_mode.Anonymous1.Anonymous2.dmPosition };
         let width = dev_mode.dmPelsWidth;
         let height = dev_mode.dmPelsHeight;
@@ -438,6 +461,8 @@ mod platform {
 
     pub fn displays() -> Result<Vec<DisplaySnapshot>, String> {
         let mut handles: Vec<HMONITOR> = Vec::new();
+        // SAFETY: the callback receives a pointer back to `handles`, which lives
+        // until `EnumDisplayMonitors` returns. The API does not retain that state.
         unsafe {
             EnumDisplayMonitors(
                 None,
@@ -472,6 +497,8 @@ mod platform {
     use objc2_foundation::{NSNumber, NSString};
 
     fn friendly_name(display_id: CGDirectDisplayID) -> Option<String> {
+        // SAFETY: AppKit requires a main-thread marker for `NSScreen::screens`.
+        // Display enumeration is only performed from the UI path that owns AppKit.
         let screens = NSScreen::screens(unsafe { MainThreadMarker::new_unchecked() });
         for screen in screens {
             let device_description = screen.deviceDescription();
@@ -506,6 +533,8 @@ mod platform {
         let mut ids: Vec<CGDirectDisplayID> = vec![0; max_displays as usize];
         let mut count: u32 = 0;
 
+        // SAFETY: `ids` is preallocated for `max_displays` entries and `count`
+        // points to a valid stack local that CoreGraphics fills before returning.
         let err = unsafe { CGGetActiveDisplayList(max_displays, ids.as_mut_ptr(), &mut count) };
         if err != CGError::Success {
             return Err(format!("CGGetActiveDisplayList failed: {:?}", err));
@@ -530,6 +559,8 @@ mod platform {
         let max_displays: u32 = 16;
         let mut ids: Vec<CGDirectDisplayID> = vec![0; max_displays as usize];
         let mut count: u32 = 0;
+        // SAFETY: `ids` is preallocated for `max_displays` entries and `count`
+        // points to a valid stack local that CoreGraphics fills before returning.
         let err =
             unsafe { CGGetDisplaysWithPoint(point, max_displays, ids.as_mut_ptr(), &mut count) };
         if err != CGError::Success {

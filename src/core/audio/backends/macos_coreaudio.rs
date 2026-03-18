@@ -119,6 +119,8 @@ struct CoreAudioHostClock {
 impl CoreAudioHostClock {
     fn calibrate() -> Result<Self, String> {
         let mut info = mach_timebase_info_data_t { numer: 0, denom: 0 };
+        // SAFETY: `mach_timebase_info` writes into the provided stack local and
+        // does not retain the pointer after returning.
         let status = unsafe { mach_timebase_info(&mut info) };
         if status != 0 || info.denom == 0 {
             return Err(format!(
@@ -127,6 +129,8 @@ impl CoreAudioHostClock {
             ));
         }
         let host_before = now_nanos();
+        // SAFETY: `mach_absolute_time` reads the current monotonic host clock and
+        // takes no pointers or borrowed Rust data.
         let mach_now = unsafe { mach_absolute_time() };
         let host_after = now_nanos();
         let host_mid =
@@ -313,6 +317,9 @@ fn device_uid(device_id: AudioDeviceID) -> Result<String, String> {
     };
     let mut uid: *mut CFString = std::ptr::null_mut();
     let mut data_size = size_of::<*mut CFString>() as u32;
+    // SAFETY: the property address is fully initialized, `data_size` points to
+    // writable stack storage sized for a `CFString` pointer, and `uid` points to
+    // writable stack storage receiving the retained CoreFoundation object.
     let status = unsafe {
         AudioObjectGetPropertyData(
             device_id,
@@ -329,6 +336,9 @@ fn device_uid(device_id: AudioDeviceID) -> Result<String, String> {
         ));
     }
     let uid = NonNull::new(uid).ok_or_else(|| "CoreAudio device UID was null".to_string())?;
+    // SAFETY: on success CoreAudio returns an owned `CFStringRef` in `uid`, so
+    // transferring it into `CFRetained` gives Rust responsibility for releasing
+    // that reference.
     let uid = unsafe { CFRetained::<CFString>::from_raw(uid) };
     Ok(uid.to_string())
 }
