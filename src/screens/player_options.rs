@@ -1152,6 +1152,20 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: ROW_INDICATOR_SCORE_TYPE.to_string(),
+            choices: vec![
+                "Money".to_string(),
+                "EX".to_string(),
+                "H.EX".to_string(),
+            ],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Choose which score formula the mini indicator tracks:".to_string(),
+                "Money (ITG), EX (FA+), or H.EX (Hard EX).".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Gameplay Extras".to_string(),
             choices: gameplay_extras_choices,
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -1959,6 +1973,17 @@ fn apply_profile_defaults(
     }
     if let Some(row) = rows
         .iter_mut()
+        .find(|r| r.name == ROW_INDICATOR_SCORE_TYPE)
+    {
+        row.selected_choice_index[player_idx] = match profile.mini_indicator_score_type {
+            crate::game::profile::MiniIndicatorScoreType::Money => 0,
+            crate::game::profile::MiniIndicatorScoreType::Ex => 1,
+            crate::game::profile::MiniIndicatorScoreType::HardEx => 2,
+        }
+        .min(row.choices.len().saturating_sub(1));
+    }
+    if let Some(row) = rows
+        .iter_mut()
         .find(|r| r.name == "Early Decent/Way Off Options")
     {
         if profile.hide_early_dw_judgments {
@@ -2575,6 +2600,7 @@ const ROW_COMBO_COLORS: &str = "Combo Colors";
 const ROW_COMBO_COLOR_MODE: &str = "Combo Color Mode";
 const ROW_LIFEMETER_TYPE: &str = "LifeMeter Type";
 const ROW_LIFE_BAR_OPTIONS: &str = "Life Bar Options";
+const ROW_INDICATOR_SCORE_TYPE: &str = "Indicator Score Type";
 
 #[derive(Clone, Copy, Debug)]
 struct RowVisibility {
@@ -2585,6 +2611,7 @@ struct RowVisibility {
     show_density_graph_background: bool,
     show_combo_rows: bool,
     show_lifebar_rows: bool,
+    show_indicator_score_type: bool,
 }
 
 #[inline(always)]
@@ -2613,6 +2640,9 @@ fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
     if row_name == ROW_LIFEMETER_TYPE || row_name == ROW_LIFE_BAR_OPTIONS {
         return visibility.show_lifebar_rows;
     }
+    if row_name == ROW_INDICATOR_SCORE_TYPE {
+        return visibility.show_indicator_score_type;
+    }
     true
 }
 
@@ -2640,6 +2670,9 @@ fn conditional_row_parent(row_name: &str) -> Option<&'static str> {
         || row_name == ROW_LIFE_BAR_OPTIONS
     {
         return Some(ROW_HIDE);
+    }
+    if row_name == ROW_INDICATOR_SCORE_TYPE {
+        return Some("Mini Indicator");
     }
     None
 }
@@ -2771,6 +2804,26 @@ fn lifebar_rows_visible(
     !any_active
 }
 
+fn indicator_score_type_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = rows.iter().find(|r| r.name == "Mini Indicator") else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in 0..PLAYER_SLOTS {
+        if !active[player_idx] {
+            continue;
+        }
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        // Visible for Subtractive(1), Predictive(2), Pace(3)
+        if choice_idx >= 1 && choice_idx <= 3 {
+            return true;
+        }
+    }
+    !any_active
+}
+
 #[inline(always)]
 fn row_visibility(
     rows: &[Row],
@@ -2786,6 +2839,7 @@ fn row_visibility(
         show_density_graph_background: density_graph_background_visible(rows, active),
         show_combo_rows: combo_rows_visible(active, hide_active_mask),
         show_lifebar_rows: lifebar_rows_visible(active, hide_active_mask),
+        show_indicator_score_type: indicator_score_type_visible(rows, active),
     }
 }
 
@@ -2949,6 +3003,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Timing Windows"
         || row_name == ROW_JUDGMENT_TILT
         || row_name == "Mini Indicator"
+        || row_name == ROW_INDICATOR_SCORE_TYPE
         || row_name == "Turn"
         || row_name == "Scroll"
         || row_name == "Hide"
@@ -3594,6 +3649,25 @@ fn change_choice_for_player(
                 subtractive_scoring,
                 pacemaker,
                 profile_ref.nps_graph_at_top,
+            );
+        }
+        visibility_changed = true;
+    } else if row_name == ROW_INDICATOR_SCORE_TYPE {
+        let choice = row
+            .choices
+            .get(row.selected_choice_index[player_idx])
+            .map(|s| s.as_str())
+            .unwrap_or("Money");
+        let score_type = match choice {
+            "EX" => crate::game::profile::MiniIndicatorScoreType::Ex,
+            "H.EX" => crate::game::profile::MiniIndicatorScoreType::HardEx,
+            _ => crate::game::profile::MiniIndicatorScoreType::Money,
+        };
+        state.player_profiles[player_idx].mini_indicator_score_type = score_type;
+        if should_persist {
+            crate::game::profile::update_mini_indicator_score_type_for_side(
+                persist_side,
+                score_type,
             );
         }
     } else if row_name == "Density Graph Background" {

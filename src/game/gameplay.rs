@@ -6878,7 +6878,7 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
 }
 
 #[inline(always)]
-fn display_carry_for_player(state: &State, player_idx: usize) -> CourseDisplayCarry {
+pub fn display_carry_for_player(state: &State, player_idx: usize) -> CourseDisplayCarry {
     if player_idx >= MAX_PLAYERS {
         return CourseDisplayCarry::default();
     }
@@ -7008,7 +7008,7 @@ fn float_match(a: f32, b: f32) -> bool {
 }
 
 #[inline(always)]
-fn display_totals_for_player(state: &State, player_idx: usize) -> CourseDisplayTotals {
+pub fn display_totals_for_player(state: &State, player_idx: usize) -> CourseDisplayTotals {
     if player_idx >= MAX_PLAYERS {
         return CourseDisplayTotals::default();
     }
