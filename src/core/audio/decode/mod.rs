@@ -2,6 +2,7 @@ pub(crate) mod flac;
 pub(crate) mod mp3;
 pub(crate) mod ogg_vorbis;
 pub(crate) mod opus;
+pub(crate) mod wav;
 
 use lewton::inside_ogg::OggStreamReader;
 use std::fs::File;
@@ -19,6 +20,7 @@ pub(crate) enum Reader {
     Mp3(mp3::Reader<BufReader<File>>),
     Ogg(OggStreamReader<BufReader<File>>),
     Opus(opus::Reader),
+    Wav(wav::Reader),
 }
 
 impl Reader {
@@ -30,6 +32,7 @@ impl Reader {
             Self::Mp3(reader) => reader.read_dec_packet_itl(),
             Self::Ogg(reader) => Ok(reader.read_dec_packet_itl()?),
             Self::Opus(reader) => reader.read_dec_packet_itl(),
+            Self::Wav(reader) => reader.read_dec_packet_itl(),
         }
     }
 
@@ -45,6 +48,7 @@ impl Reader {
                 Ok(())
             }
             Self::Opus(reader) => reader.seek_frame(frame),
+            Self::Wav(reader) => reader.seek_frame(frame),
         }
     }
 }
@@ -63,6 +67,14 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         let opened = mp3::open_file(path)?;
         return Ok(OpenFile {
             reader: Reader::Mp3(opened.reader),
+            channels: opened.channels,
+            sample_rate_hz: opened.sample_rate_hz,
+        });
+    }
+    if wav::path_is_wav(path) {
+        let opened = wav::open_file(path)?;
+        return Ok(OpenFile {
+            reader: Reader::Wav(opened.reader),
             channels: opened.channels,
             sample_rate_hz: opened.sample_rate_hz,
         });
@@ -100,6 +112,9 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     }
     if mp3::path_is_mp3(path) {
         return mp3::file_length_seconds(path);
+    }
+    if wav::path_is_wav(path) {
+        return wav::file_length_seconds(path);
     }
     if opus::path_is_opus(path) {
         return opus::file_length_seconds(path);
