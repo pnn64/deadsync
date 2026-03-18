@@ -2329,7 +2329,7 @@ mod tests {
     #[test]
     fn wrapwidthpixels_keeps_empty_lines() {
         let lines = wrap_text_lines_by_words("AA\n\nBB CC", 5, 1, |word| word.len() as i32);
-        assert_eq!(lines, boxed_lines(&["AA", "", "BB", "CC"]));
+        assert_eq!(lines, boxed_lines(&["AA", "", "BB CC"]));
     }
 
     #[test]

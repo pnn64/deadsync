@@ -10677,8 +10677,14 @@ mod tests {
     };
     use crate::game::note::{HoldData, Note, NoteType};
     use crate::game::profile;
-    use crate::game::timing::{StopSegment, TimingData, TimingSegments};
+    use crate::game::timing::{ROWS_PER_BEAT, StopSegment, TimingData, TimingSegments};
     use std::time::{Duration, Instant};
+
+    fn test_row_to_beat(last_row: usize) -> Vec<f32> {
+        (0..=last_row)
+            .map(|row| row as f32 / ROWS_PER_BEAT as f32)
+            .collect()
+    }
 
     #[test]
     fn tick_mode_cycles() {
@@ -10888,7 +10894,12 @@ mod tests {
 
     #[test]
     fn mines_insert_converts_every_sixth_nonempty_row() {
-        let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &[]);
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments::default(),
+            &test_row_to_beat(5 * 48),
+        );
         let mut notes = (0..6)
             .map(|i| {
                 let row = i * 48;
@@ -10917,7 +10928,8 @@ mod tests {
 
     #[test]
     fn mines_insert_adds_mine_half_beat_after_hold_end() {
-        let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &[]);
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &test_row_to_beat(144));
         let mut notes = vec![Note {
             beat: 0.0,
             quantization_idx: 0,

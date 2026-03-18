@@ -1473,23 +1473,30 @@ where
 }
 
 fn is_dir_ci(dir: &Path, name: &str) -> Option<PathBuf> {
-    let want = name.trim().to_ascii_lowercase();
+    let want = name.trim();
     if want.is_empty() {
         return None;
     }
+    let want_ci = want.to_ascii_lowercase();
     let Ok(entries) = fs::read_dir(dir) else {
         return None;
     };
+    let mut ci_match = None;
     for entry in entries.flatten() {
-        if !entry.path().is_dir() {
+        let path = entry.path();
+        if !path.is_dir() {
             continue;
         }
-        let got = entry.file_name().to_string_lossy().to_ascii_lowercase();
+        let got = entry.file_name();
+        let got = got.to_string_lossy();
         if got == want {
-            return Some(entry.path());
+            return Some(path);
+        }
+        if ci_match.is_none() && got.to_ascii_lowercase() == want_ci {
+            ci_match = Some(path);
         }
     }
-    None
+    ci_match
 }
 
 fn collect_course_paths(root: &Path) -> Vec<PathBuf> {
@@ -1535,12 +1542,7 @@ fn resolve_song_dir(
         if !group_dirs.contains_key(&key) {
             let mut path = None;
             for songs_root in song_roots.iter().rev() {
-                let direct = songs_root.join(group);
-                path = if direct.is_dir() {
-                    Some(direct)
-                } else {
-                    is_dir_ci(songs_root, group)
-                };
+                path = is_dir_ci(songs_root, group);
                 if path.is_some() {
                     break;
                 }
@@ -1558,12 +1560,7 @@ fn resolve_song_dir(
 
     if let Some(group) = group.map(str::trim).filter(|g| !g.is_empty()) {
         let group_dir = resolve_group_dir(song_roots, group_dirs, group)?;
-        let direct = group_dir.join(song);
-        return if direct.is_dir() {
-            Some(direct)
-        } else {
-            is_dir_ci(&group_dir, song)
-        };
+        return is_dir_ci(&group_dir, song);
     }
 
     for songs_root in song_roots.iter().rev() {
@@ -1574,10 +1571,6 @@ fn resolve_song_dir(
             let group_dir = entry.path();
             if !group_dir.is_dir() {
                 continue;
-            }
-            let direct = group_dir.join(song);
-            if direct.is_dir() {
-                return Some(direct);
             }
             if let Some(found) = is_dir_ci(&group_dir, song) {
                 return Some(found);
@@ -1601,12 +1594,7 @@ fn resolve_course_group_dir(
     }
     let mut path = None;
     for songs_root in song_roots.iter().rev() {
-        let direct = songs_root.join(group);
-        path = if direct.is_dir() {
-            Some(direct)
-        } else {
-            is_dir_ci(songs_root, group)
-        };
+        path = is_dir_ci(songs_root, group);
         if path.is_some() {
             break;
         }
