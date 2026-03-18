@@ -523,6 +523,41 @@ pub fn update(state: &mut State, dt: f32) {
     }
 }
 
+enum Nav {
+    Left,
+    Right,
+    Confirm,
+    Back,
+}
+
+fn current_visible_bg_index(state: &State) -> i32 {
+    if state.bg_fade_t < BG_FADE_DURATION {
+        let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
+        if (1.0 - a) >= a {
+            state.bg_from_index
+        } else {
+            state.bg_to_index
+        }
+    } else {
+        state.bg_to_index
+    }
+}
+
+fn scroll_by(state: &mut State, delta: i32) {
+    let num_colors = color::DECORATIVE_RGBA.len() as i32;
+    // Mimic SM's `finishtweening()` before starting a new scroll.
+    state.scroll = state.scroll_to;
+    state.scroll_from = state.scroll;
+    state.active_color_index += delta;
+    state.scroll_to = state.active_color_index as f32;
+    state.scroll_t = 0.0;
+    crate::core::audio::play_sfx("assets/sounds/expand.ogg");
+    crate::config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
+    state.bg_from_index = current_visible_bg_index(state);
+    state.bg_to_index = state.active_color_index;
+    state.bg_fade_t = 0.0;
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
@@ -532,77 +567,31 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     let nav = match crate::game::profile::get_session_player_side() {
         crate::game::profile::PlayerSide::P2 => match ev.action {
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => Some(-1),
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => Some(1),
-            VirtualAction::p2_start => Some(0),
-            VirtualAction::p2_back => Some(9),
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => Some(Nav::Left),
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => Some(Nav::Right),
+            VirtualAction::p2_start => Some(Nav::Confirm),
+            VirtualAction::p2_back => Some(Nav::Back),
             _ => None,
         },
         crate::game::profile::PlayerSide::P1 => match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => Some(-1),
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => Some(1),
-            VirtualAction::p1_start => Some(0),
-            VirtualAction::p1_back => Some(9),
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => Some(Nav::Left),
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => Some(Nav::Right),
+            VirtualAction::p1_start => Some(Nav::Confirm),
+            VirtualAction::p1_back => Some(Nav::Back),
             _ => None,
         },
     };
 
     match nav {
-        Some(-1) => {
-            let num_colors = color::DECORATIVE_RGBA.len() as i32;
-            // Mimic SM's `finishtweening()` before starting a new scroll.
-            state.scroll = state.scroll_to;
-            state.scroll_from = state.scroll;
-            state.active_color_index -= 1;
-            state.scroll_to = state.active_color_index as f32;
-            state.scroll_t = 0.0;
-            crate::core::audio::play_sfx("assets/sounds/expand.ogg");
-            crate::config::update_simply_love_color(
-                state.active_color_index.rem_euclid(num_colors),
-            );
-            let showing_now = if state.bg_fade_t < BG_FADE_DURATION {
-                let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
-                if (1.0 - a) >= a {
-                    state.bg_from_index
-                } else {
-                    state.bg_to_index
-                }
-            } else {
-                state.bg_to_index
-            };
-            state.bg_from_index = showing_now;
-            state.bg_to_index = state.active_color_index;
-            state.bg_fade_t = 0.0;
+        Some(Nav::Left) => {
+            scroll_by(state, -1);
             ScreenAction::None
         }
-        Some(1) => {
-            let num_colors = color::DECORATIVE_RGBA.len() as i32;
-            // Mimic SM's `finishtweening()` before starting a new scroll.
-            state.scroll = state.scroll_to;
-            state.scroll_from = state.scroll;
-            state.active_color_index += 1;
-            state.scroll_to = state.active_color_index as f32;
-            state.scroll_t = 0.0;
-            crate::core::audio::play_sfx("assets/sounds/expand.ogg");
-            crate::config::update_simply_love_color(
-                state.active_color_index.rem_euclid(num_colors),
-            );
-            let showing_now = if state.bg_fade_t < BG_FADE_DURATION {
-                let a = (state.bg_fade_t / BG_FADE_DURATION).clamp(0.0, 1.0);
-                if (1.0 - a) >= a {
-                    state.bg_from_index
-                } else {
-                    state.bg_to_index
-                }
-            } else {
-                state.bg_to_index
-            };
-            state.bg_from_index = showing_now;
-            state.bg_to_index = state.active_color_index;
-            state.bg_fade_t = 0.0;
+        Some(Nav::Right) => {
+            scroll_by(state, 1);
             ScreenAction::None
         }
-        Some(0) => {
+        Some(Nav::Confirm) => {
             state.exit_requested = true;
             state.scroll = state.scroll_to;
             state.scroll_from = state.scroll;
@@ -610,7 +599,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             crate::core::audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::Navigate(Screen::SelectStyle)
         }
-        Some(9) => {
+        Some(Nav::Back) => {
             state.exit_requested = true;
             state.scroll = state.scroll_to;
             state.scroll_from = state.scroll;
