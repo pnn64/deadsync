@@ -137,6 +137,8 @@ fn register_keyboard(hwnd: HWND, capture_enabled: bool) {
         dwFlags: flags,
         hwndTarget: hwnd,
     }];
+    // SAFETY: `devices` points to a fixed stack array that lives for the duration
+    // of the call, and `hwnd` is the message-only window created by this backend.
     unsafe {
         let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
     }
@@ -164,6 +166,8 @@ fn register_controllers(hwnd: HWND) {
             hwndTarget: hwnd,
         },
     ];
+    // SAFETY: `devices` points to a fixed stack array that lives for the duration
+    // of the call, and `hwnd` is the message-only window created by this backend.
     unsafe {
         let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
     }
@@ -190,6 +194,8 @@ fn keyboard_scancode(keyboard: RAWKEYBOARD) -> u16 {
         0x0000
     };
     if keyboard.MakeCode == 0 {
+        // SAFETY: `MapVirtualKeyW` takes only scalar arguments and returns the
+        // current OS mapping for the provided virtual key code.
         unsafe { MapVirtualKeyW(u32::from(keyboard.VKey), MAPVK_VK_TO_VSC_EX) as u16 }
     } else {
         keyboard.MakeCode | extension
@@ -265,6 +271,8 @@ fn wide_to_string(mut v: Vec<u16>) -> String {
 }
 
 fn get_device_name(h: HANDLE) -> Option<String> {
+    // SAFETY: all pointers passed here reference local buffers that stay alive for
+    // each Win32 call, and `h` is a device handle reported by Raw Input.
     unsafe {
         let mut size: u32 = 0;
         let _ = GetRawInputDeviceInfoW(Some(h), RIDI_DEVICENAME, None, &raw mut size);
@@ -287,6 +295,8 @@ fn get_device_name(h: HANDLE) -> Option<String> {
 }
 
 fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
+    // SAFETY: `info` and `size` are writable stack locals, and `h` is a device
+    // handle reported by Raw Input.
     unsafe {
         let mut info = RID_DEVICE_INFO::default();
         info.cbSize = size_of::<RID_DEVICE_INFO>() as u32;
@@ -308,6 +318,9 @@ fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
 }
 
 fn get_preparsed(h: HANDLE) -> Option<Vec<u8>> {
+    // SAFETY: the queried size comes from the first Raw Input call, and the second
+    // call writes into the owned `buf` allocation that stays alive for the duration
+    // of the call.
     unsafe {
         let mut size: u32 = 0;
         let _ = GetRawInputDeviceInfoW(Some(h), RIDI_PREPARSEDDATA, None, &raw mut size);
@@ -333,6 +346,9 @@ fn hat_logical_range(preparsed: &[u8]) -> Option<(i32, i32)> {
     if preparsed.is_empty() {
         return None;
     }
+    // SAFETY: `preparsed` holds the exact bytes returned by Raw Input for HID
+    // preparsed data, and all HID parser calls treat that buffer as read-only for
+    // the duration of this function.
     unsafe {
         let pd = PHIDP_PREPARSED_DATA(preparsed.as_ptr() as isize);
 
@@ -414,6 +430,8 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     let max_buttons = if preparsed.is_empty() {
         0
     } else {
+        // SAFETY: `preparsed` contains Raw Input preparsed data for this device,
+        // and `HidP_MaxUsageListLength` only reads that buffer.
         unsafe {
             HidP_MaxUsageListLength(
                 HidP_Input,
@@ -459,6 +477,9 @@ fn remove_device(ctx: &mut Ctx, h: HANDLE) {
 }
 
 fn enumerate_existing(ctx: &mut Ctx) {
+    // SAFETY: the first call queries the device count, the second fills the owned
+    // `list` buffer sized from that count, and all handles come directly from Raw
+    // Input.
     unsafe {
         let mut count: u32 = 0;
         let _ = GetRawInputDeviceList(None, &raw mut count, size_of::<RAWINPUTDEVICELIST>() as u32);
@@ -576,6 +597,9 @@ fn process_hid_report<F>(
     dev.buttons_now.clear();
 
     let mut len = dev.max_buttons;
+    // SAFETY: `dev.preparsed` is the live preparsed-data blob for this HID, the
+    // report buffer is borrowed mutably for the duration of the call, and
+    // `buttons_now` has sufficient spare capacity for `dev.max_buttons` entries.
     let status = unsafe {
         HidP_GetUsages(
             HidP_Input,
@@ -591,6 +615,8 @@ fn process_hid_report<F>(
         return;
     }
 
+    // SAFETY: `HidP_GetUsages` wrote exactly `len` initialized entries to the
+    // front of `buttons_now`, and `len <= dev.max_buttons <= capacity`.
     unsafe {
         dev.buttons_now.set_len(len as usize);
     }
@@ -601,6 +627,8 @@ fn process_hid_report<F>(
     dev.buttons_now.clear();
 
     let mut hat: u32 = 0;
+    // SAFETY: `dev.preparsed` is the live preparsed-data blob for this HID, and
+    // `hat` is a writable stack local for the requested usage value.
     let status = unsafe {
         HidP_GetUsageValue(
             HidP_Input,
@@ -662,6 +690,9 @@ fn handle_keyboard_input(ctx: &mut Ctx, timestamp: Instant, host_nanos: u64) {
         return;
     }
 
+    // SAFETY: the size check above guarantees `ctx.buf` contains at least a raw
+    // input header plus one `RAWKEYBOARD`, so the unaligned read from the payload
+    // is within bounds for this message.
     unsafe {
         let keyboard = ptr::read_unaligned(
             ctx.buf
@@ -692,6 +723,9 @@ fn handle_keyboard_input(ctx: &mut Ctx, timestamp: Instant, host_nanos: u64) {
 }
 
 fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
+    // SAFETY: the first call queries the required byte count, the second fills the
+    // owned `ctx.buf` allocation sized from that count, and all subsequent raw
+    // pointer reads are guarded by explicit size checks before use.
     unsafe {
         let mut size: u32 = 0;
         let _ = GetRawInputData(
@@ -769,24 +803,36 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
 }
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    // SAFETY: `GWLP_USERDATA` stores either null or the `Ctx` pointer we place in
+    // `WM_CREATE`. We only dereference it after null checks below.
     let ctx_ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut Ctx;
     match msg {
         WM_CREATE => {
             let cs = lparam.0 as *const CREATESTRUCTW;
             if !cs.is_null() {
+                // SAFETY: `cs` comes directly from `WM_CREATE`, so reading its
+                // `lpCreateParams` field is valid for this call frame.
                 let p = unsafe { (*cs).lpCreateParams }.cast::<Ctx>();
+                // SAFETY: `p` is the boxed context pointer passed to
+                // `CreateWindowExW`, and storing it in `GWLP_USERDATA` is how the
+                // window procedure recovers that context on later messages.
                 unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, p as _) };
             }
             LRESULT(0)
         }
         WM_INPUT => {
             if !ctx_ptr.is_null() {
+                // SAFETY: `ctx_ptr` was checked for null and points to the live
+                // boxed `Ctx` for this window. `lparam` carries the raw-input handle
+                // for the current message.
                 unsafe { handle_wm_input(&mut *ctx_ptr, HRAWINPUT(lparam.0 as *mut c_void)) };
             }
             LRESULT(0)
         }
         WM_INPUT_DEVICE_CHANGE => {
             if !ctx_ptr.is_null() {
+                // SAFETY: `ctx_ptr` was checked for null and points to the live
+                // boxed `Ctx` for this window.
                 let ctx = unsafe { &mut *ctx_ptr };
                 if ctx.enable_pad {
                     let h = HANDLE(lparam.0 as *mut c_void);
@@ -800,15 +846,23 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_DESTROY => {
+            // SAFETY: posting quit is side-effect-only and takes no borrowed Rust
+            // memory.
             unsafe { PostQuitMessage(0) };
             LRESULT(0)
         }
+        // SAFETY: forwarding all unhandled messages to `DefWindowProcW` is the
+        // required default Win32 behavior for this window procedure.
         _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
     }
 }
 
 fn run_inner(mut ctx: Box<Ctx>) {
     let _thread_policy = boost_current_thread(ThreadRole::Input);
+    // SAFETY: this thread owns the Win32 class registration, message-only window,
+    // and message loop. The boxed `ctx` pointer is passed to `CreateWindowExW` and
+    // intentionally leaked at shutdown so `GWLP_USERDATA` never dangles while the
+    // window can still receive messages.
     unsafe {
         let class_name: Vec<u16> = "deadsync_raw_input\0".encode_utf16().collect();
         let hinst: HINSTANCE = GetModuleHandleW(PCWSTR::null()).unwrap_or_default().into();

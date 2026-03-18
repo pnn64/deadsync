@@ -245,6 +245,8 @@ fn current_monotonic_nanos() -> Option<u64> {
         tv_sec: 0,
         tv_nsec: 0,
     };
+    // SAFETY: `clock_gettime` writes into the provided stack local and
+    // `CLOCK_MONOTONIC` is a valid kernel clock id.
     let rc = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
     if rc != 0 || ts.tv_sec < 0 || ts.tv_nsec < 0 {
         return None;
@@ -331,6 +333,8 @@ fn event_time(dev: &mut Dev, ev: InputEventRaw, sample: Option<ClockSample>) -> 
 #[inline(always)]
 fn enable_monotonic_timestamps(fd: i32) -> bool {
     let mut clock_id = libc::CLOCK_MONOTONIC;
+    // SAFETY: `fd` is the live evdev device descriptor and `clock_id` points to
+    // writable stack storage for the ioctl.
     unsafe { libc::ioctl(fd, EVIOCSCLOCKID, &mut clock_id) == 0 }
 }
 
@@ -361,11 +365,15 @@ fn is_permission_error(err: &std::io::Error) -> bool {
 
 #[inline(always)]
 fn ioctl_read_buffer(fd: i32, request: libc::c_ulong, buf: &mut [u8]) -> bool {
+    // SAFETY: `fd` is a live device descriptor, `request` is an evdev read ioctl,
+    // and `buf` provides writable storage for the kernel to fill.
     unsafe { libc::ioctl(fd, request, buf.as_mut_ptr()) >= 0 }
 }
 
 fn raw_dev_name(file: &std::fs::File) -> Option<String> {
     let mut buf = [0u8; 256];
+    // SAFETY: `file` is an open evdev device, and `buf` is writable stack storage
+    // for the kernel to fill with the NUL-terminated device name.
     let rc = unsafe { libc::ioctl(file.as_raw_fd(), eviocgname(buf.len()), buf.as_mut_ptr()) };
     if rc < 0 {
         return None;
@@ -376,6 +384,8 @@ fn raw_dev_name(file: &std::fs::File) -> Option<String> {
 
 fn raw_dev_info(file: &std::fs::File) -> (Option<u16>, Option<u16>) {
     let mut info = InputId::default();
+    // SAFETY: `file` is an open evdev device, and `info` is writable stack
+    // storage for the kernel to fill.
     let rc = unsafe { libc::ioctl(file.as_raw_fd(), EVIOCGID, &mut info) };
     if rc < 0 {
         return (None, None);
@@ -612,6 +622,9 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
     emit_sys(GpSystemEvent::StartupComplete);
 
     let mut buf: [MaybeUninit<InputEventRaw>; 64] = [MaybeUninit::uninit(); 64];
+    // SAFETY: `buf` is an array of `MaybeUninit<InputEventRaw>`, so viewing its
+    // backing storage as a mutable byte slice of the same size is valid for reads
+    // into the uninitialized buffer.
     let buf_bytes = unsafe {
         std::slice::from_raw_parts_mut(
             buf.as_mut_ptr().cast::<u8>(),
@@ -643,6 +656,9 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
         } else {
             pollfds.as_mut_ptr()
         };
+        // SAFETY: `poll_ptr` is either null for an empty set or points to the
+        // first element of `pollfds`, which remains allocated for the duration of
+        // the call.
         let rc = unsafe { poll(poll_ptr, pollfds.len(), -1) };
         if rc < 0 {
             continue;
@@ -674,6 +690,8 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
 
             let fd = pollfds[i + watch_offset].fd;
             let dev = &mut devs[i];
+            // SAFETY: `buf_bytes` is writable storage for `InputEventRaw` values,
+            // and the fd comes from the matching open evdev device.
             let n = unsafe { read(fd, buf_bytes.as_mut_ptr().cast::<c_void>(), buf_bytes.len()) };
             if n <= 0 {
                 remove.push(i);
@@ -689,6 +707,9 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 };
 
             for j in 0..count {
+                // SAFETY: `count` is derived from the number of bytes returned by
+                // `read`, so the first `count` entries of `buf` were initialized by
+                // the kernel in this iteration.
                 let ev = unsafe { buf[j].assume_init() };
                 if ev.type_ == EV_SYN {
                     continue;

@@ -84,12 +84,17 @@ pub(crate) struct WasapiOutputStream {
 
 impl Drop for WasapiOutputStream {
     fn drop(&mut self) {
+        // SAFETY: `stop_event` is a live manual-reset event handle owned by this
+        // stream until drop. Signaling it is the shutdown path for the render
+        // thread.
         unsafe {
             let _ = Threading::SetEvent(self.stop_event);
         }
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
+        // SAFETY: `stop_event` is still owned by this stream and is closed exactly
+        // once here after the render thread has exited.
         unsafe {
             let _ = CloseHandle(self.stop_event);
         }
@@ -108,17 +113,23 @@ pub(crate) struct WasapiOutputDevice {
 pub(crate) fn enumerate_output_devices() -> Result<Vec<WasapiOutputDevice>, String> {
     let _com = ComGuard::new()?;
     let enumerator = create_device_enumerator()?;
+    // SAFETY: COM is initialized for this thread, `enumerator` is a live COM
+    // object, and the returned endpoint/device interfaces are owned values.
     let default_device_id = unsafe {
         enumerator
             .GetDefaultAudioEndpoint(Audio::eRender, Audio::eConsole)
             .ok()
             .and_then(|device| device_id_string(&device).ok())
     };
+    // SAFETY: COM is initialized for this thread and `enumerator` is a live COM
+    // object. The collection object owns the returned endpoint list.
     let collection = unsafe {
         enumerator
             .EnumAudioEndpoints(Audio::eRender, Audio::DEVICE_STATE_ACTIVE)
             .map_err(|e| format!("failed to enumerate WASAPI output devices: {e}"))?
     };
+    // SAFETY: `collection` is a live COM object returned above, and the out value
+    // is managed internally by the windows crate.
     let count = unsafe {
         collection
             .GetCount()
@@ -126,6 +137,8 @@ pub(crate) fn enumerate_output_devices() -> Result<Vec<WasapiOutputDevice>, Stri
     };
     let mut devices = Vec::with_capacity(count as usize);
     for index in 0..count {
+        // SAFETY: `index` is within `0..count`, and `collection` remains live for
+        // the duration of the call.
         let device = unsafe {
             collection
                 .Item(index)
@@ -215,6 +228,9 @@ pub(crate) fn start(
     music_ring: Arc<internal::SpscRingI16>,
     sfx_receiver: Receiver<QueuedSfx>,
 ) -> Result<WasapiOutputStream, String> {
+    // SAFETY: creating an unnamed auto-reset event requires no borrowed Rust
+    // memory; the returned handle is owned by the caller and closed on all exit
+    // paths below.
     let stop_event = unsafe { Threading::CreateEventW(None, false, false, PCWSTR::null()) }
         .map_err(|e| format!("failed to create WASAPI stop event: {e}"))?;
     let (ready_tx, ready_rx) = channel::<Result<(), String>>();
@@ -231,6 +247,8 @@ pub(crate) fn start(
             )
         })
         .map_err(|e| {
+            // SAFETY: thread spawn failed, so ownership of `stop_event` never left
+            // this function and it must be closed here.
             unsafe {
                 let _ = CloseHandle(stop_event);
             }
@@ -243,6 +261,8 @@ pub(crate) fn start(
         }),
         Ok(Err(err)) => {
             let _ = thread.join();
+            // SAFETY: startup failed, so this function still owns `stop_event` and
+            // closes it before returning the error.
             unsafe {
                 let _ = CloseHandle(stop_event);
             }
@@ -250,6 +270,8 @@ pub(crate) fn start(
         }
         Err(_) => {
             let _ = thread.join();
+            // SAFETY: the render thread exited before taking over steady-state
+            // ownership, so this function closes the event handle on the error path.
             unsafe {
                 let _ = CloseHandle(stop_event);
             }
@@ -284,18 +306,27 @@ fn render_thread_inner(
     let device = open_output_device(prep.device_id.as_deref())?;
     let audio_client = build_audio_client(&device)?;
     initialize_client(&audio_client, &prep)?;
+    // SAFETY: creating an unnamed auto-reset event requires no borrowed Rust
+    // memory; the returned handle is owned within this function and closed on all
+    // exit paths below.
     let event = unsafe { Threading::CreateEventW(None, false, false, PCWSTR::null()) }
         .map_err(|e| format!("failed to create WASAPI event handle: {e}"))?;
+    // SAFETY: `event` is a live event handle created above, and `audio_client` is
+    // a live initialized WASAPI client that accepts an event callback handle.
     unsafe {
         audio_client
             .SetEventHandle(event)
             .map_err(|e| format!("failed to set WASAPI event handle: {e}"))?;
     }
+    // SAFETY: `audio_client` is initialized and alive, so requesting its render
+    // service yields a live COM interface owned by this function.
     let render_client = unsafe {
         audio_client
             .GetService::<Audio::IAudioRenderClient>()
             .map_err(|e| format!("failed to acquire WASAPI render client: {e}"))?
     };
+    // SAFETY: `audio_client` is initialized and alive, so requesting its clock
+    // service yields a live COM interface owned by this function.
     let audio_clock = unsafe {
         audio_client
             .GetService::<Audio::IAudioClock>()
@@ -323,6 +354,8 @@ fn render_thread_inner(
             0
         }
     };
+    // SAFETY: `audio_client` is initialized and alive, and `GetBufferSize` only
+    // writes to caller-managed stack locals through the windows bindings.
     let max_frames_in_buffer = unsafe {
         audio_client
             .GetBufferSize()
@@ -352,12 +385,16 @@ fn render_thread_inner(
             stream_latency_ns,
         ),
     );
+    // SAFETY: `audio_client` is fully initialized and primed with one buffer fill
+    // above, so starting the stream is valid here.
     unsafe {
         audio_client
             .Start()
             .map_err(|e| format!("failed to start WASAPI output: {e}"))?;
     }
     if ready_tx.send(Ok(())).is_err() {
+        // SAFETY: startup aborts before handing control back to the caller, so we
+        // stop the stream if it started and close the local event handle here.
         unsafe {
             let _ = audio_client.Stop();
             let _ = CloseHandle(event);
@@ -367,10 +404,14 @@ fn render_thread_inner(
 
     let handles = [stop_event, event];
     let result = loop {
+        // SAFETY: both handles in `handles` are valid event handles that remain
+        // alive for the duration of this wait call.
         let wait = unsafe {
             Threading::WaitForMultipleObjectsEx(&handles, false, Threading::INFINITE, false)
         };
         if wait == WAIT_FAILED {
+            // SAFETY: `GetLastError` reads the thread-local Windows error state and
+            // takes no borrowed Rust memory.
             let err = unsafe { Foundation::GetLastError() };
             break Err(format!("WaitForMultipleObjectsEx failed: {err:?}"));
         }
@@ -378,6 +419,8 @@ fn render_thread_inner(
         if idx == 0 {
             break Ok(());
         }
+        // SAFETY: `audio_client` remains alive and started while the render loop
+        // runs, so querying current padding is valid here.
         let padding = unsafe {
             audio_client
                 .GetCurrentPadding()
@@ -411,6 +454,9 @@ fn render_thread_inner(
         )?;
     };
 
+    // SAFETY: shutdown runs while `audio_client` and `event` are still owned by
+    // this function; stopping the client and closing the local event handle are
+    // the correct teardown steps.
     unsafe {
         let _ = audio_client.Stop();
         let _ = CloseHandle(event);
@@ -429,6 +475,9 @@ fn write_frames(
     if frames_available == 0 {
         return Ok(());
     }
+    // SAFETY: `render_client` owns the buffer returned by `GetBuffer` for exactly
+    // `frames_available` frames. We reinterpret that memory according to the
+    // negotiated sample format and release the same frame count before returning.
     unsafe {
         let buffer = render_client
             .GetBuffer(frames_available)
@@ -465,6 +514,8 @@ fn playback_anchor_nanos_after_frames(
 ) -> Result<u64, String> {
     let mut _position = 0u64;
     let mut qpc_position = 0u64;
+    // SAFETY: `audio_clock` is a live WASAPI clock interface, and both out
+    // pointers reference writable stack locals for the duration of the call.
     unsafe {
         audio_clock
             .GetPosition(&mut _position, Some(&mut qpc_position))
@@ -492,6 +543,8 @@ fn reference_time_to_nanos(hns: i64) -> u64 {
 
 #[inline(always)]
 fn query_stream_latency_ns(audio_client: &Audio::IAudioClient) -> Result<u64, String> {
+    // SAFETY: `audio_client` is a live initialized WASAPI client, and
+    // `GetStreamLatency` returns a plain scalar value through the windows bindings.
     unsafe {
         audio_client
             .GetStreamLatency()
@@ -533,6 +586,8 @@ fn initialize_exclusive(audio_client: &Audio::IAudioClient, format: &[u8]) -> Re
         default_period_hns,
         min_period_hns,
     );
+    // SAFETY: `audio_client` is a live COM interface, and `format` points to a
+    // valid `WAVEFORMATEX`/`WAVEFORMATEXTENSIBLE` byte buffer owned by the caller.
     unsafe {
         audio_client
             .Initialize(
@@ -552,6 +607,8 @@ fn validate_exclusive_format(
     format: &[u8],
     device_name: &str,
 ) -> Result<(), String> {
+    // SAFETY: `audio_client` is a live COM interface, and `format` points to a
+    // valid waveform description buffer for the duration of the call.
     let status = unsafe {
         audio_client.IsFormatSupported(Audio::AUDCLNT_SHAREMODE_EXCLUSIVE, waveformat(format), None)
     };
@@ -578,6 +635,8 @@ fn validate_exclusive_format(
 fn query_device_periods_hns(audio_client: &Audio::IAudioClient) -> Result<(i64, i64), String> {
     let mut default_period = 0i64;
     let mut min_period = 0i64;
+    // SAFETY: `audio_client` is a live COM interface, and both out pointers refer
+    // to writable stack locals for the duration of the call.
     unsafe {
         audio_client
             .GetDevicePeriod(Some(&mut default_period), Some(&mut min_period))
@@ -601,6 +660,8 @@ struct ComGuard;
 
 impl ComGuard {
     fn new() -> Result<Self, String> {
+        // SAFETY: this thread owns its COM initialization state. We initialize it
+        // once for multithreaded use and balance it with `CoUninitialize` in Drop.
         unsafe {
             Com::CoInitializeEx(None, Com::COINIT_MULTITHREADED)
                 .ok()
@@ -612,6 +673,8 @@ impl ComGuard {
 
 impl Drop for ComGuard {
     fn drop(&mut self) {
+        // SAFETY: this balances the successful `CoInitializeEx` call in `new()`
+        // for the same thread.
         unsafe {
             Com::CoUninitialize();
         }
@@ -619,6 +682,8 @@ impl Drop for ComGuard {
 }
 
 fn create_device_enumerator() -> Result<Audio::IMMDeviceEnumerator, String> {
+    // SAFETY: COM is initialized on this thread, and `CoCreateInstance` returns a
+    // COM interface object whose lifetime is managed by the windows crate.
     unsafe {
         Com::CoCreateInstance::<_, Audio::IMMDeviceEnumerator>(
             &Audio::MMDeviceEnumerator,
@@ -630,6 +695,8 @@ fn create_device_enumerator() -> Result<Audio::IMMDeviceEnumerator, String> {
 }
 
 fn open_output_device(device_id: Option<&str>) -> Result<Audio::IMMDevice, String> {
+    // SAFETY: COM is initialized on this thread. Any UTF-16 buffer we build for
+    // `device_id` stays alive for the duration of the call.
     unsafe {
         let enumerator = create_device_enumerator()?;
         match device_id {
@@ -647,6 +714,8 @@ fn open_output_device(device_id: Option<&str>) -> Result<Audio::IMMDevice, Strin
 }
 
 fn device_id_string(device: &Audio::IMMDevice) -> Result<String, String> {
+    // SAFETY: `device` is a live COM object. `GetId` returns CoTaskMem-allocated
+    // memory that we free exactly once with `CoTaskMemFree` after converting it.
     unsafe {
         let id = device
             .GetId()
@@ -658,6 +727,9 @@ fn device_id_string(device: &Audio::IMMDevice) -> Result<String, String> {
 }
 
 fn device_friendly_name(device: &Audio::IMMDevice) -> Result<String, String> {
+    // SAFETY: `device` and the property store it returns are live COM objects.
+    // `PropVariantClear` is called exactly once to release any owned variant
+    // storage before returning.
     unsafe {
         let store = device
             .OpenPropertyStore(Com::STGM_READ)
@@ -680,6 +752,8 @@ fn device_mix_format(device: &Audio::IMMDevice) -> Result<(u32, usize), String> 
 }
 
 fn build_audio_client(device: &Audio::IMMDevice) -> Result<Audio::IAudioClient, String> {
+    // SAFETY: `device` is a live WASAPI endpoint COM object, and activation
+    // returns an owned `IAudioClient` interface.
     unsafe {
         device
             .Activate::<Audio::IAudioClient>(Com::CLSCTX_ALL, None)
@@ -688,6 +762,8 @@ fn build_audio_client(device: &Audio::IMMDevice) -> Result<Audio::IAudioClient, 
 }
 
 fn initialize_shared(audio_client: &Audio::IAudioClient, format: &[u8]) -> Result<(), String> {
+    // SAFETY: `audio_client` is a live COM interface, and `format` points to a
+    // valid `WAVEFORMATEX`/`WAVEFORMATEXTENSIBLE` byte buffer owned by the caller.
     unsafe {
         audio_client
             .Initialize(
@@ -703,6 +779,9 @@ fn initialize_shared(audio_client: &Audio::IAudioClient, format: &[u8]) -> Resul
 }
 
 fn get_mix_format_bytes(audio_client: &Audio::IAudioClient) -> Result<Vec<u8>, String> {
+    // SAFETY: `audio_client` is a live COM interface. `GetMixFormat` returns a
+    // CoTaskMem-allocated waveform structure that we copy into a Rust `Vec<u8>`
+    // and then free exactly once with `CoTaskMemFree`.
     unsafe {
         let mix = audio_client
             .GetMixFormat()
@@ -716,11 +795,16 @@ fn get_mix_format_bytes(audio_client: &Audio::IAudioClient) -> Result<Vec<u8>, S
 
 #[inline(always)]
 fn waveformat(bytes: &[u8]) -> &Audio::WAVEFORMATEX {
+    // SAFETY: all callers pass byte buffers originating from WASAPI waveform
+    // structures, so the prefix is a valid `WAVEFORMATEX` for the lifetime of the
+    // slice borrow.
     unsafe { &*(bytes.as_ptr() as *const Audio::WAVEFORMATEX) }
 }
 
 #[inline(always)]
 fn waveformat_mut(bytes: &mut [u8]) -> &mut Audio::WAVEFORMATEX {
+    // SAFETY: all callers pass mutable byte buffers containing a writable WASAPI
+    // waveform structure, so the prefix may be viewed as `WAVEFORMATEX`.
     unsafe { &mut *(bytes.as_mut_ptr() as *mut Audio::WAVEFORMATEX) }
 }
 
@@ -736,7 +820,12 @@ fn sample_format_from_waveformat(bytes: &[u8]) -> Option<WasapiSampleFormat> {
         (Audio::WAVE_FORMAT_PCM, 16) => Some(WasapiSampleFormat::I16),
         (Multimedia::WAVE_FORMAT_IEEE_FLOAT, 32) => Some(WasapiSampleFormat::F32),
         (tag, bits) if tag == KernelStreaming::WAVE_FORMAT_EXTENSIBLE => {
+            // SAFETY: this branch is only taken for `WAVE_FORMAT_EXTENSIBLE`, so
+            // the buffer contains a `WAVEFORMATEXTENSIBLE` header after the shared
+            // `WAVEFORMATEX` prefix.
             let ext = unsafe { &*(bytes.as_ptr() as *const Audio::WAVEFORMATEXTENSIBLE) };
+            // SAFETY: `SubFormat` may be only naturally aligned inside the byte
+            // buffer, so we read it with `read_unaligned`.
             let sub = unsafe { std::ptr::addr_of!(ext.SubFormat).read_unaligned() };
             if guid_eq(&sub, &KernelStreaming::KSDATAFORMAT_SUBTYPE_PCM) && bits == 16 {
                 Some(WasapiSampleFormat::I16)
@@ -760,10 +849,16 @@ fn wide_null(s: &str) -> Vec<u16> {
 }
 
 fn pwstr_to_string(value: PWSTR) -> Result<String, std::string::FromUtf16Error> {
+    // SAFETY: callers only pass live Windows-owned UTF-16 strings and the windows
+    // crate performs the length scan/conversion before the backing allocation is
+    // freed by the caller.
     unsafe { value.to_string() }
 }
 
 fn propvariant_lpwstr(value: &StructuredStorage::PROPVARIANT) -> Option<String> {
+    // SAFETY: `value` is a live `PROPVARIANT` owned by the caller. We inspect its
+    // tagged union only after checking `vt`, and convert the contained pointer only
+    // when it is non-null.
     unsafe {
         let inner = &value.Anonymous.Anonymous;
         if inner.vt != Variant::VT_LPWSTR {

@@ -4746,11 +4746,17 @@ pub fn build(
                 let raw_travel_offset = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+                        // SAFETY: `state.arrows` only stores note indices sourced
+                        // from `state.note_time_cache`, so `arrow.note_index` is
+                        // valid for this cache lookup.
                         let note_time_chart =
                             unsafe { *state.note_time_cache.get_unchecked(arrow.note_index) };
                         (note_time_chart - current_time) / rate * pps_chart
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                        // SAFETY: `state.arrows` only stores note indices sourced
+                        // from `state.note_display_beat_cache`, so `arrow.note_index`
+                        // is valid for this cache lookup.
                         let note_disp_beat = unsafe {
                             *state
                                 .note_display_beat_cache
@@ -4771,7 +4777,8 @@ pub fn build(
                 if matches!(arrow.note_type, NoteType::Hold | NoteType::Roll) {
                     continue;
                 }
-                // `state.arrows` stores indices produced from `state.notes`, so these are in-bounds.
+                // SAFETY: `state.arrows` stores indices produced from `state.notes`,
+                // so `arrow.note_index` is in-bounds here.
                 let note = unsafe { state.notes.get_unchecked(arrow.note_index) };
                 let note_alpha = alpha_for_travel(col_idx, raw_travel_offset);
                 if note_alpha <= f32::EPSILON {
@@ -4936,6 +4943,8 @@ pub fn build(
                     continue;
                 }
                 let tap_note_part = tap_part_for_note_type(note.note_type);
+                // SAFETY: `state.arrows` only stores note indices sourced from
+                // `tap_row_hold_roll_flags`, so this cache lookup is in-bounds.
                 let tap_row_flags = unsafe {
                     *state
                         .tap_row_hold_roll_flags

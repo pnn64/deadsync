@@ -103,6 +103,8 @@ pub struct Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
+        // SAFETY: `Texture` owns these Vulkan objects, the `Device` outlives `self` via `Arc`,
+        // and both descriptor sets were allocated from `self.pool` and are not freed elsewhere.
         unsafe {
             let _ = self.device.free_descriptor_sets(
                 self.pool,
@@ -452,6 +454,8 @@ fn create_sampler(device: &Device, desc: SamplerDesc) -> Result<vk::Sampler, vk:
         .unnormalized_coordinates(false)
         .compare_enable(false)
         .compare_op(vk::CompareOp::ALWAYS);
+    // SAFETY: `sampler_info` references only stack data for this call, and `device` is a live
+    // logical device owned by the renderer.
     unsafe { device.create_sampler(&sampler_info, None) }
 }
 
@@ -475,6 +479,8 @@ fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayo
     let layout_info = vk::DescriptorSetLayoutCreateInfo::default()
         .bindings(std::slice::from_ref(&sampler_layout_binding));
 
+    // SAFETY: The create info references stack data valid for the duration of the call, and the
+    // descriptor set layout is created on a live logical device.
     unsafe { device.create_descriptor_set_layout(&layout_info, None) }
 }
 
@@ -488,6 +494,7 @@ fn create_descriptor_pool(device: &Device) -> Result<vk::DescriptorPool, vk::Res
         .max_sets(DESCRIPTOR_POOL_SET_CAPACITY)
         .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET);
 
+    // SAFETY: The create info contains only plain values and `device` is a valid logical device.
     unsafe { device.create_descriptor_pool(&pool_info, None) }
 }
 
@@ -571,6 +578,8 @@ fn create_sprite_pipeline(
         .set_layouts(std::slice::from_ref(&set_layout))
         .push_constant_ranges(std::slice::from_ref(&push_constant_range));
 
+    // SAFETY: The descriptor set layout and push-constant range are valid for this pipeline, and
+    // the create info borrows only stack data for the duration of the call.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
@@ -586,12 +595,16 @@ fn create_sprite_pipeline(
         .render_pass(render_pass)
         .subpass(0);
 
+    // SAFETY: All referenced shader modules, pipeline layout, and render pass are live and owned
+    // by the caller; Vulkan copies the provided create info before returning.
     let pipe = unsafe {
         device
             .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
             .map_err(|e| e.1)?[0]
     };
 
+    // SAFETY: The pipeline has already been created and no longer borrows the temporary shader
+    // modules, so they can be destroyed immediately on the same device.
     unsafe {
         device.destroy_shader_module(vert_module, None);
         device.destroy_shader_module(frag_module, None);
@@ -660,6 +673,8 @@ fn create_mesh_pipeline(
     let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
         .push_constant_ranges(std::slice::from_ref(&push_constant_range));
 
+    // SAFETY: The create info borrows only stack data and describes a valid push-constant layout
+    // for the mesh shaders.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
@@ -675,12 +690,16 @@ fn create_mesh_pipeline(
         .render_pass(render_pass)
         .subpass(0);
 
+    // SAFETY: All referenced shader modules, pipeline layout, and render pass are live and owned
+    // by the caller; Vulkan copies the provided create info before returning.
     let pipe = unsafe {
         device
             .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
             .map_err(|e| e.1)?[0]
     };
 
+    // SAFETY: The pipeline has already been created and no longer borrows the temporary shader
+    // modules, so they can be destroyed immediately on the same device.
     unsafe {
         device.destroy_shader_module(vert_module, None);
         device.destroy_shader_module(frag_module, None);
@@ -750,6 +769,8 @@ fn create_textured_mesh_pipeline(
         .set_layouts(std::slice::from_ref(&set_layout))
         .push_constant_ranges(std::slice::from_ref(&push_constant_range));
 
+    // SAFETY: The descriptor set layout and push-constant range are valid for this pipeline, and
+    // the create info borrows only stack data for the duration of the call.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
@@ -765,12 +786,16 @@ fn create_textured_mesh_pipeline(
         .render_pass(render_pass)
         .subpass(0);
 
+    // SAFETY: All referenced shader modules, pipeline layout, and render pass are live and owned
+    // by the caller; Vulkan copies the provided create info before returning.
     let pipe = unsafe {
         device
             .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
             .map_err(|e| e.1)?[0]
     };
 
+    // SAFETY: The pipeline has already been created and no longer borrows the temporary shader
+    // modules, so they can be destroyed immediately on the same device.
     unsafe {
         device.destroy_shader_module(vert_module, None);
         device.destroy_shader_module(frag_module, None);
@@ -816,8 +841,9 @@ fn ensure_instance_ring_capacity(
 
     // Reallocate only if missing or too small.
     if state.instance_ring.is_none() || state.instance_capacity_instances < need_total_instances {
-        // Safety: the old ring buffer may be referenced by in-flight command buffers.
-        // Wait for the GPU to finish BEFORE destroying it.
+        // SAFETY: The old ring buffer may still be referenced by in-flight command buffers.
+        // Waiting for the device to go idle guarantees those submissions are complete before
+        // unmapping or freeing the old allocation.
         if let Some(old) = state.instance_ring.take() {
             unsafe {
                 // Full idle here is fine — this path runs only when we *grow*.
@@ -840,6 +866,8 @@ fn ensure_instance_ring_capacity(
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
+        // SAFETY: `mem` was allocated from this device with HOST_VISIBLE memory and we keep the
+        // mapping alive until the ring is explicitly unmapped during growth or shutdown.
         let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
 
         state.instance_ring = Some(BufferResource {
@@ -878,6 +906,8 @@ fn ensure_mesh_ring_capacity(
 
     if state.mesh_ring.is_none() || state.mesh_capacity_vertices < need_total_vertices {
         if let Some(old) = state.mesh_ring.take() {
+            // SAFETY: The old mesh ring may still be referenced by in-flight command buffers.
+            // Waiting for idle guarantees those submissions are complete before unmapping/freeing.
             unsafe {
                 dev.device_wait_idle()?;
                 if !state.mesh_ring_ptr.is_null() {
@@ -896,6 +926,8 @@ fn ensure_mesh_ring_capacity(
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
+        // SAFETY: `mem` was allocated from this device with HOST_VISIBLE memory and we keep the
+        // mapping alive until the ring is explicitly unmapped during growth or shutdown.
         let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
 
         state.mesh_ring = Some(BufferResource {
@@ -932,6 +964,8 @@ fn ensure_tmesh_ring_capacity(
 
     if state.tmesh_ring.is_none() || state.tmesh_capacity_vertices < need_total_vertices {
         if let Some(old) = state.tmesh_ring.take() {
+            // SAFETY: The old textured-mesh ring may still be referenced by in-flight command
+            // buffers. Waiting for idle guarantees those submissions are complete first.
             unsafe {
                 dev.device_wait_idle()?;
                 if !state.tmesh_ring_ptr.is_null() {
@@ -950,6 +984,8 @@ fn ensure_tmesh_ring_capacity(
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
+        // SAFETY: `mem` was allocated from this device with HOST_VISIBLE memory and we keep the
+        // mapping alive until the ring is explicitly unmapped during growth or shutdown.
         let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
 
         state.tmesh_ring = Some(BufferResource {
@@ -987,6 +1023,8 @@ fn ensure_tmesh_instance_ring_capacity(
     if state.tmesh_instance_ring.is_none() || state.tmesh_capacity_instances < need_total_instances
     {
         if let Some(old) = state.tmesh_instance_ring.take() {
+            // SAFETY: The old textured-mesh instance ring may still be referenced by in-flight
+            // command buffers. Waiting for idle guarantees those submissions are complete first.
             unsafe {
                 dev.device_wait_idle()?;
                 if !state.tmesh_instance_ring_ptr.is_null() {
@@ -1005,6 +1043,8 @@ fn ensure_tmesh_instance_ring_capacity(
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
+        // SAFETY: `mem` was allocated from this device with HOST_VISIBLE memory and we keep the
+        // mapping alive until the ring is explicitly unmapped during growth or shutdown.
         let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
 
         state.tmesh_instance_ring = Some(BufferResource {
@@ -1067,6 +1107,8 @@ fn transition_image_layout_cmd(
         .src_access_mask(src_access_mask)
         .dst_access_mask(dst_access_mask);
 
+    // SAFETY: `cmd` is currently recording on the same queue family that owns `image`, and the
+    // barrier references only stack data alive for the duration of the call.
     unsafe {
         device.cmd_pipeline_barrier(
             cmd,
@@ -1092,9 +1134,12 @@ fn begin_pending_texture_upload_cmd(
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_pool(state.command_pool)
         .command_buffer_count(1);
+    // SAFETY: `state.command_pool` belongs to this device and remains alive until the command
+    // buffer is ended, submitted, and freed by `flush_pending_texture_uploads`.
     let cmd = unsafe { device.allocate_command_buffers(&alloc_info)?[0] };
     let begin_info =
         vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    // SAFETY: `cmd` was just allocated from `state.command_pool` and has not been begun yet.
     unsafe {
         device.begin_command_buffer(cmd, &begin_info)?;
     }
@@ -1108,6 +1153,8 @@ fn flush_pending_texture_uploads(state: &mut State) -> Result<(), Box<dyn Error>
     };
 
     let device = state.device.as_ref().unwrap();
+    // SAFETY: `cmd` is a primary command buffer allocated from `state.command_pool` and all
+    // queued staging buffers stay alive until after `queue_wait_idle` returns.
     unsafe {
         device.end_command_buffer(cmd)?;
         let submit = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
@@ -1146,6 +1193,8 @@ pub fn create_texture(
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
     )?;
+    // SAFETY: The staging allocation is HOST_VISIBLE | HOST_COHERENT, `image_data` points to
+    // initialized RGBA bytes, and we unmap the range before handing the buffer to Vulkan.
     unsafe {
         let mapped =
             device.map_memory(staging_memory, 0, staging_size, vk::MemoryMapFlags::empty())?;
@@ -1191,6 +1240,8 @@ pub fn create_texture(
             depth: 1,
         });
 
+    // SAFETY: `cmd` is recording, `staging.buffer` and `tex_image` are live transfer-compatible
+    // resources, and the image has already been transitioned to TRANSFER_DST_OPTIMAL above.
     unsafe {
         device.cmd_copy_buffer_to_image(
             cmd,
@@ -1250,6 +1301,8 @@ pub fn update_texture(
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
     )?;
+    // SAFETY: The staging allocation is HOST_VISIBLE | HOST_COHERENT, `image_data` points to
+    // initialized RGBA bytes, and we unmap the range before handing the buffer to Vulkan.
     unsafe {
         let mapped =
             device.map_memory(staging_memory, 0, staging_size, vk::MemoryMapFlags::empty())?;
@@ -1281,6 +1334,8 @@ pub fn update_texture(
             height,
             depth: 1,
         });
+    // SAFETY: `cmd` is recording, `staging_buffer` and `texture.image` are live transfer-
+    // compatible resources, and the image has already been transitioned to TRANSFER_DST_OPTIMAL.
     unsafe {
         device.cmd_copy_buffer_to_image(
             cmd,
@@ -1301,7 +1356,11 @@ pub fn update_texture(
 }
 
 #[inline(always)]
+// SAFETY: Callers must ensure `v` is fully initialized and may be viewed as a byte slice for the
+// returned lifetime.
 const unsafe fn bytes_of<T>(v: &T) -> &[u8] {
+    // SAFETY: The caller guarantees `v` may be viewed as a fully initialized byte slice for the
+    // returned lifetime.
     unsafe {
         std::slice::from_raw_parts(
             std::ptr::from_ref::<T>(v) as *const u8,
@@ -1442,6 +1501,10 @@ pub fn draw(
     let mut tmesh_written: u32 = 0;
     let mut tmesh_instance_written: u32 = 0;
 
+    // SAFETY: We wait on the current frame fence before reusing its command buffer or writing into
+    // this frame's ring-buffer slice, so the GPU is done reading prior submissions. All Vulkan
+    // handles referenced below are owned by `state` and remain alive through submission/present,
+    // and any screenshot staging buffer is kept alive until we wait for the queue and unmap/free it.
     unsafe {
         let mut waited_for_image = false;
         let mut back_pressure_waited = false;
@@ -2127,12 +2190,16 @@ pub fn cleanup(state: &mut State) {
     if let Err(e) = flush_pending_texture_uploads(state) {
         error!("Failed to flush pending texture uploads during cleanup: {e}");
     }
+    // SAFETY: If a logical device still exists, waiting for idle guarantees no in-flight work
+    // still references resources we are about to destroy below.
     unsafe {
         if let Some(device) = &state.device {
             let _ = device.device_wait_idle();
         }
     }
 
+    // SAFETY: The device is idle, so it is valid to tear down swapchain resources, mapped rings,
+    // pipelines, descriptor pools/layouts, the device, and finally the instance-owned objects.
     unsafe {
         cleanup_swapchain_and_dependents(state);
 
@@ -2299,6 +2366,8 @@ fn create_image_view(
             base_array_layer: 0,
             layer_count: 1,
         });
+    // SAFETY: `image` is a live image created on `device`, and the create info references only
+    // stack data for the duration of the call.
     unsafe { device.create_image_view(&view_info, None) }
 }
 
@@ -2327,6 +2396,8 @@ fn create_image(
         .samples(vk::SampleCountFlags::TYPE_1)
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
+    // SAFETY: All handles used here belong to the same live device/physical device pair. The
+    // image is bound exactly once to the freshly allocated memory returned by this function.
     unsafe {
         let image = state
             .device
@@ -2410,6 +2481,8 @@ fn create_texture_descriptor_set_pair(
     let alloc_info = vk::DescriptorSetAllocateInfo::default()
         .descriptor_pool(pool)
         .set_layouts(&layouts);
+    // SAFETY: `pool` and `state.descriptor_set_layout` were created on the same live device and
+    // remain valid for the duration of the allocation call.
     unsafe {
         state
             .device
@@ -2462,6 +2535,8 @@ fn create_texture_descriptor_sets(
         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
         .image_info(std::slice::from_ref(&image_info_repeat));
 
+    // SAFETY: Both descriptor sets were allocated from `pool`, and the image view/samplers remain
+    // live for at least as long as those descriptor sets do.
     unsafe {
         state
             .device
@@ -2686,9 +2761,11 @@ fn begin_single_time_commands(
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_pool(pool)
         .command_buffer_count(1);
+    // SAFETY: `pool` belongs to `device` and outlives the allocated command buffer.
     let cmd = unsafe { device.allocate_command_buffers(&alloc_info)?[0] };
     let begin_info =
         vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    // SAFETY: `cmd` was just allocated from `pool` and has not yet been begun.
     unsafe {
         device.begin_command_buffer(cmd, &begin_info)?;
     }
@@ -2701,6 +2778,8 @@ fn end_single_time_commands(
     queue: vk::Queue,
     command_buffer: vk::CommandBuffer,
 ) -> Result<(), Box<dyn Error>> {
+    // SAFETY: `command_buffer` was allocated from `pool`, recorded for one-time use, submitted to
+    // `queue`, and is freed only after `queue_wait_idle` guarantees completion.
     unsafe {
         device.end_command_buffer(command_buffer)?;
         let submit_info =
@@ -2737,6 +2816,8 @@ fn create_buffer<T: Copy>(
             staging_props,
         )?;
 
+        // SAFETY: The staging allocation is HOST_VISIBLE | HOST_COHERENT, `slice` points to
+        // initialized `T` values, and the mapped range is unmapped before submission.
         unsafe {
             let mapped =
                 device.map_memory(staging_memory, 0, buffer_size, vk::MemoryMapFlags::empty())?;
@@ -2763,6 +2844,8 @@ fn create_buffer<T: Copy>(
             buffer_size,
         )?;
 
+        // SAFETY: The transfer submission above waits for the queue to idle before returning, so
+        // the temporary staging buffer and allocation are no longer in use here.
         unsafe {
             device.destroy_buffer(staging_buffer, None);
             device.free_memory(staging_memory, None);
@@ -2788,6 +2871,8 @@ fn copy_buffer(
     size: vk::DeviceSize,
 ) -> Result<(), Box<dyn Error>> {
     let cmd = begin_single_time_commands(device, pool)?;
+    // SAFETY: `cmd` is a live recording command buffer, and `src`/`dst` are valid buffers with a
+    // copy region bounded by `size`.
     unsafe {
         let region = vk::BufferCopy::default().size(size);
         device.cmd_copy_buffer(cmd, src, dst, &[region]);
@@ -2808,7 +2893,11 @@ fn create_gpu_buffer(
         .size(size)
         .usage(usage)
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    // SAFETY: The create info references only stack data for the duration of the call and
+    // describes a buffer to be created on this live device.
     let buffer = unsafe { device.create_buffer(&buffer_info, None)? };
+    // SAFETY: `buffer` was just created on this device and is valid for querying memory
+    // requirements.
     let mem_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
     let mem_type_index = find_memory_type(
         instance,
@@ -2819,12 +2908,18 @@ fn create_gpu_buffer(
     let alloc_info = vk::MemoryAllocateInfo::default()
         .allocation_size(mem_requirements.size)
         .memory_type_index(mem_type_index);
+    // SAFETY: The allocation info matches the queried buffer requirements and uses a compatible
+    // memory type index chosen from this physical device.
     let memory = unsafe { device.allocate_memory(&alloc_info, None)? };
+    // SAFETY: `buffer` and `memory` were both created on this device, and offset 0 satisfies the
+    // alignment required by `mem_requirements`.
     unsafe { device.bind_buffer_memory(buffer, memory, 0)? };
     Ok((buffer, memory))
 }
 
 fn destroy_buffer(device: &Device, buffer: &BufferResource) {
+    // SAFETY: `buffer` owns this Vulkan buffer/allocation pair and callers only invoke this after
+    // GPU work that might reference it has completed.
     unsafe {
         device.destroy_buffer(buffer.buffer, None);
         device.free_memory(buffer.memory, None);
@@ -2837,6 +2932,7 @@ fn find_memory_type(
     type_filter: u32,
     properties: vk::MemoryPropertyFlags,
 ) -> u32 {
+    // SAFETY: `pdevice` comes from `instance`, so querying its memory properties is valid.
     let mem_properties = unsafe { instance.get_physical_device_memory_properties(pdevice) };
     (0..mem_properties.memory_type_count)
         .find(|i| {
@@ -2849,6 +2945,8 @@ fn find_memory_type(
 
 const VALIDATION_LAYER_NAME: &ffi::CStr = c"VK_LAYER_KHRONOS_validation";
 
+// SAFETY: Vulkan invokes this callback with the required ABI and pointer validity guarantees for
+// the duration of each call; the body treats all incoming pointers as borrowed only transiently.
 unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -2858,10 +2956,14 @@ unsafe extern "system" fn vulkan_debug_callback(
     let msg = if p_callback_data.is_null() {
         std::borrow::Cow::Borrowed("<null callback data>")
     } else {
+        // SAFETY: Vulkan calls this callback with a valid pointer for the duration of the call
+        // whenever `p_callback_data` is non-null.
         let p_message = unsafe { (*p_callback_data).p_message };
         if p_message.is_null() {
             std::borrow::Cow::Borrowed("<null message>")
         } else {
+            // SAFETY: `p_message` is a NUL-terminated C string owned by the validation layer for
+            // the duration of this callback.
             unsafe { ffi::CStr::from_ptr(p_message) }.to_string_lossy()
         }
     };
@@ -2878,16 +2980,22 @@ unsafe extern "system" fn vulkan_debug_callback(
 }
 
 fn supports_instance_extension(entry: &Entry, extension: &ffi::CStr) -> Result<bool, vk::Result> {
+    // SAFETY: Enumerating instance extensions only reads immutable loader state and does not
+    // retain borrowed pointers beyond the call.
     let exts = unsafe { entry.enumerate_instance_extension_properties(None)? };
     Ok(exts
         .iter()
+        // SAFETY: Vulkan writes a NUL-terminated extension name into this fixed array.
         .any(|ext| unsafe { ffi::CStr::from_ptr(ext.extension_name.as_ptr()) == extension }))
 }
 
 fn supports_instance_layer(entry: &Entry, layer: &ffi::CStr) -> Result<bool, vk::Result> {
+    // SAFETY: Enumerating instance layers only reads immutable loader state and does not retain
+    // borrowed pointers beyond the call.
     let layers = unsafe { entry.enumerate_instance_layer_properties()? };
     Ok(layers
         .iter()
+        // SAFETY: Vulkan writes a NUL-terminated layer name into this fixed array.
         .any(|prop| unsafe { ffi::CStr::from_ptr(prop.layer_name.as_ptr()) == layer }))
 }
 
@@ -2943,6 +3051,8 @@ fn create_instance(
         .enabled_layer_names(&layers_names_raw)
         .flags(create_flags);
 
+    // SAFETY: All extension/layer name pointers come from static `CStr`s or winit-provided
+    // extension arrays and stay valid for the duration of the call.
     let instance = unsafe { entry.create_instance(&create_info, None)? };
     if gfx_debug_enabled {
         debug!(
@@ -2981,6 +3091,8 @@ fn setup_debug_messenger(
                 | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
         )
         .pfn_user_callback(Some(vulkan_debug_callback));
+    // SAFETY: `loader` is bound to the live `instance`, and the callback function remains valid
+    // for the lifetime of the created messenger.
     let messenger = unsafe { loader.create_debug_utils_messenger(&create_info, None)? };
     Ok((Some(loader), Some(messenger)))
 }
@@ -2990,6 +3102,8 @@ fn create_surface(
     instance: &Instance,
     window: &Window,
 ) -> Result<vk::SurfaceKHR, Box<dyn Error>> {
+    // SAFETY: The raw display/window handles come directly from `window` and remain valid for the
+    // duration of the call; the returned surface is owned by `instance`.
     unsafe {
         Ok(ash_window::create_surface(
             entry,
@@ -3006,6 +3120,8 @@ fn select_physical_device(
     surface_loader: &surface::Instance,
     surface: vk::SurfaceKHR,
 ) -> Result<vk::PhysicalDevice, Box<dyn Error>> {
+    // SAFETY: Enumerating physical devices only reads instance state and returns handles owned by
+    // the instance.
     let pdevices = unsafe { instance.enumerate_physical_devices()? };
     pdevices
         .into_iter()
@@ -3043,7 +3159,10 @@ fn decode_driver_version(vendor_id: u32, driver_version: u32) -> String {
 }
 
 fn log_selected_device(instance: &Instance, pdevice: vk::PhysicalDevice) {
+    // SAFETY: `pdevice` was enumerated from `instance`, so querying immutable device properties is
+    // valid for the lifetime of the instance.
     let props = unsafe { instance.get_physical_device_properties(pdevice) };
+    // SAFETY: Vulkan stores the device name as a NUL-terminated string in `props.device_name`.
     let name = unsafe { ffi::CStr::from_ptr(props.device_name.as_ptr()) }.to_string_lossy();
     let api_major = vk::api_version_major(props.api_version);
     let api_minor = vk::api_version_minor(props.api_version);
@@ -3066,6 +3185,7 @@ fn log_selected_device(instance: &Instance, pdevice: vk::PhysicalDevice) {
 #[cfg(windows)]
 fn qpc_freq_hz() -> Option<u64> {
     let mut hz = 0i64;
+    // SAFETY: Windows writes the performance-counter frequency into the provided out pointer.
     unsafe {
         Performance::QueryPerformanceFrequency(&mut hz).ok()?;
     }
@@ -3179,6 +3299,7 @@ fn apply_display_to_host_offset(display_ns: u64, offset_ns: i64) -> u64 {
 fn has_device_extension(props: &[vk::ExtensionProperties], name: &ffi::CStr) -> bool {
     props
         .iter()
+        // SAFETY: Vulkan writes a NUL-terminated extension name into this fixed array.
         .any(|prop| unsafe { ffi::CStr::from_ptr(prop.extension_name.as_ptr()) == name })
 }
 
@@ -3186,6 +3307,7 @@ fn query_device_exts(
     instance: &Instance,
     pdevice: vk::PhysicalDevice,
 ) -> Result<DeviceExts, Box<dyn Error>> {
+    // SAFETY: Enumerating device extensions only reads immutable properties for `pdevice`.
     let props = unsafe { instance.enumerate_device_extension_properties(pdevice)? };
     Ok(DeviceExts {
         display_timing: has_device_extension(&props, display_timing::NAME),
@@ -3219,6 +3341,8 @@ fn init_present_telemetry(
     }
     if exts.calibrated_timestamps {
         let calib_instance = calibrated_timestamps::Instance::new(entry, instance);
+        // SAFETY: The calibrated-timestamps loader is bound to this live instance and `pdevice`
+        // was enumerated from that same instance.
         match unsafe { calib_instance.get_physical_device_calibrateable_time_domains(pdevice) } {
             Ok(domains) => {
                 telemetry.host_clock = pick_host_clock(&domains);
@@ -3246,6 +3370,7 @@ fn refresh_cycle_duration(
     let Some(loader) = telemetry.display_timing.as_ref() else {
         return Ok(0);
     };
+    // SAFETY: `loader` is tied to the live device/swapchain pair stored in telemetry/state.
     let duration = unsafe { loader.get_refresh_cycle_duration(swapchain)? };
     Ok(duration.refresh_duration)
 }
@@ -3327,6 +3452,8 @@ fn calibrate_present_clock(state: &mut State) {
     let host_info = vk::CalibratedTimestampInfoKHR::default().time_domain(host_clock);
     let display_info = vk::CalibratedTimestampInfoKHR::default().time_domain(display_clock);
     let (timestamps, max_deviation) = if display_clock == host_clock {
+        // SAFETY: The loader is bound to the live device, and the input slice lives for the
+        // duration of the call.
         match unsafe { loader.get_calibrated_timestamps(&[host_info]) } {
             Ok(pair) => pair,
             Err(e) => {
@@ -3335,6 +3462,8 @@ fn calibrate_present_clock(state: &mut State) {
             }
         }
     } else {
+        // SAFETY: The loader is bound to the live device, and the input slice lives for the
+        // duration of the call.
         match unsafe { loader.get_calibrated_timestamps(&[host_info, display_info]) } {
             Ok(pair) => pair,
             Err(e) => {
@@ -3362,6 +3491,7 @@ fn poll_past_presentation_timing(state: &mut State) {
         return;
     };
     let mut count: u32 = 0;
+    // SAFETY: Passing a null output pointer is the Vulkan-prescribed "count only" query form.
     let first = unsafe {
         (loader.fp().get_past_presentation_timing_google)(
             loader.device(),
@@ -3389,6 +3519,8 @@ fn poll_past_presentation_timing(state: &mut State) {
     if timings.capacity() < count as usize {
         timings.reserve(count as usize - timings.capacity());
     }
+    // SAFETY: `timings` has capacity for `count` elements and Vulkan writes at most that many
+    // initialized records into the buffer before returning.
     let second = unsafe {
         (loader.fp().get_past_presentation_timing_google)(
             loader.device(),
@@ -3398,6 +3530,7 @@ fn poll_past_presentation_timing(state: &mut State) {
         )
     };
     match second {
+        // SAFETY: On SUCCESS/INCOMPLETE Vulkan initialized exactly `count` entries in `timings`.
         vk::Result::SUCCESS | vk::Result::INCOMPLETE => unsafe {
             timings.set_len(count as usize);
         },
@@ -3504,9 +3637,13 @@ fn find_queue_family(
     surface_loader: &surface::Instance,
     surface: vk::SurfaceKHR,
 ) -> Option<u32> {
+    // SAFETY: `pdevice` was enumerated from `instance`, so querying queue-family properties is
+    // valid for the lifetime of the instance.
     let queue_families = unsafe { instance.get_physical_device_queue_family_properties(pdevice) };
     queue_families.iter().enumerate().find_map(|(i, family)| {
         if family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+            // SAFETY: `surface` belongs to `surface_loader`'s instance, and `i` indexes the queue
+            // family slice we just queried from the same physical device.
             && unsafe {
                 surface_loader
                     .get_physical_device_surface_support(pdevice, i as u32, surface)
@@ -3547,7 +3684,10 @@ fn create_logical_device(
         .enabled_extension_names(&device_extensions)
         .enabled_features(&features);
 
+    // SAFETY: `pdevice` was selected from `instance`, the queue info references stack data only
+    // for this call, and enabled extension names come from static `CStr`s.
     let device = unsafe { instance.create_device(pdevice, &create_info, None)? };
+    // SAFETY: We requested one queue from `queue_family_index`, so queue 0 is valid to fetch.
     let queue = unsafe { device.get_device_queue(queue_family_index, 0) };
     Ok((device, queue, queue_family_index, device_exts))
 }
@@ -3563,10 +3703,16 @@ fn create_swapchain(
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
 ) -> Result<SwapchainResources, Box<dyn Error>> {
+    // SAFETY: These surface queries only read immutable capabilities/formats/present modes for
+    // the selected physical device and surface.
     let capabilities =
         unsafe { surface_loader.get_physical_device_surface_capabilities(pdevice, surface)? };
+    // SAFETY: These surface queries only read immutable capabilities/formats/present modes for
+    // the selected physical device and surface.
     let formats = unsafe { surface_loader.get_physical_device_surface_formats(pdevice, surface)? };
     let present_modes =
+        // SAFETY: These surface queries only read immutable capabilities/formats/present modes for
+        // the selected physical device and surface.
         unsafe { surface_loader.get_physical_device_surface_present_modes(pdevice, surface)? };
 
     let format = formats
@@ -3671,7 +3817,10 @@ fn create_swapchain(
         .old_swapchain(old_swapchain.unwrap_or(vk::SwapchainKHR::null()));
 
     let swapchain_loader = swapchain::Device::new(instance, device);
+    // SAFETY: `create_info` references only stack data for the duration of the call and uses the
+    // live surface/device pair associated with `swapchain_loader`.
     let swapchain = unsafe { swapchain_loader.create_swapchain(&create_info, None)? };
+    // SAFETY: `swapchain` was just created by `swapchain_loader` and is valid to query here.
     let images = unsafe { swapchain_loader.get_swapchain_images(swapchain)? };
     let image_views = images
         .iter()
@@ -3707,6 +3856,8 @@ fn recreate_framebuffers(
                 .width(swapchain_resources.extent.width)
                 .height(swapchain_resources.extent.height)
                 .layers(1);
+            // SAFETY: The framebuffer create info references the live render pass and image view
+            // for this swapchain image, and all borrowed data lives through the call.
             unsafe { device.create_framebuffer(&create_info, None) }
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -3740,6 +3891,8 @@ fn create_render_pass(device: &Device, format: vk::Format) -> Result<vk::RenderP
         .attachments(std::slice::from_ref(&color_attachment))
         .subpasses(std::slice::from_ref(&subpass))
         .dependencies(std::slice::from_ref(&dependency));
+    // SAFETY: The render-pass create info references only stack data for the duration of the
+    // call and describes a single-color-attachment pass compatible with the swapchain format.
     unsafe { device.create_render_pass(&create_info, None) }
 }
 
@@ -3750,6 +3903,8 @@ fn create_command_pool(
     let create_info = vk::CommandPoolCreateInfo::default()
         .queue_family_index(queue_family_index)
         .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+    // SAFETY: `queue_family_index` was selected from this device and the create info references
+    // only stack data for the duration of the call.
     unsafe { device.create_command_pool(&create_info, None) }
 }
 
@@ -3762,12 +3917,15 @@ fn create_command_buffers(
         .command_pool(pool)
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_buffer_count(count as u32);
+    // SAFETY: `pool` belongs to `device` and remains alive for the returned command buffers.
     unsafe { device.allocate_command_buffers(&alloc_info) }
 }
 
 fn create_shader_module(device: &Device, code: &[u8]) -> Result<vk::ShaderModule, vk::Result> {
     let code_u32 = ash::util::read_spv(&mut std::io::Cursor::new(code)).unwrap();
     let create_info = vk::ShaderModuleCreateInfo::default().code(&code_u32);
+    // SAFETY: `code_u32` contains SPIR-V words parsed from `code`, and the create info borrows
+    // that slice only for the duration of the call.
     unsafe { device.create_shader_module(&create_info, None) }
 }
 
@@ -3780,14 +3938,22 @@ fn create_sync_objects(
     let mut render_finished = vec![];
     let mut in_flight_fences = vec![];
     for _ in 0..MAX_FRAMES_IN_FLIGHT {
+        // SAFETY: These synchronization primitives are created on a live device and are later
+        // destroyed during renderer cleanup after the device is idle.
         image_available.push(unsafe { device.create_semaphore(&semaphore_info, None)? });
+        // SAFETY: These synchronization primitives are created on a live device and are later
+        // destroyed during renderer cleanup after the device is idle.
         render_finished.push(unsafe { device.create_semaphore(&semaphore_info, None)? });
+        // SAFETY: These synchronization primitives are created on a live device and are later
+        // destroyed during renderer cleanup after the device is idle.
         in_flight_fences.push(unsafe { device.create_fence(&fence_info, None)? });
     }
     Ok((image_available, render_finished, in_flight_fences))
 }
 
 fn cleanup_swapchain_and_dependents(state: &mut State) {
+    // SAFETY: Callers ensure the device is idle, or otherwise that no in-flight work still
+    // references these framebuffers, image views, or the swapchain before destruction.
     unsafe {
         for &framebuffer in &state.swapchain_resources.framebuffers {
             state
@@ -3821,6 +3987,8 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
     // Instead of hammering vkCreateSwapchainKHR with illegal extents, mark the
     // swapchain as temporarily invalid and skip recreation; we'll try again
     // once the surface reports usable extents.
+    // SAFETY: This query only reads immutable surface capabilities for the selected
+    // physical-device/surface pair.
     let caps = unsafe {
         state
             .surface_loader
@@ -3842,6 +4010,8 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     state.swapchain_valid = false;
 
+    // SAFETY: Waiting for idle ensures no queue submission still references the old swapchain
+    // resources before we replace and destroy them below.
     unsafe {
         device.device_wait_idle()?;
     }
@@ -3864,6 +4034,8 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     recreate_framebuffers(device, &mut state.swapchain_resources, state.render_pass)?;
 
+    // SAFETY: The device is idle, so the old swapchain image views/framebuffers/swapchain are no
+    // longer referenced by in-flight work and can be destroyed here.
     unsafe {
         for fb in old.framebuffers {
             device.destroy_framebuffer(fb, None);

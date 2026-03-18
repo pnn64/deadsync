@@ -253,6 +253,8 @@ impl EvdevClockHealth {
 
 impl InotifyWatch {
     fn new() -> Option<Self> {
+        // SAFETY: `inotify_init1` takes only flag bits and returns a new owned fd
+        // or a negative errno result.
         let fd = unsafe { libc::inotify_init1(libc::IN_NONBLOCK | libc::IN_CLOEXEC) };
         if fd < 0 {
             warn!(
@@ -261,12 +263,16 @@ impl InotifyWatch {
             );
             return None;
         }
+        // SAFETY: `fd` is a live inotify descriptor owned by this constructor, and
+        // `INPUT_PATH` is a static NUL-terminated byte string.
         let wd = unsafe { libc::inotify_add_watch(fd, INPUT_PATH.as_ptr().cast(), INOTIFY_MASK) };
         if wd < 0 {
             warn!(
                 "linux evdev could not watch /dev/input for hotplug fallback: {}",
                 std::io::Error::last_os_error()
             );
+            // SAFETY: `fd` is still uniquely owned on this error path and must be
+            // closed before returning.
             unsafe {
                 libc::close(fd);
             }
@@ -287,6 +293,8 @@ impl InotifyWatch {
     fn drain(&self) {
         let mut buf = [0u8; 1024];
         loop {
+            // SAFETY: `self.fd` is the live inotify descriptor owned by this
+            // watcher, and `buf` is writable stack storage for the read call.
             let n = unsafe { read(self.fd, buf.as_mut_ptr().cast(), buf.len()) };
             if n > 0 {
                 continue;
@@ -307,6 +315,8 @@ impl InotifyWatch {
 
 impl Drop for InotifyWatch {
     fn drop(&mut self) {
+        // SAFETY: `wd` belongs to `fd`, and both are owned by this watcher. We
+        // remove the watch and close the descriptor exactly once on drop.
         unsafe {
             libc::inotify_rm_watch(self.fd, self.wd);
             libc::close(self.fd);
@@ -316,25 +326,33 @@ impl Drop for InotifyWatch {
 
 impl UdevContext {
     fn new() -> Option<Self> {
+        // SAFETY: `udev_new` returns either a new owned context pointer or null.
         let ptr = unsafe { udev_new() };
         (!ptr.is_null()).then_some(Self(ptr))
     }
 
     fn enumerate(&self) -> Option<UdevEnumerate> {
+        // SAFETY: `self.0` is a live udev context owned by this wrapper.
         let ptr = unsafe { udev_enumerate_new(self.0) };
         (!ptr.is_null()).then_some(UdevEnumerate(ptr))
     }
 
     fn device_from_syspath(&self, syspath: &CStr) -> Option<UdevDevice> {
+        // SAFETY: `self.0` is a live udev context and `syspath` is a valid
+        // NUL-terminated C string that lives for the duration of the call.
         let ptr = unsafe { udev_device_new_from_syspath(self.0, syspath.as_ptr()) };
         (!ptr.is_null()).then_some(UdevDevice(ptr))
     }
 
     fn monitor(&self) -> Option<UdevMonitor> {
+        // SAFETY: `self.0` is a live udev context and `UDEV_NETLINK` is a static
+        // NUL-terminated string.
         let ptr = unsafe { udev_monitor_new_from_netlink(self.0, UDEV_NETLINK.as_ptr().cast()) };
         if ptr.is_null() {
             return None;
         }
+        // SAFETY: `ptr` is the live monitor handle returned above, and the
+        // subsystem string is a static NUL-terminated byte string.
         if unsafe {
             udev_monitor_filter_add_match_subsystem_devtype(
                 ptr,
@@ -343,12 +361,17 @@ impl UdevContext {
             )
         } != 0
         {
+            // SAFETY: `ptr` is still uniquely owned on this error path and must be
+            // unref'd before returning.
             unsafe {
                 udev_monitor_unref(ptr);
             }
             return None;
         }
+        // SAFETY: `ptr` remains a live monitor handle owned by this constructor.
         if unsafe { udev_monitor_enable_receiving(ptr) } != 0 {
+            // SAFETY: `ptr` is still uniquely owned on this error path and must be
+            // unref'd before returning.
             unsafe {
                 udev_monitor_unref(ptr);
             }
@@ -360,6 +383,8 @@ impl UdevContext {
 
 impl Drop for UdevContext {
     fn drop(&mut self) {
+        // SAFETY: this wrapper owns the udev context pointer and releases it once
+        // here on drop.
         unsafe {
             udev_unref(self.0);
         }
@@ -368,6 +393,8 @@ impl Drop for UdevContext {
 
 impl UdevEnumerate {
     fn configure_for_joysticks(&self) -> bool {
+        // SAFETY: `self.0` is a live enumerate handle and all string pointers are
+        // static NUL-terminated byte strings.
         unsafe {
             udev_enumerate_add_match_property(
                 self.0,
@@ -381,16 +408,22 @@ impl UdevEnumerate {
 
     fn syspaths(&self) -> Vec<String> {
         let mut out = Vec::new();
+        // SAFETY: `self.0` is a live enumerate handle, and libudev returns a linked
+        // list whose nodes remain valid while the enumerate object is alive.
         let mut entry = unsafe { udev_enumerate_get_list_entry(self.0) };
         while !entry.is_null() {
+            // SAFETY: `entry` is a live node from the enumerate list.
             let name = unsafe { udev_list_entry_get_name(entry) };
             if !name.is_null() {
                 out.push(
+                    // SAFETY: `name` was checked for null above and points to a
+                    // valid NUL-terminated string owned by libudev.
                     unsafe { CStr::from_ptr(name) }
                         .to_string_lossy()
                         .into_owned(),
                 );
             }
+            // SAFETY: `entry` is a live node from the enumerate list.
             entry = unsafe { udev_list_entry_get_next(entry) };
         }
         out
@@ -399,6 +432,8 @@ impl UdevEnumerate {
 
 impl Drop for UdevEnumerate {
     fn drop(&mut self) {
+        // SAFETY: this wrapper owns the enumerate pointer and releases it once
+        // here on drop.
         unsafe {
             udev_enumerate_unref(self.0);
         }
@@ -407,15 +442,22 @@ impl Drop for UdevEnumerate {
 
 impl UdevDevice {
     fn devnode(&self) -> Option<String> {
+        // SAFETY: `self.0` is a live udev device handle and the returned pointer,
+        // if non-null, remains valid while the handle is alive.
         ptr_to_string(unsafe { udev_device_get_devnode(self.0) })
     }
 
     fn action_matches(&self, value: &[u8]) -> bool {
+        // SAFETY: `self.0` is a live udev device handle and the returned pointer,
+        // if non-null, remains valid while the handle is alive.
         cstr_matches(unsafe { udev_device_get_action(self.0) }, value)
     }
 
     fn property_matches(&self, key: &[u8], value: &[u8]) -> bool {
         cstr_matches(
+            // SAFETY: `self.0` is a live udev device handle, `key` is a valid
+            // NUL-terminated byte string, and the returned pointer, if non-null,
+            // remains valid while the handle is alive.
             unsafe { udev_device_get_property_value(self.0, key.as_ptr().cast()) },
             value,
         )
@@ -424,6 +466,8 @@ impl UdevDevice {
 
 impl Drop for UdevDevice {
     fn drop(&mut self) {
+        // SAFETY: this wrapper owns the device pointer and releases it once here
+        // on drop.
         unsafe {
             udev_device_unref(self.0);
         }
@@ -434,6 +478,8 @@ impl UdevMonitor {
     #[inline(always)]
     fn pollfd(&self) -> PollFd {
         PollFd {
+            // SAFETY: `self.0` is a live monitor handle and libudev returns the
+            // underlying pollable fd by value.
             fd: unsafe { udev_monitor_get_fd(self.0) },
             events: POLLIN,
             revents: 0,
@@ -443,6 +489,8 @@ impl UdevMonitor {
     fn collect_hotplug(&self) -> Vec<HotplugEvent> {
         let mut out = Vec::new();
         loop {
+            // SAFETY: `self.0` is a live monitor handle; libudev returns either a
+            // newly owned device pointer or null when no event is pending.
             let ptr = unsafe { udev_monitor_receive_device(self.0) };
             if ptr.is_null() {
                 break;
@@ -471,6 +519,8 @@ impl UdevMonitor {
 
 impl Drop for UdevMonitor {
     fn drop(&mut self) {
+        // SAFETY: this wrapper owns the monitor pointer and releases it once here
+        // on drop.
         unsafe {
             udev_monitor_unref(self.0);
         }
@@ -540,6 +590,8 @@ const EVIOCSCLOCKID: libc::c_ulong = iow(b'E', 0xA0, size_of::<libc::c_int>());
 #[inline(always)]
 fn ptr_to_string(ptr: *const c_char) -> Option<String> {
     (!ptr.is_null()).then(|| {
+        // SAFETY: callers only pass pointers returned by libudev, and the pointer
+        // was checked for null above before converting it to `CStr`.
         unsafe { CStr::from_ptr(ptr) }
             .to_string_lossy()
             .into_owned()
@@ -548,6 +600,8 @@ fn ptr_to_string(ptr: *const c_char) -> Option<String> {
 
 #[inline(always)]
 fn cstr_matches(ptr: *const c_char, expected: &[u8]) -> bool {
+    // SAFETY: callers only pass pointers returned by libudev. The pointer is
+    // checked for null before converting it to `CStr`.
     !ptr.is_null() && unsafe { CStr::from_ptr(ptr) }.to_bytes() == &expected[..expected.len() - 1]
 }
 
@@ -557,6 +611,8 @@ fn current_monotonic_nanos() -> Option<u64> {
         tv_sec: 0,
         tv_nsec: 0,
     };
+    // SAFETY: `clock_gettime` writes into the provided stack local and
+    // `CLOCK_MONOTONIC` is a valid kernel clock id.
     let rc = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
     if rc != 0 || ts.tv_sec < 0 || ts.tv_nsec < 0 {
         return None;
@@ -643,6 +699,8 @@ fn event_time(dev: &mut Dev, ev: InputEventRaw, sample: Option<ClockSample>) -> 
 #[inline(always)]
 fn enable_monotonic_timestamps(fd: i32) -> bool {
     let mut clock_id = libc::CLOCK_MONOTONIC;
+    // SAFETY: `fd` is the live evdev device descriptor and `clock_id` points to
+    // writable stack storage for the ioctl.
     unsafe { libc::ioctl(fd, EVIOCSCLOCKID, &mut clock_id) == 0 }
 }
 
@@ -891,6 +949,9 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
     emit_sys(GpSystemEvent::StartupComplete);
 
     let mut buf: [MaybeUninit<InputEventRaw>; 64] = [MaybeUninit::uninit(); 64];
+    // SAFETY: `buf` is an array of `MaybeUninit<InputEventRaw>`, so viewing its
+    // backing storage as a mutable byte slice of the same size is valid for reads
+    // into the uninitialized buffer.
     let buf_bytes = unsafe {
         std::slice::from_raw_parts_mut(
             buf.as_mut_ptr().cast::<u8>(),
@@ -923,6 +984,9 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
         } else {
             pollfds.as_mut_ptr()
         };
+        // SAFETY: `poll_ptr` is either null for an empty set or points to the
+        // first element of `pollfds`, which remains allocated for the duration of
+        // the call.
         let rc = unsafe { poll(poll_ptr, pollfds.len(), -1) };
         if rc < 0 {
             continue;
@@ -958,6 +1022,8 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 continue;
             }
 
+            // SAFETY: `buf_bytes` is writable storage for `InputEventRaw` values,
+            // and the fd comes from the matching open evdev device.
             let n = unsafe {
                 read(
                     pollfds[i + dev_offset].fd,
@@ -980,6 +1046,9 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 };
 
             for j in 0..count {
+                // SAFETY: `count` is derived from the number of bytes returned by
+                // `read`, so the first `count` entries of `buf` were initialized by
+                // the kernel in this iteration.
                 let ev = unsafe { buf[j].assume_init() };
                 if ev.type_ == EV_SYN {
                     continue;
