@@ -237,6 +237,7 @@ fn actor_from_vertices(
     Actor::TexturedMesh {
         align: [0.0, 0.0],
         offset: xy,
+        world_z: 0.0,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         texture: slot.texture_key_shared(),
         vertices,

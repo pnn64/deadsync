@@ -3,10 +3,12 @@ use super::super::{
     internal, note_output_clock_fallback, publish_output_timing, publish_output_timing_quality,
 };
 use crate::core::host_time::now_nanos;
+use libloading::Library;
 use log::{info, warn};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::{self, JoinHandle};
@@ -38,33 +40,87 @@ struct PaBufferAttr {
     fragsize: u32,
 }
 
-#[link(name = "pulse-simple")]
-unsafe extern "C" {
-    fn pa_simple_new(
-        server: *const c_char,
-        name: *const c_char,
-        dir: c_int,
-        dev: *const c_char,
-        stream_name: *const c_char,
-        sample_spec: *const PaSampleSpec,
-        channel_map: *const c_void,
-        attr: *const PaBufferAttr,
-        error: *mut c_int,
-    ) -> *mut PaSimple;
-    fn pa_simple_free(stream: *mut PaSimple);
-    fn pa_simple_write(
-        stream: *mut PaSimple,
-        data: *const c_void,
-        bytes: usize,
-        error: *mut c_int,
-    ) -> c_int;
-    fn pa_simple_drain(stream: *mut PaSimple, error: *mut c_int) -> c_int;
-    fn pa_simple_get_latency(stream: *mut PaSimple, error: *mut c_int) -> u64;
+type PaSimpleNewFn = unsafe extern "C" fn(
+    server: *const c_char,
+    name: *const c_char,
+    dir: c_int,
+    dev: *const c_char,
+    stream_name: *const c_char,
+    sample_spec: *const PaSampleSpec,
+    channel_map: *const c_void,
+    attr: *const PaBufferAttr,
+    error: *mut c_int,
+) -> *mut PaSimple;
+type PaSimpleFreeFn = unsafe extern "C" fn(stream: *mut PaSimple);
+type PaSimpleWriteFn = unsafe extern "C" fn(
+    stream: *mut PaSimple,
+    data: *const c_void,
+    bytes: usize,
+    error: *mut c_int,
+) -> c_int;
+type PaSimpleDrainFn = unsafe extern "C" fn(stream: *mut PaSimple, error: *mut c_int) -> c_int;
+type PaSimpleGetLatencyFn = unsafe extern "C" fn(stream: *mut PaSimple, error: *mut c_int) -> u64;
+type PaStrErrorFn = unsafe extern "C" fn(error: c_int) -> *const c_char;
+
+struct PulseApi {
+    _simple: Library,
+    _pulse: Library,
+    pa_simple_new: PaSimpleNewFn,
+    pa_simple_free: PaSimpleFreeFn,
+    pa_simple_write: PaSimpleWriteFn,
+    pa_simple_drain: PaSimpleDrainFn,
+    pa_simple_get_latency: PaSimpleGetLatencyFn,
+    pa_strerror: PaStrErrorFn,
 }
 
-#[link(name = "pulse")]
-unsafe extern "C" {
-    fn pa_strerror(error: c_int) -> *const c_char;
+static PULSE_API: OnceLock<Result<PulseApi, String>> = OnceLock::new();
+
+pub(crate) fn is_available() -> bool {
+    pulse_api().is_ok()
+}
+
+fn pulse_api() -> Result<&'static PulseApi, String> {
+    match PULSE_API.get_or_init(load_pulse_api) {
+        Ok(api) => Ok(api),
+        Err(err) => Err(err.clone()),
+    }
+}
+
+fn load_pulse_api() -> Result<PulseApi, String> {
+    let simple = load_library(&["libpulse-simple.so.0", "libpulse-simple.so"])?;
+    let pulse = load_library(&["libpulse.so.0", "libpulse.so"])?;
+    Ok(PulseApi {
+        pa_simple_new: unsafe { load_symbol(&simple, b"pa_simple_new\0")? },
+        pa_simple_free: unsafe { load_symbol(&simple, b"pa_simple_free\0")? },
+        pa_simple_write: unsafe { load_symbol(&simple, b"pa_simple_write\0")? },
+        pa_simple_drain: unsafe { load_symbol(&simple, b"pa_simple_drain\0")? },
+        pa_simple_get_latency: unsafe { load_symbol(&simple, b"pa_simple_get_latency\0")? },
+        pa_strerror: unsafe { load_symbol(&pulse, b"pa_strerror\0")? },
+        _simple: simple,
+        _pulse: pulse,
+    })
+}
+
+fn load_library(names: &[&str]) -> Result<Library, String> {
+    let mut last_err = None;
+    for name in names {
+        match unsafe { Library::new(*name) } {
+            Ok(lib) => return Ok(lib),
+            Err(err) => last_err = Some(format!("{name}: {err}")),
+        }
+    }
+    Err(last_err.unwrap_or_else(|| "no candidate library names were provided".to_string()))
+}
+
+unsafe fn load_symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, String> {
+    unsafe { lib.get::<T>(name) }
+        .map(|sym| *sym)
+        .map_err(|err| {
+            format!(
+                "{}: {err}",
+                String::from_utf8_lossy(name).trim_end_matches('\0')
+            )
+        })
 }
 
 pub(crate) struct PulseOutputPrep {
@@ -157,11 +213,13 @@ pub(crate) fn start(
 }
 
 struct PulseConnection {
+    api: &'static PulseApi,
     raw: *mut PaSimple,
 }
 
 impl PulseConnection {
     fn open(prep: &PulseOutputPrep) -> Result<Self, String> {
+        let api = pulse_api()?;
         let app_name = CString::new("deadsync").unwrap();
         let stream_name = CString::new("Gameplay").unwrap();
         let sample_spec = PaSampleSpec {
@@ -178,7 +236,7 @@ impl PulseConnection {
         };
         let mut error = 0;
         let raw = unsafe {
-            pa_simple_new(
+            (api.pa_simple_new)(
                 ptr::null(),
                 app_name.as_ptr(),
                 PA_STREAM_PLAYBACK,
@@ -193,17 +251,17 @@ impl PulseConnection {
         if raw.is_null() {
             return Err(format!(
                 "failed to open PulseAudio playback stream: {}",
-                pulse_error(error)
+                pulse_error(api, error)
             ));
         }
-        Ok(Self { raw })
+        Ok(Self { api, raw })
     }
 
     #[inline(always)]
     fn write_i16(&self, data: &[i16]) -> Result<(), String> {
         let mut error = 0;
         let rc = unsafe {
-            pa_simple_write(
+            (self.api.pa_simple_write)(
                 self.raw,
                 data.as_ptr().cast::<c_void>(),
                 std::mem::size_of_val(data),
@@ -211,7 +269,10 @@ impl PulseConnection {
             )
         };
         if rc < 0 {
-            return Err(format!("PulseAudio write failed: {}", pulse_error(error)));
+            return Err(format!(
+                "PulseAudio write failed: {}",
+                pulse_error(self.api, error)
+            ));
         }
         Ok(())
     }
@@ -219,15 +280,15 @@ impl PulseConnection {
     #[inline(always)]
     fn drain(&self) {
         let mut error = 0;
-        let _ = unsafe { pa_simple_drain(self.raw, &mut error) };
+        let _ = unsafe { (self.api.pa_simple_drain)(self.raw, &mut error) };
     }
 
     #[inline(always)]
     fn latency_nanos(&self) -> Result<u64, String> {
         let mut error = 0;
-        let latency_usec = unsafe { pa_simple_get_latency(self.raw, &mut error) };
+        let latency_usec = unsafe { (self.api.pa_simple_get_latency)(self.raw, &mut error) };
         if latency_usec == u64::MAX {
-            return Err(pulse_error(error));
+            return Err(pulse_error(self.api, error));
         }
         Ok(usec_to_nanos(latency_usec))
     }
@@ -235,7 +296,7 @@ impl PulseConnection {
 
 impl Drop for PulseConnection {
     fn drop(&mut self) {
-        unsafe { pa_simple_free(self.raw) };
+        unsafe { (self.api.pa_simple_free)(self.raw) };
     }
 }
 
@@ -352,8 +413,8 @@ fn playback_timing(
 }
 
 #[inline(always)]
-fn pulse_error(error: c_int) -> String {
-    let ptr = unsafe { pa_strerror(error) };
+fn pulse_error(api: &PulseApi, error: c_int) -> String {
+    let ptr = unsafe { (api.pa_strerror)(error) };
     if ptr.is_null() {
         return format!("PulseAudio error {error}");
     }

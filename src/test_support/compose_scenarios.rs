@@ -543,6 +543,7 @@ fn resolve_ci_scenario(metrics: Metrics, fonts: HashMap<&'static str, Font>) -> 
             actors.push(Actor::Sprite {
                 align: [0.0, 0.0],
                 offset: screen_pos(x, y),
+                world_z: 0.0,
                 size: [SizeSpec::Px(16.0), SizeSpec::Px(12.0)],
                 source: SpriteSource::Texture(Arc::<str>::from(mixed_case_texture_key(
                     &casefold_tex_key(idx),
@@ -678,6 +679,7 @@ fn mask_source_actor() -> Actor {
     Actor::Sprite {
         align: [0.5, 0.5],
         offset: [x, y],
+        world_z: 0.0,
         size: [SizeSpec::Px(680.0), SizeSpec::Px(300.0)],
         source: SpriteSource::Solid,
         tint: [1.0; 4],
@@ -718,6 +720,7 @@ fn masked_rotating_sprite(x: f32, y: f32, rot_z_deg: f32) -> Actor {
     Actor::Sprite {
         align: [0.5, 0.5],
         offset: [x, y],
+        world_z: 0.0,
         size: [SizeSpec::Px(116.0), SizeSpec::Px(64.0)],
         source: SpriteSource::Texture(Arc::<str>::from(PANEL_TEX)),
         tint: [0.82, 0.93, 1.0, 0.95],
@@ -806,6 +809,7 @@ fn textured_mesh() -> Actor {
     Actor::TexturedMesh {
         align: [0.5, 0.5],
         offset: screen_pos(0.0, -184.0),
+        world_z: 0.0,
         size: [SizeSpec::Px(120.0), SizeSpec::Px(80.0)],
         texture: Arc::<str>::from(MESH_TEX),
         vertices: verts,
@@ -838,6 +842,7 @@ fn sprite_actor(
     Actor::Sprite {
         align,
         offset,
+        world_z: 0.0,
         size: [SizeSpec::Px(size[0]), SizeSpec::Px(size[1])],
         source: SpriteSource::Texture(Arc::<str>::from(texture)),
         tint: [1.0; 4],
@@ -877,6 +882,7 @@ fn animated_sheet(align: [f32; 2], offset: [f32; 2], size: [f32; 2], z: i16) -> 
     Actor::Sprite {
         align,
         offset,
+        world_z: 0.0,
         size: [SizeSpec::Px(size[0]), SizeSpec::Px(size[1])],
         source: SpriteSource::Texture(Arc::<str>::from(SHEET_TEX)),
         tint: [0.9, 0.95, 1.0, 0.95],

@@ -32,7 +32,7 @@ use twox_hash::XxHash64;
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
 // Bump when the serialized song payload changes or resolved asset semantics change.
-const SONG_CACHE_VERSION: u8 = 2;
+const SONG_CACHE_VERSION: u8 = 1;
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 
@@ -354,6 +354,7 @@ enum CachedNoteType {
     Hold,
     Roll,
     Mine,
+    Lift,
     Fake,
 }
 
@@ -364,6 +365,7 @@ impl From<NoteType> for CachedNoteType {
             NoteType::Hold => Self::Hold,
             NoteType::Roll => Self::Roll,
             NoteType::Mine => Self::Mine,
+            NoteType::Lift => Self::Lift,
             NoteType::Fake => Self::Fake,
         }
     }
@@ -376,6 +378,7 @@ impl From<CachedNoteType> for NoteType {
             CachedNoteType::Hold => Self::Hold,
             CachedNoteType::Roll => Self::Roll,
             CachedNoteType::Mine => Self::Mine,
+            CachedNoteType::Lift => Self::Lift,
             CachedNoteType::Fake => Self::Fake,
         }
     }

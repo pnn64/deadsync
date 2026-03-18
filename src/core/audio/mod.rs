@@ -600,13 +600,19 @@ impl PlaybackPosMap {
             let start_dist = (stream_frame - start).abs();
             if start_dist < closest_dist {
                 closest_dist = start_dist;
-                closest = Some((seg.music_start_sec, seg.music_sec_per_frame));
+                closest = Some((
+                    seg.music_start_sec + (stream_frame - start) * seg.music_sec_per_frame,
+                    seg.music_sec_per_frame,
+                ));
             }
             let end_music = seg.music_start_sec + seg.music_sec_per_frame * seg.frames as f64;
             let end_dist = (stream_frame - end).abs();
             if end_dist < closest_dist {
                 closest_dist = end_dist;
-                closest = Some((end_music, seg.music_sec_per_frame));
+                closest = Some((
+                    end_music + (stream_frame - end) * seg.music_sec_per_frame,
+                    seg.music_sec_per_frame,
+                ));
             }
         }
         closest
@@ -633,6 +639,24 @@ pub fn init() -> Result<(), String> {
 
 pub fn startup_output_devices() -> Vec<OutputDeviceInfo> {
     ENGINE.startup_output_devices.clone()
+}
+
+#[cfg(target_os = "linux")]
+pub fn available_linux_backends() -> Vec<crate::config::LinuxAudioBackend> {
+    let mut backends = Vec::with_capacity(5);
+    backends.push(crate::config::LinuxAudioBackend::Auto);
+    #[cfg(has_pipewire_audio)]
+    backends.push(crate::config::LinuxAudioBackend::PipeWire);
+    #[cfg(has_pulse_audio)]
+    if backends::linux_pulse::is_available() {
+        backends.push(crate::config::LinuxAudioBackend::PulseAudio);
+    }
+    backends.push(crate::config::LinuxAudioBackend::Alsa);
+    #[cfg(has_jack_audio)]
+    if backends::linux_jack::is_available() {
+        backends.push(crate::config::LinuxAudioBackend::Jack);
+    }
+    backends
 }
 
 /// Plays a sound effect from the given path (cached after first load).
@@ -721,6 +745,7 @@ fn current_callback_clock_nanos(valid_at: Instant, source: CallbackClockSource) 
     }
 }
 
+#[cfg(any(windows, target_os = "linux", target_os = "freebsd"))]
 #[inline(always)]
 fn f32_to_i16(sample: f32) -> i16 {
     let sample = sample.clamp(-1.0, 1.0);
@@ -736,6 +761,29 @@ fn f32_to_i16(sample: f32) -> i16 {
 #[inline(always)]
 fn i16_to_f32(sample: i16) -> f32 {
     sample as f32 / (i16::MAX as f32 + 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MusicMapSeg, PlaybackPosMap};
+
+    #[test]
+    fn playback_pos_map_extrapolates_past_last_segment() {
+        let mut map = PlaybackPosMap::default();
+        map.insert(MusicMapSeg {
+            stream_frame_start: 0,
+            frames: 48_000,
+            music_start_sec: 0.0,
+            music_sec_per_frame: 1.0 / 48_000.0,
+        });
+
+        let (music_sec, sec_per_frame) = map.search(60_000.0).unwrap();
+        assert!((music_sec - 1.25).abs() <= 1e-9, "music_sec={music_sec}");
+        assert!(
+            (sec_per_frame - (1.0 / 48_000.0)).abs() <= 1e-12,
+            "sec_per_frame={sec_per_frame}"
+        );
+    }
 }
 
 #[inline(always)]
@@ -1253,7 +1301,7 @@ impl RenderState {
         self.finish_callback(total_before, out.len(), popped);
     }
 
-    #[cfg(unix)]
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     fn render_i16_host_nanos(&mut self, out: &mut [i16], anchor_nanos: u64) {
         let total_before = self.begin_callback_nanos(anchor_nanos, CallbackClockSource::Instant);
         let popped = self.mix_f32_buffer(total_before, out.len());
@@ -2001,19 +2049,38 @@ fn start_output_backend(
                 }
             }
             #[cfg(has_pulse_audio)]
-            if let Some(pulse) = pulse {
+            if backends::linux_pulse::is_available()
+                && let Some(pulse) = pulse
+            {
                 match start_linux_pulse_backend(pulse, music_ring.clone()) {
                     Ok(output) => return Ok(output),
                     Err(err) => {
                         warn!(
-                            "Failed to start native PulseAudio output: {err}. Falling back to ALSA."
+                            "Failed to start native PulseAudio output: {err}. Falling back to ALSA/JACK."
                         );
                     }
                 }
             }
             if let Some(alsa) = alsa {
-                return start_linux_alsa_backend(alsa, music_ring)
-                    .map_err(|err| format!("failed to start native ALSA output: {err}"));
+                match start_linux_alsa_backend(alsa, music_ring.clone()) {
+                    Ok(output) => return Ok(output),
+                    Err(err) => {
+                        #[cfg(has_jack_audio)]
+                        if backends::linux_jack::is_available()
+                            && let Some(jack) = jack
+                        {
+                            match start_linux_jack_backend(jack, music_ring) {
+                                Ok(output) => return Ok(output),
+                                Err(jack_err) => {
+                                    return Err(format!(
+                                        "failed to start native ALSA output: {err}; JACK fallback also failed: {jack_err}"
+                                    ));
+                                }
+                            }
+                        }
+                        return Err(format!("failed to start native ALSA output: {err}"));
+                    }
+                }
             }
             return Err("no native Linux audio backend hint is available.".to_string());
         }

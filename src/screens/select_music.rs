@@ -18,7 +18,10 @@ use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar},
-    shared::{gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input, timers},
+    shared::{
+        banner as shared_banner, gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input,
+        timers,
+    },
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec, SpriteSource};
@@ -48,6 +51,9 @@ const SYNC_HEAT_TEXTURE_KEY: &str = "__generated/sync-overlay-heat";
 const SYNC_HEAT_ALPHA: f32 = 1.0;
 const SYNC_READY_TEXT_ZOOM: f32 = 0.95;
 const SYNC_READY_LINE_STEP: f32 = 24.0 * SYNC_READY_TEXT_ZOOM;
+const SYNC_OVERLAY_MAX_PENDING_MSGS: usize = 32;
+const SYNC_OVERLAY_MAX_MSGS_PER_FRAME: usize = 32;
+const SYNC_OVERLAY_POLL_BUDGET: Duration = Duration::from_millis(2);
 
 // Simply Love BGAnimations/ScreenSelectMusic overlay/PerPlayer/StepArtist.lua
 // Cycles through AuthorCredit, Description, ChartName every 2 seconds.
@@ -3205,9 +3211,177 @@ fn refresh_sync_overlay_curve_mesh(overlay: &mut SyncOverlayStateData) {
     );
 }
 
-fn refresh_sync_overlay_meshes(overlay: &mut SyncOverlayStateData) {
-    refresh_sync_overlay_heat_texture(overlay);
-    refresh_sync_overlay_curve_mesh(overlay);
+#[derive(Default)]
+struct SyncOverlayRefresh {
+    heat: bool,
+    curve: bool,
+}
+
+impl SyncOverlayRefresh {
+    #[inline(always)]
+    fn heat(&mut self) {
+        self.heat = true;
+    }
+
+    #[inline(always)]
+    fn meshes(&mut self) {
+        self.heat = true;
+        self.curve = true;
+    }
+
+    fn flush(self, overlay: &mut SyncOverlayStateData) {
+        if self.heat {
+            refresh_sync_overlay_heat_texture(overlay);
+        }
+        if self.curve {
+            refresh_sync_overlay_curve_mesh(overlay);
+        }
+    }
+}
+
+#[inline(always)]
+fn sync_overlay_poll_exhausted(started: Instant, handled: usize) -> bool {
+    handled >= SYNC_OVERLAY_MAX_MSGS_PER_FRAME || started.elapsed() >= SYNC_OVERLAY_POLL_BUDGET
+}
+
+fn sync_overlay_apply_beat(
+    overlay: &mut SyncOverlayStateData,
+    beat_seq: usize,
+    row: Vec<f64>,
+    freq_delta: Option<Vec<f64>>,
+    refresh: &mut SyncOverlayRefresh,
+) {
+    if let Some(freq_delta) = freq_delta
+        && overlay.phase == SyncOverlayPhase::Running
+        && overlay.cols > 0
+        && overlay.freq_rows > 0
+        && freq_delta.len() == overlay.freq_rows.saturating_mul(overlay.cols)
+    {
+        if overlay.freq_domain.len() != freq_delta.len() {
+            overlay.freq_domain.resize(freq_delta.len(), 0.0);
+        }
+        for (sum, value) in overlay.freq_domain.iter_mut().zip(freq_delta) {
+            *sum += value;
+        }
+        refresh.heat();
+    }
+
+    if overlay.phase != SyncOverlayPhase::Running
+        || overlay.kernel_target != KernelTarget::Digest
+        || overlay.cols == 0
+        || row.len() != overlay.cols
+    {
+        return;
+    }
+
+    overlay.beats_processed = overlay.beats_processed.max(beat_seq + 1);
+    overlay.digest_rows = overlay.beats_processed;
+    overlay.beat_digest.extend_from_slice(row.as_slice());
+    for (sum, value) in overlay.digest_col_sums.iter_mut().zip(row.iter().copied()) {
+        *sum += value;
+    }
+    overlay.convolution =
+        sync_convolution_from_digest_sums(&overlay.digest_col_sums, overlay.kernel_type);
+    overlay.preview_bias_ms = sync_peak_bias_ms(
+        &overlay.convolution,
+        &overlay.times_ms,
+        overlay.edge_discard,
+    );
+    refresh.meshes();
+}
+
+fn sync_overlay_apply_event(
+    overlay: &mut SyncOverlayStateData,
+    event: BiasStreamEvent,
+    refresh: &mut SyncOverlayRefresh,
+) {
+    match event {
+        BiasStreamEvent::Init(init) => {
+            overlay.cols = init.cols;
+            overlay.freq_rows = init.freq_rows;
+            overlay.total_beats = init.planned_beats;
+            overlay.digest_rows = 0;
+            overlay.times_ms = init.times_ms;
+            overlay.freq_domain.clear();
+            overlay.beat_digest.clear();
+            overlay.kernel_target = init.kernel_target;
+            overlay.digest_col_sums = vec![0.0; init.cols];
+            overlay.post_rows = 0;
+            overlay.post_kernel.clear();
+            overlay.convolution.clear();
+            overlay.curve_mesh = None;
+            overlay.beats_processed = 0;
+            overlay.preview_bias_ms = None;
+        }
+        BiasStreamEvent::Beat(beat) => sync_overlay_apply_beat(
+            overlay,
+            beat.beat_seq,
+            beat.digest_row,
+            beat.freq_delta,
+            refresh,
+        ),
+        BiasStreamEvent::Convolution(conv) => {
+            overlay.post_rows = conv.rows;
+            overlay.post_kernel = conv.post_kernel;
+            overlay.convolution = conv.convolution;
+            overlay.edge_discard = conv.edge_discard;
+            overlay.preview_bias_ms = sync_peak_bias_ms(
+                &overlay.convolution,
+                &overlay.times_ms,
+                overlay.edge_discard,
+            );
+            refresh.meshes();
+        }
+        BiasStreamEvent::Done(estimate) => {
+            overlay.final_bias_ms = Some(estimate.bias_ms);
+            overlay.final_confidence = Some(estimate.confidence);
+        }
+    }
+}
+
+fn sync_overlay_apply_result(
+    overlay: &mut SyncOverlayStateData,
+    result: Result<nod::api::SyncChartResult, String>,
+    refresh: &mut SyncOverlayRefresh,
+) {
+    match result {
+        Ok(result) => {
+            if overlay.times_ms.is_empty() {
+                overlay.times_ms = result.plot.times_ms.clone();
+                overlay.cols = result.plot.cols;
+            }
+            overlay.freq_rows = result.plot.freq_rows;
+            overlay.freq_domain = result.plot.freq_domain.clone();
+            overlay.total_beats = overlay.total_beats.max(result.plot.digest_rows);
+            overlay.beats_processed = overlay.beats_processed.max(result.plot.digest_rows);
+            if overlay.beat_digest.len() != result.plot.beat_digest.len() {
+                overlay.beat_digest = result.plot.beat_digest.clone();
+            }
+            overlay.digest_rows = result.plot.digest_rows;
+            overlay.post_rows = result.plot.post_rows;
+            overlay.post_kernel = result.plot.post_kernel.clone();
+            if overlay.convolution.is_empty() {
+                overlay.convolution = result.plot.convolution.clone();
+                overlay.edge_discard = result.plot.edge_discard;
+            }
+            overlay.final_bias_ms = Some(result.estimate.bias_ms);
+            overlay.final_confidence = Some(result.estimate.confidence);
+            if overlay.preview_bias_ms.is_none() {
+                overlay.preview_bias_ms = sync_peak_bias_ms(
+                    &overlay.convolution,
+                    &overlay.times_ms,
+                    overlay.edge_discard,
+                );
+            }
+            overlay.phase = SyncOverlayPhase::Ready;
+            overlay.yes_selected = true;
+            refresh.meshes();
+        }
+        Err(err) => {
+            overlay.phase = SyncOverlayPhase::Failed;
+            overlay.error_text = Some(err);
+        }
+    }
 }
 
 fn sync_graph_label(overlay: &SyncOverlayStateData) -> &'static str {
@@ -3314,6 +3488,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         actors.push(Actor::Sprite {
             align: [0.0, 0.0],
             offset: [graph_x, graph_y],
+            world_z: 0.0,
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
             source: SpriteSource::Texture(Arc::<str>::from(SYNC_HEAT_TEXTURE_KEY)),
             tint: [1.0, 1.0, 1.0, 1.0],
@@ -3970,7 +4145,7 @@ fn show_sync_overlay(state: &mut State) {
 
     let simfile_path = song.simfile_path.clone();
     let simfile_path_thread = simfile_path.clone();
-    let (tx, rx) = mpsc::channel::<SyncWorkerMsg>();
+    let (tx, rx) = mpsc::sync_channel::<SyncWorkerMsg>(SYNC_OVERLAY_MAX_PENDING_MSGS);
     std::thread::spawn(move || {
         let tx_done = tx.clone();
         let result = nod::api::analyze_chart_stream(
@@ -4018,133 +4193,23 @@ fn show_sync_overlay(state: &mut State) {
 }
 
 fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
+    let started = Instant::now();
+    let mut handled = 0usize;
+    let mut refresh = SyncOverlayRefresh::default();
+
     loop {
+        if sync_overlay_poll_exhausted(started, handled) {
+            break;
+        }
         match overlay.rx.try_recv() {
-            Ok(SyncWorkerMsg::Event(event)) => match event {
-                BiasStreamEvent::Init(init) => {
-                    overlay.cols = init.cols;
-                    overlay.freq_rows = init.freq_rows;
-                    overlay.total_beats = init.planned_beats;
-                    overlay.digest_rows = 0;
-                    overlay.times_ms = init.times_ms;
-                    overlay.freq_domain.clear();
-                    overlay.beat_digest.clear();
-                    overlay.kernel_target = init.kernel_target;
-                    overlay.digest_col_sums = vec![0.0; init.cols];
-                    overlay.post_rows = 0;
-                    overlay.post_kernel.clear();
-                    overlay.convolution.clear();
-                    overlay.curve_mesh = None;
-                    overlay.beats_processed = 0;
-                    overlay.preview_bias_ms = None;
-                }
-                BiasStreamEvent::Beat(beat) => {
-                    let beat_seq = beat.beat_seq;
-                    let row = beat.digest_row;
-                    let freq_delta = beat.freq_delta;
-                    let mut dirty = false;
-                    if let Some(freq_delta) = freq_delta
-                        && overlay.phase == SyncOverlayPhase::Running
-                        && overlay.cols > 0
-                        && overlay.freq_rows > 0
-                        && freq_delta.len() == overlay.freq_rows.saturating_mul(overlay.cols)
-                    {
-                        if overlay.freq_domain.len() != freq_delta.len() {
-                            overlay.freq_domain.resize(freq_delta.len(), 0.0);
-                        }
-                        for (sum, value) in
-                            overlay.freq_domain.iter_mut().zip(freq_delta.into_iter())
-                        {
-                            *sum += value;
-                        }
-                        dirty = true;
-                    }
-                    if overlay.phase != SyncOverlayPhase::Running
-                        || overlay.kernel_target != KernelTarget::Digest
-                        || overlay.cols == 0
-                        || row.len() != overlay.cols
-                    {
-                        if dirty {
-                            refresh_sync_overlay_heat_texture(overlay);
-                        }
-                        continue;
-                    }
-                    overlay.beats_processed = overlay.beats_processed.max(beat_seq + 1);
-                    overlay.digest_rows = overlay.beats_processed;
-                    overlay.beat_digest.extend_from_slice(row.as_slice());
-                    for (sum, value) in overlay.digest_col_sums.iter_mut().zip(row.iter().copied())
-                    {
-                        *sum += value;
-                    }
-                    overlay.convolution = sync_convolution_from_digest_sums(
-                        &overlay.digest_col_sums,
-                        overlay.kernel_type,
-                    );
-                    overlay.preview_bias_ms = sync_peak_bias_ms(
-                        &overlay.convolution,
-                        &overlay.times_ms,
-                        overlay.edge_discard,
-                    );
-                    dirty = true;
-                    if dirty {
-                        refresh_sync_overlay_meshes(overlay);
-                    }
-                }
-                BiasStreamEvent::Convolution(conv) => {
-                    overlay.post_rows = conv.rows;
-                    overlay.post_kernel = conv.post_kernel;
-                    overlay.convolution = conv.convolution;
-                    overlay.edge_discard = conv.edge_discard;
-                    overlay.preview_bias_ms = sync_peak_bias_ms(
-                        &overlay.convolution,
-                        &overlay.times_ms,
-                        overlay.edge_discard,
-                    );
-                    refresh_sync_overlay_meshes(overlay);
-                }
-                BiasStreamEvent::Done(estimate) => {
-                    overlay.final_bias_ms = Some(estimate.bias_ms);
-                    overlay.final_confidence = Some(estimate.confidence);
-                }
-            },
-            Ok(SyncWorkerMsg::Finished(result)) => match result {
-                Ok(result) => {
-                    if overlay.times_ms.is_empty() {
-                        overlay.times_ms = result.plot.times_ms.clone();
-                        overlay.cols = result.plot.cols;
-                    }
-                    overlay.freq_rows = result.plot.freq_rows;
-                    overlay.freq_domain = result.plot.freq_domain.clone();
-                    overlay.total_beats = overlay.total_beats.max(result.plot.digest_rows);
-                    overlay.beats_processed = overlay.beats_processed.max(result.plot.digest_rows);
-                    if overlay.beat_digest.len() != result.plot.beat_digest.len() {
-                        overlay.beat_digest = result.plot.beat_digest.clone();
-                    }
-                    overlay.digest_rows = result.plot.digest_rows;
-                    overlay.post_rows = result.plot.post_rows;
-                    overlay.post_kernel = result.plot.post_kernel.clone();
-                    if overlay.convolution.is_empty() {
-                        overlay.convolution = result.plot.convolution.clone();
-                        overlay.edge_discard = result.plot.edge_discard;
-                    }
-                    overlay.final_bias_ms = Some(result.estimate.bias_ms);
-                    overlay.final_confidence = Some(result.estimate.confidence);
-                    if overlay.preview_bias_ms.is_none() {
-                        overlay.preview_bias_ms = sync_peak_bias_ms(
-                            &overlay.convolution,
-                            &overlay.times_ms,
-                            overlay.edge_discard,
-                        );
-                    }
-                    refresh_sync_overlay_meshes(overlay);
-                    overlay.phase = SyncOverlayPhase::Ready;
-                    overlay.yes_selected = true;
-                }
-                Err(err) => {
-                    overlay.phase = SyncOverlayPhase::Failed;
-                    overlay.error_text = Some(err);
-                }
-            },
+            Ok(SyncWorkerMsg::Event(event)) => {
+                sync_overlay_apply_event(overlay, event, &mut refresh);
+                handled += 1;
+            }
+            Ok(SyncWorkerMsg::Finished(result)) => {
+                sync_overlay_apply_result(overlay, result, &mut refresh);
+                handled += 1;
+            }
             Err(mpsc::TryRecvError::Empty) => break,
             Err(mpsc::TryRecvError::Disconnected) => {
                 if overlay.phase == SyncOverlayPhase::Running {
@@ -4155,6 +4220,8 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
             }
         }
     }
+
+    refresh.flush(overlay);
 }
 
 fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -5901,7 +5968,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         fallback_banner_key(state.active_color_index)
     };
-    actors.push(act!(sprite(banner_key): align(0.5, 0.5): xy(banner_cx, banner_cy): setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT): zoom(banner_zoom): z(51)));
+    actors.push(shared_banner::sprite(
+        banner_key,
+        banner_cx,
+        banner_cy,
+        BANNER_NATIVE_WIDTH,
+        BANNER_NATIVE_HEIGHT,
+        banner_zoom,
+        51,
+    ));
     if cfg.show_select_music_cdtitles
         && let Some(cdtitle_key) = state.current_cdtitle_key.as_ref()
         && asset_manager.has_texture_key(cdtitle_key)

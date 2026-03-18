@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.2"
+version = "0.3.29"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -29,11 +29,11 @@ serde_json = "1.0.149"
 rand = "0.10.0"
 chrono = "0.4.44"
 qrcodegen = "1.8.0"
-mlua = { version = "0.11.4", features = ["lua54", "vendored"] }
+mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
 
 # rssp and nod
-rssp = { git = "https://github.com/pnn64/rssp", rev = "302a0fb" }
-nod = { git = "https://github.com/pnn64/nod", rev = "19cd27b" }
+rssp = { git = "https://github.com/pnn64/rssp", rev = "fa18b15" }
+nod = { git = "https://github.com/pnn64/nod", rev = "4a8d6a7" }
 
 # Software renderer
 softbuffer = "0.4.8"
@@ -49,8 +49,10 @@ pollster = "0.4.0"
 
 # Audio
 lewton = "0.10.2"
-minimp3 = "0.5.1"
+ogg = "0.8.0"
+minimp3 = "0.6.1"
 claxon = "0.4.3"
+opusic-c = "1.5.4"
 rubato = "0.16.2"
 memmap2 = "0.9.10"
 
@@ -110,7 +112,7 @@ wgpu = { version = "28.0.0", features = ["dx12", "gles"] }
 wgpu = { version = "28.0.0", features = ["gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-libc = "0.2"
+libc = "0.2.183"
 xcb = { version = "1.7.0", features = ["randr"] }
 smithay-client-toolkit = { version = "0.20.0", default-features = false }
 
@@ -119,11 +121,12 @@ hidparser = "1.0.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 alsa = "0.11.0"
+libloading = "0.9.0"
 pipewire = { version = "0.9.2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 coreaudio = { package = "coreaudio-rs", version = "0.14.0" }
-mach2 = "0.5.0"
+mach2 = "0.6.0"
 objc2 = { version = "0.6.4", features = ["relax-sign-encoding"] }
 objc2-app-kit = "0.3.2"
 objc2-core-audio = "0.3.2"
