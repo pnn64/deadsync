@@ -1748,6 +1748,7 @@ fn score_info_from_stage(
         grade: player.grade,
         speed_mod: profile::get_for_side(side).scroll_speed,
         hands_achieved: 0,
+        hands_total: 0,
         holds_held: 0,
         holds_total: 0,
         rolls_held: 0,

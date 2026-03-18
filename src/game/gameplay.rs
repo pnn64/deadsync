@@ -2866,32 +2866,197 @@ fn count_total_steps_for_range(notes: &[Note], note_range: (usize, usize)) -> u3
     rows.len() as u32
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct PlayerTotals {
+    steps: u32,
+    holds: u32,
+    rolls: u32,
+    mines: u32,
+    jumps: u32,
+    hands: u32,
+}
+
 #[inline(always)]
-fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> (u32, u32, u32, u32) {
+fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> PlayerTotals {
     let (start, end) = note_range;
     if start >= end {
-        return (0, 0, 0, 0);
+        return PlayerTotals::default();
     }
-    let mut holds = 0u32;
-    let mut rolls = 0u32;
-    let mut mines = 0u32;
+    let mut totals = PlayerTotals {
+        steps: count_total_steps_for_range(notes, note_range),
+        ..PlayerTotals::default()
+    };
+    let mut row_cells: Vec<(usize, usize)> = Vec::with_capacity(end - start);
+    let mut hold_starts: Vec<usize> = Vec::new();
+    let mut hold_ends: Vec<usize> = Vec::new();
     for note in &notes[start..end] {
         if !note.can_be_judged {
             continue;
         }
         match note.note_type {
+<<<<<<< adstep/main/jump-recalc-fix
+            NoteType::Tap => row_cells.push((note.row_index, note.column)),
+            NoteType::Hold => {
+                totals.holds = totals.holds.saturating_add(1);
+                row_cells.push((note.row_index, note.column));
+                if let Some(hold) = note.hold.as_ref() {
+                    hold_starts.push(note.row_index);
+                    hold_ends.push(hold.end_row_index);
+                }
+            }
+            NoteType::Roll => {
+                totals.rolls = totals.rolls.saturating_add(1);
+                row_cells.push((note.row_index, note.column));
+                if let Some(hold) = note.hold.as_ref() {
+                    hold_starts.push(note.row_index);
+                    hold_ends.push(hold.end_row_index);
+                }
+            }
+            NoteType::Mine => totals.mines = totals.mines.saturating_add(1),
+            NoteType::Lift | NoteType::Fake => {}
+=======
             NoteType::Hold => holds = holds.saturating_add(1),
             NoteType::Roll => rolls = rolls.saturating_add(1),
             NoteType::Mine => mines = mines.saturating_add(1),
             NoteType::Tap | NoteType::Lift | NoteType::Fake => {}
+>>>>>>> main
         }
     }
-    (
-        count_total_steps_for_range(notes, note_range),
-        holds,
-        rolls,
-        mines,
-    )
+
+    row_cells.sort_unstable();
+    hold_starts.sort_unstable();
+    hold_ends.sort_unstable();
+
+    let mut row_ix = 0usize;
+    let mut hold_start_ix = 0usize;
+    let mut hold_end_ix = 0usize;
+    while row_ix < row_cells.len() {
+        let row = row_cells[row_ix].0;
+        let mut row_mask = 0u16;
+        while row_ix < row_cells.len() && row_cells[row_ix].0 == row {
+            row_mask |= 1u16 << row_cells[row_ix].1.min(15);
+            row_ix += 1;
+        }
+        while hold_start_ix < hold_starts.len() && hold_starts[hold_start_ix] < row {
+            hold_start_ix += 1;
+        }
+        while hold_end_ix < hold_ends.len() && hold_ends[hold_end_ix] < row {
+            hold_end_ix += 1;
+        }
+        let notes_on_row = row_mask.count_ones();
+        let carried_holds = hold_start_ix.saturating_sub(hold_end_ix) as u32;
+        if notes_on_row >= 2 {
+            totals.jumps = totals.jumps.saturating_add(1);
+        }
+        if notes_on_row + carried_holds >= 3 {
+            totals.hands = totals.hands.saturating_add(1);
+        }
+    }
+
+    totals
+}
+
+#[inline(always)]
+fn chart_has_attacks(chart: &ChartData) -> bool {
+    chart
+        .chart_attacks
+        .as_deref()
+        .is_some_and(|attacks| !attacks.trim().is_empty())
+}
+
+fn chart_has_significant_timing_changes(chart: &ChartData) -> bool {
+    let timing = &chart.timing_segments;
+    if !timing.stops.is_empty()
+        || !timing.delays.is_empty()
+        || !timing.warps.is_empty()
+        || !timing.speeds.is_empty()
+        || !timing.scrolls.is_empty()
+    {
+        return true;
+    }
+
+    let mut min_bpm = f32::INFINITY;
+    let mut max_bpm = 0.0_f32;
+    for &(_, bpm) in &timing.bpms {
+        if !bpm.is_finite() || bpm <= 0.0 {
+            continue;
+        }
+        min_bpm = min_bpm.min(bpm);
+        max_bpm = max_bpm.max(bpm);
+    }
+
+    min_bpm.is_finite() && max_bpm - min_bpm > 3.0
+}
+
+fn score_valid_for_chart(
+    chart: &ChartData,
+    profile: &profile::Profile,
+    scroll_speed: ScrollSpeedSetting,
+    music_rate: f32,
+) -> bool {
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    if rate < 1.0 {
+        return false;
+    }
+
+    if matches!(scroll_speed, ScrollSpeedSetting::CMod(_))
+        && chart_has_significant_timing_changes(chart)
+    {
+        return false;
+    }
+
+    let remove_mask = profile::normalize_remove_mask(profile.remove_active_mask);
+    if (remove_mask & REMOVE_MASK_BIT_NO_HOLDS) != 0 && chart.stats.holds > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_MINES) != 0 && chart.mines_nonfake > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_JUMPS) != 0 && chart.stats.jumps > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_HANDS) != 0 && chart.stats.hands > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_QUADS) != 0 && chart.stats.hands > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 && chart.stats.lifts > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_FAKES) != 0 && chart.stats.fakes > 0 {
+        return false;
+    }
+
+    let holds_mask = profile::normalize_holds_mask(profile.holds_active_mask);
+    if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 && chart.stats.rolls > 0 {
+        return false;
+    }
+
+    if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
+        return false;
+    }
+
+    let insert_mask = profile::normalize_insert_mask(profile.insert_active_mask);
+    if (insert_mask & INSERT_MASK_BIT_ECHO) != 0 {
+        return false;
+    }
+
+    if (holds_mask & (HOLDS_MASK_BIT_PLANTED | HOLDS_MASK_BIT_FLOORED | HOLDS_MASK_BIT_TWISTER))
+        != 0
+    {
+        return false;
+    }
+
+    match profile.attack_mode {
+        profile::AttackMode::Off => !chart_has_attacks(chart),
+        profile::AttackMode::On => true,
+        profile::AttackMode::Random => false,
+    }
 }
 
 fn compute_end_times(
@@ -4012,6 +4177,7 @@ pub struct State {
     pub song_completed_naturally: bool,
     pub autoplay_enabled: bool,
     pub autoplay_used: bool,
+    pub score_valid: [bool; MAX_PLAYERS],
     replay_mode: bool,
     pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     pub course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
@@ -4058,6 +4224,10 @@ pub struct State {
     pub rolls_total: [u32; MAX_PLAYERS],
     pub mines_total: [u32; MAX_PLAYERS],
     pub total_steps: [u32; MAX_PLAYERS],
+    #[allow(dead_code)]
+    // Stored for parity with transformed radar values; no live UI reads this yet.
+    pub jumps_total: [u32; MAX_PLAYERS],
+    pub hands_total: [u32; MAX_PLAYERS],
 
     pub total_elapsed_in_screen: f32,
 
@@ -4569,6 +4739,7 @@ fn refresh_active_attack_masks(state: &mut State) {
                     perspective = PerspectiveOverrides::default();
                     scroll_speed = None;
                     mini_percent = None;
+<<<<<<< adstep/main/jump-recalc-fix
                 }
                 chart.insert_mask |= window.chart.insert_mask;
                 chart.remove_mask |= window.chart.remove_mask;
@@ -4667,6 +4838,106 @@ fn refresh_active_attack_masks(state: &mut State) {
                 if let Some(mini) = window.mini_percent.filter(|v| v.is_finite()) {
                     mini_percent = Some(mini.clamp(-100.0, 150.0));
                 }
+=======
+                }
+                chart.insert_mask |= window.chart.insert_mask;
+                chart.remove_mask |= window.chart.remove_mask;
+                chart.holds_mask |= window.chart.holds_mask;
+                chart.turn_bits |= window.chart.turn_bits;
+                if let Some(v) = window.accel.boost {
+                    accel.boost = Some(v);
+                }
+                if let Some(v) = window.accel.brake {
+                    accel.brake = Some(v);
+                }
+                if let Some(v) = window.accel.wave {
+                    accel.wave = Some(v);
+                }
+                if let Some(v) = window.accel.expand {
+                    accel.expand = Some(v);
+                }
+                if let Some(v) = window.accel.boomerang {
+                    accel.boomerang = Some(v);
+                }
+                if let Some(v) = window.visual.drunk {
+                    visual.drunk = Some(v);
+                }
+                if let Some(v) = window.visual.dizzy {
+                    visual.dizzy = Some(v);
+                }
+                if let Some(v) = window.visual.confusion {
+                    visual.confusion = Some(v);
+                }
+                if let Some(v) = window.visual.flip {
+                    visual.flip = Some(v);
+                }
+                if let Some(v) = window.visual.invert {
+                    visual.invert = Some(v);
+                }
+                if let Some(v) = window.visual.tornado {
+                    visual.tornado = Some(v);
+                }
+                if let Some(v) = window.visual.tipsy {
+                    visual.tipsy = Some(v);
+                }
+                if let Some(v) = window.visual.bumpy {
+                    visual.bumpy = Some(v);
+                }
+                if let Some(v) = window.visual.beat {
+                    visual.beat = Some(v);
+                }
+                if let Some(v) = window.appearance.hidden {
+                    appearance.hidden = Some(v);
+                }
+                if let Some(v) = window.appearance.sudden {
+                    appearance.sudden = Some(v);
+                }
+                if let Some(v) = window.appearance.stealth {
+                    appearance.stealth = Some(v);
+                }
+                if let Some(v) = window.appearance.blink {
+                    appearance.blink = Some(v);
+                }
+                if let Some(v) = window.appearance.random_vanish {
+                    appearance.random_vanish = Some(v);
+                }
+                if let Some(v) = window.visibility.dark {
+                    visibility.dark = Some(v);
+                }
+                if let Some(v) = window.visibility.blind {
+                    visibility.blind = Some(v);
+                }
+                if let Some(v) = window.visibility.cover {
+                    visibility.cover = Some(v);
+                }
+                if let Some(v) = window.scroll.reverse {
+                    scroll.reverse = Some(v);
+                }
+                if let Some(v) = window.scroll.split {
+                    scroll.split = Some(v);
+                }
+                if let Some(v) = window.scroll.alternate {
+                    scroll.alternate = Some(v);
+                }
+                if let Some(v) = window.scroll.cross {
+                    scroll.cross = Some(v);
+                }
+                if let Some(v) = window.scroll.centered {
+                    scroll.centered = Some(v);
+                }
+                if let Some(v) = window.perspective.tilt {
+                    perspective.tilt = Some(v);
+                }
+                if let Some(v) = window.perspective.skew {
+                    perspective.skew = Some(v);
+                }
+                if let Some(speed) = window.scroll_speed {
+                    scroll_speed = Some(speed);
+                }
+                if let Some(mini) = window.mini_percent.filter(|v| v.is_finite()) {
+                    mini_percent = Some(mini.clamp(-100.0, 150.0));
+                }
+>>>>>>> main
             }
         }
         state.active_attack_clear_all[player] = clear_all;
@@ -4679,6 +4950,7 @@ fn refresh_active_attack_masks(state: &mut State) {
         state.active_attack_perspective[player] = perspective;
         state.active_attack_scroll_speed[player] = scroll_speed;
         state.active_attack_mini_percent[player] = mini_percent;
+<<<<<<< adstep/main/jump-recalc-fix
     }
 }
 
@@ -4715,6 +4987,128 @@ pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> A
 }
 
 #[inline(always)]
+pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> VisualEffects {
+    if player_idx >= state.num_players {
+        return VisualEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        VisualEffects::default()
+    } else {
+        VisualEffects::from_mask(profile::normalize_visual_effects_mask(
+            state.player_profiles[player_idx].visual_effects_active_mask,
+        ))
+    };
+    let attack = state.active_attack_visual[player_idx];
+    VisualEffects {
+        drunk: merge_attack_value(base.drunk, attack.drunk),
+        dizzy: merge_attack_value(base.dizzy, attack.dizzy),
+        confusion: merge_attack_value(base.confusion, attack.confusion),
+        big: base.big,
+        flip: merge_attack_value(base.flip, attack.flip),
+        invert: merge_attack_value(base.invert, attack.invert),
+        tornado: merge_attack_value(base.tornado, attack.tornado),
+        tipsy: merge_attack_value(base.tipsy, attack.tipsy),
+        bumpy: merge_attack_value(base.bumpy, attack.bumpy),
+        beat: merge_attack_value(base.beat, attack.beat),
+=======
+    }
+}
+
+#[inline(always)]
+fn merge_attack_value(base: f32, attack: Option<f32>) -> f32 {
+    attack.filter(|v| v.is_finite()).unwrap_or(base)
+}
+
+#[inline(always)]
+fn player_attack_base_cleared(state: &State, player_idx: usize) -> bool {
+    player_idx < state.num_players && state.active_attack_clear_all[player_idx]
+}
+
+#[inline(always)]
+pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> AccelEffects {
+    if player_idx >= state.num_players {
+        return AccelEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        AccelEffects::default()
+    } else {
+        AccelEffects::from_mask(profile::normalize_accel_effects_mask(
+            state.player_profiles[player_idx].accel_effects_active_mask,
+        ))
+    };
+    let attack = state.active_attack_accel[player_idx];
+    AccelEffects {
+        boost: merge_attack_value(base.boost, attack.boost),
+        brake: merge_attack_value(base.brake, attack.brake),
+        wave: merge_attack_value(base.wave, attack.wave),
+        expand: merge_attack_value(base.expand, attack.expand),
+        boomerang: merge_attack_value(base.boomerang, attack.boomerang),
+>>>>>>> main
+    }
+}
+
+#[inline(always)]
+<<<<<<< adstep/main/jump-recalc-fix
+pub fn effective_appearance_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> AppearanceEffects {
+    if player_idx >= state.num_players {
+        return AppearanceEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        AppearanceEffects::default()
+    } else {
+        AppearanceEffects::from_mask(profile::normalize_appearance_effects_mask(
+            state.player_profiles[player_idx].appearance_effects_active_mask,
+        ))
+    };
+    let attack = state.active_attack_appearance[player_idx];
+    AppearanceEffects {
+        hidden: merge_attack_value(base.hidden, attack.hidden),
+        sudden: merge_attack_value(base.sudden, attack.sudden),
+        stealth: merge_attack_value(base.stealth, attack.stealth),
+        blink: merge_attack_value(base.blink, attack.blink),
+        random_vanish: merge_attack_value(base.random_vanish, attack.random_vanish),
+    }
+}
+
+#[inline(always)]
+pub fn effective_visibility_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> VisibilityEffects {
+    if player_idx >= state.num_players {
+        return VisibilityEffects::default();
+    }
+    let attack = state.active_attack_visibility[player_idx];
+    VisibilityEffects {
+        dark: merge_attack_value(0.0, attack.dark),
+        blind: merge_attack_value(0.0, attack.blind),
+        cover: merge_attack_value(0.0, attack.cover),
+    }
+}
+
+#[inline(always)]
+pub fn active_chart_attack_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> ChartAttackEffects {
+    if player_idx >= state.num_players {
+        return ChartAttackEffects::default();
+    }
+    state.active_attack_chart[player_idx]
+}
+
+#[inline(always)]
+pub fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> ScrollEffects {
+    if player_idx >= state.num_players {
+        return ScrollEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        ScrollEffects::default()
+    } else {
+=======
 pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> VisualEffects {
     if player_idx >= state.num_players {
         return VisualEffects::default();
@@ -4801,6 +5195,7 @@ pub fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> 
     let base = if player_attack_base_cleared(state, player_idx) {
         ScrollEffects::default()
     } else {
+>>>>>>> main
         ScrollEffects::from_option(state.player_profiles[player_idx].scroll_option)
     };
     let attack = state.active_attack_scroll[player_idx];
@@ -6013,16 +6408,30 @@ pub fn init(
         attack_song_length_seconds,
     );
 
+    let mut score_valid = [true; MAX_PLAYERS];
+    for player in 0..num_players {
+        score_valid[player] = score_valid_for_chart(
+            &charts[player],
+            &player_profiles[player],
+            scroll_speed[player],
+            rate,
+        );
+    }
+
     let mut total_steps = [0u32; MAX_PLAYERS];
+    let mut jumps_total = [0u32; MAX_PLAYERS];
+    let mut hands_total = [0u32; MAX_PLAYERS];
     holds_total = [0; MAX_PLAYERS];
     rolls_total = [0; MAX_PLAYERS];
     mines_total = [0; MAX_PLAYERS];
     for player in 0..num_players {
-        let (steps, holds, rolls, mines) = recompute_player_totals(&notes, note_ranges[player]);
-        total_steps[player] = steps;
-        holds_total[player] = holds;
-        rolls_total[player] = rolls;
-        mines_total[player] = mines;
+        let totals = recompute_player_totals(&notes, note_ranges[player]);
+        total_steps[player] = totals.steps;
+        holds_total[player] = totals.holds;
+        rolls_total[player] = totals.rolls;
+        mines_total[player] = totals.mines;
+        jumps_total[player] = totals.jumps;
+        hands_total[player] = totals.hands;
     }
 
     let note_player_for_col = |col: usize| -> usize {
@@ -6073,6 +6482,9 @@ pub fn init(
         rolls_total[1] = rolls_total[0];
         mines_total[1] = mines_total[0];
         total_steps[1] = total_steps[0];
+        jumps_total[1] = jumps_total[0];
+        hands_total[1] = hands_total[0];
+        score_valid[1] = score_valid[0];
         note_ranges[1] = note_ranges[0];
     }
 
@@ -6643,6 +7055,7 @@ pub fn init(
         song_completed_naturally: false,
         autoplay_enabled: replay_mode,
         autoplay_used: replay_mode,
+        score_valid,
         replay_mode,
         course_display_carry,
         course_display_totals,
@@ -6688,6 +7101,8 @@ pub fn init(
         rolls_total,
         mines_total,
         total_steps,
+        jumps_total,
+        hands_total,
         total_elapsed_in_screen: 0.0,
         sync_overlay_message: None,
         replay_status_text,
@@ -8381,6 +8796,111 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         return mine_hit_on_press;
     }
     try_hit_mine_while_held(state, column, current_time)
+}
+
+/// Judge lift notes on button release. Mirrors judge_a_tap but only matches
+/// NoteType::Lift and judges a single note (no row-wide all-pressed check).
+pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool {
+    let windows = state.timing_profile.windows_s;
+    let way_off_window = windows[4];
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    let timing_hit_log = timing_hit_log_enabled();
+    let player = player_for_col(state, column);
+    let scoring_blocked = autoplay_blocks_scoring(state);
+    let way_off_window_music = way_off_window * rate;
+    let search_start_time = current_time - way_off_window_music;
+    let search_end_time = current_time + way_off_window_music;
+
+    let mut best: Option<(usize, usize, f32)> = None;
+    for (idx, arrow) in state.arrows[column].iter().enumerate() {
+        let note_index = arrow.note_index;
+        let n = &state.notes[note_index];
+        if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type != NoteType::Lift {
+            continue;
+        }
+        let note_time = state.note_time_cache[note_index];
+        if note_time < search_start_time {
+            continue;
+        }
+        if note_time > search_end_time {
+            break;
+        }
+        let abs_err_music = (current_time - note_time).abs();
+        if abs_err_music <= way_off_window_music {
+            match best {
+                Some((_, _, best_err)) if abs_err_music >= best_err => {}
+                _ => best = Some((idx, note_index, abs_err_music)),
+            }
+        }
+    }
+
+    let Some((_arrow_list_index, note_index, _)) = best else {
+        return false;
+    };
+
+    let note_time = state.note_time_cache[note_index];
+    let time_error_music = current_time - note_time;
+    let time_error_real = time_error_music / rate;
+    let abs_time_error = time_error_real.abs();
+    if abs_time_error > way_off_window {
+        return false;
+    }
+
+    let mut timing_profile = state.timing_profile;
+    timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
+    let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
+    let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
+        (
+            state.song_offset_seconds,
+            state.global_offset_seconds,
+            state.audio_lead_in_seconds.max(0.0),
+            audio::get_music_stream_position_seconds(),
+        )
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+
+    let note_col = state.notes[note_index].column;
+    let note_row_index = state.notes[note_index].row_index;
+    let note_beat = state.notes[note_index].beat;
+    let judgment = Judgment {
+        time_error_ms: time_error_real * 1000.0,
+        grade,
+        window: Some(window),
+        miss_because_held: false,
+    };
+    if !scoring_blocked {
+        error_bar_register_tap(state, player, &judgment, current_time);
+    }
+    state.notes[note_index].result = Some(judgment);
+
+    log_timing_hit_detail(
+        timing_hit_log,
+        stream_pos_s,
+        grade,
+        note_row_index,
+        note_col,
+        note_beat,
+        song_offset_s,
+        global_offset_s,
+        note_time,
+        current_time,
+        state.current_music_time,
+        rate,
+        lead_in_s,
+    );
+
+    let col_arrows = &mut state.arrows[note_col];
+    if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
+        col_arrows.remove(pos);
+    }
+    trigger_receptor_glow_pulse(state, note_col);
+    trigger_tap_explosion(state, note_col, grade);
+    true
 }
 
 /// Judge lift notes on button release. Mirrors judge_a_tap but only matches
@@ -10672,12 +11192,24 @@ mod tests {
         SongClockSnapshot, TickMode, apply_mines_insert, build_assist_clap_rows,
         build_attack_mask_windows_for_player, frame_stable_display_music_time,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
+<<<<<<< adstep/main/jump-recalc-fix
+        player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals,
+        score_valid_for_chart, scored_hold_totals_with_carry, tick_mode_status_line,
+        turn_option_bits,
+    };
+    use crate::game::chart::{ChartData, StaminaCounts};
+    use crate::game::note::{HoldData, Note, NoteType};
+    use crate::game::profile;
+    use crate::game::timing::{ROWS_PER_BEAT, StopSegment, TimingData, TimingSegments};
+    use rssp::{TechCounts, stats::ArrowStats};
+=======
         player_draw_scale_for_tilt_with_visual_mask, scored_hold_totals_with_carry,
         tick_mode_status_line, turn_option_bits,
     };
     use crate::game::note::{HoldData, Note, NoteType};
     use crate::game::profile;
     use crate::game::timing::{ROWS_PER_BEAT, StopSegment, TimingData, TimingSegments};
+>>>>>>> main
     use std::time::{Duration, Instant};
 
     fn test_row_to_beat(last_row: usize) -> Vec<f32> {
@@ -10686,6 +11218,85 @@ mod tests {
             .collect()
     }
 
+<<<<<<< adstep/main/jump-recalc-fix
+    fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
+        Note {
+            beat: row_index as f32 / ROWS_PER_BEAT as f32,
+            quantization_idx: 0,
+            column,
+            note_type,
+            row_index,
+            result: None,
+            early_result: None,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    fn test_hold(column: usize, row_index: usize, end_row_index: usize) -> Note {
+        let mut note = test_note(column, row_index, NoteType::Hold);
+        note.hold = Some(HoldData {
+            end_row_index,
+            end_beat: end_row_index as f32 / ROWS_PER_BEAT as f32,
+            result: None,
+            life: 1.0,
+            let_go_started_at: None,
+            let_go_starting_life: 0.0,
+            last_held_row_index: row_index,
+            last_held_beat: row_index as f32 / ROWS_PER_BEAT as f32,
+        });
+        note
+    }
+
+    fn test_chart(
+        stats: ArrowStats,
+        timing_segments: TimingSegments,
+        chart_attacks: Option<&str>,
+    ) -> ChartData {
+        let mines_nonfake = stats.mines;
+        let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &[]);
+        ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: "Challenge".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 10,
+            step_artist: String::new(),
+            notes: Vec::new(),
+            parsed_notes: Vec::new(),
+            row_to_beat: Vec::new(),
+            timing_segments,
+            timing,
+            short_hash: String::new(),
+            stats,
+            tech_counts: TechCounts::default(),
+            mines_nonfake,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            chart_attacks: chart_attacks.map(str::to_string),
+            chart_bpms: None,
+            chart_stops: None,
+            chart_delays: None,
+            chart_warps: None,
+            chart_speeds: None,
+            chart_scrolls: None,
+            chart_fakes: None,
+        }
+    }
+
+=======
+>>>>>>> main
     #[test]
     fn tick_mode_cycles() {
         let mode = next_tick_mode(TickMode::Off);
@@ -10788,6 +11399,114 @@ mod tests {
     }
 
     #[test]
+<<<<<<< adstep/main/jump-recalc-fix
+    fn recompute_totals_count_three_note_row_as_jump_and_hand() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Tap),
+            test_note(1, 48, NoteType::Tap),
+            test_note(2, 48, NoteType::Tap),
+        ];
+
+        let totals = recompute_player_totals(&notes, (0, notes.len()));
+
+        assert_eq!(totals.steps, 1);
+        assert_eq!(totals.jumps, 1);
+        assert_eq!(totals.hands, 1);
+    }
+
+    #[test]
+    fn recompute_totals_count_hold_assisted_hand_without_losing_jump() {
+        let notes = vec![
+            test_hold(0, 0, 96),
+            test_note(1, 48, NoteType::Tap),
+            test_note(2, 48, NoteType::Tap),
+        ];
+
+        let totals = recompute_player_totals(&notes, (0, notes.len()));
+
+        assert_eq!(totals.holds, 1);
+        assert_eq!(totals.steps, 2);
+        assert_eq!(totals.jumps, 1);
+        assert_eq!(totals.hands, 1);
+    }
+
+    #[test]
+    fn score_valid_rejects_nohands_when_chart_has_hands() {
+        let mut profile = profile::Profile::default();
+        profile.remove_active_mask = super::REMOVE_MASK_BIT_NO_HANDS;
+        let chart = test_chart(
+            ArrowStats {
+                hands: 4,
+                ..ArrowStats::default()
+            },
+            TimingSegments::default(),
+            None,
+        );
+
+        assert!(!score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn score_valid_keeps_turn_options_rankable() {
+        let mut profile = profile::Profile::default();
+        profile.turn_option = profile::TurnOption::Mirror;
+        let chart = test_chart(ArrowStats::default(), TimingSegments::default(), None);
+
+        assert!(score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn score_valid_rejects_cmod_on_significant_timing_changes() {
+        let mut profile = profile::Profile::default();
+        profile.scroll_speed = ScrollSpeedSetting::CMod(600.0);
+        let chart = test_chart(
+            ArrowStats::default(),
+            TimingSegments {
+                bpms: vec![(0.0, 120.0), (32.0, 128.5)],
+                ..TimingSegments::default()
+            },
+            None,
+        );
+
+        assert!(!score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn score_valid_rejects_disabled_chart_attacks() {
+        let mut profile = profile::Profile::default();
+        profile.attack_mode = profile::AttackMode::Off;
+        let chart = test_chart(
+            ArrowStats::default(),
+            TimingSegments::default(),
+            Some("TIME=1.0:LEN=2.0:MODS=mirror"),
+        );
+
+        assert!(!score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+=======
+>>>>>>> main
     fn cmod_stop_lookahead_uses_time_not_frozen_beat() {
         let timing = TimingData::from_segments(
             0.0,
