@@ -964,7 +964,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "deadsync"
-version = "0.3.13"
+version = "0.3.29"
 dependencies = [
  "alsa",
  "ash",
@@ -997,6 +997,8 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
+ "ogg",
+ "opusic-c",
  "pipewire",
  "pollster",
  "qrcodegen",
@@ -2316,7 +2318,7 @@ dependencies = [
 [[package]]
 name = "nod"
 version = "0.0.22"
-source = "git+https://github.com/pnn64/nod?rev=19cd27b#19cd27bf9465781cf3b2a8aa6ade30695b8a9226"
+source = "git+https://github.com/pnn64/nod?rev=4a8d6a7#4a8d6a73fe992a875d083e378eb21a7f06a2fb9a"
 dependencies = [
  "clap",
  "lewton",
@@ -2878,6 +2880,25 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "opusic-c"
+version = "1.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93198826a20ee157034a416cc42b5b41eeadce0586b6bcecd23808bdc1851522"
+dependencies = [
+ "opusic-sys",
+]
+
+[[package]]
+name = "opusic-sys"
+version = "0.5.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f43c183739dc81651487e7c9f3e4330fe4a3fd26c0fa961c788ce5fb21fa75b"
+dependencies = [
+ "cmake",
+ "libc",
+]
 
 [[package]]
 name = "orbclient"
@@ -3453,8 +3474,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.3.59"
-source = "git+https://github.com/pnn64/rssp?rev=302a0fb#302a0fb87ed43f39f0bc09c0498f38963bd92061"
+version = "0.3.60"
+source = "git+https://github.com/pnn64/rssp?rev=fa18b15#fa18b15f6013a45f52da8844362077948bb69829"
 dependencies = [
  "png",
  "serde_json",

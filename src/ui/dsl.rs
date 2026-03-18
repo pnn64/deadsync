@@ -671,6 +671,7 @@ fn build_sprite_like<'a>(
     let base = Actor::Sprite {
         align: [hx, vy],
         offset: [x, y],
+        world_z: 0.0,
         size: [SizeSpec::Px(w), SizeSpec::Px(h)],
         source,
         tint,

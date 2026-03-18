@@ -187,7 +187,8 @@ pub fn build_timing_pane(
     let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
     let timing_windows: [f32; 5] = crate::game::timing::effective_windows_ms(); // ms, with +1.5ms
     let (judgment_bands, band_count) = timing_bands_ms(scale, timing_windows);
-    let legend_span_ms = score_info.histogram.worst_window_ms.max(1.0);
+    let legend_span_ms =
+        super::eval_graphs::timing_display_window_ms(score_info.histogram.worst_window_ms, scale);
 
     for (i, band) in judgment_bands.iter().take(band_count).enumerate() {
         if band.start_ms >= legend_span_ms {
