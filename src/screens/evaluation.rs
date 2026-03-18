@@ -244,17 +244,52 @@ pub struct ColumnJudgments {
     pub w4: u32,
     pub w5: u32,
     pub miss: u32,
+    pub early_w1: u32,
     pub early_w2: u32,
     pub early_w3: u32,
     pub early_w4: u32,
     pub early_w5: u32,
+    pub early_total_w0: u32,
+    pub early_total_w1: u32,
+    pub early_total_w2: u32,
+    pub early_total_w3: u32,
+    pub early_total_w4: u32,
+    pub early_total_w5: u32,
     pub held_miss: u32,
+}
+
+#[inline(always)]
+fn add_early_total(
+    slot: &mut ColumnJudgments,
+    judgment: &crate::game::judgment::Judgment,
+    include_bad: bool,
+) {
+    if matches!(
+        judgment.window,
+        Some(crate::game::judgment::TimingWindow::W0)
+    ) {
+        slot.early_total_w0 = slot.early_total_w0.saturating_add(1);
+        return;
+    }
+    match judgment.grade {
+        JudgeGrade::Fantastic => slot.early_total_w1 = slot.early_total_w1.saturating_add(1),
+        JudgeGrade::Excellent => slot.early_total_w2 = slot.early_total_w2.saturating_add(1),
+        JudgeGrade::Great => slot.early_total_w3 = slot.early_total_w3.saturating_add(1),
+        JudgeGrade::Decent if include_bad => {
+            slot.early_total_w4 = slot.early_total_w4.saturating_add(1)
+        }
+        JudgeGrade::WayOff if include_bad => {
+            slot.early_total_w5 = slot.early_total_w5.saturating_add(1)
+        }
+        _ => {}
+    }
 }
 
 fn compute_column_judgments(
     notes: &[crate::game::note::Note],
     cols_per_player: usize,
     col_offset: usize,
+    show_fa_plus_window: bool,
 ) -> Vec<ColumnJudgments> {
     let cols = cols_per_player.max(0);
     let mut out = vec![ColumnJudgments::default(); cols];
@@ -280,7 +315,12 @@ fn compute_column_judgments(
                 Some(crate::game::judgment::TimingWindow::W0) => {
                     slot.w0 = slot.w0.saturating_add(1)
                 }
-                _ => slot.w1 = slot.w1.saturating_add(1),
+                _ => {
+                    slot.w1 = slot.w1.saturating_add(1);
+                    if show_fa_plus_window && j.time_error_ms < 0.0 {
+                        slot.early_w1 = slot.early_w1.saturating_add(1);
+                    }
+                }
             },
             JudgeGrade::Excellent => {
                 slot.w2 = slot.w2.saturating_add(1);
@@ -313,9 +353,93 @@ fn compute_column_judgments(
                 }
             }
         }
+
+        if let Some(early) = note.early_result.as_ref() {
+            add_early_total(slot, j, false);
+            add_early_total(slot, early, true);
+        }
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_column_judgments;
+    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use crate::game::note::{Note, NoteType};
+
+    fn tap_note(column: usize, result: Judgment, early_result: Option<Judgment>) -> Note {
+        Note {
+            beat: 0.0,
+            quantization_idx: 0,
+            column,
+            note_type: NoteType::Tap,
+            row_index: 0,
+            result: Some(result),
+            early_result,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    fn judgment(grade: JudgeGrade, window: Option<TimingWindow>, time_error_ms: f32) -> Judgment {
+        Judgment {
+            time_error_ms,
+            grade,
+            window,
+            miss_because_held: false,
+        }
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_split_white_early_fantastics() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Fantastic, Some(TimingWindow::W1), -8.0),
+            None,
+        )];
+
+        let with_fa = compute_column_judgments(&notes, 1, 0, true);
+        let without_fa = compute_column_judgments(&notes, 1, 0, false);
+
+        assert_eq!(with_fa[0].w1, 1);
+        assert_eq!(with_fa[0].early_w1, 1);
+        assert_eq!(without_fa[0].early_w1, 0);
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_rescored_early_totals() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Excellent, Some(TimingWindow::W2), -18.0),
+            Some(judgment(JudgeGrade::WayOff, Some(TimingWindow::W5), -18.0)),
+        )];
+
+        let out = compute_column_judgments(&notes, 1, 0, false);
+
+        assert_eq!(out[0].w2, 1);
+        assert_eq!(out[0].early_w2, 1);
+        assert_eq!(out[0].early_total_w2, 1);
+        assert_eq!(out[0].early_total_w5, 1);
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_w0_rescore_target() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Fantastic, Some(TimingWindow::W0), -4.0),
+            Some(judgment(JudgeGrade::Decent, Some(TimingWindow::W4), -16.0)),
+        )];
+
+        let out = compute_column_judgments(&notes, 1, 0, true);
+
+        assert_eq!(out[0].w0, 1);
+        assert_eq!(out[0].early_total_w0, 1);
+        assert_eq!(out[0].early_total_w4, 1);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -706,7 +830,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 grade = scores::Grade::Quint;
             }
 
-            let column_judgments = compute_column_judgments(notes, cols_per_player, col_offset);
+            let column_judgments = compute_column_judgments(
+                notes,
+                cols_per_player,
+                col_offset,
+                prof.show_fa_plus_window,
+            );
 
             score_info[player_idx] = Some(ScoreInfo {
                 song: gs.song.clone(),

@@ -1571,8 +1571,10 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let mut meter_count = 0u32;
         let mut any_failed = false;
         let mut show_w0 = false;
+        let mut show_fa_plus_pane = false;
         let mut show_ex = false;
         let mut show_hard_ex = false;
+        let mut track_early_judgments = false;
         let mut counts = crate::game::timing::WindowCounts::default();
         let mut counts_10ms = crate::game::timing::WindowCounts::default();
         let mut first_player: Option<&stage_stats::PlayerStageSummary> = None;
@@ -1593,8 +1595,10 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             meter_count = meter_count.saturating_add(1);
             any_failed |= player.grade == scores::Grade::Failed;
             show_w0 |= player.show_w0;
+            show_fa_plus_pane |= player.show_fa_plus_pane;
             show_ex |= player.show_ex_score;
             show_hard_ex |= player.show_hard_ex_score;
+            track_early_judgments |= player.track_early_judgments;
             counts = merge_window_counts(counts, player.window_counts);
             counts_10ms = merge_window_counts(counts_10ms, player.window_counts_10ms);
         }
@@ -1646,8 +1650,10 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             window_counts: counts,
             window_counts_10ms: counts_10ms,
             show_w0,
+            show_fa_plus_pane,
             show_ex_score: show_ex,
             show_hard_ex_score: show_hard_ex,
+            track_early_judgments,
         });
     }
 
@@ -1771,13 +1777,13 @@ fn score_info_from_stage(
         show_fa_plus_window: player.show_w0,
         show_ex_score: player.show_ex_score,
         show_hard_ex_score: player.show_hard_ex_score,
-        show_fa_plus_pane: player.show_w0,
+        show_fa_plus_pane: player.show_fa_plus_pane,
+        track_early_judgments: player.track_early_judgments,
         machine_records,
         machine_record_highlight_rank,
         personal_records,
         personal_record_highlight_rank,
         show_machine_personal_split: !earned_machine_record && earned_top2_personal,
-        track_early_judgments: profile::get_for_side(side).track_early_judgments,
     })
 }
 
@@ -1947,8 +1953,10 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         window_counts: si.window_counts,
         window_counts_10ms: si.window_counts_10ms,
         show_w0: (si.show_fa_plus_window && si.show_fa_plus_pane) || si.show_ex_score,
+        show_fa_plus_pane: si.show_fa_plus_pane,
         show_ex_score: si.show_ex_score,
         show_hard_ex_score: si.show_hard_ex_score,
+        track_early_judgments: si.track_early_judgments,
     };
 
     match play_style {
@@ -2201,12 +2209,13 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         asset_manager: &AssetManager,
+        shift_held: bool,
     ) -> Option<ScreenAction> {
         match self.current_screen {
             CurrentScreen::Gameplay => self
                 .gameplay_state
                 .as_mut()
-                .map(|gs| gameplay::update(gs, delta_time)),
+                .map(|gs| gameplay::update(gs, delta_time, shift_held)),
             CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
             CurrentScreen::Options => {
                 options::update(&mut self.options_state, delta_time, asset_manager)
@@ -2744,7 +2753,7 @@ impl App {
                 if self.state.screens.current_screen == CurrentScreen::Gameplay
                     && let Some(gs) = self.state.screens.gameplay_state.as_mut()
                 {
-                    let _ = gameplay::update(gs, delta_time);
+                    let _ = gameplay::update(gs, delta_time, self.state.shell.shift_held);
                 }
 
                 if finished
@@ -2772,6 +2781,7 @@ impl App {
                         redraw_started,
                         &self.state.session,
                         &self.asset_manager,
+                        self.state.shell.shift_held,
                     ) && !matches!(action, ScreenAction::None)
                     {
                         let _ = self.handle_action(action, event_loop);
