@@ -40,6 +40,7 @@ pub enum Actor {
     Sprite {
         align: [f32; 2],
         offset: [f32; 2],
+        world_z: f32,
         size: [SizeSpec; 2],
         source: SpriteSource,
         tint: [f32; 4],
@@ -117,6 +118,7 @@ pub enum Actor {
     TexturedMesh {
         align: [f32; 2],
         offset: [f32; 2],
+        world_z: f32,
         size: [SizeSpec; 2],
         texture: Arc<str>,
         vertices: Arc<[TexturedMeshVertex]>,

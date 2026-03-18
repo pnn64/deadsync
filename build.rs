@@ -11,9 +11,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Rerun on shader or asset changes
     println!("cargo:rerun-if-changed=src/core/gfx/shaders");
     println!("cargo:rerun-if-changed=assets");
-    println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
-    println!("cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR");
-    println!("cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_PIPEWIRE_AUDIO");
     println!("cargo:rustc-check-cfg=cfg(has_jack_audio)");
     println!("cargo:rustc-check-cfg=cfg(has_pipewire_audio)");
@@ -22,6 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     detect_jack_audio();
     detect_pipewire_audio();
     detect_pulse_audio();
+    configure_windows_stack();
     emit_build_info();
 
     embed_windows_icon()?;
@@ -45,16 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn detect_jack_audio() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if target_os != "linux" {
-        return;
-    }
-    let Ok(status) = Command::new("pkg-config")
-        .args(["--exists", "jack"])
-        .status()
-    else {
-        return;
-    };
-    if status.success() {
+    if target_os == "linux" {
         println!("cargo:rustc-cfg=has_jack_audio");
     }
 }
@@ -72,18 +61,21 @@ fn detect_pipewire_audio() {
 
 fn detect_pulse_audio() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if target_os != "linux" {
-        return;
-    }
-    let Ok(status) = Command::new("pkg-config")
-        .args(["--exists", "libpulse-simple"])
-        .status()
-    else {
-        return;
-    };
-    if status.success() {
+    if target_os == "linux" {
         println!("cargo:rustc-cfg=has_pulse_audio");
     }
+}
+
+fn configure_windows_stack() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "windows" {
+        return;
+    }
+    // Gameplay/notefield construction currently uses a large main-thread stack
+    // frame in debug builds. Windows binaries default to a 1 MiB stack reserve,
+    // which is smaller than the reserve we effectively get on Unix and has
+    // started overflowing when entering gameplay.
+    println!("cargo:rustc-link-arg-bins=/STACK:8388608");
 }
 
 #[cfg(windows)]

@@ -205,6 +205,35 @@ fn neg_rot_sin_cos(rotation_deg: i32) -> [f32; 2] {
     }
 }
 
+#[inline(always)]
+fn frame_duration_total(durations: &[f32], frames: usize) -> Option<f32> {
+    let total = durations.iter().take(frames).fold(0.0, |sum, duration| {
+        if *duration > f32::EPSILON {
+            sum + *duration
+        } else {
+            sum
+        }
+    });
+    (total > f32::EPSILON && total.is_finite()).then_some(total)
+}
+
+#[inline(always)]
+fn duration_frame_index(durations: &[f32], frames: usize, mut position: f32) -> Option<usize> {
+    let mut last = None;
+    for (idx, duration) in durations.iter().take(frames).enumerate() {
+        let span = (*duration).max(0.0);
+        if span <= f32::EPSILON {
+            continue;
+        }
+        last = Some(idx);
+        if position < span {
+            return Some(idx);
+        }
+        position -= span;
+    }
+    last
+}
+
 impl SpriteSlot {
     #[inline(always)]
     pub fn set_rotation_deg(&mut self, rotation_deg: i32) {
@@ -228,27 +257,23 @@ impl SpriteSlot {
             return None;
         }
         let keys = self.model_auto_rot_z_keys.as_ref();
-        if keys.is_empty() {
-            return None;
-        }
+        let first = *keys.first()?;
         let frame = (time * 30.0).rem_euclid(self.model_auto_rot_total_frames);
         if !frame.is_finite() {
-            return Some(keys[0].z_deg);
+            return Some(first.z_deg);
         }
-        let first = keys[0];
         if frame <= first.frame {
             return Some(first.z_deg);
         }
-        let mut prev = first;
-        for key in keys.iter().copied().skip(1) {
-            if frame <= key.frame {
-                let span = (key.frame - prev.frame).max(1e-6);
-                let t = ((frame - prev.frame) / span).clamp(0.0, 1.0);
-                return Some((key.z_deg - prev.z_deg).mul_add(t, prev.z_deg));
-            }
-            prev = key;
+        let next_idx = keys.partition_point(|key| key.frame < frame);
+        if next_idx >= keys.len() {
+            return Some(keys[keys.len() - 1].z_deg);
         }
-        Some(prev.z_deg)
+        let prev = keys[next_idx - 1];
+        let next = keys[next_idx];
+        let span = (next.frame - prev.frame).max(1e-6);
+        let t = ((frame - prev.frame) / span).clamp(0.0, 1.0);
+        Some((next.z_deg - prev.z_deg).mul_add(t, prev.z_deg))
     }
 
     pub fn texture_key(&self) -> &str {
@@ -289,32 +314,11 @@ impl SpriteSlot {
                         AnimationRate::FramesPerSecond(_) => time,
                         AnimationRate::FramesPerBeat(_) => beat,
                     };
-                    let mut total = 0.0f32;
-                    for duration in durations.iter().take(frames) {
-                        if *duration > f32::EPSILON {
-                            total += *duration;
-                        }
-                    }
-                    if total > f32::EPSILON && total.is_finite() {
-                        let mut phase = clock.rem_euclid(total);
-                        for (idx, duration) in durations.iter().take(frames).enumerate() {
-                            let d = (*duration).max(0.0);
-                            if d <= f32::EPSILON {
-                                continue;
-                            }
-                            if phase < d {
-                                return idx;
-                            }
-                            phase -= d;
-                        }
-                        if let Some(last_idx) = durations
-                            .iter()
-                            .take(frames)
-                            .enumerate()
-                            .rfind(|(_, duration)| **duration > f32::EPSILON)
-                            .map(|(idx, _)| idx)
+                    if let Some(total) = frame_duration_total(durations, frames) {
+                        if let Some(idx) =
+                            duration_frame_index(durations, frames, clock.rem_euclid(total))
                         {
-                            return last_idx;
+                            return idx;
                         }
                     }
                 }
@@ -344,32 +348,9 @@ impl SpriteSlot {
                 frame_durations, ..
             } => {
                 if let Some(durations) = frame_durations.as_ref() {
-                    let mut total = 0.0f32;
-                    for duration in durations.iter().take(frames) {
-                        if *duration > f32::EPSILON {
-                            total += *duration;
-                        }
-                    }
-                    if total > f32::EPSILON && total.is_finite() {
-                        let mut target = p * total;
-                        for (idx, duration) in durations.iter().take(frames).enumerate() {
-                            let d = (*duration).max(0.0);
-                            if d <= f32::EPSILON {
-                                continue;
-                            }
-                            if target < d {
-                                return idx;
-                            }
-                            target -= d;
-                        }
-                        if let Some(last_idx) = durations
-                            .iter()
-                            .take(frames)
-                            .enumerate()
-                            .rfind(|(_, duration)| **duration > f32::EPSILON)
-                            .map(|(idx, _)| idx)
-                        {
-                            return last_idx;
+                    if let Some(total) = frame_duration_total(durations, frames) {
+                        if let Some(idx) = duration_frame_index(durations, frames, p * total) {
+                            return idx;
                         }
                     }
                 }
@@ -1125,6 +1106,7 @@ pub struct Style {
 pub struct Noteskin {
     pub notes: Vec<SpriteSlot>,
     pub note_layers: Vec<Arc<[SpriteSlot]>>,
+    pub lift_note_layers: Vec<Arc<[SpriteSlot]>>,
     pub receptor_off: Vec<SpriteSlot>,
     pub receptor_glow: Vec<Option<SpriteSlot>>,
     pub mines: Vec<Option<SpriteSlot>>,
@@ -1151,6 +1133,11 @@ impl Noteskin {
             visit(slot.texture_key());
         }
         for layer in &self.note_layers {
+            for slot in layer.iter() {
+                visit(slot.texture_key());
+            }
+        }
+        for layer in &self.lift_note_layers {
             for slot in layer.iter() {
                 visit(slot.texture_key());
             }
@@ -1922,6 +1909,8 @@ fn load_itg_sprite_noteskin_compiled(
 
     let mut notes = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
     let mut note_layers = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
+    let mut lift_note_layers: Vec<Arc<[SpriteSlot]>> =
+        Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
     let mut receptor_off = Vec::with_capacity(style.num_cols);
     let mut receptor_glow = Vec::with_capacity(style.num_cols);
     let mut mines = Vec::with_capacity(style.num_cols);
@@ -2002,6 +1991,26 @@ fn load_itg_sprite_noteskin_compiled(
             let primary = layers.first().cloned().unwrap_or_else(|| note_base.clone());
             notes.push(primary);
             note_layers.push(Arc::from(layers));
+        }
+
+        let lift_sprites =
+            itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Lift")
+                .into_iter()
+                .map(|mut s| {
+                    let (draw, timeline, effect) = itg_model_draw_program(&s.commands);
+                    s.slot.model_draw = draw;
+                    s.slot.model_timeline = timeline;
+                    s.slot.model_effect = effect;
+                    s.slot
+                })
+                .collect::<Vec<_>>();
+        let lift_layers_for_col: Arc<[SpriteSlot]> = if lift_sprites.is_empty() {
+            Arc::from(note_sprites.clone())
+        } else {
+            Arc::from(lift_sprites)
+        };
+        for _ in 0..NUM_QUANTIZATIONS {
+            lift_note_layers.push(Arc::clone(&lift_layers_for_col));
         }
 
         let receptor_sprites =
@@ -2566,6 +2575,7 @@ fn load_itg_sprite_noteskin_compiled(
     Ok(Noteskin {
         notes,
         note_layers,
+        lift_note_layers,
         receptor_off,
         receptor_glow,
         tap_explosions,
@@ -5803,12 +5813,35 @@ fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnimationRate, ModelEffectClock, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart,
-        NoteColorType, Quantization, SpriteSource, Style, itg_apply_state_properties_from_script,
+        AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
+        ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
+        SpriteDefinition, SpriteSlot, SpriteSource, Style, itg_apply_state_properties_from_script,
         itg_model_draw_program, load_itg_skin, parse_explosion_animation,
     };
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
+
+    fn test_auto_rot_slot(total_frames: f32, keys: Vec<ModelAutoRotKey>) -> SpriteSlot {
+        SpriteSlot {
+            def: SpriteDefinition::default(),
+            base_rot_sin_cos: [0.0, 1.0],
+            source_size: [64, 64],
+            source: Arc::new(SpriteSource::Atlas {
+                texture_key: Arc::from("test"),
+                tex_dims: (64, 64),
+            }),
+            uv_velocity: [0.0, 0.0],
+            uv_offset: [0.0, 0.0],
+            note_color_translate: false,
+            model: None,
+            model_draw: ModelDrawState::default(),
+            model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
+            model_effect: Default::default(),
+            model_auto_rot_total_frames: total_frames,
+            model_auto_rot_z_keys: Arc::from(keys),
+        }
+    }
+
     #[test]
     fn actor_mod_parser_supports_vertalign_and_glow() {
         let mut commands = HashMap::new();
@@ -5956,6 +5989,18 @@ mod tests {
             circle_layers, 4,
             "default tap note should keep four circle layers"
         );
+    }
+
+    #[test]
+    fn default_exposes_lift_layers_for_each_quantization() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        assert_eq!(ns.lift_note_layers.len(), ns.note_layers.len());
+        assert!(ns.lift_note_layers.iter().all(|layers| !layers.is_empty()));
     }
 
     #[test]
@@ -6385,6 +6430,26 @@ mod tests {
         assert_eq!(slot.frame_index(0.0, 0.25), 1);
         assert_eq!(slot.frame_index(0.0, 0.95), 1);
         assert_eq!(slot.frame_index(0.0, 1.05), 0);
+    }
+
+    #[test]
+    fn ddr_note_receptor_phase_index_uses_weighted_delays() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "ddr-note")
+            .expect("dance/ddr-note should load from assets/noteskins");
+        let slot = ns
+            .receptor_off
+            .first()
+            .expect("ddr-note should define receptor_off for first column");
+        assert_eq!(slot.frame_index_from_phase(0.00), 0);
+        assert_eq!(slot.frame_index_from_phase(0.19), 0);
+        assert_eq!(slot.frame_index_from_phase(0.20), 1);
+        assert_eq!(slot.frame_index_from_phase(0.95), 1);
+        assert_eq!(slot.frame_index_from_phase(1.05), 0);
+        assert_eq!(slot.frame_index_from_phase(-0.05), 1);
     }
 
     #[test]
@@ -7049,6 +7114,34 @@ mod tests {
             (delta + 33.0).abs() <= 1e-3,
             "one beat should rotate lambda mine by -33 degrees; got delta={delta}"
         );
+    }
+
+    #[test]
+    fn model_auto_rot_interpolates_and_wraps() {
+        let slot = test_auto_rot_slot(
+            80.0,
+            vec![
+                ModelAutoRotKey {
+                    frame: 10.0,
+                    z_deg: 20.0,
+                },
+                ModelAutoRotKey {
+                    frame: 40.0,
+                    z_deg: 80.0,
+                },
+            ],
+        );
+        assert_eq!(slot.model_auto_rot_z_at(0.0), Some(20.0));
+        let interp = slot
+            .model_auto_rot_z_at(25.0 / 30.0)
+            .expect("frame 25 should interpolate between keys");
+        assert!(
+            (interp - 50.0).abs() <= 1e-6,
+            "frame 25 should interpolate to 50 degrees; got {interp}"
+        );
+        assert_eq!(slot.model_auto_rot_z_at(40.0 / 30.0), Some(80.0));
+        assert_eq!(slot.model_auto_rot_z_at(70.0 / 30.0), Some(80.0));
+        assert_eq!(slot.model_auto_rot_z_at(80.0 / 30.0), Some(20.0));
     }
 
     #[test]

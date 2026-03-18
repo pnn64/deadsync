@@ -18,7 +18,7 @@ use objc2_core_audio::{
     kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyDeviceUID, kAudioHardwareNoError,
     kAudioObjectPropertyElementMain, kAudioObjectPropertyScopeGlobal,
 };
-use objc2_core_foundation::{CFString, Type};
+use objc2_core_foundation::{CFRetained, CFString};
 use std::mem::size_of;
 use std::ptr::{NonNull, null};
 use std::sync::Arc;
@@ -84,7 +84,7 @@ pub(crate) fn enumerate_output_devices() -> Vec<CoreAudioOutputDevice> {
             }
         };
         let name =
-            get_device_name(device_id).unwrap_or_else(|| format!("CoreAudio Device {device_id}"));
+            get_device_name(device_id).unwrap_or_else(|_| format!("CoreAudio Device {device_id}"));
         let (default_rate_hz, channels) = match probe_device_format(device_id) {
             Ok(format) => format,
             Err(err) => {
@@ -328,10 +328,8 @@ fn device_uid(device_id: AudioDeviceID) -> Result<String, String> {
             "failed to query CoreAudio device UID (status={status})"
         ));
     }
-    if uid.is_null() {
-        return Err("CoreAudio device UID was null".to_string());
-    }
-    let uid = unsafe { CFString::wrap_under_create_rule(uid) };
+    let uid = NonNull::new(uid).ok_or_else(|| "CoreAudio device UID was null".to_string())?;
+    let uid = unsafe { CFRetained::<CFString>::from_raw(uid) };
     Ok(uid.to_string())
 }
 

@@ -5,7 +5,7 @@ layout(location = 0) in vec2 a_pos;      // unit quad: [-0.5..0.5]
 layout(location = 1) in vec2 a_uv;
 
 // Per-instance (binding = 1) — 72 bytes total
-layout(location = 2) in vec2 i_center;      // screen/world space center
+layout(location = 2) in vec4 i_center;      // screen/world space center xyz + pad
 layout(location = 3) in vec2 i_size;        // scale along X/Y (lengths of model columns)
 layout(location = 4) in vec2 i_rot_sin_cos; // (sinθ, cosθ)
 layout(location = 5) in vec4 i_tint;
@@ -42,9 +42,9 @@ void main() {
         so * i_local_offset.x + co * i_local_offset.y
     );
 
-    vec2 world = i_center + rotated + offset_world;
+    vec3 world = vec3(i_center.xy + rotated + offset_world, i_center.z);
 
-    gl_Position = pc.proj * vec4(world, 0.0, 1.0);
+    gl_Position = pc.proj * vec4(world, 1.0);
 
     v_uv       = a_uv * i_uv_scale + i_uv_offset;
     v_tint     = i_tint;

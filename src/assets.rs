@@ -607,10 +607,13 @@ fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
             | "tif"
             | "tiff"
             | "mp4"
+            | "avi"
             | "m4v"
             | "mov"
             | "webm"
             | "mkv"
+            | "mpg"
+            | "mpeg"
     )
 }
 
@@ -621,7 +624,7 @@ fn is_dynamic_video_path(path: &Path) -> bool {
     };
     matches!(
         ext.to_ascii_lowercase().as_str(),
-        "mp4" | "m4v" | "mov" | "webm" | "mkv"
+        "mp4" | "avi" | "m4v" | "mov" | "webm" | "mkv" | "mpg" | "mpeg"
     )
 }
 
@@ -1871,6 +1874,7 @@ impl AssetManager {
         if let Some(path) = path_opt {
             if let Some((key, current_path)) = self.current_dynamic_cdtitle.as_ref()
                 && current_path == &path
+                && self.has_texture_key(key)
             {
                 return Some(key.clone());
             }
@@ -1925,13 +1929,16 @@ impl AssetManager {
             if self
                 .current_dynamic_pack_banner
                 .as_ref()
-                .is_some_and(|(_, p)| p == &path)
+                .is_some_and(|(key, p)| p == &path && self.has_texture_key(key))
             {
                 return;
             }
 
             let key = path.to_string_lossy().into_owned();
-            if banner_cache_opts.enabled && self.dynamic_pack_banner_keys.contains(&key) {
+            if banner_cache_opts.enabled
+                && self.dynamic_pack_banner_keys.contains(&key)
+                && self.has_texture_key(&key)
+            {
                 self.current_dynamic_pack_banner = Some((key, path));
                 return;
             }
@@ -1993,6 +2000,7 @@ impl AssetManager {
             let key = path.to_string_lossy().into_owned();
             if let Some(current) = self.current_dynamic_banner.as_ref()
                 && current.path == path
+                && self.has_texture_key(&current.key)
             {
                 return current.key.clone();
             }
@@ -2086,6 +2094,7 @@ impl AssetManager {
                 .as_ref()
                 .is_some_and(|state| {
                     state.path == path
+                        && self.has_texture_key(&state.key)
                         && (state.video.is_some()
                             == (animate_video && is_dynamic_video_path(&path)))
                 })

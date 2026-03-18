@@ -1,7 +1,7 @@
 #version 330 core
 layout (location = 0) in vec2 a_pos;
 layout (location = 1) in vec2 a_tex_coord;
-layout (location = 2) in vec2 i_center;
+layout (location = 2) in vec4 i_center;
 layout (location = 3) in vec2 i_size;
 layout (location = 4) in vec2 i_rot_sin_cos;
 layout (location = 5) in vec4 i_tint;
@@ -36,8 +36,8 @@ void main() {
         so * i_local_offset.x + co * i_local_offset.y
     );
 
-    vec2 world = i_center + rotated + local_offset_world;
-    gl_Position = u_model_view_proj * vec4(world, 0.0, 1.0);
+    vec3 world = vec3(i_center.xy + rotated + local_offset_world, i_center.z);
+    gl_Position = u_model_view_proj * vec4(world, 1.0);
     v_tex_coord = a_tex_coord * i_uv_scale + i_uv_offset;
     v_tint = i_tint;
     v_edge_fade = i_edge_fade;

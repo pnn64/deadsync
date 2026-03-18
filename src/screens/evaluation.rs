@@ -8,7 +8,7 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::components::{
     evaluation::{self as eval_panes, eval_grades},
-    shared::{heart_bg, mode_pads, screen_bar, timers},
+    shared::{banner as shared_banner, heart_bg, mode_pads, screen_bar, timers},
 };
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -830,13 +830,16 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             scatter_mesh_hard_ex[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
+                let hard_ex_worst_window = si
+                    .scatter_worst_window_ms
+                    .min(timing_stats::effective_windows_ms()[1]);
                 let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
-                    si.scatter_worst_window_ms,
+                    hard_ex_worst_window,
                     crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -1547,7 +1550,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             offset: [screen_center_x(), 46.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             children: vec![
-                act!(sprite(banner_key): align(0.5, 0.5): xy(0.0, 66.0): setsize(418.0, 164.0): zoom(0.7): z(0)),
+                shared_banner::sprite(banner_key, 0.0, 66.0, 418.0, 164.0, 0.7, 0),
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 25.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, 1.0): z(1)),
                 act!(text: font("miso"): settext(full_title): align(0.5, 0.5): xy(0.0, 0.0): maxwidth(418.0 * 0.7): z(2)),
             ],

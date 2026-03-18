@@ -629,6 +629,7 @@ const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
 const ADVANCED_ROW_SYNC_GRAPH: &str = "Sync Graph";
 const ADVANCED_SYNC_GRAPH_CHOICES: &[&str] =
     &["Frequency", "Beat index", "Post-kernel fingerprint"];
+const SOUND_OUTPUT_MODE_CHOICES: &[&str] = &["Auto", "Shared"];
 const SOUND_ROW_MASTER_VOLUME: &str = "Master Volume";
 const SOUND_ROW_SFX_VOLUME: &str = "SFX Volume";
 const SOUND_ROW_ASSIST_TICK_VOLUME: &str = "Assist Tick Volume";
@@ -637,6 +638,8 @@ const SOUND_ROW_DEVICE: &str = "Sound Device";
 const SOUND_ROW_OUTPUT_MODE: &str = "Audio Output Mode";
 #[cfg(target_os = "linux")]
 const SOUND_ROW_LINUX_BACKEND: &str = "Linux Audio Backend";
+#[cfg(target_os = "linux")]
+const SOUND_ROW_ALSA_EXCLUSIVE: &str = "Exclusive Mode";
 const SOUND_ROW_SAMPLE_RATE: &str = "Audio Sample Rate";
 const SOUND_ROW_MINE_SOUNDS: &str = "Mine Sounds";
 const SOUND_ROW_GLOBAL_OFFSET: &str = "Global Offset (ms)";
@@ -667,62 +670,8 @@ const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
 const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;
 const SCORE_IMPORT_ROW_ONLY_MISSING_INDEX: usize = 3;
 
-#[cfg(all(
-    target_os = "linux",
-    has_pipewire_audio,
-    has_pulse_audio,
-    has_jack_audio
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "PulseAudio", "JACK", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    has_pipewire_audio,
-    has_pulse_audio,
-    not(has_jack_audio)
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "PulseAudio", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    has_pipewire_audio,
-    not(has_pulse_audio),
-    has_jack_audio
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "JACK", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    has_pipewire_audio,
-    not(has_pulse_audio),
-    not(has_jack_audio)
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PipeWire", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    not(has_pipewire_audio),
-    has_pulse_audio,
-    has_jack_audio
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PulseAudio", "JACK", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    not(has_pipewire_audio),
-    has_pulse_audio,
-    not(has_jack_audio)
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "PulseAudio", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    not(has_pipewire_audio),
-    not(has_pulse_audio),
-    has_jack_audio
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "JACK", "ALSA"];
-#[cfg(all(
-    target_os = "linux",
-    not(has_pipewire_audio),
-    not(has_pulse_audio),
-    not(has_jack_audio)
-))]
-const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto", "ALSA"];
+#[cfg(target_os = "linux")]
+const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto"];
 
 fn discover_system_noteskin_choices() -> Vec<String> {
     let mut names = noteskin_parser::discover_itg_skins("dance");
@@ -757,6 +706,26 @@ fn build_sound_device_options() -> Vec<SoundDeviceOption> {
         });
     }
     options
+}
+
+#[cfg(target_os = "linux")]
+#[inline(always)]
+const fn linux_backend_label(backend: config::LinuxAudioBackend) -> &'static str {
+    match backend {
+        config::LinuxAudioBackend::Auto => "Auto",
+        config::LinuxAudioBackend::PipeWire => "PipeWire",
+        config::LinuxAudioBackend::PulseAudio => "PulseAudio",
+        config::LinuxAudioBackend::Jack => "JACK",
+        config::LinuxAudioBackend::Alsa => "ALSA",
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn build_linux_backend_choices() -> Vec<String> {
+    audio::available_linux_backends()
+        .into_iter()
+        .map(|backend| linux_backend_label(backend).to_string())
+        .collect()
 }
 
 pub const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
@@ -1452,7 +1421,7 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         label: SOUND_ROW_OUTPUT_MODE,
-        choices: &["Auto", "Shared", "Exclusive"],
+        choices: SOUND_OUTPUT_MODE_CHOICES,
         inline: false,
     },
     #[cfg(target_os = "linux")]
@@ -1460,6 +1429,12 @@ pub const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         label: SOUND_ROW_LINUX_BACKEND,
         choices: SOUND_LINUX_BACKEND_CHOICES,
         inline: false,
+    },
+    #[cfg(target_os = "linux")]
+    SubRow {
+        label: SOUND_ROW_ALSA_EXCLUSIVE,
+        choices: &["Off", "On"],
+        inline: true,
     },
     SubRow {
         label: SOUND_ROW_SAMPLE_RATE,
@@ -1512,19 +1487,17 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
             "Windows playback prefers native WASAPI.",
             "macOS playback prefers native CoreAudio.",
             "FreeBSD playback prefers native PCM/OSS.",
-            "Linux backend routing depends on Linux Audio Backend and Audio Output Mode.",
+            "Linux backend routing depends on Linux Audio Backend; ALSA exclusive routing is configured separately.",
             "Changing this takes effect on next launch.",
         ],
     },
     Item {
         name: SOUND_ROW_OUTPUT_MODE,
         help: &[
-            "Select whether audio output should use Auto, Shared, or Exclusive mode.",
+            "Select whether audio output should use Auto or Shared mode.",
             "Auto keeps the backend default policy.",
             "Shared forces shared-mode output where supported.",
-            "Exclusive requests direct/exclusive output where supported and may fail if unavailable.",
-            "CoreAudio currently supports Auto/Shared; Exclusive is not implemented yet.",
-            "FreeBSD PCM currently supports Auto/Shared; Exclusive is not implemented yet.",
+            "Exclusive mode is exposed separately when Linux Audio Backend is set to ALSA.",
             "Changing this takes effect on next launch.",
         ],
     },
@@ -1537,7 +1510,17 @@ pub const SOUND_OPTIONS_ITEMS: &[Item] = &[
             "Auto prefers PipeWire first when available, then PulseAudio, and falls back to ALSA as needed.",
             "PipeWire and PulseAudio are shared-output backends and currently ignore explicit Sound Device selection.",
             "JACK is an explicit low-latency backend and currently ignores Sound Device selection.",
-            "ALSA is the direct Linux backend and remains the exclusive/direct path.",
+            "ALSA is the direct Linux backend and exposes the child Exclusive Mode row.",
+            "Changing this takes effect on next launch.",
+        ],
+    },
+    #[cfg(target_os = "linux")]
+    Item {
+        name: SOUND_ROW_ALSA_EXCLUSIVE,
+        help: &[
+            "Request ALSA exclusive output for the selected device.",
+            "Off keeps ALSA in the normal shared path.",
+            "On requires a direct hw/plughw device or a resolvable hardware-backed alias.",
             "Changing this takes effect on next launch.",
         ],
     },
@@ -2401,6 +2384,18 @@ fn submenu_visible_row_indices(
                 })
                 .collect()
         }
+        #[cfg(target_os = "linux")]
+        SubmenuKind::Sound => rows
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, row)| {
+                if row.label == SOUND_ROW_ALSA_EXCLUSIVE && !sound_show_alsa_exclusive(state) {
+                    None
+                } else {
+                    Some(idx)
+                }
+            })
+            .collect(),
         _ => (0..rows.len()).collect(),
     }
 }
@@ -3188,6 +3183,15 @@ fn row_choices<'a>(
                 })
                 .collect();
         }
+        #[cfg(target_os = "linux")]
+        if row.label == SOUND_ROW_LINUX_BACKEND {
+            return state
+                .linux_backend_choices
+                .iter()
+                .cloned()
+                .map(Cow::Owned)
+                .collect();
+        }
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::ScoreImport)
@@ -3488,39 +3492,52 @@ fn sound_device_from_choice(state: &State, idx: usize) -> Option<u16> {
 fn audio_output_mode_choice_index(mode: config::AudioOutputMode) -> usize {
     match mode {
         config::AudioOutputMode::Auto => 0,
-        config::AudioOutputMode::Shared => 1,
-        config::AudioOutputMode::Exclusive => 2,
+        config::AudioOutputMode::Shared | config::AudioOutputMode::Exclusive => 1,
     }
 }
 
 fn audio_output_mode_from_choice(idx: usize) -> config::AudioOutputMode {
     match idx {
         1 => config::AudioOutputMode::Shared,
-        2 => config::AudioOutputMode::Exclusive,
         _ => config::AudioOutputMode::Auto,
     }
 }
 
 #[cfg(target_os = "linux")]
-fn linux_audio_backend_choice_index(backend: config::LinuxAudioBackend) -> usize {
-    let target = match backend {
-        config::LinuxAudioBackend::Auto => "Auto",
-        config::LinuxAudioBackend::PipeWire => "PipeWire",
-        config::LinuxAudioBackend::PulseAudio => "PulseAudio",
-        config::LinuxAudioBackend::Jack => "JACK",
-        config::LinuxAudioBackend::Alsa => "ALSA",
-    };
-    SOUND_LINUX_BACKEND_CHOICES
+#[inline(always)]
+const fn alsa_exclusive_choice_index(mode: config::AudioOutputMode) -> usize {
+    if matches!(mode, config::AudioOutputMode::Exclusive) {
+        1
+    } else {
+        0
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[inline(always)]
+fn selected_audio_output_mode(state: &State) -> config::AudioOutputMode {
+    sound_row_index(SOUND_ROW_OUTPUT_MODE)
+        .and_then(|idx| state.sub_choice_indices_sound.get(idx).copied())
+        .map(audio_output_mode_from_choice)
+        .unwrap_or(config::AudioOutputMode::Auto)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_audio_backend_choice_index(state: &State, backend: config::LinuxAudioBackend) -> usize {
+    let target = linux_backend_label(backend);
+    state
+        .linux_backend_choices
         .iter()
-        .position(|&choice| choice == target)
+        .position(|choice| choice == target)
         .unwrap_or(0)
 }
 
 #[cfg(target_os = "linux")]
-fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
-    match SOUND_LINUX_BACKEND_CHOICES
+fn linux_audio_backend_from_choice(state: &State, idx: usize) -> config::LinuxAudioBackend {
+    match state
+        .linux_backend_choices
         .get(idx)
-        .copied()
+        .map(String::as_str)
         .unwrap_or("Auto")
     {
         "PipeWire" => config::LinuxAudioBackend::PipeWire,
@@ -3529,6 +3546,33 @@ fn linux_audio_backend_from_choice(idx: usize) -> config::LinuxAudioBackend {
         "ALSA" => config::LinuxAudioBackend::Alsa,
         _ => config::LinuxAudioBackend::Auto,
     }
+}
+
+#[cfg(target_os = "linux")]
+#[inline(always)]
+fn selected_linux_audio_backend(state: &State) -> config::LinuxAudioBackend {
+    sound_row_index(SOUND_ROW_LINUX_BACKEND)
+        .and_then(|idx| state.sub_choice_indices_sound.get(idx).copied())
+        .map(|idx| linux_audio_backend_from_choice(state, idx))
+        .unwrap_or(config::LinuxAudioBackend::Auto)
+}
+
+#[cfg(target_os = "linux")]
+#[inline(always)]
+fn sound_show_alsa_exclusive(state: &State) -> bool {
+    matches!(
+        selected_linux_audio_backend(state),
+        config::LinuxAudioBackend::Alsa
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn sound_parent_row(actual_idx: usize) -> Option<usize> {
+    let child_idx = sound_row_index(SOUND_ROW_ALSA_EXCLUSIVE)?;
+    if actual_idx != child_idx {
+        return None;
+    }
+    sound_row_index(SOUND_ROW_LINUX_BACKEND)
 }
 
 fn set_sound_choice_index(state: &mut State, label: &str, idx: usize) {
@@ -3877,6 +3921,8 @@ pub struct State {
     score_import_pack_choices: Vec<String>,
     score_import_pack_filters: Vec<Option<String>>,
     sound_device_options: Vec<SoundDeviceOption>,
+    #[cfg(target_os = "linux")]
+    linux_backend_choices: Vec<String>,
     master_volume_pct: i32,
     sfx_volume_pct: i32,
     assist_tick_volume_pct: i32,
@@ -3930,6 +3976,8 @@ pub fn init() -> State {
     let max_fps_choices = build_max_fps_choices();
     let max_fps_labels = max_fps_choice_labels(&max_fps_choices);
     let sound_device_options = build_sound_device_options();
+    #[cfg(target_os = "linux")]
+    let linux_backend_choices = build_linux_backend_choices();
     let machine_noteskin = profile::machine_default_noteskin();
     let machine_noteskin_idx = system_noteskin_choices
         .iter()
@@ -3996,6 +4044,8 @@ pub fn init() -> State {
         score_import_pack_choices: vec![SCORE_IMPORT_ALL_PACKS.to_string()],
         score_import_pack_filters: vec![None],
         sound_device_options,
+        #[cfg(target_os = "linux")]
+        linux_backend_choices,
         master_volume_pct: i32::from(cfg.master_volume.clamp(0, 100)),
         sfx_volume_pct: i32::from(cfg.sfx_volume.clamp(0, 100)),
         assist_tick_volume_pct: i32::from(cfg.assist_tick_volume.clamp(0, 100)),
@@ -4345,10 +4395,14 @@ pub fn init() -> State {
         audio_output_mode_choice_index(cfg.audio_output_mode),
     );
     #[cfg(target_os = "linux")]
+    let linux_backend_idx = linux_audio_backend_choice_index(&state, cfg.linux_audio_backend);
+    #[cfg(target_os = "linux")]
+    set_sound_choice_index(&mut state, SOUND_ROW_LINUX_BACKEND, linux_backend_idx);
+    #[cfg(target_os = "linux")]
     set_sound_choice_index(
         &mut state,
-        SOUND_ROW_LINUX_BACKEND,
-        linux_audio_backend_choice_index(cfg.linux_audio_backend),
+        SOUND_ROW_ALSA_EXCLUSIVE,
+        alsa_exclusive_choice_index(cfg.audio_output_mode),
     );
     let sound_rate_idx = sample_rate_choice_index(&state, cfg.audio_sample_rate_hz);
     set_sound_choice_index(&mut state, SOUND_ROW_SAMPLE_RATE, sound_rate_idx);
@@ -5831,10 +5885,37 @@ fn apply_submenu_choice_delta(
             }
             SOUND_ROW_OUTPUT_MODE => {
                 config::update_audio_output_mode(audio_output_mode_from_choice(new_index));
+                #[cfg(target_os = "linux")]
+                set_sound_choice_index(state, SOUND_ROW_ALSA_EXCLUSIVE, 0);
             }
             #[cfg(target_os = "linux")]
             SOUND_ROW_LINUX_BACKEND => {
-                config::update_linux_audio_backend(linux_audio_backend_from_choice(new_index));
+                let backend = linux_audio_backend_from_choice(state, new_index);
+                config::update_linux_audio_backend(backend);
+                if matches!(backend, config::LinuxAudioBackend::Alsa) {
+                    set_sound_choice_index(
+                        state,
+                        SOUND_ROW_ALSA_EXCLUSIVE,
+                        alsa_exclusive_choice_index(config::get().audio_output_mode),
+                    );
+                } else {
+                    if matches!(
+                        config::get().audio_output_mode,
+                        config::AudioOutputMode::Exclusive
+                    ) {
+                        config::update_audio_output_mode(selected_audio_output_mode(state));
+                    }
+                    set_sound_choice_index(state, SOUND_ROW_ALSA_EXCLUSIVE, 0);
+                }
+            }
+            #[cfg(target_os = "linux")]
+            SOUND_ROW_ALSA_EXCLUSIVE => {
+                let mode = if new_index == 1 {
+                    config::AudioOutputMode::Exclusive
+                } else {
+                    selected_audio_output_mode(state)
+                };
+                config::update_audio_output_mode(mode);
             }
             SOUND_ROW_SAMPLE_RATE => {
                 let rate = sample_rate_from_choice(state, new_index);
@@ -7518,6 +7599,18 @@ pub fn get_actors(
                         let row = &rows[actual_row_idx];
                         let label = row.label;
                         let is_disabled = is_submenu_row_disabled(kind, row.label);
+                        #[cfg(target_os = "linux")]
+                        let child_label_indent = if matches!(kind, SubmenuKind::Sound)
+                            && sound_parent_row(actual_row_idx).is_some()
+                        {
+                            12.0 * s
+                        } else {
+                            0.0
+                        };
+                        #[cfg(not(target_os = "linux"))]
+                        let child_label_indent = 0.0;
+                        let label_text_x = label_text_x + child_label_indent;
+                        let label_text_max_w = (label_text_max_w - child_label_indent).max(0.0);
                         let title_color = if is_active {
                             let mut c = col_active_text;
                             c[3] = 1.0;

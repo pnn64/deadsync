@@ -5,6 +5,7 @@ use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
+use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -22,7 +23,8 @@ const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand 
 pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{
     TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION,
-    TRANSITION_OUT_FADE_DURATION, timing_tick_status_line, toggle_flash_text,
+    TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player, timing_tick_status_line,
+    toggle_flash_text,
 };
 
 thread_local! {
@@ -400,35 +402,20 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 fn build_background(state: &State, bg_brightness: f32) -> Actor {
     let sw = screen_width();
     let sh = screen_height();
-    let screen_aspect = if sh > 0.0 { sw / sh } else { 16.0 / 9.0 };
     let bg_brightness = bg_brightness.clamp(0.0, 1.0);
-
-    let (tex_w, tex_h) =
-        if let Some(meta) = crate::assets::texture_dims(&state.background_texture_key) {
-            (meta.w as f32, meta.h as f32)
-        } else {
-            (1.0, 1.0) // fallback, will just fill screen
-        };
-
-    let tex_aspect = if tex_h > 0.0 { tex_w / tex_h } else { 1.0 };
-
-    if screen_aspect > tex_aspect {
-        // screen is wider, match width to cover
-        act!(sprite(state.background_texture_key.clone()):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoomtowidth(sw):
-            diffuse(bg_brightness, bg_brightness, bg_brightness, 1.0):
-            z(-100)
-        )
-    } else {
-        // screen is taller/equal, match height to cover
-        act!(sprite(state.background_texture_key.clone()):
-            align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
-            zoomtoheight(sh):
-            diffuse(bg_brightness, bg_brightness, bg_brightness, 1.0):
-            z(-100)
-        )
+    let mut actor = shared_banner::cover_sprite(
+        state.background_texture_key.clone(),
+        screen_center_x(),
+        screen_center_y(),
+        sw,
+        sh,
+        1.0,
+        -100,
+    );
+    if let Actor::Sprite { tint, .. } = &mut actor {
+        *tint = [bg_brightness, bg_brightness, bg_brightness, 1.0];
     }
+    actor
 }
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
@@ -448,20 +435,49 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         state.player_color
     };
     // --- Background and Filter ---
-    let hide_song_bg = state
-        .player_profiles
-        .iter()
-        .take(state.num_players)
-        .any(|p| p.hide_song_bg);
-    if hide_song_bg {
-        actors.push(act!(quad:
-            align(0.0, 0.0): xy(0.0, 0.0):
-            zoomto(screen_width(), screen_height()):
-            diffuse(0.0, 0.0, 0.0, 1.0):
-            z(-100)
-        ));
+    actors.push(build_background(state, cfg.bg_brightness));
+    let cover_alpha = |player_idx: usize| -> f32 {
+        if player_idx >= state.num_players {
+            return 0.0;
+        }
+        let profile_cover = f32::from(state.player_profiles[player_idx].hide_song_bg);
+        profile_cover
+            .max(effective_visibility_effects_for_player(state, player_idx).cover)
+            .clamp(0.0, 1.0)
+    };
+    let left_cover = cover_alpha(0);
+    let right_cover = if state.num_players > 1 {
+        cover_alpha(1)
     } else {
-        actors.push(build_background(state, cfg.bg_brightness));
+        left_cover
+    };
+    let sw = screen_width();
+    let sh = screen_height();
+    let cx = screen_center_x();
+    if left_cover > 0.0 || right_cover > 0.0 {
+        if (left_cover - right_cover).abs() <= 0.001 {
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(0.0, 0.0):
+                zoomto(sw, sh):
+                diffuse(0.0, 0.0, 0.0, left_cover.max(right_cover)):
+                z(-99)
+            ));
+        } else {
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(0.0, 0.0):
+                zoomto(cx, sh):
+                faderight(0.1):
+                diffuse(0.0, 0.0, 0.0, left_cover):
+                z(-99)
+            ));
+            actors.push(act!(quad:
+                align(0.0, 0.0): xy(cx, 0.0):
+                zoomto(sw - cx, sh):
+                fadeleft(0.1):
+                diffuse(0.0, 0.0, 0.0, right_cover):
+                z(-99)
+            ));
+        }
     }
 
     // ITGmania/Simply Love parity: ScreenSyncOverlay status text.

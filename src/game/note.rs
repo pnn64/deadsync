@@ -6,6 +6,7 @@ pub enum NoteType {
     Hold,
     Roll,
     Mine,
+    Lift,
     Fake,
 }
 
