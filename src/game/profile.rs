@@ -1241,6 +1241,8 @@ pub struct Profile {
     pub show_fa_plus_pane: bool,
     // 10ms blue Fantastic window for FA+ window display (Arrow Cloud: "SmallerWhite").
     pub fa_plus_10ms_blue_window: bool,
+    // Track and display per-column early judgment counts on evaluation (zmod/Arrow Cloud semantics).
+    pub track_early_judgments: bool,
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
@@ -1359,6 +1361,7 @@ impl Default for Profile {
             show_hard_ex_score: false,
             show_fa_plus_pane: false,
             fa_plus_10ms_blue_window: false,
+            track_early_judgments: false,
             custom_fantastic_window: false,
             custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
             judgment_tilt: false,
@@ -1805,6 +1808,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.fa_plus_10ms_blue_window)
         ));
         content.push_str(&format!(
+            "TrackEarlyJudgments = {}\n",
+            i32::from(default_profile.track_early_judgments)
+        ));
+        content.push_str(&format!(
             "CustomFantasticWindow = {}\n",
             i32::from(default_profile.custom_fantastic_window)
         ));
@@ -2124,6 +2131,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "SmallerWhite={}\n",
         i32::from(profile.fa_plus_10ms_blue_window)
+    ));
+    content.push_str(&format!(
+        "TrackEarlyJudgments={}\n",
+        i32::from(profile.track_early_judgments)
     ));
     content.push_str(&format!(
         "CustomFantasticWindow={}\n",
@@ -2558,6 +2569,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "SmallerWhite")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.fa_plus_10ms_blue_window, |v| v != 0);
+            profile.track_early_judgments = profile_conf
+                .get("PlayerOptions", "TrackEarlyJudgments")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.track_early_judgments, |v| v != 0);
             profile.custom_fantastic_window = profile_conf
                 .get("PlayerOptions", "CustomFantasticWindow")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -4097,6 +4112,18 @@ pub fn update_fa_plus_10ms_blue_window_for_side(side: PlayerSide, enabled: bool)
             return;
         }
         profile.fa_plus_10ms_blue_window = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_track_early_judgments_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.track_early_judgments == enabled {
+            return;
+        }
+        profile.track_early_judgments = enabled;
     }
     save_profile_ini_for_side(side);
 }

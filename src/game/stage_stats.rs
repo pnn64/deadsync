@@ -29,4 +29,6 @@ pub struct PlayerStageSummary {
     pub show_w0: bool,
     pub show_ex_score: bool,
     pub show_hard_ex_score: bool,
+    pub show_fa_plus_pane: bool,
+    pub track_early_judgments: bool,
 }
