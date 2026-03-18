@@ -6,8 +6,11 @@ use std::path::Path;
 
 const OPUS_HEAD_MAGIC: &[u8; 8] = b"OpusHead";
 const OPUS_TAGS_MAGIC: &[u8; 8] = b"OpusTags";
-const OPUS_SAMPLE_RATE_HZ: u32 = 48_000;
+// Opus decode/sample time is always expressed on a 48 kHz timeline.
+const OPUS_DECODE_RATE_HZ: u32 = 48_000;
 const OPUS_MAX_PACKET_FRAMES: usize = 5760;
+const OPUS_SEEK_PREROLL_FRAMES: u64 = (OPUS_DECODE_RATE_HZ as u64 * 80) / 1000;
+const OPUS_LINEAR_SEEK_FRAMES: u64 = OPUS_MAX_PACKET_FRAMES as u64;
 
 pub(crate) struct OpenFile {
     pub reader: Reader,
@@ -20,6 +23,7 @@ pub(crate) struct Reader {
     decoder: OpusDecoder,
     stream_serial: u32,
     channels: usize,
+    pre_skip_frames: usize,
     decode_buf: Vec<u16>,
     pending: Option<Vec<i16>>,
     skip_frames: usize,
@@ -53,6 +57,7 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         decoder,
         stream_serial: header.stream_serial,
         channels: header.channels,
+        pre_skip_frames: header.pre_skip_frames,
         decode_buf: vec![0; OPUS_MAX_PACKET_FRAMES * header.channels],
         pending: None,
         skip_frames: header.pre_skip_frames,
@@ -71,7 +76,7 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
     Ok(OpenFile {
         reader,
         channels: header.channels,
-        sample_rate_hz: OPUS_SAMPLE_RATE_HZ,
+        sample_rate_hz: OPUS_DECODE_RATE_HZ,
     })
 }
 
@@ -95,7 +100,7 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     let total_frames = last_granule
         .ok_or_else(|| "Opus contained no audio packets".to_string())?
         .saturating_sub(header.pre_skip_frames as u64);
-    Ok((total_frames as f64 / f64::from(OPUS_SAMPLE_RATE_HZ)) as f32)
+    Ok((total_frames as f64 / f64::from(OPUS_DECODE_RATE_HZ)) as f32)
 }
 
 impl Reader {
@@ -121,30 +126,50 @@ impl Reader {
         &mut self,
         target_frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if target_frame <= self.cursor_frames {
+        if target_frame == self.cursor_frames {
             return Ok(());
         }
-        while self.cursor_frames < target_frame {
-            let packet = if let Some(packet) = self.pending.take() {
-                packet
-            } else {
-                let Some(packet) = self.decode_next_packet()? else {
-                    return Ok(());
-                };
-                packet
-            };
-            let packet_frames = packet.len() / self.channels;
-            let remaining = (target_frame - self.cursor_frames) as usize;
-            if remaining >= packet_frames {
-                self.cursor_frames = self.cursor_frames.saturating_add(packet_frames as u64);
+        if target_frame > self.cursor_frames
+            && target_frame - self.cursor_frames <= OPUS_LINEAR_SEEK_FRAMES
+        {
+            return self.seek_frame_linear(target_frame);
+        }
+        let seek_frame = target_frame.saturating_sub(OPUS_SEEK_PREROLL_FRAMES);
+        let seek_granule = seek_frame.saturating_add(self.pre_skip_frames as u64);
+        if !self
+            .reader
+            .seek_absgp(Some(self.stream_serial), seek_granule)?
+        {
+            self.pending = None;
+            self.ended = true;
+            return Ok(());
+        }
+        self.decoder.reset().map_err(opus_error)?;
+        self.pending = None;
+        self.skip_frames = 0;
+        self.ended = false;
+
+        let Some((packets, first_packet_granule)) = self.collect_seek_page()? else {
+            self.ended = true;
+            return Ok(());
+        };
+
+        self.decoded_frames = first_packet_granule;
+        self.skip_frames = self
+            .pre_skip_frames
+            .saturating_sub(first_packet_granule as usize);
+        self.cursor_frames = first_packet_granule.saturating_sub(self.pre_skip_frames as u64);
+
+        for packet in packets {
+            let Some(decoded) = self.decode_packet(packet)? else {
                 continue;
+            };
+            if self.finish_seek_packet(decoded, target_frame) {
+                return Ok(());
             }
-            let drop_samples = remaining * self.channels;
-            self.pending = Some(packet[drop_samples..].to_vec());
-            self.cursor_frames = target_frame;
-            return Ok(());
         }
-        Ok(())
+
+        self.seek_frame_linear(target_frame)
     }
 
     fn decode_next_packet(
@@ -158,6 +183,60 @@ impl Reader {
                 self.ended = true;
                 return Ok(None);
             };
+            if let Some(decoded) = self.decode_packet(packet)? {
+                return Ok(Some(decoded));
+            }
+            if self.ended {
+                return Ok(None);
+            }
+        }
+    }
+
+    fn seek_frame_linear(
+        &mut self,
+        target_frame: u64,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if target_frame <= self.cursor_frames {
+            return Ok(());
+        }
+        while self.cursor_frames < target_frame {
+            let packet = if let Some(packet) = self.pending.take() {
+                packet
+            } else {
+                let Some(packet) = self.decode_next_packet()? else {
+                    return Ok(());
+                };
+                packet
+            };
+            if self.finish_seek_packet(packet, target_frame) {
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    fn finish_seek_packet(&mut self, packet: Vec<i16>, target_frame: u64) -> bool {
+        let packet_frames = packet.len() / self.channels;
+        let remaining = target_frame.saturating_sub(self.cursor_frames) as usize;
+        if remaining >= packet_frames {
+            self.cursor_frames = self.cursor_frames.saturating_add(packet_frames as u64);
+            return false;
+        }
+        let drop_samples = remaining * self.channels;
+        self.pending = Some(packet[drop_samples..].to_vec());
+        self.cursor_frames = target_frame;
+        true
+    }
+
+    fn collect_seek_page(
+        &mut self,
+    ) -> Result<Option<(Vec<Packet>, u64)>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut packets = Vec::with_capacity(4);
+        let mut total_frames = 0u64;
+        loop {
+            let Some(packet) = self.reader.read_packet()? else {
+                return Ok(None);
+            };
             if packet.stream_serial() != self.stream_serial {
                 return Err("chained Ogg Opus streams are unsupported".into());
             }
@@ -168,50 +247,70 @@ impl Reader {
                 }
                 continue;
             }
-            let wanted_frames = self
-                .decoder
-                .get_nb_samples(&packet.data)
-                .map_err(opus_error)?;
-            let needed_samples = wanted_frames.saturating_mul(self.channels);
-            if self.decode_buf.len() < needed_samples {
-                self.decode_buf.resize(needed_samples, 0);
+            total_frames = total_frames.saturating_add(
+                self.decoder
+                    .get_nb_samples(&packet.data)
+                    .map_err(opus_error)? as u64,
+            );
+            let last_in_page = packet.last_in_page();
+            let page_granule = packet.absgp_page();
+            packets.push(packet);
+            if last_in_page {
+                return Ok(Some((packets, page_granule.saturating_sub(total_frames))));
             }
-            let decoded_before = self.decoded_frames;
-            let decoded_frames = self
-                .decoder
-                .decode_to_slice(&packet.data, &mut self.decode_buf[..needed_samples], false)
-                .map_err(opus_error)?;
-            self.decoded_frames = self.decoded_frames.saturating_add(decoded_frames as u64);
-            let mut valid_frames = decoded_frames;
+        }
+    }
+
+    fn decode_packet(
+        &mut self,
+        packet: Packet,
+    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+        if packet.stream_serial() != self.stream_serial {
+            return Err("chained Ogg Opus streams are unsupported".into());
+        }
+        if packet.data.is_empty() {
             if packet.last_in_stream() {
-                let allowed_frames = packet.absgp_page().saturating_sub(decoded_before) as usize;
-                valid_frames = valid_frames.min(allowed_frames);
                 self.ended = true;
             }
-            if valid_frames == 0 {
-                if self.ended {
-                    return Ok(None);
-                }
-                continue;
-            }
-            let skip = self.skip_frames.min(valid_frames);
-            self.skip_frames -= skip;
-            if skip == valid_frames {
-                if self.ended {
-                    return Ok(None);
-                }
-                continue;
-            }
-            let start = skip * self.channels;
-            let end = valid_frames * self.channels;
-            let mut out = Vec::with_capacity(end - start);
-            out.extend(
-                self.decode_buf[start..end]
-                    .iter()
-                    .map(|&sample| sample as i16),
-            );
-            return Ok(Some(out));
+            return Ok(None);
         }
+        let wanted_frames = self
+            .decoder
+            .get_nb_samples(&packet.data)
+            .map_err(opus_error)?;
+        let needed_samples = wanted_frames.saturating_mul(self.channels);
+        if self.decode_buf.len() < needed_samples {
+            self.decode_buf.resize(needed_samples, 0);
+        }
+        let decoded_before = self.decoded_frames;
+        let decoded_frames = self
+            .decoder
+            .decode_to_slice(&packet.data, &mut self.decode_buf[..needed_samples], false)
+            .map_err(opus_error)?;
+        self.decoded_frames = self.decoded_frames.saturating_add(decoded_frames as u64);
+        let mut valid_frames = decoded_frames;
+        if packet.last_in_stream() {
+            let allowed_frames = packet.absgp_page().saturating_sub(decoded_before) as usize;
+            valid_frames = valid_frames.min(allowed_frames);
+            self.ended = true;
+        }
+        if valid_frames == 0 {
+            return Ok(None);
+        }
+        let skip = self.skip_frames.min(valid_frames);
+        self.skip_frames -= skip;
+        if skip == valid_frames {
+            return Ok(None);
+        }
+        let start = skip * self.channels;
+        let end = valid_frames * self.channels;
+        let mut out = Vec::with_capacity(end - start);
+        out.extend(
+            self.decode_buf[start..end]
+                .iter()
+                .map(|&sample| sample as i16),
+        );
+        Ok(Some(out))
     }
 }
 
