@@ -2643,6 +2643,41 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
+    // --- Disqualified text (Simply Love PerPlayer/Lower/Disqualified) ---
+    {
+        let label_y = screen_center_y() + 138.0;
+        let label_zoom = 0.23_f32;
+        let label_single = [(0, screen_center_x())];
+        let label_vs = [
+            (0, screen_center_x() - 155.0),
+            (1, screen_center_x() + 155.0),
+        ];
+        let label_players: &[(usize, f32)] = if play_style == profile::PlayStyle::Versus {
+            &label_vs
+        } else {
+            &label_single
+        };
+
+        for &(player_idx, center_x) in label_players {
+            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+                continue;
+            };
+            if si.score_valid {
+                continue;
+            }
+
+            actors.push(act!(text:
+                font("wendy"):
+                settext("Disqualified From Ranking"):
+                align(0.5, 0.5):
+                xy(center_x, label_y):
+                zoom(label_zoom):
+                z(103):
+                diffuse(1.0, 1.0, 1.0, 0.7)
+            ));
+        }
+    }
+
     // Auto-submit status text (SL/zmod parity with AutoSubmitScore.lua SubmitText actors):
     // Common Normal/ThemeFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
     // In SL/zmod, Common Normal.redir points to Miso/_miso light.
