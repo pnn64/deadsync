@@ -1902,35 +1902,8 @@ fn scoring_count(p: &PlayerRuntime, grade: JudgeGrade) -> u32 {
     p.scoring_counts[crate::game::judgment::judge_grade_ix(grade)]
 }
 
-#[inline(always)]
-fn add_window_counts(
-    lhs: crate::game::timing::WindowCounts,
-    rhs: crate::game::timing::WindowCounts,
-) -> crate::game::timing::WindowCounts {
-    crate::game::timing::WindowCounts {
-        w0: lhs.w0.saturating_add(rhs.w0),
-        w1: lhs.w1.saturating_add(rhs.w1),
-        w2: lhs.w2.saturating_add(rhs.w2),
-        w3: lhs.w3.saturating_add(rhs.w3),
-        w4: lhs.w4.saturating_add(rhs.w4),
-        w5: lhs.w5.saturating_add(rhs.w5),
-        miss: lhs.miss.saturating_add(rhs.miss),
-    }
-}
-
-#[inline(always)]
-fn window_counts_total_taps(wc: &crate::game::timing::WindowCounts) -> u32 {
-    wc.w0
-        .saturating_add(wc.w1)
-        .saturating_add(wc.w2)
-        .saturating_add(wc.w3)
-        .saturating_add(wc.w4)
-        .saturating_add(wc.w5)
-        .saturating_add(wc.miss)
-}
-
-/// Compute predictive kept/lost/pace percentages for ITG Money scoring.
-fn predictive_money_percents(
+/// Compute predictive kept/lost/pace percentages for ITG scoring.
+fn predictive_itg_percents(
     current_possible_dp: i32,
     possible_dp: i32,
     actual_dp: i32,
@@ -1947,88 +1920,7 @@ fn predictive_money_percents(
     (kept, lost, pace)
 }
 
-/// Compute predictive kept/lost/pace percentages for EX scoring.
-/// EX weights: W0×3.5 + W1×3 + W2×2 + W3×1 + holds + rolls − mines.
-/// Total possible: total_steps×3.5 + holds_total + rolls_total.
-fn predictive_ex_percents(
-    wc: &crate::game::timing::WindowCounts,
-    holds_held: u32,
-    rolls_held: u32,
-    mines_hit: u32,
-    totals: &crate::game::gameplay::CourseDisplayTotals,
-    resolved_holds_rolls: u32,
-) -> (f64, f64, f64) {
-    let total_possible = f64::from(totals.total_steps).mul_add(
-        3.5,
-        f64::from(totals.holds_total) + f64::from(totals.rolls_total),
-    );
-    if total_possible <= 0.0 {
-        return (0.0, 0.0, 0.0);
-    }
-    let actual = f64::from(wc.w0) * 3.5
-        + f64::from(wc.w1) * 3.0
-        + f64::from(wc.w2) * 2.0
-        + f64::from(wc.w3)
-        + f64::from(holds_held)
-        + f64::from(rolls_held)
-        - f64::from(mines_hit.min(totals.mines_total));
-    let current_possible = f64::from(window_counts_total_taps(wc))
-        .mul_add(3.5, f64::from(resolved_holds_rolls));
-    let lost = (current_possible - actual).max(0.0);
-    let kept = (total_possible - lost).max(0.0);
-    let kept_pct = ((kept / total_possible) * 10000.0).floor() / 100.0;
-    let lost_pct = (100.0 - kept_pct).max(0.0);
-    let pace_pct = if current_possible > 0.0 {
-        ((actual / current_possible).max(0.0) * 10000.0).floor() / 100.0
-    } else {
-        0.0
-    };
-    (kept_pct, lost_pct, pace_pct)
-}
-
-/// Compute predictive kept/lost/pace percentages for H.EX (Hard EX) scoring.
-/// H.EX weights: W0-10ms×3.5 + W1-10ms×3 + W2×1 + holds + rolls − mines.
-/// Total possible: total_steps×3.5 + holds_total + rolls_total.
-fn predictive_hex_percents(
-    wc: &crate::game::timing::WindowCounts,
-    wc10: &crate::game::timing::WindowCounts,
-    holds_held: u32,
-    rolls_held: u32,
-    mines_hit: u32,
-    totals: &crate::game::gameplay::CourseDisplayTotals,
-    resolved_holds_rolls: u32,
-) -> (f64, f64, f64) {
-    let total_possible = f64::from(totals.total_steps).mul_add(
-        3.5,
-        f64::from(totals.holds_total) + f64::from(totals.rolls_total),
-    );
-    if total_possible <= 0.0 {
-        return (0.0, 0.0, 0.0);
-    }
-    let fantastic_total = wc.w0.saturating_add(wc.w1);
-    let w010 = wc10.w0;
-    let w110 = fantastic_total.saturating_sub(w010);
-    let actual = f64::from(w010) * 3.5
-        + f64::from(w110) * 3.0
-        + f64::from(wc.w2)
-        + f64::from(holds_held)
-        + f64::from(rolls_held)
-        - f64::from(mines_hit.min(totals.mines_total));
-    let current_possible = f64::from(window_counts_total_taps(wc))
-        .mul_add(3.5, f64::from(resolved_holds_rolls));
-    let lost = (current_possible - actual).max(0.0);
-    let kept = (total_possible - lost).max(0.0);
-    let kept_pct = ((kept / total_possible) * 10000.0).floor() / 100.0;
-    let lost_pct = (100.0 - kept_pct).max(0.0);
-    let pace_pct = if current_possible > 0.0 {
-        ((actual / current_possible).max(0.0) * 10000.0).floor() / 100.0
-    } else {
-        0.0
-    };
-    (kept_pct, lost_pct, pace_pct)
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 struct MiniIndicatorProgress {
     kept_percent: f64,
     lost_percent: f64,
@@ -2036,6 +1928,7 @@ struct MiniIndicatorProgress {
     current_possible_dp: i32,
     possible_dp: i32,
     actual_dp: i32,
+    white_count: u32,
     w2: u32,
     w3: u32,
     w4: u32,
@@ -2084,49 +1977,23 @@ fn zmod_mini_indicator_progress(
     let actual_dp = p.earned_grade_points.max(0);
 
     // Compute predictive percents for the active score type.
-    let (kept_percent, lost_percent, pace_percent) = match score_type {
-        profile::MiniIndicatorScoreType::Money => {
-            predictive_money_percents(current_possible_dp, possible_dp, actual_dp)
+    let (kept_percent, lost_percent, pace_percent, white_count) = match score_type {
+        profile::MiniIndicatorScoreType::Itg => {
+            let (kept, lost, pace) =
+                predictive_itg_percents(current_possible_dp, possible_dp, actual_dp);
+            (kept, lost, pace, 0)
         }
         profile::MiniIndicatorScoreType::Ex | profile::MiniIndicatorScoreType::HardEx => {
-            let carry = crate::game::gameplay::display_carry_for_player(state, player_idx);
-            let wc =
-                add_window_counts(state.live_window_counts[player_idx], carry.window_counts);
-            let holds_held_total = p
-                .holds_held_for_score
-                .saturating_add(carry.holds_held_for_score);
-            let rolls_held_total = p
-                .rolls_held_for_score
-                .saturating_add(carry.rolls_held_for_score);
-            let mines_hit_total = p
-                .mines_hit_for_score
-                .saturating_add(carry.mines_hit_for_score);
-            let totals = crate::game::gameplay::display_totals_for_player(state, player_idx);
-            let resolved_holds_rolls = resolved_holds + resolved_rolls;
-
+            let score = crate::game::gameplay::display_ex_score_data(state, player_idx);
+            let white_count = score.counts.w1;
             if score_type == profile::MiniIndicatorScoreType::Ex {
-                predictive_ex_percents(
-                    &wc,
-                    holds_held_total,
-                    rolls_held_total,
-                    mines_hit_total,
-                    &totals,
-                    resolved_holds_rolls,
-                )
+                let (kept, lost, pace) =
+                    crate::game::judgment::predictive_ex_score_percents(&score);
+                (kept, lost, pace, white_count)
             } else {
-                let wc10 = add_window_counts(
-                    state.live_window_counts_10ms_blue[player_idx],
-                    carry.window_counts_10ms_blue,
-                );
-                predictive_hex_percents(
-                    &wc,
-                    &wc10,
-                    holds_held_total,
-                    rolls_held_total,
-                    mines_hit_total,
-                    &totals,
-                    resolved_holds_rolls,
-                )
+                let (kept, lost, pace) =
+                    crate::game::judgment::predictive_hard_ex_score_percents(&score);
+                (kept, lost, pace, white_count)
             }
         }
     };
@@ -2139,6 +2006,7 @@ fn zmod_mini_indicator_progress(
         current_possible_dp,
         possible_dp,
         actual_dp,
+        white_count,
         w2,
         w3,
         w4,
@@ -2147,6 +2015,26 @@ fn zmod_mini_indicator_progress(
         let_go,
         mines_hit,
         judged_any,
+    }
+}
+
+#[inline(always)]
+fn zmod_subtractive_counter_state(
+    progress: &MiniIndicatorProgress,
+    score_type: profile::MiniIndicatorScoreType,
+) -> (u32, bool) {
+    let forced_percent = progress.w3 > 0
+        || progress.w4 > 0
+        || progress.w5 > 0
+        || progress.miss > 0
+        || progress.let_go > 0
+        || progress.mines_hit > 0;
+    match score_type {
+        profile::MiniIndicatorScoreType::Itg => (progress.w2, forced_percent || progress.w2 > 10),
+        profile::MiniIndicatorScoreType::Ex | profile::MiniIndicatorScoreType::HardEx => (
+            progress.white_count,
+            forced_percent || progress.w2 > 0 || progress.white_count > 10,
+        ),
     }
 }
 
@@ -2244,24 +2132,18 @@ fn zmod_mini_indicator_text(
         return None;
     }
 
-    let progress = zmod_mini_indicator_progress(state, p, player_idx, profile.mini_indicator_score_type);
+    let progress =
+        zmod_mini_indicator_progress(state, p, player_idx, profile.mini_indicator_score_type);
     if !progress.judged_any {
         return None;
     }
 
     match mode {
         profile::MiniIndicator::SubtractiveScoring => {
-            let entered_percent_mode = progress.w3 > 0
-                || progress.w4 > 0
-                || progress.w5 > 0
-                || progress.miss > 0
-                || progress.let_go > 0
-                || progress.mines_hit > 0
-                || p.is_failing
-                || p.life <= 0.0
-                || progress.w2 > 10;
-            if !entered_percent_mode && progress.w2 > 0 {
-                return Some((cached_neg_int_u32(progress.w2), color::rgba_hex("#ff55cc")));
+            let (count, entered_percent_mode) =
+                zmod_subtractive_counter_state(&progress, profile.mini_indicator_score_type);
+            if !(entered_percent_mode || p.is_failing || p.life <= 0.0) && count > 0 {
+                return Some((cached_neg_int_u32(count), color::rgba_hex("#ff55cc")));
             }
 
             let pcts = &progress;
@@ -6408,13 +6290,13 @@ pub fn build(
 #[cfg(test)]
 mod tests {
     use super::{
-        TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, append_mini_part,
-        append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
+        MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
+        append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hud_y, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_scale_height,
         note_world_z, note_x_extra, offset_center, push_transform_parts, receptor_row_center,
         tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits,
-        turn_option_name,
+        turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::note::NoteType;
@@ -6604,6 +6486,39 @@ mod tests {
     fn bottom_cap_uv_window_rejects_degenerate_inputs() {
         assert_eq!(bottom_cap_uv_window(0.0, 1.0, 0.0, 24.0, false), None);
         assert_eq!(bottom_cap_uv_window(0.0, 1.0, 24.0, 0.0, false), None);
+    }
+
+    #[test]
+    fn subtractive_counter_uses_whites_for_ex_paths() {
+        let itg = MiniIndicatorProgress {
+            w2: 4,
+            white_count: 7,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_counter_state(&itg, profile::MiniIndicatorScoreType::Itg),
+            (4, false)
+        );
+
+        let ex = MiniIndicatorProgress {
+            w2: 0,
+            white_count: 7,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_counter_state(&ex, profile::MiniIndicatorScoreType::Ex),
+            (7, false)
+        );
+
+        let hard_ex = MiniIndicatorProgress {
+            w2: 1,
+            white_count: 7,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_counter_state(&hard_ex, profile::MiniIndicatorScoreType::HardEx),
+            (7, true)
+        );
     }
 
     #[test]

@@ -1085,7 +1085,7 @@ impl core::fmt::Display for MiniIndicator {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MiniIndicatorScoreType {
     #[default]
-    Money,
+    Itg,
     Ex,
     HardEx,
 }
@@ -1101,10 +1101,12 @@ impl FromStr for MiniIndicatorScoreType {
             }
         }
         match key.as_str() {
-            "" | "money" | "itg" => Ok(Self::Money),
+            "" | "itg" => Ok(Self::Itg),
             "ex" => Ok(Self::Ex),
             "hardex" | "hex" => Ok(Self::HardEx),
-            other => Err(format!("'{other}' is not a valid MiniIndicatorScoreType setting")),
+            other => Err(format!(
+                "'{other}' is not a valid MiniIndicatorScoreType setting"
+            )),
         }
     }
 }
@@ -1112,7 +1114,7 @@ impl FromStr for MiniIndicatorScoreType {
 impl core::fmt::Display for MiniIndicatorScoreType {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Money => write!(f, "Money"),
+            Self::Itg => write!(f, "ITG"),
             Self::Ex => write!(f, "Ex"),
             Self::HardEx => write!(f, "HardEx"),
         }
@@ -1398,7 +1400,7 @@ impl Default for Profile {
             nps_graph_at_top: false,
             transparent_density_graph_bg: false,
             mini_indicator: MiniIndicator::None,
-            mini_indicator_score_type: MiniIndicatorScoreType::Money,
+            mini_indicator_score_type: MiniIndicatorScoreType::Itg,
             mini_percent: 0,
             perspective: Perspective::default(),
             note_field_offset_x: 0,

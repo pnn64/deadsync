@@ -3670,7 +3670,9 @@ pub struct CourseDisplayCarry {
     // Display split used by gameplay counters (legacy 10ms or custom ms option).
     pub window_counts_display_blue: crate::game::timing::WindowCounts,
     pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
     pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
     pub mines_hit_for_score: u32,
 }
 
@@ -6863,9 +6865,15 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             holds_held_for_score: previous
                 .holds_held_for_score
                 .saturating_add(p.holds_held_for_score),
+            holds_let_go_for_score: previous
+                .holds_let_go_for_score
+                .saturating_add(p.holds_let_go_for_score),
             rolls_held_for_score: previous
                 .rolls_held_for_score
                 .saturating_add(p.rolls_held_for_score),
+            rolls_let_go_for_score: previous
+                .rolls_let_go_for_score
+                .saturating_add(p.rolls_let_go_for_score),
             mines_hit_for_score: previous
                 .mines_hit_for_score
                 .saturating_add(p.mines_hit_for_score),
@@ -7115,122 +7123,61 @@ pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
 }
 
 #[inline(always)]
-fn ex_score_from_components(
-    counts: crate::game::timing::WindowCounts,
-    holds_held: u32,
-    rolls_held: u32,
-    mines_hit: u32,
-    total_steps: u32,
-    holds_total: u32,
-    rolls_total: u32,
-    mines_total: u32,
-) -> f64 {
-    if total_steps == 0 {
-        return 0.0;
-    }
-    let total_possible = f64::from(total_steps).mul_add(3.5, f64::from(holds_total + rolls_total));
-    if total_possible <= 0.0 {
-        return 0.0;
-    }
-    let mines_effective = mines_hit.min(mines_total);
-    let total_points = f64::from(counts.w0) * 3.5
-        + f64::from(counts.w1) * 3.0
-        + f64::from(counts.w2) * 2.0
-        + f64::from(counts.w3)
-        + f64::from(holds_held)
-        + f64::from(rolls_held)
-        - f64::from(mines_effective);
-    ((total_points / total_possible).max(0.0) * 10000.0).floor() / 100.0
+fn scored_hold_totals_with_carry(
+    held: u32,
+    let_go: u32,
+    carry_held: u32,
+    carry_let_go: u32,
+) -> (u32, u32) {
+    let held_total = held.saturating_add(carry_held);
+    let resolved_total = held_total
+        .saturating_add(let_go)
+        .saturating_add(carry_let_go);
+    (held_total, resolved_total)
 }
 
-#[inline(always)]
-fn hard_ex_score_from_components(
-    counts: crate::game::timing::WindowCounts,
-    counts_10ms: crate::game::timing::WindowCounts,
-    holds_held: u32,
-    rolls_held: u32,
-    mines_hit: u32,
-    total_steps: u32,
-    holds_total: u32,
-    rolls_total: u32,
-    mines_total: u32,
-) -> f64 {
-    if total_steps == 0 {
-        return 0.0;
+pub(crate) fn display_ex_score_data(state: &State, player_idx: usize) -> judgment::ExScoreData {
+    if player_idx >= state.num_players {
+        return judgment::ExScoreData::default();
     }
-    let total_possible = f64::from(total_steps).mul_add(3.5, f64::from(holds_total + rolls_total));
-    if total_possible <= 0.0 {
-        return 0.0;
+    let player = &state.players[player_idx];
+    let carry = display_carry_for_player(state, player_idx);
+    let totals = display_totals_for_player(state, player_idx);
+    let (holds_held, holds_resolved) = scored_hold_totals_with_carry(
+        player.holds_held_for_score,
+        player.holds_let_go_for_score,
+        carry.holds_held_for_score,
+        carry.holds_let_go_for_score,
+    );
+    let (rolls_held, rolls_resolved) = scored_hold_totals_with_carry(
+        player.rolls_held_for_score,
+        player.rolls_let_go_for_score,
+        carry.rolls_held_for_score,
+        carry.rolls_let_go_for_score,
+    );
+    judgment::ExScoreData {
+        counts: display_window_counts(state, player_idx, None),
+        counts_10ms: display_window_counts_10ms(state, player_idx),
+        holds_held,
+        holds_resolved,
+        rolls_held,
+        rolls_resolved,
+        mines_hit: player
+            .mines_hit_for_score
+            .saturating_add(carry.mines_hit_for_score),
+        total_steps: totals.total_steps,
+        holds_total: totals.holds_total,
+        rolls_total: totals.rolls_total,
+        mines_total: totals.mines_total,
     }
-    let w010 = counts_10ms.w0;
-    let fantastic_total = counts.w0.saturating_add(counts.w1);
-    let w110 = fantastic_total.saturating_sub(w010);
-    let mines_effective = mines_hit.min(mines_total);
-    let total_points = f64::from(w010) * 3.5
-        + f64::from(w110) * 3.0
-        + f64::from(counts.w2)
-        + f64::from(holds_held)
-        + f64::from(rolls_held)
-        - f64::from(mines_effective);
-    ((total_points / total_possible).max(0.0) * 10000.0).floor() / 100.0
 }
 
 pub fn display_ex_score_percent(state: &State, player_idx: usize) -> f64 {
-    if player_idx >= state.num_players {
-        return 0.0;
-    }
-    let carry = display_carry_for_player(state, player_idx);
-    let counts = display_window_counts(state, player_idx, None);
-    let holds_held = state.players[player_idx]
-        .holds_held_for_score
-        .saturating_add(carry.holds_held_for_score);
-    let rolls_held = state.players[player_idx]
-        .rolls_held_for_score
-        .saturating_add(carry.rolls_held_for_score);
-    let mines_hit = state.players[player_idx]
-        .mines_hit_for_score
-        .saturating_add(carry.mines_hit_for_score);
-    let totals = display_totals_for_player(state, player_idx);
-    ex_score_from_components(
-        counts,
-        holds_held,
-        rolls_held,
-        mines_hit,
-        totals.total_steps,
-        totals.holds_total,
-        totals.rolls_total,
-        totals.mines_total,
-    )
+    judgment::ex_score_percent(&display_ex_score_data(state, player_idx))
 }
 
 pub fn display_hard_ex_score_percent(state: &State, player_idx: usize) -> f64 {
-    if player_idx >= state.num_players {
-        return 0.0;
-    }
-    let carry = display_carry_for_player(state, player_idx);
-    let counts = display_window_counts(state, player_idx, None);
-    let counts_10ms = display_window_counts_10ms(state, player_idx);
-    let holds_held = state.players[player_idx]
-        .holds_held_for_score
-        .saturating_add(carry.holds_held_for_score);
-    let rolls_held = state.players[player_idx]
-        .rolls_held_for_score
-        .saturating_add(carry.rolls_held_for_score);
-    let mines_hit = state.players[player_idx]
-        .mines_hit_for_score
-        .saturating_add(carry.mines_hit_for_score);
-    let totals = display_totals_for_player(state, player_idx);
-    hard_ex_score_from_components(
-        counts,
-        counts_10ms,
-        holds_held,
-        rolls_held,
-        mines_hit,
-        totals.total_steps,
-        totals.holds_total,
-        totals.rolls_total,
-        totals.mines_total,
-    )
+    judgment::hard_ex_score_percent(&display_ex_score_data(state, player_idx))
 }
 
 fn update_itg_grade_totals(p: &mut PlayerRuntime) {
@@ -10725,7 +10672,8 @@ mod tests {
         SongClockSnapshot, TickMode, apply_mines_insert, build_assist_clap_rows,
         build_attack_mask_windows_for_player, frame_stable_display_music_time,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
-        player_draw_scale_for_tilt_with_visual_mask, tick_mode_status_line, turn_option_bits,
+        player_draw_scale_for_tilt_with_visual_mask, scored_hold_totals_with_carry,
+        tick_mode_status_line, turn_option_bits,
     };
     use crate::game::note::{HoldData, Note, NoteType};
     use crate::game::profile;
@@ -10826,6 +10774,11 @@ mod tests {
             can_be_judged: true,
         }];
         assert_eq!(build_assist_clap_rows(&notes, (0, 1)), vec![48]);
+    }
+
+    #[test]
+    fn scored_hold_totals_with_carry_include_prior_let_go() {
+        assert_eq!(scored_hold_totals_with_carry(3, 2, 4, 5), (7, 14));
     }
 
     #[test]

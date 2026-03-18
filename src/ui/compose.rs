@@ -2301,21 +2301,25 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
 mod tests {
     use super::wrap_text_lines_by_words;
 
+    fn boxed_lines(lines: &[&str]) -> Vec<Box<str>> {
+        lines.iter().map(|line| Box::<str>::from(*line)).collect()
+    }
+
     #[test]
     fn wrapwidthpixels_wraps_on_spaces() {
         let lines = wrap_text_lines_by_words("A BB CCC", 3, 1, |word| word.len() as i32);
-        assert_eq!(lines, vec!["A", "BB", "CCC"]);
+        assert_eq!(lines, boxed_lines(&["A", "BB", "CCC"]));
     }
 
     #[test]
     fn wrapwidthpixels_keeps_empty_lines() {
         let lines = wrap_text_lines_by_words("AA\n\nBB CC", 5, 1, |word| word.len() as i32);
-        assert_eq!(lines, vec!["AA", "", "BB", "CC"]);
+        assert_eq!(lines, boxed_lines(&["AA", "", "BB", "CC"]));
     }
 
     #[test]
     fn wrapwidthpixels_keeps_long_word_on_own_line() {
         let lines = wrap_text_lines_by_words("AAAA BB", 3, 1, |word| word.len() as i32);
-        assert_eq!(lines, vec!["AAAA", "BB"]);
+        assert_eq!(lines, boxed_lines(&["AAAA", "BB"]));
     }
 }

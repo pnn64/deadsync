@@ -1153,15 +1153,11 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
         },
         Row {
             name: ROW_INDICATOR_SCORE_TYPE.to_string(),
-            choices: vec![
-                "Money".to_string(),
-                "EX".to_string(),
-                "H.EX".to_string(),
-            ],
+            choices: vec!["ITG".to_string(), "EX".to_string(), "H.EX".to_string()],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
                 "Choose which score formula the mini indicator tracks:".to_string(),
-                "Money (ITG), EX (FA+), or H.EX (Hard EX).".to_string(),
+                "ITG, EX (FA+), or H.EX (Hard EX).".to_string(),
             ],
             choice_difficulty_indices: None,
         },
@@ -1971,12 +1967,9 @@ fn apply_profile_defaults(
         }
         .min(row.choices.len().saturating_sub(1));
     }
-    if let Some(row) = rows
-        .iter_mut()
-        .find(|r| r.name == ROW_INDICATOR_SCORE_TYPE)
-    {
+    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_INDICATOR_SCORE_TYPE) {
         row.selected_choice_index[player_idx] = match profile.mini_indicator_score_type {
-            crate::game::profile::MiniIndicatorScoreType::Money => 0,
+            crate::game::profile::MiniIndicatorScoreType::Itg => 0,
             crate::game::profile::MiniIndicatorScoreType::Ex => 1,
             crate::game::profile::MiniIndicatorScoreType::HardEx => 2,
         }
@@ -3657,11 +3650,11 @@ fn change_choice_for_player(
             .choices
             .get(row.selected_choice_index[player_idx])
             .map(|s| s.as_str())
-            .unwrap_or("Money");
+            .unwrap_or("ITG");
         let score_type = match choice {
             "EX" => crate::game::profile::MiniIndicatorScoreType::Ex,
             "H.EX" => crate::game::profile::MiniIndicatorScoreType::HardEx,
-            _ => crate::game::profile::MiniIndicatorScoreType::Money,
+            _ => crate::game::profile::MiniIndicatorScoreType::Itg,
         };
         state.player_profiles[player_idx].mini_indicator_score_type = score_type;
         if should_persist {
