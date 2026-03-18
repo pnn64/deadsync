@@ -48,6 +48,9 @@ pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 pub const MAX_COLS: usize = 8;
 pub const MAX_PLAYERS: usize = 2;
+const OFFSET_ADJUST_STEP_SECONDS: f32 = 0.001;
+const OFFSET_ADJUST_REPEAT_DELAY: Duration = Duration::from_millis(300);
+const OFFSET_ADJUST_REPEAT_INTERVAL: Duration = Duration::from_millis(50);
 const INSERT_MASK_BIT_WIDE: u8 = 1u8 << 0;
 const INSERT_MASK_BIT_BIG: u8 = 1u8 << 1;
 const INSERT_MASK_BIT_QUICK: u8 = 1u8 << 2;
@@ -4086,6 +4089,8 @@ pub struct State {
     pub hold_to_exit_start: Option<Instant>,
     pub hold_to_exit_aborted_at: Option<Instant>,
     pub exit_transition: Option<ExitTransition>,
+    offset_adjust_held_since: [Option<Instant>; 2],
+    offset_adjust_last_at: [Option<Instant>; 2],
     prev_inputs: [bool; MAX_COLS],
     keyboard_lane_state: [bool; MAX_COLS],
     gamepad_lane_state: [bool; MAX_COLS],
@@ -6710,6 +6715,8 @@ pub fn init(
         hold_to_exit_start: None,
         hold_to_exit_aborted_at: None,
         exit_transition: None,
+        offset_adjust_held_since: [None; 2],
+        offset_adjust_last_at: [None; 2],
         prev_inputs: [false; MAX_COLS],
         keyboard_lane_state: [false; MAX_COLS],
         gamepad_lane_state: [false; MAX_COLS],
@@ -9106,6 +9113,73 @@ fn refresh_sync_overlay_message(state: &mut State) {
 }
 
 #[inline(always)]
+fn offset_adjust_slot(code: KeyCode) -> Option<usize> {
+    match code {
+        KeyCode::F11 => Some(0),
+        KeyCode::F12 => Some(1),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn offset_adjust_delta(code: KeyCode) -> Option<f32> {
+    match code {
+        KeyCode::F11 => Some(-OFFSET_ADJUST_STEP_SECONDS),
+        KeyCode::F12 => Some(OFFSET_ADJUST_STEP_SECONDS),
+        _ => return None,
+    }
+}
+
+#[inline(always)]
+fn clear_offset_adjust_hold(state: &mut State, code: KeyCode) -> bool {
+    let Some(slot) = offset_adjust_slot(code) else {
+        return false;
+    };
+    state.offset_adjust_held_since[slot] = None;
+    state.offset_adjust_last_at[slot] = None;
+    true
+}
+
+#[inline(always)]
+fn start_offset_adjust_hold(state: &mut State, code: KeyCode) -> Option<f32> {
+    let slot = offset_adjust_slot(code)?;
+    let now = Instant::now();
+    state.offset_adjust_held_since[slot] = Some(now);
+    state.offset_adjust_last_at[slot] = Some(now);
+    offset_adjust_delta(code)
+}
+
+#[inline(always)]
+fn update_offset_adjust_hold(state: &mut State, shift_held: bool) {
+    let now = Instant::now();
+    for code in [KeyCode::F11, KeyCode::F12] {
+        let Some(slot) = offset_adjust_slot(code) else {
+            continue;
+        };
+        let (Some(held_since), Some(last_at)) = (
+            state.offset_adjust_held_since[slot],
+            state.offset_adjust_last_at[slot],
+        ) else {
+            continue;
+        };
+        if now.duration_since(held_since) < OFFSET_ADJUST_REPEAT_DELAY
+            || now.duration_since(last_at) < OFFSET_ADJUST_REPEAT_INTERVAL
+        {
+            continue;
+        }
+        let Some(delta) = offset_adjust_delta(code) else {
+            continue;
+        };
+        if shift_held {
+            let _ = apply_global_offset_delta(state, delta);
+        } else if state.course_display_totals.is_none() {
+            let _ = apply_song_offset_delta(state, delta);
+        }
+        state.offset_adjust_last_at[slot] = Some(now);
+    }
+}
+
+#[inline(always)]
 fn apply_global_offset_delta(state: &mut State, delta: f32) -> bool {
     let old_offset = state.global_offset_seconds;
     let new_offset = old_offset + delta;
@@ -9156,6 +9230,7 @@ pub fn handle_raw_keycode_event(
     shift_held: bool,
 ) -> ScreenAction {
     if !pressed {
+        let _ = clear_offset_adjust_hold(state, code);
         return ScreenAction::None;
     }
     if code == KeyCode::F6 {
@@ -9174,11 +9249,8 @@ pub fn handle_raw_keycode_event(
         set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
         return ScreenAction::None;
     }
-
-    let delta = match code {
-        KeyCode::F11 => -0.001_f32,
-        KeyCode::F12 => 0.001_f32,
-        _ => return ScreenAction::None,
+    let Some(delta) = start_offset_adjust_hold(state, code) else {
+        return ScreenAction::None;
     };
 
     if shift_held {
@@ -9195,19 +9267,15 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool)
     use winit::event::ElementState;
     use winit::keyboard::PhysicalKey;
 
-    if key.state != ElementState::Pressed {
-        return ScreenAction::None;
-    }
-
     let PhysicalKey::Code(code) = key.physical_key else {
         return ScreenAction::None;
     };
 
-    if key.repeat && matches!(code, KeyCode::F6 | KeyCode::F7) {
+    if key.repeat {
         return ScreenAction::None;
     }
 
-    handle_raw_keycode_event(state, code, true, shift_held)
+    handle_raw_keycode_event(state, code, key.state == ElementState::Pressed, shift_held)
 }
 
 fn finalize_row_judgment(
@@ -10274,7 +10342,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     }
 }
 
-pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
+pub fn update(state: &mut State, delta_time: f32, shift_held: bool) -> ScreenAction {
     if let Some(exit) = state.exit_transition {
         state.total_elapsed_in_screen += delta_time;
         if exit.started_at.elapsed().as_secs_f32() >= exit_total_seconds(exit.kind) {
@@ -10423,6 +10491,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     } else {
         None
     };
+    update_offset_adjust_hold(state, shift_held);
     process_input_edges(state, trace_enabled, &mut phase_timings, song_clock);
     if let Some(started) = input_started {
         phase_timings.input_edges_us = elapsed_us_since(started);

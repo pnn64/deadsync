@@ -2200,12 +2200,13 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         asset_manager: &AssetManager,
+        shift_held: bool,
     ) -> Option<ScreenAction> {
         match self.current_screen {
             CurrentScreen::Gameplay => self
                 .gameplay_state
                 .as_mut()
-                .map(|gs| gameplay::update(gs, delta_time)),
+                .map(|gs| gameplay::update(gs, delta_time, shift_held)),
             CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
             CurrentScreen::Options => {
                 options::update(&mut self.options_state, delta_time, asset_manager)
@@ -2743,7 +2744,7 @@ impl App {
                 if self.state.screens.current_screen == CurrentScreen::Gameplay
                     && let Some(gs) = self.state.screens.gameplay_state.as_mut()
                 {
-                    let _ = gameplay::update(gs, delta_time);
+                    let _ = gameplay::update(gs, delta_time, self.state.shell.shift_held);
                 }
 
                 if finished
@@ -2771,6 +2772,7 @@ impl App {
                         redraw_started,
                         &self.state.session,
                         &self.asset_manager,
+                        self.state.shell.shift_held,
                     ) && !matches!(action, ScreenAction::None)
                     {
                         let _ = self.handle_action(action, event_loop);
