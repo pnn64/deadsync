@@ -91,7 +91,6 @@ pub fn build_column_judgments_pane(
         label: &'static str,
         color: [f32; 4],
         show_early: bool,
-        show_all: bool,
     }
 
     let show_fa_plus_rows = score_info.show_fa_plus_window && score_info.show_fa_plus_pane;
@@ -102,49 +101,42 @@ pub fn build_column_judgments_pane(
                 label: "FANTASTIC",
                 color: color::JUDGMENT_RGBA[0],
                 show_early: false,
-                show_all: false,
             },
             RowInfo {
                 kind: RowKind::FanW1,
                 label: "FANTASTIC",
                 color: color::JUDGMENT_FA_PLUS_WHITE_RGBA,
                 show_early: true,
-                show_all: false,
             },
             RowInfo {
                 kind: RowKind::Ex,
                 label: "EXCELLENT",
                 color: color::JUDGMENT_RGBA[1],
                 show_early: true,
-                show_all: false,
             },
             RowInfo {
                 kind: RowKind::Gr,
                 label: "GREAT",
                 color: color::JUDGMENT_RGBA[2],
                 show_early: true,
-                show_all: false,
             },
             RowInfo {
                 kind: RowKind::Dec,
                 label: "DECENT",
                 color: color::JUDGMENT_RGBA[3],
                 show_early: true,
-                show_all: true,
             },
             RowInfo {
                 kind: RowKind::Wo,
                 label: "WAY OFF",
                 color: color::JUDGMENT_RGBA[4],
                 show_early: true,
-                show_all: true,
             },
             RowInfo {
                 kind: RowKind::Miss,
                 label: "MISS",
                 color: color::JUDGMENT_RGBA[5],
                 show_early: false,
-                show_all: false,
             },
         ]
     } else {
@@ -154,42 +146,36 @@ pub fn build_column_judgments_pane(
                 label: "FANTASTIC",
                 color: color::JUDGMENT_RGBA[0],
                 show_early: false,
-                show_all: false,
             },
             RowInfo {
                 kind: RowKind::Ex,
                 label: "EXCELLENT",
                 color: color::JUDGMENT_RGBA[1],
                 show_early: true,
-                show_all: false,
             },
             RowInfo {
                 kind: RowKind::Gr,
                 label: "GREAT",
                 color: color::JUDGMENT_RGBA[2],
                 show_early: true,
-                show_all: false,
             },
             RowInfo {
                 kind: RowKind::Dec,
                 label: "DECENT",
                 color: color::JUDGMENT_RGBA[3],
                 show_early: true,
-                show_all: true,
             },
             RowInfo {
                 kind: RowKind::Wo,
                 label: "WAY OFF",
                 color: color::JUDGMENT_RGBA[4],
                 show_early: true,
-                show_all: true,
             },
             RowInfo {
                 kind: RowKind::Miss,
                 label: "MISS",
                 color: color::JUDGMENT_RGBA[5],
                 show_early: false,
-                show_all: false,
             },
         ]
     };
@@ -228,7 +214,6 @@ pub fn build_column_judgments_pane(
     struct RowCounts {
         count: u32,
         early: Option<u32>,
-        all: Option<u32>,
     }
 
     let count_for = |cj: ColumnJudgments, kind: RowKind| -> RowCounts {
@@ -236,42 +221,34 @@ pub fn build_column_judgments_pane(
             RowKind::FanCombined => RowCounts {
                 count: cj.w0.saturating_add(cj.w1),
                 early: None,
-                all: None,
             },
             RowKind::FanW0 => RowCounts {
                 count: cj.w0,
                 early: None,
-                all: None,
             },
             RowKind::FanW1 => RowCounts {
                 count: cj.w1,
                 early: Some(cj.early_w1),
-                all: None,
             },
             RowKind::Ex => RowCounts {
                 count: cj.w2,
                 early: Some(cj.early_w2),
-                all: None,
             },
             RowKind::Gr => RowCounts {
                 count: cj.w3,
                 early: Some(cj.early_w3),
-                all: None,
             },
             RowKind::Dec => RowCounts {
                 count: cj.w4,
                 early: Some(cj.early_w4),
-                all: Some(cj.early_total_w4),
             },
             RowKind::Wo => RowCounts {
                 count: cj.w5,
                 early: Some(cj.early_w5),
-                all: Some(cj.early_total_w5),
             },
             RowKind::Miss => RowCounts {
                 count: cj.miss,
                 early: None,
-                all: None,
             },
         }
     };
@@ -301,16 +278,6 @@ pub fn build_column_judgments_pane(
                         font::measure_line_width_logical(miso_font, row.label, all_fonts) as f32
                             * label_zoom;
                     let info_x = labels_right_x - label_width / 1.15;
-                    if row.show_all {
-                        actors.push(act!(text: font("miso"): settext("(ALL)".to_string()):
-                            align(1.0, 0.5):
-                            xy(info_x, y - (row_height * 0.70)):
-                            zoom(0.6):
-                            horizalign(right):
-                            diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
-                            z(101)
-                        ));
-                    }
                     actors.push(act!(text: font("miso"): settext("EARLY".to_string()):
                         align(1.0, 0.5):
                         xy(info_x, y - (row_height * 0.35)):
@@ -587,18 +554,6 @@ pub fn build_column_judgments_pane(
                         horizalign(center):
                         z(101)
                     ));
-
-                    if score_info.track_early_judgments
-                        && let Some(all) = counts.all
-                    {
-                        actors.push(act!(text: font("miso"): settext(all.to_string()):
-                            align(0.0, 0.5):
-                            xy(right_edge_x, y - (row_height * 0.70)):
-                            zoom(small_zoom):
-                            horizalign(left):
-                            z(101)
-                        ));
-                    }
 
                     if score_info.track_early_judgments
                         && let Some(early) = counts.early
