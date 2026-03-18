@@ -194,16 +194,23 @@ pub fn init(
         let vec2_size = (2 * mem::size_of::<f32>()) as i32;
         let vec4_size = (4 * mem::size_of::<f32>()) as i32;
         gl.enable_vertex_attrib_array(2);
-        gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false, inst_stride, 0);
+        gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, inst_stride, 0);
         gl.vertex_attrib_divisor(2, 1);
         gl.enable_vertex_attrib_array(3);
-        gl.vertex_attrib_pointer_f32(3, 2, glow::FLOAT, false, inst_stride, vec2_size);
+        gl.vertex_attrib_pointer_f32(3, 2, glow::FLOAT, false, inst_stride, vec4_size);
         gl.vertex_attrib_divisor(3, 1);
         gl.enable_vertex_attrib_array(4);
-        gl.vertex_attrib_pointer_f32(4, 2, glow::FLOAT, false, inst_stride, 2 * vec2_size);
+        gl.vertex_attrib_pointer_f32(4, 2, glow::FLOAT, false, inst_stride, vec4_size + vec2_size);
         gl.vertex_attrib_divisor(4, 1);
         gl.enable_vertex_attrib_array(5);
-        gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, inst_stride, 3 * vec2_size);
+        gl.vertex_attrib_pointer_f32(
+            5,
+            4,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            vec4_size + 2 * vec2_size,
+        );
         gl.vertex_attrib_divisor(5, 1);
         gl.enable_vertex_attrib_array(6);
         gl.vertex_attrib_pointer_f32(
@@ -212,7 +219,7 @@ pub fn init(
             glow::FLOAT,
             false,
             inst_stride,
-            3 * vec2_size + vec4_size,
+            2 * vec4_size + 2 * vec2_size,
         );
         gl.vertex_attrib_divisor(6, 1);
         gl.enable_vertex_attrib_array(7);
@@ -222,7 +229,7 @@ pub fn init(
             glow::FLOAT,
             false,
             inst_stride,
-            4 * vec2_size + vec4_size,
+            2 * vec4_size + 3 * vec2_size,
         );
         gl.vertex_attrib_divisor(7, 1);
         gl.enable_vertex_attrib_array(8);
@@ -232,7 +239,7 @@ pub fn init(
             glow::FLOAT,
             false,
             inst_stride,
-            5 * vec2_size + vec4_size,
+            2 * vec4_size + 4 * vec2_size,
         );
         gl.vertex_attrib_divisor(8, 1);
         gl.enable_vertex_attrib_array(9);
@@ -242,7 +249,7 @@ pub fn init(
             glow::FLOAT,
             false,
             inst_stride,
-            6 * vec2_size + vec4_size,
+            2 * vec4_size + 5 * vec2_size,
         );
         gl.vertex_attrib_divisor(9, 1);
         gl.enable_vertex_attrib_array(10);
@@ -252,7 +259,7 @@ pub fn init(
             glow::FLOAT,
             false,
             inst_stride,
-            7 * vec2_size + vec4_size,
+            2 * vec4_size + 6 * vec2_size,
         );
         gl.vertex_attrib_divisor(10, 1);
 
@@ -697,14 +704,14 @@ pub fn draw(
                         let vec4_size = (4 * std::mem::size_of::<f32>()) as i32;
                         let base = (run.instance_start as i32) * inst_stride;
                         gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
-                        gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false, inst_stride, base);
+                        gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, inst_stride, base);
                         gl.vertex_attrib_pointer_f32(
                             3,
                             2,
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + vec2_size,
+                            base + vec4_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             4,
@@ -712,7 +719,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 2 * vec2_size,
+                            base + vec4_size + vec2_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             5,
@@ -720,7 +727,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 3 * vec2_size,
+                            base + vec4_size + 2 * vec2_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             6,
@@ -728,7 +735,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 3 * vec2_size + vec4_size,
+                            base + 2 * vec4_size + 2 * vec2_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             7,
@@ -736,7 +743,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 4 * vec2_size + vec4_size,
+                            base + 2 * vec4_size + 3 * vec2_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             8,
@@ -744,7 +751,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 5 * vec2_size + vec4_size,
+                            base + 2 * vec4_size + 4 * vec2_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             9,
@@ -752,7 +759,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 6 * vec2_size + vec4_size,
+                            base + 2 * vec4_size + 5 * vec2_size,
                         );
                         gl.vertex_attrib_pointer_f32(
                             10,
@@ -760,7 +767,7 @@ pub fn draw(
                             glow::FLOAT,
                             false,
                             inst_stride,
-                            base + 7 * vec2_size + vec4_size,
+                            base + 2 * vec4_size + 6 * vec2_size,
                         );
                         last_sprite_instance_start = Some(run.instance_start);
                     }

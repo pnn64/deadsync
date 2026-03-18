@@ -18,6 +18,34 @@ pub enum ScatterPlotScale {
     Foot,
 }
 
+const HIST_BIN_MS: f32 = 1.0;
+
+#[inline(always)]
+fn hard_ex_display_window_ms(worst_window_ms: f32) -> f32 {
+    worst_window_ms.min(crate::game::timing::effective_windows_ms()[1])
+}
+
+#[inline(always)]
+fn scatter_display_window_ms(worst_window_ms: f32, scale: ScatterPlotScale) -> f32 {
+    let display = match scale {
+        ScatterPlotScale::HardEx => hard_ex_display_window_ms(worst_window_ms),
+        ScatterPlotScale::Itg
+        | ScatterPlotScale::Ex
+        | ScatterPlotScale::Arrow
+        | ScatterPlotScale::Foot => worst_window_ms,
+    };
+    display.max(1.0)
+}
+
+#[inline(always)]
+pub(crate) fn timing_display_window_ms(worst_window_ms: f32, scale: TimingHistogramScale) -> f32 {
+    let display = match scale {
+        TimingHistogramScale::HardEx => hard_ex_display_window_ms(worst_window_ms),
+        TimingHistogramScale::Itg | TimingHistogramScale::Ex => worst_window_ms,
+    };
+    display.max(1.0)
+}
+
 #[inline(always)]
 fn color_for_abs_ms(
     abs_ms: f32,
@@ -137,6 +165,17 @@ fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4
 }
 
 #[inline(always)]
+fn hist_bin_abs_ms(bin: i32) -> f32 {
+    if bin < 0 {
+        bin.unsigned_abs() as f32 - 0.5
+    } else if bin > 0 {
+        bin as f32 + 0.5
+    } else {
+        0.0
+    }
+}
+
+#[inline(always)]
 fn push_quad(out: &mut Vec<MeshVertex>, x: f32, y: f32, w: f32, h: f32, color: [f32; 4]) {
     let x1 = x + w;
     let y1 = y + h;
@@ -176,12 +215,21 @@ pub fn build_scatter_mesh(
     }
 
     let denom = ((last_second + 0.05) - first_second).max(0.001);
-    let worst = worst_window_ms.max(1.0);
+    let worst = scatter_display_window_ms(worst_window_ms, scale);
     let timing_windows_ms = crate::game::timing::effective_windows_ms();
+    const POINT_W: f32 = 1.5;
+    const POINT_H: f32 = 1.5;
+    const MISS_W: f32 = 1.0;
 
     let mut out: Vec<MeshVertex> = Vec::with_capacity(scatter.len().saturating_mul(6));
 
     for sp in scatter {
+        if let Some(off_ms) = sp.offset_ms
+            && off_ms.abs() > worst
+        {
+            continue;
+        }
+
         let x_time = match sp.offset_ms {
             Some(off_ms) => sp.time_sec - (off_ms / 1000.0),
             None => sp.time_sec - (worst / 1000.0),
@@ -191,12 +239,14 @@ pub fn build_scatter_mesh(
         match sp.offset_ms {
             Some(off_ms) => {
                 let t = ((worst - off_ms) / (2.0 * worst)).clamp(0.0, 1.0);
-                let y = t * h;
+                let x = x.clamp(0.0, (w - POINT_W).max(0.0));
+                let y = (t * (h - POINT_H).max(0.0)).clamp(0.0, (h - POINT_H).max(0.0));
                 let base = color_for_scatter(sp, off_ms.abs(), timing_windows_ms, scale);
                 let c = [base[0], base[1], base[2], 0.666];
-                push_quad(&mut out, x, y, 1.5, 1.5, c);
+                push_quad(&mut out, x, y, POINT_W, POINT_H, c);
             }
             None => {
+                let x = x.clamp(0.0, (w - MISS_W).max(0.0));
                 let base = miss_color_for_scatter(sp, scale);
                 let miss_alpha = if matches!(
                     scale,
@@ -209,12 +259,75 @@ pub fn build_scatter_mesh(
                 let c = [base[0], base[1], base[2], miss_alpha];
                 let h1 = if sp.miss_because_held { h * 0.5 } else { 0.0 };
                 let h2 = if sp.miss_because_held { h } else { h * 0.5 };
-                push_quad(&mut out, x, h1, 1.0, (h2 - h1).max(0.0), c);
+                push_quad(&mut out, x, h1, MISS_W, (h2 - h1).max(0.0), c);
             }
         }
     }
 
     out
+}
+
+#[inline(always)]
+fn hist_worst_observed_bin(histogram: &HistogramMs, worst_bin: i32) -> i32 {
+    let mut worst_observed = 0;
+    for &(bin, _) in &histogram.bins {
+        if bin < -worst_bin {
+            continue;
+        }
+        if bin > worst_bin {
+            break;
+        }
+        worst_observed = worst_observed.max(bin.abs());
+    }
+    worst_observed
+}
+
+#[inline(always)]
+fn hist_raw_y(bins: &[(i32, u32)], raw_ix: &mut usize, bin: i32) -> f32 {
+    while *raw_ix < bins.len() && bins[*raw_ix].0 < bin {
+        *raw_ix += 1;
+    }
+    if *raw_ix < bins.len() && bins[*raw_ix].0 == bin {
+        bins[*raw_ix].1 as f32
+    } else {
+        0.0
+    }
+}
+
+#[inline(always)]
+fn push_hist_segment(
+    out: &mut Vec<MeshVertex>,
+    ax: f32,
+    atop: f32,
+    bx: f32,
+    btop: f32,
+    bottom_y: f32,
+    color: [f32; 4],
+) {
+    out.push(MeshVertex {
+        pos: [ax, bottom_y],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [ax, atop],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, bottom_y],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [ax, atop],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, btop],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, bottom_y],
+        color,
+    });
 }
 
 pub fn build_offset_histogram_mesh(
@@ -232,93 +345,59 @@ pub fn build_offset_histogram_mesh(
         return Vec::new();
     }
 
-    let worst_bin = (histogram.worst_window_ms / 1.0).round() as i32;
+    let display_window_ms = timing_display_window_ms(histogram.worst_window_ms, scale);
+    let worst_bin = (display_window_ms / HIST_BIN_MS).round() as i32;
     if worst_bin <= 0 {
         return Vec::new();
     }
     let total_bins = (worst_bin * 2 + 1).max(1);
     let w = pw / (total_bins as f32);
-    let peak = histogram.max_count.max(1) as f32;
-    let worst_observed = (histogram.worst_observed_ms / 1.0).round() as i32;
+    let worst_observed = hist_worst_observed_bin(histogram, worst_bin);
     if worst_observed <= 0 {
         return Vec::new();
     }
+    let peak = histogram.max_count.max(1) as f32;
 
     let timing_windows_ms = crate::game::timing::effective_windows_ms();
     let height_max = ph * 0.75;
-
-    let mut raw: Vec<u32> = Vec::new();
-    if !use_smoothing {
-        raw.resize(total_bins as usize, 0);
-        for &(bin, cnt) in &histogram.bins {
-            let idx = bin + worst_bin;
-            if idx >= 0 && idx < total_bins {
-                raw[idx as usize] = cnt;
-            }
-        }
-    }
-
-    #[derive(Clone, Copy)]
-    struct Col {
-        x: f32,
-        top_y: f32,
-        color: [f32; 4],
-    }
-
-    let mut cols: Vec<Col> = Vec::with_capacity((worst_observed * 2 + 1).max(0) as usize);
-    for bin in -worst_bin..=worst_bin {
-        if bin.abs() > worst_observed {
-            continue;
-        }
-        let i = (bin - (-worst_bin) + 1) as f32;
-        let x = i * w;
-        let y = if use_smoothing {
-            let idx = (bin + worst_bin) as usize;
-            histogram.smoothed.get(idx).map_or(0.0, |(_, v)| *v)
-        } else {
-            raw[(bin + worst_bin) as usize] as f32
-        };
-        let bar_h = (y / peak) * height_max;
-        let top_y = (gh - bar_h).max(0.0);
-        let c = color_for_abs_ms(bin.abs() as f32, timing_windows_ms, scale);
-        cols.push(Col { x, top_y, color: c });
-    }
-
-    if cols.len() < 2 {
-        return Vec::new();
-    }
-
     let bottom_y = gh;
-    let mut out: Vec<MeshVertex> = Vec::with_capacity((cols.len() - 1) * 6);
-    for w in cols.windows(2) {
-        let a = w[0];
-        let b = w[1];
+    let x_for = |bin: i32| (bin + worst_bin + 1) as f32 * w;
+    let top_y_for = |y: f32| (gh - (y / peak) * height_max).max(0.0);
+    let first_bin = -worst_observed;
+    let mut out: Vec<MeshVertex> = Vec::with_capacity((worst_observed as usize).saturating_mul(12));
 
-        out.push(MeshVertex {
-            pos: [a.x, bottom_y],
-            color: a.color,
-        });
-        out.push(MeshVertex {
-            pos: [a.x, a.top_y],
-            color: a.color,
-        });
-        out.push(MeshVertex {
-            pos: [b.x, bottom_y],
-            color: b.color,
-        });
+    if use_smoothing {
+        let smoothed_zero = (histogram.smoothed.len() / 2) as i32;
+        let mut prev_x = x_for(first_bin);
+        let mut prev_top = top_y_for(histogram.smoothed[(first_bin + smoothed_zero) as usize].1);
+        let mut prev_color = color_for_abs_ms(hist_bin_abs_ms(first_bin), timing_windows_ms, scale);
 
-        out.push(MeshVertex {
-            pos: [a.x, a.top_y],
-            color: a.color,
-        });
-        out.push(MeshVertex {
-            pos: [b.x, b.top_y],
-            color: b.color,
-        });
-        out.push(MeshVertex {
-            pos: [b.x, bottom_y],
-            color: b.color,
-        });
+        for bin in (first_bin + 1)..=worst_observed {
+            let x = x_for(bin);
+            let top = top_y_for(histogram.smoothed[(bin + smoothed_zero) as usize].1);
+            push_hist_segment(&mut out, prev_x, prev_top, x, top, bottom_y, prev_color);
+            prev_x = x;
+            prev_top = top;
+            prev_color = color_for_abs_ms(hist_bin_abs_ms(bin), timing_windows_ms, scale);
+        }
+    } else {
+        let mut raw_ix = 0usize;
+        while raw_ix < histogram.bins.len() && histogram.bins[raw_ix].0 < first_bin {
+            raw_ix += 1;
+        }
+
+        let mut prev_x = x_for(first_bin);
+        let mut prev_top = top_y_for(hist_raw_y(&histogram.bins, &mut raw_ix, first_bin));
+        let mut prev_color = color_for_abs_ms(hist_bin_abs_ms(first_bin), timing_windows_ms, scale);
+
+        for bin in (first_bin + 1)..=worst_observed {
+            let x = x_for(bin);
+            let top = top_y_for(hist_raw_y(&histogram.bins, &mut raw_ix, bin));
+            push_hist_segment(&mut out, prev_x, prev_top, x, top, bottom_y, prev_color);
+            prev_x = x;
+            prev_top = top;
+            prev_color = color_for_abs_ms(hist_bin_abs_ms(bin), timing_windows_ms, scale);
+        }
     }
 
     out

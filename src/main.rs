@@ -1,4 +1,6 @@
 use deadsync::{app, config, core, game};
+use std::backtrace::Backtrace;
+use std::panic::PanicHookInfo;
 
 #[cfg(windows)]
 struct WindowsTimingGuard {
@@ -167,12 +169,39 @@ fn audio_device_lines(devices: &[core::audio::OutputDeviceInfo]) -> Vec<String> 
         .collect()
 }
 
+fn panic_payload(info: &PanicHookInfo<'_>) -> String {
+    if let Some(s) = info.payload().downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = info.payload().downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "non-string panic payload".to_string()
+    }
+}
+
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let thread = std::thread::current();
+        let thread_name = thread.name().unwrap_or("unnamed");
+        let location = info.location().map_or_else(
+            || "<unknown>".to_string(),
+            |loc| format!("{}:{}:{}", loc.file(), loc.line(), loc.column()),
+        );
+        let payload = panic_payload(info);
+        let backtrace = Backtrace::force_capture();
+        log::error!("Panic on thread '{thread_name}' at {location}: {payload}");
+        log::error!("{backtrace}");
+        log::logger().flush();
+    }));
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     set_runtime_dir()?;
     core::host_time::init();
 
     // Install logger immediately, then set runtime max level from config after loading it.
     core::logging::init(config::bootstrap_log_to_file());
+    install_panic_hook();
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
 

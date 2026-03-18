@@ -11,7 +11,7 @@ use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
-    shared::{gs_scorebox, heart_bg, mode_pads, timers},
+    shared::{banner as shared_banner, gs_scorebox, heart_bg, mode_pads, timers},
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
@@ -1831,12 +1831,14 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         (0.75, screen_center_x() - 166.0, 96.0)
     };
-    actors.push(act!(sprite(state.current_banner_key.clone()):
-        align(0.5, 0.5):
-        xy(banner_cx, banner_cy):
-        setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT):
-        zoom(banner_zoom):
-        z(51)
+    actors.push(shared_banner::sprite(
+        state.current_banner_key.clone(),
+        banner_cx,
+        banner_cy,
+        BANNER_NATIVE_WIDTH,
+        BANNER_NATIVE_HEIGHT,
+        banner_zoom,
+        51,
     ));
 
     let music_rate = profile::get_session_music_rate();

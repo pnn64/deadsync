@@ -725,6 +725,7 @@ fn build_actor_recursive<'a>(
         actors::Actor::Sprite {
             align,
             offset,
+            world_z,
             size,
             source,
             tint,
@@ -854,6 +855,7 @@ fn build_actor_recursive<'a>(
                 effect_rot[0],
                 effect_rot[1],
                 effect_rot[2],
+                *world_z,
                 *local_offset,
                 *local_offset_rot_sin_cos,
                 *texcoordvelocity,
@@ -922,6 +924,7 @@ fn build_actor_recursive<'a>(
         actors::Actor::TexturedMesh {
             align,
             offset,
+            world_z,
             size,
             texture,
             vertices,
@@ -940,7 +943,7 @@ fn build_actor_recursive<'a>(
             let rect = place_rect(parent, *align, *offset, *size);
             let base_x = m.left + rect.x;
             let base_y = m.top - rect.y;
-            let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, 0.0))
+            let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, *world_z))
                 * Matrix4::from_nonuniform_scale(1.0, -1.0, 1.0);
 
             let before = out.len();
@@ -1299,6 +1302,7 @@ fn build_actor_recursive<'a>(
                             0.0,
                             0.0,
                             0.0,
+                            0.0,
                             [0.0, 0.0],
                             [0.0, 1.0],
                             None,
@@ -1337,6 +1341,7 @@ fn build_actor_recursive<'a>(
                             0.0,
                             0.0,
                             BlendMode::Alpha,
+                            0.0,
                             0.0,
                             0.0,
                             0.0,
@@ -1542,6 +1547,7 @@ fn push_sprite<'a>(
     rot_x_deg: f32,
     rot_y_deg: f32,
     rot_z_deg: f32,
+    world_z: f32,
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
     texcoordvelocity: Option<[f32; 2]>,
@@ -1638,7 +1644,7 @@ fn push_sprite<'a>(
         let rz = Matrix4::from_angle_z(Rad(rot_z_deg.to_radians()));
         let r = rx * ry * rz;
         let s = Matrix4::from_nonuniform_scale(size_x, size_y, 1.0);
-        let t = Matrix4::from_translation(Vector3::new(center_x, center_y, 0.0));
+        let t = Matrix4::from_translation(Vector3::new(center_x, center_y, world_z));
         t * r * s
     };
 
