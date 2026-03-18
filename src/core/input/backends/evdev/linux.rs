@@ -70,6 +70,9 @@ struct InputEventRaw {
 }
 
 #[link(name = "udev")]
+// SAFETY: These are direct libudev FFI declarations. Callers must pass live libudev handles,
+// valid NUL-terminated strings, and only dereference returned pointers according to libudev's
+// ownership/lifetime rules.
 unsafe extern "C" {
     fn udev_new() -> *mut UdevCtxHandle;
     fn udev_unref(udev: *mut UdevCtxHandle) -> *mut UdevCtxHandle;

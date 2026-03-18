@@ -40,6 +40,9 @@ struct PaBufferAttr {
     fragsize: u32,
 }
 
+// SAFETY: These function-pointer types model PulseAudio's C ABI exactly. Callers must only invoke
+// them with live PulseAudio handles, valid optional pointers, and any required NUL-terminated
+// strings exactly as the PulseAudio API specifies.
 type PaSimpleNewFn = unsafe extern "C" fn(
     server: *const c_char,
     name: *const c_char,
@@ -51,15 +54,21 @@ type PaSimpleNewFn = unsafe extern "C" fn(
     attr: *const PaBufferAttr,
     error: *mut c_int,
 ) -> *mut PaSimple;
+// SAFETY: Same FFI contract as above; the stream handle must come from PulseAudio.
 type PaSimpleFreeFn = unsafe extern "C" fn(stream: *mut PaSimple);
+// SAFETY: Same FFI contract as above; the stream handle and data buffer must be valid for the
+// duration of the call.
 type PaSimpleWriteFn = unsafe extern "C" fn(
     stream: *mut PaSimple,
     data: *const c_void,
     bytes: usize,
     error: *mut c_int,
 ) -> c_int;
+// SAFETY: Same FFI contract as above; the stream handle must come from PulseAudio.
 type PaSimpleDrainFn = unsafe extern "C" fn(stream: *mut PaSimple, error: *mut c_int) -> c_int;
+// SAFETY: Same FFI contract as above; the stream handle must come from PulseAudio.
 type PaSimpleGetLatencyFn = unsafe extern "C" fn(stream: *mut PaSimple, error: *mut c_int) -> u64;
+// SAFETY: Same FFI contract as above; the error code must be one produced by PulseAudio.
 type PaStrErrorFn = unsafe extern "C" fn(error: c_int) -> *const c_char;
 
 struct PulseApi {
@@ -122,6 +131,7 @@ fn load_library(names: &[&str]) -> Result<Library, String> {
     Err(last_err.unwrap_or_else(|| "no candidate library names were provided".to_string()))
 }
 
+// SAFETY: The caller must choose `T` to match the actual symbol signature exported by `lib`.
 unsafe fn load_symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, String> {
     // SAFETY: the caller chooses `T` to match the actual symbol signature, and
     // `lib` remains alive after the copied function pointer is returned.

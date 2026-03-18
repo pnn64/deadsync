@@ -34,33 +34,49 @@ struct JackPortRaw {
     _private: [u8; 0],
 }
 
+// SAFETY: These function-pointer types model JACK's C ABI exactly. Callers must only invoke them
+// with live JACK handles, valid callback/user-data pointers, and any required NUL-terminated
+// strings exactly as the JACK API specifies.
 type JackClientOpenFn = unsafe extern "C" fn(
     client_name: *const c_char,
     options: c_int,
     status: *mut JackStatus,
     ...
 ) -> *mut JackClientRaw;
+// SAFETY: Same FFI contract as above; the passed client handle must come from JACK.
 type JackClientCloseFn = unsafe extern "C" fn(client: *mut JackClientRaw) -> c_int;
+// SAFETY: Same FFI contract as above; the passed client handle must come from JACK.
 type JackActivateFn = unsafe extern "C" fn(client: *mut JackClientRaw) -> c_int;
+// SAFETY: Same FFI contract as above; the passed client handle must come from JACK.
 type JackDeactivateFn = unsafe extern "C" fn(client: *mut JackClientRaw) -> c_int;
+// SAFETY: Same FFI contract as above; the callback and user-data pointer must stay valid for as
+// long as JACK may invoke the process callback.
 type JackSetProcessCallbackFn = unsafe extern "C" fn(
     client: *mut JackClientRaw,
     process_callback: unsafe extern "C" fn(JackNFrames, *mut c_void) -> c_int,
     arg: *mut c_void,
 ) -> c_int;
+// SAFETY: Same FFI contract as above; the passed client handle must come from JACK.
 type JackGetSampleRateFn = unsafe extern "C" fn(client: *mut JackClientRaw) -> JackNFrames;
+// SAFETY: Same FFI contract as above; the passed client handle must come from JACK.
 type JackGetBufferSizeFn = unsafe extern "C" fn(client: *mut JackClientRaw) -> JackNFrames;
+// SAFETY: Same FFI contract as above; the passed client handle must come from JACK and returned
+// pointers are JACK-owned until released with `jack_free`.
 type JackGetPortsFn = unsafe extern "C" fn(
     client: *mut JackClientRaw,
     port_name_pattern: *const c_char,
     type_name_pattern: *const c_char,
     flags: libc::c_ulong,
 ) -> *mut *const c_char;
+// SAFETY: Same FFI contract as above; the client and port-name pointers must all be valid JACK
+// objects / NUL-terminated strings.
 type JackConnectFn = unsafe extern "C" fn(
     client: *mut JackClientRaw,
     source_port: *const c_char,
     destination_port: *const c_char,
 ) -> c_int;
+// SAFETY: Same FFI contract as above; the client handle and string pointers must be valid for the
+// duration of the call.
 type JackPortRegisterFn = unsafe extern "C" fn(
     client: *mut JackClientRaw,
     port_name: *const c_char,
@@ -68,11 +84,16 @@ type JackPortRegisterFn = unsafe extern "C" fn(
     flags: libc::c_ulong,
     buffer_size: libc::c_ulong,
 ) -> *mut JackPortRaw;
+// SAFETY: Same FFI contract as above; the client and port handles must come from JACK.
 type JackPortUnregisterFn =
     unsafe extern "C" fn(client: *mut JackClientRaw, port: *mut JackPortRaw) -> c_int;
+// SAFETY: Same FFI contract as above; the passed port handle must come from JACK.
 type JackPortNameFn = unsafe extern "C" fn(port: *const JackPortRaw) -> *const c_char;
+// SAFETY: Same FFI contract as above; the returned pointer is only valid for the current JACK
+// process callback and for exactly `nframes` samples.
 type JackPortGetBufferFn =
     unsafe extern "C" fn(port: *mut JackPortRaw, nframes: JackNFrames) -> *mut c_void;
+// SAFETY: Same FFI contract as above; the pointer must be one JACK allocated and expects freed.
 type JackFreeFn = unsafe extern "C" fn(ptr: *mut c_void);
 
 struct JackApi {
@@ -177,6 +198,7 @@ fn load_library(names: &[&str]) -> Result<Library, String> {
     Err(last_err.unwrap_or_else(|| "no candidate library names were provided".to_string()))
 }
 
+// SAFETY: The caller must choose `T` to match the actual symbol signature exported by `lib`.
 unsafe fn load_symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, String> {
     // SAFETY: the caller chooses `T` to match the actual symbol signature, and
     // `lib` remains alive after the copied function pointer is returned.
@@ -465,6 +487,8 @@ pub(crate) fn start(
     })
 }
 
+// SAFETY: JACK invokes this callback with the exact user-data pointer registered in
+// `jack_set_process_callback`, and the callback must not outlive that allocation.
 unsafe extern "C" fn jack_process_callback(nframes: JackNFrames, arg: *mut c_void) -> c_int {
     let state = arg.cast::<JackCallbackState>();
     if state.is_null() {
@@ -541,6 +565,8 @@ fn connect_physical_playback(client: &JackClient) -> Result<(), String> {
 }
 
 #[inline(always)]
+// SAFETY: Callers must only request a port buffer during the active JACK process callback for the
+// matching port and frame count returned by JACK.
 unsafe fn port_buffer(
     api: &JackApi,
     port: *mut JackPortRaw,
@@ -558,6 +584,8 @@ unsafe fn port_buffer(
 }
 
 #[inline(always)]
+// SAFETY: Callers must only invoke this during the active JACK process callback for the matching
+// port and frame count returned by JACK.
 unsafe fn zero_port(api: &JackApi, port: *mut JackPortRaw, nframes: JackNFrames) {
     // SAFETY: callers only use this during the JACK process callback when the port
     // buffer for `nframes` frames is valid and writable.

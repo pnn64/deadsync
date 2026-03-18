@@ -802,6 +802,8 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
     }
 }
 
+// SAFETY: Windows invokes this window procedure with the ABI and userdata contract established by
+// `CreateWindowExW`; `GWLP_USERDATA` is either null or the boxed `Ctx` pointer stored in WM_CREATE.
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     // SAFETY: `GWLP_USERDATA` stores either null or the `Ctx` pointer we place in
     // `WM_CREATE`. We only dereference it after null checks below.

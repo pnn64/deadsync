@@ -86,6 +86,8 @@ struct InputId {
     version: u16,
 }
 
+// SAFETY: These are direct libc FFI declarations. Callers must pass valid poll arrays, file
+// descriptors, and writable/readable buffers matching the requested byte counts.
 unsafe extern "C" {
     fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
     fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;

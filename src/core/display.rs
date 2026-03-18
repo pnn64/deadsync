@@ -277,6 +277,8 @@ mod platform {
     };
     use windows::core::{BOOL, PCWSTR};
 
+    // SAFETY: Windows calls this callback synchronously during `EnumDisplayMonitors`; `state` is
+    // the exact `Vec<HMONITOR>` pointer passed from `displays()` and remains valid for that call.
     unsafe extern "system" fn monitor_enum_proc(
         h_monitor: HMONITOR,
         _: HDC,

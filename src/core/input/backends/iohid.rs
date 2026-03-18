@@ -20,6 +20,8 @@ type IOHIDElementRef = *mut c_void;
 type IOReturn = i32;
 
 #[link(name = "CoreFoundation", kind = "framework")]
+// SAFETY: These are direct CoreFoundation FFI declarations. Callers must pass valid framework
+// object handles/pointers and obey CoreFoundation ownership rules for returned objects.
 unsafe extern "C" {
     fn CFRunLoopGetCurrent() -> CFRunLoopRef;
     fn CFRunLoopRun();
@@ -37,6 +39,8 @@ unsafe extern "C" {
 }
 
 #[link(name = "IOKit", kind = "framework")]
+// SAFETY: These are direct IOKit HID FFI declarations. Callers must pass live manager/device/
+// value handles and callback pointers that remain valid for the duration required by IOKit.
 unsafe extern "C" {
     fn IOHIDManagerCreate(alloc: CFAllocatorRef, options: u32) -> IOHIDManagerRef;
     fn IOHIDManagerSetDeviceMatching(manager: IOHIDManagerRef, matching: CFTypeRef);

@@ -569,6 +569,8 @@ fn wrapped_text_lines(
 }
 
 #[inline(always)]
+// SAFETY: Callers must only pass pointers captured from cached string storage that remains valid
+// and immutable for at least the lifetime of the returned borrow.
 unsafe fn str_from_cached_ptr<'a>(ptr: *const str) -> &'a str {
     // SAFETY: callers only pass pointers captured from cached font glyph storage
     // that outlives the returned borrow for the duration of render-list assembly.

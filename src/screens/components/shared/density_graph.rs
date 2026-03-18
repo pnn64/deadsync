@@ -295,6 +295,8 @@ fn density_life_vertex_count(points: &[[f32; 2]], start: usize, end: usize) -> u
 }
 
 #[inline(always)]
+// SAFETY: Callers must ensure `dst` points to writable storage for at least the maximum vertex
+// count implied by `points[start..end]`, and that `start..end` is in bounds of `points`.
 unsafe fn write_density_life_vertices(
     mut dst: *mut MeshVertex,
     points: &[[f32; 2]],
