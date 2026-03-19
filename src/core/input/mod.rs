@@ -486,6 +486,48 @@ static GAMEPLAY_PAD_DEBOUNCE_STATE: std::sync::LazyLock<
 const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
 #[inline(always)]
+fn gameplay_debounce_caps(km: &Keymap) -> (usize, usize) {
+    let key_cap = km
+        .key_rev
+        .values()
+        .filter(|actions| actions.iter().any(|action| action.is_gameplay_arrow()))
+        .count();
+    let mut pad_cap = km
+        .pad_dir_rev
+        .iter()
+        .filter(|actions| actions.iter().any(|action| action.is_gameplay_arrow()))
+        .count();
+    pad_cap += km
+        .pad_dir_on_rev
+        .values()
+        .filter(|actions| actions.iter().any(|action| action.is_gameplay_arrow()))
+        .count();
+    pad_cap += km
+        .pad_code_rev
+        .values()
+        .map(|entries| {
+            entries
+                .iter()
+                .filter(|entry| entry.act.is_gameplay_arrow())
+                .count()
+        })
+        .sum::<usize>();
+    (key_cap, pad_cap)
+}
+
+#[inline(always)]
+fn reset_gameplay_debounce_state(key_cap: usize, pad_cap: usize) {
+    let mut keyboard = GAMEPLAY_KEYBOARD_DEBOUNCE_STATE.lock().unwrap();
+    keyboard.clear();
+    keyboard.reserve(key_cap);
+    drop(keyboard);
+
+    let mut pad = GAMEPLAY_PAD_DEBOUNCE_STATE.lock().unwrap();
+    pad.clear();
+    pad.reserve(pad_cap);
+}
+
+#[inline(always)]
 pub fn with_keymap<R>(f: impl FnOnce(&Keymap) -> R) -> R {
     f(&KEYMAP.read().unwrap())
 }
@@ -497,15 +539,17 @@ pub fn get_keymap() -> Keymap {
 
 #[inline(always)]
 pub fn set_keymap(new_map: Keymap) {
+    let (key_cap, pad_cap) = gameplay_debounce_caps(&new_map);
     *KEYMAP.write().unwrap() = new_map;
-    GAMEPLAY_KEYBOARD_DEBOUNCE_STATE.lock().unwrap().clear();
-    GAMEPLAY_PAD_DEBOUNCE_STATE.lock().unwrap().clear();
+    reset_gameplay_debounce_state(key_cap, pad_cap);
 }
 
 #[inline(always)]
 pub fn clear_debounce_state() {
-    GAMEPLAY_KEYBOARD_DEBOUNCE_STATE.lock().unwrap().clear();
-    GAMEPLAY_PAD_DEBOUNCE_STATE.lock().unwrap().clear();
+    with_keymap(|km| {
+        let (key_cap, pad_cap) = gameplay_debounce_caps(km);
+        reset_gameplay_debounce_state(key_cap, pad_cap);
+    });
 }
 
 #[inline(always)]
@@ -1707,6 +1751,54 @@ mod tests {
             assert!(km.pad_event_mapped(&mapped));
             assert!(!km.pad_event_mapped(&wrong_dev));
         });
+
+        set_keymap(original);
+        clear_debounce_state();
+    }
+
+    #[test]
+    fn set_keymap_presizes_gameplay_debounce_state() {
+        let _guard = TEST_GUARD.lock().unwrap();
+        let original = get_keymap();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_left,
+            &[
+                InputBinding::Key(KeyCode::ArrowLeft),
+                InputBinding::PadDir(PadDir::Left),
+            ],
+        );
+        km.bind(
+            VirtualAction::p1_down,
+            &[InputBinding::PadDirOn {
+                device: 2,
+                dir: PadDir::Down,
+            }],
+        );
+        km.bind(
+            VirtualAction::p1_up,
+            &[InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 77,
+                device: None,
+                uuid: None,
+            })],
+        );
+        km.bind(
+            VirtualAction::p2_right,
+            &[InputBinding::Key(KeyCode::Numpad6)],
+        );
+        let (key_cap, pad_cap) = gameplay_debounce_caps(&km);
+
+        set_keymap(km);
+
+        assert!(
+            GAMEPLAY_KEYBOARD_DEBOUNCE_STATE.lock().unwrap().capacity() >= key_cap,
+            "keyboard debounce store should be pre-sized for mapped gameplay keys"
+        );
+        assert!(
+            GAMEPLAY_PAD_DEBOUNCE_STATE.lock().unwrap().capacity() >= pad_cap,
+            "pad debounce store should be pre-sized for mapped gameplay bindings"
+        );
 
         set_keymap(original);
         clear_debounce_state();
