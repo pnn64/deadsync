@@ -1174,7 +1174,7 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: INPUT_ROW_DEBOUNCE,
         help: &[
-            "Per-input debounce window used across keyboard and all gamepad drivers.",
+            "Global per-input debounce window used across menus and gameplay for keyboard and all gamepad drivers.",
             "ITGmania default is 20ms. 50ms was common on older arcade pads.",
         ],
     },

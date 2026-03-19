@@ -2617,15 +2617,14 @@ impl App {
         let mut draw_us: u32 = 0;
         let mut draw_stats = renderer::DrawStats::default();
         let input_started = Instant::now();
-        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
         #[cfg(windows)]
         if let Err(e) = self.drain_raw_keyboard_events(event_loop) {
             error!("Failed to handle raw keyboard input: {e}");
             event_loop.exit();
             return;
         }
-        if gameplay_screen && let Err(e) = self.flush_due_gameplay_arrow_events(event_loop) {
-            error!("Failed to handle gameplay debounced input: {e}");
+        if let Err(e) = self.flush_due_input_events(event_loop) {
+            error!("Failed to handle debounced input: {e}");
             event_loop.exit();
             return;
         }
@@ -2947,18 +2946,24 @@ impl App {
         );
     }
 
-    fn flush_due_gameplay_arrow_events(
+    fn flush_due_input_events(
         &mut self,
         event_loop: &ActiveEventLoop,
     ) -> Result<bool, Box<dyn Error>> {
-        if self.state.screens.current_screen != CurrentScreen::Gameplay {
+        if !matches!(self.state.shell.transition, TransitionState::Idle)
+            || self.state.screens.current_screen == CurrentScreen::Init
+        {
+            input::clear_debounce_state();
             return Ok(false);
         }
         let mut flushed = false;
         let mut err: Option<Box<dyn Error>> = None;
-        input::drain_gameplay_arrow_events_with(|ev| {
+        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        input::drain_debounced_input_events_with(|ev| {
             flushed = true;
-            if err.is_none()
+            if gameplay_screen {
+                self.queue_input_event(ev);
+            } else if err.is_none()
                 && let Err(e) = self.route_input_event(event_loop, ev)
             {
                 err = Some(e);
@@ -6128,20 +6133,12 @@ impl App {
 
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
         #[cfg(windows)]
-        if gameplay_screen && input::keycode_is_gameplay_arrow_only(raw_key.code) {
-            return true;
-        }
-        if gameplay_screen && !cfg!(windows) {
-            input::gameplay_arrow_raw_key_events_with(&raw_key, |ev| {
-                self.queue_input_event(ev);
-            });
+        if gameplay_screen {
+            return false;
         }
 
         let mut input_err: Option<Box<dyn Error>> = None;
         input::map_raw_key_event_with(&raw_key, |ev| {
-            if gameplay_screen && ev.action.is_gameplay_arrow() {
-                return;
-            }
             if gameplay_screen {
                 self.queue_input_event(ev);
             } else if input_err.is_none()
@@ -6171,16 +6168,8 @@ impl App {
             return;
         }
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
-        if gameplay_screen {
-            input::gameplay_arrow_pad_events_with(&ev, |iev| {
-                self.queue_input_event(iev);
-            });
-        }
         let mut input_err: Option<Box<dyn Error>> = None;
         input::map_pad_event_with(&ev, |iev| {
-            if gameplay_screen && iev.action.is_gameplay_arrow() {
-                return;
-            }
             if gameplay_screen {
                 self.queue_input_event(iev);
             } else if input_err.is_none()
@@ -7615,11 +7604,11 @@ impl ApplicationHandler<UserEvent> for App {
             .finish_gameplay_event_batch(Instant::now(), self.state.screens.current_screen);
         #[cfg(windows)]
         self.sync_raw_keyboard_capture();
-        match self.flush_due_gameplay_arrow_events(event_loop) {
-            Ok(true) => self.request_redraw(&window, "gameplay_debounce"),
+        match self.flush_due_input_events(event_loop) {
+            Ok(true) => self.request_redraw(&window, "input_debounce"),
             Ok(false) => {}
             Err(e) => {
-                error!("Failed to handle gameplay debounced input before wait: {e}");
+                error!("Failed to handle debounced input before wait: {e}");
                 event_loop.exit();
                 return;
             }
@@ -7702,15 +7691,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 },
                 move |ev| {
                     if ring.is_enabled() {
-                        input::gameplay_arrow_keycode_events_with_host(
-                            ev.code,
-                            ev.pressed,
-                            ev.timestamp,
-                            ev.host_nanos,
-                            |iev| {
-                                ring.push(iev);
-                            },
-                        );
+                        input::map_raw_key_event_with(&ev, |iev| ring.push(iev));
                     }
                     let _ = proxy_key.send_event(UserEvent::Key(ev));
                 },

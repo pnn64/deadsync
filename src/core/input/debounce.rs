@@ -49,29 +49,21 @@ pub(super) struct DebounceEdges {
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct DebounceWindows {
-    pub(super) press: Duration,
-    pub(super) release: Duration,
+    pub(super) window: Duration,
 }
 
 impl DebounceWindows {
     #[cfg_attr(not(test), allow(dead_code))]
     #[inline(always)]
     pub(super) const fn uniform(window: Duration) -> Self {
-        // ITGmania InputFilter parity: gameplay debounce is a symmetric window
-        // unless the caller explicitly asks for a different release window.
-        Self {
-            press: window,
-            release: window,
-        }
+        // ITGmania InputFilter parity: one global debounce window gates both
+        // press and release edges for every input binding.
+        Self { window }
     }
 
     #[inline(always)]
     pub(super) fn prune_window(self) -> Duration {
-        if self.press >= self.release {
-            self.press
-        } else {
-            self.release
-        }
+        self.window
     }
 }
 
@@ -86,12 +78,7 @@ pub(super) fn debounce_emit_if_due(
     if state.held_raw == state.held_reported {
         return None;
     }
-    let window = if state.held_raw {
-        windows.press
-    } else {
-        windows.release
-    };
-    if now.duration_since(state.last_report_time) < window {
+    if now.duration_since(state.last_report_time) < windows.window {
         return None;
     }
     state.last_report_time = now;
@@ -271,13 +258,6 @@ mod tests {
         }
     }
 
-    fn windows(press_ms: u64, release_ms: u64) -> DebounceWindows {
-        DebounceWindows {
-            press: Duration::from_millis(press_ms),
-            release: Duration::from_millis(release_ms),
-        }
-    }
-
     fn assert_edge(
         edge: Option<DebouncedEdge>,
         binding: DebounceBinding,
@@ -412,38 +392,6 @@ mod tests {
         assert_eq!(
             debounce_emit_if_due(&mut state, t0 + Duration::from_millis(50), windows),
             Some((true, repress_ts, repress_host, repress_ts))
-        );
-    }
-
-    #[test]
-    fn debounce_can_use_shorter_release_window() {
-        let t0 = Instant::now();
-        let t0_host = 100;
-        let binding = DebounceBinding::Keyboard(KeyCode::KeyA);
-        let mut state = base_state(t0, Duration::from_millis(20));
-        let windows = windows(20, 5);
-
-        let press = debounce_step(&mut state, binding, true, t0, t0_host, t0, windows);
-        assert!(press.first.is_none());
-        assert_edge(press.second, binding, true, t0, t0_host, t0, t0);
-
-        let release_ts = t0 + Duration::from_millis(1);
-        let release_host = 101;
-        let release = debounce_step(
-            &mut state,
-            binding,
-            false,
-            release_ts,
-            release_host,
-            release_ts,
-            windows,
-        );
-        assert!(release.first.is_none());
-        assert!(release.second.is_none());
-
-        assert_eq!(
-            debounce_emit_if_due(&mut state, t0 + Duration::from_millis(6), windows),
-            Some((false, release_ts, release_host, release_ts))
         );
     }
 

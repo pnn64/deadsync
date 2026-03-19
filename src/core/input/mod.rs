@@ -534,54 +534,35 @@ static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
     std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
 static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
 static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
-static GAMEPLAY_RELEASE_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.005f32).to_bits());
-static GAMEPLAY_KEYBOARD_DEBOUNCE_STATE: std::sync::LazyLock<
+static KEYBOARD_DEBOUNCE_STATE: std::sync::LazyLock<
     Mutex<HashMap<DebounceBinding, DebounceState>>,
 > = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
-static GAMEPLAY_PAD_DEBOUNCE_STATE: std::sync::LazyLock<
-    Mutex<HashMap<DebounceBinding, DebounceState>>,
-> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static PAD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<HashMap<DebounceBinding, DebounceState>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
 #[inline(always)]
-fn gameplay_debounce_caps(km: &Keymap) -> (usize, usize) {
-    let key_cap = km
-        .key_rev
-        .values()
-        .filter(|actions| actions.iter().any(|action| action.is_gameplay_arrow()))
-        .count();
+fn debounce_caps(km: &Keymap) -> (usize, usize) {
+    let key_cap = km.key_rev.len();
     let mut pad_cap = km
         .pad_dir_rev
         .iter()
-        .filter(|actions| actions.iter().any(|action| action.is_gameplay_arrow()))
+        .filter(|actions| !actions.is_empty())
         .count();
-    pad_cap += km
-        .pad_dir_on_rev
-        .values()
-        .filter(|actions| actions.iter().any(|action| action.is_gameplay_arrow()))
-        .count();
-    pad_cap += km
-        .pad_code_rev
-        .values()
-        .map(|entries| {
-            entries
-                .iter()
-                .filter(|entry| entry.act.is_gameplay_arrow())
-                .count()
-        })
-        .sum::<usize>();
+    pad_cap += km.pad_dir_on_rev.len();
+    pad_cap += km.pad_code_rev.len();
     (key_cap, pad_cap)
 }
 
 #[inline(always)]
-fn reset_gameplay_debounce_state(key_cap: usize, pad_cap: usize) {
-    let mut keyboard = GAMEPLAY_KEYBOARD_DEBOUNCE_STATE.lock().unwrap();
+fn reset_debounce_state(key_cap: usize, pad_cap: usize) {
+    let mut keyboard = KEYBOARD_DEBOUNCE_STATE.lock().unwrap();
     keyboard.clear();
     keyboard.reserve(key_cap);
     drop(keyboard);
 
-    let mut pad = GAMEPLAY_PAD_DEBOUNCE_STATE.lock().unwrap();
+    let mut pad = PAD_DEBOUNCE_STATE.lock().unwrap();
     pad.clear();
     pad.reserve(pad_cap);
 }
@@ -598,16 +579,16 @@ pub fn get_keymap() -> Keymap {
 
 #[inline(always)]
 pub fn set_keymap(new_map: Keymap) {
-    let (key_cap, pad_cap) = gameplay_debounce_caps(&new_map);
+    let (key_cap, pad_cap) = debounce_caps(&new_map);
     *KEYMAP.write().unwrap() = new_map;
-    reset_gameplay_debounce_state(key_cap, pad_cap);
+    reset_debounce_state(key_cap, pad_cap);
 }
 
 #[inline(always)]
 pub fn clear_debounce_state() {
     with_keymap(|km| {
-        let (key_cap, pad_cap) = gameplay_debounce_caps(km);
-        reset_gameplay_debounce_state(key_cap, pad_cap);
+        let (key_cap, pad_cap) = debounce_caps(km);
+        reset_debounce_state(key_cap, pad_cap);
     });
 }
 
@@ -646,26 +627,8 @@ fn input_debounce_window() -> Duration {
 }
 
 #[inline(always)]
-pub fn set_gameplay_release_debounce_seconds(seconds: f32) {
-    let clamped = seconds.clamp(0.0, INPUT_DEBOUNCE_MAX_SECONDS);
-    GAMEPLAY_RELEASE_DEBOUNCE_SECONDS_BITS.store(clamped.to_bits(), Ordering::Relaxed);
-}
-
-#[inline(always)]
-fn gameplay_debounce_windows() -> DebounceWindows {
-    DebounceWindows {
-        press: input_debounce_window(),
-        // Gameplay release debounce is intentionally shorter than the generic
-        // input window so taps do not feel sticky on fast streams.
-        release: Duration::from_secs_f32(f32::from_bits(
-            GAMEPLAY_RELEASE_DEBOUNCE_SECONDS_BITS.load(Ordering::Relaxed),
-        )),
-    }
-}
-
-#[inline(always)]
-fn gameplay_keyboard_debounce_windows() -> DebounceWindows {
-    gameplay_debounce_windows()
+fn debounce_windows() -> DebounceWindows {
+    DebounceWindows::uniform(input_debounce_window())
 }
 
 // Defaults are provided by config.rs; keep this module free of config.
@@ -1146,135 +1109,25 @@ fn emit_normalized_actions(
 }
 
 #[inline(always)]
-fn emit_filtered_key_actions(
-    km: &Keymap,
-    code: KeyCode,
-    keep: impl Fn(VirtualAction) -> bool,
-    mut emit: impl FnMut(VirtualAction),
-) {
-    let Some(actions) = km.key_rev.get(&code) else {
-        return;
-    };
-    let mut seen: u32 = 0;
-    for &action in actions {
-        if !keep(action) {
-            continue;
-        }
-        let bit = 1u32 << (action.ix() as u32);
-        if (seen & bit) != 0 {
-            continue;
-        }
-        seen |= bit;
-        emit(action);
-    }
-}
-
-#[inline(always)]
-fn emit_filtered_pad_dir_actions(
-    km: &Keymap,
-    id: PadId,
-    dir: PadDir,
-    keep: impl Fn(VirtualAction) -> bool,
-    mut emit: impl FnMut(VirtualAction),
-) {
-    let dev = usize::from(id);
-    let any = &km.pad_dir_rev[dir.ix()];
-    let on = km.pad_dir_on_rev.get(&(dev, dir));
-    if any.is_empty() && on.is_none() {
-        return;
-    }
-    let mut seen: u32 = 0;
-    for &action in any {
-        if !keep(action) {
-            continue;
-        }
-        let bit = 1u32 << (action.ix() as u32);
-        if (seen & bit) != 0 {
-            continue;
-        }
-        seen |= bit;
-        emit(action);
-    }
-    if let Some(actions) = on {
-        for &action in actions {
-            if !keep(action) {
-                continue;
-            }
-            let bit = 1u32 << (action.ix() as u32);
-            if (seen & bit) != 0 {
-                continue;
-            }
-            seen |= bit;
-            emit(action);
-        }
-    }
-}
-
-#[inline(always)]
-fn emit_filtered_pad_button_actions(
-    km: &Keymap,
-    id: PadId,
-    code: PadCode,
-    uuid: [u8; 16],
-    keep: impl Fn(VirtualAction) -> bool,
-    mut emit: impl FnMut(VirtualAction),
-) {
-    let dev = usize::from(id);
-    let Some(entries) = km.pad_code_rev.get(&code.into_u32()) else {
-        return;
-    };
-    let mut seen: u32 = 0;
-    for entry in entries {
-        if let Some(d_expected) = entry.device
-            && d_expected != dev
-        {
-            continue;
-        }
-        if let Some(u_expected) = entry.uuid
-            && u_expected != uuid
-        {
-            continue;
-        }
-        let action = entry.act;
-        if !keep(action) {
-            continue;
-        }
-        let bit = 1u32 << (action.ix() as u32);
-        if (seen & bit) != 0 {
-            continue;
-        }
-        seen |= bit;
-        emit(action);
-    }
-}
-
-#[inline(always)]
-fn emit_filtered_actions_from_edge(
-    km: &Keymap,
-    edge: DebouncedEdge,
-    keep: impl Fn(VirtualAction) -> bool + Copy,
-    mut emit: impl FnMut(VirtualAction),
-) {
+fn collect_actions_from_edge(km: &Keymap, edge: DebouncedEdge, out: &mut ActionBuf) -> usize {
     match edge.binding {
-        DebounceBinding::Keyboard(code) => {
-            emit_filtered_key_actions(km, code, keep, |action| emit(action))
-        }
-        DebounceBinding::PadDir { id, dir } => {
-            emit_filtered_pad_dir_actions(km, id, dir, keep, |action| emit(action))
-        }
+        DebounceBinding::Keyboard(code) => collect_key_actions(km, code, out),
+        DebounceBinding::PadDir { id, dir } => collect_pad_dir_actions(km, id, dir, out),
         DebounceBinding::PadButton { id, code, uuid } => {
-            emit_filtered_pad_button_actions(km, id, code, uuid, keep, |action| emit(action))
+            collect_pad_button_actions(km, id, code, uuid, out)
         }
     }
 }
 
 #[inline(always)]
-fn emit_gameplay_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(InputEvent)) {
+fn emit_input_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(InputEvent)) {
     with_keymap(|km| {
-        emit_filtered_actions_from_edge(km, edge, VirtualAction::is_gameplay_arrow, |action| {
+        let mut actions: ActionBuf = [None; VirtualAction::COUNT];
+        let len = collect_actions_from_edge(km, edge, &mut actions);
+        emit_normalized_actions(&actions, len, edge.pressed, |action, pressed| {
             emit(input_event(
                 action,
-                edge.pressed,
+                pressed,
                 edge.source,
                 edge.timestamp,
                 edge.timestamp_host_nanos,
@@ -1285,65 +1138,13 @@ fn emit_gameplay_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(Inpu
     });
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
 #[inline(always)]
-pub fn keycode_is_gameplay_arrow_only(code: KeyCode) -> bool {
-    with_keymap(|km| {
-        let Some(actions) = km.key_rev.get(&code) else {
-            return false;
-        };
-        let mut saw_arrow = false;
-        for &action in actions {
-            if !action.is_gameplay_arrow() {
-                return false;
-            }
-            saw_arrow = true;
-        }
-        saw_arrow
-    })
-}
-
-#[inline(always)]
-pub fn gameplay_arrow_keycode_events_with(
-    code: KeyCode,
-    pressed: bool,
-    timestamp: Instant,
-    mut emit: impl FnMut(InputEvent),
-) {
-    gameplay_arrow_keycode_events_with_host(code, pressed, timestamp, 0, &mut emit);
-}
-
-#[inline(always)]
-pub fn gameplay_arrow_keycode_events_with_host(
-    code: KeyCode,
-    pressed: bool,
-    timestamp: Instant,
-    timestamp_host_nanos: u64,
-    mut emit: impl FnMut(InputEvent),
-) {
-    let edges = debounce_input_edge_in_store(
-        &GAMEPLAY_KEYBOARD_DEBOUNCE_STATE,
-        DebounceBinding::Keyboard(code),
-        pressed,
-        timestamp,
-        timestamp_host_nanos,
-        gameplay_keyboard_debounce_windows(),
-    );
+fn emit_debounced_edges(edges: DebounceEdges, mut emit: impl FnMut(InputEvent)) {
     if let Some(edge) = edges.first {
-        emit_gameplay_events_from_edge(edge, &mut emit);
+        emit_input_events_from_edge(edge, &mut emit);
     }
     if let Some(edge) = edges.second {
-        emit_gameplay_events_from_edge(edge, &mut emit);
-    }
-}
-
-#[inline(always)]
-fn emit_debounced_input_events(edges: DebounceEdges, mut emit: impl FnMut(InputEvent)) {
-    if let Some(edge) = edges.first {
-        emit_gameplay_events_from_edge(edge, &mut emit);
-    }
-    if let Some(edge) = edges.second {
-        emit_gameplay_events_from_edge(edge, &mut emit);
+        emit_input_events_from_edge(edge, &mut emit);
     }
 }
 
@@ -1352,7 +1153,15 @@ pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent
     if ev.pressed && ev.repeat {
         return;
     }
-    map_keycode_event_with_host(ev.code, ev.pressed, ev.timestamp, ev.host_nanos, emit);
+    let edges = debounce_input_edge_in_store(
+        &KEYBOARD_DEBOUNCE_STATE,
+        DebounceBinding::Keyboard(ev.code),
+        ev.pressed,
+        ev.timestamp,
+        ev.host_nanos,
+        debounce_windows(),
+    );
+    emit_debounced_edges(edges, emit);
 }
 
 #[inline(always)]
@@ -1389,69 +1198,7 @@ pub fn map_keycode_event_with_host(
 }
 
 #[inline(always)]
-pub fn gameplay_arrow_raw_key_events_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent)) {
-    if ev.pressed && ev.repeat {
-        return;
-    }
-    gameplay_arrow_keycode_events_with(ev.code, ev.pressed, ev.timestamp, emit);
-}
-
-#[inline(always)]
-fn pad_event_timestamps(ev: &PadEvent) -> (Instant, u64) {
-    match *ev {
-        PadEvent::Dir {
-            timestamp,
-            host_nanos,
-            ..
-        }
-        | PadEvent::RawButton {
-            timestamp,
-            host_nanos,
-            ..
-        }
-        | PadEvent::RawAxis {
-            timestamp,
-            host_nanos,
-            ..
-        } => (timestamp, host_nanos),
-    }
-}
-
-#[inline(always)]
 pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
-    let (timestamp, timestamp_host_nanos) = pad_event_timestamps(ev);
-    let mut actions: ActionBuf = [None; VirtualAction::COUNT];
-    let (pressed, len) = with_keymap(|km| match *ev {
-        PadEvent::Dir {
-            id, dir, pressed, ..
-        } => (pressed, collect_pad_dir_actions(km, id, dir, &mut actions)),
-        PadEvent::RawButton {
-            id,
-            code,
-            uuid,
-            pressed,
-            ..
-        } => (
-            pressed,
-            collect_pad_button_actions(km, id, code, uuid, &mut actions),
-        ),
-        PadEvent::RawAxis { .. } => (false, 0),
-    });
-    emit_normalized_actions(&actions, len, pressed, |action, pressed| {
-        emit(input_event(
-            action,
-            pressed,
-            InputSource::Gamepad,
-            timestamp,
-            timestamp_host_nanos,
-            timestamp,
-            timestamp,
-        ));
-    });
-}
-
-#[inline(always)]
-pub fn gameplay_arrow_pad_events_with(ev: &PadEvent, emit: impl FnMut(InputEvent)) {
     let edges = match *ev {
         PadEvent::Dir {
             id,
@@ -1460,12 +1207,12 @@ pub fn gameplay_arrow_pad_events_with(ev: &PadEvent, emit: impl FnMut(InputEvent
             timestamp,
             host_nanos,
         } => debounce_input_edge_in_store(
-            &GAMEPLAY_PAD_DEBOUNCE_STATE,
+            &PAD_DEBOUNCE_STATE,
             DebounceBinding::PadDir { id, dir },
             pressed,
             timestamp,
             host_nanos,
-            gameplay_debounce_windows(),
+            debounce_windows(),
         ),
         PadEvent::RawButton {
             id,
@@ -1476,32 +1223,27 @@ pub fn gameplay_arrow_pad_events_with(ev: &PadEvent, emit: impl FnMut(InputEvent
             host_nanos,
             ..
         } => debounce_input_edge_in_store(
-            &GAMEPLAY_PAD_DEBOUNCE_STATE,
+            &PAD_DEBOUNCE_STATE,
             DebounceBinding::PadButton { id, code, uuid },
             pressed,
             timestamp,
             host_nanos,
-            gameplay_debounce_windows(),
+            debounce_windows(),
         ),
         PadEvent::RawAxis { .. } => return,
     };
-    emit_debounced_input_events(edges, emit);
+    emit_debounced_edges(edges, &mut emit);
 }
 
-pub fn drain_gameplay_arrow_events_with(mut emit: impl FnMut(InputEvent)) -> bool {
+pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bool {
     let now = Instant::now();
-    let mut flushed = emit_due_debounce_edges_from(
-        &GAMEPLAY_KEYBOARD_DEBOUNCE_STATE,
-        now,
-        gameplay_keyboard_debounce_windows(),
-        |edge| emit_gameplay_events_from_edge(edge, &mut emit),
-    );
-    flushed |= emit_due_debounce_edges_from(
-        &GAMEPLAY_PAD_DEBOUNCE_STATE,
-        now,
-        gameplay_debounce_windows(),
-        |edge| emit_gameplay_events_from_edge(edge, &mut emit),
-    );
+    let mut flushed =
+        emit_due_debounce_edges_from(&KEYBOARD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
+            emit_input_events_from_edge(edge, &mut emit)
+        });
+    flushed |= emit_due_debounce_edges_from(&PAD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
+        emit_input_events_from_edge(edge, &mut emit)
+    });
     flushed
 }
 
@@ -1797,7 +1539,74 @@ mod tests {
     }
 
     #[test]
-    fn set_keymap_presizes_gameplay_debounce_state() {
+    fn map_raw_key_event_with_debounces_all_screens() {
+        let _guard = TEST_GUARD.lock().unwrap();
+        let original = get_keymap();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_left,
+            &[InputBinding::Key(KeyCode::ArrowLeft)],
+        );
+        set_keymap(km);
+        set_only_dedicated_menu_buttons(false);
+
+        let t0 = Instant::now();
+        let press = RawKeyboardEvent {
+            code: KeyCode::ArrowLeft,
+            pressed: true,
+            repeat: false,
+            timestamp: t0,
+            host_nanos: 100,
+        };
+        let release = RawKeyboardEvent {
+            code: KeyCode::ArrowLeft,
+            pressed: false,
+            repeat: false,
+            timestamp: t0 + Duration::from_millis(1),
+            host_nanos: 101,
+        };
+        let repress = RawKeyboardEvent {
+            code: KeyCode::ArrowLeft,
+            pressed: true,
+            repeat: false,
+            timestamp: t0 + Duration::from_millis(5),
+            host_nanos: 105,
+        };
+
+        let mut actual = Vec::new();
+        map_raw_key_event_with(&press, |event| actual.push(event));
+        assert_eq!(actual.len(), 2, "press event count");
+        assert_eq!(actual[0].action, VirtualAction::p1_left);
+        assert!(actual[0].pressed);
+        assert_eq!(actual[0].source, InputSource::Keyboard);
+        assert_eq!(actual[0].timestamp, t0);
+        assert_eq!(actual[0].timestamp_host_nanos, 100);
+        assert_eq!(actual[1].action, VirtualAction::p1_menu_left);
+        assert!(actual[1].pressed);
+        assert_eq!(actual[1].source, InputSource::Keyboard);
+        assert_eq!(actual[1].timestamp, t0);
+        assert_eq!(actual[1].timestamp_host_nanos, 100);
+
+        actual.clear();
+        map_raw_key_event_with(&release, |event| actual.push(event));
+        assert!(
+            actual.is_empty(),
+            "release inside debounce window should be delayed"
+        );
+
+        map_raw_key_event_with(&repress, |event| actual.push(event));
+        assert!(
+            actual.is_empty(),
+            "quick release/repress chatter should not escape the shared debounce path"
+        );
+
+        set_keymap(original);
+        set_only_dedicated_menu_buttons(false);
+        clear_debounce_state();
+    }
+
+    #[test]
+    fn set_keymap_presizes_debounce_state() {
         let _guard = TEST_GUARD.lock().unwrap();
         let original = get_keymap();
         let mut km = Keymap::default();
@@ -1827,17 +1636,17 @@ mod tests {
             VirtualAction::p2_right,
             &[InputBinding::Key(KeyCode::Numpad6)],
         );
-        let (key_cap, pad_cap) = gameplay_debounce_caps(&km);
+        let (key_cap, pad_cap) = debounce_caps(&km);
 
         set_keymap(km);
 
         assert!(
-            GAMEPLAY_KEYBOARD_DEBOUNCE_STATE.lock().unwrap().capacity() >= key_cap,
-            "keyboard debounce store should be pre-sized for mapped gameplay keys"
+            KEYBOARD_DEBOUNCE_STATE.lock().unwrap().capacity() >= key_cap,
+            "keyboard debounce store should be pre-sized for mapped keys"
         );
         assert!(
-            GAMEPLAY_PAD_DEBOUNCE_STATE.lock().unwrap().capacity() >= pad_cap,
-            "pad debounce store should be pre-sized for mapped gameplay bindings"
+            PAD_DEBOUNCE_STATE.lock().unwrap().capacity() >= pad_cap,
+            "pad debounce store should be pre-sized for mapped bindings"
         );
 
         set_keymap(original);
