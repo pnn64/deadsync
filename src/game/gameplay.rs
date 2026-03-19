@@ -1,7 +1,7 @@
 use crate::core::audio;
 use crate::core::gfx::MeshVertex;
 use crate::core::input::{
-    InputEdge, InputEvent, InputSource, Lane, RawKeyboardEvent, VirtualAction, lane_from_action,
+    InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
 use crate::core::space::{is_wide, screen_center_y, screen_height, screen_width};
 use crate::game::chart::ChartData;
@@ -4313,6 +4313,8 @@ pub struct State {
     pub hold_to_exit_start: Option<Instant>,
     pub hold_to_exit_aborted_at: Option<Instant>,
     pub exit_transition: Option<ExitTransition>,
+    shift_held: bool,
+    ctrl_held: bool,
     offset_adjust_held_since: [Option<Instant>; 2],
     offset_adjust_last_at: [Option<Instant>; 2],
     prev_inputs: [bool; MAX_COLS],
@@ -6964,6 +6966,8 @@ pub fn init(
         hold_to_exit_start: None,
         hold_to_exit_aborted_at: None,
         exit_transition: None,
+        shift_held: false,
+        ctrl_held: false,
         offset_adjust_held_since: [None; 2],
         offset_adjust_last_at: [None; 2],
         prev_inputs: [false; MAX_COLS],
@@ -9336,16 +9340,15 @@ fn clear_offset_adjust_hold(state: &mut State, code: KeyCode) -> bool {
 }
 
 #[inline(always)]
-fn start_offset_adjust_hold(state: &mut State, code: KeyCode) -> Option<f32> {
+fn start_offset_adjust_hold(state: &mut State, code: KeyCode, at: Instant) -> Option<f32> {
     let slot = offset_adjust_slot(code)?;
-    let now = Instant::now();
-    state.offset_adjust_held_since[slot] = Some(now);
-    state.offset_adjust_last_at[slot] = Some(now);
+    state.offset_adjust_held_since[slot] = Some(at);
+    state.offset_adjust_last_at[slot] = Some(at);
     offset_adjust_delta(code)
 }
 
 #[inline(always)]
-fn update_offset_adjust_hold(state: &mut State, shift_held: bool) {
+fn update_offset_adjust_hold(state: &mut State) {
     let now = Instant::now();
     for code in [KeyCode::F11, KeyCode::F12] {
         let Some(slot) = offset_adjust_slot(code) else {
@@ -9365,12 +9368,21 @@ fn update_offset_adjust_hold(state: &mut State, shift_held: bool) {
         let Some(delta) = offset_adjust_delta(code) else {
             continue;
         };
-        if shift_held {
+        if state.shift_held {
             let _ = apply_global_offset_delta(state, delta);
         } else if state.course_display_totals.is_none() {
             let _ = apply_song_offset_delta(state, delta);
         }
         state.offset_adjust_last_at[slot] = Some(now);
+    }
+}
+
+#[inline(always)]
+fn update_raw_modifier_state(state: &mut State, code: KeyCode, pressed: bool) {
+    match code {
+        KeyCode::ShiftLeft | KeyCode::ShiftRight => state.shift_held = pressed,
+        KeyCode::ControlLeft | KeyCode::ControlRight => state.ctrl_held = pressed,
+        _ => {}
     }
 }
 
@@ -9418,56 +9430,57 @@ fn apply_song_offset_delta(state: &mut State, delta: f32) -> bool {
     true
 }
 
-pub fn handle_raw_keycode_event(
+pub enum RawKeyAction {
+    None,
+    Restart,
+}
+
+pub fn handle_queued_raw_key(
     state: &mut State,
     code: KeyCode,
     pressed: bool,
-    shift_held: bool,
-) -> ScreenAction {
+    timestamp: Instant,
+    allow_commands: bool,
+) -> RawKeyAction {
+    update_raw_modifier_state(state, code, pressed);
     if !pressed {
         let _ = clear_offset_adjust_hold(state, code);
-        return ScreenAction::None;
+        return RawKeyAction::None;
+    }
+    if !allow_commands {
+        return RawKeyAction::None;
+    }
+    if code == KeyCode::KeyR && state.ctrl_held {
+        return RawKeyAction::Restart;
     }
     if code == KeyCode::F6 {
         cycle_autosync_mode(state);
-        return ScreenAction::None;
+        return RawKeyAction::None;
     }
 
     if code == KeyCode::F7 {
         let now_music_time = current_music_time_from_stream(state);
         set_tick_mode(state, next_tick_mode(state.tick_mode), now_music_time);
-        return ScreenAction::None;
+        return RawKeyAction::None;
     }
 
     if code == KeyCode::F8 {
         let now_music_time = current_music_time_from_stream(state);
         set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
-        return ScreenAction::None;
+        return RawKeyAction::None;
     }
-    let Some(delta) = start_offset_adjust_hold(state, code) else {
-        return ScreenAction::None;
+    let Some(delta) = start_offset_adjust_hold(state, code, timestamp) else {
+        return RawKeyAction::None;
     };
 
-    if shift_held {
+    if state.shift_held {
         let _ = apply_global_offset_delta(state, delta);
-        return ScreenAction::None;
+        return RawKeyAction::None;
     }
     if state.course_display_totals.is_none() {
         let _ = apply_song_offset_delta(state, delta);
     }
-    ScreenAction::None
-}
-
-pub fn handle_raw_key_event(
-    state: &mut State,
-    key: &RawKeyboardEvent,
-    shift_held: bool,
-) -> ScreenAction {
-    if key.repeat {
-        return ScreenAction::None;
-    }
-
-    handle_raw_keycode_event(state, key.code, key.pressed, shift_held)
+    RawKeyAction::None
 }
 
 fn finalize_row_judgment(
@@ -10542,7 +10555,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     }
 }
 
-pub fn update(state: &mut State, delta_time: f32, shift_held: bool) -> ScreenAction {
+pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     if let Some(exit) = state.exit_transition {
         state.total_elapsed_in_screen += delta_time;
         if exit.started_at.elapsed().as_secs_f32() >= exit_total_seconds(exit.kind) {
@@ -10691,7 +10704,7 @@ pub fn update(state: &mut State, delta_time: f32, shift_held: bool) -> ScreenAct
     } else {
         None
     };
-    update_offset_adjust_hold(state, shift_held);
+    update_offset_adjust_hold(state);
     process_input_edges(state, trace_enabled, &mut phase_timings, song_clock);
     if let Some(started) = input_started {
         phase_timings.input_edges_us = elapsed_us_since(started);
