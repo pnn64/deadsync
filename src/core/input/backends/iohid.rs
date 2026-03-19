@@ -1,11 +1,14 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
 use crate::core::host_time::now_nanos;
+use crate::core::input::RawKeyboardEvent;
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use std::collections::HashMap;
 use std::ffi::{c_char, c_void};
 use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::time::Instant;
+use winit::keyboard::KeyCode;
 
 type CFAllocatorRef = *const c_void;
 type CFRunLoopRef = *mut c_void;
@@ -97,12 +100,22 @@ fn cfnum_i32(v: CFTypeRef) -> Option<i32> {
     ok.then_some(out)
 }
 
-struct Dev {
+struct PadDev {
     id: PadId,
     name: String,
     uuid: [u8; 16],
     last: HashMap<u32, i64>,
     dir: [bool; 4],
+}
+
+struct KeyDev {
+    last: HashMap<u32, i64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DevClass {
+    Pad,
+    Keyboard,
 }
 
 #[derive(Clone, Copy)]
@@ -149,9 +162,11 @@ impl HostClock {
 struct Ctx {
     emit_pad: Box<dyn FnMut(PadEvent) + Send>,
     emit_sys: Box<dyn FnMut(GpSystemEvent) + Send>,
+    emit_key: Box<dyn FnMut(RawKeyboardEvent) + Send>,
     next_id: u32,
     id_by_uuid: HashMap<[u8; 16], PadId>,
-    devs: HashMap<usize, Dev>,
+    pad_devs: HashMap<usize, PadDev>,
+    key_devs: HashMap<usize, KeyDev>,
     host_clock: Option<HostClock>,
     startup_complete_sent: bool,
 
@@ -161,6 +176,25 @@ struct Ctx {
     key_vendor_id: CFStringRef,
     key_product_id: CFStringRef,
     key_location_id: CFStringRef,
+}
+
+static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
+static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
+
+#[inline(always)]
+pub fn set_keyboard_window_focused(focused: bool) {
+    KEYBOARD_WINDOW_FOCUSED.store(focused, Ordering::Relaxed);
+}
+
+#[inline(always)]
+pub fn set_keyboard_capture_enabled(enabled: bool) {
+    KEYBOARD_CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+#[inline(always)]
+fn keyboard_capture_active() -> bool {
+    KEYBOARD_WINDOW_FOCUSED.load(Ordering::Relaxed)
+        && KEYBOARD_CAPTURE_ENABLED.load(Ordering::Relaxed)
 }
 
 #[inline(always)]
@@ -201,6 +235,154 @@ fn event_time(host_clock: Option<HostClock>, value: IOHIDValueRef) -> (Instant, 
     )
 }
 
+fn hid_key_code(usage: u16) -> Option<KeyCode> {
+    Some(match usage {
+        0x04 => KeyCode::KeyA,
+        0x05 => KeyCode::KeyB,
+        0x06 => KeyCode::KeyC,
+        0x07 => KeyCode::KeyD,
+        0x08 => KeyCode::KeyE,
+        0x09 => KeyCode::KeyF,
+        0x0A => KeyCode::KeyG,
+        0x0B => KeyCode::KeyH,
+        0x0C => KeyCode::KeyI,
+        0x0D => KeyCode::KeyJ,
+        0x0E => KeyCode::KeyK,
+        0x0F => KeyCode::KeyL,
+        0x10 => KeyCode::KeyM,
+        0x11 => KeyCode::KeyN,
+        0x12 => KeyCode::KeyO,
+        0x13 => KeyCode::KeyP,
+        0x14 => KeyCode::KeyQ,
+        0x15 => KeyCode::KeyR,
+        0x16 => KeyCode::KeyS,
+        0x17 => KeyCode::KeyT,
+        0x18 => KeyCode::KeyU,
+        0x19 => KeyCode::KeyV,
+        0x1A => KeyCode::KeyW,
+        0x1B => KeyCode::KeyX,
+        0x1C => KeyCode::KeyY,
+        0x1D => KeyCode::KeyZ,
+        0x1E => KeyCode::Digit1,
+        0x1F => KeyCode::Digit2,
+        0x20 => KeyCode::Digit3,
+        0x21 => KeyCode::Digit4,
+        0x22 => KeyCode::Digit5,
+        0x23 => KeyCode::Digit6,
+        0x24 => KeyCode::Digit7,
+        0x25 => KeyCode::Digit8,
+        0x26 => KeyCode::Digit9,
+        0x27 => KeyCode::Digit0,
+        0x28 => KeyCode::Enter,
+        0x29 => KeyCode::Escape,
+        0x2A => KeyCode::Backspace,
+        0x2B => KeyCode::Tab,
+        0x2C => KeyCode::Space,
+        0x2D => KeyCode::Minus,
+        0x2E => KeyCode::Equal,
+        0x2F => KeyCode::BracketLeft,
+        0x30 => KeyCode::BracketRight,
+        0x31 => KeyCode::Backslash,
+        0x32 => KeyCode::IntlBackslash,
+        0x33 => KeyCode::Semicolon,
+        0x34 => KeyCode::Quote,
+        0x35 => KeyCode::Backquote,
+        0x36 => KeyCode::Comma,
+        0x37 => KeyCode::Period,
+        0x38 => KeyCode::Slash,
+        0x39 => KeyCode::CapsLock,
+        0x3A => KeyCode::F1,
+        0x3B => KeyCode::F2,
+        0x3C => KeyCode::F3,
+        0x3D => KeyCode::F4,
+        0x3E => KeyCode::F5,
+        0x3F => KeyCode::F6,
+        0x40 => KeyCode::F7,
+        0x41 => KeyCode::F8,
+        0x42 => KeyCode::F9,
+        0x43 => KeyCode::F10,
+        0x44 => KeyCode::F11,
+        0x45 => KeyCode::F12,
+        0x46 => KeyCode::PrintScreen,
+        0x47 => KeyCode::ScrollLock,
+        0x48 => KeyCode::Pause,
+        0x49 => KeyCode::Insert,
+        0x4A => KeyCode::Home,
+        0x4B => KeyCode::PageUp,
+        0x4C => KeyCode::Delete,
+        0x4D => KeyCode::End,
+        0x4E => KeyCode::PageDown,
+        0x4F => KeyCode::ArrowRight,
+        0x50 => KeyCode::ArrowLeft,
+        0x51 => KeyCode::ArrowDown,
+        0x52 => KeyCode::ArrowUp,
+        0x53 => KeyCode::NumLock,
+        0x54 => KeyCode::NumpadDivide,
+        0x55 => KeyCode::NumpadMultiply,
+        0x56 => KeyCode::NumpadSubtract,
+        0x57 => KeyCode::NumpadAdd,
+        0x58 => KeyCode::NumpadEnter,
+        0x59 => KeyCode::Numpad1,
+        0x5A => KeyCode::Numpad2,
+        0x5B => KeyCode::Numpad3,
+        0x5C => KeyCode::Numpad4,
+        0x5D => KeyCode::Numpad5,
+        0x5E => KeyCode::Numpad6,
+        0x5F => KeyCode::Numpad7,
+        0x60 => KeyCode::Numpad8,
+        0x61 => KeyCode::Numpad9,
+        0x62 => KeyCode::Numpad0,
+        0x63 => KeyCode::NumpadDecimal,
+        0x64 => KeyCode::IntlBackslash,
+        0x65 => KeyCode::ContextMenu,
+        0x66 => KeyCode::Power,
+        0x67 => KeyCode::NumpadEqual,
+        0x68 => KeyCode::F13,
+        0x69 => KeyCode::F14,
+        0x6A => KeyCode::F15,
+        0x6B => KeyCode::F16,
+        0x6C => KeyCode::F17,
+        0x6D => KeyCode::F18,
+        0x6E => KeyCode::F19,
+        0x6F => KeyCode::F20,
+        0x70 => KeyCode::F21,
+        0x71 => KeyCode::F22,
+        0x72 => KeyCode::F23,
+        0x73 => KeyCode::F24,
+        0x75 => KeyCode::Help,
+        0x77 => KeyCode::Select,
+        0x79 => KeyCode::Again,
+        0x7A => KeyCode::Undo,
+        0x7B => KeyCode::Cut,
+        0x7C => KeyCode::Copy,
+        0x7D => KeyCode::Paste,
+        0x7E => KeyCode::Find,
+        0x7F => KeyCode::AudioVolumeMute,
+        0x80 => KeyCode::AudioVolumeUp,
+        0x81 => KeyCode::AudioVolumeDown,
+        0x85 => KeyCode::NumpadComma,
+        0x87 => KeyCode::IntlRo,
+        0x88 => KeyCode::KanaMode,
+        0x89 => KeyCode::IntlYen,
+        0x8A => KeyCode::Convert,
+        0x8B => KeyCode::NonConvert,
+        0x90 => KeyCode::Lang1,
+        0x91 => KeyCode::Lang2,
+        0x92 => KeyCode::Lang3,
+        0x93 => KeyCode::Lang4,
+        0x94 => KeyCode::Lang5,
+        0xE0 => KeyCode::ControlLeft,
+        0xE1 => KeyCode::ShiftLeft,
+        0xE2 => KeyCode::AltLeft,
+        0xE3 => KeyCode::SuperLeft,
+        0xE4 => KeyCode::ControlRight,
+        0xE5 => KeyCode::ShiftRight,
+        0xE6 => KeyCode::AltRight,
+        0xE7 => KeyCode::SuperRight,
+        _ => return None,
+    })
+}
+
 extern "C" fn on_match(
     _ctx: *mut c_void,
     _res: IOReturn,
@@ -213,7 +395,7 @@ extern "C" fn on_match(
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let key = device as usize;
-        if ctx.devs.contains_key(&key) {
+        if ctx.pad_devs.contains_key(&key) || ctx.key_devs.contains_key(&key) {
             return;
         }
 
@@ -223,8 +405,21 @@ extern "C" fn on_match(
         let u = cfnum_i32(IOHIDDeviceGetProperty(device, ctx.key_primary_usage))
             .map(|x| x as u16)
             .unwrap_or(0);
-        let is_controller = up == 0x01 && matches!(u, 0x04 | 0x05 | 0x08);
-        if !is_controller {
+        let class = if up == 0x01 && matches!(u, 0x04 | 0x05 | 0x08) {
+            DevClass::Pad
+        } else if up == 0x01 && u == 0x06 {
+            DevClass::Keyboard
+        } else {
+            return;
+        };
+
+        if class == DevClass::Keyboard {
+            ctx.key_devs.insert(
+                key,
+                KeyDev {
+                    last: HashMap::new(),
+                },
+            );
             return;
         }
 
@@ -248,7 +443,7 @@ extern "C" fn on_match(
             id
         });
 
-        let dev = Dev {
+        let dev = PadDev {
             id,
             name: name.clone(),
             uuid,
@@ -265,7 +460,7 @@ extern "C" fn on_match(
             initial: !ctx.startup_complete_sent,
         });
 
-        ctx.devs.insert(key, dev);
+        ctx.pad_devs.insert(key, dev);
     }
 }
 
@@ -281,7 +476,10 @@ extern "C" fn on_remove(
     unsafe {
         let ctx = &mut *(_ctx as *mut Ctx);
         let key = device as usize;
-        let Some(dev) = ctx.devs.remove(&key) else {
+        if ctx.key_devs.remove(&key).is_some() {
+            return;
+        }
+        let Some(dev) = ctx.pad_devs.remove(&key) else {
             return;
         };
         (ctx.emit_sys)(GpSystemEvent::Disconnected {
@@ -313,64 +511,90 @@ extern "C" fn on_input(
         if device.is_null() {
             return;
         }
-        let Some(dev) = ctx.devs.get_mut(&(device as usize)) else {
-            return;
-        };
+        let key = device as usize;
         let usage_page = IOHIDElementGetUsagePage(elem) as u16;
         let usage = IOHIDElementGetUsage(elem) as u16;
         let code = ((usage_page as u32) << 16) | (usage as u32);
         let v = IOHIDValueGetIntegerValue(value) as i64;
 
+        if let Some(dev) = ctx.pad_devs.get_mut(&key) {
+            if dev.last.get(&code).copied() == Some(v) {
+                return;
+            }
+            dev.last.insert(code, v);
+
+            // Hat switch → PadDir edges (match common HID D-pads/pads).
+            if usage_page == 0x01 && usage == 0x39 {
+                let hat = v as u32;
+                let want_up = matches!(hat, 0 | 1 | 7);
+                let want_right = matches!(hat, 1 | 2 | 3);
+                let want_down = matches!(hat, 3 | 4 | 5);
+                let want_left = matches!(hat, 5 | 6 | 7);
+                emit_dir_edges(
+                    &mut ctx.emit_pad,
+                    dev.id,
+                    &mut dev.dir,
+                    timestamp,
+                    host_nanos,
+                    [want_up, want_down, want_left, want_right],
+                );
+                return;
+            }
+
+            if usage_page == 0x09 {
+                let pressed = v != 0;
+                (ctx.emit_pad)(PadEvent::RawButton {
+                    id: dev.id,
+                    timestamp,
+                    host_nanos,
+                    code: PadCode(code),
+                    uuid: dev.uuid,
+                    value: if pressed { 1.0 } else { 0.0 },
+                    pressed,
+                });
+            } else {
+                (ctx.emit_pad)(PadEvent::RawAxis {
+                    id: dev.id,
+                    timestamp,
+                    host_nanos,
+                    code: PadCode(code),
+                    uuid: dev.uuid,
+                    value: v as f32,
+                });
+            }
+            return;
+        }
+
+        let Some(dev) = ctx.key_devs.get_mut(&key) else {
+            return;
+        };
+        if usage_page != 0x07 {
+            return;
+        }
         if dev.last.get(&code).copied() == Some(v) {
             return;
         }
         dev.last.insert(code, v);
-
-        // Hat switch → PadDir edges (match common HID D-pads/pads).
-        if usage_page == 0x01 && usage == 0x39 {
-            let hat = v as u32;
-            let want_up = matches!(hat, 0 | 1 | 7);
-            let want_right = matches!(hat, 1 | 2 | 3);
-            let want_down = matches!(hat, 3 | 4 | 5);
-            let want_left = matches!(hat, 5 | 6 | 7);
-            emit_dir_edges(
-                &mut ctx.emit_pad,
-                dev.id,
-                &mut dev.dir,
-                timestamp,
-                host_nanos,
-                [want_up, want_down, want_left, want_right],
-            );
+        if !keyboard_capture_active() {
             return;
         }
-
-        if usage_page == 0x09 {
-            let pressed = v != 0;
-            (ctx.emit_pad)(PadEvent::RawButton {
-                id: dev.id,
-                timestamp,
-                host_nanos,
-                code: PadCode(code),
-                uuid: dev.uuid,
-                value: if pressed { 1.0 } else { 0.0 },
-                pressed,
-            });
-        } else {
-            (ctx.emit_pad)(PadEvent::RawAxis {
-                id: dev.id,
-                timestamp,
-                host_nanos,
-                code: PadCode(code),
-                uuid: dev.uuid,
-                value: v as f32,
-            });
-        }
+        let Some(code) = hid_key_code(usage) else {
+            return;
+        };
+        (ctx.emit_key)(RawKeyboardEvent {
+            code,
+            pressed: v != 0,
+            repeat: false,
+            timestamp,
+            host_nanos,
+        });
     }
 }
 
 pub fn run(
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
+    emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
 ) {
     // SAFETY: the manager, run loop, and callback registrations all stay within
     // this thread; `ctx` is intentionally leaked so the callback context pointer
@@ -386,9 +610,11 @@ pub fn run(
         let mut ctx = Box::new(Ctx {
             emit_pad: Box::new(emit_pad),
             emit_sys: Box::new(emit_sys),
+            emit_key: Box::new(emit_key),
             next_id: 0,
             id_by_uuid: HashMap::new(),
-            devs: HashMap::new(),
+            pad_devs: HashMap::new(),
+            key_devs: HashMap::new(),
             host_clock: HostClock::calibrate(),
             startup_complete_sent: false,
             key_primary_usage_page: cfstr("PrimaryUsagePage"),

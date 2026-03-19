@@ -242,7 +242,7 @@ pub fn run_pad_backend(
         return backends::evdev::run(emit_pad, emit_sys, |_| {});
     }
     #[cfg(target_os = "macos")]
-    return backends::iohid::run(emit_pad, emit_sys);
+    return backends::iohid::run(emit_pad, emit_sys, |_| {});
 
     #[cfg(not(any(
         windows,
@@ -275,6 +275,15 @@ pub fn run_freebsd_backend(
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
 ) {
     backends::evdev::run(emit_pad, emit_sys, emit_key);
+}
+
+#[cfg(target_os = "macos")]
+pub fn run_macos_backend(
+    emit_pad: impl FnMut(PadEvent) + Send + 'static,
+    emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
+    emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
+) {
+    backends::iohid::run(emit_pad, emit_sys, emit_key);
 }
 
 #[cfg(windows)]
@@ -313,7 +322,16 @@ pub fn set_raw_keyboard_window_focused(focused: bool) {
     backends::evdev::set_keyboard_window_focused(focused);
 }
 
-#[cfg(all(not(windows), not(any(target_os = "linux", target_os = "freebsd"))))]
+#[cfg(target_os = "macos")]
+#[inline(always)]
+pub fn set_raw_keyboard_window_focused(focused: bool) {
+    backends::iohid::set_keyboard_window_focused(focused);
+}
+
+#[cfg(all(
+    not(windows),
+    not(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))
+))]
 #[inline(always)]
 pub fn set_raw_keyboard_window_focused(focused: bool) {
     let _ = focused;
@@ -326,7 +344,17 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     backends::evdev::set_keyboard_capture_enabled(enabled);
 }
 
-#[cfg(all(not(windows), not(any(target_os = "linux", target_os = "freebsd"))))]
+#[cfg(target_os = "macos")]
+#[allow(dead_code)]
+#[inline(always)]
+pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
+    backends::iohid::set_keyboard_capture_enabled(enabled);
+}
+
+#[cfg(all(
+    not(windows),
+    not(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))
+))]
 #[allow(dead_code)]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
