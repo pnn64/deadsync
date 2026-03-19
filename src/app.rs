@@ -42,9 +42,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(all(not(windows), not(target_os = "linux")))]
+#[cfg(all(not(windows), not(target_os = "linux"), not(target_os = "freebsd")))]
 compile_error!(
-    "deadsync control input requires a raw keyboard backend; only Windows and Linux are wired for full app input"
+    "deadsync control input requires a raw keyboard backend; only Windows, Linux, and FreeBSD are wired for full app input"
 );
 
 use crate::ui::actors::Actor;
@@ -7720,6 +7720,26 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_key = proxy.clone();
         std::thread::spawn(move || {
             input::run_linux_backend(
+                move |pe| {
+                    let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                },
+                move |se| {
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
+                },
+                move |ke| {
+                    let _ = proxy_key.send_event(UserEvent::Key(ke));
+                },
+            );
+        });
+    }
+    #[cfg(target_os = "freebsd")]
+    {
+        input::set_raw_keyboard_window_focused(true);
+        let proxy_pad = proxy.clone();
+        let proxy_sys = proxy.clone();
+        let proxy_key = proxy.clone();
+        std::thread::spawn(move || {
+            input::run_freebsd_backend(
                 move |pe| {
                     let _ = proxy_pad.send_event(UserEvent::Pad(pe));
                 },
