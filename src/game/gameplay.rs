@@ -18,7 +18,7 @@ use crate::game::{
         LIFE_DECENT, LIFE_EXCELLENT, LIFE_FANTASTIC, LIFE_GREAT, LIFE_HELD, LIFE_HIT_MINE,
         LIFE_LET_GO, LIFE_MISS, LIFE_WAY_OFF, REGEN_COMBO_AFTER_MISS,
     },
-    profile,
+    profile::{self, TimingTickMode as TickMode},
     scroll::ScrollSpeedSetting,
 };
 use crate::screens::components::shared::{
@@ -612,13 +612,6 @@ pub enum AutosyncMode {
     Off,
     Song,
     Machine,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TickMode {
-    Off,
-    Assist,
-    Hit,
 }
 
 #[inline(always)]
@@ -6982,7 +6975,7 @@ pub fn init(
         autoplay_pending_row: [None; MAX_PLAYERS],
         autoplay_lane_state: [false; MAX_COLS],
         autoplay_hold_release_time: [None; MAX_COLS],
-        tick_mode: TickMode::Off,
+        tick_mode: profile::get_session_timing_tick_mode(),
         assist_clap_rows,
         assist_clap_cursor: 0,
         assist_last_crossed_row: -1,
@@ -8858,6 +8851,7 @@ fn set_tick_mode(state: &mut State, mode: TickMode, now_music_time: f32) {
         return;
     }
     state.tick_mode = mode;
+    profile::set_session_timing_tick_mode(mode);
 
     let song_row = assist_row_no_offset(state, now_music_time);
     state.assist_last_crossed_row = song_row;

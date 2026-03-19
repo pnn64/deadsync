@@ -1469,6 +1469,14 @@ pub enum PlayerSide {
     P2,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TimingTickMode {
+    #[default]
+    Off,
+    Assist,
+    Hit,
+}
+
 pub const GUEST_SCROLL_SPEED: ScrollSpeedSetting = ScrollSpeedSetting::MMod(250.0);
 
 const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
@@ -1487,6 +1495,7 @@ struct SessionState {
     active_profiles: [ActiveProfile; PLAYER_SLOTS],
     joined_mask: u8,
     music_rate: f32,
+    timing_tick_mode: TimingTickMode,
     play_style: PlayStyle,
     play_mode: PlayMode,
     player_side: PlayerSide,
@@ -1503,6 +1512,7 @@ static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::
         ],
         joined_mask: SESSION_JOINED_MASK_P1,
         music_rate: 1.0,
+        timing_tick_mode: TimingTickMode::Off,
         play_style: PlayStyle::Single,
         play_mode: PlayMode::Regular,
         player_side: PlayerSide::P1,
@@ -3474,6 +3484,14 @@ pub fn set_session_music_rate(rate: f32) {
     } else {
         1.0
     };
+}
+
+pub fn get_session_timing_tick_mode() -> TimingTickMode {
+    lock_session().timing_tick_mode
+}
+
+pub fn set_session_timing_tick_mode(mode: TimingTickMode) {
+    lock_session().timing_tick_mode = mode;
 }
 
 pub fn get_session_play_style() -> PlayStyle {
