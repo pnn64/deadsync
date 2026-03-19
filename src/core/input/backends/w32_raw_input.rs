@@ -111,6 +111,25 @@ impl Ctx {
     }
 }
 
+#[cold]
+fn warn_win32(label: &str, err: &windows::core::Error) {
+    log::warn!("Windows Raw Input {label} failed ({err})");
+}
+
+#[cold]
+fn emit_startup_complete(ctx: &mut Ctx) {
+    if ctx.enable_pad {
+        (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+    }
+}
+
+#[cold]
+fn disable_backend(ctx: &mut Ctx, label: &str, err: windows::core::Error) {
+    RAW_INPUT_HWND.store(0, Ordering::Release);
+    log::warn!("Windows Raw Input {label} failed ({err}); backend disabled");
+    emit_startup_complete(ctx);
+}
+
 #[inline(always)]
 pub fn set_window_focused(focused: bool) {
     WINDOW_FOCUSED.store(focused, Ordering::Relaxed);
@@ -126,7 +145,7 @@ pub fn set_capture_enabled(enabled: bool) {
 }
 
 #[inline(always)]
-fn register_keyboard(hwnd: HWND, capture_enabled: bool) {
+fn register_keyboard(hwnd: HWND, capture_enabled: bool) -> bool {
     let mut flags = RIDEV_INPUTSINK;
     if capture_enabled {
         flags |= RIDEV_NOLEGACY;
@@ -140,12 +159,18 @@ fn register_keyboard(hwnd: HWND, capture_enabled: bool) {
     // SAFETY: `devices` points to a fixed stack array that lives for the duration
     // of the call, and `hwnd` is the message-only window created by this backend.
     unsafe {
-        let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
+        match RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32) {
+            Ok(()) => true,
+            Err(err) => {
+                warn_win32("keyboard registration", &err);
+                false
+            }
+        }
     }
 }
 
 #[inline(always)]
-fn register_controllers(hwnd: HWND) {
+fn register_controllers(hwnd: HWND) -> bool {
     let devices = [
         RAWINPUTDEVICE {
             usUsagePage: USAGE_PAGE_GENERIC,
@@ -169,7 +194,13 @@ fn register_controllers(hwnd: HWND) {
     // SAFETY: `devices` points to a fixed stack array that lives for the duration
     // of the call, and `hwnd` is the message-only window created by this backend.
     unsafe {
-        let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
+        match RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32) {
+            Ok(()) => true,
+            Err(err) => {
+                warn_win32("controller registration", &err);
+                false
+            }
+        }
     }
 }
 
@@ -867,7 +898,13 @@ fn run_inner(mut ctx: Box<Ctx>) {
     // window can still receive messages.
     unsafe {
         let class_name: Vec<u16> = "deadsync_raw_input\0".encode_utf16().collect();
-        let hinst: HINSTANCE = GetModuleHandleW(PCWSTR::null()).unwrap_or_default().into();
+        let hinst: HINSTANCE = match GetModuleHandleW(PCWSTR::null()) {
+            Ok(hinst) => hinst.into(),
+            Err(err) => {
+                disable_backend(&mut ctx, "module handle lookup", err);
+                return;
+            }
+        };
 
         let wc = WNDCLASSEXW {
             cbSize: size_of::<WNDCLASSEXW>() as u32,
@@ -878,7 +915,7 @@ fn run_inner(mut ctx: Box<Ctx>) {
         };
         RegisterClassExW(&raw const wc);
 
-        let hwnd = CreateWindowExW(
+        let hwnd = match CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             wc.lpszClassName,
             PCWSTR::null(),
@@ -891,21 +928,30 @@ fn run_inner(mut ctx: Box<Ctx>) {
             None,
             Some(hinst),
             Some(ptr::addr_of_mut!(*ctx).cast::<c_void>().cast_const()),
-        )
-        .unwrap_or_default();
-        if hwnd.0.is_null() {
-            loop {
-                std::thread::park();
+        ) {
+            Ok(hwnd) if !hwnd.0.is_null() => hwnd,
+            Ok(_) => {
+                disable_backend(
+                    &mut ctx,
+                    "window creation",
+                    windows::core::Error::from_thread(),
+                );
+                return;
             }
-        }
+            Err(err) => {
+                disable_backend(&mut ctx, "window creation", err);
+                return;
+            }
+        };
 
         RAW_INPUT_HWND.store(hwnd.0 as isize, Ordering::Release);
-        register_keyboard(hwnd, CAPTURE_ENABLED.load(Ordering::Relaxed));
+        let _ = register_keyboard(hwnd, CAPTURE_ENABLED.load(Ordering::Relaxed));
 
         if ctx.enable_pad {
-            register_controllers(hwnd);
-            enumerate_existing(&mut ctx);
-            (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+            if register_controllers(hwnd) {
+                enumerate_existing(&mut ctx);
+            }
+            emit_startup_complete(&mut ctx);
         }
 
         let mut msg = MSG::default();
