@@ -469,6 +469,19 @@ const GAMEPLAY_TRACE_SLOW_FRAME_US: u32 = 4_000;
 const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
 const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
 const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
+
+#[inline(always)]
+const fn input_queue_cap(num_cols: usize) -> usize {
+    // Pre-size one backlog-warning bucket per 4-panel field so live gameplay
+    // does not grow the queue before crossing its first pressure threshold.
+    let fields = if num_cols <= 4 {
+        1
+    } else {
+        num_cols.div_ceil(4)
+    };
+    GAMEPLAY_INPUT_BACKLOG_WARN * fields
+}
+
 // Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
 const RANDOM_ATTACK_MOD_POOL: [&str; 29] = [
     "0.5x",
@@ -6467,7 +6480,7 @@ pub fn init(
             arrow_capacity[col] = arrow_capacity[col].saturating_add(1);
         }
     }
-    let pending_edges_capacity = (num_cols * 16).max(32);
+    let pending_edges_capacity = input_queue_cap(num_cols);
     let decaying_hold_capacity = (0..num_players).fold(0usize, |acc, player| {
         acc.saturating_add(holds_total[player] as usize + rolls_total[player] as usize)
     });
@@ -10896,10 +10909,11 @@ fn update_danger_fx(state: &mut State) {
 #[cfg(test)]
 mod tests {
     use super::{
-        FrameStableDisplayClock, INSERT_MASK_BIT_MINES, ScrollEffects, ScrollSpeedSetting,
-        SongClockSnapshot, TickMode, apply_mines_insert, build_assist_clap_rows,
-        build_attack_mask_windows_for_player, frame_stable_display_music_time,
-        lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
+        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, ScrollEffects,
+        ScrollSpeedSetting, SongClockSnapshot, TickMode, apply_mines_insert,
+        build_assist_clap_rows, build_attack_mask_windows_for_player,
+        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals,
         score_valid_for_chart, scored_hold_totals_with_carry, tick_mode_status_line,
@@ -11436,5 +11450,13 @@ mod tests {
         assert!(notes.iter().any(|note| note.row_index == 120
             && note.column == 1
             && note.note_type == NoteType::Mine));
+    }
+
+    #[test]
+    fn input_queue_cap_scales_with_fields() {
+        assert_eq!(input_queue_cap(0), GAMEPLAY_INPUT_BACKLOG_WARN);
+        assert_eq!(input_queue_cap(4), GAMEPLAY_INPUT_BACKLOG_WARN);
+        assert_eq!(input_queue_cap(5), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
+        assert_eq!(input_queue_cap(8), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
     }
 }
