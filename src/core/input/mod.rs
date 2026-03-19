@@ -506,10 +506,24 @@ struct PadCodeRev {
     uuid: Option<[u8; 16]>,
 }
 
+const KEY_CODE_CAP: usize = KeyCode::F35 as usize + 1;
+
+#[inline(always)]
+fn new_key_rev() -> Box<[Vec<VirtualAction>]> {
+    vec![Vec::new(); KEY_CODE_CAP].into_boxed_slice()
+}
+
+#[inline(always)]
+const fn dense_key_ix(code: KeyCode) -> Option<usize> {
+    let ix = code as usize;
+    if ix < KEY_CODE_CAP { Some(ix) } else { None }
+}
+
 #[derive(Clone, Debug)]
 pub struct Keymap {
     map: HashMap<VirtualAction, Vec<InputBinding>>,
-    key_rev: HashMap<KeyCode, Vec<VirtualAction>>,
+    key_rev: Box<[Vec<VirtualAction>]>,
+    key_rev_extra: HashMap<KeyCode, Vec<VirtualAction>>,
     pad_dir_rev: [Vec<VirtualAction>; 4],
     pad_dir_on_rev: HashMap<(usize, PadDir), Vec<VirtualAction>>,
     pad_code_rev: HashMap<u32, Vec<PadCodeRev>>,
@@ -519,7 +533,8 @@ impl Default for Keymap {
     fn default() -> Self {
         Self {
             map: HashMap::new(),
-            key_rev: HashMap::new(),
+            key_rev: new_key_rev(),
+            key_rev_extra: HashMap::new(),
             pad_dir_rev: std::array::from_fn(|_| Vec::new()),
             pad_dir_on_rev: HashMap::new(),
             pad_code_rev: HashMap::new(),
@@ -540,7 +555,12 @@ const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
 #[inline(always)]
 fn debounce_caps(km: &Keymap) -> (usize, usize) {
-    let key_cap = km.key_rev.len();
+    let key_cap = km
+        .key_rev
+        .iter()
+        .filter(|actions| !actions.is_empty())
+        .count()
+        + km.key_rev_extra.len();
     let mut pad_cap = km
         .pad_dir_rev
         .iter()
@@ -629,14 +649,25 @@ fn debounce_windows() -> DebounceWindows {
 
 impl Keymap {
     #[inline(always)]
+    fn key_actions(&self, code: KeyCode) -> &[VirtualAction] {
+        match dense_key_ix(code) {
+            Some(ix) => &self.key_rev[ix],
+            None => self.key_rev_extra.get(&code).map_or(&[], Vec::as_slice),
+        }
+    }
+
+    #[inline(always)]
     fn remove_rev(&mut self, action: VirtualAction, prev: &[InputBinding]) {
         for b in prev {
             match *b {
                 InputBinding::Key(code) => {
-                    if let Some(v) = self.key_rev.get_mut(&code) {
+                    if let Some(ix) = dense_key_ix(code) {
+                        let v = &mut self.key_rev[ix];
+                        v.retain(|a| *a != action);
+                    } else if let Some(v) = self.key_rev_extra.get_mut(&code) {
                         v.retain(|a| *a != action);
                         if v.is_empty() {
-                            self.key_rev.remove(&code);
+                            self.key_rev_extra.remove(&code);
                         }
                     }
                 }
@@ -670,7 +701,13 @@ impl Keymap {
     fn add_rev(&mut self, action: VirtualAction, inputs: &[InputBinding]) {
         for b in inputs {
             match *b {
-                InputBinding::Key(code) => self.key_rev.entry(code).or_default().push(action),
+                InputBinding::Key(code) => {
+                    if let Some(ix) = dense_key_ix(code) {
+                        self.key_rev[ix].push(action);
+                    } else {
+                        self.key_rev_extra.entry(code).or_default().push(action);
+                    }
+                }
                 InputBinding::PadDir(dir) => self.pad_dir_rev[dir.ix()].push(action),
                 InputBinding::PadDirOn { device, dir } => self
                     .pad_dir_on_rev
@@ -726,23 +763,13 @@ impl Keymap {
     }
 
     #[inline(always)]
-    pub fn actions_for_raw_key_event(&self, ev: &RawKeyboardEvent) -> Vec<(VirtualAction, bool)> {
-        self.actions_for_key_code(ev.code, ev.pressed)
-    }
-
-    #[inline(always)]
     pub fn keycode_mapped(&self, code: KeyCode) -> bool {
-        self.key_rev
-            .get(&code)
-            .is_some_and(|actions| !actions.is_empty())
+        !self.key_actions(code).is_empty()
     }
 
     #[inline(always)]
     pub fn keycode_has_action(&self, code: KeyCode, keep: impl Fn(VirtualAction) -> bool) -> bool {
-        let Some(actions) = self.key_rev.get(&code) else {
-            return false;
-        };
-        for &action in actions {
+        for &action in self.key_actions(code) {
             if keep(action) {
                 return true;
             }
@@ -762,35 +789,6 @@ impl Keymap {
         keep: impl Fn(VirtualAction) -> bool,
     ) -> bool {
         self.keycode_has_action(ev.code, keep)
-    }
-
-    #[inline(always)]
-    pub fn actions_for_key_code(&self, code: KeyCode, pressed: bool) -> Vec<(VirtualAction, bool)> {
-        let Some(actions) = self.key_rev.get(&code) else {
-            return Vec::new();
-        };
-        dedup_actions(actions, pressed)
-    }
-
-    #[inline(always)]
-    pub fn actions_for_pad_event(&self, ev: &PadEvent) -> Vec<(VirtualAction, bool)> {
-        match *ev {
-            PadEvent::Dir {
-                id, dir, pressed, ..
-            } => self.actions_for_pad_dir(id, dir, pressed),
-            PadEvent::RawButton {
-                id,
-                code,
-                uuid,
-                pressed,
-                ..
-            } => self.actions_for_pad_button(id, code, uuid, pressed),
-            PadEvent::RawAxis { .. } => {
-                // Axis events are exposed for debugging but are not yet
-                // mapped directly to virtual actions.
-                Vec::new()
-            }
-        }
     }
 
     #[inline(always)]
@@ -824,93 +822,6 @@ impl Keymap {
             PadEvent::RawAxis { .. } => false,
         }
     }
-
-    #[inline(always)]
-    pub fn actions_for_pad_dir(
-        &self,
-        id: PadId,
-        dir: PadDir,
-        pressed: bool,
-    ) -> Vec<(VirtualAction, bool)> {
-        let dev = usize::from(id);
-        let any = &self.pad_dir_rev[dir.ix()];
-        let on = self.pad_dir_on_rev.get(&(dev, dir));
-        if any.is_empty() && on.is_none() {
-            return Vec::new();
-        }
-        let mut out = Vec::with_capacity(any.len() + on.map_or(0, |v| v.len()));
-        let mut seen: u32 = 0;
-        for &act in any {
-            let bit = 1u32 << (act.ix() as u32);
-            if (seen & bit) != 0 {
-                continue;
-            }
-            seen |= bit;
-            out.push((act, pressed));
-        }
-        if let Some(v) = on {
-            for &act in v {
-                let bit = 1u32 << (act.ix() as u32);
-                if (seen & bit) != 0 {
-                    continue;
-                }
-                seen |= bit;
-                out.push((act, pressed));
-            }
-        }
-        out
-    }
-
-    #[inline(always)]
-    pub fn actions_for_pad_button(
-        &self,
-        id: PadId,
-        code: PadCode,
-        uuid: [u8; 16],
-        pressed: bool,
-    ) -> Vec<(VirtualAction, bool)> {
-        let dev = usize::from(id);
-        let code_u32 = code.into_u32();
-        let Some(entries) = self.pad_code_rev.get(&code_u32) else {
-            return Vec::new();
-        };
-        let mut out = Vec::with_capacity(entries.len().min(4));
-        let mut seen: u32 = 0;
-        for e in entries {
-            if let Some(d_expected) = e.device
-                && d_expected != dev
-            {
-                continue;
-            }
-            if let Some(u_expected) = e.uuid
-                && u_expected != uuid
-            {
-                continue;
-            }
-            let bit = 1u32 << (e.act.ix() as u32);
-            if (seen & bit) != 0 {
-                continue;
-            }
-            seen |= bit;
-            out.push((e.act, pressed));
-        }
-        out
-    }
-}
-
-#[inline(always)]
-fn dedup_actions(actions: &[VirtualAction], pressed: bool) -> Vec<(VirtualAction, bool)> {
-    let mut out = Vec::with_capacity(actions.len());
-    let mut seen: u32 = 0;
-    for &act in actions {
-        let bit = 1u32 << (act.ix() as u32);
-        if (seen & bit) != 0 {
-            continue;
-        }
-        seen |= bit;
-        out.push((act, pressed));
-    }
-    out
 }
 
 // INI parsing and default emission moved to config.rs
@@ -974,9 +885,10 @@ fn push_action(out: &mut ActionBuf, len: &mut usize, seen: &mut u32, action: Vir
 
 #[inline(always)]
 fn collect_key_actions(km: &Keymap, code: KeyCode, out: &mut ActionBuf) -> usize {
-    let Some(actions) = km.key_rev.get(&code) else {
+    let actions = km.key_actions(code);
+    if actions.is_empty() {
         return 0;
-    };
+    }
     let mut len = 0;
     let mut seen = 0;
     for &action in actions {
@@ -1114,31 +1026,29 @@ fn collect_actions_from_edge(km: &Keymap, edge: DebouncedEdge, out: &mut ActionB
 }
 
 #[inline(always)]
-fn emit_input_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(InputEvent)) {
-    with_keymap(|km| {
-        let mut actions: ActionBuf = [None; VirtualAction::COUNT];
-        let len = collect_actions_from_edge(km, edge, &mut actions);
-        emit_normalized_actions(&actions, len, edge.pressed, |action, pressed| {
-            emit(input_event(
-                action,
-                pressed,
-                edge.source,
-                edge.timestamp,
-                edge.timestamp_host_nanos,
-                edge.stored_at,
-                edge.emitted_at,
-            ));
-        });
+fn emit_input_events_from_edge(km: &Keymap, edge: DebouncedEdge, mut emit: impl FnMut(InputEvent)) {
+    let mut actions: ActionBuf = [None; VirtualAction::COUNT];
+    let len = collect_actions_from_edge(km, edge, &mut actions);
+    emit_normalized_actions(&actions, len, edge.pressed, |action, pressed| {
+        emit(input_event(
+            action,
+            pressed,
+            edge.source,
+            edge.timestamp,
+            edge.timestamp_host_nanos,
+            edge.stored_at,
+            edge.emitted_at,
+        ));
     });
 }
 
 #[inline(always)]
-fn emit_debounced_edges(edges: DebounceEdges, mut emit: impl FnMut(InputEvent)) {
+fn emit_debounced_edges(km: &Keymap, edges: DebounceEdges, mut emit: impl FnMut(InputEvent)) {
     if let Some(edge) = edges.first {
-        emit_input_events_from_edge(edge, &mut emit);
+        emit_input_events_from_edge(km, edge, &mut emit);
     }
     if let Some(edge) = edges.second {
-        emit_input_events_from_edge(edge, &mut emit);
+        emit_input_events_from_edge(km, edge, &mut emit);
     }
 }
 
@@ -1155,7 +1065,7 @@ pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent
         ev.host_nanos,
         debounce_windows(),
     );
-    emit_debounced_edges(edges, emit);
+    with_keymap(|km| emit_debounced_edges(km, edges, emit));
 }
 
 #[inline(always)]
@@ -1226,19 +1136,24 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
         ),
         PadEvent::RawAxis { .. } => return,
     };
-    emit_debounced_edges(edges, &mut emit);
+    with_keymap(|km| emit_debounced_edges(km, edges, &mut emit));
 }
 
 pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bool {
-    let now = Instant::now();
-    let mut flushed =
-        emit_due_debounce_edges_from(&KEYBOARD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
-            emit_input_events_from_edge(edge, &mut emit)
-        });
-    flushed |= emit_due_debounce_edges_from(&PAD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
-        emit_input_events_from_edge(edge, &mut emit)
-    });
-    flushed
+    with_keymap(|km| {
+        let now = Instant::now();
+        let mut flushed = emit_due_debounce_edges_from(
+            &KEYBOARD_DEBOUNCE_STATE,
+            now,
+            debounce_windows(),
+            |edge| emit_input_events_from_edge(km, edge, &mut emit),
+        );
+        flushed |=
+            emit_due_debounce_edges_from(&PAD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
+                emit_input_events_from_edge(km, edge, &mut emit)
+            });
+        flushed
+    })
 }
 
 #[inline(always)]
