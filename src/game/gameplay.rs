@@ -469,6 +469,7 @@ const GAMEPLAY_TRACE_SLOW_FRAME_US: u32 = 4_000;
 const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
 const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
 const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
+const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
 
 #[inline(always)]
 const fn input_queue_cap(num_cols: usize) -> usize {
@@ -480,6 +481,22 @@ const fn input_queue_cap(num_cols: usize) -> usize {
         num_cols.div_ceil(4)
     };
     GAMEPLAY_INPUT_BACKLOG_WARN * fields
+}
+
+#[inline(always)]
+const fn replay_edge_cap(num_cols: usize, replay_cells: usize, replay_mode: bool) -> usize {
+    if replay_mode {
+        return 0;
+    }
+    // Live recording stores physical press/release edges, so reserve two edges
+    // per playable note cell and keep a small per-lane floor for early misses.
+    let chart_cap = replay_cells.saturating_mul(2);
+    let floor_cap = num_cols.saturating_mul(REPLAY_EDGE_FLOOR_PER_LANE);
+    if chart_cap > floor_cap {
+        chart_cap
+    } else {
+        floor_cap
+    }
 }
 
 // Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
@@ -6474,13 +6491,18 @@ pub fn init(
     }
     let next_mine_ix_cursor: [usize; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let mut arrow_capacity = [0usize; MAX_COLS];
+    let mut replay_cells = 0usize;
     for note in &notes {
         let col = note.column;
         if col < num_cols && col < MAX_COLS {
             arrow_capacity[col] = arrow_capacity[col].saturating_add(1);
         }
+        if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+            replay_cells = replay_cells.saturating_add(1);
+        }
     }
     let pending_edges_capacity = input_queue_cap(num_cols);
+    let replay_edges_capacity = replay_edge_cap(num_cols, replay_cells, replay_mode);
     let decaying_hold_capacity = (0..num_players).fold(0usize, |acc, player| {
         acc.saturating_add(holds_total[player] as usize + rolls_total[player] as usize)
     });
@@ -6969,7 +6991,7 @@ pub fn init(
         toggle_flash_timer: 0.0,
         replay_input,
         replay_cursor: 0,
-        replay_edges: Vec::with_capacity(4096),
+        replay_edges: Vec::with_capacity(replay_edges_capacity),
         update_trace: GameplayUpdateTraceState::default(),
     };
     state.update_trace = GameplayUpdateTraceState::from_state(&state);
@@ -10915,7 +10937,7 @@ mod tests {
         frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
-        player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals,
+        player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals, replay_edge_cap,
         score_valid_for_chart, scored_hold_totals_with_carry, tick_mode_status_line,
         turn_option_bits, update_lane_count,
     };
@@ -11458,5 +11480,14 @@ mod tests {
         assert_eq!(input_queue_cap(4), GAMEPLAY_INPUT_BACKLOG_WARN);
         assert_eq!(input_queue_cap(5), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
         assert_eq!(input_queue_cap(8), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
+    }
+
+    #[test]
+    fn replay_edge_cap_scales_with_chart_and_skips_replay_mode() {
+        assert_eq!(replay_edge_cap(4, 0, true), 0);
+        assert_eq!(replay_edge_cap(4, 0, false), 4 * 64);
+        assert_eq!(replay_edge_cap(4, 120, false), 4 * 64);
+        assert_eq!(replay_edge_cap(4, 200, false), 400);
+        assert_eq!(replay_edge_cap(8, 1000, false), 2000);
     }
 }
