@@ -338,14 +338,12 @@ pub fn set_raw_keyboard_window_focused(focused: bool) {
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-#[allow(dead_code)]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     backends::evdev::set_keyboard_capture_enabled(enabled);
 }
 
 #[cfg(target_os = "macos")]
-#[allow(dead_code)]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     backends::iohid::set_keyboard_capture_enabled(enabled);
@@ -355,7 +353,6 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     not(windows),
     not(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))
 ))]
-#[allow(dead_code)]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     let _ = enabled;

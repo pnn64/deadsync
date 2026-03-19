@@ -26,13 +26,10 @@ use winit::{
 
 use log::{debug, error, info, trace, warn};
 use std::borrow::Cow;
-#[cfg(windows)]
 use std::cell::UnsafeCell;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
-#[cfg(windows)]
 use std::mem::MaybeUninit;
-#[cfg(windows)]
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::{
     error::Error,
@@ -130,8 +127,7 @@ const GAMEPLAY_EVENT_BATCH_SLOW_US: u32 = 1_000;
 const GAMEPLAY_EVENT_BATCH_BURST_KEYS: u32 = 8;
 const PENDING_INPUT_EVENT_CAPACITY: usize = 512;
 const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 131_072;
-#[cfg(windows)]
-const RAW_KEYBOARD_EVENT_CAPACITY: usize = 1024;
+const GAMEPLAY_INPUT_RING_CAPACITY: usize = 1024;
 
 #[derive(Clone, Copy)]
 enum ScreenshotPreviewTarget {
@@ -245,28 +241,24 @@ impl PendingInputRing {
     }
 }
 
-#[cfg(windows)]
-struct RawKeyboardRing {
+struct GameplayInputRing {
     enabled: AtomicBool,
     head: AtomicUsize,
     tail: AtomicUsize,
     dropped: AtomicU32,
-    slots: [UnsafeCell<MaybeUninit<InputEvent>>; RAW_KEYBOARD_EVENT_CAPACITY],
+    slots: [UnsafeCell<MaybeUninit<InputEvent>>; GAMEPLAY_INPUT_RING_CAPACITY],
 }
 
-#[cfg(windows)]
-// SAFETY: `RawKeyboardRing` is a single-producer/single-consumer ring. Slot
+// SAFETY: `GameplayInputRing` is a single-producer/single-consumer ring. Slot
 // ownership is synchronized with the `head`/`tail` atomics, so moving the ring
 // between threads does not create unsynchronized aliasing of initialized items.
-unsafe impl Send for RawKeyboardRing {}
-#[cfg(windows)]
+unsafe impl Send for GameplayInputRing {}
 // SAFETY: readers and writers coordinate exclusively through atomics and only
 // touch disjoint slots at any instant. Shared references are therefore safe as
 // long as callers preserve the intended SPSC usage.
-unsafe impl Sync for RawKeyboardRing {}
+unsafe impl Sync for GameplayInputRing {}
 
-#[cfg(windows)]
-impl RawKeyboardRing {
+impl GameplayInputRing {
     #[inline(always)]
     fn new() -> Self {
         Self {
@@ -284,6 +276,11 @@ impl RawKeyboardRing {
     }
 
     #[inline(always)]
+    fn swap_enabled(&self, enabled: bool) -> bool {
+        self.enabled.swap(enabled, Ordering::Relaxed)
+    }
+
+    #[inline(always)]
     fn is_enabled(&self) -> bool {
         self.enabled.load(Ordering::Relaxed)
     }
@@ -295,11 +292,11 @@ impl RawKeyboardRing {
         }
         let tail = self.tail.load(Ordering::Relaxed);
         let head = self.head.load(Ordering::Acquire);
-        if tail.wrapping_sub(head) == RAW_KEYBOARD_EVENT_CAPACITY {
+        if tail.wrapping_sub(head) == GAMEPLAY_INPUT_RING_CAPACITY {
             self.dropped.fetch_add(1, Ordering::Relaxed);
             return;
         }
-        let slot = tail % RAW_KEYBOARD_EVENT_CAPACITY;
+        let slot = tail % GAMEPLAY_INPUT_RING_CAPACITY;
         // SAFETY: `tail - head < capacity` guarantees this slot is not currently
         // visible to the consumer. The write happens-before publication via the
         // following Release store to `tail`.
@@ -314,7 +311,7 @@ impl RawKeyboardRing {
         if head == tail {
             return None;
         }
-        let slot = head % RAW_KEYBOARD_EVENT_CAPACITY;
+        let slot = head % GAMEPLAY_INPUT_RING_CAPACITY;
         // SAFETY: `head != tail` means the producer has already initialized this
         // slot and published it with a Release store to `tail`. The Acquire load
         // above pairs with that store before we read the item out exactly once.
@@ -2417,8 +2414,8 @@ pub struct App {
     ui_text_layout_cache: crate::ui::compose::TextLayoutCache,
     gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache,
     state: AppState,
-    #[cfg(windows)]
-    raw_keyboard_ring: Arc<RawKeyboardRing>,
+    gameplay_key_ring: Arc<GameplayInputRing>,
+    gameplay_pad_ring: Arc<GameplayInputRing>,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
 }
@@ -2606,8 +2603,7 @@ impl App {
             .as_secs_f32();
         crate::ui::runtime::tick(delta_time);
 
-        #[cfg(windows)]
-        self.sync_raw_keyboard_capture();
+        self.sync_gameplay_input_capture();
         self.state.shell.update_gamepad_overlay(redraw_started);
         let input_us: u32;
         let update_us: u32;
@@ -2617,12 +2613,7 @@ impl App {
         let mut draw_us: u32 = 0;
         let mut draw_stats = renderer::DrawStats::default();
         let input_started = Instant::now();
-        #[cfg(windows)]
-        if let Err(e) = self.drain_raw_keyboard_events(event_loop) {
-            error!("Failed to handle raw keyboard input: {e}");
-            event_loop.exit();
-            return;
-        }
+        self.drain_gameplay_input_events();
         if let Err(e) = self.flush_due_input_events(event_loop) {
             error!("Failed to handle debounced input: {e}");
             event_loop.exit();
@@ -3010,8 +3001,8 @@ impl App {
                 GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
             ),
             state,
-            #[cfg(windows)]
-            raw_keyboard_ring: Arc::new(RawKeyboardRing::new()),
+            gameplay_key_ring: Arc::new(GameplayInputRing::new()),
+            gameplay_pad_ring: Arc::new(GameplayInputRing::new()),
             software_renderer_threads,
             gfx_debug_enabled,
         }
@@ -4191,55 +4182,64 @@ impl App {
         self.state.pending_input_events.push(ev);
     }
 
-    #[cfg(windows)]
     #[inline(always)]
-    fn sync_raw_keyboard_capture(&self) {
+    fn sync_gameplay_input_capture(&self) {
         let capture_enabled = self.state.shell.window_focused && self.state.shell.surface_active;
         let ring_enabled = capture_enabled
             && self.state.screens.current_screen == CurrentScreen::Gameplay
             && matches!(self.state.shell.transition, TransitionState::Idle);
-        let was_ring_enabled = self
-            .raw_keyboard_ring
-            .enabled
-            .swap(ring_enabled, Ordering::Relaxed);
+        let key_was_enabled = self.gameplay_key_ring.swap_enabled(ring_enabled);
+        let pad_was_enabled = self.gameplay_pad_ring.swap_enabled(ring_enabled);
         input::set_raw_keyboard_capture_enabled(capture_enabled);
-        if was_ring_enabled != ring_enabled || !ring_enabled {
-            self.raw_keyboard_ring.clear();
-            self.raw_keyboard_ring.take_dropped();
+        if key_was_enabled != ring_enabled || !ring_enabled {
+            self.gameplay_key_ring.clear();
+            self.gameplay_key_ring.take_dropped();
+        }
+        if pad_was_enabled != ring_enabled || !ring_enabled {
+            self.gameplay_pad_ring.clear();
+            self.gameplay_pad_ring.take_dropped();
         }
     }
 
-    #[cfg(windows)]
     #[inline(always)]
-    fn clear_raw_keyboard_events(&self) {
-        self.raw_keyboard_ring.set_enabled(false);
+    fn clear_gameplay_input_events(&self) {
+        self.gameplay_key_ring.set_enabled(false);
+        self.gameplay_pad_ring.set_enabled(false);
         input::set_raw_keyboard_capture_enabled(false);
-        self.raw_keyboard_ring.clear();
-        self.raw_keyboard_ring.take_dropped();
+        self.gameplay_key_ring.clear();
+        self.gameplay_key_ring.take_dropped();
+        self.gameplay_pad_ring.clear();
+        self.gameplay_pad_ring.take_dropped();
     }
 
-    #[cfg(windows)]
-    fn drain_raw_keyboard_events(
-        &mut self,
-        _event_loop: &ActiveEventLoop,
-    ) -> Result<(), Box<dyn Error>> {
-        let dropped = self.raw_keyboard_ring.take_dropped();
-        if dropped > 0 {
+    fn drain_gameplay_input_events(&mut self) {
+        let dropped_keys = self.gameplay_key_ring.take_dropped();
+        if dropped_keys > 0 {
             warn!(
-                "Raw keyboard input ring overflowed; dropped {dropped} event(s) on screen {:?}",
+                "Gameplay key input ring overflowed; dropped {dropped_keys} event(s) on screen {:?}",
+                self.state.screens.current_screen
+            );
+        }
+        let dropped_pads = self.gameplay_pad_ring.take_dropped();
+        if dropped_pads > 0 {
+            warn!(
+                "Gameplay pad input ring overflowed; dropped {dropped_pads} event(s) on screen {:?}",
                 self.state.screens.current_screen
             );
         }
         if self.state.screens.current_screen != CurrentScreen::Gameplay
             || !matches!(self.state.shell.transition, TransitionState::Idle)
         {
-            self.raw_keyboard_ring.clear();
-            return Ok(());
+            self.gameplay_key_ring.clear();
+            self.gameplay_pad_ring.clear();
+            return;
         }
-        while let Some(ev) = self.raw_keyboard_ring.pop() {
+        while let Some(ev) = self.gameplay_key_ring.pop() {
             self.queue_input_event(ev);
         }
-        Ok(())
+        while let Some(ev) = self.gameplay_pad_ring.pop() {
+            self.queue_input_event(ev);
+        }
     }
 
     fn route_pending_input_events(
@@ -6126,22 +6126,18 @@ impl App {
         if is_transitioning {
             input::clear_debounce_state();
             self.state.pending_input_events.clear();
-            #[cfg(windows)]
-            self.clear_raw_keyboard_events();
+            self.clear_gameplay_input_events();
             return true;
         }
 
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
-        #[cfg(windows)]
         if gameplay_screen {
             return false;
         }
 
         let mut input_err: Option<Box<dyn Error>> = None;
         input::map_raw_key_event_with(&raw_key, |ev| {
-            if gameplay_screen {
-                self.queue_input_event(ev);
-            } else if input_err.is_none()
+            if input_err.is_none()
                 && let Err(e) = self.route_input_event(event_loop, ev)
             {
                 input_err = Some(e);
@@ -6163,16 +6159,16 @@ impl App {
         if is_transitioning || self.state.screens.current_screen == CurrentScreen::Init {
             input::clear_debounce_state();
             self.state.pending_input_events.clear();
-            #[cfg(windows)]
-            self.clear_raw_keyboard_events();
+            self.clear_gameplay_input_events();
             return;
         }
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        if gameplay_screen {
+            return;
+        }
         let mut input_err: Option<Box<dyn Error>> = None;
         input::map_pad_event_with(&ev, |iev| {
-            if gameplay_screen {
-                self.queue_input_event(iev);
-            } else if input_err.is_none()
+            if input_err.is_none()
                 && let Err(e) = self.route_input_event(event_loop, iev)
             {
                 input_err = Some(e);
@@ -7512,8 +7508,7 @@ impl ApplicationHandler<UserEvent> for App {
                     .state
                     .shell
                     .set_surface_active(new_size.width > 0 && new_size.height > 0, now);
-                #[cfg(windows)]
-                self.sync_raw_keyboard_capture();
+                self.sync_gameplay_input_capture();
                 if surface_changed {
                     debug!(
                         "Window surface state changed: active={} size={}x{} screen={:?}",
@@ -7538,8 +7533,7 @@ impl ApplicationHandler<UserEvent> for App {
             WindowEvent::Focused(focused) => {
                 input::set_raw_keyboard_window_focused(focused);
                 if self.state.shell.set_window_focus(focused, Instant::now()) {
-                    #[cfg(windows)]
-                    self.sync_raw_keyboard_capture();
+                    self.sync_gameplay_input_capture();
                     debug!(
                         "Window focus changed: focused={} screen={:?}",
                         focused, self.state.screens.current_screen
@@ -7547,8 +7541,7 @@ impl ApplicationHandler<UserEvent> for App {
                     if !focused {
                         input::clear_debounce_state();
                         self.state.pending_input_events.clear();
-                        #[cfg(windows)]
-                        self.clear_raw_keyboard_events();
+                        self.clear_gameplay_input_events();
                     }
                     if focused {
                         self.request_redraw(&window, "focus");
@@ -7561,8 +7554,7 @@ impl ApplicationHandler<UserEvent> for App {
                     .shell
                     .set_window_occluded(occluded, Instant::now())
                 {
-                    #[cfg(windows)]
-                    self.sync_raw_keyboard_capture();
+                    self.sync_gameplay_input_capture();
                     debug!(
                         "Window occlusion changed: occluded={} screen={:?}",
                         occluded, self.state.screens.current_screen
@@ -7602,8 +7594,7 @@ impl ApplicationHandler<UserEvent> for App {
         self.state
             .shell
             .finish_gameplay_event_batch(Instant::now(), self.state.screens.current_screen);
-        #[cfg(windows)]
-        self.sync_raw_keyboard_capture();
+        self.sync_gameplay_input_capture();
         match self.flush_due_input_events(event_loop) {
             Ok(true) => self.request_redraw(&window, "input_debounce"),
             Ok(false) => {}
@@ -7671,12 +7662,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Spawn background input backend threads; all input stays decoupled from frame rate.
     let proxy: EventLoopProxy<UserEvent> = event_loop.create_proxy();
+    input::set_raw_keyboard_window_focused(true);
+    app.sync_gameplay_input_capture();
     #[cfg(windows)]
     {
         let win_pad_backend = config.windows_gamepad_backend;
-        input::set_raw_keyboard_window_focused(true);
-        app.sync_raw_keyboard_capture();
-        let ring = app.raw_keyboard_ring.clone();
+        let key_ring = app.gameplay_key_ring.clone();
+        let pad_ring = app.gameplay_pad_ring.clone();
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
@@ -7684,14 +7676,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             input::run_windows_backend(
                 win_pad_backend,
                 move |pe| {
+                    if pad_ring.is_enabled() {
+                        input::map_pad_event_with(&pe, |iev| pad_ring.push(iev));
+                    }
                     let _ = proxy_pad.send_event(UserEvent::Pad(pe));
                 },
                 move |se| {
                     let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
                 },
                 move |ev| {
-                    if ring.is_enabled() {
-                        input::map_raw_key_event_with(&ev, |iev| ring.push(iev));
+                    if key_ring.is_enabled() {
+                        input::map_raw_key_event_with(&ev, |iev| key_ring.push(iev));
                     }
                     let _ = proxy_key.send_event(UserEvent::Key(ev));
                 },
@@ -7700,19 +7695,26 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(target_os = "linux")]
     {
-        input::set_raw_keyboard_window_focused(true);
+        let key_ring = app.gameplay_key_ring.clone();
+        let pad_ring = app.gameplay_pad_ring.clone();
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
         std::thread::spawn(move || {
             input::run_linux_backend(
                 move |pe| {
+                    if pad_ring.is_enabled() {
+                        input::map_pad_event_with(&pe, |iev| pad_ring.push(iev));
+                    }
                     let _ = proxy_pad.send_event(UserEvent::Pad(pe));
                 },
                 move |se| {
                     let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
                 },
                 move |ke| {
+                    if key_ring.is_enabled() {
+                        input::map_raw_key_event_with(&ke, |iev| key_ring.push(iev));
+                    }
                     let _ = proxy_key.send_event(UserEvent::Key(ke));
                 },
             );
@@ -7720,19 +7722,26 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(target_os = "freebsd")]
     {
-        input::set_raw_keyboard_window_focused(true);
+        let key_ring = app.gameplay_key_ring.clone();
+        let pad_ring = app.gameplay_pad_ring.clone();
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
         std::thread::spawn(move || {
             input::run_freebsd_backend(
                 move |pe| {
+                    if pad_ring.is_enabled() {
+                        input::map_pad_event_with(&pe, |iev| pad_ring.push(iev));
+                    }
                     let _ = proxy_pad.send_event(UserEvent::Pad(pe));
                 },
                 move |se| {
                     let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
                 },
                 move |ke| {
+                    if key_ring.is_enabled() {
+                        input::map_raw_key_event_with(&ke, |iev| key_ring.push(iev));
+                    }
                     let _ = proxy_key.send_event(UserEvent::Key(ke));
                 },
             );
@@ -7740,19 +7749,26 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(target_os = "macos")]
     {
-        input::set_raw_keyboard_window_focused(true);
+        let key_ring = app.gameplay_key_ring.clone();
+        let pad_ring = app.gameplay_pad_ring.clone();
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
         std::thread::spawn(move || {
             input::run_macos_backend(
                 move |pe| {
+                    if pad_ring.is_enabled() {
+                        input::map_pad_event_with(&pe, |iev| pad_ring.push(iev));
+                    }
                     let _ = proxy_pad.send_event(UserEvent::Pad(pe));
                 },
                 move |se| {
                     let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
                 },
                 move |ke| {
+                    if key_ring.is_enabled() {
+                        input::map_raw_key_event_with(&ke, |iev| key_ring.push(iev));
+                    }
                     let _ = proxy_key.send_event(UserEvent::Key(ke));
                 },
             );
