@@ -12,4 +12,4 @@ mod linux;
 #[cfg(target_os = "freebsd")]
 pub use freebsd::run;
 #[cfg(target_os = "linux")]
-pub use linux::run;
+pub use linux::{run, set_keyboard_capture_enabled, set_keyboard_window_focused};

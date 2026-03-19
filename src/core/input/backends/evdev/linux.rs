@@ -1,12 +1,16 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
 use crate::core::host_time::{instant_nanos, now_nanos};
+use crate::core::input::RawKeyboardEvent;
 use log::{debug, warn};
 use std::collections::HashSet;
 use std::ffi::{CStr, c_char, c_void};
 use std::fs;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::platform::scancode::PhysicalKeyExtScancode;
 
 const POLLIN: i16 = 0x0001;
 const POLLERR: i16 = 0x0008;
@@ -35,6 +39,12 @@ const BTN_DPAD_RIGHT: u16 = 0x223;
 const BTN_TRIGGER_HAPPY1: u16 = 0x2c0;
 const BTN_TRIGGER_HAPPY4: u16 = 0x2c3;
 
+const KEY_ESC: u16 = 1;
+const KEY_ENTER: u16 = 28;
+const KEY_A: u16 = 30;
+const KEY_Z: u16 = 44;
+const KEY_SPACE: u16 = 57;
+
 const INPUT_PATH: &[u8] = b"/dev/input\0";
 const INPUT_SUBSYSTEM: &[u8] = b"input\0";
 const UDEV_NETLINK: &[u8] = b"udev\0";
@@ -42,6 +52,7 @@ const ID_INPUT_JOYSTICK: &[u8] = b"ID_INPUT_JOYSTICK\0";
 const VALUE_ONE: &[u8] = b"1\0";
 const ACTION_ADD: &[u8] = b"add\0";
 const ACTION_REMOVE: &[u8] = b"remove\0";
+const ID_INPUT_KEYBOARD: &[u8] = b"ID_INPUT_KEYBOARD\0";
 const INOTIFY_MASK: u32 =
     libc::IN_CREATE | libc::IN_DELETE | libc::IN_ATTRIB | libc::IN_MOVED_TO | libc::IN_MOVED_FROM;
 
@@ -79,11 +90,6 @@ unsafe extern "C" {
 
     fn udev_enumerate_new(udev: *mut UdevCtxHandle) -> *mut UdevEnumHandle;
     fn udev_enumerate_unref(enumerate: *mut UdevEnumHandle) -> *mut UdevEnumHandle;
-    fn udev_enumerate_add_match_property(
-        enumerate: *mut UdevEnumHandle,
-        key: *const c_char,
-        value: *const c_char,
-    ) -> i32;
     fn udev_enumerate_add_match_subsystem(
         enumerate: *mut UdevEnumHandle,
         subsystem: *const c_char,
@@ -137,8 +143,22 @@ struct Dev {
     dir: [bool; 4],
 }
 
+struct KeyDev {
+    path: String,
+    file: std::fs::File,
+    monotonic_timestamps: bool,
+    clock_health: EvdevClockHealth,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DevClass {
+    Pad,
+    Keyboard,
+}
+
 #[derive(Clone)]
 struct DevSpec {
+    class: DevClass,
     path: String,
     name: String,
     vendor_id: Option<u16>,
@@ -184,6 +204,25 @@ enum Discovery {
 enum HotplugEvent {
     Add(DevSpec),
     Remove(String),
+}
+
+static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
+static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
+
+#[inline(always)]
+pub fn set_keyboard_window_focused(focused: bool) {
+    KEYBOARD_WINDOW_FOCUSED.store(focused, Ordering::Relaxed);
+}
+
+#[inline(always)]
+pub fn set_keyboard_capture_enabled(enabled: bool) {
+    KEYBOARD_CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+#[inline(always)]
+fn keyboard_capture_active() -> bool {
+    KEYBOARD_WINDOW_FOCUSED.load(Ordering::Relaxed)
+        && KEYBOARD_CAPTURE_ENABLED.load(Ordering::Relaxed)
 }
 
 impl CapabilityBits {
@@ -395,16 +434,11 @@ impl Drop for UdevContext {
 }
 
 impl UdevEnumerate {
-    fn configure_for_joysticks(&self) -> bool {
+    fn configure_for_input_subsystem(&self) -> bool {
         // SAFETY: `self.0` is a live enumerate handle and all string pointers are
         // static NUL-terminated byte strings.
         unsafe {
-            udev_enumerate_add_match_property(
-                self.0,
-                ID_INPUT_JOYSTICK.as_ptr().cast(),
-                VALUE_ONE.as_ptr().cast(),
-            ) == 0
-                && udev_enumerate_add_match_subsystem(self.0, INPUT_SUBSYSTEM.as_ptr().cast()) == 0
+            udev_enumerate_add_match_subsystem(self.0, INPUT_SUBSYSTEM.as_ptr().cast()) == 0
                 && udev_enumerate_scan_devices(self.0) == 0
         }
     }
@@ -499,12 +533,17 @@ impl UdevMonitor {
                 break;
             }
             let dev = UdevDevice(ptr);
-            if !dev.property_matches(ID_INPUT_JOYSTICK, VALUE_ONE) {
-                continue;
-            }
             if dev.action_matches(ACTION_ADD) {
+                let class = if dev.property_matches(ID_INPUT_JOYSTICK, VALUE_ONE) {
+                    Some(DevClass::Pad)
+                } else if dev.property_matches(ID_INPUT_KEYBOARD, VALUE_ONE) {
+                    Some(DevClass::Keyboard)
+                } else {
+                    None
+                };
                 if let Some(path) = dev.devnode()
-                    && let Some(spec) = dev_spec_from_event_path(&path)
+                    && let Some(class) = class
+                    && let Some(spec) = dev_spec_from_event_path(&path, class)
                 {
                     out.push(HotplugEvent::Add(spec));
                 }
@@ -541,7 +580,7 @@ impl UdevState {
         let Some(enumerate) = self._ctx.enumerate() else {
             return Vec::new();
         };
-        if !enumerate.configure_for_joysticks() {
+        if !enumerate.configure_for_input_subsystem() {
             return Vec::new();
         }
         let mut out = Vec::new();
@@ -552,8 +591,16 @@ impl UdevState {
             let Some(dev) = self._ctx.device_from_syspath(syspath.as_c_str()) else {
                 continue;
             };
+            let class = if dev.property_matches(ID_INPUT_JOYSTICK, VALUE_ONE) {
+                Some(DevClass::Pad)
+            } else if dev.property_matches(ID_INPUT_KEYBOARD, VALUE_ONE) {
+                Some(DevClass::Keyboard)
+            } else {
+                None
+            };
             if let Some(path) = dev.devnode()
-                && let Some(spec) = dev_spec_from_event_path(&path)
+                && let Some(class) = class
+                && let Some(spec) = dev_spec_from_event_path(&path, class)
             {
                 out.push(spec);
             }
@@ -662,9 +709,15 @@ fn instant_from_clock_sample(target_nanos: u64, sample: ClockSample) -> Instant 
 }
 
 #[inline(always)]
-fn event_time(dev: &mut Dev, ev: InputEventRaw, sample: Option<ClockSample>) -> (Instant, u64) {
-    if dev.monotonic_timestamps
-        && dev.clock_health.uses_kernel_timestamps()
+fn event_time(
+    path: &str,
+    monotonic_timestamps: bool,
+    clock_health: &mut EvdevClockHealth,
+    ev: InputEventRaw,
+    sample: Option<ClockSample>,
+) -> (Instant, u64) {
+    if monotonic_timestamps
+        && clock_health.uses_kernel_timestamps()
         && let Some(sample) = sample
         && let Some(target_nanos) = evdev_event_nanos(ev)
     {
@@ -673,24 +726,14 @@ fn event_time(dev: &mut Dev, ev: InputEventRaw, sample: Option<ClockSample>) -> 
                 .monotonic_nanos
                 .saturating_add(EVDEV_FUTURE_TOLERANCE_NS)
         {
-            dev.clock_health.note_failure(
-                &dev.path,
-                "future",
-                target_nanos,
-                sample.monotonic_nanos,
-            );
-        } else if dev.clock_health.last_event_nanos != 0
+            clock_health.note_failure(path, "future", target_nanos, sample.monotonic_nanos);
+        } else if clock_health.last_event_nanos != 0
             && target_nanos.saturating_add(EVDEV_REGRESSION_TOLERANCE_NS)
-                < dev.clock_health.last_event_nanos
+                < clock_health.last_event_nanos
         {
-            dev.clock_health.note_failure(
-                &dev.path,
-                "regression",
-                target_nanos,
-                sample.monotonic_nanos,
-            );
+            clock_health.note_failure(path, "regression", target_nanos, sample.monotonic_nanos);
         } else {
-            dev.clock_health.note_success(target_nanos);
+            clock_health.note_success(target_nanos);
             let timestamp = instant_from_clock_sample(target_nanos, sample);
             return (timestamp, instant_nanos(timestamp));
         }
@@ -710,6 +753,14 @@ fn enable_monotonic_timestamps(fd: i32) -> bool {
 #[inline(always)]
 fn code_u32(type_: u16, code: u16) -> u32 {
     ((type_ as u32) << 16) | code as u32
+}
+
+#[inline(always)]
+fn linux_key_code(code: u16) -> Option<KeyCode> {
+    let PhysicalKey::Code(code) = PhysicalKey::from_scancode(u32::from(code)) else {
+        return None;
+    };
+    Some(code)
 }
 
 #[inline(always)]
@@ -734,11 +785,12 @@ fn event_name_from_path(path: &str) -> Option<&str> {
     .then_some(name)
 }
 
-fn dev_spec_from_event_path(path: &str) -> Option<DevSpec> {
+fn dev_spec_from_event_path(path: &str, class: DevClass) -> Option<DevSpec> {
     let event_name = event_name_from_path(path)?;
     let sys = format!("/sys/class/input/{event_name}/device");
     let name = read_trimmed(&format!("{sys}/name")).unwrap_or_else(|| format!("evdev:{path}"));
     Some(DevSpec {
+        class,
         path: path.to_string(),
         name,
         vendor_id: read_hex_u16(&format!("{sys}/id/vendor")),
@@ -762,6 +814,18 @@ fn looks_like_controller(ev: &CapabilityBits, key: &CapabilityBits, abs: &Capabi
     primaries && (dpad || menu || sticks || hats)
 }
 
+#[inline(always)]
+fn looks_like_keyboard(ev: &CapabilityBits, key: &CapabilityBits, abs: &CapabilityBits) -> bool {
+    ev.has(EV_KEY)
+        && !abs.has(ABS_X)
+        && !abs.has(ABS_Y)
+        && key.has(KEY_ESC)
+        && key.has(KEY_ENTER)
+        && key.has(KEY_A)
+        && key.has(KEY_Z)
+        && key.has(KEY_SPACE)
+}
+
 fn fallback_spec_from_event_path(path: &str) -> Option<DevSpec> {
     let event_name = event_name_from_path(path)?;
     let sys = format!("/sys/class/input/{event_name}/device");
@@ -771,9 +835,14 @@ fn fallback_spec_from_event_path(path: &str) -> Option<DevSpec> {
         .map_or_else(CapabilityBits::default, |text| CapabilityBits::parse(&text));
     let abs = read_trimmed(&format!("{sys}/capabilities/abs"))
         .map_or_else(CapabilityBits::default, |text| CapabilityBits::parse(&text));
-    looks_like_controller(&ev, &key, &abs)
-        .then(|| dev_spec_from_event_path(path))
-        .flatten()
+    let class = if looks_like_controller(&ev, &key, &abs) {
+        Some(DevClass::Pad)
+    } else if looks_like_keyboard(&ev, &key, &abs) {
+        Some(DevClass::Keyboard)
+    } else {
+        None
+    };
+    class.and_then(|class| dev_spec_from_event_path(path, class))
 }
 
 fn scan_live_event_paths() -> HashSet<String> {
@@ -810,7 +879,12 @@ fn scan_fallback_specs(open_paths: &HashSet<String>) -> Vec<DevSpec> {
     out
 }
 
-fn remove_dev_by_path(path: &str, devs: &mut Vec<Dev>, emit_sys: &mut impl FnMut(GpSystemEvent)) {
+fn remove_dev_by_path(
+    path: &str,
+    devs: &mut Vec<Dev>,
+    key_devs: &mut Vec<KeyDev>,
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+) {
     if let Some(idx) = devs.iter().position(|dev| dev.path == path) {
         let dev = devs.swap_remove(idx);
         emit_sys(GpSystemEvent::Disconnected {
@@ -819,6 +893,10 @@ fn remove_dev_by_path(path: &str, devs: &mut Vec<Dev>, emit_sys: &mut impl FnMut
             backend: PadBackend::LinuxEvdev,
             initial: false,
         });
+        return;
+    }
+    if let Some(idx) = key_devs.iter().position(|dev| dev.path == path) {
+        key_devs.swap_remove(idx);
     }
 }
 
@@ -873,6 +951,26 @@ fn open_dev(
     })
 }
 
+fn open_key_dev(spec: DevSpec) -> Option<KeyDev> {
+    let file = match std::fs::File::open(&spec.path) {
+        Ok(file) => file,
+        Err(err) => {
+            warn!(
+                "linux evdev could not open keyboard candidate '{}' at '{}': {err}",
+                spec.name, spec.path
+            );
+            return None;
+        }
+    };
+    let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
+    Some(KeyDev {
+        path: spec.path,
+        file,
+        monotonic_timestamps,
+        clock_health: EvdevClockHealth::new(monotonic_timestamps),
+    })
+}
+
 fn add_dev_if_new(
     spec: DevSpec,
     devs: &mut Vec<Dev>,
@@ -890,8 +988,18 @@ fn add_dev_if_new(
     }
 }
 
+fn add_key_dev_if_new(spec: DevSpec, key_devs: &mut Vec<KeyDev>) {
+    if key_devs.iter().any(|dev| dev.path == spec.path) {
+        return;
+    }
+    if let Some(dev) = open_key_dev(spec) {
+        key_devs.push(dev);
+    }
+}
+
 fn refresh_fallback(
     devs: &mut Vec<Dev>,
+    key_devs: &mut Vec<KeyDev>,
     next_id: &mut u32,
     emit_sys: &mut impl FnMut(GpSystemEvent),
 ) {
@@ -911,12 +1019,25 @@ fn refresh_fallback(
             initial: false,
         });
     }
+    let mut key_remove = Vec::new();
+    for (idx, dev) in key_devs.iter().enumerate() {
+        if !live_paths.contains(&dev.path) {
+            key_remove.push(idx);
+        }
+    }
+    for &idx in key_remove.iter().rev() {
+        key_devs.swap_remove(idx);
+    }
     let open_paths = devs
         .iter()
         .map(|dev| dev.path.clone())
+        .chain(key_devs.iter().map(|dev| dev.path.clone()))
         .collect::<HashSet<_>>();
     for spec in scan_fallback_specs(&open_paths) {
-        add_dev_if_new(spec, devs, next_id, false, emit_sys);
+        match spec.class {
+            DevClass::Pad => add_dev_if_new(spec, devs, next_id, false, emit_sys),
+            DevClass::Keyboard => add_key_dev_if_new(spec, key_devs),
+        }
     }
 }
 
@@ -932,20 +1053,35 @@ fn init_discovery() -> Discovery {
     Discovery::None
 }
 
-pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystemEvent)) {
+pub fn run(
+    mut emit_pad: impl FnMut(PadEvent),
+    mut emit_sys: impl FnMut(GpSystemEvent),
+    mut emit_key: impl FnMut(RawKeyboardEvent),
+) {
     let discovery = init_discovery();
     let mut devs: Vec<Dev> = Vec::new();
+    let mut key_devs: Vec<KeyDev> = Vec::new();
     let mut next_id = 0u32;
 
     match &discovery {
         Discovery::Udev(state) => {
             for spec in state.enumerate_specs() {
-                add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys);
+                match spec.class {
+                    DevClass::Pad => {
+                        add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys)
+                    }
+                    DevClass::Keyboard => add_key_dev_if_new(spec, &mut key_devs),
+                }
             }
         }
         Discovery::Inotify(_) | Discovery::None => {
             for spec in scan_fallback_specs(&HashSet::new()) {
-                add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys);
+                match spec.class {
+                    DevClass::Pad => {
+                        add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys)
+                    }
+                    DevClass::Keyboard => add_key_dev_if_new(spec, &mut key_devs),
+                }
             }
         }
     }
@@ -962,7 +1098,7 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
             buf.len() * size_of::<InputEventRaw>(),
         )
     };
-    let mut pollfds = Vec::with_capacity(9);
+    let mut pollfds = Vec::with_capacity(17);
 
     loop {
         pollfds.clear();
@@ -978,6 +1114,12 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
             Discovery::None => 0usize,
         };
         pollfds.extend(devs.iter().map(|dev| PollFd {
+            fd: dev.file.as_raw_fd(),
+            events: POLLIN,
+            revents: 0,
+        }));
+        let key_offset = dev_offset + devs.len();
+        pollfds.extend(key_devs.iter().map(|dev| PollFd {
             fd: dev.file.as_raw_fd(),
             events: POLLIN,
             revents: 0,
@@ -1061,7 +1203,13 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                     if ev.value == 2 {
                         continue;
                     }
-                    let (timestamp, host_nanos) = event_time(dev, ev, clock_sample);
+                    let (timestamp, host_nanos) = event_time(
+                        &dev.path,
+                        dev.monotonic_timestamps,
+                        &mut dev.clock_health,
+                        ev,
+                        clock_sample,
+                    );
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
@@ -1078,7 +1226,13 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                     continue;
                 }
 
-                let (timestamp, host_nanos) = event_time(dev, ev, clock_sample);
+                let (timestamp, host_nanos) = event_time(
+                    &dev.path,
+                    dev.monotonic_timestamps,
+                    &mut dev.clock_health,
+                    ev,
+                    clock_sample,
+                );
                 emit_pad(PadEvent::RawAxis {
                     id: dev.id,
                     timestamp,
@@ -1108,6 +1262,72 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
             }
         }
 
+        let mut key_remove = Vec::new();
+        for i in 0..key_devs.len() {
+            let revents = pollfds[i + key_offset].revents;
+            if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                key_remove.push(i);
+                continue;
+            }
+            if (revents & POLLIN) == 0 {
+                continue;
+            }
+
+            // SAFETY: `buf_bytes` is writable storage for `InputEventRaw` values,
+            // and the fd comes from the matching open evdev device.
+            let n = unsafe {
+                read(
+                    pollfds[i + key_offset].fd,
+                    buf_bytes.as_mut_ptr().cast(),
+                    buf_bytes.len(),
+                )
+            };
+            if n <= 0 {
+                key_remove.push(i);
+                continue;
+            }
+
+            let dev = &mut key_devs[i];
+            let count = (n as usize / size_of::<InputEventRaw>()).min(buf.len());
+            let clock_sample =
+                if dev.monotonic_timestamps && dev.clock_health.uses_kernel_timestamps() {
+                    sample_monotonic_clock()
+                } else {
+                    None
+                };
+
+            for j in 0..count {
+                // SAFETY: `count` is derived from the number of bytes returned by
+                // `read`, so the first `count` entries of `buf` were initialized by
+                // the kernel in this iteration.
+                let ev = unsafe { buf[j].assume_init() };
+                if ev.type_ != EV_KEY {
+                    continue;
+                }
+                let Some(code) = linux_key_code(ev.code) else {
+                    continue;
+                };
+                let repeat = ev.value == 2;
+                let pressed = ev.value != 0;
+                let (timestamp, host_nanos) = event_time(
+                    &dev.path,
+                    dev.monotonic_timestamps,
+                    &mut dev.clock_health,
+                    ev,
+                    clock_sample,
+                );
+                if keyboard_capture_active() {
+                    emit_key(RawKeyboardEvent {
+                        code,
+                        pressed,
+                        repeat,
+                        timestamp,
+                        host_nanos,
+                    });
+                }
+            }
+        }
+
         remove.sort_unstable();
         remove.dedup();
         for &idx in remove.iter().rev() {
@@ -1119,17 +1339,27 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 initial: false,
             });
         }
+        key_remove.sort_unstable();
+        key_remove.dedup();
+        for &idx in key_remove.iter().rev() {
+            key_devs.swap_remove(idx);
+        }
 
         for event in hotplug {
             match event {
-                HotplugEvent::Add(spec) => {
-                    add_dev_if_new(spec, &mut devs, &mut next_id, false, &mut emit_sys)
+                HotplugEvent::Add(spec) => match spec.class {
+                    DevClass::Pad => {
+                        add_dev_if_new(spec, &mut devs, &mut next_id, false, &mut emit_sys)
+                    }
+                    DevClass::Keyboard => add_key_dev_if_new(spec, &mut key_devs),
+                },
+                HotplugEvent::Remove(path) => {
+                    remove_dev_by_path(&path, &mut devs, &mut key_devs, &mut emit_sys)
                 }
-                HotplugEvent::Remove(path) => remove_dev_by_path(&path, &mut devs, &mut emit_sys),
             }
         }
         if fallback_refresh {
-            refresh_fallback(&mut devs, &mut next_id, &mut emit_sys);
+            refresh_fallback(&mut devs, &mut key_devs, &mut next_id, &mut emit_sys);
         }
     }
 }

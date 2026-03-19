@@ -231,7 +231,7 @@ pub fn run_pad_backend(
         WindowsPadBackend::Wgi => backends::wgi::run(emit_pad, emit_sys),
     }
     #[cfg(target_os = "linux")]
-    return backends::evdev::run(emit_pad, emit_sys);
+    return backends::evdev::run(emit_pad, emit_sys, |_| {});
     #[cfg(target_os = "freebsd")]
     {
         let mut emit_pad = emit_pad;
@@ -257,6 +257,15 @@ pub fn run_pad_backend(
             std::thread::park();
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+pub fn run_linux_backend(
+    emit_pad: impl FnMut(PadEvent) + Send + 'static,
+    emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
+    emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
+) {
+    backends::evdev::run(emit_pad, emit_sys, emit_key);
 }
 
 #[cfg(windows)]
@@ -289,13 +298,26 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     backends::w32_raw_input::set_capture_enabled(enabled);
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+#[inline(always)]
+pub fn set_raw_keyboard_window_focused(focused: bool) {
+    backends::evdev::set_keyboard_window_focused(focused);
+}
+
+#[cfg(all(not(windows), not(target_os = "linux")))]
 #[inline(always)]
 pub fn set_raw_keyboard_window_focused(focused: bool) {
     let _ = focused;
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+#[allow(dead_code)]
+#[inline(always)]
+pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
+    backends::evdev::set_keyboard_capture_enabled(enabled);
+}
+
+#[cfg(all(not(windows), not(target_os = "linux")))]
 #[allow(dead_code)]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
