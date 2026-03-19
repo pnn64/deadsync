@@ -782,6 +782,22 @@ fn enumerate_existing(ctx: &mut Ctx) {
     }
 }
 
+#[inline(always)]
+fn register_hotplug_handler<T>(
+    label: &str,
+    register: impl FnOnce() -> windows::core::Result<T>,
+) -> Option<T> {
+    match register() {
+        Ok(token) => Some(token),
+        Err(err) => {
+            log::warn!(
+                "WGI {label} handler registration failed ({err}); controller hotplug events disabled"
+            );
+            None
+        }
+    }
+}
+
 pub fn run(
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
@@ -801,7 +817,9 @@ pub fn run(
         }
         Ok(())
     });
-    let _added_token = RawGameController::RawGameControllerAdded(&added_handler).unwrap();
+    let _added_token = register_hotplug_handler("add", || {
+        RawGameController::RawGameControllerAdded(&added_handler)
+    });
 
     let removed_tx = tx.clone();
     let removed_handler = EventHandler::<RawGameController>::new(move |_, c| {
@@ -810,7 +828,9 @@ pub fn run(
         }
         Ok(())
     });
-    let _removed_token = RawGameController::RawGameControllerRemoved(&removed_handler).unwrap();
+    let _removed_token = register_hotplug_handler("remove", || {
+        RawGameController::RawGameControllerRemoved(&removed_handler)
+    });
 
     // WGI can surface already-connected controllers slightly after startup due to WinRT's
     // async device discovery. Treat very-early adds/removes as "initial" to avoid hotplug
