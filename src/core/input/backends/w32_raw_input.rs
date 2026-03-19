@@ -472,6 +472,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
             )
         }
     };
+    let button_cap = max_buttons as usize;
 
     let dev = Dev {
         id,
@@ -481,8 +482,8 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
         uuid,
         preparsed,
         max_buttons,
-        buttons_prev: Vec::new(),
-        buttons_now: Vec::new(),
+        buttons_prev: Vec::with_capacity(button_cap),
+        buttons_now: Vec::with_capacity(button_cap),
         hat_min,
         hat_max,
         dir: [false; 4],
@@ -621,17 +622,12 @@ fn process_hid_report<F>(
         return;
     }
 
-    let want_cap = dev.max_buttons as usize;
-    if dev.buttons_now.capacity() < want_cap {
-        dev.buttons_now
-            .reserve(want_cap - dev.buttons_now.capacity());
-    }
     dev.buttons_now.clear();
 
     let mut len = dev.max_buttons;
     // SAFETY: `dev.preparsed` is the live preparsed-data blob for this HID, the
     // report buffer is borrowed mutably for the duration of the call, and
-    // `buttons_now` has sufficient spare capacity for `dev.max_buttons` entries.
+    // `buttons_now` was pre-sized from `max_buttons` when the device was added.
     let status = unsafe {
         HidP_GetUsages(
             HidP_Input,
