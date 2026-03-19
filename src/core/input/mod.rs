@@ -839,12 +839,7 @@ const fn action_bit(action: VirtualAction) -> u32 {
 }
 
 #[inline(always)]
-fn push_action(
-    out: &mut ActionBuf,
-    len: &mut usize,
-    seen: &mut u32,
-    action: VirtualAction,
-) {
+fn push_action(out: &mut ActionBuf, len: &mut usize, seen: &mut u32, action: VirtualAction) {
     let bit = action_bit(action);
     if (*seen & bit) != 0 {
         return;
@@ -1388,8 +1383,7 @@ const fn primary_from_menu_alias(act: VirtualAction) -> Option<VirtualAction> {
 mod tests {
     use super::*;
 
-    static TEST_GUARD: std::sync::LazyLock<Mutex<()>> =
-        std::sync::LazyLock::new(|| Mutex::new(()));
+    static TEST_GUARD: std::sync::LazyLock<Mutex<()>> = std::sync::LazyLock::new(|| Mutex::new(()));
 
     fn assert_events_eq(actual: &[InputEvent], expected: &[InputEvent]) {
         assert_eq!(actual.len(), expected.len(), "event count");
@@ -1453,7 +1447,10 @@ mod tests {
         let _guard = TEST_GUARD.lock().unwrap();
         let original = get_keymap();
         let mut km = Keymap::default();
-        km.bind(VirtualAction::p1_left, &[InputBinding::PadDir(PadDir::Left)]);
+        km.bind(
+            VirtualAction::p1_left,
+            &[InputBinding::PadDir(PadDir::Left)],
+        );
         set_keymap(km);
         set_only_dedicated_menu_buttons(false);
 

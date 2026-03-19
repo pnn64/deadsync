@@ -758,7 +758,8 @@ fn looks_like_controller(ev: &CapabilityBits, key: &CapabilityBits, abs: &Capabi
     let menu = key.has(BTN_START) || key.has(BTN_SELECT);
     let sticks = abs.has(ABS_X) || abs.has(ABS_Y) || abs.has(ABS_RX) || abs.has(ABS_RY);
     let hats = abs.has(ABS_HAT0X) || abs.has(ABS_HAT0Y);
-    (face || joystick) && (dpad || menu || sticks || hats)
+    let primaries = face || joystick || dpad || hats;
+    primaries && (dpad || menu || sticks || hats)
 }
 
 fn fallback_spec_from_event_path(path: &str) -> Option<DevSpec> {
@@ -1136,5 +1137,31 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
         if fallback_refresh {
             refresh_fallback(&mut devs, &mut next_id, &mut emit_sys);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn caps(bits: &[u16]) -> CapabilityBits {
+        let words_len = bits
+            .iter()
+            .copied()
+            .max()
+            .map_or(0usize, |bit| (bit as usize >> 6) + 1);
+        let mut words = vec![0u64; words_len];
+        for bit in bits {
+            words[*bit as usize >> 6] |= 1u64 << (*bit as usize & 63);
+        }
+        CapabilityBits(words)
+    }
+
+    #[test]
+    fn detects_dpad_only_controller() {
+        let ev = caps(&[EV_KEY]);
+        let key = caps(&[BTN_DPAD_UP, BTN_DPAD_RIGHT, BTN_START]);
+        let abs = CapabilityBits::default();
+        assert!(looks_like_controller(&ev, &key, &abs));
     }
 }
