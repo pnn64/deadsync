@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -28,6 +27,60 @@ pub(super) struct DebounceState {
     pub(super) last_raw_change_host_nanos: u64,
     pub(super) last_raw_store_time: Instant,
     pub(super) last_report_time: Instant,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DebounceEntry {
+    binding: DebounceBinding,
+    state: DebounceState,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct DebounceStore {
+    entries: Vec<DebounceEntry>,
+    next_due_at: Option<Instant>,
+}
+
+impl DebounceStore {
+    #[inline(always)]
+    pub(super) const fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            next_due_at: None,
+        }
+    }
+
+    #[inline(always)]
+    pub(super) fn clear_and_reserve(&mut self, cap: usize) {
+        self.entries.clear();
+        self.next_due_at = None;
+        let needed = cap.saturating_sub(self.entries.capacity());
+        if needed > 0 {
+            self.entries.reserve(needed);
+        }
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    #[inline(always)]
+    pub(super) fn capacity(&self) -> usize {
+        self.entries.capacity()
+    }
+
+    #[inline(always)]
+    fn find_index(&self, binding: DebounceBinding) -> Option<usize> {
+        self.entries
+            .iter()
+            .position(|entry| entry.binding == binding)
+    }
+
+    #[inline(always)]
+    fn recalc_next_due_at(&mut self, windows: DebounceWindows) {
+        self.next_due_at = self
+            .entries
+            .iter()
+            .filter_map(|entry| debounce_due_at(entry.state, windows))
+            .min();
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -176,8 +229,16 @@ fn should_prune_debounce_state(
         && now.duration_since(state.last_report_time) >= windows.prune_window()
 }
 
+#[inline(always)]
+fn debounce_due_at(state: DebounceState, windows: DebounceWindows) -> Option<Instant> {
+    if state.held_raw == state.held_reported {
+        return None;
+    }
+    state.last_report_time.checked_add(windows.window)
+}
+
 pub(super) fn debounce_input_edge_in_store(
-    states: &Mutex<HashMap<DebounceBinding, DebounceState>>,
+    states: &Mutex<DebounceStore>,
     binding: DebounceBinding,
     pressed: bool,
     timestamp: Instant,
@@ -186,19 +247,35 @@ pub(super) fn debounce_input_edge_in_store(
 ) -> DebounceEdges {
     let now = Instant::now();
     let mut states = states.lock().unwrap();
-    let (edges, prune) = {
-        let state = states.entry(binding).or_insert_with(|| DebounceState {
+    let edges = if let Some(index) = states.find_index(binding) {
+        let (edges, prune) = {
+            let state = &mut states.entries[index].state;
+            let edges = debounce_step(
+                state,
+                binding,
+                pressed,
+                timestamp,
+                timestamp_host_nanos,
+                now,
+                windows,
+            );
+            (edges, should_prune_debounce_state(*state, now, windows))
+        };
+        if prune {
+            states.entries.swap_remove(index);
+        }
+        edges
+    } else {
+        let mut state = DebounceState {
             held_raw: false,
             held_reported: false,
             last_raw_change_time: timestamp,
             last_raw_change_host_nanos: timestamp_host_nanos,
             last_raw_store_time: now,
             last_report_time: now.checked_sub(windows.prune_window()).unwrap_or(now),
-        });
-        // Preserve the original raw edge timestamp separately from store/emission
-        // time so gameplay can judge against the real edge time, like ITGmania.
+        };
         let edges = debounce_step(
-            state,
+            &mut state,
             binding,
             pressed,
             timestamp,
@@ -206,16 +283,17 @@ pub(super) fn debounce_input_edge_in_store(
             now,
             windows,
         );
-        (edges, should_prune_debounce_state(*state, now, windows))
+        if !should_prune_debounce_state(state, now, windows) {
+            states.entries.push(DebounceEntry { binding, state });
+        }
+        edges
     };
-    if prune {
-        states.remove(&binding);
-    }
+    states.recalc_next_due_at(windows);
     edges
 }
 
 pub(super) fn emit_due_debounce_edges_from(
-    states: &Mutex<HashMap<DebounceBinding, DebounceState>>,
+    states: &Mutex<DebounceStore>,
     now: Instant,
     windows: DebounceWindows,
     mut emit: impl FnMut(DebouncedEdge),
@@ -223,23 +301,42 @@ pub(super) fn emit_due_debounce_edges_from(
     // ITGmania Update() parity: delayed edges are surfaced later, but they still
     // carry the original raw timestamp that caused the debounce holdoff.
     let mut states = states.lock().unwrap();
+    if let Some(next_due_at) = states.next_due_at
+        && now < next_due_at
+    {
+        return false;
+    }
     let mut flushed = false;
-    states.retain(|binding, state| {
-        if let Some((pressed, timestamp, timestamp_host_nanos, stored_at)) =
-            debounce_emit_if_due(state, now, windows)
-        {
+    let mut i = 0;
+    while i < states.entries.len() {
+        let mut edge = None;
+        let remove = {
+            let entry = &mut states.entries[i];
+            if let Some((pressed, timestamp, timestamp_host_nanos, stored_at)) =
+                debounce_emit_if_due(&mut entry.state, now, windows)
+            {
+                edge = Some(debounced_edge(
+                    entry.binding,
+                    pressed,
+                    timestamp,
+                    timestamp_host_nanos,
+                    stored_at,
+                    now,
+                ));
+            }
+            should_prune_debounce_state(entry.state, now, windows)
+        };
+        if let Some(edge) = edge {
             flushed = true;
-            emit(debounced_edge(
-                *binding,
-                pressed,
-                timestamp,
-                timestamp_host_nanos,
-                stored_at,
-                now,
-            ));
+            emit(edge);
         }
-        !should_prune_debounce_state(*state, now, windows)
-    });
+        if remove {
+            states.entries.swap_remove(i);
+            continue;
+        }
+        i += 1;
+    }
+    states.recalc_next_due_at(windows);
     flushed
 }
 
@@ -421,10 +518,17 @@ mod tests {
         );
         assert!(release.first.is_none());
         assert!(release.second.is_none());
-        let states = Mutex::new(HashMap::from([
-            (binding_due, due_state),
-            (binding_stale, stale_state),
-        ]));
+        let mut store = DebounceStore::new();
+        store.entries.push(DebounceEntry {
+            binding: binding_due,
+            state: due_state,
+        });
+        store.entries.push(DebounceEntry {
+            binding: binding_stale,
+            state: stale_state,
+        });
+        store.recalc_next_due_at(windows);
+        let states = Mutex::new(store);
         let mut emitted = Vec::new();
 
         assert!(emit_due_debounce_edges_from(
@@ -440,8 +544,8 @@ mod tests {
         assert_eq!(emitted[0].timestamp_host_nanos, 101);
 
         let guard = states.lock().unwrap();
-        assert_eq!(guard.len(), 1);
-        assert!(guard.contains_key(&binding_due));
+        assert_eq!(guard.entries.len(), 1);
+        assert_eq!(guard.entries[0].binding, binding_due);
         drop(guard);
 
         emitted.clear();
@@ -452,6 +556,6 @@ mod tests {
             |edge| emitted.push(edge),
         ));
         assert!(emitted.is_empty());
-        assert!(states.lock().unwrap().is_empty());
+        assert!(states.lock().unwrap().entries.is_empty());
     }
 }

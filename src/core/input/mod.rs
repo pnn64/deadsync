@@ -9,7 +9,7 @@ mod backends;
 mod debounce;
 
 use debounce::{
-    DebounceBinding, DebounceEdges, DebounceState, DebounceWindows, DebouncedEdge,
+    DebounceBinding, DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge,
     debounce_input_edge_in_store, emit_due_debounce_edges_from,
 };
 
@@ -531,11 +531,10 @@ static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
     std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
 static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
 static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
-static KEYBOARD_DEBOUNCE_STATE: std::sync::LazyLock<
-    Mutex<HashMap<DebounceBinding, DebounceState>>,
-> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
-static PAD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<HashMap<DebounceBinding, DebounceState>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+static KEYBOARD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
+    std::sync::LazyLock::new(|| Mutex::new(DebounceStore::new()));
+static PAD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
+    std::sync::LazyLock::new(|| Mutex::new(DebounceStore::new()));
 
 const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
 
@@ -555,13 +554,11 @@ fn debounce_caps(km: &Keymap) -> (usize, usize) {
 #[inline(always)]
 fn reset_debounce_state(key_cap: usize, pad_cap: usize) {
     let mut keyboard = KEYBOARD_DEBOUNCE_STATE.lock().unwrap();
-    keyboard.clear();
-    keyboard.reserve(key_cap);
+    keyboard.clear_and_reserve(key_cap);
     drop(keyboard);
 
     let mut pad = PAD_DEBOUNCE_STATE.lock().unwrap();
-    pad.clear();
-    pad.reserve(pad_cap);
+    pad.clear_and_reserve(pad_cap);
 }
 
 #[inline(always)]
