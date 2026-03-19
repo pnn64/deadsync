@@ -627,7 +627,44 @@ fn receptor_glow_behavior_for_col(state: &State, col: usize) -> noteskin::Recept
 
 #[inline(always)]
 fn lane_is_pressed(state: &State, col: usize) -> bool {
-    state.keyboard_lane_state[col] || state.gamepad_lane_state[col]
+    lane_counts_pressed(
+        state.keyboard_lane_counts[col],
+        state.gamepad_lane_counts[col],
+    )
+}
+
+#[inline(always)]
+const fn lane_counts_pressed(keyboard_count: u8, gamepad_count: u8) -> bool {
+    keyboard_count != 0 || gamepad_count != 0
+}
+
+#[inline(always)]
+fn update_lane_count(count: &mut u8, pressed: bool) {
+    *count = if pressed {
+        (*count).saturating_add(1)
+    } else {
+        (*count).saturating_sub(1)
+    };
+}
+
+#[inline(always)]
+const fn lane_press_started(pressed: bool, was_down: bool, is_down: bool) -> bool {
+    pressed && !was_down && is_down
+}
+
+#[inline(always)]
+const fn lane_release_finished(pressed: bool, was_down: bool, is_down: bool) -> bool {
+    !pressed && was_down && !is_down
+}
+
+#[inline(always)]
+const fn lane_edge_judges_tap(pressed: bool) -> bool {
+    pressed
+}
+
+#[inline(always)]
+const fn lane_edge_judges_lift(pressed: bool, was_down: bool) -> bool {
+    !pressed && was_down
 }
 
 #[inline(always)]
@@ -4257,8 +4294,8 @@ pub struct State {
     offset_adjust_held_since: [Option<Instant>; 2],
     offset_adjust_last_at: [Option<Instant>; 2],
     prev_inputs: [bool; MAX_COLS],
-    keyboard_lane_state: [bool; MAX_COLS],
-    gamepad_lane_state: [bool; MAX_COLS],
+    keyboard_lane_counts: [u8; MAX_COLS],
+    gamepad_lane_counts: [u8; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
     autoplay_rng: TurnRng,
     autoplay_cursor: [usize; MAX_PLAYERS],
@@ -6903,8 +6940,8 @@ pub fn init(
         offset_adjust_held_since: [None; 2],
         offset_adjust_last_at: [None; 2],
         prev_inputs: [false; MAX_COLS],
-        keyboard_lane_state: [false; MAX_COLS],
-        gamepad_lane_state: [false; MAX_COLS],
+        keyboard_lane_counts: [0; MAX_COLS],
+        gamepad_lane_counts: [0; MAX_COLS],
         pending_edges: VecDeque::with_capacity(pending_edges_capacity),
         autoplay_rng: TurnRng::new(song_seed ^ 0xA0A7_0F8A_1A2B_3C4D),
         autoplay_cursor: note_range_start,
@@ -8356,7 +8393,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             }
             let all_pressed = notes_on_row[..notes_on_row_len].iter().all(|&idx| {
                 let col = state.notes[idx].column;
-                state.keyboard_lane_state[col] || state.gamepad_lane_state[col]
+                lane_is_pressed(state, col)
             });
             if !all_pressed {
                 return false;
@@ -8802,8 +8839,8 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
     state.autoplay_enabled = enabled;
 
     if enabled {
-        state.keyboard_lane_state = [false; MAX_COLS];
-        state.gamepad_lane_state = [false; MAX_COLS];
+        state.keyboard_lane_counts = [0; MAX_COLS];
+        state.gamepad_lane_counts = [0; MAX_COLS];
         state.prev_inputs = [false; MAX_COLS];
         state.receptor_glow_timers = [0.0; MAX_COLS];
         state.receptor_glow_press_timers = [0.0; MAX_COLS];
@@ -9695,21 +9732,24 @@ fn process_input_edges(
         } else {
             None
         };
-        let mut keyboard_down = state.keyboard_lane_state[lane_idx];
-        let mut gamepad_down = state.gamepad_lane_state[lane_idx];
-        let was_down = keyboard_down || gamepad_down;
+        let mut keyboard_count = state.keyboard_lane_counts[lane_idx];
+        let mut gamepad_count = state.gamepad_lane_counts[lane_idx];
+        let was_down = keyboard_count != 0 || gamepad_count != 0;
         match edge.source {
-            InputSource::Keyboard => keyboard_down = edge.pressed,
-            InputSource::Gamepad => gamepad_down = edge.pressed,
+            InputSource::Keyboard => update_lane_count(&mut keyboard_count, edge.pressed),
+            InputSource::Gamepad => update_lane_count(&mut gamepad_count, edge.pressed),
         }
-        state.keyboard_lane_state[lane_idx] = keyboard_down;
-        state.gamepad_lane_state[lane_idx] = gamepad_down;
-        let is_down = keyboard_down || gamepad_down;
+        state.keyboard_lane_counts[lane_idx] = keyboard_count;
+        state.gamepad_lane_counts[lane_idx] = gamepad_count;
+        let is_down = keyboard_count != 0 || gamepad_count != 0;
         if let Some(started) = state_started {
             add_elapsed_us(&mut phase_timings.input_state_us, started);
         }
 
-        if edge.pressed && !was_down && is_down {
+        let press_started = lane_press_started(edge.pressed, was_down, is_down);
+        let release_finished = lane_release_finished(edge.pressed, was_down, is_down);
+
+        if press_started {
             if trace_enabled {
                 let started = Instant::now();
                 start_receptor_glow_press(state, lane_idx);
@@ -9717,6 +9757,17 @@ fn process_input_edges(
             } else {
                 start_receptor_glow_press(state, lane_idx);
             }
+        } else if release_finished {
+            if trace_enabled {
+                let started = Instant::now();
+                release_receptor_glow(state, lane_idx);
+                add_elapsed_us(&mut phase_timings.input_glow_us, started);
+            } else {
+                release_receptor_glow(state, lane_idx);
+            }
+        }
+
+        if lane_edge_judges_tap(edge.pressed) {
             let event_music_time = edge.event_music_time;
             let hit_note = if trace_enabled {
                 let started = Instant::now();
@@ -9740,14 +9791,7 @@ fn process_input_edges(
             } else {
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
-        } else if !edge.pressed && was_down && !is_down {
-            if trace_enabled {
-                let started = Instant::now();
-                release_receptor_glow(state, lane_idx);
-                add_elapsed_us(&mut phase_timings.input_glow_us, started);
-            } else {
-                release_receptor_glow(state, lane_idx);
-            }
+        } else if lane_edge_judges_lift(edge.pressed, was_down) {
             let event_music_time = edge.event_music_time;
             let hit_lift = judge_a_lift(state, lane_idx, event_music_time);
             if hit_lift && state.tick_mode == TickMode::Hit {
@@ -10095,8 +10139,10 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
         if music_time_sec - note_time > way_off_window * rate {
             let time_err_music = music_time_sec - note_time;
             let time_err_real = time_err_music / rate;
-            let miss_because_held =
-                state.keyboard_lane_state[col_idx] || state.gamepad_lane_state[col_idx];
+            let miss_because_held = lane_counts_pressed(
+                state.keyboard_lane_counts[col_idx],
+                state.gamepad_lane_counts[col_idx],
+            );
             let miss = Judgment {
                 time_error_ms: time_err_real * 1000.0,
                 grade: JudgeGrade::Miss,
@@ -10157,8 +10203,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
             {
                 let time_err_music = music_time_sec - note_time;
                 let time_err_real = time_err_music / rate;
-                let miss_because_held = (col < state.num_cols)
-                    && (state.keyboard_lane_state[col] || state.gamepad_lane_state[col]);
+                let miss_because_held = (col < state.num_cols) && lane_is_pressed(state, col);
                 let miss = Judgment {
                     time_error_ms: time_err_real * 1000.0,
                     grade: JudgeGrade::Miss,
@@ -10637,7 +10682,7 @@ pub fn update(state: &mut State, delta_time: f32, shift_held: bool) -> ScreenAct
         if i >= num_cols {
             return false;
         }
-        state.keyboard_lane_state[i] || state.gamepad_lane_state[i]
+        lane_is_pressed(state, i)
     });
     let prev_inputs = state.prev_inputs;
     for (col, (now_down, was_down)) in current_inputs.iter().copied().zip(prev_inputs).enumerate() {
@@ -10854,11 +10899,13 @@ mod tests {
         FrameStableDisplayClock, INSERT_MASK_BIT_MINES, ScrollEffects, ScrollSpeedSetting,
         SongClockSnapshot, TickMode, apply_mines_insert, build_assist_clap_rows,
         build_attack_mask_windows_for_player, frame_stable_display_music_time,
+        lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals,
         score_valid_for_chart, scored_hold_totals_with_carry, tick_mode_status_line,
-        turn_option_bits,
+        turn_option_bits, update_lane_count,
     };
+    use crate::core::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
     use crate::game::note::{HoldData, Note, NoteType};
     use crate::game::profile;
@@ -10954,6 +11001,72 @@ mod tests {
         assert_eq!(mode, TickMode::Assist);
         assert_eq!(next_tick_mode(mode), TickMode::Hit);
         assert_eq!(next_tick_mode(TickMode::Hit), TickMode::Off);
+    }
+
+    #[test]
+    fn lane_press_counts_hold_until_last_alias_release() {
+        let mut keyboard = 0u8;
+        let mut gamepad = 0u8;
+
+        let mut transitions = Vec::new();
+        for (source, pressed) in [
+            (InputSource::Keyboard, true),
+            (InputSource::Keyboard, true),
+            (InputSource::Keyboard, false),
+            (InputSource::Keyboard, false),
+            (InputSource::Gamepad, true),
+            (InputSource::Keyboard, true),
+            (InputSource::Gamepad, false),
+            (InputSource::Keyboard, false),
+        ] {
+            let was_down = keyboard != 0 || gamepad != 0;
+            match source {
+                InputSource::Keyboard => update_lane_count(&mut keyboard, pressed),
+                InputSource::Gamepad => update_lane_count(&mut gamepad, pressed),
+            }
+            transitions.push((was_down, keyboard != 0 || gamepad != 0));
+        }
+
+        assert_eq!(
+            transitions,
+            vec![
+                (false, true),
+                (true, true),
+                (true, true),
+                (true, false),
+                (false, true),
+                (true, true),
+                (true, true),
+                (true, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn physical_edges_still_judge_while_lane_is_logically_held() {
+        let mut keyboard = 0u8;
+
+        let mut tap_edges = Vec::new();
+        let mut lift_edges = Vec::new();
+        let mut glow_edges = Vec::new();
+        for pressed in [true, true, false, false] {
+            let was_down = keyboard != 0;
+            update_lane_count(&mut keyboard, pressed);
+            let is_down = keyboard != 0;
+            tap_edges.push(lane_edge_judges_tap(pressed));
+            lift_edges.push(lane_edge_judges_lift(pressed, was_down));
+            glow_edges.push((
+                lane_press_started(pressed, was_down, is_down),
+                lane_release_finished(pressed, was_down, is_down),
+            ));
+        }
+
+        assert_eq!(tap_edges, vec![true, true, false, false]);
+        assert_eq!(lift_edges, vec![false, false, true, true]);
+        assert_eq!(
+            glow_edges,
+            vec![(true, false), (false, false), (false, false), (false, true)]
+        );
     }
 
     #[test]
