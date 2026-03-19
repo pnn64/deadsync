@@ -331,6 +331,29 @@ impl GameplayInputRing {
     }
 }
 
+#[inline(always)]
+fn gameplay_input_precedes(a: &InputEvent, b: &InputEvent) -> bool {
+    if a.timestamp_host_nanos != 0
+        && b.timestamp_host_nanos != 0
+        && a.timestamp_host_nanos != b.timestamp_host_nanos
+    {
+        return a.timestamp_host_nanos < b.timestamp_host_nanos;
+    }
+    if a.timestamp != b.timestamp {
+        return a.timestamp < b.timestamp;
+    }
+    if a.emitted_at != b.emitted_at {
+        return a.emitted_at < b.emitted_at;
+    }
+    if a.stored_at != b.stored_at {
+        return a.stored_at < b.stored_at;
+    }
+    matches!(
+        (a.source, b.source),
+        (input::InputSource::Keyboard, input::InputSource::Gamepad)
+    )
+}
+
 #[derive(Clone, Copy)]
 struct GameplayEventBatchTrace {
     started_at: Instant,
@@ -4234,11 +4257,29 @@ impl App {
             self.gameplay_pad_ring.clear();
             return;
         }
-        while let Some(ev) = self.gameplay_key_ring.pop() {
-            self.queue_input_event(ev);
-        }
-        while let Some(ev) = self.gameplay_pad_ring.pop() {
-            self.queue_input_event(ev);
+        let mut next_key = self.gameplay_key_ring.pop();
+        let mut next_pad = self.gameplay_pad_ring.pop();
+        loop {
+            match (next_key.as_ref(), next_pad.as_ref()) {
+                (Some(key_ev), Some(pad_ev)) => {
+                    if gameplay_input_precedes(key_ev, pad_ev) {
+                        self.queue_input_event(next_key.take().unwrap());
+                        next_key = self.gameplay_key_ring.pop();
+                    } else {
+                        self.queue_input_event(next_pad.take().unwrap());
+                        next_pad = self.gameplay_pad_ring.pop();
+                    }
+                }
+                (Some(_), None) => {
+                    self.queue_input_event(next_key.take().unwrap());
+                    next_key = self.gameplay_key_ring.pop();
+                }
+                (None, Some(_)) => {
+                    self.queue_input_event(next_pad.take().unwrap());
+                    next_pad = self.gameplay_pad_ring.pop();
+                }
+                (None, None) => break,
+            }
         }
     }
 
@@ -7776,4 +7817,56 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     event_loop.run_app(&mut app)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input_event(
+        source: input::InputSource,
+        timestamp: Instant,
+        host_nanos: u64,
+        stored_at: Instant,
+        emitted_at: Instant,
+    ) -> InputEvent {
+        InputEvent {
+            action: input::VirtualAction::p1_left,
+            pressed: true,
+            source,
+            timestamp,
+            timestamp_host_nanos: host_nanos,
+            stored_at,
+            emitted_at,
+        }
+    }
+
+    #[test]
+    fn gameplay_input_precedes_prefers_host_clock_when_available() {
+        let now = Instant::now();
+        let later = now + Duration::from_millis(1);
+        let a = input_event(input::InputSource::Gamepad, later, 100, later, later);
+        let b = input_event(input::InputSource::Keyboard, now, 200, now, now);
+        assert!(gameplay_input_precedes(&a, &b));
+        assert!(!gameplay_input_precedes(&b, &a));
+    }
+
+    #[test]
+    fn gameplay_input_precedes_falls_back_to_instant_without_host_clock() {
+        let now = Instant::now();
+        let later = now + Duration::from_millis(1);
+        let a = input_event(input::InputSource::Keyboard, now, 0, now, now);
+        let b = input_event(input::InputSource::Gamepad, later, 0, later, later);
+        assert!(gameplay_input_precedes(&a, &b));
+        assert!(!gameplay_input_precedes(&b, &a));
+    }
+
+    #[test]
+    fn gameplay_input_precedes_breaks_exact_ties_deterministically() {
+        let now = Instant::now();
+        let key = input_event(input::InputSource::Keyboard, now, 100, now, now);
+        let pad = input_event(input::InputSource::Gamepad, now, 100, now, now);
+        assert!(gameplay_input_precedes(&key, &pad));
+        assert!(!gameplay_input_precedes(&pad, &key));
+    }
 }
