@@ -11,7 +11,7 @@ mod debounce;
 
 use debounce::{
     DebounceBinding, DebounceEdges, DebounceState, DebounceWindows, DebouncedEdge,
-    collect_due_debounce_edges_from, debounce_input_edge_in_store,
+    debounce_input_edge_in_store, emit_due_debounce_edges_from,
 };
 
 /* ------------------------ Pad types + backend ------------------------ */
@@ -1202,23 +1202,18 @@ pub fn drain_debounced_events() -> Vec<InputEvent> {
 
 pub fn drain_gameplay_arrow_events_with(mut emit: impl FnMut(InputEvent)) -> bool {
     let now = Instant::now();
-    let mut flushed = false;
-    for edge in collect_due_debounce_edges_from(
+    let mut flushed = emit_due_debounce_edges_from(
         &GAMEPLAY_KEYBOARD_DEBOUNCE_STATE,
         now,
         gameplay_keyboard_debounce_windows(),
-    ) {
-        flushed = true;
-        emit_gameplay_events_from_edge(edge, &mut emit);
-    }
-    for edge in collect_due_debounce_edges_from(
+        |edge| emit_gameplay_events_from_edge(edge, &mut emit),
+    );
+    flushed |= emit_due_debounce_edges_from(
         &GAMEPLAY_PAD_DEBOUNCE_STATE,
         now,
         gameplay_debounce_windows(),
-    ) {
-        flushed = true;
-        emit_gameplay_events_from_edge(edge, &mut emit);
-    }
+        |edge| emit_gameplay_events_from_edge(edge, &mut emit),
+    );
     flushed
 }
 

@@ -227,22 +227,23 @@ pub(super) fn debounce_input_edge_in_store(
     edges
 }
 
-pub(super) fn collect_due_debounce_edges_from(
+pub(super) fn emit_due_debounce_edges_from(
     states: &Mutex<HashMap<DebounceBinding, DebounceState>>,
     now: Instant,
     windows: DebounceWindows,
-) -> Vec<DebouncedEdge> {
+    mut emit: impl FnMut(DebouncedEdge),
+) -> bool {
     // ITGmania Update() parity: delayed edges are surfaced later, but they still
     // carry the original raw timestamp that caused the debounce holdoff.
     let mut states = states.lock().unwrap();
-    let mut out: Vec<DebouncedEdge> = Vec::with_capacity(states.len().min(8));
-    let mut prune: Vec<DebounceBinding> = Vec::new();
-    for (&binding, state) in states.iter_mut() {
+    let mut flushed = false;
+    states.retain(|binding, state| {
         if let Some((pressed, timestamp, timestamp_host_nanos, stored_at)) =
             debounce_emit_if_due(state, now, windows)
         {
-            out.push(debounced_edge(
-                binding,
+            flushed = true;
+            emit(debounced_edge(
+                *binding,
                 pressed,
                 timestamp,
                 timestamp_host_nanos,
@@ -250,14 +251,9 @@ pub(super) fn collect_due_debounce_edges_from(
                 now,
             ));
         }
-        if should_prune_debounce_state(*state, now, windows) {
-            prune.push(binding);
-        }
-    }
-    for binding in prune {
-        states.remove(&binding);
-    }
-    out
+        !should_prune_debounce_state(*state, now, windows)
+    });
+    flushed
 }
 
 #[cfg(test)]
@@ -449,5 +445,65 @@ mod tests {
             debounce_emit_if_due(&mut state, t0 + Duration::from_millis(6), windows),
             Some((false, release_ts, release_host, release_ts))
         );
+    }
+
+    #[test]
+    fn emit_due_edges_prunes_stale_entries_without_temp_buffers() {
+        let window = Duration::from_millis(20);
+        let windows = DebounceWindows::uniform(window);
+        let t0 = Instant::now();
+        let binding_due = DebounceBinding::Keyboard(KeyCode::KeyA);
+        let binding_stale = DebounceBinding::Keyboard(KeyCode::KeyB);
+        let mut due_state = base_state(t0, window);
+        let stale_state = base_state(t0, window);
+
+        let press = debounce_step(&mut due_state, binding_due, true, t0, 100, t0, windows);
+        assert!(press.first.is_none());
+        assert!(press.second.is_some());
+
+        let release_ts = t0 + Duration::from_millis(1);
+        let release = debounce_step(
+            &mut due_state,
+            binding_due,
+            false,
+            release_ts,
+            101,
+            release_ts,
+            windows,
+        );
+        assert!(release.first.is_none());
+        assert!(release.second.is_none());
+        let states = Mutex::new(HashMap::from([
+            (binding_due, due_state),
+            (binding_stale, stale_state),
+        ]));
+        let mut emitted = Vec::new();
+
+        assert!(emit_due_debounce_edges_from(
+            &states,
+            t0 + Duration::from_millis(21),
+            windows,
+            |edge| emitted.push(edge),
+        ));
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].binding, binding_due);
+        assert!(!emitted[0].pressed);
+        assert_eq!(emitted[0].timestamp, release_ts);
+        assert_eq!(emitted[0].timestamp_host_nanos, 101);
+
+        let guard = states.lock().unwrap();
+        assert_eq!(guard.len(), 1);
+        assert!(guard.contains_key(&binding_due));
+        drop(guard);
+
+        emitted.clear();
+        assert!(!emit_due_debounce_edges_from(
+            &states,
+            t0 + Duration::from_millis(41),
+            windows,
+            |edge| emitted.push(edge),
+        ));
+        assert!(emitted.is_empty());
+        assert!(states.lock().unwrap().is_empty());
     }
 }
