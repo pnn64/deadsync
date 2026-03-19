@@ -2630,16 +2630,6 @@ impl App {
             event_loop.exit();
             return;
         }
-        for ev in input::drain_debounced_events() {
-            if gameplay_screen && ev.action.is_gameplay_arrow() {
-                continue;
-            }
-            if let Err(e) = self.route_input_event(event_loop, ev) {
-                error!("Failed to handle debounced input: {e}");
-                event_loop.exit();
-                return;
-            }
-        }
         input_us = elapsed_us_since(input_started);
 
         let mut finished_fading_out_to: Option<CurrentScreen> = None;
@@ -6203,17 +6193,22 @@ impl App {
             });
         }
 
-        for ev in input::map_key_event(&key_event, event_timestamp) {
+        let mut input_err: Option<Box<dyn Error>> = None;
+        input::map_key_event_with(&key_event, event_timestamp, |ev| {
             if gameplay_screen && ev.action.is_gameplay_arrow() {
-                continue;
+                return;
             }
             if gameplay_screen {
                 self.queue_input_event(ev);
-            } else if let Err(e) = self.route_input_event(event_loop, ev) {
-                log::error!("Failed to handle input: {e}");
-                event_loop.exit();
-                return;
+            } else if input_err.is_none()
+                && let Err(e) = self.route_input_event(event_loop, ev)
+            {
+                input_err = Some(e);
             }
+        });
+        if let Some(e) = input_err {
+            log::error!("Failed to handle input: {e}");
+            event_loop.exit();
         }
     }
 
@@ -6235,17 +6230,22 @@ impl App {
                 self.queue_input_event(iev);
             });
         }
-        for iev in input::map_pad_event(&ev) {
+        let mut input_err: Option<Box<dyn Error>> = None;
+        input::map_pad_event_with(&ev, |iev| {
             if gameplay_screen && iev.action.is_gameplay_arrow() {
-                continue;
+                return;
             }
             if gameplay_screen {
                 self.queue_input_event(iev);
-            } else if let Err(e) = self.route_input_event(event_loop, iev) {
-                error!("Failed to handle pad input: {e}");
-                event_loop.exit();
-                return;
+            } else if input_err.is_none()
+                && let Err(e) = self.route_input_event(event_loop, iev)
+            {
+                input_err = Some(e);
             }
+        });
+        if let Some(e) = input_err {
+            error!("Failed to handle pad input: {e}");
+            event_loop.exit();
         }
     }
 
