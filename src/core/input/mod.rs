@@ -385,6 +385,8 @@ pub enum VirtualAction {
 }
 
 impl VirtualAction {
+    pub const COUNT: usize = Self::p2_restart as usize + 1;
+
     #[inline(always)]
     pub const fn ix(self) -> usize {
         self as usize
@@ -829,26 +831,156 @@ fn input_event(
     }
 }
 
+type ActionBuf = [Option<VirtualAction>; VirtualAction::COUNT];
+
 #[inline(always)]
-fn emit_input_events_from_actions(
-    actions: impl IntoIterator<Item = (VirtualAction, bool)>,
-    source: InputSource,
-    timestamp: Instant,
-    timestamp_host_nanos: u64,
-    stored_at: Instant,
-    emitted_at: Instant,
-    mut emit: impl FnMut(InputEvent),
+const fn action_bit(action: VirtualAction) -> u32 {
+    1u32 << (action.ix() as u32)
+}
+
+#[inline(always)]
+fn push_action(
+    out: &mut ActionBuf,
+    len: &mut usize,
+    seen: &mut u32,
+    action: VirtualAction,
 ) {
-    for (action, pressed) in actions {
-        emit(input_event(
-            action,
-            pressed,
-            source,
-            timestamp,
-            timestamp_host_nanos,
-            stored_at,
-            emitted_at,
-        ));
+    let bit = action_bit(action);
+    if (*seen & bit) != 0 {
+        return;
+    }
+    *seen |= bit;
+    out[*len] = Some(action);
+    *len += 1;
+}
+
+#[inline(always)]
+fn collect_key_actions(km: &Keymap, code: KeyCode, out: &mut ActionBuf) -> usize {
+    let Some(actions) = km.key_rev.get(&code) else {
+        return 0;
+    };
+    let mut len = 0;
+    let mut seen = 0;
+    for &action in actions {
+        push_action(out, &mut len, &mut seen, action);
+    }
+    len
+}
+
+#[inline(always)]
+fn collect_pad_dir_actions(km: &Keymap, id: PadId, dir: PadDir, out: &mut ActionBuf) -> usize {
+    let dev = usize::from(id);
+    let any = &km.pad_dir_rev[dir.ix()];
+    let on = km.pad_dir_on_rev.get(&(dev, dir));
+    if any.is_empty() && on.is_none() {
+        return 0;
+    }
+    let mut len = 0;
+    let mut seen = 0;
+    for &action in any {
+        push_action(out, &mut len, &mut seen, action);
+    }
+    if let Some(actions) = on {
+        for &action in actions {
+            push_action(out, &mut len, &mut seen, action);
+        }
+    }
+    len
+}
+
+#[inline(always)]
+fn collect_pad_button_actions(
+    km: &Keymap,
+    id: PadId,
+    code: PadCode,
+    uuid: [u8; 16],
+    out: &mut ActionBuf,
+) -> usize {
+    let Some(entries) = km.pad_code_rev.get(&code.into_u32()) else {
+        return 0;
+    };
+    let dev = usize::from(id);
+    let mut len = 0;
+    let mut seen = 0;
+    for entry in entries {
+        if let Some(d_expected) = entry.device
+            && d_expected != dev
+        {
+            continue;
+        }
+        if let Some(u_expected) = entry.uuid
+            && u_expected != uuid
+        {
+            continue;
+        }
+        push_action(out, &mut len, &mut seen, entry.act);
+    }
+    len
+}
+
+#[inline(always)]
+fn direct_action_mask(actions: &ActionBuf, len: usize) -> u32 {
+    let mut mask = 0;
+    let mut i = 0;
+    while i < len {
+        if let Some(action) = actions[i] {
+            mask |= action_bit(action);
+        }
+        i += 1;
+    }
+    mask
+}
+
+#[inline(always)]
+fn emit_normalized_action(
+    action: VirtualAction,
+    pressed: bool,
+    direct_mask: u32,
+    emitted: &mut u32,
+    emit: &mut impl FnMut(VirtualAction, bool),
+) {
+    if pressed
+        && let Some(primary) = primary_from_menu_alias(action)
+        && (direct_mask & action_bit(primary)) != 0
+    {
+        return;
+    }
+    let bit = action_bit(action);
+    if (*emitted & bit) != 0 {
+        return;
+    }
+    *emitted |= bit;
+    emit(action, pressed);
+}
+
+#[inline(always)]
+fn emit_normalized_actions(
+    actions: &ActionBuf,
+    len: usize,
+    pressed: bool,
+    mut emit: impl FnMut(VirtualAction, bool),
+) {
+    if len == 0 {
+        return;
+    }
+    let direct_mask = direct_action_mask(actions, len);
+    let mut emitted = 0;
+    let mut i = 0;
+    while i < len {
+        if let Some(action) = actions[i] {
+            emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit);
+        }
+        i += 1;
+    }
+    if ONLY_DEDICATED_MENU_BUTTONS.load(Ordering::Relaxed) && pressed {
+        return;
+    }
+    let mut i = 0;
+    while i < len {
+        if let Some(menu_action) = actions[i].and_then(VirtualAction::secondary_menu) {
+            emit_normalized_action(menu_action, pressed, direct_mask, &mut emitted, &mut emit);
+        }
+        i += 1;
     }
 }
 
@@ -976,13 +1108,6 @@ fn emit_filtered_actions_from_edge(
 }
 
 #[inline(always)]
-fn normalize_actions(actions: &mut Vec<(VirtualAction, bool)>) {
-    append_secondary_menu_actions(actions);
-    dedup_primary_vs_menu_alias(actions);
-    dedup_action_pairs(actions);
-}
-
-#[inline(always)]
 fn emit_gameplay_events_from_edge(edge: DebouncedEdge, mut emit: impl FnMut(InputEvent)) {
     with_keymap(|km| {
         emit_filtered_actions_from_edge(km, edge, VirtualAction::is_gameplay_arrow, |action| {
@@ -1090,17 +1215,19 @@ pub fn map_keycode_event_with_host(
     timestamp_host_nanos: u64,
     mut emit: impl FnMut(InputEvent),
 ) {
-    let mut actions = with_keymap(|km| km.actions_for_key_code(code, pressed));
-    normalize_actions(&mut actions);
-    emit_input_events_from_actions(
-        actions,
-        InputSource::Keyboard,
-        timestamp,
-        timestamp_host_nanos,
-        timestamp,
-        timestamp,
-        &mut emit,
-    );
+    let mut actions: ActionBuf = [None; VirtualAction::COUNT];
+    let len = with_keymap(|km| collect_key_actions(km, code, &mut actions));
+    emit_normalized_actions(&actions, len, pressed, |action, pressed| {
+        emit(input_event(
+            action,
+            pressed,
+            InputSource::Keyboard,
+            timestamp,
+            timestamp_host_nanos,
+            timestamp,
+            timestamp,
+        ));
+    });
 }
 
 #[inline(always)]
@@ -1142,17 +1269,34 @@ fn pad_event_timestamps(ev: &PadEvent) -> (Instant, u64) {
 #[inline(always)]
 pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
     let (timestamp, timestamp_host_nanos) = pad_event_timestamps(ev);
-    let mut actions = with_keymap(|km| km.actions_for_pad_event(ev));
-    normalize_actions(&mut actions);
-    emit_input_events_from_actions(
-        actions,
-        InputSource::Gamepad,
-        timestamp,
-        timestamp_host_nanos,
-        timestamp,
-        timestamp,
-        &mut emit,
-    );
+    let mut actions: ActionBuf = [None; VirtualAction::COUNT];
+    let (pressed, len) = with_keymap(|km| match *ev {
+        PadEvent::Dir {
+            id, dir, pressed, ..
+        } => (pressed, collect_pad_dir_actions(km, id, dir, &mut actions)),
+        PadEvent::RawButton {
+            id,
+            code,
+            uuid,
+            pressed,
+            ..
+        } => (
+            pressed,
+            collect_pad_button_actions(km, id, code, uuid, &mut actions),
+        ),
+        PadEvent::RawAxis { .. } => (false, 0),
+    });
+    emit_normalized_actions(&actions, len, pressed, |action, pressed| {
+        emit(input_event(
+            action,
+            pressed,
+            InputSource::Gamepad,
+            timestamp,
+            timestamp_host_nanos,
+            timestamp,
+            timestamp,
+        ));
+    });
 }
 
 #[inline(always)]
@@ -1226,24 +1370,6 @@ pub const fn lane_from_action(act: VirtualAction) -> Option<Lane> {
 }
 
 #[inline(always)]
-fn dedup_action_pairs(actions: &mut Vec<(VirtualAction, bool)>) {
-    let mut seen_pressed: u32 = 0;
-    let mut seen_released: u32 = 0;
-    actions.retain(|(act, pressed)| {
-        let bit = 1u32 << (act.ix() as u32);
-        if *pressed {
-            let keep = (seen_pressed & bit) == 0;
-            seen_pressed |= bit;
-            keep
-        } else {
-            let keep = (seen_released & bit) == 0;
-            seen_released |= bit;
-            keep
-        }
-    });
-}
-
-#[inline(always)]
 const fn primary_from_menu_alias(act: VirtualAction) -> Option<VirtualAction> {
     match act {
         VirtualAction::p1_menu_up => Some(VirtualAction::p1_up),
@@ -1255,46 +1381,6 @@ const fn primary_from_menu_alias(act: VirtualAction) -> Option<VirtualAction> {
         VirtualAction::p2_menu_left => Some(VirtualAction::p2_left),
         VirtualAction::p2_menu_right => Some(VirtualAction::p2_right),
         _ => None,
-    }
-}
-
-#[inline(always)]
-fn dedup_primary_vs_menu_alias(actions: &mut Vec<(VirtualAction, bool)>) {
-    let mut pressed: u32 = 0;
-    for (act, is_pressed) in actions.iter().copied() {
-        let bit = 1u32 << (act.ix() as u32);
-        if is_pressed {
-            pressed |= bit;
-        }
-    }
-    actions.retain(|(act, is_pressed)| {
-        let Some(primary) = primary_from_menu_alias(*act) else {
-            return true;
-        };
-        if !*is_pressed {
-            // Keep release aliases so dedicated-menu filtering can still
-            // propagate a menu release if a primary action is suppressed.
-            return true;
-        }
-        let bit = 1u32 << (primary.ix() as u32);
-        (pressed & bit) == 0
-    });
-}
-
-#[inline(always)]
-fn append_secondary_menu_actions(actions: &mut Vec<(VirtualAction, bool)>) {
-    let only_dedicated = ONLY_DEDICATED_MENU_BUTTONS.load(Ordering::Relaxed);
-    let original_len = actions.len();
-    for i in 0..original_len {
-        let (act, pressed) = actions[i];
-        // Keep releasing secondary menu aliases even in dedicated-only mode so
-        // menu hold/repeat state cannot get orphaned if the preference changes
-        // while an arrow is held.
-        if let Some(menu_act) = act.secondary_menu()
-            && (!only_dedicated || !pressed)
-        {
-            actions.push((menu_act, pressed));
-        }
     }
 }
 
@@ -1397,6 +1483,87 @@ mod tests {
                 InputSource::Gamepad,
                 timestamp,
                 42,
+                timestamp,
+                timestamp,
+            ),
+        ];
+        assert_events_eq(&actual, &expected);
+
+        set_keymap(original);
+        set_only_dedicated_menu_buttons(false);
+        clear_debounce_state();
+    }
+
+    #[test]
+    fn map_keycode_event_with_suppresses_pressed_alias_when_primary_is_bound() {
+        let _guard = TEST_GUARD.lock().unwrap();
+        let original = get_keymap();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_left,
+            &[InputBinding::Key(KeyCode::ArrowLeft)],
+        );
+        km.bind(
+            VirtualAction::p1_menu_left,
+            &[InputBinding::Key(KeyCode::ArrowLeft)],
+        );
+        set_keymap(km);
+        set_only_dedicated_menu_buttons(false);
+
+        let timestamp = Instant::now();
+        let mut actual = Vec::new();
+        map_keycode_event_with(KeyCode::ArrowLeft, true, timestamp, |event| {
+            actual.push(event);
+        });
+        let expected = [input_event(
+            VirtualAction::p1_left,
+            true,
+            InputSource::Keyboard,
+            timestamp,
+            0,
+            timestamp,
+            timestamp,
+        )];
+        assert_events_eq(&actual, &expected);
+
+        set_keymap(original);
+        set_only_dedicated_menu_buttons(false);
+        clear_debounce_state();
+    }
+
+    #[test]
+    fn map_keycode_event_with_keeps_release_alias_in_dedicated_mode() {
+        let _guard = TEST_GUARD.lock().unwrap();
+        let original = get_keymap();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_left,
+            &[InputBinding::Key(KeyCode::ArrowLeft)],
+        );
+        set_keymap(km);
+        set_only_dedicated_menu_buttons(true);
+
+        let timestamp = Instant::now();
+        let mut actual = Vec::new();
+        map_keycode_event_with(KeyCode::ArrowLeft, false, timestamp, |event| {
+            actual.push(event);
+        });
+        let expected = [
+            input_event(
+                VirtualAction::p1_left,
+                false,
+                InputSource::Keyboard,
+                timestamp,
+                0,
+                timestamp,
+                timestamp,
+            ),
+            input_event(
+                VirtualAction::p1_menu_left,
+                false,
+                InputSource::Keyboard,
+                timestamp,
+                0,
                 timestamp,
                 timestamp,
             ),
