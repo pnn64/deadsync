@@ -90,9 +90,9 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
         return ScreenAction::None;
     }
     let is_back = with_keymap(|km| {
-        km.actions_for_key_event(key_event)
-            .into_iter()
-            .any(|(act, _)| matches!(act, VirtualAction::p1_back | VirtualAction::p2_back))
+        km.key_event_has_action(key_event, |action| {
+            matches!(action, VirtualAction::p1_back | VirtualAction::p2_back)
+        })
     });
     if !is_back {
         return ScreenAction::None;

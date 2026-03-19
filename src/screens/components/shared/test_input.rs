@@ -169,7 +169,7 @@ pub fn apply_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
         }
     };
 
-    let mapped = with_keymap(|km| !km.actions_for_pad_event(pad_event).is_empty());
+    let mapped = with_keymap(|km| km.pad_event_mapped(pad_event));
     if mapped {
         return;
     }
@@ -190,7 +190,7 @@ pub fn apply_raw_key_event(state: &mut State, key_event: &KeyEvent) {
     if key_event.repeat {
         return;
     }
-    let mapped = with_keymap(|km| !km.actions_for_key_event(key_event).is_empty());
+    let mapped = with_keymap(|km| km.key_event_mapped(key_event));
     if mapped {
         return;
     }

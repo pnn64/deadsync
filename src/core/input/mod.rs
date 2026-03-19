@@ -674,6 +674,46 @@ impl Keymap {
     }
 
     #[inline(always)]
+    pub fn keycode_mapped(&self, code: KeyCode) -> bool {
+        self.key_rev
+            .get(&code)
+            .is_some_and(|actions| !actions.is_empty())
+    }
+
+    #[inline(always)]
+    pub fn keycode_has_action(&self, code: KeyCode, keep: impl Fn(VirtualAction) -> bool) -> bool {
+        let Some(actions) = self.key_rev.get(&code) else {
+            return false;
+        };
+        for &action in actions {
+            if keep(action) {
+                return true;
+            }
+        }
+        false
+    }
+
+    #[inline(always)]
+    pub fn key_event_mapped(&self, ev: &KeyEvent) -> bool {
+        let PhysicalKey::Code(code) = ev.physical_key else {
+            return false;
+        };
+        self.keycode_mapped(code)
+    }
+
+    #[inline(always)]
+    pub fn key_event_has_action(
+        &self,
+        ev: &KeyEvent,
+        keep: impl Fn(VirtualAction) -> bool,
+    ) -> bool {
+        let PhysicalKey::Code(code) = ev.physical_key else {
+            return false;
+        };
+        self.keycode_has_action(code, keep)
+    }
+
+    #[inline(always)]
     pub fn actions_for_key_code(&self, code: KeyCode, pressed: bool) -> Vec<(VirtualAction, bool)> {
         let Some(actions) = self.key_rev.get(&code) else {
             return Vec::new();
@@ -699,6 +739,38 @@ impl Keymap {
                 // mapped directly to virtual actions.
                 Vec::new()
             }
+        }
+    }
+
+    #[inline(always)]
+    pub fn pad_event_mapped(&self, ev: &PadEvent) -> bool {
+        match *ev {
+            PadEvent::Dir { id, dir, .. } => {
+                let dev = usize::from(id);
+                !self.pad_dir_rev[dir.ix()].is_empty()
+                    || self.pad_dir_on_rev.contains_key(&(dev, dir))
+            }
+            PadEvent::RawButton { id, code, uuid, .. } => {
+                let dev = usize::from(id);
+                let Some(entries) = self.pad_code_rev.get(&code.into_u32()) else {
+                    return false;
+                };
+                for entry in entries {
+                    if let Some(d_expected) = entry.device
+                        && d_expected != dev
+                    {
+                        continue;
+                    }
+                    if let Some(u_expected) = entry.uuid
+                        && u_expected != uuid
+                    {
+                        continue;
+                    }
+                    return true;
+                }
+                false
+            }
+            PadEvent::RawAxis { .. } => false,
         }
     }
 
@@ -1569,6 +1641,74 @@ mod tests {
 
         set_keymap(original);
         set_only_dedicated_menu_buttons(false);
+        clear_debounce_state();
+    }
+
+    #[test]
+    fn keycode_has_action_matches_without_allocating_action_vec() {
+        let _guard = TEST_GUARD.lock().unwrap();
+        let original = get_keymap();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_back,
+            &[InputBinding::Key(KeyCode::Escape)],
+        );
+        set_keymap(km);
+
+        with_keymap(|km| {
+            assert!(km.keycode_mapped(KeyCode::Escape));
+            assert!(
+                km.keycode_has_action(KeyCode::Escape, |action| action == VirtualAction::p1_back)
+            );
+            assert!(
+                !km.keycode_has_action(KeyCode::Escape, |action| action == VirtualAction::p2_back)
+            );
+        });
+
+        set_keymap(original);
+        clear_debounce_state();
+    }
+
+    #[test]
+    fn pad_event_mapped_checks_device_and_uuid_without_allocating_action_vec() {
+        let _guard = TEST_GUARD.lock().unwrap();
+        let original = get_keymap();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_start,
+            &[InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 77,
+                device: Some(3),
+                uuid: Some([9; 16]),
+            })],
+        );
+        set_keymap(km);
+
+        let mapped = PadEvent::RawButton {
+            id: PadId(3),
+            timestamp: Instant::now(),
+            host_nanos: 0,
+            code: PadCode(77),
+            uuid: [9; 16],
+            value: 1.0,
+            pressed: true,
+        };
+        let wrong_dev = PadEvent::RawButton {
+            id: PadId(4),
+            timestamp: Instant::now(),
+            host_nanos: 0,
+            code: PadCode(77),
+            uuid: [9; 16],
+            value: 1.0,
+            pressed: true,
+        };
+
+        with_keymap(|km| {
+            assert!(km.pad_event_mapped(&mapped));
+            assert!(!km.pad_event_mapped(&wrong_dev));
+        });
+
+        set_keymap(original);
         clear_debounce_state();
     }
 }
