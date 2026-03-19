@@ -1,4 +1,4 @@
-use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
+use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
 use crate::core::host_time::now_nanos;
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use std::collections::HashMap;
@@ -333,21 +333,14 @@ extern "C" fn on_input(
             let want_right = matches!(hat, 1 | 2 | 3);
             let want_down = matches!(hat, 3 | 4 | 5);
             let want_left = matches!(hat, 5 | 6 | 7);
-            let want = [want_up, want_down, want_left, want_right];
-            let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
-            for i in 0..4 {
-                if dev.dir[i] == want[i] {
-                    continue;
-                }
-                dev.dir[i] = want[i];
-                (ctx.emit_pad)(PadEvent::Dir {
-                    id: dev.id,
-                    timestamp,
-                    host_nanos,
-                    dir: dirs[i],
-                    pressed: want[i],
-                });
-            }
+            emit_dir_edges(
+                &mut ctx.emit_pad,
+                dev.id,
+                &mut dev.dir,
+                timestamp,
+                host_nanos,
+                [want_up, want_down, want_left, want_right],
+            );
             return;
         }
 

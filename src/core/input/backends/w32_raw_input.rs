@@ -1,5 +1,6 @@
 use super::{
-    GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent, uuid_from_bytes,
+    GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, RawKeyboardEvent, emit_dir_edges,
+    uuid_from_bytes,
 };
 use crate::core::windows_rt::{ThreadRole, boost_current_thread, current_host_nanos};
 use std::collections::HashMap;
@@ -695,21 +696,14 @@ fn process_hid_report<F>(
     let want_right = matches!(hat0, 1..=3);
     let want_down = matches!(hat0, 3..=5);
     let want_left = matches!(hat0, 5..=7);
-    let want = [want_up, want_down, want_left, want_right];
-    let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
-    for i in 0..4 {
-        if dev.dir[i] == want[i] {
-            continue;
-        }
-        dev.dir[i] = want[i];
-        (emit_pad)(PadEvent::Dir {
-            id: dev.id,
-            timestamp,
-            host_nanos,
-            dir: dirs[i],
-            pressed: want[i],
-        });
-    }
+    emit_dir_edges(
+        emit_pad,
+        dev.id,
+        &mut dev.dir,
+        timestamp,
+        host_nanos,
+        [want_up, want_down, want_left, want_right],
+    );
 }
 
 #[inline(always)]

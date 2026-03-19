@@ -1,5 +1,5 @@
 use super::{
-    DevdEvent, DevdWatch, GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId,
+    DevdEvent, DevdWatch, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges,
     uuid_from_bytes,
 };
 use crate::core::host_time::{instant_nanos, now_nanos};
@@ -758,20 +758,14 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 }
 
                 let want = [dev.hat_y < 0, dev.hat_y > 0, dev.hat_x < 0, dev.hat_x > 0];
-                let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
-                for k in 0..4 {
-                    if dev.dir[k] == want[k] {
-                        continue;
-                    }
-                    dev.dir[k] = want[k];
-                    emit_pad(PadEvent::Dir {
-                        id: dev.id,
-                        timestamp,
-                        host_nanos,
-                        dir: dirs[k],
-                        pressed: want[k],
-                    });
-                }
+                emit_dir_edges(
+                    &mut emit_pad,
+                    dev.id,
+                    &mut dev.dir,
+                    timestamp,
+                    host_nanos,
+                    want,
+                );
             }
         }
 

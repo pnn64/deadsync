@@ -1,4 +1,4 @@
-use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
+use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
 use crate::core::windows_rt::{
     ThreadRole, boost_current_thread, current_host_nanos, qpc_ticks_to_nanos,
 };
@@ -540,37 +540,6 @@ fn remove_controller(ctx: &mut Ctx, controller: RawGameController) {
         let uuid2 = ctx.devs[idx].uuid;
         ctx.idx_by_uuid.insert(uuid2, idx);
     }
-}
-
-#[inline(always)]
-fn emit_dir_edges<F>(
-    emit_pad: &mut F,
-    id: PadId,
-    dir_state: &mut [bool; 4],
-    timestamp: Instant,
-    host_nanos: u64,
-    want: [bool; 4],
-) -> bool
-where
-    F: FnMut(PadEvent),
-{
-    let mut changed = false;
-    let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
-    for i in 0..4 {
-        if dir_state[i] == want[i] {
-            continue;
-        }
-        dir_state[i] = want[i];
-        changed = true;
-        (emit_pad)(PadEvent::Dir {
-            id,
-            timestamp,
-            host_nanos,
-            dir: dirs[i],
-            pressed: want[i],
-        });
-    }
-    changed
 }
 
 fn pump_gamepad<F>(emit_pad: &mut F, id: PadId, uuid: [u8; 16], st: &mut GamepadState) -> bool
