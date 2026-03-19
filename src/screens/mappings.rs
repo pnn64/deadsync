@@ -2,7 +2,8 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{
-    GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, VirtualAction, with_keymap,
+    GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, RawKeyboardEvent,
+    VirtualAction, with_keymap,
 };
 use crate::core::space::{screen_height, screen_width, widescale};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
@@ -12,9 +13,7 @@ use crate::ui::actors::Actor;
 use crate::ui::color;
 use crate::ui::font;
 use std::time::{Duration, Instant};
-use winit::event::ElementState;
-use winit::event::KeyEvent;
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::keyboard::KeyCode;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -413,15 +412,13 @@ pub fn update(state: &mut State, dt: f32) {
 }
 
 /// Raw keyboard handler used only while capturing a new mapping.
-pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAction {
+pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ScreenAction {
     if key_event.repeat {
         return ScreenAction::None;
     }
 
-    let is_pressed = key_event.state == ElementState::Pressed;
-    let PhysicalKey::Code(code) = key_event.physical_key else {
-        return ScreenAction::None;
-    };
+    let is_pressed = key_event.pressed;
+    let code = key_event.code;
 
     // If we're capturing, treat this as a candidate mapping; otherwise,
     // interpret arrows / Enter / Escape as navigation/back/capture.

@@ -3,8 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::keyboard::KeyCode;
 
 mod backends;
 mod debounce;
@@ -184,6 +183,7 @@ pub enum PadEvent {
 pub struct RawKeyboardEvent {
     pub code: KeyCode,
     pub pressed: bool,
+    pub repeat: bool,
     pub timestamp: Instant,
     pub host_nanos: u64,
 }
@@ -710,11 +710,8 @@ impl Keymap {
     }
 
     #[inline(always)]
-    pub fn actions_for_key_event(&self, ev: &KeyEvent) -> Vec<(VirtualAction, bool)> {
-        let PhysicalKey::Code(code) = ev.physical_key else {
-            return Vec::new();
-        };
-        self.actions_for_key_code(code, ev.state == ElementState::Pressed)
+    pub fn actions_for_raw_key_event(&self, ev: &RawKeyboardEvent) -> Vec<(VirtualAction, bool)> {
+        self.actions_for_key_code(ev.code, ev.pressed)
     }
 
     #[inline(always)]
@@ -738,23 +735,17 @@ impl Keymap {
     }
 
     #[inline(always)]
-    pub fn key_event_mapped(&self, ev: &KeyEvent) -> bool {
-        let PhysicalKey::Code(code) = ev.physical_key else {
-            return false;
-        };
-        self.keycode_mapped(code)
+    pub fn raw_key_event_mapped(&self, ev: &RawKeyboardEvent) -> bool {
+        self.keycode_mapped(ev.code)
     }
 
     #[inline(always)]
-    pub fn key_event_has_action(
+    pub fn raw_key_event_has_action(
         &self,
-        ev: &KeyEvent,
+        ev: &RawKeyboardEvent,
         keep: impl Fn(VirtualAction) -> bool,
     ) -> bool {
-        let PhysicalKey::Code(code) = ev.physical_key else {
-            return false;
-        };
-        self.keycode_has_action(code, keep)
+        self.keycode_has_action(ev.code, keep)
     }
 
     #[inline(always)]
@@ -1298,14 +1289,11 @@ fn emit_debounced_input_events(edges: DebounceEdges, mut emit: impl FnMut(InputE
 }
 
 #[inline(always)]
-pub fn map_key_event_with(ev: &KeyEvent, timestamp: Instant, emit: impl FnMut(InputEvent)) {
-    if ev.state == ElementState::Pressed && ev.repeat {
+pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent)) {
+    if ev.pressed && ev.repeat {
         return;
     }
-    let PhysicalKey::Code(code) = ev.physical_key else {
-        return;
-    };
-    map_keycode_event_with(code, ev.state == ElementState::Pressed, timestamp, emit);
+    map_keycode_event_with_host(ev.code, ev.pressed, ev.timestamp, ev.host_nanos, emit);
 }
 
 #[inline(always)]
@@ -1342,18 +1330,11 @@ pub fn map_keycode_event_with_host(
 }
 
 #[inline(always)]
-pub fn gameplay_arrow_key_events_with(
-    ev: &KeyEvent,
-    timestamp: Instant,
-    emit: impl FnMut(InputEvent),
-) {
-    if ev.state == ElementState::Pressed && ev.repeat {
+pub fn gameplay_arrow_raw_key_events_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent)) {
+    if ev.pressed && ev.repeat {
         return;
     }
-    let PhysicalKey::Code(code) = ev.physical_key else {
-        return;
-    };
-    gameplay_arrow_keycode_events_with(code, ev.state == ElementState::Pressed, timestamp, emit);
+    gameplay_arrow_keycode_events_with(ev.code, ev.pressed, ev.timestamp, emit);
 }
 
 #[inline(always)]

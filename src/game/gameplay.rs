@@ -1,7 +1,7 @@
 use crate::core::audio;
 use crate::core::gfx::MeshVertex;
 use crate::core::input::{
-    InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
+    InputEdge, InputEvent, InputSource, Lane, RawKeyboardEvent, VirtualAction, lane_from_action,
 };
 use crate::core::space::{is_wide, screen_center_y, screen_height, screen_width};
 use crate::game::chart::ChartData;
@@ -37,7 +37,6 @@ use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
-use winit::event::KeyEvent;
 use winit::keyboard::KeyCode;
 
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
@@ -9465,19 +9464,16 @@ pub fn handle_raw_keycode_event(
     ScreenAction::None
 }
 
-pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
-    use winit::event::ElementState;
-    use winit::keyboard::PhysicalKey;
-
-    let PhysicalKey::Code(code) = key.physical_key else {
-        return ScreenAction::None;
-    };
-
+pub fn handle_raw_key_event(
+    state: &mut State,
+    key: &RawKeyboardEvent,
+    shift_held: bool,
+) -> ScreenAction {
     if key.repeat {
         return ScreenAction::None;
     }
 
-    handle_raw_keycode_event(state, code, key.state == ElementState::Pressed, shift_held)
+    handle_raw_keycode_event(state, key.code, key.pressed, shift_held)
 }
 
 fn finalize_row_judgment(

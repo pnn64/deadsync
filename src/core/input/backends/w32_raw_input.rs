@@ -737,6 +737,7 @@ fn handle_keyboard_input(ctx: &mut Ctx, timestamp: Instant, host_nanos: u64) {
         (ctx.emit_key)(RawKeyboardEvent {
             code,
             pressed,
+            repeat: false,
             timestamp,
             host_nanos,
         });

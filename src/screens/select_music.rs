@@ -5,7 +5,7 @@ use crate::config::{
 };
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
-use crate::core::input::{InputEvent, PadDir, VirtualAction};
+use crate::core::input::{InputEvent, PadDir, RawKeyboardEvent, VirtualAction};
 use crate::core::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
@@ -39,7 +39,6 @@ use std::sync::mpsc;
 use std::sync::{Arc, OnceLock};
 use std::thread::LocalKey;
 use std::time::{Duration, Instant};
-use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -5000,18 +4999,17 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
     }
 }
 
-pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
+pub fn handle_raw_key_event(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+    text: Option<&str>,
+) -> ScreenAction {
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
 
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
-        if key.state == ElementState::Pressed
-            && matches!(
-                key.physical_key,
-                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
-            )
-        {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             hide_sync_overlay(state);
             state.song_search_ignore_next_back_select = true;
         }
@@ -5019,12 +5017,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
     }
 
     if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
-        if key.state == ElementState::Pressed
-            && matches!(
-                key.physical_key,
-                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
-            )
-        {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
             state.song_search_ignore_next_back_select = true;
             return ScreenAction::None;
@@ -5038,9 +5031,9 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    if key.state == ElementState::Pressed {
+    if key.is_some_and(|key| key.pressed) {
         if matches!(state.song_search, sort_menu::SongSearchState::Results(_))
-            && let winit::keyboard::PhysicalKey::Code(KeyCode::Escape) = key.physical_key
+            && key.is_some_and(|key| key.code == KeyCode::Escape)
         {
             cancel_song_search(state);
             return ScreenAction::None;
@@ -5048,7 +5041,8 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
         if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
-            if let winit::keyboard::PhysicalKey::Code(code) = key.physical_key {
+            if let Some(key) = key {
+                let code = key.code;
                 match code {
                     KeyCode::Backspace => {
                         sort_menu::song_search_backspace(entry);
@@ -5066,7 +5060,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 
             if !prompt_close
                 && prompt_start.is_none()
-                && let Some(text) = key.text.as_ref()
+                && let Some(text) = text
             {
                 sort_menu::song_search_add_text(entry, text);
             }
@@ -5083,10 +5077,10 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         }
     }
 
-    if key.state != ElementState::Pressed {
+    if !key.is_some_and(|key| key.pressed) {
         return ScreenAction::None;
     }
-    if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key {
+    if key.is_some_and(|key| key.code == KeyCode::F7) {
         let target_chart_type = profile::get_session_play_style().chart_type();
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
             if let Some(chart) =

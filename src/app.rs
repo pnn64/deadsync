@@ -5985,10 +5985,9 @@ impl App {
                 return Ok(());
             }
             if let Some(gs) = &mut self.state.screens.gameplay_state {
-                let action = crate::game::gameplay::handle_raw_keycode_event(
+                let action = crate::game::gameplay::handle_raw_key_event(
                     gs,
-                    key_event.code,
-                    key_event.pressed,
+                    &key_event,
                     self.state.shell.shift_held,
                 );
                 if !matches!(action, ScreenAction::None) {
@@ -5998,18 +5997,29 @@ impl App {
             }
         }
 
-        input::map_keycode_event_with_host(
-            key_event.code,
-            key_event.pressed,
-            key_event.timestamp,
-            key_event.host_nanos,
-            |ev| {
-                if !ev.action.is_gameplay_arrow() {
-                    self.queue_input_event(ev);
-                }
-            },
-        );
+        input::map_raw_key_event_with(&key_event, |ev| {
+            if !ev.action.is_gameplay_arrow() {
+                self.queue_input_event(ev);
+            }
+        });
         Ok(())
+    }
+
+    #[inline(always)]
+    fn raw_key_from_winit(
+        key_event: &winit::event::KeyEvent,
+        timestamp: Instant,
+    ) -> Option<input::RawKeyboardEvent> {
+        let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key else {
+            return None;
+        };
+        Some(input::RawKeyboardEvent {
+            code,
+            pressed: key_event.state == winit::event::ElementState::Pressed,
+            repeat: key_event.repeat,
+            timestamp,
+            host_nanos: 0,
+        })
     }
 
     #[inline(always)]
@@ -6019,26 +6029,28 @@ impl App {
         key_event: winit::event::KeyEvent,
     ) {
         let event_timestamp = Instant::now();
-        // Track modifier key state for gameplay raw sync combos (F11/F12).
-        if let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key {
-            use winit::event::ElementState;
+        let raw_key = Self::raw_key_from_winit(&key_event, event_timestamp);
+        let text = key_event.text.as_deref();
+        if let Some(raw_key) = raw_key {
             use winit::keyboard::KeyCode;
-            match code {
+            match raw_key.code {
                 KeyCode::ShiftLeft | KeyCode::ShiftRight => {
-                    self.state.shell.shift_held = key_event.state == ElementState::Pressed;
+                    self.state.shell.shift_held = raw_key.pressed;
                 }
                 KeyCode::ControlLeft | KeyCode::ControlRight => {
-                    self.state.shell.ctrl_held = key_event.state == ElementState::Pressed;
+                    self.state.shell.ctrl_held = raw_key.pressed;
                 }
                 _ => {}
             }
         }
 
         if self.state.screens.current_screen == CurrentScreen::Sandbox {
-            let action = crate::screens::sandbox::handle_raw_key_event(
-                &mut self.state.screens.sandbox_state,
-                &key_event,
-            );
+            let action = raw_key.as_ref().map_or(ScreenAction::None, |raw_key| {
+                crate::screens::sandbox::handle_raw_key_event(
+                    &mut self.state.screens.sandbox_state,
+                    raw_key,
+                )
+            });
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Sandbox raw key action: {e}");
@@ -6046,10 +6058,12 @@ impl App {
                 return;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Menu {
-            let action = crate::screens::menu::handle_raw_key_event(
-                &mut self.state.screens.menu_state,
-                &key_event,
-            );
+            let action = raw_key.as_ref().map_or(ScreenAction::None, |raw_key| {
+                crate::screens::menu::handle_raw_key_event(
+                    &mut self.state.screens.menu_state,
+                    raw_key,
+                )
+            });
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Menu raw key action: {e}");
@@ -6057,10 +6071,12 @@ impl App {
                 return;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Mappings {
-            let action = crate::screens::mappings::handle_raw_key_event(
-                &mut self.state.screens.mappings_state,
-                &key_event,
-            );
+            let action = raw_key.as_ref().map_or(ScreenAction::None, |raw_key| {
+                crate::screens::mappings::handle_raw_key_event(
+                    &mut self.state.screens.mappings_state,
+                    raw_key,
+                )
+            });
             if !matches!(action, ScreenAction::None)
                 && let Err(e) = self.handle_action(action, event_loop)
             {
@@ -6072,7 +6088,8 @@ impl App {
         } else if self.state.screens.current_screen == CurrentScreen::ManageLocalProfiles {
             let action = crate::screens::manage_local_profiles::handle_raw_key_event(
                 &mut self.state.screens.manage_local_profiles_state,
-                &key_event,
+                raw_key.as_ref(),
+                text,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
@@ -6081,10 +6098,12 @@ impl App {
                 return;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Input {
-            let action = crate::screens::input::handle_raw_key_event(
-                &mut self.state.screens.input_state,
-                &key_event,
-            );
+            let action = raw_key.as_ref().map_or(ScreenAction::None, |raw_key| {
+                crate::screens::input::handle_raw_key_event(
+                    &mut self.state.screens.input_state,
+                    raw_key,
+                )
+            });
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Input raw key action: {e}");
@@ -6095,7 +6114,8 @@ impl App {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
             let action = crate::screens::select_music::handle_raw_key_event(
                 &mut self.state.screens.select_music_state,
-                &key_event,
+                raw_key.as_ref(),
+                text,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
@@ -6104,11 +6124,10 @@ impl App {
                 return;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
-            if key_event.state == winit::event::ElementState::Pressed
+            if raw_key.is_some_and(|key| key.pressed)
                 && !self.state.session.course_eval_pages.is_empty()
-                && let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key
             {
-                match code {
+                match raw_key.unwrap().code {
                     winit::keyboard::KeyCode::KeyN => {
                         self.step_course_eval_page(1);
                         return;
@@ -6122,21 +6141,21 @@ impl App {
             }
         } else if self.state.screens.current_screen == CurrentScreen::Gameplay {
             if self.state.gameplay_offset_save_prompt.is_none() {
-                if key_event.state == winit::event::ElementState::Pressed
-                    && !key_event.repeat
+                if raw_key.is_some_and(|key| key.pressed && !key.repeat)
                     && self.state.shell.ctrl_held
-                    && key_event.physical_key
-                        == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyR)
+                    && raw_key.is_some_and(|key| key.code == winit::keyboard::KeyCode::KeyR)
                     && config::get().keyboard_features
                     && self.state.session.course_run.is_none()
                 {
                     self.try_gameplay_restart(event_loop, "Ctrl+R");
                     return;
                 }
-                if let Some(gs) = &mut self.state.screens.gameplay_state {
+                if let Some(gs) = &mut self.state.screens.gameplay_state
+                    && let Some(raw_key) = raw_key.as_ref()
+                {
                     let action = crate::game::gameplay::handle_raw_key_event(
                         gs,
-                        &key_event,
+                        raw_key,
                         self.state.shell.shift_held,
                     );
                     if !matches!(action, ScreenAction::None) {
@@ -6150,21 +6169,16 @@ impl App {
         }
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
 
-        if key_event.state == winit::event::ElementState::Pressed
-            && key_event.physical_key
-                == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3)
-        {
+        if raw_key.is_some_and(|key| key.pressed && key.code == winit::keyboard::KeyCode::F3) {
             let mode = self.state.shell.cycle_overlay_mode();
             debug!("Overlay {}", self.state.shell.overlay_mode.label());
             config::update_show_stats_mode(mode);
             options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
         }
-        if key_event.state == winit::event::ElementState::Pressed
-            && !key_event.repeat
+        if raw_key.is_some_and(|key| key.pressed && !key.repeat)
             && self.state.shell.ctrl_held
             && self.state.shell.shift_held
-            && key_event.physical_key
-                == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F10)
+            && raw_key.is_some_and(|key| key.code == winit::keyboard::KeyCode::F10)
         {
             self.capture_compose_case_now();
             return;
@@ -6182,30 +6196,35 @@ impl App {
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
         #[cfg(windows)]
         if gameplay_screen
-            && let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key
-            && input::keycode_is_gameplay_arrow_only(code)
+            && let Some(raw_key) = raw_key
+            && input::keycode_is_gameplay_arrow_only(raw_key.code)
         {
             return;
         }
-        if gameplay_screen && !cfg!(windows) {
-            input::gameplay_arrow_key_events_with(&key_event, event_timestamp, |ev| {
+        if gameplay_screen
+            && !cfg!(windows)
+            && let Some(raw_key) = raw_key.as_ref()
+        {
+            input::gameplay_arrow_raw_key_events_with(raw_key, |ev| {
                 self.queue_input_event(ev);
             });
         }
 
         let mut input_err: Option<Box<dyn Error>> = None;
-        input::map_key_event_with(&key_event, event_timestamp, |ev| {
-            if gameplay_screen && ev.action.is_gameplay_arrow() {
-                return;
-            }
-            if gameplay_screen {
-                self.queue_input_event(ev);
-            } else if input_err.is_none()
-                && let Err(e) = self.route_input_event(event_loop, ev)
-            {
-                input_err = Some(e);
-            }
-        });
+        if let Some(raw_key) = raw_key.as_ref() {
+            input::map_raw_key_event_with(raw_key, |ev| {
+                if gameplay_screen && ev.action.is_gameplay_arrow() {
+                    return;
+                }
+                if gameplay_screen {
+                    self.queue_input_event(ev);
+                } else if input_err.is_none()
+                    && let Err(e) = self.route_input_event(event_loop, ev)
+                {
+                    input_err = Some(e);
+                }
+            });
+        }
         if let Some(e) = input_err {
             log::error!("Failed to handle input: {e}");
             event_loop.exit();

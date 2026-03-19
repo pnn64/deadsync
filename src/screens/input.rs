@@ -1,12 +1,12 @@
 use crate::act;
-use crate::core::input::{InputEvent, InputSource, PadEvent, VirtualAction, with_keymap};
+use crate::core::input::{
+    InputEvent, InputSource, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
+};
 use crate::core::space::{screen_height, screen_width};
 use crate::screens::components::shared::{heart_bg, test_input};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
-use winit::event::{ElementState, KeyEvent};
-
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
@@ -84,20 +84,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     ScreenAction::None
 }
 
-pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAction {
+pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ScreenAction {
     test_input::apply_raw_key_event(&mut state.test_input, key_event);
-    if key_event.state == ElementState::Pressed && key_event.repeat {
+    if key_event.pressed && key_event.repeat {
         return ScreenAction::None;
     }
     let is_back = with_keymap(|km| {
-        km.key_event_has_action(key_event, |action| {
+        km.raw_key_event_has_action(key_event, |action| {
             matches!(action, VirtualAction::p1_back | VirtualAction::p2_back)
         })
     });
     if !is_back {
         return ScreenAction::None;
     }
-    if key_event.state == ElementState::Pressed {
+    if key_event.pressed {
         if !state.back_hold_active {
             state.back_hold_active = true;
             state.back_hold_secs = 0.0;

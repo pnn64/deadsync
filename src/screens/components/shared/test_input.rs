@@ -1,10 +1,11 @@
 use crate::act;
-use crate::core::input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keymap};
+use crate::core::input::{
+    InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
+};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::ui::actors::Actor;
 use std::collections::HashMap;
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::keyboard::KeyCode;
 
 const UNMAPPED_AXIS_HELD_THRESHOLD: f32 = 0.5;
 const SORT_MENU_DIM_ALPHA: f32 = 0.875;
@@ -183,19 +184,20 @@ pub fn apply_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     }
 }
 
-pub fn apply_raw_key_event(state: &mut State, key_event: &KeyEvent) {
-    let PhysicalKey::Code(code) = key_event.physical_key else {
-        return;
-    };
+pub fn apply_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) {
     if key_event.repeat {
         return;
     }
-    let mapped = with_keymap(|km| km.key_event_mapped(key_event));
+    let mapped = with_keymap(|km| km.raw_key_event_mapped(key_event));
     if mapped {
         return;
     }
-    let pressed = key_event.state == ElementState::Pressed;
-    state.unmapped.set(UnmappedKey::Keyboard { code }, pressed);
+    state.unmapped.set(
+        UnmappedKey::Keyboard {
+            code: key_event.code,
+        },
+        key_event.pressed,
+    );
 }
 
 #[inline(always)]
