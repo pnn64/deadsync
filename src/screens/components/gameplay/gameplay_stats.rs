@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 const TEXT_CACHE_LIMIT: usize = 8192;
+const COUNT_PREWARM_CAP: u32 = 2048;
+const TIME_PREWARM_CAP_S: u32 = 600;
 
 thread_local! {
     static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
@@ -279,10 +281,25 @@ pub fn prewarm_text_layout(
     } else {
         4
     };
-    for count in 0..=max_count {
+    for count in 0..=max_count.min(COUNT_PREWARM_CAP) {
         let (dim, bright) = cached_padded_runs(count, digits);
         cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
         cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+    }
+    let (dim, bright) = cached_padded_runs(max_count, digits);
+    cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
+    cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+    for player in 0..state.num_players {
+        for count in [
+            state.total_steps[player],
+            state.holds_total[player],
+            state.rolls_total[player],
+            state.mines_total[player],
+        ] {
+            let (dim, bright) = cached_padded_runs(count, digits);
+            cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
+            cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+        }
     }
     let end_seconds = state
         .music_end_time
@@ -290,12 +307,16 @@ pub fn prewarm_text_layout(
         .ceil()
         .max(0.0) as u32;
     let mode = game_time_mode(end_seconds as f32);
-    for second in 0..=end_seconds {
+    for second in 0..=end_seconds.min(TIME_PREWARM_CAP_S) {
         let key = (second, mode);
         let text = cached_game_time(second, mode);
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
         let _ = cached_game_time_width_for_key(key, asset_manager);
     }
+    let key = (end_seconds, mode);
+    let text = cached_game_time(end_seconds, mode);
+    cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    let _ = cached_game_time_width_for_key(key, asset_manager);
     cache.prewarm_text(fonts, "miso", TIME_SONG_LEFT_TEXT.as_ref(), None);
     cache.prewarm_text(fonts, "miso", TIME_REMAINING_LEFT_TEXT.as_ref(), None);
     cache.prewarm_text(fonts, "miso", TIME_SONG_RIGHT_TEXT.as_ref(), None);

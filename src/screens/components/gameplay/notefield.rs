@@ -86,6 +86,9 @@ const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
 const TEXT_CACHE_LIMIT: usize = 8192;
+const COMBO_PREWARM_CAP: u32 = 2048;
+const MEASURE_PREWARM_CAP: i32 = 64;
+const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
 
 // Visual Feedback
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
@@ -1720,6 +1723,45 @@ pub fn prewarm_text_layout(
     fonts: &HashMap<&'static str, font::Font>,
     state: &State,
 ) {
+    let prewarm_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
+        let text = cached_int_u32(value);
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_i32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: i32| {
+        let text = cached_int_i32(value);
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_ratio =
+        |cache: &mut TextLayoutCache, font_name: &'static str, curr: i32, total: i32| {
+            let text = cached_ratio_i32(curr, total);
+            cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+        };
+    let prewarm_timer = |cache: &mut TextLayoutCache,
+                         font_name: &'static str,
+                         second: i32,
+                         threshold: i32,
+                         trailing: bool| {
+        let text = cached_run_timer(second, threshold, trailing);
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_percent = |cache: &mut TextLayoutCache, font_name: &'static str, value: f64| {
+        let text = cached_percent2_f64(value.clamp(0.0, 100.0));
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_signed_percent =
+        |cache: &mut TextLayoutCache, font_name: &'static str, value: f64, neg: bool| {
+            let text = cached_signed_percent2_f64(value.clamp(0.0, 100.0), neg);
+            cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+        };
+    let prewarm_neg_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
+        let text = cached_neg_int_u32(value);
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_offset = |cache: &mut TextLayoutCache, value: f32| {
+        let text = cached_offset_ms(value);
+        cache.prewarm_text(fonts, "wendy", text.as_ref(), None);
+    };
+
     let mut max_combo = 0u32;
     let mut max_measure_len = 0i32;
     let music_end_seconds = state.music_end_time.ceil().max(0.0) as i32;
@@ -1733,10 +1775,10 @@ pub fn prewarm_text_layout(
         );
 
         if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
-            for value in 0..=max_combo {
-                let text = cached_int_u32(value);
-                cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+            for value in 0..=max_combo.min(COMBO_PREWARM_CAP) {
+                prewarm_u32(cache, font_name, value);
             }
+            prewarm_u32(cache, font_name, max_combo);
         }
 
         let mods_text = gameplay_mods_text(state, player);
@@ -1760,56 +1802,57 @@ pub fn prewarm_text_layout(
                 max_measure_len = max_measure_len.max((broken_end - seg.start) as i32);
             }
         }
-        for total in 1..=max_measure_len {
-            let total_text = cached_int_i32(total);
+        let prewarm_measure_len = max_measure_len.min(MEASURE_PREWARM_CAP);
+        for total in 1..=prewarm_measure_len {
+            prewarm_i32(cache, mc_font_name, total);
             let break_text = cached_paren_i32(total);
-            cache.prewarm_text(fonts, mc_font_name, total_text.as_ref(), None);
             cache.prewarm_text(fonts, mc_font_name, break_text.as_ref(), None);
             for curr in 1..=total {
-                let text = cached_ratio_i32(curr, total);
-                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
+                prewarm_ratio(cache, mc_font_name, curr, total);
             }
         }
-        for second in 0..=music_end_seconds {
-            let idle = cached_run_timer(second, 60, false);
-            let active = cached_run_timer(second, 59, true);
-            cache.prewarm_text(fonts, mc_font_name, idle.as_ref(), None);
-            cache.prewarm_text(fonts, mc_font_name, active.as_ref(), None);
+        if max_measure_len > prewarm_measure_len {
+            prewarm_i32(cache, mc_font_name, max_measure_len);
+            let break_text = cached_paren_i32(max_measure_len);
+            cache.prewarm_text(fonts, mc_font_name, break_text.as_ref(), None);
+            prewarm_ratio(cache, mc_font_name, 1, max_measure_len);
+            prewarm_ratio(cache, mc_font_name, max_measure_len, max_measure_len);
         }
+        for second in 0..=music_end_seconds.min(RUN_TIMER_PREWARM_CAP_S) {
+            prewarm_timer(cache, mc_font_name, second, 60, false);
+            prewarm_timer(cache, mc_font_name, second, 59, true);
+        }
+        prewarm_timer(cache, mc_font_name, music_end_seconds, 60, false);
+        prewarm_timer(cache, mc_font_name, music_end_seconds, 59, true);
         if profile.measure_counter != crate::game::profile::MeasureCounter::None {
-            let countdown_max = max_measure_len.max(16);
+            let countdown_max = max_measure_len.max(16).min(MEASURE_PREWARM_CAP);
             for value in 0..=countdown_max {
-                let text = cached_int_i32(value);
-                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
+                prewarm_i32(cache, mc_font_name, value);
             }
+            prewarm_i32(cache, mc_font_name, max_measure_len.max(16));
         }
         if zmod_indicator_mode(profile) != profile::MiniIndicator::None {
-            for centi in 0..=10_000 {
-                let text = cached_percent2_f64(centi as f64 / 100.0);
-                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
-                let neg = cached_signed_percent2_f64(centi as f64 / 100.0, true);
-                let pos = cached_signed_percent2_f64(centi as f64 / 100.0, false);
-                cache.prewarm_text(fonts, mc_font_name, neg.as_ref(), None);
-                cache.prewarm_text(fonts, mc_font_name, pos.as_ref(), None);
+            for &value in &[0.0, 50.0, 89.0, 95.0, 100.0] {
+                prewarm_percent(cache, mc_font_name, value);
+                prewarm_signed_percent(cache, mc_font_name, value, true);
+                prewarm_signed_percent(cache, mc_font_name, value, false);
             }
-            for value in 0..=max_combo {
-                let text = cached_neg_int_u32(value);
-                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
-            }
+            prewarm_percent(
+                cache,
+                mc_font_name,
+                state.mini_indicator_target_score_percent[player],
+            );
+            prewarm_percent(
+                cache,
+                mc_font_name,
+                state.mini_indicator_rival_score_percent[player],
+            );
+            prewarm_neg_u32(cache, mc_font_name, 0);
+            prewarm_neg_u32(cache, mc_font_name, max_combo.min(COMBO_PREWARM_CAP));
+            prewarm_neg_u32(cache, mc_font_name, max_combo);
         }
         if profile.error_ms_display {
-            let max_window_s = state
-                .timing_profile
-                .windows_s
-                .iter()
-                .copied()
-                .filter(|value| value.is_finite() && *value > 0.0)
-                .fold(0.0_f32, f32::max);
-            let max_centi_ms = ((max_window_s * 1000.0 * 100.0).ceil() as i32).max(0);
-            for centi in -max_centi_ms..=max_centi_ms {
-                let text = cached_offset_ms(centi as f32 / 100.0);
-                cache.prewarm_text(fonts, "wendy", text.as_ref(), None);
-            }
+            prewarm_offset(cache, 0.0);
         }
     }
 

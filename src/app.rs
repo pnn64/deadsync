@@ -1959,7 +1959,7 @@ fn prewarm_gameplay_text_layout_cache(
     let started = Instant::now();
     cache.configure(
         GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
-        crate::ui::compose::TextLayoutOverflowPolicy::Saturating,
+        crate::ui::compose::TextLayoutOverflowPolicy::PruneOwnedEntries,
     );
     cache.clear();
 
@@ -1978,7 +1978,6 @@ fn prewarm_gameplay_text_layout_cache(
         cache, fonts, assets, state,
     );
     crate::screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
-    cache.lock_growth();
 
     let stats = cache.frame_stats();
     debug!(
