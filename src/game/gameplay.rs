@@ -5843,6 +5843,29 @@ fn stream_pos_to_music_time(state: &State, stream_pos: f32) -> f32 {
 }
 
 #[inline(always)]
+fn stage_music_cut(lead_in_seconds: f32) -> audio::Cut {
+    audio::Cut {
+        start_sec: f64::from(-lead_in_seconds.max(0.0)),
+        length_sec: f64::INFINITY,
+        ..Default::default()
+    }
+}
+
+pub fn start_stage_music(state: &State) {
+    let Some(music_path) = state.song.music_path.as_ref() else {
+        return;
+    };
+    let lead_in = state.audio_lead_in_seconds.max(0.0);
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    debug!("Starting music with a preroll delay of {lead_in:.2}s");
+    audio::play_music(music_path.clone(), stage_music_cut(lead_in), false, rate);
+}
+
+#[inline(always)]
 fn push_input_edge(
     state: &mut State,
     source: InputSource,
@@ -6408,15 +6431,6 @@ pub fn init(
     }
     if start_delay < 0.0 {
         start_delay = 0.0;
-    }
-    if let Some(music_path) = &song.music_path {
-        debug!("Starting music with a preroll delay of {start_delay:.2}s");
-        let cut = audio::Cut {
-            start_sec: f64::from(-start_delay),
-            length_sec: f64::INFINITY,
-            ..Default::default()
-        };
-        audio::play_music(music_path.clone(), cut, false, rate.max(0.01));
     }
 
     let first_note_beat = timing.get_beat_for_time(first_second);
@@ -10972,8 +10986,8 @@ mod tests {
         lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals, replay_edge_cap,
-        score_valid_for_chart, scored_hold_totals_with_carry, tick_mode_status_line,
-        turn_option_bits, update_lane_count,
+        score_valid_for_chart, scored_hold_totals_with_carry, stage_music_cut,
+        tick_mode_status_line, turn_option_bits, update_lane_count,
     };
     use crate::core::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
@@ -11514,6 +11528,18 @@ mod tests {
         assert_eq!(input_queue_cap(4), GAMEPLAY_INPUT_BACKLOG_WARN);
         assert_eq!(input_queue_cap(5), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
         assert_eq!(input_queue_cap(8), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
+    }
+
+    #[test]
+    fn stage_music_cut_uses_negative_lead_in() {
+        let cut = stage_music_cut(2.5);
+        assert!((cut.start_sec + 2.5).abs() <= 1e-9);
+        assert!(cut.length_sec.is_infinite());
+        assert_eq!(cut.fade_in_sec, 0.0);
+        assert_eq!(cut.fade_out_sec, 0.0);
+
+        let clamped = stage_music_cut(-1.0);
+        assert_eq!(clamped.start_sec, 0.0);
     }
 
     #[test]
