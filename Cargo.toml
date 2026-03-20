@@ -20,6 +20,11 @@ path = "tests/draw/bench.rs"
 name = "input_bench"
 path = "tests/input/bench.rs"
 
+[[bin]]
+name = "input_e2e_bench"
+path = "tests/input_e2e/bench.rs"
+
+
 [features]
 pipewire-audio = ["dep:pipewire"]
 

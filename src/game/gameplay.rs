@@ -469,6 +469,7 @@ const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
 const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
 const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
 const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
+const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
 
 #[inline(always)]
 const fn input_queue_cap(num_cols: usize) -> usize {
@@ -483,19 +484,32 @@ const fn input_queue_cap(num_cols: usize) -> usize {
 }
 
 #[inline(always)]
-const fn replay_edge_cap(num_cols: usize, replay_cells: usize, replay_mode: bool) -> usize {
+fn replay_edge_cap(
+    num_cols: usize,
+    replay_cells: usize,
+    replay_mode: bool,
+    song_seconds: f32,
+) -> usize {
     if replay_mode {
         return 0;
     }
     // Live recording stores physical press/release edges, so reserve two edges
-    // per playable note cell and keep a small per-lane floor for early misses.
+    // per playable note cell, keep a small per-lane floor for early misses, and
+    // add a duration budget so a whole-song run does not grow on dense mashing.
     let chart_cap = replay_cells.saturating_mul(2);
     let floor_cap = num_cols.saturating_mul(REPLAY_EDGE_FLOOR_PER_LANE);
-    if chart_cap > floor_cap {
-        chart_cap
-    } else {
-        floor_cap
+    let seconds_cap = replay_seconds_cap(num_cols, song_seconds);
+    chart_cap.max(floor_cap).max(seconds_cap)
+}
+
+#[inline(always)]
+fn replay_seconds_cap(num_cols: usize, song_seconds: f32) -> usize {
+    if !song_seconds.is_finite() || song_seconds <= 0.0 {
+        return 0;
     }
+    (song_seconds.ceil() as usize)
+        .saturating_mul(num_cols)
+        .saturating_mul(REPLAY_EDGE_RATE_PER_SEC)
 }
 
 // Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
@@ -4231,6 +4245,7 @@ pub struct State {
     pub autoplay_used: bool,
     pub score_valid: [bool; MAX_PLAYERS],
     replay_mode: bool,
+    replay_capture_enabled: bool,
     pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     pub course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     pub live_window_counts: [crate::game::timing::WindowCounts; MAX_PLAYERS],
@@ -5688,8 +5703,18 @@ pub fn queue_input_edge(
         emitted_at,
         queued_at,
         f32::NAN,
-        true,
+        state.replay_capture_enabled,
     );
+}
+
+#[inline(always)]
+pub fn set_replay_capture_enabled(state: &mut State, enabled: bool) {
+    state.replay_capture_enabled = enabled;
+}
+
+#[inline(always)]
+pub fn replay_capture_enabled(state: &State) -> bool {
+    state.replay_capture_enabled
 }
 
 #[inline(always)]
@@ -6496,7 +6521,9 @@ pub fn init(
         }
     }
     let pending_edges_capacity = input_queue_cap(num_cols);
-    let replay_edges_capacity = replay_edge_cap(num_cols, replay_cells, replay_mode);
+    let replay_seconds = (music_end_time + start_delay).max(notes_end_time + start_delay);
+    let replay_edges_capacity =
+        replay_edge_cap(num_cols, replay_cells, replay_mode, replay_seconds);
     let decaying_hold_capacity = (0..num_players).fold(0usize, |acc, player| {
         acc.saturating_add(holds_total[player] as usize + rolls_total[player] as usize)
     });
@@ -6891,6 +6918,7 @@ pub fn init(
         autoplay_used: replay_mode,
         score_valid,
         replay_mode,
+        replay_capture_enabled: !replay_mode,
         course_display_carry,
         course_display_totals,
         live_window_counts: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
@@ -10934,9 +10962,9 @@ fn update_danger_fx(state: &mut State) {
 #[cfg(test)]
 mod tests {
     use super::{
-        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, ScrollEffects,
-        ScrollSpeedSetting, SongClockSnapshot, TickMode, apply_mines_insert,
-        build_assist_clap_rows, build_attack_mask_windows_for_player,
+        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES,
+        REPLAY_EDGE_RATE_PER_SEC, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode,
+        apply_mines_insert, build_assist_clap_rows, build_attack_mask_windows_for_player,
         frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
@@ -11487,10 +11515,20 @@ mod tests {
 
     #[test]
     fn replay_edge_cap_scales_with_chart_and_skips_replay_mode() {
-        assert_eq!(replay_edge_cap(4, 0, true), 0);
-        assert_eq!(replay_edge_cap(4, 0, false), 4 * 64);
-        assert_eq!(replay_edge_cap(4, 120, false), 4 * 64);
-        assert_eq!(replay_edge_cap(4, 200, false), 400);
-        assert_eq!(replay_edge_cap(8, 1000, false), 2000);
+        assert_eq!(replay_edge_cap(4, 0, true, 120.0), 0);
+        assert_eq!(replay_edge_cap(4, 0, false, 0.0), 4 * 64);
+        assert_eq!(
+            replay_edge_cap(4, 0, false, 2.0),
+            4 * 2 * REPLAY_EDGE_RATE_PER_SEC
+        );
+        assert_eq!(
+            replay_edge_cap(4, 120, false, 2.0),
+            4 * 2 * REPLAY_EDGE_RATE_PER_SEC
+        );
+        assert_eq!(replay_edge_cap(4, 4000, false, 2.0), 8000);
+        assert_eq!(
+            replay_edge_cap(8, 1000, false, 1.0),
+            8 * REPLAY_EDGE_RATE_PER_SEC
+        );
     }
 }
