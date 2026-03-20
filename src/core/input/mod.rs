@@ -514,26 +514,38 @@ fn new_key_rev() -> Box<[Vec<VirtualAction>]> {
 }
 
 #[inline(always)]
+fn new_key_mask_rev() -> Box<[u32]> {
+    vec![0; KEY_CODE_CAP].into_boxed_slice()
+}
+
+#[inline(always)]
 const fn dense_key_ix(code: KeyCode) -> Option<usize> {
     let ix = code as usize;
     if ix < KEY_CODE_CAP { Some(ix) } else { None }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct CompiledPadCodeRev {
+    mask: u32,
+    device: Option<usize>,
+    uuid: Option<[u8; 16]>,
+}
+
 #[derive(Clone, Debug)]
 struct CompiledKeymap {
-    key_rev: Box<[Vec<VirtualAction>]>,
-    key_rev_extra: HashMap<KeyCode, Vec<VirtualAction>>,
-    pad_dir_rev: [Vec<VirtualAction>; 4],
-    pad_dir_on_rev: HashMap<(usize, PadDir), Vec<VirtualAction>>,
-    pad_code_rev: HashMap<u32, Vec<PadCodeRev>>,
+    key_rev: Box<[u32]>,
+    key_rev_extra: HashMap<KeyCode, u32>,
+    pad_dir_rev: [u32; 4],
+    pad_dir_on_rev: HashMap<(usize, PadDir), u32>,
+    pad_code_rev: HashMap<u32, Vec<CompiledPadCodeRev>>,
 }
 
 impl Default for CompiledKeymap {
     fn default() -> Self {
         Self {
-            key_rev: new_key_rev(),
+            key_rev: new_key_mask_rev(),
             key_rev_extra: HashMap::new(),
-            pad_dir_rev: std::array::from_fn(|_| Vec::new()),
+            pad_dir_rev: [0; 4],
             pad_dir_on_rev: HashMap::new(),
             pad_code_rev: HashMap::new(),
         }
@@ -543,20 +555,72 @@ impl Default for CompiledKeymap {
 impl CompiledKeymap {
     #[inline(always)]
     fn from_keymap(km: &Keymap) -> Self {
+        let mut key_rev = new_key_mask_rev();
+        for (ix, actions) in km.key_rev.iter().enumerate() {
+            let mut mask = 0;
+            for &action in actions {
+                mask |= action_bit(action);
+            }
+            key_rev[ix] = mask;
+        }
+        let mut key_rev_extra = HashMap::with_capacity(km.key_rev_extra.len());
+        for (&code, actions) in &km.key_rev_extra {
+            let mut mask = 0;
+            for &action in actions {
+                mask |= action_bit(action);
+            }
+            key_rev_extra.insert(code, mask);
+        }
+        let mut pad_dir_rev = [0; 4];
+        for (ix, actions) in km.pad_dir_rev.iter().enumerate() {
+            let mut mask = 0;
+            for &action in actions {
+                mask |= action_bit(action);
+            }
+            pad_dir_rev[ix] = mask;
+        }
+        let mut pad_dir_on_rev = HashMap::with_capacity(km.pad_dir_on_rev.len());
+        for (&key, actions) in &km.pad_dir_on_rev {
+            let mut mask = 0;
+            for &action in actions {
+                mask |= action_bit(action);
+            }
+            pad_dir_on_rev.insert(key, mask);
+        }
+        let mut pad_code_rev = HashMap::with_capacity(km.pad_code_rev.len());
+        for (&code, entries) in &km.pad_code_rev {
+            let mut compiled = Vec::with_capacity(entries.len());
+            for entry in entries {
+                if let Some(existing) =
+                    compiled.iter_mut().find(|item: &&mut CompiledPadCodeRev| {
+                        item.device == entry.device && item.uuid == entry.uuid
+                    })
+                {
+                    existing.mask |= action_bit(entry.act);
+                    continue;
+                }
+                compiled.push(CompiledPadCodeRev {
+                    mask: action_bit(entry.act),
+                    device: entry.device,
+                    uuid: entry.uuid,
+                });
+            }
+            pad_code_rev.insert(code, compiled);
+        }
         Self {
-            key_rev: km.key_rev.clone(),
-            key_rev_extra: km.key_rev_extra.clone(),
-            pad_dir_rev: km.pad_dir_rev.clone(),
-            pad_dir_on_rev: km.pad_dir_on_rev.clone(),
-            pad_code_rev: km.pad_code_rev.clone(),
+            key_rev,
+            key_rev_extra,
+            pad_dir_rev,
+            pad_dir_on_rev,
+            pad_code_rev,
         }
     }
 
     #[inline(always)]
-    fn key_actions(&self, code: KeyCode) -> &[VirtualAction] {
+    fn key_mask(&self, code: KeyCode) -> u32 {
         match dense_key_ix(code) {
-            Some(ix) => &self.key_rev[ix],
-            None => self.key_rev_extra.get(&code).map_or(&[], Vec::as_slice),
+            Some(ix) => self.key_rev[ix],
+            None => self.key_rev_extra.get(&code).copied().unwrap_or(0),
         }
     }
 }
@@ -916,82 +980,87 @@ fn input_event(
     }
 }
 
-type ActionBuf = [Option<VirtualAction>; VirtualAction::COUNT];
-
 #[inline(always)]
 const fn action_bit(action: VirtualAction) -> u32 {
     1u32 << (action.ix() as u32)
 }
 
 #[inline(always)]
-fn push_action(out: &mut ActionBuf, len: &mut usize, seen: &mut u32, action: VirtualAction) {
-    let bit = action_bit(action);
-    if (*seen & bit) != 0 {
-        return;
+const fn action_from_ix(ix: usize) -> VirtualAction {
+    match ix {
+        0 => VirtualAction::p1_up,
+        1 => VirtualAction::p1_down,
+        2 => VirtualAction::p1_left,
+        3 => VirtualAction::p1_right,
+        4 => VirtualAction::p1_start,
+        5 => VirtualAction::p1_back,
+        6 => VirtualAction::p1_menu_up,
+        7 => VirtualAction::p1_menu_down,
+        8 => VirtualAction::p1_menu_left,
+        9 => VirtualAction::p1_menu_right,
+        10 => VirtualAction::p1_select,
+        11 => VirtualAction::p1_operator,
+        12 => VirtualAction::p1_restart,
+        13 => VirtualAction::p2_up,
+        14 => VirtualAction::p2_down,
+        15 => VirtualAction::p2_left,
+        16 => VirtualAction::p2_right,
+        17 => VirtualAction::p2_start,
+        18 => VirtualAction::p2_back,
+        19 => VirtualAction::p2_menu_up,
+        20 => VirtualAction::p2_menu_down,
+        21 => VirtualAction::p2_menu_left,
+        22 => VirtualAction::p2_menu_right,
+        23 => VirtualAction::p2_select,
+        24 => VirtualAction::p2_operator,
+        25 => VirtualAction::p2_restart,
+        _ => unreachable!(),
     }
-    *seen |= bit;
-    out[*len] = Some(action);
-    *len += 1;
 }
 
 #[inline(always)]
-fn collect_key_actions_from_compiled(
-    km: &CompiledKeymap,
-    code: KeyCode,
-    out: &mut ActionBuf,
-) -> usize {
-    let actions = km.key_actions(code);
-    if actions.is_empty() {
-        return 0;
+fn for_each_action(mut mask: u32, mut f: impl FnMut(VirtualAction)) {
+    while mask != 0 {
+        let ix = mask.trailing_zeros() as usize;
+        f(action_from_ix(ix));
+        mask &= mask - 1;
     }
-    let mut len = 0;
-    let mut seen = 0;
-    for &action in actions {
-        push_action(out, &mut len, &mut seen, action);
-    }
-    len
 }
 
 #[inline(always)]
-fn collect_pad_dir_actions_from_compiled(
-    km: &CompiledKeymap,
-    id: PadId,
-    dir: PadDir,
-    out: &mut ActionBuf,
-) -> usize {
-    let dev = usize::from(id);
-    let any = &km.pad_dir_rev[dir.ix()];
-    let on = km.pad_dir_on_rev.get(&(dev, dir));
-    if any.is_empty() && on.is_none() {
-        return 0;
-    }
-    let mut len = 0;
-    let mut seen = 0;
-    for &action in any {
-        push_action(out, &mut len, &mut seen, action);
-    }
-    if let Some(actions) = on {
-        for &action in actions {
-            push_action(out, &mut len, &mut seen, action);
+fn secondary_menu_mask(mask: u32) -> u32 {
+    let mut out = 0;
+    for_each_action(mask, |action| {
+        if let Some(menu_action) = action.secondary_menu() {
+            out |= action_bit(menu_action);
         }
-    }
-    len
+    });
+    out
 }
 
 #[inline(always)]
-fn collect_pad_button_actions_from_compiled(
+fn collect_key_mask_from_compiled(km: &CompiledKeymap, code: KeyCode) -> u32 {
+    km.key_mask(code)
+}
+
+#[inline(always)]
+fn collect_pad_dir_mask_from_compiled(km: &CompiledKeymap, id: PadId, dir: PadDir) -> u32 {
+    let dev = usize::from(id);
+    km.pad_dir_rev[dir.ix()] | km.pad_dir_on_rev.get(&(dev, dir)).copied().unwrap_or(0)
+}
+
+#[inline(always)]
+fn collect_pad_button_mask_from_compiled(
     km: &CompiledKeymap,
     id: PadId,
     code: PadCode,
     uuid: [u8; 16],
-    out: &mut ActionBuf,
-) -> usize {
+) -> u32 {
     let Some(entries) = km.pad_code_rev.get(&code.into_u32()) else {
         return 0;
     };
     let dev = usize::from(id);
-    let mut len = 0;
-    let mut seen = 0;
+    let mut mask = 0;
     for entry in entries {
         if let Some(d_expected) = entry.device
             && d_expected != dev
@@ -1003,20 +1072,7 @@ fn collect_pad_button_actions_from_compiled(
         {
             continue;
         }
-        push_action(out, &mut len, &mut seen, entry.act);
-    }
-    len
-}
-
-#[inline(always)]
-fn direct_action_mask(actions: &ActionBuf, len: usize) -> u32 {
-    let mut mask = 0;
-    let mut i = 0;
-    while i < len {
-        if let Some(action) = actions[i] {
-            mask |= action_bit(action);
-        }
-        i += 1;
+        mask |= entry.mask;
     }
     mask
 }
@@ -1045,47 +1101,31 @@ fn emit_normalized_action(
 
 #[inline(always)]
 fn emit_normalized_actions(
-    actions: &ActionBuf,
-    len: usize,
+    direct_mask: u32,
     pressed: bool,
     mut emit: impl FnMut(VirtualAction, bool),
 ) {
-    if len == 0 {
+    if direct_mask == 0 {
         return;
     }
-    let direct_mask = direct_action_mask(actions, len);
     let mut emitted = 0;
-    let mut i = 0;
-    while i < len {
-        if let Some(action) = actions[i] {
-            emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit);
-        }
-        i += 1;
-    }
+    for_each_action(direct_mask, |action| {
+        emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit)
+    });
     if ONLY_DEDICATED_MENU_BUTTONS.load(Ordering::Relaxed) && pressed {
         return;
     }
-    let mut i = 0;
-    while i < len {
-        if let Some(menu_action) = actions[i].and_then(VirtualAction::secondary_menu) {
-            emit_normalized_action(menu_action, pressed, direct_mask, &mut emitted, &mut emit);
-        }
-        i += 1;
-    }
+    for_each_action(secondary_menu_mask(direct_mask), |action| {
+        emit_normalized_action(action, pressed, direct_mask, &mut emitted, &mut emit)
+    });
 }
 
-fn collect_actions_from_compiled(
-    km: &CompiledKeymap,
-    edge: DebouncedEdge,
-    out: &mut ActionBuf,
-) -> usize {
+fn collect_actions_from_compiled(km: &CompiledKeymap, edge: DebouncedEdge) -> u32 {
     match edge.binding {
-        DebounceBinding::Keyboard(code) => collect_key_actions_from_compiled(km, code, out),
-        DebounceBinding::PadDir { id, dir } => {
-            collect_pad_dir_actions_from_compiled(km, id, dir, out)
-        }
+        DebounceBinding::Keyboard(code) => collect_key_mask_from_compiled(km, code),
+        DebounceBinding::PadDir { id, dir } => collect_pad_dir_mask_from_compiled(km, id, dir),
         DebounceBinding::PadButton { id, code, uuid } => {
-            collect_pad_button_actions_from_compiled(km, id, code, uuid, out)
+            collect_pad_button_mask_from_compiled(km, id, code, uuid)
         }
     }
 }
@@ -1096,9 +1136,8 @@ fn emit_input_events_from_edge(
     edge: DebouncedEdge,
     mut emit: impl FnMut(InputEvent),
 ) {
-    let mut actions: ActionBuf = [None; VirtualAction::COUNT];
-    let len = collect_actions_from_compiled(km, edge, &mut actions);
-    emit_normalized_actions(&actions, len, edge.pressed, |action, pressed| {
+    let mask = collect_actions_from_compiled(km, edge);
+    emit_normalized_actions(mask, edge.pressed, |action, pressed| {
         emit(input_event(
             action,
             pressed,
@@ -1161,9 +1200,8 @@ pub fn map_keycode_event_with_host(
     mut emit: impl FnMut(InputEvent),
 ) {
     let km = load_compiled_keymap();
-    let mut actions: ActionBuf = [None; VirtualAction::COUNT];
-    let len = collect_key_actions_from_compiled(km.as_ref(), code, &mut actions);
-    emit_normalized_actions(&actions, len, pressed, |action, pressed| {
+    let mask = collect_key_mask_from_compiled(km.as_ref(), code);
+    emit_normalized_actions(mask, pressed, |action, pressed| {
         emit(input_event(
             action,
             pressed,
