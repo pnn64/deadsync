@@ -1125,7 +1125,7 @@ pub enum DensityGraphSlot {
 pub struct DensityGraphSource {
     pub max_nps: f64,
     pub measure_nps_vec: Vec<f64>,
-    pub timing: crate::game::timing::TimingData,
+    pub measure_seconds_vec: Vec<f32>,
     pub first_second: f32,
     pub last_second: f32,
 }

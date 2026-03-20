@@ -4,7 +4,7 @@ use crate::core::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
 use crate::core::space::{is_wide, screen_center_y, screen_height, screen_width};
-use crate::game::chart::ChartData;
+use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, Noteskin, Style};
@@ -2879,7 +2879,7 @@ fn apply_chart_attacks_for_player(
 fn apply_chart_attacks_transforms(
     notes: &mut Vec<Note>,
     note_ranges: &mut [(usize, usize); MAX_PLAYERS],
-    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
     cols_per_player: usize,
     num_players: usize,
     player_profiles: &[profile::Profile; MAX_PLAYERS],
@@ -2900,7 +2900,7 @@ fn apply_chart_attacks_transforms(
         let mut player_notes = notes[slice_start..slice_end].to_vec();
         apply_chart_attacks_for_player(
             &mut player_notes,
-            charts[player].chart_attacks.as_deref(),
+            gameplay_charts[player].chart_attacks.as_deref(),
             player_profiles[player].attack_mode,
             timing_players[player].as_ref(),
             player.saturating_mul(cols_per_player),
@@ -3024,34 +3024,11 @@ fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Player
 
 #[inline(always)]
 fn chart_has_attacks(chart: &ChartData) -> bool {
-    chart
-        .chart_attacks
-        .as_deref()
-        .is_some_and(|attacks| !attacks.trim().is_empty())
+    chart.has_chart_attacks
 }
 
 fn chart_has_significant_timing_changes(chart: &ChartData) -> bool {
-    let timing = &chart.timing_segments;
-    if !timing.stops.is_empty()
-        || !timing.delays.is_empty()
-        || !timing.warps.is_empty()
-        || !timing.speeds.is_empty()
-        || !timing.scrolls.is_empty()
-    {
-        return true;
-    }
-
-    let mut min_bpm = f32::INFINITY;
-    let mut max_bpm = 0.0_f32;
-    for &(_, bpm) in &timing.bpms {
-        if !bpm.is_finite() || bpm <= 0.0 {
-            continue;
-        }
-        min_bpm = min_bpm.min(bpm);
-        max_bpm = max_bpm.max(bpm);
-    }
-
-    min_bpm.is_finite() && max_bpm - min_bpm > 3.0
+    chart.has_significant_timing_changes
 }
 
 fn score_valid_for_chart(
@@ -3195,60 +3172,13 @@ pub struct CourseDisplayTotals {
     pub mines_total: u32,
 }
 
-pub fn course_display_totals_for_chart(
-    chart: &ChartData,
-    global_offset_seconds: f32,
-) -> CourseDisplayTotals {
-    let mut timing = chart.timing.clone();
-    timing.set_global_offset_seconds(global_offset_seconds);
-    let mut holds_total = 0u32;
-    let mut rolls_total = 0u32;
-    let mut mines_total = 0u32;
-    let mut rows: Vec<usize> = Vec::with_capacity(chart.parsed_notes.len());
-    for parsed in &chart.parsed_notes {
-        let Some(beat) = timing.get_beat_for_row(parsed.row_index) else {
-            continue;
-        };
-        let explicit_fake_tap = matches!(parsed.note_type, NoteType::Fake);
-        let fake_by_segment = timing.is_fake_at_beat(beat);
-        let is_fake = explicit_fake_tap || fake_by_segment;
-        let note_type = if explicit_fake_tap {
-            NoteType::Tap
-        } else {
-            parsed.note_type
-        };
-        let can_be_judged = !is_fake && timing.is_judgable_at_beat(beat);
-        if !can_be_judged {
-            continue;
-        }
-        match note_type {
-            NoteType::Hold => {
-                holds_total = holds_total.saturating_add(1);
-                rows.push(parsed.row_index);
-            }
-            NoteType::Roll => {
-                rolls_total = rolls_total.saturating_add(1);
-                rows.push(parsed.row_index);
-            }
-            NoteType::Mine => {
-                mines_total = mines_total.saturating_add(1);
-            }
-            NoteType::Tap | NoteType::Lift | NoteType::Fake => {
-                rows.push(parsed.row_index);
-            }
-        }
-    }
-    rows.sort_unstable();
-    rows.dedup();
-    let possible_i64 = i64::try_from(rows.len()).unwrap_or(i64::MAX) * 5
-        + i64::from(holds_total) * i64::from(judgment::HOLD_SCORE_HELD)
-        + i64::from(rolls_total) * i64::from(judgment::HOLD_SCORE_HELD);
+pub fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplayTotals {
     CourseDisplayTotals {
-        possible_grade_points: possible_i64.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        possible_grade_points: chart.possible_grade_points,
         total_steps: chart.stats.total_steps,
-        holds_total,
-        rolls_total,
-        mines_total,
+        holds_total: chart.holds_total,
+        rolls_total: chart.rolls_total,
+        mines_total: chart.mines_total,
     }
 }
 
@@ -4174,6 +4104,7 @@ pub struct State {
     pub next_background_change_ix: usize,
     pub background_texture_key: String,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
+    pub gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
     pub num_cols: usize,
     pub cols_per_player: usize,
     pub num_players: usize,
@@ -6008,6 +5939,7 @@ fn upper_density_graph_width(play_style: profile::PlayStyle) -> f32 {
 pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
+    gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -6037,10 +5969,12 @@ pub fn init(
     };
     let replay_edges = replay_edges.unwrap_or_default();
     let mut charts = charts;
+    let mut gameplay_charts = gameplay_charts;
     if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
         scroll_speed[0] = scroll_speed[1];
         player_profiles[0] = player_profiles[1].clone();
         charts[0] = charts[1].clone();
+        gameplay_charts[0] = gameplay_charts[1].clone();
         combo_carry[0] = combo_carry[1];
     }
     let player_color_index =
@@ -6102,11 +6036,11 @@ pub fn init(
             .find(|p| p.group_name == pack_group.as_ref())
             .and_then(|p| p.banner_path.clone())
     };
-    let mut timing_base = charts[0].timing.clone();
+    let mut timing_base = gameplay_charts[0].timing.clone();
     timing_base.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing_base);
     let mut timing_players: [Arc<TimingData>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        let mut t = charts[player].timing.clone();
+        let mut t = gameplay_charts[player].timing.clone();
         t.set_global_offset_seconds(config.global_offset_seconds);
         Arc::new(t)
     });
@@ -6166,7 +6100,7 @@ pub fn init(
     let beat_info_cache = BeatInfoCache::new(&timing);
 
     let notes_cap: usize = (0..num_players)
-        .map(|player| charts[player].parsed_notes.len())
+        .map(|player| gameplay_charts[player].parsed_notes.len())
         .sum();
     let mut notes: Vec<Note> = Vec::with_capacity(notes_cap);
     let mut note_ranges = [(0usize, 0usize); MAX_PLAYERS];
@@ -6177,7 +6111,7 @@ pub fn init(
 
     for player in 0..num_players {
         let timing_player = &timing_players[player];
-        let parsed_notes = &charts[player].parsed_notes;
+        let parsed_notes = &gameplay_charts[player].parsed_notes;
         let start = notes.len();
         let col_offset = player.saturating_mul(cols_per_player);
         for parsed in parsed_notes {
@@ -6276,7 +6210,7 @@ pub fn init(
     apply_chart_attacks_transforms(
         &mut notes,
         &mut note_ranges,
-        &charts,
+        &gameplay_charts,
         cols_per_player,
         num_players,
         &player_profiles,
@@ -6566,7 +6500,7 @@ pub fn init(
             return Vec::new();
         }
         build_attack_mask_windows_for_player(
-            charts[player].chart_attacks.as_deref(),
+            gameplay_charts[player].chart_attacks.as_deref(),
             player_profiles[player].attack_mode,
             player,
             song_seed,
@@ -6600,7 +6534,7 @@ pub fn init(
         if p >= num_players {
             return Vec::new();
         }
-        rssp::stats::measure_densities(&charts[p].notes, cols_per_player)
+        rssp::stats::measure_densities(&gameplay_charts[p].notes, cols_per_player)
     });
 
     let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] = std::array::from_fn(|p| {
@@ -6762,7 +6696,7 @@ pub fn init(
                 crate::screens::components::shared::density_graph::build_density_histogram_mesh(
                     &chart.measure_nps_vec,
                     chart.max_nps,
-                    &timing,
+                    &chart.measure_seconds_vec,
                     density_graph_first_second,
                     density_graph_last_second,
                     graph_w,
@@ -6787,7 +6721,7 @@ pub fn init(
         crate::screens::components::shared::density_graph::build_density_histogram_cache(
             &chart.measure_nps_vec,
             chart.max_nps,
-            &timing,
+            &chart.measure_seconds_vec,
             density_graph_first_second,
             density_graph_last_second,
             density_graph_scaled_width,
@@ -6863,6 +6797,7 @@ pub fn init(
         current_background_path: None,
         next_background_change_ix,
         charts,
+        gameplay_charts,
         background_texture_key: "__black".to_string(),
         num_cols,
         cols_per_player,
@@ -11040,7 +10975,6 @@ mod tests {
         chart_attacks: Option<&str>,
     ) -> ChartData {
         let mines_nonfake = stats.mines;
-        let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &[]);
         ChartData {
             chart_type: "dance-single".to_string(),
             difficulty: "Challenge".to_string(),
@@ -11048,11 +10982,6 @@ mod tests {
             chart_name: String::new(),
             meter: 10,
             step_artist: String::new(),
-            notes: Vec::new(),
-            parsed_notes: Vec::new(),
-            row_to_beat: Vec::new(),
-            timing_segments,
-            timing,
             short_hash: String::new(),
             stats,
             tech_counts: TechCounts::default(),
@@ -11068,14 +10997,33 @@ mod tests {
             simple_breakdown: String::new(),
             total_measures: 0,
             measure_nps_vec: Vec::new(),
-            chart_attacks: chart_attacks.map(str::to_string),
-            chart_bpms: None,
-            chart_stops: None,
-            chart_delays: None,
-            chart_warps: None,
-            chart_speeds: None,
-            chart_scrolls: None,
-            chart_fakes: None,
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: chart_attacks.is_some_and(|attacks| !attacks.trim().is_empty()),
+            has_significant_timing_changes: {
+                !timing_segments.stops.is_empty()
+                    || !timing_segments.delays.is_empty()
+                    || !timing_segments.warps.is_empty()
+                    || !timing_segments.speeds.is_empty()
+                    || !timing_segments.scrolls.is_empty()
+                    || {
+                        let mut min_bpm = f32::INFINITY;
+                        let mut max_bpm = 0.0_f32;
+                        for &(_, bpm) in &timing_segments.bpms {
+                            if !bpm.is_finite() || bpm <= 0.0 {
+                                continue;
+                            }
+                            min_bpm = min_bpm.min(bpm);
+                            max_bpm = max_bpm.max(bpm);
+                        }
+                        min_bpm.is_finite() && max_bpm - min_bpm > 3.0
+                    }
+            },
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
         }
     }
 

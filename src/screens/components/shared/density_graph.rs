@@ -1,5 +1,4 @@
 use crate::core::gfx::MeshVertex;
-use crate::game::timing::TimingData;
 use std::sync::Arc;
 
 #[inline(always)]
@@ -59,7 +58,7 @@ pub struct DensityHistCache {
 fn build_hist_cols(
     measure_nps: &[f64],
     peak_nps: f64,
-    timing: &TimingData,
+    measure_seconds: &[f32],
     first_second: f32,
     last_second: f32,
     width: f32,
@@ -89,7 +88,9 @@ fn build_hist_cols(
             continue;
         }
 
-        let t = timing.get_time_for_beat(i as f32 * 4.0);
+        let Some(&t) = measure_seconds.get(i) else {
+            continue;
+        };
         let x = ((t - first_second) / denom_t) * width;
         let bar_h = ((nps / peak) * height).round();
         let top_y = height - bar_h;
@@ -127,7 +128,7 @@ fn build_hist_cols(
 pub fn build_density_histogram_cache(
     measure_nps: &[f64],
     peak_nps: f64,
-    timing: &TimingData,
+    measure_seconds: &[f32],
     first_second: f32,
     last_second: f32,
     scaled_width: f32,
@@ -143,7 +144,7 @@ pub fn build_density_histogram_cache(
     let (cols, bottom_color) = build_hist_cols(
         measure_nps,
         peak_nps,
-        timing,
+        measure_seconds,
         first_second,
         last_second,
         scaled_width,
@@ -388,7 +389,7 @@ pub(crate) fn update_density_life_mesh(
 pub fn build_density_histogram_mesh(
     measure_nps: &[f64],
     peak_nps: f64,
-    timing: &TimingData,
+    measure_seconds: &[f32],
     first_second: f32,
     last_second: f32,
     scaled_width: f32,
@@ -408,7 +409,7 @@ pub fn build_density_histogram_mesh(
     let Some(cache) = build_density_histogram_cache(
         measure_nps,
         peak_nps,
-        timing,
+        measure_seconds,
         first_second,
         last_second,
         scaled_width,

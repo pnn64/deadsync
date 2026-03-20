@@ -1,4 +1,4 @@
-use crate::game::chart::{ChartData, StaminaCounts};
+use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
 use crate::game::gameplay::{
     self, ActiveHold, ActiveTapExplosion, Arrow, ColumnCue, ColumnCueColumn, ErrorBarText,
     ErrorBarTick, MAX_COLS, MAX_PLAYERS,
@@ -65,6 +65,9 @@ pub fn fixture() -> NotefieldBenchFixture {
     let song = Arc::new(bench_song());
     let chart = Arc::new(song.charts[0].clone());
     let charts: [Arc<ChartData>; MAX_PLAYERS] = [chart.clone(), chart];
+    let gameplay_chart = Arc::new(bench_gameplay_chart());
+    let gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS] =
+        [gameplay_chart.clone(), gameplay_chart];
     let mut player_profiles = [profile::Profile::default(), profile::Profile::default()];
     player_profiles[0].noteskin = profile::NoteSkin::new(profile::NoteSkin::CEL_NAME);
     player_profiles[0].scroll_speed = ScrollSpeedSetting::CMod(620.0);
@@ -81,6 +84,7 @@ pub fn fixture() -> NotefieldBenchFixture {
     let mut state = gameplay::init(
         song,
         charts,
+        gameplay_charts,
         0,
         1.0,
         [
@@ -237,56 +241,15 @@ fn bench_song() -> SongData {
         min_bpm: 150.0,
         max_bpm: 150.0,
         normalized_bpms: "0.000=150.000".to_string(),
-        normalized_stops: String::new(),
-        normalized_delays: String::new(),
-        normalized_warps: String::new(),
-        normalized_speeds: String::new(),
-        normalized_scrolls: String::new(),
-        normalized_fakes: String::new(),
         music_length_seconds: 128.0,
         total_length_seconds: 128,
+        precise_last_second_seconds: 128.0,
         charts: vec![chart],
     }
 }
 
 fn bench_chart() -> ChartData {
-    let parsed_notes = bench_notes();
-    let max_row = parsed_notes
-        .iter()
-        .map(|note| note.tail_row_index.unwrap_or(note.row_index))
-        .max()
-        .unwrap_or(0);
-    let row_to_beat: Vec<f32> = (0..=max_row)
-        .map(|row| note_row_to_beat(row as i32))
-        .collect();
-    let timing_segments = TimingSegments {
-        beat0_offset_adjust: 0.0,
-        bpms: vec![(0.0, 150.0)],
-        stops: Vec::new(),
-        delays: Vec::new(),
-        warps: Vec::new(),
-        speeds: Vec::new(),
-        scrolls: Vec::new(),
-        fakes: Vec::new(),
-    };
-    let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &row_to_beat);
-    let holds = parsed_notes
-        .iter()
-        .filter(|note| note.note_type == NoteType::Hold)
-        .count() as u32;
-    let rolls = parsed_notes
-        .iter()
-        .filter(|note| note.note_type == NoteType::Roll)
-        .count() as u32;
-    let mines = parsed_notes
-        .iter()
-        .filter(|note| note.note_type == NoteType::Mine)
-        .count() as u32;
-    let total_steps = parsed_notes
-        .iter()
-        .filter(|note| !matches!(note.note_type, NoteType::Mine | NoteType::Fake))
-        .count() as u32;
-
+    let (gameplay, holds, rolls, mines, total_steps) = bench_chart_bundle();
     ChartData {
         chart_type: "dance-single".to_string(),
         difficulty: "challenge".to_string(),
@@ -294,11 +257,6 @@ fn bench_chart() -> ChartData {
         chart_name: String::new(),
         meter: 15,
         step_artist: String::new(),
-        notes: Vec::new(),
-        parsed_notes,
-        row_to_beat,
-        timing_segments,
-        timing,
         short_hash: "notefield-bench".to_string(),
         stats: ArrowStats {
             total_arrows: total_steps,
@@ -340,15 +298,74 @@ fn bench_chart() -> ChartData {
         simple_breakdown: String::new(),
         total_measures: 0,
         measure_nps_vec: Vec::new(),
-        chart_attacks: None,
-        chart_bpms: None,
-        chart_stops: None,
-        chart_delays: None,
-        chart_warps: None,
-        chart_speeds: None,
-        chart_scrolls: None,
-        chart_fakes: None,
+        measure_seconds_vec: Vec::new(),
+        first_second: gameplay.timing.get_time_for_beat(0.0).min(0.0),
+        has_note_data: true,
+        has_chart_attacks: false,
+        has_significant_timing_changes: false,
+        possible_grade_points: 0,
+        holds_total: holds,
+        rolls_total: rolls,
+        mines_total: mines,
     }
+}
+
+fn bench_gameplay_chart() -> GameplayChartData {
+    let (gameplay, _, _, _, _) = bench_chart_bundle();
+    gameplay
+}
+
+fn bench_chart_bundle() -> (GameplayChartData, u32, u32, u32, u32) {
+    let parsed_notes = bench_notes();
+    let max_row = parsed_notes
+        .iter()
+        .map(|note| note.tail_row_index.unwrap_or(note.row_index))
+        .max()
+        .unwrap_or(0);
+    let row_to_beat: Vec<f32> = (0..=max_row)
+        .map(|row| note_row_to_beat(row as i32))
+        .collect();
+    let timing_segments = TimingSegments {
+        beat0_offset_adjust: 0.0,
+        bpms: vec![(0.0, 150.0)],
+        stops: Vec::new(),
+        delays: Vec::new(),
+        warps: Vec::new(),
+        speeds: Vec::new(),
+        scrolls: Vec::new(),
+        fakes: Vec::new(),
+    };
+    let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &row_to_beat);
+    let holds = parsed_notes
+        .iter()
+        .filter(|note| note.note_type == NoteType::Hold)
+        .count() as u32;
+    let rolls = parsed_notes
+        .iter()
+        .filter(|note| note.note_type == NoteType::Roll)
+        .count() as u32;
+    let mines = parsed_notes
+        .iter()
+        .filter(|note| note.note_type == NoteType::Mine)
+        .count() as u32;
+    let total_steps = parsed_notes
+        .iter()
+        .filter(|note| !matches!(note.note_type, NoteType::Mine | NoteType::Fake))
+        .count() as u32;
+    (
+        GameplayChartData {
+            notes: Vec::new(),
+            parsed_notes,
+            row_to_beat,
+            timing_segments,
+            timing,
+            chart_attacks: None,
+        },
+        holds,
+        rolls,
+        mines,
+        total_steps,
+    )
 }
 
 fn bench_notes() -> Vec<ParsedNote> {

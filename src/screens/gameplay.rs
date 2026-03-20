@@ -216,7 +216,7 @@ pub fn prewarm_text_layout(
             cfg.zmod_rating_box_text,
         );
         cache.prewarm_text(fonts, "miso", detail, None);
-        for &(_, bpm) in &chart.timing_segments.bpms {
+        for &(_, bpm) in &state.gameplay_charts[player].timing_segments.bpms {
             let text = cached_bpm_text(
                 f64::from(bpm.max(0.0)) * f64::from(state.music_rate),
                 cfg.show_bpm_decimal,

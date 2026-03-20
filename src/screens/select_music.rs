@@ -432,18 +432,12 @@ fn sec_at_beat(song: &SongData, target_beat: f64) -> f64 {
     if !target_beat.is_finite() || target_beat <= 0.0 {
         return 0.0;
     }
-    if let Some(chart) = song.charts.first() {
-        return chart.timing.get_time_for_beat(target_beat as f32).max(0.0) as f64;
-    }
     sec_at_beat_from_bpms(&song.normalized_bpms, target_beat)
 }
 
 fn beat_at_sec(song: &SongData, target_sec: f64) -> f64 {
     if !target_sec.is_finite() || target_sec <= 0.0 {
         return 0.0;
-    }
-    if let Some(chart) = song.charts.first() {
-        return chart.timing.get_beat_for_time(target_sec as f32).max(0.0) as f64;
     }
     beat_at_sec_from_bpms(&song.normalized_bpms, target_sec)
 }
@@ -482,7 +476,7 @@ fn preview_marker(
     if graph_w <= 0.0 || !preview_sec.is_finite() {
         return None;
     }
-    let first_second = 0.0_f32.min(chart.timing.get_time_for_beat(0.0));
+    let first_second = chart.first_second;
     let last_second = displayed
         .song
         .precise_last_second()
@@ -1510,7 +1504,7 @@ fn song_meter_for_sort(song: &SongData, chart_type: &str) -> Option<u32> {
     let mut best_non_edit: Option<u32> = None;
     let mut best_any: Option<u32> = None;
     for chart in &song.charts {
-        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || chart.notes.is_empty() {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
             continue;
         }
         best_any = Some(best_any.map_or(chart.meter, |m| m.max(chart.meter)));
@@ -1582,7 +1576,7 @@ fn build_popularity_grouped_entries(
         HashMap::with_capacity(songs.len().saturating_mul(8));
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
-            if chart.notes.is_empty() {
+            if !chart.has_note_data {
                 continue;
             }
             hash_to_song_ix
@@ -1641,7 +1635,7 @@ fn build_recent_grouped_entries(
         HashMap::with_capacity(songs.len().saturating_mul(8));
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
-            if chart.notes.is_empty() {
+            if !chart.has_note_data {
                 continue;
             }
             hash_to_song_ix
@@ -5559,8 +5553,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                         DensityGraphSource {
                             max_nps: c.max_nps,
                             measure_nps_vec: c.measure_nps_vec.clone(),
-                            timing: c.timing.clone(),
-                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                            measure_seconds_vec: c.measure_seconds_vec.clone(),
+                            first_second: c.first_second,
                             last_second: song.precise_last_second(),
                         }
                     }),
@@ -5592,8 +5586,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                             DensityGraphSource {
                                 max_nps: c.max_nps,
                                 measure_nps_vec: c.measure_nps_vec.clone(),
-                                timing: c.timing.clone(),
-                                first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                                measure_seconds_vec: c.measure_seconds_vec.clone(),
+                                first_second: c.first_second,
                                 last_second: song.precise_last_second(),
                             }
                         }),

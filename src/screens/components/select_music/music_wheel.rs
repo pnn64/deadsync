@@ -95,7 +95,7 @@ fn chart_for_preferred_or_nearest_standard<'a>(
     let mut best_chart = None;
     let mut best_distance = usize::MAX;
     for chart in &song.charts {
-        if chart.notes.is_empty() || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
+        if !chart.has_note_data || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
             continue;
         }
         let Some(diff_ix) = color::FILE_DIFFICULTY_NAMES

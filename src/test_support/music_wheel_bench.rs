@@ -1,6 +1,5 @@
 use crate::game::chart::{ChartData, StaminaCounts};
 use crate::game::song::SongData;
-use crate::game::timing::{TimingData, TimingSegments};
 use crate::screens::components::select_music::music_wheel::{self, MusicWheelParams};
 use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::Actor;
@@ -122,14 +121,9 @@ fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
         min_bpm: 160.0,
         max_bpm: 160.0,
         normalized_bpms: String::from("0.000=160.000"),
-        normalized_stops: String::new(),
-        normalized_delays: String::new(),
-        normalized_warps: String::new(),
-        normalized_speeds: String::new(),
-        normalized_scrolls: String::new(),
-        normalized_fakes: String::new(),
         music_length_seconds: 92.0 + song_idx as f32,
         total_length_seconds: 92 + song_idx as i32,
+        precise_last_second_seconds: 92.0 + song_idx as f32,
         charts: bench_charts(&base, has_edit),
     })
 }
@@ -152,20 +146,6 @@ fn bench_chart(base: &str, difficulty: &str, meter: u32) -> ChartData {
         chart_name: String::new(),
         meter,
         step_artist: String::new(),
-        notes: vec![b'0', b'0', b'0', b'0'],
-        parsed_notes: Vec::new(),
-        row_to_beat: Vec::new(),
-        timing_segments: TimingSegments {
-            beat0_offset_adjust: 0.0,
-            bpms: vec![(0.0, 160.0)],
-            stops: Vec::new(),
-            delays: Vec::new(),
-            warps: Vec::new(),
-            speeds: Vec::new(),
-            scrolls: Vec::new(),
-            fakes: Vec::new(),
-        },
-        timing: TimingData::default(),
         short_hash: format!("{base}-{difficulty}"),
         stats: ArrowStats {
             total_arrows: 0,
@@ -207,13 +187,14 @@ fn bench_chart(base: &str, difficulty: &str, meter: u32) -> ChartData {
         simple_breakdown: String::new(),
         total_measures: 0,
         measure_nps_vec: Vec::new(),
-        chart_attacks: None,
-        chart_bpms: None,
-        chart_stops: None,
-        chart_delays: None,
-        chart_warps: None,
-        chart_speeds: None,
-        chart_scrolls: None,
-        chart_fakes: None,
+        measure_seconds_vec: Vec::new(),
+        first_second: 0.0,
+        has_note_data: true,
+        has_chart_attacks: false,
+        has_significant_timing_changes: false,
+        possible_grade_points: 0,
+        holds_total: 0,
+        rolls_total: 0,
+        mines_total: 0,
     }
 }

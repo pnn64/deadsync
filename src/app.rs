@@ -1554,7 +1554,6 @@ fn build_course_run_from_selection(
     if stages.is_empty() {
         return None;
     }
-    let global_offset_seconds = crate::config::get().global_offset_seconds;
     let mut course_display_totals =
         [crate::game::gameplay::CourseDisplayTotals::default(); crate::game::gameplay::MAX_PLAYERS];
     for stage in &stages {
@@ -1566,10 +1565,7 @@ fn build_course_run_from_selection(
             ) else {
                 continue;
             };
-            let add = crate::game::gameplay::course_display_totals_for_chart(
-                chart,
-                global_offset_seconds,
-            );
+            let add = crate::game::gameplay::course_display_totals_for_chart(chart);
             let total = &mut course_display_totals[player_idx];
             total.possible_grade_points = total
                 .possible_grade_points
@@ -4563,7 +4559,7 @@ impl App {
                 crate::screens::components::shared::density_graph::build_density_histogram_mesh(
                     &chart.measure_nps_vec,
                     chart.max_nps,
-                    &chart.timing,
+                    &chart.measure_seconds_vec,
                     chart.first_second,
                     chart.last_second,
                     graph_w,
@@ -6783,7 +6779,7 @@ impl App {
                 ))
             });
             if let Some(po_state) = self.state.screens.player_options_state.take() {
-                let song_arc = po_state.song;
+                let song_arc = po_state.song.clone();
                 let play_style = profile::get_session_play_style();
                 let player_side = profile::get_session_player_side();
                 let target_chart_type = play_style.chart_type();
@@ -6827,8 +6823,14 @@ impl App {
                     );
                     chart_ref
                 };
-
-                let (charts, last_played_chart_ref, last_played_idx) = match play_style {
+                let chart_ix_for_ref = |chart_ref: &crate::game::chart::ChartData| {
+                    song_arc
+                        .charts
+                        .iter()
+                        .position(|chart| std::ptr::eq(chart, chart_ref))
+                        .expect("selected chart ref must come from selected song")
+                };
+                let (charts, chart_ixs, last_played_chart_ref, last_played_idx) = match play_style {
                     profile::PlayStyle::Versus => {
                         let chart_ref_p1 = resolve_chart(0);
                         let chart_ref_p2 = resolve_chart(1);
@@ -6836,6 +6838,10 @@ impl App {
                             [
                                 Arc::new(chart_ref_p1.clone()),
                                 Arc::new(chart_ref_p2.clone()),
+                            ],
+                            [
+                                chart_ix_for_ref(chart_ref_p1),
+                                chart_ix_for_ref(chart_ref_p2),
                             ],
                             chart_ref_p1,
                             0usize,
@@ -6848,8 +6854,43 @@ impl App {
                         };
                         let chart_ref = resolve_chart(idx);
                         let chart = Arc::new(chart_ref.clone());
-                        ([chart.clone(), chart], chart_ref, idx)
+                        let chart_ix = chart_ix_for_ref(chart_ref);
+                        ([chart.clone(), chart], [chart_ix, chart_ix], chart_ref, idx)
                     }
+                };
+
+                let gameplay_charts = if prev == CurrentScreen::Gameplay
+                    && self.state.session.course_run.is_none()
+                    && let Some(current) = self.state.screens.gameplay_state.as_ref()
+                    && current.song.simfile_path == song_arc.simfile_path
+                    && current.charts[0].short_hash == charts[0].short_hash
+                    && current.charts[1].short_hash == charts[1].short_hash
+                {
+                    debug!(
+                        "Reusing gameplay payload for quick restart '{}'",
+                        song_arc.title
+                    );
+                    current.gameplay_charts.clone()
+                } else {
+                    let gameplay_song = match song_loading::load_gameplay_charts(
+                        song_arc.as_ref(),
+                        config::get().global_offset_seconds,
+                    ) {
+                        Ok(gameplay_song) => gameplay_song,
+                        Err(e) => {
+                            error!(
+                                "Failed to load gameplay payload for '{}': {}",
+                                song_arc.title, e
+                            );
+                            self.state.screens.current_screen = CurrentScreen::PlayerOptions;
+                            self.state.screens.player_options_state = Some(po_state);
+                            return commands;
+                        }
+                    };
+                    [
+                        Arc::new(gameplay_song[chart_ixs[0]].clone()),
+                        Arc::new(gameplay_song[chart_ixs[1]].clone()),
+                    ]
                 };
 
                 // Keep SelectMusic's current stepchart in sync with what we're about to play.
@@ -6940,6 +6981,7 @@ impl App {
                 let gs = gameplay::init(
                     song_arc,
                     charts,
+                    gameplay_charts,
                     color_index,
                     po_state.music_rate,
                     scroll_speeds,
@@ -7336,8 +7378,8 @@ impl App {
                     .map(|c| DensityGraphSource {
                         max_nps: c.max_nps,
                         measure_nps_vec: c.measure_nps_vec.clone(),
-                        timing: c.timing.clone(),
-                        first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                        measure_seconds_vec: c.measure_seconds_vec.clone(),
+                        first_second: c.first_second,
                         last_second: song.precise_last_second(),
                     })
                 }
@@ -7369,8 +7411,8 @@ impl App {
                         .map(|c| DensityGraphSource {
                             max_nps: c.max_nps,
                             measure_nps_vec: c.measure_nps_vec.clone(),
-                            timing: c.timing.clone(),
-                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                            measure_seconds_vec: c.measure_seconds_vec.clone(),
+                            first_second: c.first_second,
                             last_second: song.precise_last_second(),
                         })
                     }

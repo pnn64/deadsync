@@ -942,7 +942,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     crate::screens::components::shared::density_graph::build_density_histogram_mesh(
                         &si.chart.measure_nps_vec,
                         si.chart.max_nps,
-                        &si.chart.timing,
+                        &si.chart.measure_seconds_vec,
                         si.graph_first_second,
                         last_second,
                         graph_width,

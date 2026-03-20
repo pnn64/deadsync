@@ -2011,7 +2011,9 @@ fn arrowcloud_nps_info(gs: &gameplay::State, player_idx: usize) -> ArrowCloudNps
         if !started {
             continue;
         }
-        let t = chart.timing.get_time_for_beat((measure as f32) * 4.0);
+        let Some(&t) = chart.measure_seconds_vec.get(measure) else {
+            continue;
+        };
         let x = if last_second > first_second {
             ((t - first_second) / (last_second - first_second)).clamp(0.0, 1.0)
         } else {
