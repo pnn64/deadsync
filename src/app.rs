@@ -373,6 +373,21 @@ fn gameplay_raw_key_event(raw_key: &input::RawKeyboardEvent) -> Option<GameplayQ
     }))
 }
 
+#[inline(always)]
+fn proxy_gameplay_raw_key(raw_key: &input::RawKeyboardEvent) -> bool {
+    use winit::keyboard::KeyCode;
+
+    matches!(
+        raw_key.code,
+        KeyCode::ShiftLeft
+            | KeyCode::ShiftRight
+            | KeyCode::ControlLeft
+            | KeyCode::ControlRight
+            | KeyCode::F3
+            | KeyCode::F10
+    )
+}
+
 #[derive(Clone, Copy)]
 struct GameplayEventBatchTrace {
     started_at: Instant,
@@ -7750,18 +7765,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             input::run_windows_backend(
                 win_pad_backend,
                 move |pe| {
-                    if pad_ring.is_enabled() {
+                    let captured = pad_ring.is_enabled();
+                    if captured {
                         input::map_pad_event_with(&pe, |iev| {
                             pad_ring.push(GameplayQueuedEvent::Input(iev))
                         });
                     }
-                    let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    if !captured {
+                        let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    }
                 },
                 move |se| {
                     let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
                 },
                 move |ev| {
-                    if key_ring.is_enabled() {
+                    let captured = key_ring.is_enabled();
+                    if captured {
                         if let Some(gameplay_ev) = gameplay_raw_key_event(&ev) {
                             key_ring.push(gameplay_ev);
                         }
@@ -7769,7 +7788,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             key_ring.push(GameplayQueuedEvent::Input(iev))
                         });
                     }
-                    let _ = proxy_key.send_event(UserEvent::Key(ev));
+                    if !captured || proxy_gameplay_raw_key(&ev) {
+                        let _ = proxy_key.send_event(UserEvent::Key(ev));
+                    }
                 },
             );
         });
@@ -7784,18 +7805,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::thread::spawn(move || {
             input::run_linux_backend(
                 move |pe| {
-                    if pad_ring.is_enabled() {
+                    let captured = pad_ring.is_enabled();
+                    if captured {
                         input::map_pad_event_with(&pe, |iev| {
                             pad_ring.push(GameplayQueuedEvent::Input(iev))
                         });
                     }
-                    let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    if !captured {
+                        let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    }
                 },
                 move |se| {
                     let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
                 },
                 move |ke| {
-                    if key_ring.is_enabled() {
+                    let captured = key_ring.is_enabled();
+                    if captured {
                         if let Some(gameplay_ev) = gameplay_raw_key_event(&ke) {
                             key_ring.push(gameplay_ev);
                         }
@@ -7803,7 +7828,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             key_ring.push(GameplayQueuedEvent::Input(iev))
                         });
                     }
-                    let _ = proxy_key.send_event(UserEvent::Key(ke));
+                    if !captured || proxy_gameplay_raw_key(&ke) {
+                        let _ = proxy_key.send_event(UserEvent::Key(ke));
+                    }
                 },
             );
         });
@@ -7818,18 +7845,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::thread::spawn(move || {
             input::run_freebsd_backend(
                 move |pe| {
-                    if pad_ring.is_enabled() {
+                    let captured = pad_ring.is_enabled();
+                    if captured {
                         input::map_pad_event_with(&pe, |iev| {
                             pad_ring.push(GameplayQueuedEvent::Input(iev))
                         });
                     }
-                    let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    if !captured {
+                        let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    }
                 },
                 move |se| {
                     let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
                 },
                 move |ke| {
-                    if key_ring.is_enabled() {
+                    let captured = key_ring.is_enabled();
+                    if captured {
                         if let Some(gameplay_ev) = gameplay_raw_key_event(&ke) {
                             key_ring.push(gameplay_ev);
                         }
@@ -7837,7 +7868,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             key_ring.push(GameplayQueuedEvent::Input(iev))
                         });
                     }
-                    let _ = proxy_key.send_event(UserEvent::Key(ke));
+                    if !captured || proxy_gameplay_raw_key(&ke) {
+                        let _ = proxy_key.send_event(UserEvent::Key(ke));
+                    }
                 },
             );
         });
@@ -7852,18 +7885,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::thread::spawn(move || {
             input::run_macos_backend(
                 move |pe| {
-                    if pad_ring.is_enabled() {
+                    let captured = pad_ring.is_enabled();
+                    if captured {
                         input::map_pad_event_with(&pe, |iev| {
                             pad_ring.push(GameplayQueuedEvent::Input(iev))
                         });
                     }
-                    let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    if !captured {
+                        let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    }
                 },
                 move |se| {
                     let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
                 },
                 move |ke| {
-                    if key_ring.is_enabled() {
+                    let captured = key_ring.is_enabled();
+                    if captured {
                         if let Some(gameplay_ev) = gameplay_raw_key_event(&ke) {
                             key_ring.push(gameplay_ev);
                         }
@@ -7871,7 +7908,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             key_ring.push(GameplayQueuedEvent::Input(iev))
                         });
                     }
-                    let _ = proxy_key.send_event(UserEvent::Key(ke));
+                    if !captured || proxy_gameplay_raw_key(&ke) {
+                        let _ = proxy_key.send_event(UserEvent::Key(ke));
+                    }
                 },
             );
         });
