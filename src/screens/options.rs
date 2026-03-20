@@ -618,6 +618,7 @@ const MACHINE_ROW_EVAL_SUMMARY: &str = "Eval Summary";
 const MACHINE_ROW_NAME_ENTRY: &str = "Name Entry";
 const MACHINE_ROW_GAMEOVER: &str = "Gameover Screen";
 const MACHINE_ROW_MENU_MUSIC: &str = "Menu Music";
+const MACHINE_ROW_REPLAYS: &str = "Replays";
 const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
 const MACHINE_ROW_VIDEO_BGS: &str = "Video BGs";
 const ADVANCED_ROW_DEFAULT_FAIL_TYPE: &str = "Default Fail Type";
@@ -1236,6 +1237,11 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: MACHINE_ROW_REPLAYS,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
         label: MACHINE_ROW_KEYBOARD_FEATURES,
         choices: &["Off", "On"],
         inline: true,
@@ -1287,6 +1293,13 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: MACHINE_ROW_MENU_MUSIC,
         help: &["Play or mute the looping menu song on Select Color/Style/Play Mode."],
+    },
+    Item {
+        name: MACHINE_ROW_REPLAYS,
+        help: &[
+            "Enable local replay recording during gameplay.",
+            "When Off, Select Music hides the Play Replay option.",
+        ],
     },
     Item {
         name: MACHINE_ROW_KEYBOARD_FEATURES,
@@ -4233,6 +4246,12 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_REPLAYS,
+        usize::from(cfg.machine_enable_replays),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
         MACHINE_ROW_KEYBOARD_FEATURES,
         usize::from(cfg.keyboard_features),
     );
@@ -5784,6 +5803,7 @@ fn apply_submenu_choice_delta(
             MACHINE_ROW_NAME_ENTRY => config::update_machine_show_name_entry(enabled),
             MACHINE_ROW_GAMEOVER => config::update_machine_show_gameover(enabled),
             MACHINE_ROW_MENU_MUSIC => config::update_menu_music(enabled),
+            MACHINE_ROW_REPLAYS => config::update_machine_enable_replays(enabled),
             MACHINE_ROW_KEYBOARD_FEATURES => config::update_keyboard_features(enabled),
             MACHINE_ROW_VIDEO_BGS => config::update_show_video_backgrounds(enabled),
             _ => {}

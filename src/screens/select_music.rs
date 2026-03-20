@@ -2471,6 +2471,7 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
     if page == sort_menu::Page::Sorts {
         return &sort_menu::ITEMS_SORTS;
     }
+    let replays_enabled = config::get().machine_enable_replays;
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
@@ -2483,15 +2484,26 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
         single_player_joined,
         has_song_selected,
     ) {
-        (profile::PlayStyle::Single, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE,
+        (profile::PlayStyle::Single, true, true) if replays_enabled => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE
+        }
+        (profile::PlayStyle::Single, true, true) => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE_NO_REPLAY
+        }
         (profile::PlayStyle::Single, true, false) => {
             &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE[..6]
         }
-        (profile::PlayStyle::Double, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE,
+        (profile::PlayStyle::Double, true, true) if replays_enabled => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE
+        }
+        (profile::PlayStyle::Double, true, true) => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE_NO_REPLAY
+        }
         (profile::PlayStyle::Double, true, false) => {
             &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE[..6]
         }
-        (_, _, true) => &sort_menu::ITEMS_MAIN,
+        (_, _, true) if replays_enabled => &sort_menu::ITEMS_MAIN,
+        (_, _, true) => &sort_menu::ITEMS_MAIN_NO_REPLAY,
         (_, _, false) => &sort_menu::ITEMS_MAIN[..5],
     }
 }
@@ -3963,6 +3975,9 @@ fn show_leaderboard_overlay(state: &mut State) {
 }
 
 fn show_replay_overlay(state: &mut State) {
+    if !config::get().machine_enable_replays {
+        return;
+    }
     let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
         return;
     };

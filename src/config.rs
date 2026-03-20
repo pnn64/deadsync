@@ -598,6 +598,8 @@ pub struct Config {
     pub machine_preferred_style: MachinePreferredPlayStyle,
     /// Startup flow fallback mode used when Select Play Mode is disabled.
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
+    /// Machine-wide replay recording and replay menu visibility.
+    pub machine_enable_replays: bool,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
@@ -702,6 +704,7 @@ impl Default for Config {
             machine_show_select_play_mode: true,
             machine_preferred_style: MachinePreferredPlayStyle::Single,
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
+            machine_enable_replays: true,
             machine_show_eval_summary: true,
             machine_show_name_entry: true,
             machine_show_gameover: true,
@@ -1496,6 +1499,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "MachineEnableReplays={}\n",
+        if default.machine_enable_replays {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "MachinePreferredStyle={}\n",
         default.machine_preferred_style.as_str()
     ));
@@ -2084,6 +2095,27 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.machine_show_select_play_mode);
+                cfg.machine_enable_replays = conf
+                    .get("Theme", "MachineEnableReplays")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_enable_replays);
                 cfg.machine_preferred_style = conf
                     .get("Theme", "MachinePreferredStyle")
                     .and_then(|v| MachinePreferredPlayStyle::from_str(&v).ok())
@@ -2255,6 +2287,9 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "MachineShowSelectStyle") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachineEnableReplays") {
                     miss = true;
                 }
                 if !miss && !has("Theme", "MachinePreferredStyle") {
@@ -3436,6 +3471,10 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "MachineEnableReplays={}\n",
+        if cfg.machine_enable_replays { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
         "MachinePreferredStyle={}\n",
         cfg.machine_preferred_style.as_str()
     ));
@@ -4348,6 +4387,17 @@ pub fn update_machine_show_gameover(enabled: bool) {
             return;
         }
         cfg.machine_show_gameover = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_machine_enable_replays(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_enable_replays == enabled {
+            return;
+        }
+        cfg.machine_enable_replays = enabled;
     }
     save_without_keymaps();
 }

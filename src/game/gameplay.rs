@@ -1,3 +1,4 @@
+use crate::config;
 use crate::core::audio;
 use crate::core::gfx::MeshVertex;
 use crate::core::input::{
@@ -6918,7 +6919,7 @@ pub fn init(
         autoplay_used: replay_mode,
         score_valid,
         replay_mode,
-        replay_capture_enabled: !replay_mode,
+        replay_capture_enabled: !replay_mode && config::get().machine_enable_replays,
         course_display_carry,
         course_display_totals,
         live_window_counts: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
