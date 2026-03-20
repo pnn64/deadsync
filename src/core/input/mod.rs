@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use winit::keyboard::KeyCode;
@@ -520,6 +520,48 @@ const fn dense_key_ix(code: KeyCode) -> Option<usize> {
 }
 
 #[derive(Clone, Debug)]
+struct CompiledKeymap {
+    key_rev: Box<[Vec<VirtualAction>]>,
+    key_rev_extra: HashMap<KeyCode, Vec<VirtualAction>>,
+    pad_dir_rev: [Vec<VirtualAction>; 4],
+    pad_dir_on_rev: HashMap<(usize, PadDir), Vec<VirtualAction>>,
+    pad_code_rev: HashMap<u32, Vec<PadCodeRev>>,
+}
+
+impl Default for CompiledKeymap {
+    fn default() -> Self {
+        Self {
+            key_rev: new_key_rev(),
+            key_rev_extra: HashMap::new(),
+            pad_dir_rev: std::array::from_fn(|_| Vec::new()),
+            pad_dir_on_rev: HashMap::new(),
+            pad_code_rev: HashMap::new(),
+        }
+    }
+}
+
+impl CompiledKeymap {
+    #[inline(always)]
+    fn from_keymap(km: &Keymap) -> Self {
+        Self {
+            key_rev: km.key_rev.clone(),
+            key_rev_extra: km.key_rev_extra.clone(),
+            pad_dir_rev: km.pad_dir_rev.clone(),
+            pad_dir_on_rev: km.pad_dir_on_rev.clone(),
+            pad_code_rev: km.pad_code_rev.clone(),
+        }
+    }
+
+    #[inline(always)]
+    fn key_actions(&self, code: KeyCode) -> &[VirtualAction] {
+        match dense_key_ix(code) {
+            Some(ix) => &self.key_rev[ix],
+            None => self.key_rev_extra.get(&code).map_or(&[], Vec::as_slice),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Keymap {
     map: HashMap<VirtualAction, Vec<InputBinding>>,
     key_rev: Box<[Vec<VirtualAction>]>,
@@ -544,6 +586,8 @@ impl Default for Keymap {
 
 static KEYMAP: std::sync::LazyLock<RwLock<Keymap>> =
     std::sync::LazyLock::new(|| RwLock::new(Keymap::default()));
+static COMPILED_KEYMAP: std::sync::LazyLock<RwLock<Arc<CompiledKeymap>>> =
+    std::sync::LazyLock::new(|| RwLock::new(Arc::new(CompiledKeymap::default())));
 static ONLY_DEDICATED_MENU_BUTTONS: AtomicBool = AtomicBool::new(false);
 static INPUT_DEBOUNCE_SECONDS_BITS: AtomicU32 = AtomicU32::new((0.02f32).to_bits());
 static KEYBOARD_DEBOUNCE_STATE: std::sync::LazyLock<Mutex<DebounceStore>> =
@@ -594,7 +638,9 @@ pub fn get_keymap() -> Keymap {
 #[inline(always)]
 pub fn set_keymap(new_map: Keymap) {
     let (key_cap, pad_cap) = debounce_caps(&new_map);
+    let compiled = Arc::new(CompiledKeymap::from_keymap(&new_map));
     *KEYMAP.write().unwrap() = new_map;
+    *COMPILED_KEYMAP.write().unwrap() = compiled;
     reset_debounce_state(key_cap, pad_cap);
 }
 
@@ -604,6 +650,11 @@ pub fn clear_debounce_state() {
         let (key_cap, pad_cap) = debounce_caps(km);
         reset_debounce_state(key_cap, pad_cap);
     });
+}
+
+#[inline(always)]
+fn load_compiled_keymap() -> Arc<CompiledKeymap> {
+    COMPILED_KEYMAP.read().unwrap().clone()
 }
 
 #[inline(always)]
@@ -884,7 +935,11 @@ fn push_action(out: &mut ActionBuf, len: &mut usize, seen: &mut u32, action: Vir
 }
 
 #[inline(always)]
-fn collect_key_actions(km: &Keymap, code: KeyCode, out: &mut ActionBuf) -> usize {
+fn collect_key_actions_from_compiled(
+    km: &CompiledKeymap,
+    code: KeyCode,
+    out: &mut ActionBuf,
+) -> usize {
     let actions = km.key_actions(code);
     if actions.is_empty() {
         return 0;
@@ -898,7 +953,12 @@ fn collect_key_actions(km: &Keymap, code: KeyCode, out: &mut ActionBuf) -> usize
 }
 
 #[inline(always)]
-fn collect_pad_dir_actions(km: &Keymap, id: PadId, dir: PadDir, out: &mut ActionBuf) -> usize {
+fn collect_pad_dir_actions_from_compiled(
+    km: &CompiledKeymap,
+    id: PadId,
+    dir: PadDir,
+    out: &mut ActionBuf,
+) -> usize {
     let dev = usize::from(id);
     let any = &km.pad_dir_rev[dir.ix()];
     let on = km.pad_dir_on_rev.get(&(dev, dir));
@@ -919,8 +979,8 @@ fn collect_pad_dir_actions(km: &Keymap, id: PadId, dir: PadDir, out: &mut Action
 }
 
 #[inline(always)]
-fn collect_pad_button_actions(
-    km: &Keymap,
+fn collect_pad_button_actions_from_compiled(
+    km: &CompiledKeymap,
     id: PadId,
     code: PadCode,
     uuid: [u8; 16],
@@ -1014,21 +1074,30 @@ fn emit_normalized_actions(
     }
 }
 
-#[inline(always)]
-fn collect_actions_from_edge(km: &Keymap, edge: DebouncedEdge, out: &mut ActionBuf) -> usize {
+fn collect_actions_from_compiled(
+    km: &CompiledKeymap,
+    edge: DebouncedEdge,
+    out: &mut ActionBuf,
+) -> usize {
     match edge.binding {
-        DebounceBinding::Keyboard(code) => collect_key_actions(km, code, out),
-        DebounceBinding::PadDir { id, dir } => collect_pad_dir_actions(km, id, dir, out),
+        DebounceBinding::Keyboard(code) => collect_key_actions_from_compiled(km, code, out),
+        DebounceBinding::PadDir { id, dir } => {
+            collect_pad_dir_actions_from_compiled(km, id, dir, out)
+        }
         DebounceBinding::PadButton { id, code, uuid } => {
-            collect_pad_button_actions(km, id, code, uuid, out)
+            collect_pad_button_actions_from_compiled(km, id, code, uuid, out)
         }
     }
 }
 
 #[inline(always)]
-fn emit_input_events_from_edge(km: &Keymap, edge: DebouncedEdge, mut emit: impl FnMut(InputEvent)) {
+fn emit_input_events_from_edge(
+    km: &CompiledKeymap,
+    edge: DebouncedEdge,
+    mut emit: impl FnMut(InputEvent),
+) {
     let mut actions: ActionBuf = [None; VirtualAction::COUNT];
-    let len = collect_actions_from_edge(km, edge, &mut actions);
+    let len = collect_actions_from_compiled(km, edge, &mut actions);
     emit_normalized_actions(&actions, len, edge.pressed, |action, pressed| {
         emit(input_event(
             action,
@@ -1043,7 +1112,11 @@ fn emit_input_events_from_edge(km: &Keymap, edge: DebouncedEdge, mut emit: impl 
 }
 
 #[inline(always)]
-fn emit_debounced_edges(km: &Keymap, edges: DebounceEdges, mut emit: impl FnMut(InputEvent)) {
+fn emit_debounced_edges(
+    km: &CompiledKeymap,
+    edges: DebounceEdges,
+    mut emit: impl FnMut(InputEvent),
+) {
     if let Some(edge) = edges.first {
         emit_input_events_from_edge(km, edge, &mut emit);
     }
@@ -1065,7 +1138,8 @@ pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent
         ev.host_nanos,
         debounce_windows(),
     );
-    with_keymap(|km| emit_debounced_edges(km, edges, emit));
+    let km = load_compiled_keymap();
+    emit_debounced_edges(km.as_ref(), edges, emit);
 }
 
 #[inline(always)]
@@ -1086,8 +1160,9 @@ pub fn map_keycode_event_with_host(
     timestamp_host_nanos: u64,
     mut emit: impl FnMut(InputEvent),
 ) {
+    let km = load_compiled_keymap();
     let mut actions: ActionBuf = [None; VirtualAction::COUNT];
-    let len = with_keymap(|km| collect_key_actions(km, code, &mut actions));
+    let len = collect_key_actions_from_compiled(km.as_ref(), code, &mut actions);
     emit_normalized_actions(&actions, len, pressed, |action, pressed| {
         emit(input_event(
             action,
@@ -1136,24 +1211,21 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
         ),
         PadEvent::RawAxis { .. } => return,
     };
-    with_keymap(|km| emit_debounced_edges(km, edges, &mut emit));
+    let km = load_compiled_keymap();
+    emit_debounced_edges(km.as_ref(), edges, &mut emit);
 }
 
 pub fn drain_debounced_input_events_with(mut emit: impl FnMut(InputEvent)) -> bool {
-    with_keymap(|km| {
-        let now = Instant::now();
-        let mut flushed = emit_due_debounce_edges_from(
-            &KEYBOARD_DEBOUNCE_STATE,
-            now,
-            debounce_windows(),
-            |edge| emit_input_events_from_edge(km, edge, &mut emit),
-        );
-        flushed |=
-            emit_due_debounce_edges_from(&PAD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
-                emit_input_events_from_edge(km, edge, &mut emit)
-            });
-        flushed
-    })
+    let km = load_compiled_keymap();
+    let now = Instant::now();
+    let mut flushed =
+        emit_due_debounce_edges_from(&KEYBOARD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
+            emit_input_events_from_edge(km.as_ref(), edge, &mut emit)
+        });
+    flushed |= emit_due_debounce_edges_from(&PAD_DEBOUNCE_STATE, now, debounce_windows(), |edge| {
+        emit_input_events_from_edge(km.as_ref(), edge, &mut emit)
+    });
+    flushed
 }
 
 #[inline(always)]
