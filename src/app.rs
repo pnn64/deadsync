@@ -183,7 +183,6 @@ const GAMEPLAY_PRESENT_SPIKE_US: u32 = 3_000;
 const GAMEPLAY_EVENT_TRACE_INTERVAL: Duration = Duration::from_secs(1);
 const GAMEPLAY_EVENT_BATCH_SLOW_US: u32 = 1_000;
 const GAMEPLAY_EVENT_BATCH_BURST_KEYS: u32 = 8;
-const PENDING_INPUT_EVENT_CAPACITY: usize = 512;
 const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 131_072;
 const GAMEPLAY_INPUT_RING_CAPACITY: usize = 1024;
 
@@ -229,74 +228,6 @@ struct CourseRunState {
     next_stage_index: usize,
     stage_summaries: Vec<stage_stats::StageSummary>,
     stage_eval_pages: Vec<evaluation::State>,
-}
-
-struct PendingInputRing {
-    slots: [Option<GameplayQueuedEvent>; PENDING_INPUT_EVENT_CAPACITY],
-    head: usize,
-    len: usize,
-    dropped: u32,
-}
-
-impl PendingInputRing {
-    #[inline(always)]
-    const fn new() -> Self {
-        Self {
-            slots: [None; PENDING_INPUT_EVENT_CAPACITY],
-            head: 0,
-            len: 0,
-            dropped: 0,
-        }
-    }
-
-    #[inline(always)]
-    const fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    #[inline(always)]
-    fn clear(&mut self) {
-        let mut i = 0;
-        while i < self.len {
-            let ix = (self.head + i) % PENDING_INPUT_EVENT_CAPACITY;
-            self.slots[ix] = None;
-            i += 1;
-        }
-        self.head = 0;
-        self.len = 0;
-    }
-
-    #[inline(always)]
-    fn push(&mut self, ev: GameplayQueuedEvent) {
-        if self.len == PENDING_INPUT_EVENT_CAPACITY {
-            self.dropped = self.dropped.saturating_add(1);
-            return;
-        }
-        let tail = (self.head + self.len) % PENDING_INPUT_EVENT_CAPACITY;
-        self.slots[tail] = Some(ev);
-        self.len += 1;
-    }
-
-    #[inline(always)]
-    fn pop(&mut self) -> Option<GameplayQueuedEvent> {
-        if self.len == 0 {
-            return None;
-        }
-        let ev = self.slots[self.head].take();
-        self.head = (self.head + 1) % PENDING_INPUT_EVENT_CAPACITY;
-        self.len -= 1;
-        if self.len == 0 {
-            self.head = 0;
-        }
-        ev
-    }
-
-    #[inline(always)]
-    fn take_dropped(&mut self) -> u32 {
-        let dropped = self.dropped;
-        self.dropped = 0;
-        dropped
-    }
 }
 
 struct GameplayInputRing {
@@ -1066,7 +997,6 @@ pub struct AppState {
     shell: ShellState,
     screens: ScreensState,
     session: SessionState,
-    pending_input_events: PendingInputRing,
     gameplay_offset_save_prompt: Option<GameplayOffsetSavePrompt>,
 }
 
@@ -2510,7 +2440,6 @@ impl AppState {
             shell,
             screens,
             session,
-            pending_input_events: PendingInputRing::new(),
             gameplay_offset_save_prompt: None,
         }
     }
@@ -2723,14 +2652,13 @@ impl App {
         let mut draw_us: u32 = 0;
         let mut draw_stats = renderer::DrawStats::default();
         let input_started = Instant::now();
-        self.drain_gameplay_input_events();
-        if let Err(e) = self.flush_due_input_events(event_loop) {
-            error!("Failed to handle debounced input: {e}");
+        if let Err(e) = self.drain_gameplay_input_events(event_loop) {
+            error!("Failed to handle gameplay ring input: {e}");
             event_loop.exit();
             return;
         }
-        if let Err(e) = self.route_pending_input_events(event_loop) {
-            error!("Failed to handle queued input: {e}");
+        if let Err(e) = self.flush_due_input_events(event_loop) {
+            error!("Failed to handle debounced input: {e}");
             event_loop.exit();
             return;
         }
@@ -3059,16 +2987,33 @@ impl App {
         let mut flushed = false;
         let mut err: Option<Box<dyn Error>> = None;
         let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        let start_screen = self.state.screens.current_screen;
+        let mut discard_gameplay_batch = false;
         input::drain_debounced_input_events_with(|ev| {
             flushed = true;
             if gameplay_screen {
-                self.queue_gameplay_event(GameplayQueuedEvent::Input(ev));
+                if discard_gameplay_batch || err.is_some() {
+                    return;
+                }
+                if let Err(e) =
+                    self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(ev))
+                {
+                    err = Some(e);
+                    return;
+                }
+                if !self.gameplay_dispatch_continues(start_screen) {
+                    discard_gameplay_batch = true;
+                }
             } else if err.is_none()
                 && let Err(e) = self.route_input_event(event_loop, ev)
             {
                 err = Some(e);
             }
         });
+        if discard_gameplay_batch {
+            self.gameplay_key_ring.clear();
+            self.gameplay_pad_ring.clear();
+        }
         if let Some(e) = err {
             return Err(e);
         }
@@ -4286,9 +4231,25 @@ impl App {
     }
 
     #[inline(always)]
-    fn queue_gameplay_event(&mut self, ev: GameplayQueuedEvent) {
+    fn gameplay_dispatch_continues(&self, start_screen: CurrentScreen) -> bool {
+        self.state.screens.current_screen == start_screen
+            && matches!(self.state.shell.transition, TransitionState::Idle)
+    }
+
+    #[inline(always)]
+    fn route_gameplay_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        ev: GameplayQueuedEvent,
+    ) -> Result<(), Box<dyn Error>> {
         self.state.shell.note_gameplay_queued_input();
-        self.state.pending_input_events.push(ev);
+        match ev {
+            GameplayQueuedEvent::Input(ev) => self.route_input_event(event_loop, ev),
+            GameplayQueuedEvent::RawKey(ev) => {
+                self.route_gameplay_raw_key_event(event_loop, ev);
+                Ok(())
+            }
+        }
     }
 
     fn route_gameplay_raw_key_event(
@@ -4348,7 +4309,10 @@ impl App {
         self.gameplay_pad_ring.take_dropped();
     }
 
-    fn drain_gameplay_input_events(&mut self) {
+    fn drain_gameplay_input_events(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<(), Box<dyn Error>> {
         let dropped_keys = self.gameplay_key_ring.take_dropped();
         if dropped_keys > 0 {
             warn!(
@@ -4368,60 +4332,40 @@ impl App {
         {
             self.gameplay_key_ring.clear();
             self.gameplay_pad_ring.clear();
-            return;
-        }
-        let mut next_key = self.gameplay_key_ring.pop();
-        let mut next_pad = self.gameplay_pad_ring.pop();
-        loop {
-            match (next_key.as_ref(), next_pad.as_ref()) {
-                (Some(key_ev), Some(pad_ev)) => {
-                    if gameplay_event_precedes(key_ev, pad_ev) {
-                        self.queue_gameplay_event(next_key.take().unwrap());
-                        next_key = self.gameplay_key_ring.pop();
-                    } else {
-                        self.queue_gameplay_event(next_pad.take().unwrap());
-                        next_pad = self.gameplay_pad_ring.pop();
-                    }
-                }
-                (Some(_), None) => {
-                    self.queue_gameplay_event(next_key.take().unwrap());
-                    next_key = self.gameplay_key_ring.pop();
-                }
-                (None, Some(_)) => {
-                    self.queue_gameplay_event(next_pad.take().unwrap());
-                    next_pad = self.gameplay_pad_ring.pop();
-                }
-                (None, None) => break,
-            }
-        }
-    }
-
-    fn route_pending_input_events(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-    ) -> Result<(), Box<dyn Error>> {
-        let dropped = self.state.pending_input_events.take_dropped();
-        if dropped > 0 {
-            warn!(
-                "Gameplay input ring overflowed; dropped {dropped} event(s) on screen {:?}",
-                self.state.screens.current_screen
-            );
-        }
-        if self.state.pending_input_events.is_empty() {
             return Ok(());
         }
         let start_screen = self.state.screens.current_screen;
-        while let Some(ev) = self.state.pending_input_events.pop() {
-            match ev {
-                GameplayQueuedEvent::Input(ev) => self.route_input_event(event_loop, ev)?,
-                GameplayQueuedEvent::RawKey(ev) => {
-                    self.route_gameplay_raw_key_event(event_loop, ev)
+        let mut next_key = self.gameplay_key_ring.pop();
+        let mut next_pad = self.gameplay_pad_ring.pop();
+        loop {
+            let ev = match (next_key.as_ref(), next_pad.as_ref()) {
+                (Some(key_ev), Some(pad_ev)) => {
+                    if gameplay_event_precedes(key_ev, pad_ev) {
+                        let ev = next_key.take().unwrap();
+                        next_key = self.gameplay_key_ring.pop();
+                        ev
+                    } else {
+                        let ev = next_pad.take().unwrap();
+                        next_pad = self.gameplay_pad_ring.pop();
+                        ev
+                    }
                 }
-            }
-            if self.state.screens.current_screen != start_screen
-                || !matches!(self.state.shell.transition, TransitionState::Idle)
-            {
-                self.state.pending_input_events.clear();
+                (Some(_), None) => {
+                    let ev = next_key.take().unwrap();
+                    next_key = self.gameplay_key_ring.pop();
+                    ev
+                }
+                (None, Some(_)) => {
+                    let ev = next_pad.take().unwrap();
+                    next_pad = self.gameplay_pad_ring.pop();
+                    ev
+                }
+                (None, None) => break,
+            };
+            self.route_gameplay_event(event_loop, ev)?;
+            if !self.gameplay_dispatch_continues(start_screen) {
+                self.gameplay_key_ring.clear();
+                self.gameplay_pad_ring.clear();
                 break;
             }
         }
@@ -6258,7 +6202,6 @@ impl App {
 
         if is_transitioning {
             input::clear_debounce_state();
-            self.state.pending_input_events.clear();
             self.clear_gameplay_input_events();
             return true;
         }
@@ -6291,7 +6234,6 @@ impl App {
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
         if is_transitioning || self.state.screens.current_screen == CurrentScreen::Init {
             input::clear_debounce_state();
-            self.state.pending_input_events.clear();
             self.clear_gameplay_input_events();
             return;
         }
@@ -7673,7 +7615,6 @@ impl ApplicationHandler<UserEvent> for App {
                     );
                     if !focused {
                         input::clear_debounce_state();
-                        self.state.pending_input_events.clear();
                         self.clear_gameplay_input_events();
                     }
                     if focused {
