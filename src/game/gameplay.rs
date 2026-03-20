@@ -1,4 +1,3 @@
-use crate::config;
 use crate::core::audio;
 use crate::core::gfx::MeshVertex;
 use crate::core::input::{
@@ -6523,8 +6522,11 @@ pub fn init(
     }
     let pending_edges_capacity = input_queue_cap(num_cols);
     let replay_seconds = (music_end_time + start_delay).max(notes_end_time + start_delay);
-    let replay_edges_capacity =
-        replay_edge_cap(num_cols, replay_cells, replay_mode, replay_seconds);
+    let replay_capture_enabled = !replay_mode && config.machine_enable_replays;
+    let replay_edges_capacity = [
+        0,
+        replay_edge_cap(num_cols, replay_cells, replay_mode, replay_seconds),
+    ][replay_capture_enabled as usize];
     let decaying_hold_capacity = (0..num_players).fold(0usize, |acc, player| {
         acc.saturating_add(holds_total[player] as usize + rolls_total[player] as usize)
     });
@@ -6919,7 +6921,7 @@ pub fn init(
         autoplay_used: replay_mode,
         score_valid,
         replay_mode,
-        replay_capture_enabled: !replay_mode && config::get().machine_enable_replays,
+        replay_capture_enabled,
         course_display_carry,
         course_display_totals,
         live_window_counts: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
