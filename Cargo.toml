@@ -67,7 +67,7 @@ rubato = "0.16.2"
 memmap2 = "0.9.10"
 
 # Networking
-ureq = { version = "3.2.0", features = ["json", "rustls"] }
+ureq = { version = "3.3.0", features = ["json", "rustls"] }
 
 # Song cache
 bincode = "2.0.1"
