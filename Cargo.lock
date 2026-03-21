@@ -970,7 +970,7 @@ dependencies = [
  "ash",
  "ash-window",
  "bincode",
- "bytemuck",
+ "bitflags 2.11.0",
  "cgmath",
  "chrono",
  "claxon",

@@ -657,6 +657,7 @@ const GAMEPLAY_ROW_BG_BRIGHTNESS: &str = "BG Brightness";
 const GAMEPLAY_ROW_CENTERED_P1: &str = "Centered P1 Notefield";
 const GAMEPLAY_ROW_ZMOD_RATING_BOX: &str = "Zmod Rating Box";
 const GAMEPLAY_ROW_BPM_DECIMAL: &str = "Show Decimal in BPM";
+const GAMEPLAY_ROW_AUTO_SCREENSHOT: &str = "Auto Screenshot";
 const SCORE_IMPORT_ROW_ENDPOINT: &str = "API Endpoint";
 const SCORE_IMPORT_ROW_PROFILE: &str = "Profile";
 const SCORE_IMPORT_ROW_PACK: &str = "Pack";
@@ -1385,6 +1386,11 @@ pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["Off", "On"],
         inline: true,
     },
+    SubRow {
+        label: GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        choices: &config::AUTO_SS_FLAG_NAMES,
+        inline: true,
+    },
 ];
 
 pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
@@ -1403,6 +1409,15 @@ pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: GAMEPLAY_ROW_BPM_DECIMAL,
         help: &["Show one decimal place for live gameplay BPM when BPM is non-integer."],
+    },
+    Item {
+        name: GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        help: &[
+            "Automatically screenshot the Evaluation screen.",
+            "Use Left/Right to pick a condition, then Start to toggle it.",
+            "PBs: personal bests. Fails: failed scores.",
+            "Clears: non-PB clears. Quads: 100%. Quints: perfect EX.",
+        ],
     },
     Item {
         name: "Exit",
@@ -3629,6 +3644,23 @@ const fn scorebox_cycle_mask(itg: bool, ex: bool, hard_ex: bool, tournaments: bo
 }
 
 #[inline(always)]
+const fn auto_screenshot_cursor_index(mask: u8) -> usize {
+    if (mask & config::AUTO_SS_PBS) != 0 {
+        0
+    } else if (mask & config::AUTO_SS_FAILS) != 0 {
+        1
+    } else if (mask & config::AUTO_SS_CLEARS) != 0 {
+        2
+    } else if (mask & config::AUTO_SS_QUADS) != 0 {
+        3
+    } else if (mask & config::AUTO_SS_QUINTS) != 0 {
+        4
+    } else {
+        0
+    }
+}
+
+#[inline(always)]
 const fn scorebox_cycle_cursor_index(
     itg: bool,
     ex: bool,
@@ -3707,6 +3739,45 @@ fn toggle_select_music_scorebox_cycle_option(state: &mut State, choice_idx: usiz
 #[inline(always)]
 fn select_music_scorebox_cycle_enabled_mask() -> u8 {
     scorebox_cycle_mask_from_config(&config::get())
+}
+
+#[inline(always)]
+const fn auto_screenshot_bit_from_choice(idx: usize) -> u8 {
+    config::auto_screenshot_bit(idx)
+}
+
+#[inline(always)]
+fn auto_screenshot_enabled_mask() -> u8 {
+    config::get().auto_screenshot_eval
+}
+
+fn toggle_auto_screenshot_option(state: &mut State, choice_idx: usize) {
+    let bit = auto_screenshot_bit_from_choice(choice_idx);
+    if bit == 0 {
+        return;
+    }
+    let mut mask = config::get().auto_screenshot_eval;
+    if (mask & bit) != 0 {
+        mask &= !bit;
+    } else {
+        mask |= bit;
+    }
+    config::update_auto_screenshot_eval(mask);
+
+    let clamped = choice_idx.min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
+    set_choice_by_label(
+        &mut state.sub_choice_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
+        GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        clamped,
+    );
+    set_choice_by_label(
+        &mut state.sub_cursor_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
+        GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        clamped,
+    );
+    audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
 const fn breakdown_style_choice_index(style: BreakdownStyle) -> usize {
@@ -4351,6 +4422,12 @@ pub fn init() -> State {
         GAMEPLAY_OPTIONS_ROWS,
         GAMEPLAY_ROW_BPM_DECIMAL,
         usize::from(cfg.show_bpm_decimal),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
+        GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        auto_screenshot_cursor_index(cfg.auto_screenshot_eval),
     );
 
     set_choice_by_label(
@@ -6264,6 +6341,23 @@ pub fn handle_input(
                             return ScreenAction::None;
                         }
                     }
+                    if matches!(kind, SubmenuKind::Gameplay)
+                        && let Some(row_idx) =
+                            submenu_visible_row_to_actual(state, kind, selected_row)
+                    {
+                        let rows = submenu_rows(kind);
+                        if rows.get(row_idx).map(|row| row.label)
+                            == Some(GAMEPLAY_ROW_AUTO_SCREENSHOT)
+                        {
+                            let choice_idx = submenu_cursor_indices(state, kind)
+                                .get(row_idx)
+                                .copied()
+                                .unwrap_or(0)
+                                .min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
+                            toggle_auto_screenshot_option(state, choice_idx);
+                            return ScreenAction::None;
+                        }
+                    }
                     // Exit row in the submenu: back to the main Options list.
                     if selected_row == total - 1 {
                         audio::play_sfx("assets/sounds/start.ogg");
@@ -7625,8 +7719,17 @@ pub fn get_actors(
                                 .min(layout.texts.len().saturating_sub(1));
                             let is_scorebox_cycle_row = matches!(kind, SubmenuKind::SelectMusic)
                                 && row.label == SELECT_MUSIC_ROW_SCOREBOX_CYCLE;
+                            let is_auto_screenshot_row = matches!(kind, SubmenuKind::Gameplay)
+                                && row.label == GAMEPLAY_ROW_AUTO_SCREENSHOT;
+                            let is_multi_toggle_row =
+                                is_scorebox_cycle_row || is_auto_screenshot_row;
                             let scorebox_enabled_mask = if is_scorebox_cycle_row {
                                 select_music_scorebox_cycle_enabled_mask()
+                            } else {
+                                0
+                            };
+                            let auto_screenshot_mask = if is_auto_screenshot_row {
+                                auto_screenshot_enabled_mask()
                             } else {
                                 0
                             };
@@ -7642,13 +7745,20 @@ pub fn get_actors(
                                     if is_choice_selected {
                                         selected_left_x = Some(x);
                                     }
-                                    let is_choice_enabled = is_scorebox_cycle_row
-                                        && (scorebox_enabled_mask
+                                    let is_choice_enabled = if is_scorebox_cycle_row {
+                                        (scorebox_enabled_mask
                                             & scorebox_cycle_bit_from_choice(idx))
-                                            != 0;
+                                            != 0
+                                    } else if is_auto_screenshot_row {
+                                        (auto_screenshot_mask
+                                            & auto_screenshot_bit_from_choice(idx))
+                                            != 0
+                                    } else {
+                                        false
+                                    };
                                     let mut choice_color = if is_disabled && !is_choice_selected {
                                         sl_gray
-                                    } else if is_scorebox_cycle_row {
+                                    } else if is_multi_toggle_row {
                                         if is_choice_enabled {
                                             col_white
                                         } else {
@@ -7694,8 +7804,8 @@ pub fn get_actors(
                             }
 
                             // For normal rows, underline the selected option.
-                            // For GS Box Leaderboards, underline each enabled option (multi-select).
-                            if layout.inline_row && is_scorebox_cycle_row {
+                            // For multi-toggle rows, underline each enabled option.
+                            if layout.inline_row && is_multi_toggle_row {
                                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                                 let offset = widescale(3.0, 4.0);
                                 let underline_y = row_mid_y + layout.text_h * 0.5 + offset;
@@ -7703,8 +7813,14 @@ pub fn get_actors(
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
                                 for idx in 0..layout.texts.len() {
-                                    let bit = scorebox_cycle_bit_from_choice(idx);
-                                    if bit == 0 || (scorebox_enabled_mask & bit) == 0 {
+                                    let enabled = if is_scorebox_cycle_row {
+                                        let bit = scorebox_cycle_bit_from_choice(idx);
+                                        bit != 0 && (scorebox_enabled_mask & bit) != 0
+                                    } else {
+                                        let bit = auto_screenshot_bit_from_choice(idx);
+                                        bit != 0 && (auto_screenshot_mask & bit) != 0
+                                    };
+                                    if !enabled {
                                         continue;
                                     }
                                     let underline_left_x = choice_inner_left

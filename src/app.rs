@@ -1890,6 +1890,34 @@ fn build_course_summary_eval_state(
     state
 }
 
+fn should_auto_screenshot_eval(eval: &evaluation::State, mask: u8) -> bool {
+    if mask == 0 {
+        return false;
+    }
+    for info in eval.score_info.iter().flatten() {
+        let is_fail = info.fail_time.is_some();
+        let is_pb = info.personal_record_highlight_rank.is_some();
+        let is_quad = matches!(info.grade, scores::Grade::Tier01);
+        let is_quint = matches!(info.grade, scores::Grade::Quint);
+        if (mask & config::AUTO_SS_PBS) != 0 && is_pb {
+            return true;
+        }
+        if (mask & config::AUTO_SS_FAILS) != 0 && is_fail {
+            return true;
+        }
+        if (mask & config::AUTO_SS_CLEARS) != 0 && !is_fail && !is_pb {
+            return true;
+        }
+        if (mask & config::AUTO_SS_QUADS) != 0 && is_quad {
+            return true;
+        }
+        if (mask & config::AUTO_SS_QUINTS) != 0 && is_quint {
+            return true;
+        }
+    }
+    false
+}
+
 fn save_screenshot_image(image: &image::RgbaImage) -> Result<PathBuf, Box<dyn Error>> {
     let dir = PathBuf::from(SCREENSHOT_DIR);
     std::fs::create_dir_all(&dir)?;
@@ -2847,6 +2875,19 @@ impl App {
                     ) && !matches!(action, ScreenAction::None)
                     {
                         let _ = self.handle_action(action, event_loop);
+                    }
+                }
+                if self.state.screens.current_screen == CurrentScreen::Evaluation
+                    && !self.state.screens.evaluation_state.auto_screenshot_taken
+                    && evaluation::auto_screenshot_ready(&self.state.screens.evaluation_state)
+                {
+                    self.state.screens.evaluation_state.auto_screenshot_taken = true;
+                    if should_auto_screenshot_eval(
+                        &self.state.screens.evaluation_state,
+                        config::get().auto_screenshot_eval,
+                    ) {
+                        self.state.shell.screenshot_pending = true;
+                        self.state.shell.screenshot_request_side = None;
                     }
                 }
             }

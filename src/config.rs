@@ -221,6 +221,59 @@ impl FromStr for SelectMusicScoreboxPlacement {
     }
 }
 
+pub const AUTO_SS_NUM_FLAGS: usize = 5;
+pub const AUTO_SS_FLAG_NAMES: [&str; AUTO_SS_NUM_FLAGS] =
+    ["PBs", "Fails", "Clears", "Quads", "Quints"];
+pub const AUTO_SS_PBS: u8 = 1 << 0;
+pub const AUTO_SS_FAILS: u8 = 1 << 1;
+pub const AUTO_SS_CLEARS: u8 = 1 << 2;
+pub const AUTO_SS_QUADS: u8 = 1 << 3;
+pub const AUTO_SS_QUINTS: u8 = 1 << 4;
+
+#[inline(always)]
+pub const fn auto_screenshot_bit(idx: usize) -> u8 {
+    match idx {
+        0 => AUTO_SS_PBS,
+        1 => AUTO_SS_FAILS,
+        2 => AUTO_SS_CLEARS,
+        3 => AUTO_SS_QUADS,
+        4 => AUTO_SS_QUINTS,
+        _ => 0,
+    }
+}
+
+pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
+    if mask == 0 {
+        return "Off".to_string();
+    }
+    let mut parts = Vec::with_capacity(AUTO_SS_NUM_FLAGS);
+    for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
+        if (mask & auto_screenshot_bit(idx)) != 0 {
+            parts.push(*name);
+        }
+    }
+    parts.join("|")
+}
+
+pub fn auto_screenshot_mask_from_str(s: &str) -> u8 {
+    let trimmed = s.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+        return 0;
+    }
+    let mut mask = 0u8;
+    for part in trimmed.split('|') {
+        match part.trim().to_ascii_lowercase().as_str() {
+            "pbs" => mask |= AUTO_SS_PBS,
+            "fails" => mask |= AUTO_SS_FAILS,
+            "clears" => mask |= AUTO_SS_CLEARS,
+            "quads" => mask |= AUTO_SS_QUADS,
+            "quints" => mask |= AUTO_SS_QUINTS,
+            _ => {}
+        }
+    }
+    mask
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncGraphMode {
     Frequency,
@@ -650,6 +703,8 @@ pub struct Config {
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
     pub smooth_histogram: bool,
+    /// Conditions for auto-screenshotting the Evaluation screen.
+    pub auto_screenshot_eval: u8,
     /// ITGmania InputFilter parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
@@ -744,6 +799,7 @@ impl Default for Config {
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
+            auto_screenshot_eval: 0,
             input_debounce_seconds: 0.02,
             only_dedicated_menu_buttons: false,
         }
@@ -1341,6 +1397,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_mask_to_str(default.auto_screenshot_eval)
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if default.show_stats_mode != 0 {
             "1"
@@ -1869,6 +1929,10 @@ pub fn load() {
                     .get("Options", "SelectMusicScoreboxCycleTournaments")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.select_music_scorebox_cycle_tournaments, |v| v != 0);
+                cfg.auto_screenshot_eval = conf
+                    .get("Options", "AutoScreenshotEval")
+                    .map(|v| auto_screenshot_mask_from_str(&v))
+                    .unwrap_or(default.auto_screenshot_eval);
                 cfg.fastload = conf
                     .get("Options", "FastLoad")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -3346,6 +3410,10 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_mask_to_str(cfg.auto_screenshot_eval)
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
@@ -4157,6 +4225,17 @@ pub fn update_select_music_scorebox_cycle_tournaments(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_auto_screenshot_eval(mask: u8) {
+    {
+        let mut cfg = lock_config();
+        if cfg.auto_screenshot_eval == mask {
+            return;
+        }
+        cfg.auto_screenshot_eval = mask;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_random_courses(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -4519,6 +4598,24 @@ mod tests {
                 "failed for {token}"
             );
         }
+    }
+
+    #[test]
+    fn auto_screenshot_mask_roundtrips() {
+        let mask = AUTO_SS_PBS | AUTO_SS_CLEARS | AUTO_SS_QUINTS;
+        let encoded = auto_screenshot_mask_to_str(mask);
+        assert_eq!(encoded, "PBs|Clears|Quints");
+        assert_eq!(auto_screenshot_mask_from_str(&encoded), mask);
+    }
+
+    #[test]
+    fn auto_screenshot_mask_handles_off_and_unknown_tokens() {
+        assert_eq!(auto_screenshot_mask_from_str(""), 0);
+        assert_eq!(auto_screenshot_mask_from_str("Off"), 0);
+        assert_eq!(
+            auto_screenshot_mask_from_str("PBs|unknown|Fails"),
+            AUTO_SS_PBS | AUTO_SS_FAILS
+        );
     }
 
     #[test]

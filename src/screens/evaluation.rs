@@ -657,6 +657,7 @@ pub struct State {
     pub return_to_course: bool,
     pub auto_advance_seconds: Option<f32>,
     pub allow_online_panes: bool,
+    pub auto_screenshot_taken: bool,
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
 }
@@ -1135,6 +1136,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
+        auto_screenshot_taken: false,
         active_pane,
         active_graph,
     }
@@ -1190,6 +1192,7 @@ pub fn init_from_score_info(
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
+        auto_screenshot_taken: false,
         active_pane,
         active_graph,
     }
@@ -1310,6 +1313,16 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
             linear(0.0): visible(false)
         ),
     ]
+}
+
+#[inline(always)]
+pub(crate) fn auto_screenshot_ready(state: &State) -> bool {
+    state.screen_elapsed >= auto_screenshot_ready_seconds()
+}
+
+#[inline(always)]
+pub(crate) fn auto_screenshot_ready_seconds() -> f32 {
+    EVAL_STAGE_IN_TOTAL_SECONDS.max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
