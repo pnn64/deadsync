@@ -1961,7 +1961,7 @@ fn prewarm_gameplay_text_layout_cache(
         GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
         crate::ui::compose::TextLayoutOverflowPolicy::PruneOwnedEntries,
     );
-    cache.clear();
+    cache.begin_frame_stats();
 
     let fonts = assets.fonts();
     let actors = gameplay::get_actors(state, assets);
@@ -6858,18 +6858,30 @@ impl App {
                     }
                 };
 
-                let gameplay_charts = if prev == CurrentScreen::Gameplay
-                    && self.state.session.course_run.is_none()
-                    && let Some(current) = self.state.screens.gameplay_state.as_ref()
-                    && current.song.simfile_path == song_arc.simfile_path
-                    && current.charts[0].short_hash == charts[0].short_hash
-                    && current.charts[1].short_hash == charts[1].short_hash
-                {
+                let gameplay_entry_started = Instant::now();
+                let reused_gameplay_charts =
+                    if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_none() {
+                        self.state
+                            .screens
+                            .gameplay_state
+                            .as_ref()
+                            .filter(|current| {
+                                current.song.simfile_path == song_arc.simfile_path
+                                    && current.charts[0].short_hash == charts[0].short_hash
+                                    && current.charts[1].short_hash == charts[1].short_hash
+                            })
+                            .map(|current| current.gameplay_charts.clone())
+                    } else {
+                        None
+                    };
+                let reusing_gameplay_payload = reused_gameplay_charts.is_some();
+                let payload_started = Instant::now();
+                let gameplay_charts = if let Some(gameplay_charts) = reused_gameplay_charts {
                     debug!(
                         "Reusing gameplay payload for quick restart '{}'",
                         song_arc.title
                     );
-                    current.gameplay_charts.clone()
+                    gameplay_charts
                 } else {
                     let gameplay_song = match song_loading::load_gameplay_charts(
                         song_arc.as_ref(),
@@ -6891,6 +6903,7 @@ impl App {
                         Arc::new(gameplay_song[chart_ixs[1]].clone()),
                     ]
                 };
+                let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
                 // Keep SelectMusic's current stepchart in sync with what we're about to play.
                 if play_style == profile::PlayStyle::Versus {
@@ -6977,6 +6990,7 @@ impl App {
                         Arc::from("EVENT")
                     };
                 let combo_carry = self.state.session.combo_carry;
+                let init_started = Instant::now();
                 let gs = gameplay::init(
                     song_arc,
                     charts,
@@ -6994,19 +7008,48 @@ impl App {
                     course_display_totals,
                     combo_carry,
                 );
+                let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
 
+                let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
                     if let Some(path) = gs.song.banner_path.as_ref() {
                         self.asset_manager.ensure_texture_from_path(backend, path);
                     }
                 }
+                let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let text_prewarm_started = Instant::now();
                 prewarm_gameplay_text_layout_cache(
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
                     &gs,
                 );
+                let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;
+                if total_ms >= 50.0 {
+                    info!(
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        gs.song.title,
+                        prev == CurrentScreen::Gameplay,
+                        if reusing_gameplay_payload {
+                            "reuse"
+                        } else {
+                            "load"
+                        },
+                    );
+                } else {
+                    debug!(
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        gs.song.title,
+                        prev == CurrentScreen::Gameplay,
+                        if reusing_gameplay_payload {
+                            "reuse"
+                        } else {
+                            "load"
+                        },
+                    );
+                }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 let show_video_backgrounds = config::get().show_video_backgrounds;
                 commands.push(Command::SetDynamicBackground(

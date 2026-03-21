@@ -2059,6 +2059,7 @@ fn load_gameplay_song_data(
     allow_cache_write: bool,
     global_offset_seconds: f32,
 ) -> Result<SerializableSongData, String> {
+    let started = Instant::now();
     let cache_keys = if allow_cache_read || allow_cache_write {
         compute_song_cache_keys(simfile_path)
     } else {
@@ -2068,16 +2069,44 @@ fn load_gameplay_song_data(
         && let Some(cp) = cache_keys.cache_path.as_ref()
         && let Some(cached_song) = load_cached_song(simfile_path, cp)
     {
+        let total_ms = started.elapsed().as_secs_f64() * 1000.0;
+        if total_ms >= 25.0 {
+            info!(
+                "Gameplay song data load: source=cache file={:?} elapsed_ms={total_ms:.3}",
+                simfile_path.file_name().unwrap_or_default()
+            );
+        } else {
+            debug!(
+                "Gameplay song data load: source=cache file={:?} elapsed_ms={total_ms:.3}",
+                simfile_path.file_name().unwrap_or_default()
+            );
+        }
         return Ok(cached_song.data);
     }
 
     let need_hash = allow_cache_write && cache_keys.cache_path.is_some();
+    let parse_started = Instant::now();
     let (mut song_data, content_hash) = parse_and_process_song_file(simfile_path, need_hash)?;
+    let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
     update_precise_last_second(&mut song_data, global_offset_seconds);
+    let write_started = Instant::now();
     if allow_cache_write
         && let (Some(cp), Some(ch)) = (cache_keys.cache_path.as_ref(), content_hash)
     {
         write_song_cache(cp, ch, &song_data);
+    }
+    let write_ms = write_started.elapsed().as_secs_f64() * 1000.0;
+    let total_ms = started.elapsed().as_secs_f64() * 1000.0;
+    if total_ms >= 25.0 {
+        info!(
+            "Gameplay song data load: source=parse file={:?} parse_ms={parse_ms:.3} write_ms={write_ms:.3} elapsed_ms={total_ms:.3}",
+            simfile_path.file_name().unwrap_or_default()
+        );
+    } else {
+        debug!(
+            "Gameplay song data load: source=parse file={:?} parse_ms={parse_ms:.3} write_ms={write_ms:.3} elapsed_ms={total_ms:.3}",
+            simfile_path.file_name().unwrap_or_default()
+        );
     }
     Ok(song_data)
 }
@@ -2086,21 +2115,40 @@ pub fn load_gameplay_charts(
     song: &SongData,
     global_offset_seconds: f32,
 ) -> Result<Vec<GameplayChartData>, String> {
+    let started = Instant::now();
     let config = crate::config::get();
     let allow_cache_read = config.fastload || config.cachesongs;
     let allow_cache_write = config.cachesongs;
+    let load_started = Instant::now();
     let song_data = load_gameplay_song_data(
         &song.simfile_path,
         allow_cache_read,
         allow_cache_write,
         global_offset_seconds,
     )?;
+    let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
     let song_offset = song_data.offset;
-    Ok(song_data
+    let chart_count = song_data.charts.len();
+    let build_started = Instant::now();
+    let charts = song_data
         .charts
         .into_iter()
         .map(|chart| build_gameplay_chart(chart, song_offset, global_offset_seconds))
-        .collect())
+        .collect::<Vec<_>>();
+    let build_ms = build_started.elapsed().as_secs_f64() * 1000.0;
+    let total_ms = started.elapsed().as_secs_f64() * 1000.0;
+    if total_ms >= 25.0 {
+        info!(
+            "Gameplay chart payload load: song='{}' charts={} load_ms={load_ms:.3} materialize_ms={build_ms:.3} elapsed_ms={total_ms:.3}",
+            song.title, chart_count
+        );
+    } else {
+        debug!(
+            "Gameplay chart payload load: song='{}' charts={} load_ms={load_ms:.3} materialize_ms={build_ms:.3} elapsed_ms={total_ms:.3}",
+            song.title, chart_count
+        );
+    }
+    Ok(charts)
 }
 
 fn parse_song_and_maybe_write_cache(

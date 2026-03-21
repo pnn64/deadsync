@@ -27,7 +27,7 @@ use crate::screens::components::shared::{
 };
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
-use log::{debug, trace, warn};
+use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -2195,6 +2195,13 @@ fn apply_uncommon_masks_for_player(
     );
 }
 
+#[inline(always)]
+fn has_uncommon_masks(profile: &profile::Profile) -> bool {
+    profile::normalize_insert_mask(profile.insert_active_mask) != 0
+        || profile::normalize_remove_mask(profile.remove_active_mask) != 0
+        || profile::normalize_holds_mask(profile.holds_active_mask) != 0
+}
+
 fn apply_uncommon_chart_transforms(
     notes: &mut Vec<Note>,
     note_ranges: &mut [(usize, usize); MAX_PLAYERS],
@@ -2203,7 +2210,12 @@ fn apply_uncommon_chart_transforms(
     player_profiles: &[profile::Profile; MAX_PLAYERS],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
 ) {
-    if num_players == 0 {
+    if num_players == 0
+        || !player_profiles
+            .iter()
+            .take(num_players)
+            .any(has_uncommon_masks)
+    {
         return;
     }
 
@@ -2214,6 +2226,12 @@ fn apply_uncommon_chart_transforms(
         let (start, end) = note_ranges[player];
         let slice_end = end.min(notes.len());
         let slice_start = start.min(slice_end);
+        let out_start = transformed.len();
+        if !has_uncommon_masks(&player_profiles[player]) {
+            transformed.extend_from_slice(&notes[slice_start..slice_end]);
+            transformed_ranges[player] = (out_start, transformed.len());
+            continue;
+        }
         let mut player_notes = notes[slice_start..slice_end].to_vec();
         apply_uncommon_masks_for_player(
             &mut player_notes,
@@ -2224,7 +2242,6 @@ fn apply_uncommon_chart_transforms(
             player,
         );
 
-        let out_start = transformed.len();
         transformed.extend(player_notes);
         transformed_ranges[player] = (out_start, transformed.len());
     }
@@ -2876,6 +2893,25 @@ fn apply_chart_attacks_for_player(
     }
 }
 
+#[inline(always)]
+fn has_chart_attacks(chart: &GameplayChartData, profile: &profile::Profile) -> bool {
+    match profile.attack_mode {
+        profile::AttackMode::Off => false,
+        profile::AttackMode::On => chart
+            .chart_attacks
+            .as_deref()
+            .is_some_and(|raw| !raw.trim().is_empty()),
+        profile::AttackMode::Random => true,
+    }
+}
+
+#[inline(always)]
+fn player_changes_chart(chart: &GameplayChartData, profile: &profile::Profile) -> bool {
+    has_uncommon_masks(profile)
+        || profile.turn_option != profile::TurnOption::None
+        || has_chart_attacks(chart, profile)
+}
+
 fn apply_chart_attacks_transforms(
     notes: &mut Vec<Note>,
     note_ranges: &mut [(usize, usize); MAX_PLAYERS],
@@ -2887,7 +2923,10 @@ fn apply_chart_attacks_transforms(
     base_seed: u64,
     song_length_seconds: f32,
 ) {
-    if num_players == 0 {
+    if num_players == 0
+        || !(0..num_players)
+            .any(|player| has_chart_attacks(&gameplay_charts[player], &player_profiles[player]))
+    {
         return;
     }
     let mut transformed = Vec::with_capacity(notes.len());
@@ -2897,6 +2936,12 @@ fn apply_chart_attacks_transforms(
         let (start, end) = note_ranges[player];
         let slice_end = end.min(notes.len());
         let slice_start = start.min(slice_end);
+        let out_start = transformed.len();
+        if !has_chart_attacks(&gameplay_charts[player], &player_profiles[player]) {
+            transformed.extend_from_slice(&notes[slice_start..slice_end]);
+            transformed_ranges[player] = (out_start, transformed.len());
+            continue;
+        }
         let mut player_notes = notes[slice_start..slice_end].to_vec();
         apply_chart_attacks_for_player(
             &mut player_notes,
@@ -2909,7 +2954,6 @@ fn apply_chart_attacks_transforms(
             base_seed,
             song_length_seconds,
         );
-        let out_start = transformed.len();
         transformed.extend(player_notes);
         transformed_ranges[player] = (out_start, transformed.len());
     }
@@ -5954,6 +5998,7 @@ pub fn init(
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
     debug!("Initializing Gameplay Screen...");
+    let init_started = Instant::now();
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {
@@ -6098,7 +6143,9 @@ pub fn init(
         );
     }
     let beat_info_cache = BeatInfoCache::new(&timing);
+    let setup_ms = init_started.elapsed().as_secs_f64() * 1000.0;
 
+    let note_build_started = Instant::now();
     let notes_cap: usize = (0..num_players)
         .map(|player| gameplay_charts[player].parsed_notes.len())
         .sum();
@@ -6184,7 +6231,9 @@ pub fn init(
         let end = notes.len();
         note_ranges[player] = (start, end);
     }
+    let note_build_ms = note_build_started.elapsed().as_secs_f64() * 1000.0;
 
+    let transform_started = Instant::now();
     apply_uncommon_chart_transforms(
         &mut notes,
         &mut note_ranges,
@@ -6229,21 +6278,54 @@ pub fn init(
         );
     }
 
+    let chart_layout_changed = (0..num_players)
+        .any(|player| player_changes_chart(&gameplay_charts[player], &player_profiles[player]));
     let mut total_steps = [0u32; MAX_PLAYERS];
     let mut jumps_total = [0u32; MAX_PLAYERS];
     let mut hands_total = [0u32; MAX_PLAYERS];
-    holds_total = [0; MAX_PLAYERS];
-    rolls_total = [0; MAX_PLAYERS];
-    mines_total = [0; MAX_PLAYERS];
-    for player in 0..num_players {
-        let totals = recompute_player_totals(&notes, note_ranges[player]);
-        total_steps[player] = totals.steps;
-        holds_total[player] = totals.holds;
-        rolls_total[player] = totals.rolls;
-        mines_total[player] = totals.mines;
-        jumps_total[player] = totals.jumps;
-        hands_total[player] = totals.hands;
+    let mut possible_grade_points = [0i32; MAX_PLAYERS];
+    if chart_layout_changed {
+        holds_total = [0; MAX_PLAYERS];
+        rolls_total = [0; MAX_PLAYERS];
+        mines_total = [0; MAX_PLAYERS];
+        for player in 0..num_players {
+            let totals = recompute_player_totals(&notes, note_ranges[player]);
+            total_steps[player] = totals.steps;
+            holds_total[player] = totals.holds;
+            rolls_total[player] = totals.rolls;
+            mines_total[player] = totals.mines;
+            jumps_total[player] = totals.jumps;
+            hands_total[player] = totals.hands;
+            possible_grade_points[player] = compute_possible_grade_points(
+                &notes,
+                note_ranges[player],
+                holds_total[player],
+                rolls_total[player],
+            );
+        }
+    } else {
+        for player in 0..num_players {
+            total_steps[player] = charts[player].stats.total_steps;
+            holds_total[player] = charts[player].holds_total;
+            rolls_total[player] = charts[player].rolls_total;
+            mines_total[player] = charts[player].mines_total;
+            jumps_total[player] = charts[player].stats.jumps;
+            hands_total[player] = charts[player].stats.hands;
+            possible_grade_points[player] = charts[player].possible_grade_points;
+        }
     }
+    if num_players == 1 {
+        possible_grade_points[1] = possible_grade_points[0];
+        holds_total[1] = holds_total[0];
+        rolls_total[1] = rolls_total[0];
+        mines_total[1] = mines_total[0];
+        total_steps[1] = total_steps[0];
+        jumps_total[1] = jumps_total[0];
+        hands_total[1] = hands_total[0];
+        score_valid[1] = score_valid[0];
+        note_ranges[1] = note_ranges[0];
+    }
+    let transform_ms = transform_started.elapsed().as_secs_f64() * 1000.0;
 
     let note_player_for_col = |col: usize| -> usize {
         if num_players <= 1 || cols_per_player == 0 {
@@ -6253,6 +6335,7 @@ pub fn init(
         }
     };
 
+    let cache_build_started = Instant::now();
     let note_time_cache: Vec<f32> = notes
         .iter()
         .map(|n| timing_players[note_player_for_col(n.column)].get_time_for_beat(n.beat))
@@ -6277,27 +6360,6 @@ pub fn init(
             })
         })
         .collect();
-
-    let mut possible_grade_points = [0i32; MAX_PLAYERS];
-    for player in 0..num_players {
-        possible_grade_points[player] = compute_possible_grade_points(
-            &notes,
-            note_ranges[player],
-            holds_total[player],
-            rolls_total[player],
-        );
-    }
-    if num_players == 1 {
-        possible_grade_points[1] = possible_grade_points[0];
-        holds_total[1] = holds_total[0];
-        rolls_total[1] = rolls_total[0];
-        mines_total[1] = mines_total[0];
-        total_steps[1] = total_steps[0];
-        jumps_total[1] = jumps_total[0];
-        hands_total[1] = hands_total[0];
-        score_valid[1] = score_valid[0];
-        note_ranges[1] = note_ranges[0];
-    }
 
     debug!("Parsed {} notes from chart data.", notes.len());
 
@@ -6345,7 +6407,9 @@ pub fn init(
             .copied()
             .unwrap_or(0);
     }
+    let cache_build_ms = cache_build_started.elapsed().as_secs_f64() * 1000.0;
 
+    let timing_prep_started = Instant::now();
     let first_second = notes
         .iter()
         .zip(&note_time_cache)
@@ -6478,7 +6542,9 @@ pub fn init(
     let decaying_hold_capacity = (0..num_players).fold(0usize, |acc, player| {
         acc.saturating_add(holds_total[player] as usize + rolls_total[player] as usize)
     });
+    let timing_prep_ms = timing_prep_started.elapsed().as_secs_f64() * 1000.0;
 
+    let hud_prep_started = Instant::now();
     let global_visual_delay_seconds = config.visual_delay_seconds;
     let player_visual_delay_seconds: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -6601,7 +6667,9 @@ pub fn init(
                 SCOREBOX_NUM_ENTRIES,
             );
     }
+    let hud_prep_ms = hud_prep_started.elapsed().as_secs_f64() * 1000.0;
 
+    let graph_prep_started = Instant::now();
     let wants_step_stats = player_profiles
         .iter()
         .take(num_players)
@@ -6771,7 +6839,9 @@ pub fn init(
         std::array::from_fn(|_| None);
     let density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let density_graph_life_dirty: [bool; MAX_PLAYERS] = [false; MAX_PLAYERS];
+    let graph_prep_ms = graph_prep_started.elapsed().as_secs_f64() * 1000.0;
 
+    let finalize_started = Instant::now();
     let mut players = std::array::from_fn(|_| init_player_runtime());
     for p in 0..num_players {
         if player_profiles[p].carry_combo_between_songs && !replay_mode {
@@ -6974,6 +7044,25 @@ pub fn init(
     refresh_active_attack_masks(&mut state);
     let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
     refresh_live_notefield_options(&mut state, current_bpm);
+    let finalize_ms = finalize_started.elapsed().as_secs_f64() * 1000.0;
+    let total_ms = init_started.elapsed().as_secs_f64() * 1000.0;
+    if total_ms >= 50.0 {
+        info!(
+            "Gameplay init timing: song='{}' notes={} players={} density_graph={} setup_ms={setup_ms:.3} note_build_ms={note_build_ms:.3} transform_ms={transform_ms:.3} cache_ms={cache_build_ms:.3} timing_ms={timing_prep_ms:.3} hud_ms={hud_prep_ms:.3} graph_ms={graph_prep_ms:.3} finalize_ms={finalize_ms:.3} elapsed_ms={total_ms:.3}",
+            state.song.title,
+            state.notes.len(),
+            state.num_players,
+            density_graph_enabled,
+        );
+    } else {
+        debug!(
+            "Gameplay init timing: song='{}' notes={} players={} density_graph={} setup_ms={setup_ms:.3} note_build_ms={note_build_ms:.3} transform_ms={transform_ms:.3} cache_ms={cache_build_ms:.3} timing_ms={timing_prep_ms:.3} hud_ms={hud_prep_ms:.3} graph_ms={graph_prep_ms:.3} finalize_ms={finalize_ms:.3} elapsed_ms={total_ms:.3}",
+            state.song.title,
+            state.notes.len(),
+            state.num_players,
+            density_graph_enabled,
+        );
+    }
     state
 }
 
