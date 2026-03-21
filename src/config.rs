@@ -189,6 +189,42 @@ impl FromStr for SelectMusicPatternInfoMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewPackMode {
+    Disabled,
+    OpenPack,
+    HasScore,
+}
+
+impl NewPackMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "Disabled",
+            Self::OpenPack => "OpenPack",
+            Self::HasScore => "HasScore",
+        }
+    }
+}
+
+impl FromStr for NewPackMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "disabled" | "disable" | "off" => Ok(Self::Disabled),
+            "openpack" | "open" => Ok(Self::OpenPack),
+            "hasscore" | "score" | "scored" => Ok(Self::HasScore),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectMusicScoreboxPlacement {
     Auto,
     StepPane,
@@ -219,6 +255,59 @@ impl FromStr for SelectMusicScoreboxPlacement {
             _ => Err(()),
         }
     }
+}
+
+pub const AUTO_SS_NUM_FLAGS: usize = 5;
+pub const AUTO_SS_FLAG_NAMES: [&str; AUTO_SS_NUM_FLAGS] =
+    ["PBs", "Fails", "Clears", "Quads", "Quints"];
+pub const AUTO_SS_PBS: u8 = 1 << 0;
+pub const AUTO_SS_FAILS: u8 = 1 << 1;
+pub const AUTO_SS_CLEARS: u8 = 1 << 2;
+pub const AUTO_SS_QUADS: u8 = 1 << 3;
+pub const AUTO_SS_QUINTS: u8 = 1 << 4;
+
+#[inline(always)]
+pub const fn auto_screenshot_bit(idx: usize) -> u8 {
+    match idx {
+        0 => AUTO_SS_PBS,
+        1 => AUTO_SS_FAILS,
+        2 => AUTO_SS_CLEARS,
+        3 => AUTO_SS_QUADS,
+        4 => AUTO_SS_QUINTS,
+        _ => 0,
+    }
+}
+
+pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
+    if mask == 0 {
+        return "Off".to_string();
+    }
+    let mut parts = Vec::with_capacity(AUTO_SS_NUM_FLAGS);
+    for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
+        if (mask & auto_screenshot_bit(idx)) != 0 {
+            parts.push(*name);
+        }
+    }
+    parts.join("|")
+}
+
+pub fn auto_screenshot_mask_from_str(s: &str) -> u8 {
+    let trimmed = s.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+        return 0;
+    }
+    let mut mask = 0u8;
+    for part in trimmed.split('|') {
+        match part.trim().to_ascii_lowercase().as_str() {
+            "pbs" => mask |= AUTO_SS_PBS,
+            "fails" => mask |= AUTO_SS_FAILS,
+            "clears" => mask |= AUTO_SS_CLEARS,
+            "quads" => mask |= AUTO_SS_QUADS,
+            "quints" => mask |= AUTO_SS_QUINTS,
+            _ => {}
+        }
+    }
+    mask
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -579,6 +668,7 @@ pub struct Config {
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub select_music_new_pack_mode: NewPackMode,
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
@@ -598,6 +688,8 @@ pub struct Config {
     pub machine_preferred_style: MachinePreferredPlayStyle,
     /// Startup flow fallback mode used when Select Play Mode is disabled.
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
+    /// Machine-wide replay recording and replay menu visibility.
+    pub machine_enable_replays: bool,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
@@ -648,11 +740,10 @@ pub struct Config {
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
     pub smooth_histogram: bool,
+    /// Conditions for auto-screenshotting the Evaluation screen.
+    pub auto_screenshot_eval: u8,
     /// ITGmania InputFilter parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
-    /// Gameplay-only release debounce window in seconds. A shorter value keeps
-    /// tap releases from lingering as long as the general input debounce.
-    pub gameplay_release_debounce_seconds: f32,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
     /// menu navigation. Only explicitly-bound menu buttons (p*_menu_*) work in menus.
     pub only_dedicated_menu_buttons: bool,
@@ -694,6 +785,7 @@ impl Default for Config {
             show_select_music_cdtitles: true,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
+            select_music_new_pack_mode: NewPackMode::Disabled,
             show_select_music_previews: true,
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,
@@ -705,6 +797,7 @@ impl Default for Config {
             machine_show_select_play_mode: true,
             machine_preferred_style: MachinePreferredPlayStyle::Single,
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
+            machine_enable_replays: true,
             machine_show_eval_summary: true,
             machine_show_name_entry: true,
             machine_show_gameover: true,
@@ -744,8 +837,8 @@ impl Default for Config {
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
+            auto_screenshot_eval: 0,
             input_debounce_seconds: 0.02,
-            gameplay_release_debounce_seconds: 0.005,
             only_dedicated_menu_buttons: false,
         }
     }
@@ -1270,6 +1363,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicNewPackMode={}\n",
+        default.select_music_new_pack_mode.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviews={}\n",
         if default.show_select_music_previews {
             "1"
@@ -1342,6 +1439,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_mask_to_str(default.auto_screenshot_eval)
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if default.show_stats_mode != 0 {
             "1"
@@ -1360,10 +1461,6 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "InputDebounceTime={:.3}\n",
         default.input_debounce_seconds
-    ));
-    content.push_str(&format!(
-        "GameplayReleaseDebounceTime={:.3}\n",
-        default.gameplay_release_debounce_seconds
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
@@ -1498,6 +1595,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "MachineShowSelectStyle={}\n",
         if default.machine_show_select_style {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "MachineEnableReplays={}\n",
+        if default.machine_enable_replays {
             "1"
         } else {
             "0"
@@ -1826,6 +1931,10 @@ pub fn load() {
                     .get("Options", "SelectMusicWheelLamps")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_music_wheel_lamps, |v| v != 0);
+                cfg.select_music_new_pack_mode = conf
+                    .get("Options", "SelectMusicNewPackMode")
+                    .and_then(|v| NewPackMode::from_str(&v).ok())
+                    .unwrap_or(default.select_music_new_pack_mode);
                 cfg.show_select_music_previews = conf
                     .get("Options", "SelectMusicPreviews")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1866,6 +1975,10 @@ pub fn load() {
                     .get("Options", "SelectMusicScoreboxCycleTournaments")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.select_music_scorebox_cycle_tournaments, |v| v != 0);
+                cfg.auto_screenshot_eval = conf
+                    .get("Options", "AutoScreenshotEval")
+                    .map(|v| auto_screenshot_mask_from_str(&v))
+                    .unwrap_or(default.auto_screenshot_eval);
                 cfg.fastload = conf
                     .get("Options", "FastLoad")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1910,27 +2023,6 @@ pub fn load() {
                         })
                     })
                     .unwrap_or(default.input_debounce_seconds);
-                cfg.gameplay_release_debounce_seconds = conf
-                    .get("Options", "GameplayReleaseDebounceTime")
-                    .map(|v| v.trim().to_string())
-                    .and_then(|v| {
-                        if v.is_empty() {
-                            return None;
-                        }
-                        let lower = v.to_ascii_lowercase();
-                        if let Some(ms) = lower.strip_suffix("ms") {
-                            return ms
-                                .trim()
-                                .parse::<f32>()
-                                .ok()
-                                .map(|n| (n / 1000.0).clamp(0.0, 0.2));
-                        }
-                        v.parse::<f32>().ok().map(|n| {
-                            let secs = if n > 1.0 { n / 1000.0 } else { n };
-                            secs.clamp(0.0, 0.2)
-                        })
-                    })
-                    .unwrap_or(default.gameplay_release_debounce_seconds);
                 cfg.only_dedicated_menu_buttons = conf
                     .get("Options", "OnlyDedicatedMenuButtons")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -2113,6 +2205,27 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.machine_show_select_play_mode);
+                cfg.machine_enable_replays = conf
+                    .get("Theme", "MachineEnableReplays")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_enable_replays);
                 cfg.machine_preferred_style = conf
                     .get("Theme", "MachinePreferredStyle")
                     .and_then(|v| MachinePreferredPlayStyle::from_str(&v).ok())
@@ -2236,7 +2349,6 @@ pub fn load() {
                     "ShowStatsMode",
                     "SmoothHistogram",
                     "InputDebounceTime",
-                    "GameplayReleaseDebounceTime",
                     "OnlyDedicatedMenuButtons",
                     "AssistTickVolume",
                     "SFXVolume",
@@ -2287,6 +2399,9 @@ pub fn load() {
                 if !miss && !has("Theme", "MachineShowSelectStyle") {
                     miss = true;
                 }
+                if !miss && !has("Theme", "MachineEnableReplays") {
+                    miss = true;
+                }
                 if !miss && !has("Theme", "MachinePreferredStyle") {
                     miss = true;
                 }
@@ -2324,9 +2439,6 @@ pub fn load() {
     }
     crate::core::input::set_only_dedicated_menu_buttons(dedicated);
     crate::core::input::set_input_debounce_seconds(get().input_debounce_seconds);
-    crate::core::input::set_gameplay_release_debounce_seconds(
-        get().gameplay_release_debounce_seconds,
-    );
 }
 
 // --- Keymap defaults and parsing (kept in config to avoid coupling input.rs to config) ---
@@ -3272,6 +3384,10 @@ fn save_without_keymaps() {
         if cfg.show_music_wheel_lamps { "1" } else { "0" }
     ));
     content.push_str(&format!(
+        "SelectMusicNewPackMode={}\n",
+        cfg.select_music_new_pack_mode.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviews={}\n",
         if cfg.show_select_music_previews {
             "1"
@@ -3344,6 +3460,10 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_mask_to_str(cfg.auto_screenshot_eval)
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
@@ -3355,10 +3475,6 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "InputDebounceTime={:.3}\n",
         cfg.input_debounce_seconds
-    ));
-    content.push_str(&format!(
-        "GameplayReleaseDebounceTime={:.3}\n",
-        cfg.gameplay_release_debounce_seconds
     ));
     content.push_str(&format!(
         "OnlyDedicatedMenuButtons={}\n",
@@ -3471,6 +3587,10 @@ fn save_without_keymaps() {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "MachineEnableReplays={}\n",
+        if cfg.machine_enable_replays { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "MachinePreferredStyle={}\n",
@@ -4034,6 +4154,17 @@ pub fn update_show_music_wheel_lamps(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_select_music_new_pack_mode(mode: NewPackMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_new_pack_mode == mode {
+            return;
+        }
+        cfg.select_music_new_pack_mode = mode;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_previews(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -4151,6 +4282,17 @@ pub fn update_select_music_scorebox_cycle_tournaments(enabled: bool) {
             return;
         }
         cfg.select_music_scorebox_cycle_tournaments = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_auto_screenshot_eval(mask: u8) {
+    {
+        let mut cfg = lock_config();
+        if cfg.auto_screenshot_eval == mask {
+            return;
+        }
+        cfg.auto_screenshot_eval = mask;
     }
     save_without_keymaps();
 }
@@ -4389,6 +4531,17 @@ pub fn update_machine_show_gameover(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_machine_enable_replays(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_enable_replays == enabled {
+            return;
+        }
+        cfg.machine_enable_replays = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_enable_groovestats(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -4506,6 +4659,24 @@ mod tests {
                 "failed for {token}"
             );
         }
+    }
+
+    #[test]
+    fn auto_screenshot_mask_roundtrips() {
+        let mask = AUTO_SS_PBS | AUTO_SS_CLEARS | AUTO_SS_QUINTS;
+        let encoded = auto_screenshot_mask_to_str(mask);
+        assert_eq!(encoded, "PBs|Clears|Quints");
+        assert_eq!(auto_screenshot_mask_from_str(&encoded), mask);
+    }
+
+    #[test]
+    fn auto_screenshot_mask_handles_off_and_unknown_tokens() {
+        assert_eq!(auto_screenshot_mask_from_str(""), 0);
+        assert_eq!(auto_screenshot_mask_from_str("Off"), 0);
+        assert_eq!(
+            auto_screenshot_mask_from_str("PBs|unknown|Fails"),
+            AUTO_SS_PBS | AUTO_SS_FAILS
+        );
     }
 
     #[test]

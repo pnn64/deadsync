@@ -98,7 +98,7 @@ fn chart_for_preferred_or_nearest_standard<'a>(
     let mut best_chart = None;
     let mut best_distance = usize::MAX;
     for chart in &song.charts {
-        if chart.notes.is_empty() || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
+        if !chart.has_note_data || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
             continue;
         }
         let Some(diff_ix) = color::FILE_DIFFICULTY_NAMES
@@ -222,7 +222,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     } else {
                         [1.0, 1.0, 1.0, 1.0]
                     };
-                    let mut slot_children = Vec::with_capacity(4);
+                    let show_new_badge = p.color_pack_headers
+                        && p.new_pack_names
+                            .is_some_and(|new_packs| new_packs.contains(name.as_str()));
+                    let mut slot_children = Vec::with_capacity(4 + usize::from(show_new_badge));
                     slot_children.push(act!(quad:
                         align(0.0, 0.5):
                         xy(0.0, half_item_h):
@@ -247,29 +250,22 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         diffuse(header_color[0], header_color[1], header_color[2], 1.0):
                         z(2)
                     ));
-
-                    // NEW badge — pulsing green/white
-                    if let Some(new_packs) = p.new_pack_names
-                        && new_packs.contains(name.as_str())
-                    {
+                    if show_new_badge {
                         let phase = (p.selection_animation_timer / NEW_BADGE_PULSE_PERIOD)
                             * std::f32::consts::PI
                             * 2.0;
-                        let t = f32::midpoint(phase.sin(), 1.0);
-                        let col = lerp_color(NEW_BADGE_COLOR, NEW_BADGE_COLOR_PEAK, t);
-
-                        let new_badge_x = pack_count_x_local - widescale(30.0, 40.0);
+                        let pulse_t = f32::midpoint(phase.sin(), 1.0);
+                        let color = lerp_color(NEW_BADGE_COLOR, NEW_BADGE_COLOR_PEAK, pulse_t);
                         slot_children.push(act!(text:
                             font("miso"):
                             settext("NEW"):
                             align(1.0, 0.5):
-                            xy(new_badge_x, half_item_h):
+                            xy(pack_count_x_local - widescale(30.0, 40.0), half_item_h):
                             zoom(0.6):
-                            diffuse(col[0], col[1], col[2], col[3]):
+                            diffuse(color[0], color[1], color[2], color[3]):
                             z(2)
                         ));
                     }
-
                     if let Some(count) = p.pack_song_counts.get(name.as_str())
                         && *count > 0
                     {

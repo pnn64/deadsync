@@ -1,18 +1,19 @@
 use crate::act;
 use crate::assets::{self, AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{
-    self, BreakdownStyle, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SyncGraphMode,
+    self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SyncGraphMode,
 };
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
-use crate::core::input::{InputEvent, PadDir, VirtualAction};
+use crate::core::input::{InputEvent, PadDir, RawKeyboardEvent, VirtualAction};
 use crate::core::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
 };
 use crate::game::chart::ChartData;
-use crate::game::parsing::simfile as song_loading;
 use crate::game::known_packs;
+use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
@@ -40,7 +41,6 @@ use std::sync::mpsc;
 use std::sync::{Arc, OnceLock};
 use std::thread::LocalKey;
 use std::time::{Duration, Instant};
-use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -434,18 +434,12 @@ fn sec_at_beat(song: &SongData, target_beat: f64) -> f64 {
     if !target_beat.is_finite() || target_beat <= 0.0 {
         return 0.0;
     }
-    if let Some(chart) = song.charts.first() {
-        return chart.timing.get_time_for_beat(target_beat as f32).max(0.0) as f64;
-    }
     sec_at_beat_from_bpms(&song.normalized_bpms, target_beat)
 }
 
 fn beat_at_sec(song: &SongData, target_sec: f64) -> f64 {
     if !target_sec.is_finite() || target_sec <= 0.0 {
         return 0.0;
-    }
-    if let Some(chart) = song.charts.first() {
-        return chart.timing.get_beat_for_time(target_sec as f32).max(0.0) as f64;
     }
     beat_at_sec_from_bpms(&song.normalized_bpms, target_sec)
 }
@@ -484,7 +478,7 @@ fn preview_marker(
     if graph_w <= 0.0 || !preview_sec.is_finite() {
         return None;
     }
-    let first_second = 0.0_f32.min(chart.timing.get_time_for_beat(0.0));
+    let first_second = chart.first_second;
     let last_second = displayed
         .song
         .precise_last_second()
@@ -914,6 +908,89 @@ pub struct State {
     popularity_pack_song_counts: HashMap<String, usize>,
     recent_pack_song_counts: HashMap<String, usize>,
     new_pack_names: HashSet<String>,
+}
+
+#[inline(always)]
+fn cached_score_exists(score: scores::CachedScore) -> bool {
+    score.grade != scores::Grade::Failed || score.score_percent > 0.0
+}
+
+fn song_has_cached_score(song: &SongData) -> bool {
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        for chart in &song.charts {
+            if scores::get_cached_score_for_side(&chart.short_hash, side)
+                .is_some_and(cached_score_exists)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn joined_local_profile_ids() -> Vec<String> {
+    let mut profile_ids = Vec::with_capacity(2);
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+            continue;
+        };
+        if !profile_ids.iter().any(|id| id == &profile_id) {
+            profile_ids.push(profile_id);
+        }
+    }
+    profile_ids
+}
+
+fn sync_new_pack_names(
+    profile_ids: &[String],
+    scanned_pack_names: Vec<String>,
+    scored_pack_names: &HashSet<String>,
+    mode: NewPackMode,
+) -> HashSet<String> {
+    let mut new_pack_names = known_packs::sync_known_packs(profile_ids, &scanned_pack_names);
+    if new_pack_names.is_empty() {
+        return new_pack_names;
+    }
+    match mode {
+        NewPackMode::Disabled => {
+            known_packs::mark_packs_known(
+                profile_ids,
+                scanned_pack_names.iter().map(String::as_str),
+            );
+            HashSet::new()
+        }
+        NewPackMode::OpenPack => new_pack_names,
+        NewPackMode::HasScore => {
+            new_pack_names.retain(|name| !scored_pack_names.contains(name.as_str()));
+            new_pack_names
+        }
+    }
+}
+
+fn maybe_clear_selected_pack_on_score(state: &mut State, mode: NewPackMode) {
+    if mode != NewPackMode::HasScore
+        || state.sort_mode != WheelSortMode::Group
+        || state.new_pack_names.is_empty()
+    {
+        return;
+    }
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return;
+    };
+    let song = song.clone();
+    if !song_has_cached_score(&song) {
+        return;
+    }
+    let Some(pack_name) = group_name_for_song(&state.entries, &song) else {
+        return;
+    };
+    state.new_pack_names.remove(&pack_name);
 }
 
 pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usize) -> bool {
@@ -1513,7 +1590,7 @@ fn song_meter_for_sort(song: &SongData, chart_type: &str) -> Option<u32> {
     let mut best_non_edit: Option<u32> = None;
     let mut best_any: Option<u32> = None;
     for chart in &song.charts {
-        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || chart.notes.is_empty() {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
             continue;
         }
         best_any = Some(best_any.map_or(chart.meter, |m| m.max(chart.meter)));
@@ -1585,7 +1662,7 @@ fn build_popularity_grouped_entries(
         HashMap::with_capacity(songs.len().saturating_mul(8));
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
-            if chart.notes.is_empty() {
+            if !chart.has_note_data {
                 continue;
             }
             hash_to_song_ix
@@ -1644,7 +1721,7 @@ fn build_recent_grouped_entries(
         HashMap::with_capacity(songs.len().saturating_mul(8));
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
-            if chart.notes.is_empty() {
+            if !chart.has_note_data {
                 continue;
             }
             hash_to_song_ix
@@ -1817,11 +1894,15 @@ pub fn init() -> State {
     let target_chart_type = profile::get_session_play_style().chart_type();
     let total_packs = song_cache.len();
     let total_songs: usize = song_cache.iter().map(|p| p.songs.len()).sum();
+    let new_pack_mode = config::get().select_music_new_pack_mode;
+    let clear_new_packs_on_score = new_pack_mode == NewPackMode::HasScore;
+    let joined_profile_ids = joined_local_profile_ids();
 
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
     let mut pack_song_counts = HashMap::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
     let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
+    let mut scored_pack_names = HashSet::new();
 
     let profile_data = profile::get();
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
@@ -1843,6 +1924,7 @@ pub fn init() -> State {
         let mut pack_name: Option<String> = None;
         let mut pack_song_count = 0usize;
         let mut pack_total_seconds = 0.0_f64;
+        let mut pack_has_cached_score = false;
 
         for song in &pack.songs {
             let mut has_target_chart_type = false;
@@ -1862,6 +1944,9 @@ pub fn init() -> State {
             }
             if has_edit {
                 song_has_edit_ptrs.insert(Arc::as_ptr(song) as usize);
+            }
+            if clear_new_packs_on_score && !pack_has_cached_score && song_has_cached_score(song) {
+                pack_has_cached_score = true;
             }
 
             let pack_name = pack_name.get_or_insert_with(|| {
@@ -1900,6 +1985,9 @@ pub fn init() -> State {
 
         if let Some(name) = pack_name {
             // Compute cache for get_actors (HOT PATH OPTIMIZATION)
+            if pack_has_cached_score {
+                scored_pack_names.insert(name.clone());
+            }
             pack_song_counts.insert(name, pack_song_count);
             pack_total_seconds_by_index[i] = pack_total_seconds;
         }
@@ -1914,6 +2002,12 @@ pub fn init() -> State {
     let (popularity_entries, popularity_pack_song_counts) =
         build_popularity_grouped_entries(&all_entries);
     let (recent_entries, recent_pack_song_counts) = build_recent_grouped_entries(&all_entries);
+    let new_pack_names = sync_new_pack_names(
+        &joined_profile_ids,
+        pack_song_counts.keys().cloned().collect(),
+        &scored_pack_names,
+        new_pack_mode,
+    );
 
     let mut state = State {
         all_entries: all_entries.clone(),
@@ -2008,7 +2102,7 @@ pub fn init() -> State {
         pack_total_seconds_by_index,
         song_has_edit_ptrs,
         pack_song_counts: pack_song_counts.clone(),
-        group_pack_song_counts: pack_song_counts.clone(),
+        group_pack_song_counts: pack_song_counts,
         title_pack_song_counts,
         artist_pack_song_counts,
         bpm_pack_song_counts,
@@ -2016,10 +2110,7 @@ pub fn init() -> State {
         meter_pack_song_counts,
         popularity_pack_song_counts,
         recent_pack_song_counts,
-        new_pack_names: {
-            let scanned_names: Vec<String> = pack_song_counts.keys().cloned().collect();
-            known_packs::sync_known_packs(&scanned_names)
-        },
+        new_pack_names,
     };
 
     let built_entries_len = state.all_entries.len();
@@ -2479,6 +2570,7 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
     if page == sort_menu::Page::Sorts {
         return &sort_menu::ITEMS_SORTS;
     }
+    let replays_enabled = config::get().machine_enable_replays;
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
@@ -2491,15 +2583,26 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
         single_player_joined,
         has_song_selected,
     ) {
-        (profile::PlayStyle::Single, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE,
+        (profile::PlayStyle::Single, true, true) if replays_enabled => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE
+        }
+        (profile::PlayStyle::Single, true, true) => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE_NO_REPLAY
+        }
         (profile::PlayStyle::Single, true, false) => {
             &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE[..6]
         }
-        (profile::PlayStyle::Double, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE,
+        (profile::PlayStyle::Double, true, true) if replays_enabled => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE
+        }
+        (profile::PlayStyle::Double, true, true) => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE_NO_REPLAY
+        }
         (profile::PlayStyle::Double, true, false) => {
             &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE[..6]
         }
-        (_, _, true) => &sort_menu::ITEMS_MAIN,
+        (_, _, true) if replays_enabled => &sort_menu::ITEMS_MAIN,
+        (_, _, true) => &sort_menu::ITEMS_MAIN_NO_REPLAY,
         (_, _, false) => &sort_menu::ITEMS_MAIN[..5],
     }
 }
@@ -3971,6 +4074,9 @@ fn show_leaderboard_overlay(state: &mut State) {
 }
 
 fn show_replay_overlay(state: &mut State) {
+    if !config::get().machine_enable_replays {
+        return;
+    }
     let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
         return;
     };
@@ -4986,8 +5092,11 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
         Some(MusicWheelEntry::PackHeader { name, .. }) => {
             audio::play_sfx("assets/sounds/expand.ogg");
             let target = name.clone();
-            if state.new_pack_names.remove(&target) {
-                known_packs::mark_pack_known(&target);
+            if config::get().select_music_new_pack_mode == NewPackMode::OpenPack
+                && state.new_pack_names.remove(&target)
+            {
+                let profile_ids = joined_local_profile_ids();
+                known_packs::mark_pack_known(&profile_ids, &target);
             }
             if state.expanded_pack_name.as_ref() == Some(&target) {
                 state.expanded_pack_name = None;
@@ -5010,18 +5119,17 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
     }
 }
 
-pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
+pub fn handle_raw_key_event(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+    text: Option<&str>,
+) -> ScreenAction {
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
 
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
-        if key.state == ElementState::Pressed
-            && matches!(
-                key.physical_key,
-                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
-            )
-        {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             hide_sync_overlay(state);
             state.song_search_ignore_next_back_select = true;
         }
@@ -5029,12 +5137,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
     }
 
     if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
-        if key.state == ElementState::Pressed
-            && matches!(
-                key.physical_key,
-                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
-            )
-        {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
             state.song_search_ignore_next_back_select = true;
             return ScreenAction::None;
@@ -5048,9 +5151,9 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    if key.state == ElementState::Pressed {
+    if key.is_some_and(|key| key.pressed) {
         if matches!(state.song_search, sort_menu::SongSearchState::Results(_))
-            && let winit::keyboard::PhysicalKey::Code(KeyCode::Escape) = key.physical_key
+            && key.is_some_and(|key| key.code == KeyCode::Escape)
         {
             cancel_song_search(state);
             return ScreenAction::None;
@@ -5058,7 +5161,8 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
         if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
-            if let winit::keyboard::PhysicalKey::Code(code) = key.physical_key {
+            if let Some(key) = key {
+                let code = key.code;
                 match code {
                     KeyCode::Backspace => {
                         sort_menu::song_search_backspace(entry);
@@ -5076,7 +5180,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 
             if !prompt_close
                 && prompt_start.is_none()
-                && let Some(text) = key.text.as_ref()
+                && let Some(text) = text
             {
                 sort_menu::song_search_add_text(entry, text);
             }
@@ -5093,10 +5197,10 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         }
     }
 
-    if key.state != ElementState::Pressed {
+    if !key.is_some_and(|key| key.pressed) {
         return ScreenAction::None;
     }
-    if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key {
+    if key.is_some_and(|key| key.code == KeyCode::F7) {
         let target_chart_type = profile::get_session_play_style().chart_type();
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
             if let Some(chart) =
@@ -5461,6 +5565,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     let cfg = config::get();
+    maybe_clear_selected_pack_on_score(state, cfg.select_music_new_pack_mode);
 
     // Keep banner/CDTitle aligned to the restored wheel selection even while
     // overlays are visible; only preview/GS fetches are paused under overlays.
@@ -5560,8 +5665,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                         DensityGraphSource {
                             max_nps: c.max_nps,
                             measure_nps_vec: c.measure_nps_vec.clone(),
-                            timing: c.timing.clone(),
-                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                            measure_seconds_vec: c.measure_seconds_vec.clone(),
+                            first_second: c.first_second,
                             last_second: song.precise_last_second(),
                         }
                     }),
@@ -5593,8 +5698,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                             DensityGraphSource {
                                 max_nps: c.max_nps,
                                 measure_nps_vec: c.measure_nps_vec.clone(),
-                                timing: c.timing.clone(),
-                                first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                                measure_seconds_vec: c.measure_seconds_vec.clone(),
+                                first_second: c.first_second,
                                 last_second: song.precise_last_second(),
                             }
                         }),
@@ -6898,7 +7003,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
         show_music_wheel_grades: cfg.show_music_wheel_grades,
         show_music_wheel_lamps: cfg.show_music_wheel_lamps,
-        new_pack_names: Some(&state.new_pack_names),
+        new_pack_names: (state.sort_mode == WheelSortMode::Group).then_some(&state.new_pack_names),
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 
