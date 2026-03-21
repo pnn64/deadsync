@@ -6885,6 +6885,7 @@ impl App {
                 } else {
                     let gameplay_song = match song_loading::load_gameplay_charts(
                         song_arc.as_ref(),
+                        &chart_ixs,
                         config::get().global_offset_seconds,
                     ) {
                         Ok(gameplay_song) => gameplay_song,
@@ -6899,8 +6900,8 @@ impl App {
                         }
                     };
                     [
-                        Arc::new(gameplay_song[chart_ixs[0]].clone()),
-                        Arc::new(gameplay_song[chart_ixs[1]].clone()),
+                        Arc::new(gameplay_song[0].clone()),
+                        Arc::new(gameplay_song[1].clone()),
                     ]
                 };
                 let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
