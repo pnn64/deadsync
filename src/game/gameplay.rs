@@ -6336,76 +6336,55 @@ pub fn init(
     };
 
     let cache_build_started = Instant::now();
-    let note_time_cache: Vec<f32> = notes
-        .iter()
-        .map(|n| timing_players[note_player_for_col(n.column)].get_time_for_beat(n.beat))
-        .collect();
-    let note_display_beat_cache: Vec<f32> = notes
-        .iter()
-        .map(|n| timing_players[note_player_for_col(n.column)].get_displayed_beat(n.beat))
-        .collect();
-    let hold_end_time_cache: Vec<Option<f32>> = notes
-        .iter()
-        .map(|n| {
-            n.hold.as_ref().map(|h| {
-                timing_players[note_player_for_col(n.column)].get_time_for_beat(h.end_beat)
-            })
-        })
-        .collect();
-    let hold_end_display_beat_cache: Vec<Option<f32>> = notes
-        .iter()
-        .map(|n| {
-            n.hold.as_ref().map(|h| {
-                timing_players[note_player_for_col(n.column)].get_displayed_beat(h.end_beat)
-            })
-        })
-        .collect();
+    let mut note_time_cache = Vec::with_capacity(notes.len());
+    let mut note_display_beat_cache = Vec::with_capacity(notes.len());
+    let mut hold_end_time_cache = Vec::with_capacity(notes.len());
+    let mut hold_end_display_beat_cache = Vec::with_capacity(notes.len());
+    for note in &notes {
+        let timing_player = &timing_players[note_player_for_col(note.column)];
+        note_time_cache.push(timing_player.get_time_for_beat(note.beat));
+        note_display_beat_cache.push(timing_player.get_displayed_beat(note.beat));
+        if let Some(hold) = note.hold.as_ref() {
+            hold_end_time_cache.push(Some(timing_player.get_time_for_beat(hold.end_beat)));
+            hold_end_display_beat_cache.push(Some(timing_player.get_displayed_beat(hold.end_beat)));
+        } else {
+            hold_end_time_cache.push(None);
+            hold_end_display_beat_cache.push(None);
+        }
+    }
 
     debug!("Parsed {} notes from chart data.", notes.len());
 
-    let mut row_map: HashMap<usize, Vec<usize>> = HashMap::new();
-    for (i, n) in notes.iter().enumerate() {
-        if matches!(n.note_type, NoteType::Mine) {
-            continue;
-        }
-        if !n.can_be_judged {
-            continue;
-        }
-        row_map.entry(n.row_index).or_default().push(i);
-    }
-    let mut row_entries: Vec<RowEntry> = row_map
-        .into_iter()
-        .map(|(row_index, nonmine_note_indices)| RowEntry {
-            row_index,
-            nonmine_note_indices,
-        })
-        .collect();
-    row_entries.sort_by_key(|e| e.row_index);
-
-    // Build optimized O(1) lookup table for row entries
+    let mut row_entries: Vec<RowEntry> = Vec::with_capacity(notes.len() / 2);
     let mut row_map_cache = vec![u32::MAX; max_row_index + 1];
-    for (pos, entry) in row_entries.iter().enumerate() {
-        if entry.row_index < row_map_cache.len() {
-            row_map_cache[entry.row_index] = pos as u32;
-        }
-    }
-    let mut row_hold_roll_flags: HashMap<usize, u8> = HashMap::new();
-    for note in &notes {
-        let flag = match note.note_type {
-            NoteType::Hold => 0b01,
-            NoteType::Roll => 0b10,
-            _ => 0,
-        };
-        if flag != 0 {
-            *row_hold_roll_flags.entry(note.row_index).or_insert(0) |= flag;
-        }
-    }
     let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
-    for (idx, note) in notes.iter().enumerate() {
-        tap_row_hold_roll_flags[idx] = row_hold_roll_flags
-            .get(&note.row_index)
-            .copied()
-            .unwrap_or(0);
+    let mut cursor = 0usize;
+    while cursor < notes.len() {
+        let row_index = notes[cursor].row_index;
+        let row_start = cursor;
+        let mut row_flags = 0u8;
+        let mut nonmine_note_indices = Vec::with_capacity(4);
+        while cursor < notes.len() && notes[cursor].row_index == row_index {
+            let note = &notes[cursor];
+            match note.note_type {
+                NoteType::Hold => row_flags |= 0b01,
+                NoteType::Roll => row_flags |= 0b10,
+                _ => {}
+            }
+            if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+                nonmine_note_indices.push(cursor);
+            }
+            cursor += 1;
+        }
+        if !nonmine_note_indices.is_empty() {
+            let row_entry_index = row_entries.len() as u32;
+            row_map_cache[row_index] = row_entry_index;
+            row_entries.push(RowEntry {
+                row_index,
+                nonmine_note_indices,
+            });
+        }
+        tap_row_hold_roll_flags[row_start..cursor].fill(row_flags);
     }
     let cache_build_ms = cache_build_started.elapsed().as_secs_f64() * 1000.0;
 

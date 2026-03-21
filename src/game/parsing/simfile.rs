@@ -1939,7 +1939,7 @@ fn scan_and_load_courses_impl<F>(
     set_course_cache(loaded_courses);
 }
 
-fn load_cached_song(path: &Path, cache_path: &Path) -> Option<CachedSong> {
+fn load_cached_song_base(path: &Path, cache_path: &Path) -> Option<CachedSong> {
     if !cache_path.exists() {
         return None;
     }
@@ -1988,7 +1988,11 @@ fn load_cached_song(path: &Path, cache_path: &Path) -> Option<CachedSong> {
         );
         return None;
     }
+    Some(cached_song)
+}
 
+fn load_cached_song(path: &Path, cache_path: &Path) -> Option<CachedSong> {
+    let cached_song = load_cached_song_base(path, cache_path)?;
     let content_hash = match get_content_hash(path) {
         Ok(h) => h,
         Err(e) => {
@@ -2010,6 +2014,18 @@ fn load_cached_song(path: &Path, cache_path: &Path) -> Option<CachedSong> {
     }
 
     debug!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
+    Some(cached_song)
+}
+
+fn load_cached_song_for_gameplay(path: &Path, cache_path: &Path) -> Option<CachedSong> {
+    // Startup already validated the source hash for the current session.
+    // Gameplay payload loads can trust that session-local cache state and
+    // avoid re-reading giant simfiles on every song entry/restart.
+    let cached_song = load_cached_song_base(path, cache_path)?;
+    debug!(
+        "Gameplay cache hit (no source rehash) for: {:?}",
+        path.file_name().unwrap_or_default()
+    );
     Some(cached_song)
 }
 
@@ -2067,7 +2083,7 @@ fn load_gameplay_song_data(
     };
     if allow_cache_read
         && let Some(cp) = cache_keys.cache_path.as_ref()
-        && let Some(cached_song) = load_cached_song(simfile_path, cp)
+        && let Some(cached_song) = load_cached_song_for_gameplay(simfile_path, cp)
     {
         let total_ms = started.elapsed().as_secs_f64() * 1000.0;
         if total_ms >= 25.0 {
