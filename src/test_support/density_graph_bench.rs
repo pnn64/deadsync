@@ -54,11 +54,14 @@ pub fn fixture() -> DensityGraphBenchFixture {
         },
         &[],
     );
+    let measure_seconds: Vec<f32> = (0..measure_nps.len())
+        .map(|measure| timing.get_time_for_beat((measure as f32) * 4.0))
+        .collect();
     let visible_width = 286.0_f32;
     let cache = density_graph::build_density_histogram_cache(
         &measure_nps,
         peak_nps,
-        &timing,
+        &measure_seconds,
         0.0,
         timing.get_time_for_beat(measure_nps.len() as f32 * 4.0),
         1144.0,

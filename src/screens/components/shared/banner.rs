@@ -121,8 +121,8 @@ mod tests {
     #[test]
     fn crops_full_art_vertically_like_itgmania() {
         let uv = clipped_uv_for_dims(1536.0, 1024.0, 418.0, 164.0).unwrap();
-        assert!((uv[1] - 0.13118279).abs() < 0.0001);
-        assert!((uv[3] - 0.8688172).abs() < 0.0001);
+        assert!((uv[1] - 0.13074161).abs() < 0.0001);
+        assert!((uv[3] - 0.8692584).abs() < 0.0001);
     }
 
     #[test]

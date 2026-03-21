@@ -1,14 +1,18 @@
 use super::{
-    DevdEvent, DevdWatch, GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId,
+    DevdEvent, DevdWatch, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges,
     uuid_from_bytes,
 };
 use crate::core::host_time::{instant_nanos, now_nanos};
+use crate::core::input::RawKeyboardEvent;
 use log::{debug, warn};
 use std::ffi::c_void;
 use std::fs;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::platform::scancode::PhysicalKeyExtScancode;
 
 const POLLIN: i16 = 0x0001;
 const POLLERR: i16 = 0x0008;
@@ -36,6 +40,12 @@ const BTN_DPAD_UP: u16 = 0x220;
 const BTN_DPAD_RIGHT: u16 = 0x223;
 const BTN_TRIGGER_HAPPY1: u16 = 0x2c0;
 const BTN_TRIGGER_HAPPY4: u16 = 0x2c3;
+
+const KEY_ESC: u16 = 1;
+const KEY_ENTER: u16 = 28;
+const KEY_A: u16 = 30;
+const KEY_Z: u16 = 44;
+const KEY_SPACE: u16 = 57;
 
 const EV_MAX: u16 = 0x1f;
 const KEY_MAX: u16 = 0x2ff;
@@ -86,6 +96,8 @@ struct InputId {
     version: u16,
 }
 
+// SAFETY: These are direct libc FFI declarations. Callers must pass valid poll arrays, file
+// descriptors, and writable/readable buffers matching the requested byte counts.
 unsafe extern "C" {
     fn poll(fds: *mut PollFd, nfds: usize, timeout: i32) -> i32;
     fn read(fd: i32, buf: *mut c_void, count: usize) -> isize;
@@ -104,7 +116,21 @@ struct Dev {
     dir: [bool; 4],
 }
 
+struct KeyDev {
+    path: String,
+    file: std::fs::File,
+    monotonic_timestamps: bool,
+    clock_health: EvdevClockHealth,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DevClass {
+    Pad,
+    Keyboard,
+}
+
 struct DevSpec {
+    class: DevClass,
     path: String,
     name: String,
     vendor_id: Option<u16>,
@@ -116,15 +142,15 @@ struct ScanStats {
     event_nodes: u32,
     permission_denied: u32,
     open_errors: u32,
-    non_controller: u32,
+    non_input: u32,
 }
 
 enum ProbeResult {
     Skip,
     PermissionDenied,
     OpenError,
-    NotController,
-    Controller(DevSpec),
+    NotInput,
+    Device(DevSpec),
 }
 
 #[derive(Clone, Copy)]
@@ -140,6 +166,25 @@ struct EvdevClockHealth {
     kernel_trusted: bool,
     invalid_samples: u32,
     last_event_nanos: u64,
+}
+
+static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
+static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
+
+#[inline(always)]
+pub fn set_keyboard_window_focused(focused: bool) {
+    KEYBOARD_WINDOW_FOCUSED.store(focused, Ordering::Relaxed);
+}
+
+#[inline(always)]
+pub fn set_keyboard_capture_enabled(enabled: bool) {
+    KEYBOARD_CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+#[inline(always)]
+fn keyboard_capture_active() -> bool {
+    KEYBOARD_WINDOW_FOCUSED.load(Ordering::Relaxed)
+        && KEYBOARD_CAPTURE_ENABLED.load(Ordering::Relaxed)
 }
 
 impl CapabilityBits {
@@ -245,6 +290,8 @@ fn current_monotonic_nanos() -> Option<u64> {
         tv_sec: 0,
         tv_nsec: 0,
     };
+    // SAFETY: `clock_gettime` writes into the provided stack local and
+    // `CLOCK_MONOTONIC` is a valid kernel clock id.
     let rc = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
     if rc != 0 || ts.tv_sec < 0 || ts.tv_nsec < 0 {
         return None;
@@ -291,9 +338,15 @@ fn instant_from_clock_sample(target_nanos: u64, sample: ClockSample) -> Instant 
 }
 
 #[inline(always)]
-fn event_time(dev: &mut Dev, ev: InputEventRaw, sample: Option<ClockSample>) -> (Instant, u64) {
-    if dev.monotonic_timestamps
-        && dev.clock_health.uses_kernel_timestamps()
+fn event_time(
+    path: &str,
+    monotonic_timestamps: bool,
+    clock_health: &mut EvdevClockHealth,
+    ev: InputEventRaw,
+    sample: Option<ClockSample>,
+) -> (Instant, u64) {
+    if monotonic_timestamps
+        && clock_health.uses_kernel_timestamps()
         && let Some(sample) = sample
         && let Some(target_nanos) = evdev_event_nanos(ev)
     {
@@ -302,24 +355,14 @@ fn event_time(dev: &mut Dev, ev: InputEventRaw, sample: Option<ClockSample>) -> 
                 .monotonic_nanos
                 .saturating_add(EVDEV_FUTURE_TOLERANCE_NS)
         {
-            dev.clock_health.note_failure(
-                &dev.path,
-                "future",
-                target_nanos,
-                sample.monotonic_nanos,
-            );
-        } else if dev.clock_health.last_event_nanos != 0
+            clock_health.note_failure(path, "future", target_nanos, sample.monotonic_nanos);
+        } else if clock_health.last_event_nanos != 0
             && target_nanos.saturating_add(EVDEV_REGRESSION_TOLERANCE_NS)
-                < dev.clock_health.last_event_nanos
+                < clock_health.last_event_nanos
         {
-            dev.clock_health.note_failure(
-                &dev.path,
-                "regression",
-                target_nanos,
-                sample.monotonic_nanos,
-            );
+            clock_health.note_failure(path, "regression", target_nanos, sample.monotonic_nanos);
         } else {
-            dev.clock_health.note_success(target_nanos);
+            clock_health.note_success(target_nanos);
             let timestamp = instant_from_clock_sample(target_nanos, sample);
             return (timestamp, instant_nanos(timestamp));
         }
@@ -331,12 +374,22 @@ fn event_time(dev: &mut Dev, ev: InputEventRaw, sample: Option<ClockSample>) -> 
 #[inline(always)]
 fn enable_monotonic_timestamps(fd: i32) -> bool {
     let mut clock_id = libc::CLOCK_MONOTONIC;
+    // SAFETY: `fd` is the live evdev device descriptor and `clock_id` points to
+    // writable stack storage for the ioctl.
     unsafe { libc::ioctl(fd, EVIOCSCLOCKID, &mut clock_id) == 0 }
 }
 
 #[inline(always)]
 fn code_u32(type_: u16, code: u16) -> u32 {
     ((type_ as u32) << 16) | (code as u32)
+}
+
+#[inline(always)]
+fn freebsd_key_code(code: u16) -> Option<KeyCode> {
+    let PhysicalKey::Code(code) = PhysicalKey::from_scancode(u32::from(code)) else {
+        return None;
+    };
+    Some(code)
 }
 
 #[inline(always)]
@@ -361,11 +414,15 @@ fn is_permission_error(err: &std::io::Error) -> bool {
 
 #[inline(always)]
 fn ioctl_read_buffer(fd: i32, request: libc::c_ulong, buf: &mut [u8]) -> bool {
+    // SAFETY: `fd` is a live device descriptor, `request` is an evdev read ioctl,
+    // and `buf` provides writable storage for the kernel to fill.
     unsafe { libc::ioctl(fd, request, buf.as_mut_ptr()) >= 0 }
 }
 
 fn raw_dev_name(file: &std::fs::File) -> Option<String> {
     let mut buf = [0u8; 256];
+    // SAFETY: `file` is an open evdev device, and `buf` is writable stack storage
+    // for the kernel to fill with the NUL-terminated device name.
     let rc = unsafe { libc::ioctl(file.as_raw_fd(), eviocgname(buf.len()), buf.as_mut_ptr()) };
     if rc < 0 {
         return None;
@@ -376,6 +433,8 @@ fn raw_dev_name(file: &std::fs::File) -> Option<String> {
 
 fn raw_dev_info(file: &std::fs::File) -> (Option<u16>, Option<u16>) {
     let mut info = InputId::default();
+    // SAFETY: `file` is an open evdev device, and `info` is writable stack
+    // storage for the kernel to fill.
     let rc = unsafe { libc::ioctl(file.as_raw_fd(), EVIOCGID, &mut info) };
     if rc < 0 {
         return (None, None);
@@ -406,6 +465,18 @@ fn looks_like_controller(ev: &CapabilityBits, key: &CapabilityBits, abs: &Capabi
     (face || joystick) && (dpad || menu || sticks || hats)
 }
 
+#[inline(always)]
+fn looks_like_keyboard(ev: &CapabilityBits, key: &CapabilityBits, abs: &CapabilityBits) -> bool {
+    ev.has(EV_KEY)
+        && !abs.has(ABS_X)
+        && !abs.has(ABS_Y)
+        && key.has(KEY_ESC)
+        && key.has(KEY_ENTER)
+        && key.has(KEY_A)
+        && key.has(KEY_Z)
+        && key.has(KEY_SPACE)
+}
+
 fn probe_path(path: &str, noisy: bool) -> ProbeResult {
     if !is_event_path(path) {
         return ProbeResult::Skip;
@@ -429,12 +500,20 @@ fn probe_path(path: &str, noisy: bool) -> ProbeResult {
     let ev = evdev_bits(file.as_raw_fd(), 0, EV_BITS_LEN);
     let key = evdev_bits(file.as_raw_fd(), EV_KEY as u8, KEY_BITS_LEN);
     let abs = evdev_bits(file.as_raw_fd(), EV_ABS as u8, ABS_BITS_LEN);
-    if !looks_like_controller(&ev, &key, &abs) {
-        return ProbeResult::NotController;
-    }
+    let class = if looks_like_controller(&ev, &key, &abs) {
+        Some(DevClass::Pad)
+    } else if looks_like_keyboard(&ev, &key, &abs) {
+        Some(DevClass::Keyboard)
+    } else {
+        None
+    };
+    let Some(class) = class else {
+        return ProbeResult::NotInput;
+    };
     let name = raw_dev_name(&file).unwrap_or_else(|| format!("evdev:{path}"));
     let (vendor_id, product_id) = raw_dev_info(&file);
-    ProbeResult::Controller(DevSpec {
+    ProbeResult::Device(DevSpec {
+        class,
         path: path.to_owned(),
         name,
         vendor_id,
@@ -460,11 +539,11 @@ fn scan_event_specs() -> (Vec<DevSpec>, ScanStats) {
                 stats.event_nodes += 1;
                 stats.open_errors += 1;
             }
-            ProbeResult::NotController => {
+            ProbeResult::NotInput => {
                 stats.event_nodes += 1;
-                stats.non_controller += 1;
+                stats.non_input += 1;
             }
-            ProbeResult::Controller(spec) => {
+            ProbeResult::Device(spec) => {
                 stats.event_nodes += 1;
                 out.push(spec);
             }
@@ -503,7 +582,7 @@ fn warn_startup_scan(stats: &ScanStats) {
         .saturating_sub(stats.permission_denied + stats.open_errors);
     if readable != 0 {
         warn!(
-            "freebsd evdev saw {} readable /dev/input/event* nodes at startup, but none looked like controllers",
+            "freebsd evdev saw {} readable /dev/input/event* nodes at startup, but none looked like supported input devices",
             readable
         );
     }
@@ -559,6 +638,26 @@ fn open_dev(
     })
 }
 
+fn open_key_dev(spec: DevSpec) -> Option<KeyDev> {
+    let file = match std::fs::File::open(&spec.path) {
+        Ok(file) => file,
+        Err(err) => {
+            warn!(
+                "freebsd evdev could not reopen keyboard candidate '{}' at '{}': {err}",
+                spec.name, spec.path
+            );
+            return None;
+        }
+    };
+    let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
+    Some(KeyDev {
+        path: spec.path,
+        file,
+        monotonic_timestamps,
+        clock_health: EvdevClockHealth::new(monotonic_timestamps),
+    })
+}
+
 fn add_dev_if_new(
     path: String,
     devs: &mut Vec<Dev>,
@@ -569,7 +668,10 @@ fn add_dev_if_new(
     if devs.iter().any(|dev| dev.path == path) {
         return;
     }
-    let ProbeResult::Controller(spec) = probe_path(&path, !initial) else {
+    let ProbeResult::Device(spec) = probe_path(&path, !initial) else {
+        return;
+    };
+    if spec.class != DevClass::Pad {
         return;
     };
     let id = PadId(*next_id);
@@ -579,7 +681,27 @@ fn add_dev_if_new(
     }
 }
 
-fn remove_dev_by_path(path: &str, devs: &mut Vec<Dev>, emit_sys: &mut impl FnMut(GpSystemEvent)) {
+fn add_key_dev_if_new(path: String, key_devs: &mut Vec<KeyDev>, initial: bool) {
+    if key_devs.iter().any(|dev| dev.path == path) {
+        return;
+    }
+    let ProbeResult::Device(spec) = probe_path(&path, !initial) else {
+        return;
+    };
+    if spec.class != DevClass::Keyboard {
+        return;
+    }
+    if let Some(dev) = open_key_dev(spec) {
+        key_devs.push(dev);
+    }
+}
+
+fn remove_dev_by_path(
+    path: &str,
+    devs: &mut Vec<Dev>,
+    key_devs: &mut Vec<KeyDev>,
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+) {
     if let Some(idx) = devs.iter().position(|dev| dev.path == path) {
         let dev = devs.swap_remove(idx);
         emit_sys(GpSystemEvent::Disconnected {
@@ -588,37 +710,60 @@ fn remove_dev_by_path(path: &str, devs: &mut Vec<Dev>, emit_sys: &mut impl FnMut
             backend: PadBackend::FreeBsdEvdev,
             initial: false,
         });
+        return;
+    }
+    if let Some(idx) = key_devs.iter().position(|dev| dev.path == path) {
+        key_devs.swap_remove(idx);
     }
 }
 
-pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystemEvent)) {
+pub fn run(
+    mut emit_pad: impl FnMut(PadEvent),
+    mut emit_sys: impl FnMut(GpSystemEvent),
+    mut emit_key: impl FnMut(RawKeyboardEvent),
+) {
     let watch = DevdWatch::new();
     let mut devs = Vec::new();
+    let mut key_devs = Vec::new();
     let mut next_id = 0u32;
     let (startup_specs, startup_stats) = scan_event_specs();
     for spec in startup_specs {
         let path = spec.path.clone();
-        let id = PadId(next_id);
-        if let Some(dev) = open_dev(spec, id, true, &mut emit_sys) {
-            next_id = next_id.saturating_add(1);
-            devs.push(dev);
-        } else {
-            debug!("freebsd evdev skipped '{path}' during startup");
+        match spec.class {
+            DevClass::Pad => {
+                let id = PadId(next_id);
+                if let Some(dev) = open_dev(spec, id, true, &mut emit_sys) {
+                    next_id = next_id.saturating_add(1);
+                    devs.push(dev);
+                } else {
+                    debug!("freebsd evdev skipped '{path}' during startup");
+                }
+            }
+            DevClass::Keyboard => {
+                if let Some(dev) = open_key_dev(spec) {
+                    key_devs.push(dev);
+                } else {
+                    debug!("freebsd evdev skipped '{path}' during startup");
+                }
+            }
         }
     }
-    if devs.is_empty() {
+    if devs.is_empty() && key_devs.is_empty() {
         warn_startup_scan(&startup_stats);
     }
     emit_sys(GpSystemEvent::StartupComplete);
 
     let mut buf: [MaybeUninit<InputEventRaw>; 64] = [MaybeUninit::uninit(); 64];
+    // SAFETY: `buf` is an array of `MaybeUninit<InputEventRaw>`, so viewing its
+    // backing storage as a mutable byte slice of the same size is valid for reads
+    // into the uninitialized buffer.
     let buf_bytes = unsafe {
         std::slice::from_raw_parts_mut(
             buf.as_mut_ptr().cast::<u8>(),
             buf.len() * size_of::<InputEventRaw>(),
         )
     };
-    let mut pollfds = Vec::with_capacity(9);
+    let mut pollfds = Vec::with_capacity(17);
 
     loop {
         pollfds.clear();
@@ -637,12 +782,21 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
             events: POLLIN,
             revents: 0,
         }));
+        let key_offset = watch_offset + devs.len();
+        pollfds.extend(key_devs.iter().map(|dev| PollFd {
+            fd: dev.file.as_raw_fd(),
+            events: POLLIN,
+            revents: 0,
+        }));
 
         let poll_ptr = if pollfds.is_empty() {
             std::ptr::null_mut()
         } else {
             pollfds.as_mut_ptr()
         };
+        // SAFETY: `poll_ptr` is either null for an empty set or points to the
+        // first element of `pollfds`, which remains allocated for the duration of
+        // the call.
         let rc = unsafe { poll(poll_ptr, pollfds.len(), -1) };
         if rc < 0 {
             continue;
@@ -674,6 +828,8 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
 
             let fd = pollfds[i + watch_offset].fd;
             let dev = &mut devs[i];
+            // SAFETY: `buf_bytes` is writable storage for `InputEventRaw` values,
+            // and the fd comes from the matching open evdev device.
             let n = unsafe { read(fd, buf_bytes.as_mut_ptr().cast::<c_void>(), buf_bytes.len()) };
             if n <= 0 {
                 remove.push(i);
@@ -689,6 +845,9 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 };
 
             for j in 0..count {
+                // SAFETY: `count` is derived from the number of bytes returned by
+                // `read`, so the first `count` entries of `buf` were initialized by
+                // the kernel in this iteration.
                 let ev = unsafe { buf[j].assume_init() };
                 if ev.type_ == EV_SYN {
                     continue;
@@ -698,7 +857,13 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                     if ev.value == 2 {
                         continue;
                     }
-                    let (timestamp, host_nanos) = event_time(dev, ev, clock_sample);
+                    let (timestamp, host_nanos) = event_time(
+                        &dev.path,
+                        dev.monotonic_timestamps,
+                        &mut dev.clock_health,
+                        ev,
+                        clock_sample,
+                    );
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
@@ -716,7 +881,13 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                     continue;
                 }
 
-                let (timestamp, host_nanos) = event_time(dev, ev, clock_sample);
+                let (timestamp, host_nanos) = event_time(
+                    &dev.path,
+                    dev.monotonic_timestamps,
+                    &mut dev.clock_health,
+                    ev,
+                    clock_sample,
+                );
                 emit_pad(PadEvent::RawAxis {
                     id: dev.id,
                     timestamp,
@@ -735,18 +906,73 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 }
 
                 let want = [dev.hat_y < 0, dev.hat_y > 0, dev.hat_x < 0, dev.hat_x > 0];
-                let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
-                for k in 0..4 {
-                    if dev.dir[k] == want[k] {
-                        continue;
-                    }
-                    dev.dir[k] = want[k];
-                    emit_pad(PadEvent::Dir {
-                        id: dev.id,
+                emit_dir_edges(
+                    &mut emit_pad,
+                    dev.id,
+                    &mut dev.dir,
+                    timestamp,
+                    host_nanos,
+                    want,
+                );
+            }
+        }
+
+        let mut key_remove = Vec::new();
+        for i in 0..key_devs.len() {
+            let revents = pollfds[i + key_offset].revents;
+            if (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 {
+                key_remove.push(i);
+                continue;
+            }
+            if (revents & POLLIN) == 0 {
+                continue;
+            }
+
+            let fd = pollfds[i + key_offset].fd;
+            let dev = &mut key_devs[i];
+            // SAFETY: `buf_bytes` is writable storage for `InputEventRaw` values,
+            // and the fd comes from the matching open evdev device.
+            let n = unsafe { read(fd, buf_bytes.as_mut_ptr().cast::<c_void>(), buf_bytes.len()) };
+            if n <= 0 {
+                key_remove.push(i);
+                continue;
+            }
+
+            let count = (n as usize / size_of::<InputEventRaw>()).min(buf.len());
+            let clock_sample =
+                if dev.monotonic_timestamps && dev.clock_health.uses_kernel_timestamps() {
+                    sample_monotonic_clock()
+                } else {
+                    None
+                };
+
+            for j in 0..count {
+                // SAFETY: `count` is derived from the number of bytes returned by
+                // `read`, so the first `count` entries of `buf` were initialized by
+                // the kernel in this iteration.
+                let ev = unsafe { buf[j].assume_init() };
+                if ev.type_ != EV_KEY {
+                    continue;
+                }
+                let Some(code) = freebsd_key_code(ev.code) else {
+                    continue;
+                };
+                let repeat = ev.value == 2;
+                let pressed = ev.value != 0;
+                let (timestamp, host_nanos) = event_time(
+                    &dev.path,
+                    dev.monotonic_timestamps,
+                    &mut dev.clock_health,
+                    ev,
+                    clock_sample,
+                );
+                if keyboard_capture_active() {
+                    emit_key(RawKeyboardEvent {
+                        code,
+                        pressed,
+                        repeat,
                         timestamp,
                         host_nanos,
-                        dir: dirs[k],
-                        pressed: want[k],
                     });
                 }
             }
@@ -763,12 +989,20 @@ pub fn run(mut emit_pad: impl FnMut(PadEvent), mut emit_sys: impl FnMut(GpSystem
                 initial: false,
             });
         }
+        key_remove.sort_unstable();
+        key_remove.dedup();
+        for &idx in key_remove.iter().rev() {
+            key_devs.swap_remove(idx);
+        }
         for event in hotplug {
             match event {
                 DevdEvent::Create(path) => {
-                    add_dev_if_new(path, &mut devs, &mut next_id, false, &mut emit_sys)
+                    add_dev_if_new(path.clone(), &mut devs, &mut next_id, false, &mut emit_sys);
+                    add_key_dev_if_new(path, &mut key_devs, false);
                 }
-                DevdEvent::Destroy(path) => remove_dev_by_path(&path, &mut devs, &mut emit_sys),
+                DevdEvent::Destroy(path) => {
+                    remove_dev_by_path(&path, &mut devs, &mut key_devs, &mut emit_sys)
+                }
             }
         }
     }

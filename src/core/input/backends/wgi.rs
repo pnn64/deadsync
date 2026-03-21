@@ -1,4 +1,4 @@
-use super::{GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, uuid_from_bytes};
+use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
 use crate::core::windows_rt::{
     ThreadRole, boost_current_thread, current_host_nanos, qpc_ticks_to_nanos,
 };
@@ -542,37 +542,6 @@ fn remove_controller(ctx: &mut Ctx, controller: RawGameController) {
     }
 }
 
-#[inline(always)]
-fn emit_dir_edges<F>(
-    emit_pad: &mut F,
-    id: PadId,
-    dir_state: &mut [bool; 4],
-    timestamp: Instant,
-    host_nanos: u64,
-    want: [bool; 4],
-) -> bool
-where
-    F: FnMut(PadEvent),
-{
-    let mut changed = false;
-    let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
-    for i in 0..4 {
-        if dir_state[i] == want[i] {
-            continue;
-        }
-        dir_state[i] = want[i];
-        changed = true;
-        (emit_pad)(PadEvent::Dir {
-            id,
-            timestamp,
-            host_nanos,
-            dir: dirs[i],
-            pressed: want[i],
-        });
-    }
-    changed
-}
-
 fn pump_gamepad<F>(emit_pad: &mut F, id: PadId, uuid: [u8; 16], st: &mut GamepadState) -> bool
 where
     F: FnMut(PadEvent),
@@ -782,11 +751,30 @@ fn enumerate_existing(ctx: &mut Ctx) {
     }
 }
 
+#[inline(always)]
+fn register_hotplug_handler<T>(
+    label: &str,
+    register: impl FnOnce() -> windows::core::Result<T>,
+) -> Option<T> {
+    match register() {
+        Ok(token) => Some(token),
+        Err(err) => {
+            log::warn!(
+                "WGI {label} handler registration failed ({err}); controller hotplug events disabled"
+            );
+            None
+        }
+    }
+}
+
 pub fn run(
     emit_pad: impl FnMut(PadEvent) + Send + 'static,
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
 ) {
     let _thread_policy = boost_current_thread(ThreadRole::Input);
+    // SAFETY: this thread initializes WinRT exactly once for multithreaded use
+    // before touching WGI APIs. Duplicate initialization is tolerated by
+    // `RoInitialize`, and shutdown is process-wide for this usage.
     let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
 
     let (tx, rx) = mpsc::channel::<Msg>();
@@ -798,7 +786,9 @@ pub fn run(
         }
         Ok(())
     });
-    let _added_token = RawGameController::RawGameControllerAdded(&added_handler).unwrap();
+    let _added_token = register_hotplug_handler("add", || {
+        RawGameController::RawGameControllerAdded(&added_handler)
+    });
 
     let removed_tx = tx.clone();
     let removed_handler = EventHandler::<RawGameController>::new(move |_, c| {
@@ -807,7 +797,9 @@ pub fn run(
         }
         Ok(())
     });
-    let _removed_token = RawGameController::RawGameControllerRemoved(&removed_handler).unwrap();
+    let _removed_token = register_hotplug_handler("remove", || {
+        RawGameController::RawGameControllerRemoved(&removed_handler)
+    });
 
     // WGI can surface already-connected controllers slightly after startup due to WinRT's
     // async device discovery. Treat very-early adds/removes as "initial" to avoid hotplug

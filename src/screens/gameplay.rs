@@ -8,16 +8,15 @@ use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::cache::{TextCache, cached_text};
 use crate::ui::color;
 use crate::ui::compose::TextLayoutCache;
 use crate::ui::font;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use std::thread::LocalKey;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
-type TextCache<K> = HashMap<K, Arc<str>>;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 
 pub use crate::game::gameplay::{State, init, update};
@@ -34,23 +33,8 @@ thread_local! {
     static LIFE_PERCENT_TEXT_CACHE: RefCell<TextCache<u32>> =
         RefCell::new(HashMap::with_capacity(1024));
     static METER_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(64));
-    static SYNC_OVERLAY_CACHE: RefCell<TextCache<SyncOverlayTextKey>> =
-        RefCell::new(HashMap::with_capacity(256));
     static AUTOSYNC_TEXT_CACHE: RefCell<TextCache<AutosyncTextKey>> =
         RefCell::new(HashMap::with_capacity(256));
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct SyncOverlayTextKey {
-    replay_tag: u8,
-    replay_ptr: usize,
-    replay_len: usize,
-    timing_ptr: usize,
-    timing_len: usize,
-    autosync_ptr: usize,
-    autosync_len: usize,
-    message_ptr: usize,
-    message_len: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,33 +47,9 @@ struct AutosyncTextKey {
 }
 
 #[inline(always)]
-fn str_key(line: &str) -> (usize, usize) {
-    (line.as_ptr() as usize, line.len())
-}
-
-#[inline(always)]
 fn empty_text() -> Arc<str> {
     static EMPTY: OnceLock<Arc<str>> = OnceLock::new();
     EMPTY.get_or_init(|| Arc::<str>::from("")).clone()
-}
-
-#[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
-    })
 }
 
 #[inline(always)]
@@ -115,7 +75,7 @@ fn quantize_tenths_u32(value: f32) -> u32 {
 #[inline(always)]
 fn cached_score_2dp(value: f64) -> Arc<str> {
     let key = quantize_centi_u32(value);
-    cached_text(&SCORE_2DP_CACHE, key, || {
+    cached_text(&SCORE_2DP_CACHE, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}", key as f64 / 100.0)
     })
 }
@@ -125,7 +85,7 @@ fn cached_rate_text(rate: f32) -> Arc<str> {
     if (rate - 1.0).abs() <= 0.001 {
         return empty_text();
     }
-    cached_text(&RATE_TEXT_CACHE, rate.to_bits(), || {
+    cached_text(&RATE_TEXT_CACHE, rate.to_bits(), TEXT_CACHE_LIMIT, || {
         format!("{rate:.2}x rate")
     })
 }
@@ -138,12 +98,14 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
     if !show_decimal {
         let rounded = bpm.round().max(0.0);
         let key = (rounded.to_bits(), false);
-        return cached_text(&BPM_TEXT_CACHE, key, || format!("{rounded:.0}"));
+        return cached_text(&BPM_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
+            format!("{rounded:.0}")
+        });
     }
     let rounded_tenth = (bpm * 10.0).round() / 10.0;
     let rounded_tenth = rounded_tenth.max(0.0);
     let key = (rounded_tenth.to_bits(), true);
-    cached_text(&BPM_TEXT_CACHE, key, || {
+    cached_text(&BPM_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
         let nearest_int = rounded_tenth.round();
         if (rounded_tenth - nearest_int).abs() <= 0.001 {
             format!("{nearest_int:.0}")
@@ -156,14 +118,16 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
 #[inline(always)]
 fn cached_life_percent_text(life_percent: f32) -> Arc<str> {
     let key = quantize_tenths_u32(life_percent);
-    cached_text(&LIFE_PERCENT_TEXT_CACHE, key, || {
+    cached_text(&LIFE_PERCENT_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
         format!("{:.1}%", key as f32 / 10.0)
     })
 }
 
 #[inline(always)]
 fn cached_meter_text(meter: u32) -> Arc<str> {
-    cached_text(&METER_TEXT_CACHE, meter, || meter.to_string())
+    cached_text(&METER_TEXT_CACHE, meter, TEXT_CACHE_LIMIT, || {
+        meter.to_string()
+    })
 }
 
 fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
@@ -194,52 +158,16 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
     if line_count == 0 {
         return None;
     }
-    let replay_line = if state.autoplay_enabled {
-        Some(state.replay_status_text.as_deref().unwrap_or("AutoPlay"))
-    } else {
-        None
-    };
-    let timing_line = timing_tick_status_line(state);
-    let autosync_line = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode);
-    let message_line = state.sync_overlay_message.as_deref();
-    let (replay_ptr, replay_len, replay_tag) = if let Some(line) = replay_line {
-        let (ptr, len) = str_key(line);
-        (
-            ptr,
-            len,
-            if state.replay_status_text.is_some() {
-                2
-            } else {
-                1
-            },
-        )
-    } else {
-        (0, 0, 0)
-    };
-    let (timing_ptr, timing_len) = timing_line.map_or((0, 0), str_key);
-    let (autosync_ptr, autosync_len) = autosync_line.map_or((0, 0), str_key);
-    let (message_ptr, message_len) = message_line.map_or((0, 0), str_key);
-    let key = SyncOverlayTextKey {
-        replay_tag,
-        replay_ptr,
-        replay_len,
-        timing_ptr,
-        timing_len,
-        autosync_ptr,
-        autosync_len,
-        message_ptr,
-        message_len,
-    };
-    let text = cached_text(&SYNC_OVERLAY_CACHE, key, || {
-        let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
-        out.push_str(lines[0]);
-        for line in &lines[1..line_count] {
-            out.push('\n');
-            out.push_str(line);
-        }
-        out
-    });
-    Some((text, line_count))
+    // Do not cache this string by pointer identity. `sync_overlay_message` is rebuilt
+    // during live offset tweaks, and allocator address reuse can otherwise return a
+    // stale overlay line with the wrong numbers.
+    let mut out = String::with_capacity(total_len + line_count.saturating_sub(1));
+    out.push_str(lines[0]);
+    for line in &lines[1..line_count] {
+        out.push('\n');
+        out.push_str(line);
+    }
+    Some((Arc::<str>::from(out), line_count))
 }
 
 #[inline(always)]
@@ -251,7 +179,7 @@ fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<
         stddev_bits: state.autosync_standard_deviation.to_bits(),
         sample_count: state.autosync_offset_sample_count.min(u16::MAX as usize) as u16,
     };
-    cached_text(&AUTOSYNC_TEXT_CACHE, key, || {
+    cached_text(&AUTOSYNC_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
         let collecting_sample = state
             .autosync_offset_sample_count
             .saturating_add(1)
@@ -288,7 +216,7 @@ pub fn prewarm_text_layout(
             cfg.zmod_rating_box_text,
         );
         cache.prewarm_text(fonts, "miso", detail, None);
-        for &(_, bpm) in &chart.timing_segments.bpms {
+        for &(_, bpm) in &state.gameplay_charts[player].timing_segments.bpms {
             let text = cached_bpm_text(
                 f64::from(bpm.max(0.0)) * f64::from(state.music_rate),
                 cfg.show_bpm_decimal,

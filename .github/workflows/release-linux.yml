@@ -96,170 +96,22 @@ jobs:
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
-      - name: Setup Rust
+      - name: Verify Docker access
         if: steps.select_arch.outputs.enabled == 'true'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Add Linux ARM64 Rust target
-        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'arm64'
-        run: rustup target add aarch64-unknown-linux-gnu
-
-      - name: Install Linux native deps (best effort)
-        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'x86_64'
-        shell: bash
-        run: |
-          if ! command -v apt-get >/dev/null 2>&1; then
-            echo "apt-get not found; skipping auto-install."
-            exit 0
-          fi
-          if ! command -v sudo >/dev/null 2>&1; then
-            echo "sudo not found; skipping auto-install."
-            exit 0
-          fi
-          if ! sudo -n true 2>/dev/null; then
-            echo "passwordless sudo unavailable; skipping auto-install."
-            exit 0
-          fi
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-            build-essential \
-            cmake \
-            pkg-config \
-            libudev-dev \
-            libasound2-dev \
-            libvulkan-dev \
-            libgl1-mesa-dev
-
-      - name: Install Linux ARM64 deps (best effort)
-        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'arm64'
-        shell: bash
-        run: |
-          if ! command -v apt-get >/dev/null 2>&1; then
-            echo "apt-get not found; skipping auto-install."
-            exit 0
-          fi
-          if ! command -v sudo >/dev/null 2>&1; then
-            echo "sudo not found; skipping auto-install."
-            exit 0
-          fi
-          if ! sudo -n true 2>/dev/null; then
-            echo "passwordless sudo unavailable; skipping auto-install."
-            exit 0
-          fi
-          sudo dpkg --add-architecture arm64
-          if [ -r /etc/os-release ]; then
-            # shellcheck disable=SC1091
-            . /etc/os-release
-          fi
-          if [ "${ID:-}" = "ubuntu" ]; then
-            codename="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
-            if [ -n "${codename}" ]; then
-              if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-                if grep -q '^Architectures:' /etc/apt/sources.list.d/ubuntu.sources; then
-                  sudo sed -Ei 's/^Architectures:.*/Architectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
-                else
-                  sudo sed -i '/^Suites:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
-                fi
-                printf '%s\n' \
-                  "Types: deb" \
-                  "URIs: http://ports.ubuntu.com/ubuntu-ports" \
-                  "Suites: ${codename} ${codename}-updates ${codename}-backports ${codename}-security" \
-                  "Components: main restricted universe multiverse" \
-                  "Architectures: arm64" \
-                  "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" \
-                  | sudo tee /etc/apt/sources.list.d/ubuntu-arm64.sources >/dev/null
-              elif [ -f /etc/apt/sources.list ]; then
-                sudo sed -Ei '/^[[:space:]]*deb[[:space:]]+/ { /\[arch=/! s|^[[:space:]]*deb[[:space:]]+|deb [arch=amd64] | }' /etc/apt/sources.list
-                printf '%s\n' \
-                  "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename} main restricted universe multiverse" \
-                  "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-updates main restricted universe multiverse" \
-                  "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-backports main restricted universe multiverse" \
-                  "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-security main restricted universe multiverse" \
-                  | sudo tee /etc/apt/sources.list.d/ubuntu-arm64.list >/dev/null
-              fi
-            fi
-          fi
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-            build-essential \
-            cmake \
-            gcc-aarch64-linux-gnu \
-            libc6-dev-arm64-cross \
-            pkg-config \
-            libudev-dev:arm64 \
-            libasound2-dev:arm64 \
-            libvulkan-dev:arm64 \
-            libgl1-mesa-dev:arm64
-
-      - name: Verify Linux native deps
-        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'x86_64'
         shell: bash
         run: |
           set -euo pipefail
-          missing=0
-          if ! command -v pkg-config >/dev/null 2>&1; then
-            echo "::error::pkg-config is missing."
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "::error::docker is required on the Linux release runner."
             exit 1
           fi
-          if ! pkg-config --exists vulkan; then
-            echo "::error::Missing Vulkan dev package. Install libvulkan-dev (or distro equivalent)."
-            missing=1
-          fi
-          if ! pkg-config --exists alsa; then
-            echo "::error::Missing ALSA dev package. Install libasound2-dev (or distro equivalent)."
-            missing=1
-          fi
-          if ! pkg-config --exists libudev; then
-            echo "::error::Missing libudev dev package. Install libudev-dev (or distro equivalent)."
-            missing=1
-          fi
-          if [ "${missing}" -ne 0 ]; then
-            exit 1
-          fi
+          docker version >/dev/null
 
-      - name: Verify Linux ARM64 deps
-        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'arm64'
-        shell: bash
-        run: |
-          set -euo pipefail
-          missing=0
-          if ! command -v pkg-config >/dev/null 2>&1; then
-            echo "::error::pkg-config is missing."
-            exit 1
-          fi
-          export PKG_CONFIG_ALLOW_CROSS=1
-          export PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          if ! command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then
-            echo "::error::Missing aarch64-linux-gnu-gcc. Install gcc-aarch64-linux-gnu."
-            missing=1
-          fi
-          if ! pkg-config --exists vulkan; then
-            echo "::error::Missing ARM64 Vulkan dev package. Install libvulkan-dev:arm64."
-            missing=1
-          fi
-          if ! pkg-config --exists alsa; then
-            echo "::error::Missing ARM64 ALSA dev package. Install libasound2-dev:arm64."
-            missing=1
-          fi
-          if ! pkg-config --exists libudev; then
-            echo "::error::Missing ARM64 libudev dev package. Install libudev-dev:arm64."
-            missing=1
-          fi
-          if [ "${missing}" -ne 0 ]; then
-            exit 1
-          fi
-
-      - name: Build release
-        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'x86_64'
-        run: cargo build --release --locked
-
-      - name: Build release (ARM64 cross)
-        if: steps.select_arch.outputs.enabled == 'true' && matrix.arch == 'arm64'
+      - name: Build release in Debian 12 container
+        if: steps.select_arch.outputs.enabled == 'true'
         env:
-          PKG_CONFIG_ALLOW_CROSS: "1"
-          PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --release --locked --target aarch64-unknown-linux-gnu
+          LINUX_BUILD_IMAGE: debian:12
+        run: bash scripts/build-linux-release-docker.sh "${{ matrix.arch }}" "${{ matrix.target }}"
 
       - name: Package Linux release
         id: package

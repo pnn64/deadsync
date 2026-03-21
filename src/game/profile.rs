@@ -1083,6 +1083,45 @@ impl core::fmt::Display for MiniIndicator {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MiniIndicatorScoreType {
+    #[default]
+    Itg,
+    Ex,
+    HardEx,
+}
+
+impl FromStr for MiniIndicatorScoreType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "" | "itg" => Ok(Self::Itg),
+            "ex" => Ok(Self::Ex),
+            "hardex" | "hex" => Ok(Self::HardEx),
+            other => Err(format!(
+                "'{other}' is not a valid MiniIndicatorScoreType setting"
+            )),
+        }
+    }
+}
+
+impl core::fmt::Display for MiniIndicatorScoreType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Itg => write!(f, "ITG"),
+            Self::Ex => write!(f, "Ex"),
+            Self::HardEx => write!(f, "HardEx"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TargetScoreSetting {
     CMinus,
     C,
@@ -1202,6 +1241,8 @@ pub struct Profile {
     pub show_fa_plus_pane: bool,
     // 10ms blue Fantastic window for FA+ window display (Arrow Cloud: "SmallerWhite").
     pub fa_plus_10ms_blue_window: bool,
+    // Track and display per-column early judgment counts on evaluation (zmod/Arrow Cloud semantics).
+    pub track_early_judgments: bool,
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
@@ -1254,6 +1295,7 @@ pub struct Profile {
     pub nps_graph_at_top: bool,
     pub transparent_density_graph_bg: bool,
     pub mini_indicator: MiniIndicator,
+    pub mini_indicator_score_type: MiniIndicatorScoreType,
     // Mini modifier as a percentage, mirroring Simply Love semantics.
     // 0 = normal size, 100 = 100% Mini (smaller), negative values enlarge.
     pub mini_percent: i32,
@@ -1319,6 +1361,7 @@ impl Default for Profile {
             show_hard_ex_score: false,
             show_fa_plus_pane: false,
             fa_plus_10ms_blue_window: false,
+            track_early_judgments: false,
             custom_fantastic_window: false,
             custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
             judgment_tilt: false,
@@ -1360,6 +1403,7 @@ impl Default for Profile {
             nps_graph_at_top: false,
             transparent_density_graph_bg: false,
             mini_indicator: MiniIndicator::None,
+            mini_indicator_score_type: MiniIndicatorScoreType::Itg,
             mini_percent: 0,
             perspective: Perspective::default(),
             note_field_offset_x: 0,
@@ -1425,6 +1469,14 @@ pub enum PlayerSide {
     P2,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TimingTickMode {
+    #[default]
+    Off,
+    Assist,
+    Hit,
+}
+
 pub const GUEST_SCROLL_SPEED: ScrollSpeedSetting = ScrollSpeedSetting::MMod(250.0);
 
 const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
@@ -1443,6 +1495,7 @@ struct SessionState {
     active_profiles: [ActiveProfile; PLAYER_SLOTS],
     joined_mask: u8,
     music_rate: f32,
+    timing_tick_mode: TimingTickMode,
     play_style: PlayStyle,
     play_mode: PlayMode,
     player_side: PlayerSide,
@@ -1459,6 +1512,7 @@ static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::
         ],
         joined_mask: SESSION_JOINED_MASK_P1,
         music_rate: 1.0,
+        timing_tick_mode: TimingTickMode::Off,
         play_style: PlayStyle::Single,
         play_mode: PlayMode::Regular,
         player_side: PlayerSide::P1,
@@ -1736,6 +1790,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             default_profile.mini_indicator
         ));
         content.push_str(&format!(
+            "MiniIndicatorScoreType = {}\n",
+            default_profile.mini_indicator_score_type
+        ));
+        content.push_str(&format!(
             "ReverseScroll = {}\n",
             i32::from(default_profile.reverse_scroll)
         ));
@@ -1758,6 +1816,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!(
             "SmallerWhite = {}\n",
             i32::from(default_profile.fa_plus_10ms_blue_window)
+        ));
+        content.push_str(&format!(
+            "TrackEarlyJudgments = {}\n",
+            i32::from(default_profile.track_early_judgments)
         ));
         content.push_str(&format!(
             "CustomFantasticWindow = {}\n",
@@ -2053,6 +2115,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     ));
     content.push_str(&format!("MiniIndicator={}\n", profile.mini_indicator));
     content.push_str(&format!(
+        "MiniIndicatorScoreType={}\n",
+        profile.mini_indicator_score_type
+    ));
+    content.push_str(&format!(
         "ReverseScroll={}\n",
         i32::from(profile.reverse_scroll)
     ));
@@ -2075,6 +2141,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "SmallerWhite={}\n",
         i32::from(profile.fa_plus_10ms_blue_window)
+    ));
+    content.push_str(&format!(
+        "TrackEarlyJudgments={}\n",
+        i32::from(profile.track_early_judgments)
     ));
     content.push_str(&format!(
         "CustomFantasticWindow={}\n",
@@ -2509,6 +2579,10 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "SmallerWhite")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.fa_plus_10ms_blue_window, |v| v != 0);
+            profile.track_early_judgments = profile_conf
+                .get("PlayerOptions", "TrackEarlyJudgments")
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.track_early_judgments, |v| v != 0);
             profile.custom_fantastic_window = profile_conf
                 .get("PlayerOptions", "CustomFantasticWindow")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -2801,6 +2875,10 @@ fn load_for_side(side: PlayerSide) {
             if profile.mini_indicator == MiniIndicator::Pacemaker {
                 profile.pacemaker = true;
             }
+            profile.mini_indicator_score_type = profile_conf
+                .get("PlayerOptions", "MiniIndicatorScoreType")
+                .and_then(|s| MiniIndicatorScoreType::from_str(&s).ok())
+                .unwrap_or(default_profile.mini_indicator_score_type);
             profile.scroll_option = profile_conf
                 .get("PlayerOptions", "Scroll")
                 .and_then(|s| ScrollOption::from_str(&s).ok())
@@ -3408,6 +3486,14 @@ pub fn set_session_music_rate(rate: f32) {
     };
 }
 
+pub fn get_session_timing_tick_mode() -> TimingTickMode {
+    lock_session().timing_tick_mode
+}
+
+pub fn set_session_timing_tick_mode(mode: TimingTickMode) {
+    lock_session().timing_tick_mode = mode;
+}
+
 pub fn get_session_play_style() -> PlayStyle {
     lock_session().play_style
 }
@@ -3895,6 +3981,21 @@ pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) 
     save_profile_ini_for_side(side);
 }
 
+pub fn update_mini_indicator_score_type_for_side(
+    side: PlayerSide,
+    setting: MiniIndicatorScoreType,
+) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.mini_indicator_score_type == setting {
+            return;
+        }
+        profile.mini_indicator_score_type = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_noteskin_for_side(side: PlayerSide, setting: NoteSkin) {
     {
         let mut profiles = lock_profiles();
@@ -4029,6 +4130,18 @@ pub fn update_fa_plus_10ms_blue_window_for_side(side: PlayerSide, enabled: bool)
             return;
         }
         profile.fa_plus_10ms_blue_window = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_track_early_judgments_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.track_early_judgments == enabled {
+            return;
+        }
+        profile.track_early_judgments = enabled;
     }
     save_profile_ini_for_side(side);
 }

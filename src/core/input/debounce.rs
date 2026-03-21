@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -31,6 +30,60 @@ pub(super) struct DebounceState {
 }
 
 #[derive(Clone, Copy, Debug)]
+struct DebounceEntry {
+    binding: DebounceBinding,
+    state: DebounceState,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct DebounceStore {
+    entries: Vec<DebounceEntry>,
+    next_due_at: Option<Instant>,
+}
+
+impl DebounceStore {
+    #[inline(always)]
+    pub(super) const fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+            next_due_at: None,
+        }
+    }
+
+    #[inline(always)]
+    pub(super) fn clear_and_reserve(&mut self, cap: usize) {
+        self.entries.clear();
+        self.next_due_at = None;
+        let needed = cap.saturating_sub(self.entries.capacity());
+        if needed > 0 {
+            self.entries.reserve(needed);
+        }
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    #[inline(always)]
+    pub(super) fn capacity(&self) -> usize {
+        self.entries.capacity()
+    }
+
+    #[inline(always)]
+    fn find_index(&self, binding: DebounceBinding) -> Option<usize> {
+        self.entries
+            .iter()
+            .position(|entry| entry.binding == binding)
+    }
+
+    #[inline(always)]
+    fn recalc_next_due_at(&mut self, windows: DebounceWindows) {
+        self.next_due_at = self
+            .entries
+            .iter()
+            .filter_map(|entry| debounce_due_at(entry.state, windows))
+            .min();
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(super) struct DebouncedEdge {
     pub(super) binding: DebounceBinding,
     pub(super) pressed: bool,
@@ -49,29 +102,21 @@ pub(super) struct DebounceEdges {
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct DebounceWindows {
-    pub(super) press: Duration,
-    pub(super) release: Duration,
+    pub(super) window: Duration,
 }
 
 impl DebounceWindows {
     #[cfg_attr(not(test), allow(dead_code))]
     #[inline(always)]
     pub(super) const fn uniform(window: Duration) -> Self {
-        // ITGmania InputFilter parity: gameplay debounce is a symmetric window
-        // unless the caller explicitly asks for a different release window.
-        Self {
-            press: window,
-            release: window,
-        }
+        // ITGmania InputFilter parity: one global debounce window gates both
+        // press and release edges for every input binding.
+        Self { window }
     }
 
     #[inline(always)]
     pub(super) fn prune_window(self) -> Duration {
-        if self.press >= self.release {
-            self.press
-        } else {
-            self.release
-        }
+        self.window
     }
 }
 
@@ -86,12 +131,7 @@ pub(super) fn debounce_emit_if_due(
     if state.held_raw == state.held_reported {
         return None;
     }
-    let window = if state.held_raw {
-        windows.press
-    } else {
-        windows.release
-    };
-    if now.duration_since(state.last_report_time) < window {
+    if now.duration_since(state.last_report_time) < windows.window {
         return None;
     }
     state.last_report_time = now;
@@ -189,8 +229,16 @@ fn should_prune_debounce_state(
         && now.duration_since(state.last_report_time) >= windows.prune_window()
 }
 
+#[inline(always)]
+fn debounce_due_at(state: DebounceState, windows: DebounceWindows) -> Option<Instant> {
+    if state.held_raw == state.held_reported {
+        return None;
+    }
+    state.last_report_time.checked_add(windows.window)
+}
+
 pub(super) fn debounce_input_edge_in_store(
-    states: &Mutex<HashMap<DebounceBinding, DebounceState>>,
+    states: &Mutex<DebounceStore>,
     binding: DebounceBinding,
     pressed: bool,
     timestamp: Instant,
@@ -199,19 +247,35 @@ pub(super) fn debounce_input_edge_in_store(
 ) -> DebounceEdges {
     let now = Instant::now();
     let mut states = states.lock().unwrap();
-    let (edges, prune) = {
-        let state = states.entry(binding).or_insert_with(|| DebounceState {
+    let edges = if let Some(index) = states.find_index(binding) {
+        let (edges, prune) = {
+            let state = &mut states.entries[index].state;
+            let edges = debounce_step(
+                state,
+                binding,
+                pressed,
+                timestamp,
+                timestamp_host_nanos,
+                now,
+                windows,
+            );
+            (edges, should_prune_debounce_state(*state, now, windows))
+        };
+        if prune {
+            states.entries.swap_remove(index);
+        }
+        edges
+    } else {
+        let mut state = DebounceState {
             held_raw: false,
             held_reported: false,
             last_raw_change_time: timestamp,
             last_raw_change_host_nanos: timestamp_host_nanos,
             last_raw_store_time: now,
             last_report_time: now.checked_sub(windows.prune_window()).unwrap_or(now),
-        });
-        // Preserve the original raw edge timestamp separately from store/emission
-        // time so gameplay can judge against the real edge time, like ITGmania.
+        };
         let edges = debounce_step(
-            state,
+            &mut state,
             binding,
             pressed,
             timestamp,
@@ -219,45 +283,61 @@ pub(super) fn debounce_input_edge_in_store(
             now,
             windows,
         );
-        (edges, should_prune_debounce_state(*state, now, windows))
+        if !should_prune_debounce_state(state, now, windows) {
+            states.entries.push(DebounceEntry { binding, state });
+        }
+        edges
     };
-    if prune {
-        states.remove(&binding);
-    }
+    states.recalc_next_due_at(windows);
     edges
 }
 
-pub(super) fn collect_due_debounce_edges_from(
-    states: &Mutex<HashMap<DebounceBinding, DebounceState>>,
+pub(super) fn emit_due_debounce_edges_from(
+    states: &Mutex<DebounceStore>,
     now: Instant,
     windows: DebounceWindows,
-) -> Vec<DebouncedEdge> {
+    mut emit: impl FnMut(DebouncedEdge),
+) -> bool {
     // ITGmania Update() parity: delayed edges are surfaced later, but they still
     // carry the original raw timestamp that caused the debounce holdoff.
     let mut states = states.lock().unwrap();
-    let mut out: Vec<DebouncedEdge> = Vec::with_capacity(states.len().min(8));
-    let mut prune: Vec<DebounceBinding> = Vec::new();
-    for (&binding, state) in states.iter_mut() {
-        if let Some((pressed, timestamp, timestamp_host_nanos, stored_at)) =
-            debounce_emit_if_due(state, now, windows)
-        {
-            out.push(debounced_edge(
-                binding,
-                pressed,
-                timestamp,
-                timestamp_host_nanos,
-                stored_at,
-                now,
-            ));
-        }
-        if should_prune_debounce_state(*state, now, windows) {
-            prune.push(binding);
-        }
+    if let Some(next_due_at) = states.next_due_at
+        && now < next_due_at
+    {
+        return false;
     }
-    for binding in prune {
-        states.remove(&binding);
+    let mut flushed = false;
+    let mut i = 0;
+    while i < states.entries.len() {
+        let mut edge = None;
+        let remove = {
+            let entry = &mut states.entries[i];
+            if let Some((pressed, timestamp, timestamp_host_nanos, stored_at)) =
+                debounce_emit_if_due(&mut entry.state, now, windows)
+            {
+                edge = Some(debounced_edge(
+                    entry.binding,
+                    pressed,
+                    timestamp,
+                    timestamp_host_nanos,
+                    stored_at,
+                    now,
+                ));
+            }
+            should_prune_debounce_state(entry.state, now, windows)
+        };
+        if let Some(edge) = edge {
+            flushed = true;
+            emit(edge);
+        }
+        if remove {
+            states.entries.swap_remove(i);
+            continue;
+        }
+        i += 1;
     }
-    out
+    states.recalc_next_due_at(windows);
+    flushed
 }
 
 #[cfg(test)]
@@ -272,13 +352,6 @@ mod tests {
             last_raw_change_host_nanos: 0,
             last_raw_store_time: now,
             last_report_time: now.checked_sub(window).unwrap_or(now),
-        }
-    }
-
-    fn windows(press_ms: u64, release_ms: u64) -> DebounceWindows {
-        DebounceWindows {
-            press: Duration::from_millis(press_ms),
-            release: Duration::from_millis(release_ms),
         }
     }
 
@@ -420,34 +493,69 @@ mod tests {
     }
 
     #[test]
-    fn debounce_can_use_shorter_release_window() {
+    fn emit_due_edges_prunes_stale_entries_without_temp_buffers() {
+        let window = Duration::from_millis(20);
+        let windows = DebounceWindows::uniform(window);
         let t0 = Instant::now();
-        let t0_host = 100;
-        let binding = DebounceBinding::Keyboard(KeyCode::KeyA);
-        let mut state = base_state(t0, Duration::from_millis(20));
-        let windows = windows(20, 5);
+        let binding_due = DebounceBinding::Keyboard(KeyCode::KeyA);
+        let binding_stale = DebounceBinding::Keyboard(KeyCode::KeyB);
+        let mut due_state = base_state(t0, window);
+        let stale_state = base_state(t0, window);
 
-        let press = debounce_step(&mut state, binding, true, t0, t0_host, t0, windows);
+        let press = debounce_step(&mut due_state, binding_due, true, t0, 100, t0, windows);
         assert!(press.first.is_none());
-        assert_edge(press.second, binding, true, t0, t0_host, t0, t0);
+        assert!(press.second.is_some());
 
         let release_ts = t0 + Duration::from_millis(1);
-        let release_host = 101;
         let release = debounce_step(
-            &mut state,
-            binding,
+            &mut due_state,
+            binding_due,
             false,
             release_ts,
-            release_host,
+            101,
             release_ts,
             windows,
         );
         assert!(release.first.is_none());
         assert!(release.second.is_none());
+        let mut store = DebounceStore::new();
+        store.entries.push(DebounceEntry {
+            binding: binding_due,
+            state: due_state,
+        });
+        store.entries.push(DebounceEntry {
+            binding: binding_stale,
+            state: stale_state,
+        });
+        store.recalc_next_due_at(windows);
+        let states = Mutex::new(store);
+        let mut emitted = Vec::new();
 
-        assert_eq!(
-            debounce_emit_if_due(&mut state, t0 + Duration::from_millis(6), windows),
-            Some((false, release_ts, release_host, release_ts))
-        );
+        assert!(emit_due_debounce_edges_from(
+            &states,
+            t0 + Duration::from_millis(21),
+            windows,
+            |edge| emitted.push(edge),
+        ));
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].binding, binding_due);
+        assert!(!emitted[0].pressed);
+        assert_eq!(emitted[0].timestamp, release_ts);
+        assert_eq!(emitted[0].timestamp_host_nanos, 101);
+
+        let guard = states.lock().unwrap();
+        assert_eq!(guard.entries.len(), 1);
+        assert_eq!(guard.entries[0].binding, binding_due);
+        drop(guard);
+
+        emitted.clear();
+        assert!(!emit_due_debounce_edges_from(
+            &states,
+            t0 + Duration::from_millis(41),
+            windows,
+            |edge| emitted.push(edge),
+        ));
+        assert!(emitted.is_empty());
+        assert!(states.lock().unwrap().entries.is_empty());
     }
 }

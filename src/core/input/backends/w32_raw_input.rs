@@ -1,5 +1,6 @@
 use super::{
-    GpSystemEvent, PadBackend, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent, uuid_from_bytes,
+    GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, RawKeyboardEvent, emit_dir_edges,
+    uuid_from_bytes,
 };
 use crate::core::windows_rt::{ThreadRole, boost_current_thread, current_host_nanos};
 use std::collections::HashMap;
@@ -111,6 +112,25 @@ impl Ctx {
     }
 }
 
+#[cold]
+fn warn_win32(label: &str, err: &windows::core::Error) {
+    log::warn!("Windows Raw Input {label} failed ({err})");
+}
+
+#[cold]
+fn emit_startup_complete(ctx: &mut Ctx) {
+    if ctx.enable_pad {
+        (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+    }
+}
+
+#[cold]
+fn disable_backend(ctx: &mut Ctx, label: &str, err: windows::core::Error) {
+    RAW_INPUT_HWND.store(0, Ordering::Release);
+    log::warn!("Windows Raw Input {label} failed ({err}); backend disabled");
+    emit_startup_complete(ctx);
+}
+
 #[inline(always)]
 pub fn set_window_focused(focused: bool) {
     WINDOW_FOCUSED.store(focused, Ordering::Relaxed);
@@ -126,7 +146,7 @@ pub fn set_capture_enabled(enabled: bool) {
 }
 
 #[inline(always)]
-fn register_keyboard(hwnd: HWND, capture_enabled: bool) {
+fn register_keyboard(hwnd: HWND, capture_enabled: bool) -> bool {
     let mut flags = RIDEV_INPUTSINK;
     if capture_enabled {
         flags |= RIDEV_NOLEGACY;
@@ -137,13 +157,21 @@ fn register_keyboard(hwnd: HWND, capture_enabled: bool) {
         dwFlags: flags,
         hwndTarget: hwnd,
     }];
+    // SAFETY: `devices` points to a fixed stack array that lives for the duration
+    // of the call, and `hwnd` is the message-only window created by this backend.
     unsafe {
-        let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
+        match RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32) {
+            Ok(()) => true,
+            Err(err) => {
+                warn_win32("keyboard registration", &err);
+                false
+            }
+        }
     }
 }
 
 #[inline(always)]
-fn register_controllers(hwnd: HWND) {
+fn register_controllers(hwnd: HWND) -> bool {
     let devices = [
         RAWINPUTDEVICE {
             usUsagePage: USAGE_PAGE_GENERIC,
@@ -164,8 +192,16 @@ fn register_controllers(hwnd: HWND) {
             hwndTarget: hwnd,
         },
     ];
+    // SAFETY: `devices` points to a fixed stack array that lives for the duration
+    // of the call, and `hwnd` is the message-only window created by this backend.
     unsafe {
-        let _ = RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32);
+        match RegisterRawInputDevices(&devices, size_of::<RAWINPUTDEVICE>() as u32) {
+            Ok(()) => true,
+            Err(err) => {
+                warn_win32("controller registration", &err);
+                false
+            }
+        }
     }
 }
 
@@ -190,6 +226,8 @@ fn keyboard_scancode(keyboard: RAWKEYBOARD) -> u16 {
         0x0000
     };
     if keyboard.MakeCode == 0 {
+        // SAFETY: `MapVirtualKeyW` takes only scalar arguments and returns the
+        // current OS mapping for the provided virtual key code.
         unsafe { MapVirtualKeyW(u32::from(keyboard.VKey), MAPVK_VK_TO_VSC_EX) as u16 }
     } else {
         keyboard.MakeCode | extension
@@ -265,6 +303,8 @@ fn wide_to_string(mut v: Vec<u16>) -> String {
 }
 
 fn get_device_name(h: HANDLE) -> Option<String> {
+    // SAFETY: all pointers passed here reference local buffers that stay alive for
+    // each Win32 call, and `h` is a device handle reported by Raw Input.
     unsafe {
         let mut size: u32 = 0;
         let _ = GetRawInputDeviceInfoW(Some(h), RIDI_DEVICENAME, None, &raw mut size);
@@ -287,6 +327,8 @@ fn get_device_name(h: HANDLE) -> Option<String> {
 }
 
 fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
+    // SAFETY: `info` and `size` are writable stack locals, and `h` is a device
+    // handle reported by Raw Input.
     unsafe {
         let mut info = RID_DEVICE_INFO::default();
         info.cbSize = size_of::<RID_DEVICE_INFO>() as u32;
@@ -308,6 +350,9 @@ fn get_device_info(h: HANDLE) -> Option<RID_DEVICE_INFO_HID> {
 }
 
 fn get_preparsed(h: HANDLE) -> Option<Vec<u8>> {
+    // SAFETY: the queried size comes from the first Raw Input call, and the second
+    // call writes into the owned `buf` allocation that stays alive for the duration
+    // of the call.
     unsafe {
         let mut size: u32 = 0;
         let _ = GetRawInputDeviceInfoW(Some(h), RIDI_PREPARSEDDATA, None, &raw mut size);
@@ -333,6 +378,9 @@ fn hat_logical_range(preparsed: &[u8]) -> Option<(i32, i32)> {
     if preparsed.is_empty() {
         return None;
     }
+    // SAFETY: `preparsed` holds the exact bytes returned by Raw Input for HID
+    // preparsed data, and all HID parser calls treat that buffer as read-only for
+    // the duration of this function.
     unsafe {
         let pd = PHIDP_PREPARSED_DATA(preparsed.as_ptr() as isize);
 
@@ -414,6 +462,8 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
     let max_buttons = if preparsed.is_empty() {
         0
     } else {
+        // SAFETY: `preparsed` contains Raw Input preparsed data for this device,
+        // and `HidP_MaxUsageListLength` only reads that buffer.
         unsafe {
             HidP_MaxUsageListLength(
                 HidP_Input,
@@ -422,6 +472,7 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
             )
         }
     };
+    let button_cap = max_buttons as usize;
 
     let dev = Dev {
         id,
@@ -431,8 +482,8 @@ fn add_device(ctx: &mut Ctx, h: HANDLE, initial: bool) {
         uuid,
         preparsed,
         max_buttons,
-        buttons_prev: Vec::new(),
-        buttons_now: Vec::new(),
+        buttons_prev: Vec::with_capacity(button_cap),
+        buttons_now: Vec::with_capacity(button_cap),
         hat_min,
         hat_max,
         dir: [false; 4],
@@ -459,6 +510,9 @@ fn remove_device(ctx: &mut Ctx, h: HANDLE) {
 }
 
 fn enumerate_existing(ctx: &mut Ctx) {
+    // SAFETY: the first call queries the device count, the second fills the owned
+    // `list` buffer sized from that count, and all handles come directly from Raw
+    // Input.
     unsafe {
         let mut count: u32 = 0;
         let _ = GetRawInputDeviceList(None, &raw mut count, size_of::<RAWINPUTDEVICELIST>() as u32);
@@ -568,14 +622,12 @@ fn process_hid_report<F>(
         return;
     }
 
-    let want_cap = dev.max_buttons as usize;
-    if dev.buttons_now.capacity() < want_cap {
-        dev.buttons_now
-            .reserve(want_cap - dev.buttons_now.capacity());
-    }
     dev.buttons_now.clear();
 
     let mut len = dev.max_buttons;
+    // SAFETY: `dev.preparsed` is the live preparsed-data blob for this HID, the
+    // report buffer is borrowed mutably for the duration of the call, and
+    // `buttons_now` was pre-sized from `max_buttons` when the device was added.
     let status = unsafe {
         HidP_GetUsages(
             HidP_Input,
@@ -591,6 +643,8 @@ fn process_hid_report<F>(
         return;
     }
 
+    // SAFETY: `HidP_GetUsages` wrote exactly `len` initialized entries to the
+    // front of `buttons_now`, and `len <= dev.max_buttons <= capacity`.
     unsafe {
         dev.buttons_now.set_len(len as usize);
     }
@@ -601,6 +655,8 @@ fn process_hid_report<F>(
     dev.buttons_now.clear();
 
     let mut hat: u32 = 0;
+    // SAFETY: `dev.preparsed` is the live preparsed-data blob for this HID, and
+    // `hat` is a writable stack local for the requested usage value.
     let status = unsafe {
         HidP_GetUsageValue(
             HidP_Input,
@@ -636,21 +692,14 @@ fn process_hid_report<F>(
     let want_right = matches!(hat0, 1..=3);
     let want_down = matches!(hat0, 3..=5);
     let want_left = matches!(hat0, 5..=7);
-    let want = [want_up, want_down, want_left, want_right];
-    let dirs = [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right];
-    for i in 0..4 {
-        if dev.dir[i] == want[i] {
-            continue;
-        }
-        dev.dir[i] = want[i];
-        (emit_pad)(PadEvent::Dir {
-            id: dev.id,
-            timestamp,
-            host_nanos,
-            dir: dirs[i],
-            pressed: want[i],
-        });
-    }
+    emit_dir_edges(
+        emit_pad,
+        dev.id,
+        &mut dev.dir,
+        timestamp,
+        host_nanos,
+        [want_up, want_down, want_left, want_right],
+    );
 }
 
 #[inline(always)]
@@ -662,6 +711,9 @@ fn handle_keyboard_input(ctx: &mut Ctx, timestamp: Instant, host_nanos: u64) {
         return;
     }
 
+    // SAFETY: the size check above guarantees `ctx.buf` contains at least a raw
+    // input header plus one `RAWKEYBOARD`, so the unaligned read from the payload
+    // is within bounds for this message.
     unsafe {
         let keyboard = ptr::read_unaligned(
             ctx.buf
@@ -685,6 +737,7 @@ fn handle_keyboard_input(ctx: &mut Ctx, timestamp: Instant, host_nanos: u64) {
         (ctx.emit_key)(RawKeyboardEvent {
             code,
             pressed,
+            repeat: false,
             timestamp,
             host_nanos,
         });
@@ -692,6 +745,9 @@ fn handle_keyboard_input(ctx: &mut Ctx, timestamp: Instant, host_nanos: u64) {
 }
 
 fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
+    // SAFETY: the first call queries the required byte count, the second fills the
+    // owned `ctx.buf` allocation sized from that count, and all subsequent raw
+    // pointer reads are guarded by explicit size checks before use.
     unsafe {
         let mut size: u32 = 0;
         let _ = GetRawInputData(
@@ -768,25 +824,39 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
     }
 }
 
+// SAFETY: Windows invokes this window procedure with the ABI and userdata contract established by
+// `CreateWindowExW`; `GWLP_USERDATA` is either null or the boxed `Ctx` pointer stored in WM_CREATE.
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    // SAFETY: `GWLP_USERDATA` stores either null or the `Ctx` pointer we place in
+    // `WM_CREATE`. We only dereference it after null checks below.
     let ctx_ptr = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut Ctx;
     match msg {
         WM_CREATE => {
             let cs = lparam.0 as *const CREATESTRUCTW;
             if !cs.is_null() {
+                // SAFETY: `cs` comes directly from `WM_CREATE`, so reading its
+                // `lpCreateParams` field is valid for this call frame.
                 let p = unsafe { (*cs).lpCreateParams }.cast::<Ctx>();
+                // SAFETY: `p` is the boxed context pointer passed to
+                // `CreateWindowExW`, and storing it in `GWLP_USERDATA` is how the
+                // window procedure recovers that context on later messages.
                 unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, p as _) };
             }
             LRESULT(0)
         }
         WM_INPUT => {
             if !ctx_ptr.is_null() {
+                // SAFETY: `ctx_ptr` was checked for null and points to the live
+                // boxed `Ctx` for this window. `lparam` carries the raw-input handle
+                // for the current message.
                 unsafe { handle_wm_input(&mut *ctx_ptr, HRAWINPUT(lparam.0 as *mut c_void)) };
             }
             LRESULT(0)
         }
         WM_INPUT_DEVICE_CHANGE => {
             if !ctx_ptr.is_null() {
+                // SAFETY: `ctx_ptr` was checked for null and points to the live
+                // boxed `Ctx` for this window.
                 let ctx = unsafe { &mut *ctx_ptr };
                 if ctx.enable_pad {
                     let h = HANDLE(lparam.0 as *mut c_void);
@@ -800,18 +870,32 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_DESTROY => {
+            // SAFETY: posting quit is side-effect-only and takes no borrowed Rust
+            // memory.
             unsafe { PostQuitMessage(0) };
             LRESULT(0)
         }
+        // SAFETY: forwarding all unhandled messages to `DefWindowProcW` is the
+        // required default Win32 behavior for this window procedure.
         _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
     }
 }
 
 fn run_inner(mut ctx: Box<Ctx>) {
     let _thread_policy = boost_current_thread(ThreadRole::Input);
+    // SAFETY: this thread owns the Win32 class registration, message-only window,
+    // and message loop. The boxed `ctx` pointer is passed to `CreateWindowExW` and
+    // intentionally leaked at shutdown so `GWLP_USERDATA` never dangles while the
+    // window can still receive messages.
     unsafe {
         let class_name: Vec<u16> = "deadsync_raw_input\0".encode_utf16().collect();
-        let hinst: HINSTANCE = GetModuleHandleW(PCWSTR::null()).unwrap_or_default().into();
+        let hinst: HINSTANCE = match GetModuleHandleW(PCWSTR::null()) {
+            Ok(hinst) => hinst.into(),
+            Err(err) => {
+                disable_backend(&mut ctx, "module handle lookup", err);
+                return;
+            }
+        };
 
         let wc = WNDCLASSEXW {
             cbSize: size_of::<WNDCLASSEXW>() as u32,
@@ -822,7 +906,7 @@ fn run_inner(mut ctx: Box<Ctx>) {
         };
         RegisterClassExW(&raw const wc);
 
-        let hwnd = CreateWindowExW(
+        let hwnd = match CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             wc.lpszClassName,
             PCWSTR::null(),
@@ -835,21 +919,30 @@ fn run_inner(mut ctx: Box<Ctx>) {
             None,
             Some(hinst),
             Some(ptr::addr_of_mut!(*ctx).cast::<c_void>().cast_const()),
-        )
-        .unwrap_or_default();
-        if hwnd.0.is_null() {
-            loop {
-                std::thread::park();
+        ) {
+            Ok(hwnd) if !hwnd.0.is_null() => hwnd,
+            Ok(_) => {
+                disable_backend(
+                    &mut ctx,
+                    "window creation",
+                    windows::core::Error::from_thread(),
+                );
+                return;
             }
-        }
+            Err(err) => {
+                disable_backend(&mut ctx, "window creation", err);
+                return;
+            }
+        };
 
         RAW_INPUT_HWND.store(hwnd.0 as isize, Ordering::Release);
-        register_keyboard(hwnd, CAPTURE_ENABLED.load(Ordering::Relaxed));
+        let _ = register_keyboard(hwnd, CAPTURE_ENABLED.load(Ordering::Relaxed));
 
         if ctx.enable_pad {
-            register_controllers(hwnd);
-            enumerate_existing(&mut ctx);
-            (ctx.emit_sys)(GpSystemEvent::StartupComplete);
+            if register_controllers(hwnd) {
+                enumerate_existing(&mut ctx);
+            }
+            emit_startup_complete(&mut ctx);
         }
 
         let mut msg = MSG::default();

@@ -82,13 +82,7 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
         let Some(block) = block else {
             break;
         };
-        if block.channels() as usize != channels {
-            return Err(format!(
-                "unsupported FLAC channel change ({} -> {})",
-                channels,
-                block.channels()
-            ));
-        }
+        validate_channels(channels, block.channels() as usize)?;
         total_frames = total_frames.saturating_add(block.duration() as u64);
         block_buffer = block.into_buffer();
     }
@@ -99,18 +93,12 @@ impl Reader {
     pub(crate) fn read_dec_packet_itl(
         &mut self,
     ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(packet) = self.pending.take() {
-            self.cursor_frames = self
-                .cursor_frames
-                .saturating_add((packet.len() / self.channels.max(1)) as u64);
-            return Ok(Some(packet));
-        }
-        let Some(packet) = self.decode_next_packet()? else {
+        let Some(packet) = self.take_packet()? else {
             return Ok(None);
         };
         self.cursor_frames = self
             .cursor_frames
-            .saturating_add((packet.len() / self.channels.max(1)) as u64);
+            .saturating_add(packet_frames(&packet, self.channels) as u64);
         Ok(Some(packet))
     }
 
@@ -122,26 +110,37 @@ impl Reader {
             return Ok(());
         }
         while self.cursor_frames < target_frame {
-            let packet = if let Some(packet) = self.pending.take() {
-                packet
-            } else {
-                let Some(packet) = self.decode_next_packet()? else {
-                    return Ok(());
-                };
-                packet
+            let Some(packet) = self.take_packet()? else {
+                return Ok(());
             };
-            let packet_frames = packet.len() / self.channels.max(1);
-            let remaining = (target_frame - self.cursor_frames) as usize;
-            if remaining >= packet_frames {
-                self.cursor_frames = self.cursor_frames.saturating_add(packet_frames as u64);
-                continue;
+            if self.finish_seek_packet(packet, target_frame) {
+                return Ok(());
             }
-            let drop_samples = remaining * self.channels;
-            self.pending = Some(packet[drop_samples..].to_vec());
-            self.cursor_frames = target_frame;
-            return Ok(());
         }
         Ok(())
+    }
+
+    #[inline(always)]
+    fn take_packet(
+        &mut self,
+    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(packet) = self.pending.take() {
+            return Ok(Some(packet));
+        }
+        self.decode_next_packet()
+    }
+
+    fn finish_seek_packet(&mut self, packet: Vec<i16>, target_frame: u64) -> bool {
+        let packet_frames = packet_frames(&packet, self.channels);
+        let remaining = target_frame.saturating_sub(self.cursor_frames) as usize;
+        if remaining >= packet_frames {
+            self.cursor_frames = self.cursor_frames.saturating_add(packet_frames as u64);
+            return false;
+        }
+        let drop_samples = remaining * self.channels;
+        self.pending = Some(packet[drop_samples..].to_vec());
+        self.cursor_frames = target_frame;
+        true
     }
 
     fn decode_next_packet(
@@ -154,25 +153,35 @@ impl Reader {
         let Some(block) = block else {
             return Ok(None);
         };
-        if block.channels() as usize != self.channels {
-            return Err(format!(
-                "unsupported FLAC channel change ({} -> {})",
-                self.channels,
-                block.channels()
-            )
-            .into());
+        if let Err(err) = validate_channels(self.channels, block.channels() as usize) {
+            return Err(err.into());
         }
         let frames = block.duration() as usize;
-        let channels = block.channels() as usize;
-        let mut packet = Vec::with_capacity(frames.saturating_mul(channels));
+        let mut packet = Vec::with_capacity(frames.saturating_mul(self.channels));
         for frame in 0..frames as u32 {
-            for ch in 0..channels as u32 {
+            for ch in 0..self.channels as u32 {
                 packet.push(sample_to_i16(block.sample(ch, frame), self.bits_per_sample));
             }
         }
         self.block_buffer = block.into_buffer();
         Ok(Some(packet))
     }
+}
+
+#[inline(always)]
+fn packet_frames(packet: &[i16], channels: usize) -> usize {
+    packet.len() / channels
+}
+
+#[inline(always)]
+fn validate_channels(expected: usize, found: usize) -> Result<(), String> {
+    if found != expected {
+        return Err(format!(
+            "unsupported FLAC channel change ({} -> {})",
+            expected, found
+        ));
+    }
+    Ok(())
 }
 
 #[inline(always)]

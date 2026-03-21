@@ -7,16 +7,17 @@ use crate::game::judgment::JudgeGrade;
 use crate::game::profile;
 use crate::screens::components::shared::gs_scorebox;
 use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::cache::{TextCache, cached_text};
 use crate::ui::color;
 use crate::ui::compose::TextLayoutCache;
 use crate::ui::font;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
-use std::thread::LocalKey;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
-type TextCache<K> = HashMap<K, Arc<str>>;
+const COUNT_PREWARM_CAP: u32 = 2048;
+const TIME_PREWARM_CAP_S: u32 = 600;
 
 thread_local! {
     static PADDED_NUM_CACHE: RefCell<TextCache<(u32, u8)>> = RefCell::new(HashMap::with_capacity(2048));
@@ -43,28 +44,9 @@ static TIME_REMAINING_RIGHT_TEXT: LazyLock<Arc<str>> =
 static SLASH_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("/"));
 
 #[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
-    })
-}
-
-#[inline(always)]
 fn cached_padded_num(count: u32, digits: usize) -> Arc<str> {
     let digits = digits.clamp(1, u8::MAX as usize) as u8;
-    cached_text(&PADDED_NUM_CACHE, (count, digits), || {
+    cached_text(&PADDED_NUM_CACHE, (count, digits), TEXT_CACHE_LIMIT, || {
         format!("{:0width$}", count, width = digits as usize)
     })
 }
@@ -81,34 +63,41 @@ fn padded_dim_len(full: &str, count: u32, digits: usize) -> usize {
 #[inline(always)]
 fn cached_padded_runs(count: u32, digits: usize) -> (Arc<str>, Arc<str>) {
     let digits = digits.clamp(1, u8::MAX as usize) as u8;
-    let dim = cached_text(&PADDED_DIM_CACHE, (count, digits), || {
+    let dim = cached_text(&PADDED_DIM_CACHE, (count, digits), TEXT_CACHE_LIMIT, || {
         let full = cached_padded_num(count, digits as usize);
         let split = padded_dim_len(full.as_ref(), count, digits as usize);
         full[..split].to_string()
     });
-    let bright = cached_text(&PADDED_BRIGHT_CACHE, (count, digits), || {
-        let full = cached_padded_num(count, digits as usize);
-        let split = padded_dim_len(full.as_ref(), count, digits as usize);
-        full[split..].to_string()
-    });
+    let bright = cached_text(
+        &PADDED_BRIGHT_CACHE,
+        (count, digits),
+        TEXT_CACHE_LIMIT,
+        || {
+            let full = cached_padded_num(count, digits as usize);
+            let split = padded_dim_len(full.as_ref(), count, digits as usize);
+            full[split..].to_string()
+        },
+    );
     (dim, bright)
 }
 
 #[inline(always)]
 fn cached_blue_window_label(ms: i32) -> Arc<str> {
-    cached_text(&BLUE_WINDOW_LABEL_CACHE, ms, || format!("({ms}ms)"))
+    cached_text(&BLUE_WINDOW_LABEL_CACHE, ms, TEXT_CACHE_LIMIT, || {
+        format!("({ms}ms)")
+    })
 }
 
 #[inline(always)]
 fn cached_peak_nps_text(peak: f32) -> Arc<str> {
-    cached_text(&PEAK_NPS_CACHE, peak.to_bits(), || {
+    cached_text(&PEAK_NPS_CACHE, peak.to_bits(), TEXT_CACHE_LIMIT, || {
         format!("Peak NPS: {:.2}", peak.max(0.0))
     })
 }
 
 #[inline(always)]
 fn cached_game_time(seconds: u32, mode: u8) -> Arc<str> {
-    cached_text(&GAME_TIME_CACHE, (seconds, mode), || {
+    cached_text(&GAME_TIME_CACHE, (seconds, mode), TEXT_CACHE_LIMIT, || {
         let seconds = seconds as u64;
         let minutes = seconds / 60;
         let secs = seconds % 60;
@@ -292,10 +281,25 @@ pub fn prewarm_text_layout(
     } else {
         4
     };
-    for count in 0..=max_count {
+    for count in 0..=max_count.min(COUNT_PREWARM_CAP) {
         let (dim, bright) = cached_padded_runs(count, digits);
         cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
         cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+    }
+    let (dim, bright) = cached_padded_runs(max_count, digits);
+    cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
+    cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+    for player in 0..state.num_players {
+        for count in [
+            state.total_steps[player],
+            state.holds_total[player],
+            state.rolls_total[player],
+            state.mines_total[player],
+        ] {
+            let (dim, bright) = cached_padded_runs(count, digits);
+            cache.prewarm_text(fonts, "wendy_screenevaluation", dim.as_ref(), None);
+            cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
+        }
     }
     let end_seconds = state
         .music_end_time
@@ -303,12 +307,16 @@ pub fn prewarm_text_layout(
         .ceil()
         .max(0.0) as u32;
     let mode = game_time_mode(end_seconds as f32);
-    for second in 0..=end_seconds {
+    for second in 0..=end_seconds.min(TIME_PREWARM_CAP_S) {
         let key = (second, mode);
         let text = cached_game_time(second, mode);
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
         let _ = cached_game_time_width_for_key(key, asset_manager);
     }
+    let key = (end_seconds, mode);
+    let text = cached_game_time(end_seconds, mode);
+    cache.prewarm_text(fonts, "miso", text.as_ref(), None);
+    let _ = cached_game_time_width_for_key(key, asset_manager);
     cache.prewarm_text(fonts, "miso", TIME_SONG_LEFT_TEXT.as_ref(), None);
     cache.prewarm_text(fonts, "miso", TIME_REMAINING_LEFT_TEXT.as_ref(), None);
     cache.prewarm_text(fonts, "miso", TIME_SONG_RIGHT_TEXT.as_ref(), None);

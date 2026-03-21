@@ -32,6 +32,8 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
 
 pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     let file = File::open(path).map_err(|e| format!("Cannot open file: {e}"))?;
+    // SAFETY: the mapping is read-only, tied to the lifetime of `file`, and this
+    // function never mutates the file descriptor while the map is live.
     let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {e}"))?;
     let sample_rate_hz = sample_rate_hz(&mmap)?;
     let total_samples = find_last_granule_backwards(&mmap)?;

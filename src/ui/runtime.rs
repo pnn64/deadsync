@@ -17,19 +17,27 @@ thread_local! {
     static REG: RefCell<Registry> = RefCell::new(Registry::default());
 }
 
+#[inline(always)]
+const fn seen_recently(last_seen_frame: u64, frame: u64) -> bool {
+    frame.wrapping_sub(last_seen_frame) <= 1
+}
+
 /// Advance all tweens once per frame and GC unseen actors from the previous frame.
 pub fn tick(dt: f32) {
     REG.with(|r| {
         let mut r = r.borrow_mut();
-        r.frame = r.frame.wrapping_add(1);
+        let frame = r.frame.wrapping_add(1);
+        r.frame = frame;
 
-        for e in r.map.values_mut() {
-            e.seq.update(dt);
-        }
-
-        let cur = r.frame;
-        // Drop anything not seen last frame (one-frame grace is usually enough).
-        r.map.retain(|_, e| e.last_seen_frame + 1 >= cur);
+        // Drop anything not seen in the current or previous frame. `wrapping_sub`
+        // keeps the one-frame grace semantics correct across `u64` wraparound.
+        r.map.retain(|_, e| {
+            let keep = seen_recently(e.last_seen_frame, frame);
+            if keep {
+                e.seq.update(dt);
+            }
+            keep
+        });
     });
 }
 
@@ -72,5 +80,55 @@ pub fn site_id(file: &'static str, line: u32, col: u32, extra: u64) -> u64 {
 
 // Optional manual clear (e.g., on screen swaps if desired).
 pub fn clear_all() {
-    REG.with(|r| r.borrow_mut().map.clear());
+    REG.with(|r| *r.borrow_mut() = Registry::default());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::anim;
+
+    fn reset_registry(frame: u64) {
+        REG.with(|r| {
+            let mut r = r.borrow_mut();
+            *r = Registry::default();
+            r.frame = frame;
+        });
+    }
+
+    fn registry_len() -> usize {
+        REG.with(|r| r.borrow().map.len())
+    }
+
+    #[test]
+    fn tick_updates_live_tweens() {
+        reset_registry(0);
+        let steps = [anim::linear(1.0).x(10.0).build()];
+
+        let state = materialize(1, TweenState::default(), &steps);
+        assert_eq!(state.x, 0.0);
+
+        tick(0.25);
+
+        let state = materialize(1, TweenState::default(), &steps);
+        assert!(
+            (state.x - 2.5).abs() < 0.0001,
+            "expected x ~= 2.5, got {}",
+            state.x
+        );
+    }
+
+    #[test]
+    fn tick_drops_stale_entries_across_frame_wraparound() {
+        reset_registry(u64::MAX - 1);
+        let steps = [anim::sleep(1.0)];
+        materialize(7, TweenState::default(), &steps);
+        assert_eq!(registry_len(), 1);
+
+        tick(0.0);
+        assert_eq!(registry_len(), 1);
+
+        tick(0.0);
+        assert_eq!(registry_len(), 0);
+    }
 }

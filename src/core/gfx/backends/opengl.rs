@@ -143,6 +143,9 @@ pub fn init(
         create_tmesh_program(&gl, shaders.tmesh_vert, shaders.tmesh_frag)?;
 
     // Create shared static unit quad + index buffer.
+    // SAFETY: the OpenGL context created above is current on this thread for the
+    // duration of initialization, so creating and configuring these GL objects is
+    // valid here.
     let (shared_vao, _shared_vbo, _shared_ibo, shared_instance_vbo, index_count) = unsafe {
         const UNIT_QUAD_VERTICES: [[f32; 4]; 4] = [
             [-0.5, -0.5, 0.0, 1.0],
@@ -268,6 +271,8 @@ pub fn init(
         (vao, vbo, ibo, instance_vbo, QUAD_INDICES.len() as i32)
     };
 
+    // SAFETY: the OpenGL context is still current on this thread, so creating and
+    // configuring the mesh VAO/VBO pair is valid here.
     let (mesh_vao, mesh_vbo) = unsafe {
         let vao = gl.create_vertex_array()?;
         let vbo = gl.create_buffer()?;
@@ -293,6 +298,8 @@ pub fn init(
         gl.bind_vertex_array(None);
         (vao, vbo)
     };
+    // SAFETY: the OpenGL context is still current on this thread, so creating and
+    // configuring the textured-mesh VAO/VBO pair is valid here.
     let (tmesh_vao, tmesh_vbo, tmesh_instance_vbo) = unsafe {
         let vao = gl.create_vertex_array()?;
         let vbo = gl.create_buffer()?;
@@ -384,6 +391,8 @@ pub fn init(
     let initial_size = window.inner_size();
     let projection = ortho_for_window(initial_size.width, initial_size.height);
 
+    // SAFETY: the OpenGL context is current and all program/texture handles used
+    // below were created successfully in this function.
     unsafe {
         gl.viewport(0, 0, initial_size.width as i32, initial_size.height as i32);
         gl.use_program(Some(program));
@@ -458,6 +467,8 @@ fn log_opengl_driver_info(gl: &glow::Context) {
             trimmed.to_string()
         }
     }
+    // SAFETY: driver string queries only read state from the current OpenGL
+    // context and do not retain Rust pointers.
     unsafe {
         let vendor = norm(gl.get_parameter_string(glow::VENDOR));
         let renderer = norm(gl.get_parameter_string(glow::RENDERER));
@@ -483,6 +494,9 @@ pub fn create_texture(
         SamplerFilter::Linear => glow::LINEAR,
         SamplerFilter::Nearest => glow::NEAREST,
     };
+    // SAFETY: the caller provides a live OpenGL context, and `image.as_raw()`
+    // exposes initialized RGBA bytes that stay alive for the duration of the GL
+    // upload call.
     unsafe {
         let t = gl.create_texture()?;
         gl.bind_texture(glow::TEXTURE_2D, Some(t));
@@ -537,6 +551,9 @@ pub fn update_texture(
     let w = i32::try_from(image.width()).map_err(|_| "texture width overflow".to_string())?;
     let h = i32::try_from(image.height()).map_err(|_| "texture height overflow".to_string())?;
     let raw = image.as_raw();
+    // SAFETY: `texture.0` is a live OpenGL texture handle owned by this backend,
+    // and `raw` exposes initialized RGBA bytes that stay alive for the duration of
+    // the update call.
     unsafe {
         gl.bind_texture(glow::TEXTURE_2D, Some(texture.0));
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
@@ -588,6 +605,8 @@ pub fn draw(
         if *last == Some(want) {
             return;
         }
+        // SAFETY: blend-state calls only mutate GL state on the current context and
+        // do not retain Rust pointers.
         unsafe {
             gl.enable(glow::BLEND);
             match want {
@@ -628,6 +647,9 @@ pub fn draw(
     let mut vertices: u32 = 0;
 
     let backend_record_started = Instant::now();
+    // SAFETY: the OpenGL context in `state` is current on this thread for drawing,
+    // and all buffer uploads reference slices that remain alive for the duration of
+    // each call.
     unsafe {
         let gl = &state.gl;
 
@@ -982,6 +1004,8 @@ pub fn draw(
         // Mirror ITGmania's uncapped GL path: block here so the CPU does not
         // run frames far ahead of the GPU when swap interval is disabled.
         let wait_started = Instant::now();
+        // SAFETY: `finish` only blocks on the current GL context and does not
+        // retain Rust pointers.
         unsafe {
             state.gl.finish();
         }
@@ -1014,6 +1038,8 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 
     let byte_len = width as usize * height as usize * 4;
     let mut pixels = vec![0u8; byte_len];
+    // SAFETY: the current OpenGL context writes RGBA bytes into the owned `pixels`
+    // buffer for the exact viewport rectangle requested.
     unsafe {
         state.gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
         state.gl.read_buffer(state.api.screenshot_read_buffer());
@@ -1058,6 +1084,8 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     let h = NonZeroU32::new(height).unwrap();
 
     state.gl_surface.resize(&state.gl_context, w, h);
+    // SAFETY: the OpenGL context remains current for this surface, so updating the
+    // viewport to match the resized window is valid here.
     unsafe {
         state.gl.viewport(0, 0, width as i32, height as i32);
     }
@@ -1067,6 +1095,8 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
 
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up OpenGL resources...");
+    // SAFETY: all GL object handles below were created by this backend and are
+    // still owned by `state`, so deleting them once during cleanup is valid.
     unsafe {
         state.gl.delete_program(state.program);
         state.gl.delete_program(state.mesh_program);
@@ -1103,6 +1133,8 @@ fn create_opengl_context(
     let (display, vsync_logic) = {
         debug!("Using WGL for OpenGL context.");
         let preference = DisplayApiPreference::Wgl(None);
+        // SAFETY: `display_handle` comes from the live winit window and remains
+        // valid for the duration of context creation.
         let display = unsafe { Display::new(display_handle, preference)? };
 
         let vsync_logic = move |display: &Display| {
@@ -1111,6 +1143,9 @@ fn create_opengl_context(
             let proc_name = c"wglSwapIntervalEXT";
             let proc = display.get_proc_address(proc_name);
             if !proc.is_null() {
+                // SAFETY: `proc` was looked up specifically as `wglSwapIntervalEXT`
+                // and is only called when non-null, so this cast matches the WGL
+                // extension signature.
                 let f: SwapIntervalFn = unsafe { std::mem::transmute(proc) };
                 let interval = i32::from(vsync_enabled);
                 if f(interval) != 0 {
@@ -1144,6 +1179,8 @@ fn create_opengl_context(
         };
 
         // The rest of the logic is common for macOS and Linux/BSD
+        // SAFETY: `display_handle` comes from the live winit window and remains
+        // valid for the duration of context creation.
         let display = unsafe { Display::new(display_handle, preference)? };
 
         let vsync_logic = move |_display: &Display,
@@ -1278,6 +1315,8 @@ fn create_opengl_context(
     #[cfg(not(target_os = "windows"))]
     vsync_logic(&display, &surface, &context);
 
+    // SAFETY: `display.get_proc_address` is valid while the display/context are
+    // alive, and `glow` only stores the function pointers returned by this loader.
     unsafe {
         let gl = glow::Context::from_loader_function_cstr(|s: &CStr| display.get_proc_address(s));
         Ok((surface, context, gl, api))
@@ -1289,6 +1328,9 @@ fn create_graphics_program(
     vert_src: &str,
     frag_src: &str,
 ) -> Result<(glow::Program, UniformLocation, UniformLocation), String> {
+    // SAFETY: shader/program creation and linkage only touch the current OpenGL
+    // context, and all temporary shader/program handles are cleaned up on every
+    // exit path below.
     unsafe {
         let program = gl.create_program()?;
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
@@ -1339,6 +1381,9 @@ fn create_mesh_program(
     vert_src: &str,
     frag_src: &str,
 ) -> Result<(glow::Program, UniformLocation), String> {
+    // SAFETY: shader/program creation and linkage only touch the current OpenGL
+    // context, and all temporary shader/program handles are cleaned up on every
+    // exit path below.
     unsafe {
         let program = gl.create_program()?;
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
@@ -1386,6 +1431,9 @@ fn create_tmesh_program(
     vert_src: &str,
     frag_src: &str,
 ) -> Result<(glow::Program, UniformLocation, UniformLocation), String> {
+    // SAFETY: shader/program creation and linkage only touch the current OpenGL
+    // context, and all temporary shader/program handles are cleaned up on every
+    // exit path below.
     unsafe {
         let program = gl.create_program()?;
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
@@ -1445,6 +1493,8 @@ fn find_config(
         .with_transparency(false)
         .compatible_with_native_window(raw_window_handle)
         .build();
+    // SAFETY: `display` is live and `template` contains the raw window handle
+    // borrowed from the live winit window for the duration of this call.
     unsafe { display.find_configs(template)?.next() }
         .ok_or_else(|| std::io::Error::other(format!("Failed to find a suitable {label} config")))
         .map_err(Into::into)
@@ -1463,20 +1513,14 @@ fn create_window_surface_context(
         NonZeroU32::new(width).unwrap(),
         NonZeroU32::new(height).unwrap(),
     );
+    // SAFETY: `display`, `config`, and `surface_attributes` all refer to the live
+    // window and chosen GL config for this thread, so creating the window surface
+    // is valid here.
     let surface = unsafe { display.create_window_surface(config, &surface_attributes)? };
+    // SAFETY: `display`, `config`, and `context_attributes` refer to the same live
+    // window/config pair as the surface above, so creating and making the GL
+    // context current on that surface is valid here.
     let context =
         unsafe { display.create_context(config, &context_attributes)? }.make_current(&surface)?;
     Ok((surface, context))
-}
-
-mod bytemuck {
-    #[inline(always)]
-    pub fn cast_slice<T, U>(slice: &[T]) -> &[U] {
-        let (prefix, mid, suffix) = unsafe { slice.align_to::<U>() };
-        debug_assert!(
-            prefix.is_empty() && suffix.is_empty(),
-            "cast_slice: misaligned cast"
-        );
-        mid
-    }
 }

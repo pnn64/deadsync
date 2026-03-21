@@ -3,9 +3,11 @@ use bincode::{Decode, Encode};
 use log::warn;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub const CACHE_ROOT: &str = "cache/noteskins";
 pub const CACHE_SCHEMA_VERSION: u32 = 1;
+static CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Encode, Decode, Default, PartialEq, Eq)]
 pub struct CompiledLoader {
@@ -110,13 +112,23 @@ pub fn save_compiled_bundle(path: &Path, bundle: &CompiledNoteskinBundle) -> Res
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| format!("invalid cache filename '{}'", path.display()))?;
-    let tmp_path = parent.join(format!("{file_name}.tmp"));
+    let tmp_path = parent.join(format!(
+        "{file_name}.{}.{}.tmp",
+        std::process::id(),
+        CACHE_TMP_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
     fs::write(&tmp_path, bytes)
         .map_err(|err| format!("failed to write '{}': {err}", tmp_path.display()))?;
-    if fs::rename(&tmp_path, path).is_err() {
-        let _ = fs::remove_file(path);
-        fs::rename(&tmp_path, path)
-            .map_err(|err| format!("failed to finalize '{}': {err}", path.display()))?;
+    if let Err(err) = fs::rename(&tmp_path, path) {
+        // Parallel test loads can race to publish the same cache bundle.
+        // If another writer already installed the final file, keep it and
+        // discard our temp file instead of deleting the shared destination.
+        if path.is_file() {
+            let _ = fs::remove_file(&tmp_path);
+            return Ok(());
+        }
+        let _ = fs::remove_file(&tmp_path);
+        return Err(format!("failed to finalize '{}': {err}", path.display()));
     }
     Ok(())
 }

@@ -17,6 +17,8 @@ pub(super) struct DevdWatch {
 
 impl DevdWatch {
     pub(super) fn new() -> Option<Self> {
+        // SAFETY: this is a straightforward libc socket creation call with no
+        // aliasing requirements; we check the returned fd before using it.
         let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET, 0) };
         if fd < 0 {
             warn!(
@@ -26,17 +28,23 @@ impl DevdWatch {
             return None;
         }
         if !configure_socket(fd) {
+            // SAFETY: `fd` is still owned by this constructor path and has not been
+            // moved into any wrapper yet, so closing it here is correct cleanup.
             unsafe {
                 libc::close(fd);
             }
             return None;
         }
+        // SAFETY: zero-initializing `sockaddr_un` is valid and gives us a clean
+        // buffer before setting the required fields below.
         let mut addr = unsafe { std::mem::zeroed::<libc::sockaddr_un>() };
         addr.sun_len = size_of::<libc::sockaddr_un>() as u8;
         addr.sun_family = libc::AF_UNIX as libc::sa_family_t;
         let path = &DEVD_SOCKET[..DEVD_SOCKET.len() - 1];
         if path.len() >= addr.sun_path.len() {
             warn!("freebsd input devd socket path is too long");
+            // SAFETY: `fd` is still uniquely owned here and must be closed on the
+            // early-return path.
             unsafe {
                 libc::close(fd);
             }
@@ -47,6 +55,8 @@ impl DevdWatch {
             addr.sun_path[i] = path[i] as libc::c_char;
             i += 1;
         }
+        // SAFETY: `addr` is fully initialized as a Unix-domain socket address and
+        // we pass its address with the correct byte size for `sockaddr_un`.
         let rc = unsafe {
             libc::connect(
                 fd,
@@ -61,6 +71,8 @@ impl DevdWatch {
             "freebsd input could not connect to devd seqpacket socket: {}",
             std::io::Error::last_os_error()
         );
+        // SAFETY: `fd` is still owned locally because the connection failed, so we
+        // must close it before returning.
         unsafe {
             libc::close(fd);
         }
@@ -76,6 +88,9 @@ impl DevdWatch {
         let mut out = Vec::new();
         let mut buf = [0u8; DEVD_BUF_LEN];
         loop {
+            // SAFETY: `buf` is a valid writable byte array of length `buf.len()`,
+            // and `self.fd` remains owned by this watcher for the duration of the
+            // call.
             let n = unsafe { libc::recv(self.fd, buf.as_mut_ptr().cast::<c_void>(), buf.len(), 0) };
             if n > 0 {
                 if let Some(event) = parse_packet(&buf[..n as usize]) {
@@ -100,6 +115,8 @@ impl DevdWatch {
 
 impl Drop for DevdWatch {
     fn drop(&mut self) {
+        // SAFETY: `fd` is owned by `DevdWatch` and closed exactly once here on
+        // drop.
         unsafe {
             libc::close(self.fd);
         }
@@ -107,6 +124,8 @@ impl Drop for DevdWatch {
 }
 
 fn configure_socket(fd: RawFd) -> bool {
+    // SAFETY: `fd` is an open descriptor created by `socket`, and `F_GETFL` does
+    // not require any extra pointer arguments.
     let flags = unsafe { libc::fcntl(fd, libc::F_GETFL, 0) };
     if flags < 0 {
         warn!(
@@ -115,6 +134,8 @@ fn configure_socket(fd: RawFd) -> bool {
         );
         return false;
     }
+    // SAFETY: `F_SETFL` updates the descriptor flags for this valid fd. We only
+    // add `O_NONBLOCK`.
     if unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } != 0 {
         warn!(
             "freebsd input could not make devd socket nonblocking: {}",
@@ -122,6 +143,8 @@ fn configure_socket(fd: RawFd) -> bool {
         );
         return false;
     }
+    // SAFETY: `F_SETFD` updates close-on-exec on this valid fd without borrowing
+    // any Rust-managed memory.
     if unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } == 0 {
         return true;
     }

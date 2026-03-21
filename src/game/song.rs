@@ -35,17 +35,13 @@ pub struct SongData {
     pub min_bpm: f64,
     pub max_bpm: f64,
     pub normalized_bpms: String,
-    pub normalized_stops: String,
-    pub normalized_delays: String,
-    pub normalized_warps: String,
-    pub normalized_speeds: String,
-    pub normalized_scrolls: String,
-    pub normalized_fakes: String,
     /// Length of the music file in seconds (audio duration, including trailing silence).
     /// Mirrors `ITGmania`'s `Song::m_fMusicLengthSeconds` / `MusicLengthSeconds()` Lua.
     pub music_length_seconds: f32,
     /// Length of the chart in seconds based on the last note/hold (`Song::GetLastSecond()` semantics).
     pub total_length_seconds: i32,
+    /// Float-precision song end time used by graph scaling and preview helpers.
+    pub precise_last_second_seconds: f32,
     pub charts: Vec<ChartData>,
 }
 
@@ -119,48 +115,13 @@ impl SongData {
         }
     }
 
-    #[inline(always)]
-    fn chart_last_beat(chart: &ChartData) -> Option<f32> {
-        let mut last_row: Option<usize> = None;
-        for note in &chart.parsed_notes {
-            let row = note.tail_row_index.unwrap_or(note.row_index);
-            last_row = Some(last_row.map_or(row, |prev| prev.max(row)));
-        }
-        let row = last_row?;
-        chart.row_to_beat.get(row).copied()
-    }
-
-    #[inline(always)]
-    fn chart_last_second(chart: &ChartData) -> Option<f32> {
-        let beat = Self::chart_last_beat(chart)?;
-        let sec = chart.timing.get_time_for_beat(beat);
-        sec.is_finite().then_some(sec.max(0.0))
-    }
-
     /// Float-precision song end time used by graph scaling.
     ///
     /// Mirrors ITGmania's `Song::GetLastSecond()` chart-selection behavior:
     /// if any non-Edit chart exists, ignore Edit charts for song length.
     pub fn precise_last_second(&self) -> f32 {
-        let has_non_edit = self
-            .charts
-            .iter()
-            .any(|c| !c.difficulty.eq_ignore_ascii_case("edit"));
-        let mut last = 0.0_f32;
-
-        for chart in &self.charts {
-            if has_non_edit && chart.difficulty.eq_ignore_ascii_case("edit") {
-                continue;
-            }
-            if let Some(sec) = Self::chart_last_second(chart)
-                && sec > last
-            {
-                last = sec;
-            }
-        }
-
         let fallback = self.total_length_seconds.max(0) as f32;
-        last.max(fallback)
+        self.precise_last_second_seconds.max(fallback)
     }
 
     pub fn display_title(&self, translit: bool) -> &str {

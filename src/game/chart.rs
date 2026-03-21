@@ -29,11 +29,6 @@ pub struct ChartData {
     pub chart_name: String,
     pub meter: u32,
     pub step_artist: String,
-    pub notes: Vec<u8>, // This is the minimized raw data we will parse
-    pub parsed_notes: Vec<ParsedNote>,
-    pub row_to_beat: Vec<f32>,
-    pub timing_segments: TimingSegments,
-    pub timing: TimingData,
     pub short_hash: String,
     pub stats: ArrowStats,
     pub tech_counts: TechCounts,
@@ -51,12 +46,23 @@ pub struct ChartData {
     pub simple_breakdown: String,
     pub total_measures: usize,
     pub measure_nps_vec: Vec<f64>,
+    pub measure_seconds_vec: Vec<f32>,
+    pub first_second: f32,
+    pub has_note_data: bool,
+    pub has_chart_attacks: bool,
+    pub has_significant_timing_changes: bool,
+    pub possible_grade_points: i32,
+    pub holds_total: u32,
+    pub rolls_total: u32,
+    pub mines_total: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayChartData {
+    pub notes: Vec<u8>, // This is the minimized raw data we will parse
+    pub parsed_notes: Vec<ParsedNote>,
+    pub row_to_beat: Vec<f32>,
+    pub timing_segments: TimingSegments,
+    pub timing: TimingData,
     pub chart_attacks: Option<String>,
-    pub chart_bpms: Option<String>,
-    pub chart_stops: Option<String>,
-    pub chart_delays: Option<String>,
-    pub chart_warps: Option<String>,
-    pub chart_speeds: Option<String>,
-    pub chart_scrolls: Option<String>,
-    pub chart_fakes: Option<String>,
 }

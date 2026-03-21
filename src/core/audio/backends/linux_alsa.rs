@@ -789,6 +789,8 @@ fn current_clock_nanos(host_clock: AlsaHostClock) -> Option<u64> {
         tv_sec: 0,
         tv_nsec: 0,
     };
+    // SAFETY: `clock_gettime` writes into the provided stack `timespec`, and
+    // `clock_id` is chosen from the valid ALSA host-clock constants above.
     let rc = unsafe { libc::clock_gettime(clock_id, &mut ts) };
     if rc != 0 {
         return None;

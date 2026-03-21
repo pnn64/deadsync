@@ -75,6 +75,9 @@ impl Drop for ThreadPolicyGuard {
         let Some(handle) = self.mmcss_handle.take() else {
             return;
         };
+        // SAFETY: `handle` only comes from a successful
+        // `AvSetMmThreadCharacteristicsW` call in `boost_current_thread`, so it is
+        // a live MMCSS handle owned by this guard and can be reverted exactly once.
         unsafe {
             if let Err(e) = Threading::AvRevertMmThreadCharacteristics(handle) {
                 warn!("Failed to leave MMCSS thread class: {e}");
@@ -85,6 +88,9 @@ impl Drop for ThreadPolicyGuard {
 
 #[inline(always)]
 fn apply_fallback_priority(profile: ThreadProfile) {
+    // SAFETY: `GetCurrentThread` returns the pseudo-handle for the current
+    // thread, and `profile.fallback_priority` is one of the documented Win32
+    // constants accepted by `SetThreadPriority`.
     unsafe {
         if let Err(e) = SetThreadPriority(GetCurrentThread(), profile.fallback_priority) {
             warn!(
@@ -103,10 +109,15 @@ fn apply_fallback_priority(profile: ThreadProfile) {
 pub fn boost_current_thread(role: ThreadRole) -> ThreadPolicyGuard {
     let profile = role.profile();
     let mut task_index = 0u32;
+    // SAFETY: `profile.mmcss_task` is a static wide string and `task_index`
+    // points to a live local that Win32 fills before returning.
     let mmcss =
         unsafe { Threading::AvSetMmThreadCharacteristicsW(profile.mmcss_task, &mut task_index) };
     match mmcss {
         Ok(handle) => {
+            // SAFETY: `handle` was returned by
+            // `AvSetMmThreadCharacteristicsW` above and remains valid until this
+            // thread leaves the MMCSS class or the guard drops.
             unsafe {
                 if let Err(e) = Threading::AvSetMmThreadPriority(handle, profile.mmcss_priority) {
                     warn!(
@@ -137,6 +148,8 @@ pub fn boost_current_thread(role: ThreadRole) -> ThreadPolicyGuard {
 
 #[inline(always)]
 fn qpc_freq_hz() -> Option<u64> {
+    // SAFETY: `QueryPerformanceFrequency` writes into a valid stack local and does
+    // not retain the pointer after the call returns.
     unsafe {
         let mut hz = 0i64;
         Performance::QueryPerformanceFrequency(&mut hz).ok()?;
@@ -154,6 +167,8 @@ pub(crate) fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
 
 #[inline(always)]
 pub(crate) fn current_qpc_nanos() -> Option<u64> {
+    // SAFETY: `QueryPerformanceCounter` writes into a valid stack local and does
+    // not retain the pointer after the call returns.
     unsafe {
         let mut ticks = 0i64;
         Performance::QueryPerformanceCounter(&mut ticks).ok()?;

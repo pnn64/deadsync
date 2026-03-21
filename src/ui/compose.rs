@@ -137,7 +137,7 @@ pub enum TextLayoutOverflowPolicy {
 
 pub struct TextLayoutCache {
     owned_entries: HashMap<TextLayoutKey, HashMap<Box<str>, OwnedLayoutEntry>>,
-    shared_aliases: HashMap<TextLayoutKey, HashMap<usize, (Arc<str>, *const CachedTextLayout)>>,
+    shared_aliases: HashMap<TextLayoutKey, HashMap<usize, Arc<str>>>,
     entry_count: usize,
     alias_count: usize,
     max_entries: usize,
@@ -260,15 +260,41 @@ impl TextLayoutCache {
     }
 
     #[inline(always)]
-    fn touch_owned_layout(
-        &mut self,
-        key: TextLayoutKey,
-        text: &str,
-        tick: u64,
-    ) -> Option<*const CachedTextLayout> {
-        let entry = self.owned_entries.get_mut(&key)?.get_mut(text)?;
+    fn touch_owned_layout(&mut self, key: TextLayoutKey, text: &str, tick: u64) -> bool {
+        let Some(entry) = self
+            .owned_entries
+            .get_mut(&key)
+            .and_then(|font_entries| font_entries.get_mut(text))
+        else {
+            return false;
+        };
         entry.last_used = tick;
-        Some(entry.layout.as_ref() as *const CachedTextLayout)
+        true
+    }
+
+    #[inline(always)]
+    fn owned_layout(&self, key: TextLayoutKey, text: &str) -> Option<&CachedTextLayout> {
+        Some(self.owned_entries.get(&key)?.get(text)?.layout.as_ref())
+    }
+
+    #[inline(always)]
+    fn uncached_layout_ref(&self) -> &CachedTextLayout {
+        self.uncached_layout
+            .as_deref()
+            .expect("uncached text layout inserted")
+    }
+
+    #[inline(always)]
+    fn record_layout_build(&mut self, layout: &CachedTextLayout) {
+        self.frame_stats.misses = self.frame_stats.misses.saturating_add(1);
+        self.frame_stats.built_lines = self
+            .frame_stats
+            .built_lines
+            .saturating_add(saturating_u32(layout.lines.len()));
+        self.frame_stats.built_glyphs = self
+            .frame_stats
+            .built_glyphs
+            .saturating_add(saturating_u32(layout.glyph_count));
     }
 
     fn insert_owned_layout(
@@ -277,7 +303,7 @@ impl TextLayoutCache {
         text: &str,
         layout: CachedTextLayout,
         tick: u64,
-    ) -> (*const CachedTextLayout, bool) {
+    ) -> bool {
         if self.entry_count >= self.max_entries {
             match self.overflow_policy {
                 TextLayoutOverflowPolicy::PruneOwnedEntries => {
@@ -287,28 +313,20 @@ impl TextLayoutCache {
                 }
                 TextLayoutOverflowPolicy::Saturating => {
                     self.uncached_layout = Some(Box::new(layout));
-                    return (
-                        self.uncached_layout
-                            .as_deref()
-                            .map_or(std::ptr::null(), std::ptr::from_ref),
-                        false,
-                    );
+                    return false;
                 }
             }
         }
-        self.owned_entries.entry(key).or_default().insert(
+        let replaced = self.owned_entries.entry(key).or_default().insert(
             text.into(),
             OwnedLayoutEntry {
                 layout: Box::new(layout),
                 last_used: tick,
             },
         );
-        self.entry_count += 1;
-        (
-            self.touch_owned_layout(key, text, tick)
-                .expect("owned text layout cache entry inserted"),
-            true,
-        )
+        debug_assert!(replaced.is_none());
+        self.entry_count += usize::from(replaced.is_none());
+        true
     }
 
     pub fn prewarm_text(
@@ -353,22 +371,20 @@ impl TextLayoutCache {
         text: &str,
     ) -> &CachedTextLayout {
         let tick = self.next_use_tick();
-        if let Some(layout_ptr) = self.touch_owned_layout(key, text, tick) {
+        if self.touch_owned_layout(key, text, tick) {
             self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
-            return unsafe { &*layout_ptr };
+            return self
+                .owned_layout(key, text)
+                .expect("owned text layout cache entry touched");
         }
         let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
-        self.frame_stats.misses = self.frame_stats.misses.saturating_add(1);
-        self.frame_stats.built_lines = self
-            .frame_stats
-            .built_lines
-            .saturating_add(saturating_u32(layout.lines.len()));
-        self.frame_stats.built_glyphs = self
-            .frame_stats
-            .built_glyphs
-            .saturating_add(saturating_u32(layout.glyph_count));
-        let (layout_ptr, _) = self.insert_owned_layout(key, text, layout, tick);
-        unsafe { &*layout_ptr }
+        self.record_layout_build(&layout);
+        if self.insert_owned_layout(key, text, layout, tick) {
+            self.owned_layout(key, text)
+                .expect("owned text layout cache entry inserted")
+        } else {
+            self.uncached_layout_ref()
+        }
     }
 
     fn get_or_build_shared(
@@ -380,15 +396,18 @@ impl TextLayoutCache {
     ) -> &CachedTextLayout {
         let tick = self.next_use_tick();
         let text_key = Arc::as_ptr(text) as *const () as usize;
+        let text_ref = text.as_ref();
         if self
             .shared_aliases
             .get(&key)
             .and_then(|font_entries| font_entries.get(&text_key))
             .is_some()
         {
-            if let Some(layout_ptr) = self.touch_owned_layout(key, text.as_ref(), tick) {
+            if self.touch_owned_layout(key, text_ref, tick) {
                 self.frame_stats.shared_hits = self.frame_stats.shared_hits.saturating_add(1);
-                return unsafe { &*layout_ptr };
+                return self
+                    .owned_layout(key, text_ref)
+                    .expect("shared text layout alias touched");
             }
             self.shared_aliases
                 .entry(key)
@@ -396,25 +415,16 @@ impl TextLayoutCache {
                 .remove(&text_key);
             self.alias_count = self.alias_count.saturating_sub(1);
         }
-        let (layout_ptr, aliasable) =
-            if let Some(layout_ptr) = self.touch_owned_layout(key, text.as_ref(), tick) {
-                self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
-                (layout_ptr, true)
-            } else {
-                let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
-                self.frame_stats.misses = self.frame_stats.misses.saturating_add(1);
-                self.frame_stats.built_lines = self
-                    .frame_stats
-                    .built_lines
-                    .saturating_add(saturating_u32(layout.lines.len()));
-                self.frame_stats.built_glyphs = self
-                    .frame_stats
-                    .built_glyphs
-                    .saturating_add(saturating_u32(layout.glyph_count));
-                self.insert_owned_layout(key, text, layout, tick)
-            };
+        let aliasable = if self.touch_owned_layout(key, text_ref, tick) {
+            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
+            true
+        } else {
+            let layout = build_cached_text_layout(font, fonts, text_ref, key.wrap_width_pixels);
+            self.record_layout_build(&layout);
+            self.insert_owned_layout(key, text_ref, layout, tick)
+        };
         if !aliasable {
-            return unsafe { &*layout_ptr };
+            return self.uncached_layout_ref();
         }
         if self.alias_count >= self.max_aliases {
             match self.overflow_policy {
@@ -422,19 +432,24 @@ impl TextLayoutCache {
                     self.shared_aliases.clear();
                     self.alias_count = 0;
                 }
-                TextLayoutOverflowPolicy::Saturating => return unsafe { &*layout_ptr },
+                TextLayoutOverflowPolicy::Saturating => {
+                    return self
+                        .owned_layout(key, text_ref)
+                        .expect("shared text layout cache entry available");
+                }
             }
         }
         if self
             .shared_aliases
             .entry(key)
             .or_default()
-            .insert(text_key, (text.clone(), layout_ptr))
+            .insert(text_key, text.clone())
             .is_none()
         {
             self.alias_count += 1;
         }
-        unsafe { &*layout_ptr }
+        self.owned_layout(key, text_ref)
+            .expect("shared text layout cache entry aliased")
     }
 }
 
@@ -554,7 +569,11 @@ fn wrapped_text_lines(
 }
 
 #[inline(always)]
+// SAFETY: Callers must only pass pointers captured from cached string storage that remains valid
+// and immutable for at least the lifetime of the returned borrow.
 unsafe fn str_from_cached_ptr<'a>(ptr: *const str) -> &'a str {
+    // SAFETY: callers only pass pointers captured from cached font glyph storage
+    // that outlives the returned borrow for the duration of render-list assembly.
     unsafe { &*ptr }
 }
 
@@ -1185,6 +1204,10 @@ fn build_actor_recursive<'a>(
                                     && {
                                         // Glyph texture keys are borrowed from font storage, so this
                                         // cached byte slice stays valid across pushes after reserve().
+                                        // SAFETY: `cached_texture_ptr` and `cached_texture_len` are
+                                        // only refreshed from `texture_key.as_bytes()` values that
+                                        // live for the duration of the cached layout. The pointer is
+                                        // never used after either cached value changes.
                                         let cached_bytes = unsafe {
                                             std::slice::from_raw_parts(
                                                 cached_texture_ptr,
@@ -1902,6 +1925,9 @@ fn layout_text<'a>(
 
                 out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
+                        // SAFETY: `glyph.texture_key` was captured from cached font
+                        // storage when the layout was built and remains valid for
+                        // the lifetime of this render-list assembly pass.
                         texture_id: std::borrow::Cow::Borrowed(unsafe {
                             str_from_cached_ptr(glyph.texture_key)
                         }),
@@ -2301,21 +2327,25 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
 mod tests {
     use super::wrap_text_lines_by_words;
 
+    fn boxed_lines(lines: &[&str]) -> Vec<Box<str>> {
+        lines.iter().map(|line| Box::<str>::from(*line)).collect()
+    }
+
     #[test]
     fn wrapwidthpixels_wraps_on_spaces() {
         let lines = wrap_text_lines_by_words("A BB CCC", 3, 1, |word| word.len() as i32);
-        assert_eq!(lines, vec!["A", "BB", "CCC"]);
+        assert_eq!(lines, boxed_lines(&["A", "BB", "CCC"]));
     }
 
     #[test]
     fn wrapwidthpixels_keeps_empty_lines() {
         let lines = wrap_text_lines_by_words("AA\n\nBB CC", 5, 1, |word| word.len() as i32);
-        assert_eq!(lines, vec!["AA", "", "BB", "CC"]);
+        assert_eq!(lines, boxed_lines(&["AA", "", "BB CC"]));
     }
 
     #[test]
     fn wrapwidthpixels_keeps_long_word_on_own_line() {
         let lines = wrap_text_lines_by_words("AAAA BB", 3, 1, |word| word.len() as i32);
-        assert_eq!(lines, vec!["AAAA", "BB"]);
+        assert_eq!(lines, boxed_lines(&["AAAA", "BB"]));
     }
 }

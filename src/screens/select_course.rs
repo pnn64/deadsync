@@ -534,7 +534,7 @@ fn resolve_course_chart<'a>(
         if first_chart.is_none() {
             first_chart = Some(chart);
         }
-        if chart.notes.is_empty() {
+        if !chart.has_note_data {
             continue;
         }
         if first_playable.is_none() {
@@ -751,14 +751,9 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         min_bpm: meta.min_bpm.unwrap_or(0.0),
         max_bpm: meta.max_bpm.unwrap_or(meta.min_bpm.unwrap_or(0.0)),
         normalized_bpms: String::new(),
-        normalized_stops: String::new(),
-        normalized_delays: String::new(),
-        normalized_warps: String::new(),
-        normalized_speeds: String::new(),
-        normalized_scrolls: String::new(),
-        normalized_fakes: String::new(),
         music_length_seconds: meta.total_length_seconds.max(0) as f32,
         total_length_seconds: meta.total_length_seconds.max(0),
+        precise_last_second_seconds: meta.total_length_seconds.max(0) as f32,
         charts: Vec::new(),
     }
 }

@@ -58,14 +58,14 @@ impl Api {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     pos: [f32; 2],
     uv: [f32; 2],
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct InstanceRaw {
     center: [f32; 4],
     size: [f32; 2],
@@ -79,7 +79,7 @@ struct InstanceRaw {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct TexturedMeshVertexRaw {
     pos: [f32; 2],
     uv: [f32; 2],
@@ -88,7 +88,7 @@ struct TexturedMeshVertexRaw {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct TexturedMeshInstanceRaw {
     model_col0: [f32; 4],
     model_col1: [f32; 4],
@@ -2246,9 +2246,8 @@ const INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
 const PROJ_BYTES: u64 = mem::size_of::<[[f32; 4]; 4]>() as u64;
 
 #[inline(always)]
-const fn cast_slice<T>(data: &[T]) -> &[u8] {
-    let len = std::mem::size_of_val(data);
-    unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<u8>(), len) }
+fn cast_slice<T: bytemuck::Pod>(data: &[T]) -> &[u8] {
+    bytemuck::cast_slice(data)
 }
 
 #[inline(always)]

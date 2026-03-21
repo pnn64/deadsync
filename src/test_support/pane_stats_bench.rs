@@ -5,7 +5,7 @@ use crate::game::profile;
 use crate::game::scores::Grade;
 use crate::game::scroll::ScrollSpeedSetting;
 use crate::game::song::SongData;
-use crate::game::timing::{HistogramMs, TimingData, TimingSegments, TimingStats, WindowCounts};
+use crate::game::timing::{HistogramMs, TimingStats, WindowCounts};
 use crate::screens::components::evaluation::pane_stats;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use crate::test_support::compose_scenarios;
@@ -69,11 +69,13 @@ fn bench_score_info() -> ScoreInfo {
         song,
         chart,
         profile_name: "BenchPlayer".to_string(),
+        score_valid: true,
         judgment_counts,
         score_percent: 0.9765,
         grade: Grade::Tier02,
         speed_mod: ScrollSpeedSetting::CMod(700.0),
         hands_achieved: 237,
+        hands_total: 288,
         holds_held: 452,
         holds_total: 487,
         rolls_held: 73,
@@ -121,6 +123,7 @@ fn bench_score_info() -> ScoreInfo {
         show_ex_score: true,
         show_hard_ex_score: true,
         show_fa_plus_pane: true,
+        track_early_judgments: true,
         machine_records: Vec::new(),
         machine_record_highlight_rank: None,
         personal_records: Vec::new(),
@@ -149,14 +152,9 @@ fn bench_song() -> SongData {
         min_bpm: 180.0,
         max_bpm: 180.0,
         normalized_bpms: "0.000=180.000".to_string(),
-        normalized_stops: String::new(),
-        normalized_delays: String::new(),
-        normalized_warps: String::new(),
-        normalized_speeds: String::new(),
-        normalized_scrolls: String::new(),
-        normalized_fakes: String::new(),
         music_length_seconds: 128.0,
         total_length_seconds: 128,
+        precise_last_second_seconds: 128.0,
         charts: vec![bench_chart()],
     }
 }
@@ -169,20 +167,6 @@ fn bench_chart() -> ChartData {
         chart_name: String::new(),
         meter: 15,
         step_artist: String::new(),
-        notes: vec![b'0', b'0', b'0', b'0'],
-        parsed_notes: Vec::new(),
-        row_to_beat: Vec::new(),
-        timing_segments: TimingSegments {
-            beat0_offset_adjust: 0.0,
-            bpms: vec![(0.0, 180.0)],
-            stops: Vec::new(),
-            delays: Vec::new(),
-            warps: Vec::new(),
-            speeds: Vec::new(),
-            scrolls: Vec::new(),
-            fakes: Vec::new(),
-        },
-        timing: TimingData::default(),
         short_hash: "pane-stats-bench".to_string(),
         stats: ArrowStats {
             total_arrows: 0,
@@ -224,13 +208,14 @@ fn bench_chart() -> ChartData {
         simple_breakdown: String::new(),
         total_measures: 0,
         measure_nps_vec: Vec::new(),
-        chart_attacks: None,
-        chart_bpms: None,
-        chart_stops: None,
-        chart_delays: None,
-        chart_warps: None,
-        chart_speeds: None,
-        chart_scrolls: None,
-        chart_fakes: None,
+        measure_seconds_vec: Vec::new(),
+        first_second: 0.0,
+        has_note_data: true,
+        has_chart_attacks: false,
+        has_significant_timing_changes: false,
+        possible_grade_points: 0,
+        holds_total: 487,
+        rolls_total: 81,
+        mines_total: 999,
     }
 }

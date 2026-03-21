@@ -1,6 +1,6 @@
 use crate::act;
 // Screen navigation is handled in app.rs
-use crate::core::input::{InputEvent, VirtualAction};
+use crate::core::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::core::network::{self, ArrowCloudConnectionStatus, ConnectionStatus};
 use crate::game::course::get_course_cache;
 use crate::game::song::get_song_cache;
@@ -13,7 +13,6 @@ use crate::ui::actors::{Actor, TextAlign};
 use crate::ui::color;
 use std::cell::RefCell;
 use std::sync::{Arc, LazyLock};
-use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
 
 use crate::core::space::{screen_center_x, screen_height, screen_width};
@@ -125,17 +124,13 @@ pub fn init() -> State {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 // Screen-specific raw keyboard handling for Menu (e.g., F4 to Sandbox)
-pub fn handle_raw_key_event(_state: &mut State, key: &KeyEvent) -> ScreenAction {
-    if key.state != ElementState::Pressed {
+pub fn handle_raw_key_event(_state: &mut State, key: &RawKeyboardEvent) -> ScreenAction {
+    if !key.pressed {
         return ScreenAction::None;
     }
-    match key.physical_key {
-        winit::keyboard::PhysicalKey::Code(KeyCode::F4) => {
-            return ScreenAction::Navigate(Screen::Sandbox);
-        }
-        winit::keyboard::PhysicalKey::Code(KeyCode::Escape) => {
-            return ScreenAction::Exit;
-        }
+    match key.code {
+        KeyCode::F4 => return ScreenAction::Navigate(Screen::Sandbox),
+        KeyCode::Escape => return ScreenAction::Exit,
         _ => {}
     }
     ScreenAction::None

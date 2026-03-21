@@ -105,6 +105,59 @@ fn skip_parenthetical(bytes: &[u8], start: usize) -> usize {
     bytes.len()
 }
 
+#[inline(always)]
+fn trim_ascii_ws(bytes: &[u8]) -> &[u8] {
+    let start = bytes
+        .iter()
+        .position(|b| !b.is_ascii_whitespace())
+        .unwrap_or(bytes.len());
+    let end = bytes
+        .iter()
+        .rposition(|b| !b.is_ascii_whitespace())
+        .map_or(start, |idx| idx + 1);
+    &bytes[start..end]
+}
+
+fn parse_res_dims(section: &[u8]) -> Option<(u32, u32)> {
+    let mut scan = 0usize;
+    while scan + 4 <= section.len() {
+        if !section[scan..scan + 4].eq_ignore_ascii_case(b"res ") {
+            scan += 1;
+            continue;
+        }
+
+        let mut width_start = scan + 4;
+        while width_start < section.len() && section[width_start].is_ascii_whitespace() {
+            width_start += 1;
+        }
+
+        let Some(x_rel) = section[width_start..]
+            .iter()
+            .position(|b| matches!(*b, b'x' | b'X'))
+        else {
+            break;
+        };
+        let x_idx = width_start + x_rel;
+        let width = parse_ascii_digits(trim_ascii_ws(&section[width_start..x_idx]));
+
+        let mut height_end = x_idx + 1;
+        while height_end < section.len() && section[height_end].is_ascii_digit() {
+            height_end += 1;
+        }
+        let height = parse_ascii_digits(&section[x_idx + 1..height_end]);
+
+        if let (Some(width), Some(height)) = (width, height)
+            && width > 0
+            && height > 0
+        {
+            return Some((width, height));
+        }
+
+        scan = height_end.max(width_start + 1);
+    }
+    None
+}
+
 fn parse_texture_resolution_hint(raw: &str) -> Option<(u32, u32)> {
     let bytes = raw.as_bytes();
     let mut i = 0usize;
@@ -118,35 +171,8 @@ fn parse_texture_resolution_hint(raw: &str) -> Option<(u32, u32)> {
             i = end.max(i + 1);
             continue;
         }
-        let section = raw.get(i + 1..end - 1)?.to_ascii_lowercase();
-        let mut scan = 0usize;
-        while let Some(rel) = section[scan..].find("res ") {
-            let start = scan + rel + 4;
-            let tail = section[start..].trim_start();
-            let Some(x_pos) = tail.find('x') else {
-                break;
-            };
-            let width_txt = tail[..x_pos].trim();
-            if width_txt.is_empty() || !width_txt.bytes().all(|b| b.is_ascii_digit()) {
-                scan = start + 1;
-                continue;
-            }
-            let after_x = &tail[x_pos + 1..];
-            let height_len = after_x.bytes().take_while(|b| b.is_ascii_digit()).count();
-            if height_len == 0 {
-                scan = start + x_pos + 1;
-                continue;
-            }
-            let height_txt = &after_x[..height_len];
-            let (Ok(width), Ok(height)) = (width_txt.parse::<u32>(), height_txt.parse::<u32>())
-            else {
-                scan = start + x_pos + 1 + height_len;
-                continue;
-            };
-            if width > 0 && height > 0 {
-                return Some((width, height));
-            }
-            scan = start + x_pos + 1 + height_len;
+        if let Some(dims) = parse_res_dims(&bytes[i + 1..end - 1]) {
+            return Some(dims);
         }
         i = end.max(i + 1);
     }
@@ -1099,7 +1125,7 @@ pub enum DensityGraphSlot {
 pub struct DensityGraphSource {
     pub max_nps: f64,
     pub measure_nps_vec: Vec<f64>,
-    pub timing: crate::game::timing::TimingData,
+    pub measure_seconds_vec: Vec<f32>,
     pub first_second: f32,
     pub last_second: f32,
 }
@@ -2416,5 +2442,47 @@ impl AssetManager {
         {
             state.high_res_loaded = true;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_texture_resolution_hint;
+
+    #[test]
+    fn parses_texture_resolution_hint_from_parenthetical_res_tag() {
+        assert_eq!(
+            parse_texture_resolution_hint("_miso light 15x15 (res 360x360).png"),
+            Some((360, 360))
+        );
+    }
+
+    #[test]
+    fn parses_texture_resolution_hint_case_insensitively() {
+        assert_eq!(
+            parse_texture_resolution_hint("banner (ReS 512x160).png"),
+            Some((512, 160))
+        );
+    }
+
+    #[test]
+    fn ignores_invalid_res_tags_until_a_valid_one() {
+        assert_eq!(
+            parse_texture_resolution_hint("sheet (res nope) (res 384 x170).png"),
+            Some((384, 170))
+        );
+    }
+
+    #[test]
+    fn ignores_zero_sized_res_tags() {
+        assert_eq!(parse_texture_resolution_hint("sheet (res 0x170).png"), None);
+    }
+
+    #[test]
+    fn ignores_non_parenthetical_sheet_dims() {
+        assert_eq!(
+            parse_texture_resolution_hint("_miso light 16x7 doubleres.png"),
+            None
+        );
     }
 }

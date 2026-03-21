@@ -27,6 +27,7 @@ use crate::game::{
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::cache::{TextCache, cached_text};
 use crate::ui::color;
 use crate::ui::compose::TextLayoutCache;
 use crate::ui::font;
@@ -37,7 +38,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::sync::Arc;
-use std::thread::LocalKey;
 use twox_hash::XxHash64;
 
 // --- CONSTANTS ---
@@ -86,6 +86,9 @@ const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
 const TEXT_CACHE_LIMIT: usize = 8192;
+const COMBO_PREWARM_CAP: u32 = 2048;
+const MEASURE_PREWARM_CAP: i32 = 64;
+const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
 
 // Visual Feedback
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
@@ -153,47 +156,47 @@ struct TornadoBounds {
     min_x: f32,
     max_x: f32,
 }
-type TextCache<K> = HashMap<K, Arc<str>, BuildHasherDefault<XxHash64>>;
+type FastTextCache<K> = TextCache<K, BuildHasherDefault<XxHash64>>;
 
 thread_local! {
-    static FMT2_CACHE_F32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static FMT2_CACHE_F32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static PERCENT2_CACHE_F64: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static PERCENT2_CACHE_F64: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static SIGNED_PERCENT2_CACHE_F64: RefCell<TextCache<(u32, bool)>> = RefCell::new(
+    static SIGNED_PERCENT2_CACHE_F64: RefCell<FastTextCache<(u32, bool)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
     );
-    static NEG_INT_CACHE_U32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static NEG_INT_CACHE_U32: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         256,
         BuildHasherDefault::default(),
     ));
-    static PAREN_INT_CACHE_I32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static PAREN_INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static INT_CACHE_I32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static INT_CACHE_U32: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static INT_CACHE_U32: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static RATIO_CACHE_I32: RefCell<TextCache<(i32, i32)>> = RefCell::new(
+    static RATIO_CACHE_I32: RefCell<FastTextCache<(i32, i32)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
-    static OFFSET_MS_CACHE_F32: RefCell<TextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
+    static OFFSET_MS_CACHE_F32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
     ));
-    static RUN_TIMER_CACHE: RefCell<TextCache<(i32, i32, bool)>> = RefCell::new(
+    static RUN_TIMER_CACHE: RefCell<FastTextCache<(i32, i32, bool)>> = RefCell::new(
         HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
     );
-    static GAMEPLAY_MODS_CACHE: RefCell<TextCache<GameplayModsTextKey>> = RefCell::new(
+    static GAMEPLAY_MODS_CACHE: RefCell<FastTextCache<GameplayModsTextKey>> = RefCell::new(
         HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
     );
 }
@@ -221,25 +224,6 @@ struct GameplayModsTextKey {
 }
 
 #[inline(always)]
-fn cached_text<K, F>(cache: &'static LocalKey<RefCell<TextCache<K>>>, key: K, build: F) -> Arc<str>
-where
-    K: Copy + Eq + std::hash::Hash,
-    F: FnOnce() -> String,
-{
-    cache.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(text) = cache.get(&key) {
-            return text.clone();
-        }
-        let text: Arc<str> = Arc::<str>::from(build());
-        if cache.len() < TEXT_CACHE_LIMIT {
-            cache.insert(key, text.clone());
-        }
-        text
-    })
-}
-
-#[inline(always)]
 fn quantize_centi_i32(value: f64) -> i32 {
     (if value.is_finite() { value } else { 0.0 } * 100.0)
         .round()
@@ -259,7 +243,7 @@ fn quantize_centi_u32(value: f64) -> u32 {
 #[inline(always)]
 fn cached_fmt2_f32(value: f32) -> Arc<str> {
     let key = quantize_centi_i32(f64::from(value));
-    cached_text(&FMT2_CACHE_F32, key, || {
+    cached_text(&FMT2_CACHE_F32, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}", key as f64 / 100.0)
     })
 }
@@ -267,7 +251,7 @@ fn cached_fmt2_f32(value: f32) -> Arc<str> {
 #[inline(always)]
 fn cached_percent2_f64(value: f64) -> Arc<str> {
     let key = quantize_centi_u32(value);
-    cached_text(&PERCENT2_CACHE_F64, key, || {
+    cached_text(&PERCENT2_CACHE_F64, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}%", key as f64 / 100.0)
     })
 }
@@ -275,38 +259,51 @@ fn cached_percent2_f64(value: f64) -> Arc<str> {
 #[inline(always)]
 fn cached_signed_percent2_f64(value: f64, neg: bool) -> Arc<str> {
     let key = quantize_centi_u32(value);
-    cached_text(&SIGNED_PERCENT2_CACHE_F64, (key, neg), || {
-        if neg {
-            format!("-{:.2}%", key as f64 / 100.0)
-        } else {
-            format!("+{:.2}%", key as f64 / 100.0)
-        }
-    })
+    cached_text(
+        &SIGNED_PERCENT2_CACHE_F64,
+        (key, neg),
+        TEXT_CACHE_LIMIT,
+        || {
+            if neg {
+                format!("-{:.2}%", key as f64 / 100.0)
+            } else {
+                format!("+{:.2}%", key as f64 / 100.0)
+            }
+        },
+    )
 }
 
 #[inline(always)]
 fn cached_neg_int_u32(value: u32) -> Arc<str> {
-    cached_text(&NEG_INT_CACHE_U32, value, || format!("-{value}"))
+    cached_text(&NEG_INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
+        format!("-{value}")
+    })
 }
 
 #[inline(always)]
 fn cached_paren_i32(value: i32) -> Arc<str> {
-    cached_text(&PAREN_INT_CACHE_I32, value, || format!("({value})"))
+    cached_text(&PAREN_INT_CACHE_I32, value, TEXT_CACHE_LIMIT, || {
+        format!("({value})")
+    })
 }
 
 #[inline(always)]
 fn cached_int_i32(value: i32) -> Arc<str> {
-    cached_text(&INT_CACHE_I32, value, || value.to_string())
+    cached_text(&INT_CACHE_I32, value, TEXT_CACHE_LIMIT, || {
+        value.to_string()
+    })
 }
 
 #[inline(always)]
 fn cached_int_u32(value: u32) -> Arc<str> {
-    cached_text(&INT_CACHE_U32, value, || value.to_string())
+    cached_text(&INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
+        value.to_string()
+    })
 }
 
 #[inline(always)]
 fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
-    cached_text(&RATIO_CACHE_I32, (curr, total), || {
+    cached_text(&RATIO_CACHE_I32, (curr, total), TEXT_CACHE_LIMIT, || {
         format!("{curr}/{total}")
     })
 }
@@ -314,7 +311,7 @@ fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
 #[inline(always)]
 fn cached_offset_ms(value: f32) -> Arc<str> {
     let key = quantize_centi_i32(f64::from(value));
-    cached_text(&OFFSET_MS_CACHE_F32, key, || {
+    cached_text(&OFFSET_MS_CACHE_F32, key, TEXT_CACHE_LIMIT, || {
         format!("{:.2}ms", key as f64 / 100.0)
     })
 }
@@ -324,6 +321,7 @@ fn cached_run_timer(seconds: i32, minute_threshold: i32, trailing_space: bool) -
     cached_text(
         &RUN_TIMER_CACHE,
         (seconds, minute_threshold, trailing_space),
+        TEXT_CACHE_LIMIT,
         || {
             let mut s = if seconds < 10 {
                 format!("0.0{seconds}")
@@ -1259,7 +1257,7 @@ fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
 #[inline(always)]
 fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
     let key = gameplay_mods_text_key(state, player_idx);
-    cached_text(&GAMEPLAY_MODS_CACHE, key, || {
+    cached_text(&GAMEPLAY_MODS_CACHE, key, TEXT_CACHE_LIMIT, || {
         let mut parts = Vec::with_capacity(32);
         parts.push(format_speed_mod_for_display(
             effective_scroll_speed_for_player(state, player_idx),
@@ -1725,6 +1723,45 @@ pub fn prewarm_text_layout(
     fonts: &HashMap<&'static str, font::Font>,
     state: &State,
 ) {
+    let prewarm_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
+        let text = cached_int_u32(value);
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_i32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: i32| {
+        let text = cached_int_i32(value);
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_ratio =
+        |cache: &mut TextLayoutCache, font_name: &'static str, curr: i32, total: i32| {
+            let text = cached_ratio_i32(curr, total);
+            cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+        };
+    let prewarm_timer = |cache: &mut TextLayoutCache,
+                         font_name: &'static str,
+                         second: i32,
+                         threshold: i32,
+                         trailing: bool| {
+        let text = cached_run_timer(second, threshold, trailing);
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_percent = |cache: &mut TextLayoutCache, font_name: &'static str, value: f64| {
+        let text = cached_percent2_f64(value.clamp(0.0, 100.0));
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_signed_percent =
+        |cache: &mut TextLayoutCache, font_name: &'static str, value: f64, neg: bool| {
+            let text = cached_signed_percent2_f64(value.clamp(0.0, 100.0), neg);
+            cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+        };
+    let prewarm_neg_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
+        let text = cached_neg_int_u32(value);
+        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+    };
+    let prewarm_offset = |cache: &mut TextLayoutCache, value: f32| {
+        let text = cached_offset_ms(value);
+        cache.prewarm_text(fonts, "wendy", text.as_ref(), None);
+    };
+
     let mut max_combo = 0u32;
     let mut max_measure_len = 0i32;
     let music_end_seconds = state.music_end_time.ceil().max(0.0) as i32;
@@ -1738,10 +1775,10 @@ pub fn prewarm_text_layout(
         );
 
         if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
-            for value in 0..=max_combo {
-                let text = cached_int_u32(value);
-                cache.prewarm_text(fonts, font_name, text.as_ref(), None);
+            for value in 0..=max_combo.min(COMBO_PREWARM_CAP) {
+                prewarm_u32(cache, font_name, value);
             }
+            prewarm_u32(cache, font_name, max_combo);
         }
 
         let mods_text = gameplay_mods_text(state, player);
@@ -1765,56 +1802,57 @@ pub fn prewarm_text_layout(
                 max_measure_len = max_measure_len.max((broken_end - seg.start) as i32);
             }
         }
-        for total in 1..=max_measure_len {
-            let total_text = cached_int_i32(total);
+        let prewarm_measure_len = max_measure_len.min(MEASURE_PREWARM_CAP);
+        for total in 1..=prewarm_measure_len {
+            prewarm_i32(cache, mc_font_name, total);
             let break_text = cached_paren_i32(total);
-            cache.prewarm_text(fonts, mc_font_name, total_text.as_ref(), None);
             cache.prewarm_text(fonts, mc_font_name, break_text.as_ref(), None);
             for curr in 1..=total {
-                let text = cached_ratio_i32(curr, total);
-                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
+                prewarm_ratio(cache, mc_font_name, curr, total);
             }
         }
-        for second in 0..=music_end_seconds {
-            let idle = cached_run_timer(second, 60, false);
-            let active = cached_run_timer(second, 59, true);
-            cache.prewarm_text(fonts, mc_font_name, idle.as_ref(), None);
-            cache.prewarm_text(fonts, mc_font_name, active.as_ref(), None);
+        if max_measure_len > prewarm_measure_len {
+            prewarm_i32(cache, mc_font_name, max_measure_len);
+            let break_text = cached_paren_i32(max_measure_len);
+            cache.prewarm_text(fonts, mc_font_name, break_text.as_ref(), None);
+            prewarm_ratio(cache, mc_font_name, 1, max_measure_len);
+            prewarm_ratio(cache, mc_font_name, max_measure_len, max_measure_len);
         }
+        for second in 0..=music_end_seconds.min(RUN_TIMER_PREWARM_CAP_S) {
+            prewarm_timer(cache, mc_font_name, second, 60, false);
+            prewarm_timer(cache, mc_font_name, second, 59, true);
+        }
+        prewarm_timer(cache, mc_font_name, music_end_seconds, 60, false);
+        prewarm_timer(cache, mc_font_name, music_end_seconds, 59, true);
         if profile.measure_counter != crate::game::profile::MeasureCounter::None {
-            let countdown_max = max_measure_len.max(16);
+            let countdown_max = max_measure_len.max(16).min(MEASURE_PREWARM_CAP);
             for value in 0..=countdown_max {
-                let text = cached_int_i32(value);
-                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
+                prewarm_i32(cache, mc_font_name, value);
             }
+            prewarm_i32(cache, mc_font_name, max_measure_len.max(16));
         }
         if zmod_indicator_mode(profile) != profile::MiniIndicator::None {
-            for centi in 0..=10_000 {
-                let text = cached_percent2_f64(centi as f64 / 100.0);
-                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
-                let neg = cached_signed_percent2_f64(centi as f64 / 100.0, true);
-                let pos = cached_signed_percent2_f64(centi as f64 / 100.0, false);
-                cache.prewarm_text(fonts, mc_font_name, neg.as_ref(), None);
-                cache.prewarm_text(fonts, mc_font_name, pos.as_ref(), None);
+            for &value in &[0.0, 50.0, 89.0, 95.0, 100.0] {
+                prewarm_percent(cache, mc_font_name, value);
+                prewarm_signed_percent(cache, mc_font_name, value, true);
+                prewarm_signed_percent(cache, mc_font_name, value, false);
             }
-            for value in 0..=max_combo {
-                let text = cached_neg_int_u32(value);
-                cache.prewarm_text(fonts, mc_font_name, text.as_ref(), None);
-            }
+            prewarm_percent(
+                cache,
+                mc_font_name,
+                state.mini_indicator_target_score_percent[player],
+            );
+            prewarm_percent(
+                cache,
+                mc_font_name,
+                state.mini_indicator_rival_score_percent[player],
+            );
+            prewarm_neg_u32(cache, mc_font_name, 0);
+            prewarm_neg_u32(cache, mc_font_name, max_combo.min(COMBO_PREWARM_CAP));
+            prewarm_neg_u32(cache, mc_font_name, max_combo);
         }
         if profile.error_ms_display {
-            let max_window_s = state
-                .timing_profile
-                .windows_s
-                .iter()
-                .copied()
-                .filter(|value| value.is_finite() && *value > 0.0)
-                .fold(0.0_f32, f32::max);
-            let max_centi_ms = ((max_window_s * 1000.0 * 100.0).ceil() as i32).max(0);
-            for centi in -max_centi_ms..=max_centi_ms {
-                let text = cached_offset_ms(centi as f32 / 100.0);
-                cache.prewarm_text(fonts, "wendy", text.as_ref(), None);
-            }
+            prewarm_offset(cache, 0.0);
         }
     }
 
@@ -1902,7 +1940,25 @@ fn scoring_count(p: &PlayerRuntime, grade: JudgeGrade) -> u32 {
     p.scoring_counts[crate::game::judgment::judge_grade_ix(grade)]
 }
 
-#[derive(Clone, Copy, Debug)]
+/// Compute predictive kept/lost/pace percentages for ITG scoring.
+fn predictive_itg_percents(
+    current_possible_dp: i32,
+    possible_dp: i32,
+    actual_dp: i32,
+) -> (f64, f64, f64) {
+    let dp_lost = current_possible_dp.saturating_sub(actual_dp);
+    let kept_dp = possible_dp.saturating_sub(dp_lost).max(0);
+    let kept = ((f64::from(kept_dp) / f64::from(possible_dp)) * 10000.0).floor() / 100.0;
+    let lost = (100.0 - kept).max(0.0);
+    let pace = if current_possible_dp > 0 {
+        ((f64::from(actual_dp) / f64::from(current_possible_dp)) * 10000.0).floor() / 100.0
+    } else {
+        0.0
+    };
+    (kept, lost, pace)
+}
+
+#[derive(Clone, Copy, Debug, Default)]
 struct MiniIndicatorProgress {
     kept_percent: f64,
     lost_percent: f64,
@@ -1910,6 +1966,7 @@ struct MiniIndicatorProgress {
     current_possible_dp: i32,
     possible_dp: i32,
     actual_dp: i32,
+    white_count: u32,
     w2: u32,
     w3: u32,
     w4: u32,
@@ -1924,6 +1981,7 @@ fn zmod_mini_indicator_progress(
     state: &State,
     p: &PlayerRuntime,
     player_idx: usize,
+    score_type: profile::MiniIndicatorScoreType,
 ) -> MiniIndicatorProgress {
     let w1 = scoring_count(p, JudgeGrade::Fantastic);
     let w2 = scoring_count(p, JudgeGrade::Excellent);
@@ -1955,15 +2013,29 @@ fn zmod_mini_indicator_progress(
 
     let possible_dp = state.possible_grade_points[player_idx].max(1);
     let actual_dp = p.earned_grade_points.max(0);
-    let dp_lost = current_possible_dp.saturating_sub(actual_dp);
-    let kept_dp = possible_dp.saturating_sub(dp_lost).max(0);
-    let kept_percent = ((f64::from(kept_dp) / f64::from(possible_dp)) * 10000.0).floor() / 100.0;
-    let lost_percent = (100.0 - kept_percent).max(0.0);
-    let pace_percent = if current_possible_dp > 0 {
-        ((f64::from(actual_dp) / f64::from(current_possible_dp)) * 10000.0).floor() / 100.0
-    } else {
-        0.0
+
+    // Compute predictive percents for the active score type.
+    let (kept_percent, lost_percent, pace_percent, white_count) = match score_type {
+        profile::MiniIndicatorScoreType::Itg => {
+            let (kept, lost, pace) =
+                predictive_itg_percents(current_possible_dp, possible_dp, actual_dp);
+            (kept, lost, pace, 0)
+        }
+        profile::MiniIndicatorScoreType::Ex | profile::MiniIndicatorScoreType::HardEx => {
+            let score = crate::game::gameplay::display_ex_score_data(state, player_idx);
+            let white_count = score.counts.w1;
+            if score_type == profile::MiniIndicatorScoreType::Ex {
+                let (kept, lost, pace) =
+                    crate::game::judgment::predictive_ex_score_percents(&score);
+                (kept, lost, pace, white_count)
+            } else {
+                let (kept, lost, pace) =
+                    crate::game::judgment::predictive_hard_ex_score_percents(&score);
+                (kept, lost, pace, white_count)
+            }
+        }
     };
+
     let judged_any = tap_rows > 0 || let_go > 0 || mines_hit > 0 || p.is_failing || p.life <= 0.0;
     MiniIndicatorProgress {
         kept_percent,
@@ -1972,6 +2044,7 @@ fn zmod_mini_indicator_progress(
         current_possible_dp,
         possible_dp,
         actual_dp,
+        white_count,
         w2,
         w3,
         w4,
@@ -1980,6 +2053,26 @@ fn zmod_mini_indicator_progress(
         let_go,
         mines_hit,
         judged_any,
+    }
+}
+
+#[inline(always)]
+fn zmod_subtractive_counter_state(
+    progress: &MiniIndicatorProgress,
+    score_type: profile::MiniIndicatorScoreType,
+) -> (u32, bool) {
+    let forced_percent = progress.w3 > 0
+        || progress.w4 > 0
+        || progress.w5 > 0
+        || progress.miss > 0
+        || progress.let_go > 0
+        || progress.mines_hit > 0;
+    match score_type {
+        profile::MiniIndicatorScoreType::Itg => (progress.w2, forced_percent || progress.w2 > 10),
+        profile::MiniIndicatorScoreType::Ex | profile::MiniIndicatorScoreType::HardEx => (
+            progress.white_count,
+            forced_percent || progress.w2 > 0 || progress.white_count > 10,
+        ),
     }
 }
 
@@ -2000,15 +2093,15 @@ fn zmod_indicator_mode(profile: &profile::Profile) -> profile::MiniIndicator {
 #[inline(always)]
 fn zmod_indicator_default_color(score_percent: f64) -> [f32; 4] {
     if score_percent >= 96.0 {
-        color::rgba_hex("#21CCE8")
+        color::JUDGMENT_RGBA[0] // Fantastic
     } else if score_percent >= 89.0 {
-        color::rgba_hex("#e29c18")
+        color::JUDGMENT_RGBA[1] // Excellent
     } else if score_percent >= 80.0 {
-        color::rgba_hex("#66c955")
+        color::JUDGMENT_RGBA[2] // Great
     } else if score_percent >= 68.0 {
-        color::rgba_hex("#b45cff")
+        color::JUDGMENT_RGBA[3] // Decent
     } else {
-        [1.0, 0.0, 0.0, 1.0]
+        color::JUDGMENT_RGBA[5] // Miss
     }
 }
 
@@ -2077,29 +2170,24 @@ fn zmod_mini_indicator_text(
         return None;
     }
 
-    let progress = zmod_mini_indicator_progress(state, p, player_idx);
+    let progress =
+        zmod_mini_indicator_progress(state, p, player_idx, profile.mini_indicator_score_type);
     if !progress.judged_any {
         return None;
     }
 
     match mode {
         profile::MiniIndicator::SubtractiveScoring => {
-            let entered_percent_mode = progress.w3 > 0
-                || progress.w4 > 0
-                || progress.w5 > 0
-                || progress.miss > 0
-                || progress.let_go > 0
-                || progress.mines_hit > 0
-                || p.is_failing
-                || p.life <= 0.0
-                || progress.w2 > 10;
-            if !entered_percent_mode && progress.w2 > 0 {
-                return Some((cached_neg_int_u32(progress.w2), color::rgba_hex("#ff55cc")));
+            let (count, entered_percent_mode) =
+                zmod_subtractive_counter_state(&progress, profile.mini_indicator_score_type);
+            if !(entered_percent_mode || p.is_failing || p.life <= 0.0) && count > 0 {
+                return Some((cached_neg_int_u32(count), color::rgba_hex("#ff55cc")));
             }
 
-            let score = progress.kept_percent.clamp(0.0, 100.0);
+            let pcts = &progress;
+            let score = pcts.kept_percent.clamp(0.0, 100.0);
             Some((
-                cached_signed_percent2_f64(progress.lost_percent.clamp(0.0, 100.0), true),
+                cached_signed_percent2_f64(pcts.lost_percent.clamp(0.0, 100.0), true),
                 zmod_indicator_default_color(score),
             ))
         }
@@ -4701,11 +4789,17 @@ pub fn build(
                 let raw_travel_offset = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+                        // SAFETY: `state.arrows` only stores note indices sourced
+                        // from `state.note_time_cache`, so `arrow.note_index` is
+                        // valid for this cache lookup.
                         let note_time_chart =
                             unsafe { *state.note_time_cache.get_unchecked(arrow.note_index) };
                         (note_time_chart - current_time) / rate * pps_chart
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                        // SAFETY: `state.arrows` only stores note indices sourced
+                        // from `state.note_display_beat_cache`, so `arrow.note_index`
+                        // is valid for this cache lookup.
                         let note_disp_beat = unsafe {
                             *state
                                 .note_display_beat_cache
@@ -4726,7 +4820,8 @@ pub fn build(
                 if matches!(arrow.note_type, NoteType::Hold | NoteType::Roll) {
                     continue;
                 }
-                // `state.arrows` stores indices produced from `state.notes`, so these are in-bounds.
+                // SAFETY: `state.arrows` stores indices produced from `state.notes`,
+                // so `arrow.note_index` is in-bounds here.
                 let note = unsafe { state.notes.get_unchecked(arrow.note_index) };
                 let note_alpha = alpha_for_travel(col_idx, raw_travel_offset);
                 if note_alpha <= f32::EPSILON {
@@ -4891,6 +4986,8 @@ pub fn build(
                     continue;
                 }
                 let tap_note_part = tap_part_for_note_type(note.note_type);
+                // SAFETY: `state.arrows` only stores note indices sourced from
+                // `tap_row_hold_roll_flags`, so this cache lookup is in-bounds.
                 let tap_row_flags = unsafe {
                     *state
                         .tap_row_hold_roll_flags
@@ -6240,13 +6337,13 @@ pub fn build(
 #[cfg(test)]
 mod tests {
     use super::{
-        TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, append_mini_part,
-        append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
+        MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
+        append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hud_y, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_scale_height,
         note_world_z, note_x_extra, offset_center, push_transform_parts, receptor_row_center,
         tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits,
-        turn_option_name,
+        turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::note::NoteType;
@@ -6436,6 +6533,39 @@ mod tests {
     fn bottom_cap_uv_window_rejects_degenerate_inputs() {
         assert_eq!(bottom_cap_uv_window(0.0, 1.0, 0.0, 24.0, false), None);
         assert_eq!(bottom_cap_uv_window(0.0, 1.0, 24.0, 0.0, false), None);
+    }
+
+    #[test]
+    fn subtractive_counter_uses_whites_for_ex_paths() {
+        let itg = MiniIndicatorProgress {
+            w2: 4,
+            white_count: 7,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_counter_state(&itg, profile::MiniIndicatorScoreType::Itg),
+            (4, false)
+        );
+
+        let ex = MiniIndicatorProgress {
+            w2: 0,
+            white_count: 7,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_counter_state(&ex, profile::MiniIndicatorScoreType::Ex),
+            (7, false)
+        );
+
+        let hard_ex = MiniIndicatorProgress {
+            w2: 1,
+            white_count: 7,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_counter_state(&hard_ex, profile::MiniIndicatorScoreType::HardEx),
+            (7, true)
+        );
     }
 
     #[test]

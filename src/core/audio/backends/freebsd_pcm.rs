@@ -143,6 +143,8 @@ fn select_default_index(
 fn default_unit() -> Option<u32> {
     let mut unit: c_int = -1;
     let mut len = size_of::<c_int>();
+    // SAFETY: `sysctlbyname` reads the kernel default-unit sysctl into writable
+    // stack locals, and the sysctl name is a static NUL-terminated byte string.
     let rc = unsafe {
         libc::sysctlbyname(
             b"hw.snd.default_unit\0".as_ptr().cast(),
@@ -422,6 +424,8 @@ fn write_all(
     stop_flag: &AtomicBool,
     device_name: &str,
 ) -> Result<(), String> {
+    // SAFETY: `mix` is a contiguous slice of initialized `i16` samples, and `u8`
+    // has alignment 1, so viewing the same memory as a byte slice is valid.
     let bytes = unsafe {
         std::slice::from_raw_parts(mix.as_ptr().cast::<u8>(), std::mem::size_of_val(mix))
     };
@@ -430,6 +434,9 @@ fn write_all(
         if stop_flag.load(Ordering::Relaxed) {
             return Ok(());
         }
+        // SAFETY: `fd` is a live PCM device descriptor and the byte subslice points
+        // to initialized sample data that remains alive for the duration of the
+        // write call.
         let rc = unsafe {
             libc::write(
                 fd,
@@ -532,6 +539,8 @@ fn reset_dsp(fd: RawFd) -> Result<(), String> {
 
 #[inline(always)]
 fn ioctl_none(fd: RawFd, req: c_ulong) -> Result<(), std::io::Error> {
+    // SAFETY: `fd` is a live PCM device descriptor and `req` is an ioctl that
+    // takes no extra pointer argument.
     let rc = unsafe { libc::ioctl(fd, req) };
     if rc == 0 {
         Ok(())
@@ -542,6 +551,8 @@ fn ioctl_none(fd: RawFd, req: c_ulong) -> Result<(), std::io::Error> {
 
 #[inline(always)]
 fn ioctl_mut<T>(fd: RawFd, req: c_ulong, value: &mut T) -> Result<(), std::io::Error> {
+    // SAFETY: `fd` is a live PCM device descriptor and `value` points to writable
+    // storage of the exact type expected by the ioctl request.
     let rc = unsafe { libc::ioctl(fd, req, value) };
     if rc == 0 {
         Ok(())

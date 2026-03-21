@@ -1407,6 +1407,14 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     let mines_disabled = false;
 
     for player_idx in 0..gs.num_players {
+        if !gs.score_valid[player_idx] {
+            debug!(
+                "Skipping local score save for player {}: ranking-invalid modifiers were used.",
+                player_idx + 1
+            );
+            continue;
+        }
+
         let side = if gs.num_players >= 2 {
             if player_idx == 0 {
                 profile::PlayerSide::P1
@@ -1970,12 +1978,13 @@ fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<ArrowC
     let notes = &gs.notes[start..end];
     let note_times = &gs.note_time_cache[start..end];
     let col_offset = player_idx.saturating_mul(gs.cols_per_player);
+    let stream_segments = gameplay::stream_segments_for_results(gs, player_idx);
     let scatter = crate::game::timing::build_scatter_points(
         notes,
         note_times,
         col_offset,
         gs.cols_per_player,
-        &gs.mini_indicator_stream_segments[player_idx],
+        &stream_segments,
     );
     arrowcloud_timing_data_from_scatter(&scatter)
 }
@@ -2003,7 +2012,9 @@ fn arrowcloud_nps_info(gs: &gameplay::State, player_idx: usize) -> ArrowCloudNps
         if !started {
             continue;
         }
-        let t = chart.timing.get_time_for_beat((measure as f32) * 4.0);
+        let Some(&t) = chart.measure_seconds_vec.get(measure) else {
+            continue;
+        };
         let x = if last_second > first_second {
             ((t - first_second) / (last_second - first_second)).clamp(0.0, 1.0)
         } else {
@@ -2239,6 +2250,14 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
 
     let mut jobs = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        if !gs.score_valid[player_idx] {
+            debug!(
+                "Skipping ArrowCloud submit for player {}: ranking-invalid modifiers were used.",
+                player_idx + 1
+            );
+            continue;
+        }
+
         let side = gameplay_side_for_player(gs, player_idx);
         let api_key = gs.player_profiles[player_idx].arrowcloud_api_key.trim();
         if api_key.is_empty() {
@@ -2305,6 +2324,10 @@ pub fn save_local_summary_score_for_side(
     summary: &stage_stats::PlayerStageSummary,
 ) {
     if chart_hash.trim().is_empty() {
+        return;
+    }
+    if !summary.score_valid {
+        debug!("Skipping local summary score save: ranking-invalid modifiers were used.");
         return;
     }
     let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {

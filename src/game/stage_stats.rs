@@ -18,6 +18,7 @@ pub struct StageSummary {
 pub struct PlayerStageSummary {
     pub profile_name: String,
     pub chart: Arc<ChartData>,
+    pub score_valid: bool,
     pub grade: scores::Grade,
     pub score_percent: f64,
     pub ex_score_percent: f64,
@@ -29,4 +30,6 @@ pub struct PlayerStageSummary {
     pub show_w0: bool,
     pub show_ex_score: bool,
     pub show_hard_ex_score: bool,
+    pub show_fa_plus_pane: bool,
+    pub track_early_judgments: bool,
 }

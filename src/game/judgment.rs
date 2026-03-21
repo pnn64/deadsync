@@ -185,6 +185,21 @@ const HARD_EX_WEIGHT_W2: f64 = 1.0;
 const HARD_EX_WEIGHT_HELD: f64 = 1.0;
 const HARD_EX_WEIGHT_HIT_MINE: f64 = -1.0;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ExScoreData {
+    pub counts: WindowCounts,
+    pub counts_10ms: WindowCounts,
+    pub holds_held: u32,
+    pub holds_resolved: u32,
+    pub rolls_held: u32,
+    pub rolls_resolved: u32,
+    pub mines_hit: u32,
+    pub total_steps: u32,
+    pub holds_total: u32,
+    pub rolls_total: u32,
+    pub mines_total: u32,
+}
+
 struct ExScoreCounts {
     windows: WindowCounts,
     w010: u32,
@@ -305,6 +320,118 @@ fn compute_ex_score_counts(
     }
 }
 
+#[inline(always)]
+fn window_counts_total_taps(counts: WindowCounts) -> u32 {
+    counts
+        .w0
+        .saturating_add(counts.w1)
+        .saturating_add(counts.w2)
+        .saturating_add(counts.w3)
+        .saturating_add(counts.w4)
+        .saturating_add(counts.w5)
+        .saturating_add(counts.miss)
+}
+
+#[inline(always)]
+fn ex_total_possible(data: &ExScoreData) -> f64 {
+    if data.total_steps == 0 {
+        return 0.0;
+    }
+    f64::from(data.total_steps).mul_add(
+        EX_WEIGHT_W0,
+        f64::from(data.holds_total.saturating_add(data.rolls_total)),
+    )
+}
+
+#[inline(always)]
+fn ex_score_points(data: &ExScoreData) -> f64 {
+    let mines_effective = data.mines_hit.min(data.mines_total);
+    f64::from(data.counts.w0) * EX_WEIGHT_W0
+        + f64::from(data.counts.w1) * EX_WEIGHT_W1
+        + f64::from(data.counts.w2) * EX_WEIGHT_W2
+        + f64::from(data.counts.w3) * EX_WEIGHT_W3
+        + f64::from(data.holds_held) * EX_WEIGHT_HELD
+        + f64::from(data.rolls_held) * EX_WEIGHT_HELD
+        + f64::from(mines_effective) * EX_WEIGHT_HIT_MINE
+}
+
+#[inline(always)]
+fn hard_ex_score_points(data: &ExScoreData) -> f64 {
+    let w010 = data.counts_10ms.w0;
+    let fantastic_total = data.counts.w0.saturating_add(data.counts.w1);
+    let w110 = fantastic_total.saturating_sub(w010);
+    let mines_effective = data.mines_hit.min(data.mines_total);
+    f64::from(w010) * HARD_EX_WEIGHT_W010
+        + f64::from(w110) * HARD_EX_WEIGHT_W110
+        + f64::from(data.counts.w2) * HARD_EX_WEIGHT_W2
+        + f64::from(data.holds_held) * HARD_EX_WEIGHT_HELD
+        + f64::from(data.rolls_held) * HARD_EX_WEIGHT_HELD
+        + f64::from(mines_effective) * HARD_EX_WEIGHT_HIT_MINE
+}
+
+#[inline(always)]
+fn ex_current_possible_points(data: &ExScoreData) -> f64 {
+    let resolved = data.holds_resolved.saturating_add(data.rolls_resolved);
+    f64::from(window_counts_total_taps(data.counts)).mul_add(EX_WEIGHT_W0, f64::from(resolved))
+}
+
+#[inline(always)]
+fn floor_percent(points: f64, total: f64) -> f64 {
+    if total <= 0.0 {
+        return 0.0;
+    }
+    ((points / total).max(0.0) * 10000.0).floor() / 100.0
+}
+
+#[inline(always)]
+fn predictive_score_percents(
+    total_possible: f64,
+    current_possible: f64,
+    actual: f64,
+) -> (f64, f64, f64) {
+    if total_possible <= 0.0 {
+        return (0.0, 0.0, 0.0);
+    }
+    let lost = (current_possible - actual).max(0.0);
+    let kept = (total_possible - lost).max(0.0);
+    let kept_pct = floor_percent(kept, total_possible);
+    let lost_pct = (100.0 - kept_pct).max(0.0);
+    let pace_pct = if current_possible > 0.0 {
+        floor_percent(actual, current_possible)
+    } else {
+        0.0
+    };
+    (kept_pct, lost_pct, pace_pct)
+}
+
+#[inline(always)]
+pub fn ex_score_percent(data: &ExScoreData) -> f64 {
+    floor_percent(ex_score_points(data), ex_total_possible(data))
+}
+
+#[inline(always)]
+pub fn hard_ex_score_percent(data: &ExScoreData) -> f64 {
+    floor_percent(hard_ex_score_points(data), ex_total_possible(data))
+}
+
+#[inline(always)]
+pub fn predictive_ex_score_percents(data: &ExScoreData) -> (f64, f64, f64) {
+    predictive_score_percents(
+        ex_total_possible(data),
+        ex_current_possible_points(data),
+        ex_score_points(data),
+    )
+}
+
+#[inline(always)]
+pub fn predictive_hard_ex_score_percents(data: &ExScoreData) -> (f64, f64, f64) {
+    predictive_score_percents(
+        ex_total_possible(data),
+        ex_current_possible_points(data),
+        hard_ex_score_points(data),
+    )
+}
+
 /// Calculates FA+ EX score using the same algebra as SL:
 ///
 ///   `total_possible` = `total_steps` * 3.5 + (`total_holds` + `total_rolls`)
@@ -328,39 +455,20 @@ pub fn calculate_ex_score_from_notes(
     fail_time: Option<f32>,
     _mines_disabled: bool,
 ) -> f64 {
-    if total_steps == 0 {
-        return 0.0;
-    }
-
     let counts = compute_ex_score_counts(notes, note_times, hold_end_times, fail_time);
-
-    let total_steps_f = f64::from(total_steps);
-    let total_holds_f = f64::from(holds_total);
-    let total_rolls_f = f64::from(rolls_total);
-
-    let total_possible = total_steps_f.mul_add(
-        EX_WEIGHT_W0,
-        (total_holds_f + total_rolls_f) * EX_WEIGHT_HELD,
-    );
-    if total_possible <= 0.0 {
-        return 0.0;
-    }
-
-    // Spreadsheet-style EX points: tap rows plus successful holds and rolls.
-    let mut total_points = 0.0_f64;
-    total_points += f64::from(counts.windows.w0) * EX_WEIGHT_W0;
-    total_points += f64::from(counts.windows.w1) * EX_WEIGHT_W1;
-    total_points += f64::from(counts.windows.w2) * EX_WEIGHT_W2;
-    total_points += f64::from(counts.windows.w3) * EX_WEIGHT_W3;
-    total_points += f64::from(counts.holds_held) * EX_WEIGHT_HELD;
-    total_points += f64::from(counts.rolls_held) * EX_WEIGHT_HELD;
-
-    // Mines subtract if hit while alive.
-    let mines_effective = counts.mines_hit.min(mines_total);
-    total_points += f64::from(mines_effective) * EX_WEIGHT_HIT_MINE;
-
-    let ratio = (total_points / total_possible).max(0.0);
-    ((ratio * 10000.0).floor()) / 100.0
+    ex_score_percent(&ExScoreData {
+        counts: counts.windows,
+        counts_10ms: WindowCounts::default(),
+        holds_held: counts.holds_held,
+        holds_resolved: counts.holds_held,
+        rolls_held: counts.rolls_held,
+        rolls_resolved: counts.rolls_held,
+        mines_hit: counts.mines_hit,
+        total_steps,
+        holds_total,
+        rolls_total,
+        mines_total,
+    })
 }
 
 pub fn calculate_hard_ex_score_from_notes(
@@ -374,39 +482,23 @@ pub fn calculate_hard_ex_score_from_notes(
     fail_time: Option<f32>,
     _mines_disabled: bool,
 ) -> f64 {
-    if total_steps == 0 {
-        return 0.0;
-    }
-
     let counts = compute_ex_score_counts(notes, note_times, hold_end_times, fail_time);
-
-    let total_steps_f = f64::from(total_steps);
-    let total_holds_f = f64::from(holds_total);
-    let total_rolls_f = f64::from(rolls_total);
-
-    let total_possible = total_steps_f.mul_add(
-        HARD_EX_WEIGHT_W010,
-        (total_holds_f + total_rolls_f) * HARD_EX_WEIGHT_HELD,
-    );
-    if total_possible <= 0.0 {
-        return 0.0;
-    }
-
-    let fantastic_total = counts.windows.w0.saturating_add(counts.windows.w1);
-    let w110 = fantastic_total.saturating_sub(counts.w010);
-
-    let mut total_points = 0.0_f64;
-    total_points += f64::from(counts.w010) * HARD_EX_WEIGHT_W010;
-    total_points += f64::from(w110) * HARD_EX_WEIGHT_W110;
-    total_points += f64::from(counts.windows.w2) * HARD_EX_WEIGHT_W2;
-    total_points += f64::from(counts.holds_held) * HARD_EX_WEIGHT_HELD;
-    total_points += f64::from(counts.rolls_held) * HARD_EX_WEIGHT_HELD;
-
-    let mines_effective = counts.mines_hit.min(mines_total);
-    total_points += f64::from(mines_effective) * HARD_EX_WEIGHT_HIT_MINE;
-
-    let ratio = (total_points / total_possible).max(0.0);
-    ((ratio * 10000.0).floor()) / 100.0
+    hard_ex_score_percent(&ExScoreData {
+        counts: counts.windows,
+        counts_10ms: WindowCounts {
+            w0: counts.w010,
+            ..WindowCounts::default()
+        },
+        holds_held: counts.holds_held,
+        holds_resolved: counts.holds_held,
+        rolls_held: counts.rolls_held,
+        rolls_resolved: counts.rolls_held,
+        mines_hit: counts.mines_hit,
+        total_steps,
+        holds_total,
+        rolls_total,
+        mines_total,
+    })
 }
 
 #[cfg(test)]
@@ -797,5 +889,133 @@ mod tests {
         );
 
         assert!((ex - 99.33).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn hard_ex_percent_matches_known_reference_counts() {
+        let total_steps = BLUE_FANTASTIC
+            .saturating_add(WHITE_FANTASTIC)
+            .saturating_add(EXCELLENT)
+            .saturating_add(GREAT)
+            .saturating_add(DECENT)
+            .saturating_add(WAY_OFF)
+            .saturating_add(MISS);
+
+        let mut notes: Vec<Note> =
+            Vec::with_capacity((total_steps + HOLDS_TOTAL + MINES_HIT) as usize);
+        let mut row_index = 0usize;
+
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            BLUE_FANTASTIC,
+            JudgeGrade::Fantastic,
+            0.0,
+        );
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            WHITE_FANTASTIC,
+            JudgeGrade::Fantastic,
+            FA_PLUS_W0_MS + 0.001,
+        );
+        push_taps(
+            &mut notes,
+            &mut row_index,
+            EXCELLENT,
+            JudgeGrade::Excellent,
+            0.0,
+        );
+        push_taps(&mut notes, &mut row_index, GREAT, JudgeGrade::Great, 0.0);
+        push_taps(&mut notes, &mut row_index, DECENT, JudgeGrade::Decent, 0.0);
+        push_taps(&mut notes, &mut row_index, WAY_OFF, JudgeGrade::WayOff, 0.0);
+        push_taps(&mut notes, &mut row_index, MISS, JudgeGrade::Miss, 0.0);
+
+        for i in 0..HOLDS_TOTAL {
+            notes.push(make_hold(
+                row_index.saturating_add(i as usize),
+                i < HOLDS_HELD,
+            ));
+        }
+        row_index = row_index.saturating_add(HOLDS_TOTAL as usize);
+        for i in 0..MINES_HIT {
+            notes.push(make_mine(row_index.saturating_add(i as usize)));
+        }
+
+        let note_times = vec![0.0_f32; notes.len()];
+        let hold_end_times = vec![None; notes.len()];
+        let hard_ex = calculate_hard_ex_score_from_notes(
+            &notes,
+            &note_times,
+            &hold_end_times,
+            total_steps,
+            HOLDS_TOTAL,
+            ROLLS_TOTAL,
+            MINES_HIT,
+            None,
+            false,
+        );
+
+        assert!((hard_ex - 71.39).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn predictive_ex_percents_account_for_resolved_hold_losses() {
+        let score = ExScoreData {
+            counts: WindowCounts {
+                w0: 3,
+                w1: 1,
+                w2: 1,
+                ..WindowCounts::default()
+            },
+            counts_10ms: WindowCounts {
+                w0: 2,
+                ..WindowCounts::default()
+            },
+            holds_held: 1,
+            holds_resolved: 2,
+            rolls_held: 0,
+            rolls_resolved: 1,
+            mines_hit: 1,
+            total_steps: 10,
+            holds_total: 2,
+            rolls_total: 1,
+            mines_total: 2,
+        };
+
+        let (kept, lost, pace) = predictive_ex_score_percents(&score);
+        assert!((kept - 86.84).abs() <= 1e-9);
+        assert!((lost - 13.16).abs() <= 1e-9);
+        assert!((pace - 75.60).abs() <= 1e-9);
+    }
+
+    #[test]
+    fn predictive_hard_ex_percents_account_for_resolved_hold_losses() {
+        let score = ExScoreData {
+            counts: WindowCounts {
+                w0: 3,
+                w1: 1,
+                w2: 1,
+                ..WindowCounts::default()
+            },
+            counts_10ms: WindowCounts {
+                w0: 2,
+                ..WindowCounts::default()
+            },
+            holds_held: 1,
+            holds_resolved: 2,
+            rolls_held: 0,
+            rolls_resolved: 1,
+            mines_hit: 1,
+            total_steps: 10,
+            holds_total: 2,
+            rolls_total: 1,
+            mines_total: 2,
+        };
+
+        let (kept, lost, pace) = predictive_hard_ex_score_percents(&score);
+        assert!((kept - 82.89).abs() <= 1e-9);
+        assert!((lost - 17.11).abs() <= 1e-9);
+        assert!((pace - 68.29).abs() <= 1e-9);
     }
 }
