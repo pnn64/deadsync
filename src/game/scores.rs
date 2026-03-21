@@ -1978,12 +1978,13 @@ fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<ArrowC
     let notes = &gs.notes[start..end];
     let note_times = &gs.note_time_cache[start..end];
     let col_offset = player_idx.saturating_mul(gs.cols_per_player);
+    let stream_segments = gameplay::stream_segments_for_results(gs, player_idx);
     let scatter = crate::game::timing::build_scatter_points(
         notes,
         note_times,
         col_offset,
         gs.cols_per_player,
-        &gs.mini_indicator_stream_segments[player_idx],
+        &stream_segments,
     );
     arrowcloud_timing_data_from_scatter(&scatter)
 }

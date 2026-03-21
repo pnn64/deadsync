@@ -705,6 +705,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let p = &gs.players[player_idx];
             let prof = &gs.player_profiles[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
+            let stream_segments =
+                crate::game::gameplay::stream_segments_for_results(&gs, player_idx);
 
             // Compute timing statistics across all non-miss tap judgments
             let stats = timing_stats::compute_note_timing_stats(notes);
@@ -714,7 +716,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 note_times,
                 col_offset,
                 cols_per_player,
-                &gs.mini_indicator_stream_segments[player_idx],
+                &stream_segments,
             );
             let histogram = timing_stats::build_histogram_ms(notes);
             let scatter_worst_window_ms = {

@@ -3075,6 +3075,51 @@ fn chart_has_significant_timing_changes(chart: &ChartData) -> bool {
     chart.has_significant_timing_changes
 }
 
+#[inline(always)]
+fn mini_indicator_mode(profile: &profile::Profile) -> profile::MiniIndicator {
+    if profile.mini_indicator != profile::MiniIndicator::None {
+        profile.mini_indicator
+    } else if profile.subtractive_scoring {
+        profile::MiniIndicator::SubtractiveScoring
+    } else if profile.pacemaker {
+        profile::MiniIndicator::Pacemaker
+    } else {
+        profile::MiniIndicator::None
+    }
+}
+
+#[inline(always)]
+fn needs_stream_data(profile: &profile::Profile) -> bool {
+    profile.measure_counter != profile::MeasureCounter::None
+        || mini_indicator_mode(profile) != profile::MiniIndicator::None
+}
+
+#[inline(always)]
+fn chart_stream_segments(
+    gameplay_chart: &GameplayChartData,
+    lanes: usize,
+    constant_bpm: bool,
+) -> (Vec<StreamSegment>, f32, f32) {
+    let measure_densities = rssp::stats::measure_densities(&gameplay_chart.notes, lanes);
+    zmod_stream_totals_full_measures(&measure_densities, constant_bpm)
+}
+
+pub fn stream_segments_for_results(state: &State, player: usize) -> Vec<StreamSegment> {
+    if player >= state.num_players {
+        return Vec::new();
+    }
+    if !state.mini_indicator_stream_segments[player].is_empty() {
+        return state.mini_indicator_stream_segments[player].clone();
+    }
+    let constant_bpm = !state.timing_players[player].has_bpm_changes();
+    let (segments, _, _) = chart_stream_segments(
+        &state.gameplay_charts[player],
+        state.cols_per_player,
+        constant_bpm,
+    );
+    segments
+}
+
 fn score_valid_for_chart(
     chart: &ChartData,
     profile: &profile::Profile,
@@ -6544,6 +6589,9 @@ pub fn init(
         if player >= num_players {
             return Vec::new();
         }
+        if player_profiles[player].attack_mode == profile::AttackMode::Off {
+            return Vec::new();
+        }
         build_attack_mask_windows_for_player(
             gameplay_charts[player].chart_attacks.as_deref(),
             player_profiles[player].attack_mode,
@@ -6560,6 +6608,9 @@ pub fn init(
     });
     let mut column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
     for player in 0..num_players {
+        if !player_profiles[player].column_cues {
+            continue;
+        }
         let col_start = player.saturating_mul(cols_per_player);
         let col_end = (col_start + cols_per_player).min(num_cols);
         column_cues[player] = build_column_cues_for_player(
@@ -6576,7 +6627,7 @@ pub fn init(
     }
 
     let measure_densities: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if p >= num_players {
+        if p >= num_players || !needs_stream_data(&player_profiles[p]) {
             return Vec::new();
         }
         rssp::stats::measure_densities(&gameplay_charts[p].notes, cols_per_player)
@@ -6599,6 +6650,9 @@ pub fn init(
     let mut mini_indicator_rival_score_percent = [0.0_f64; MAX_PLAYERS];
 
     for p in 0..num_players {
+        if mini_indicator_mode(&player_profiles[p]) == profile::MiniIndicator::None {
+            continue;
+        }
         let constant_bpm = !timing_players[p].has_bpm_changes();
         let (stream_segments, total_stream, _total_break) =
             zmod_stream_totals_full_measures(&measure_densities[p], constant_bpm);
