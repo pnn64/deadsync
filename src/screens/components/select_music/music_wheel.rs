@@ -32,6 +32,9 @@ const WHEEL_DRAW_RADIUS: f32 = (NUM_WHEEL_ITEMS_TO_DRAW as f32) * 0.5; // 8.5
 const SELECTION_HIGHLIGHT_BEAT_PERIOD: f32 = 2.0;
 const LAMP_PULSE_PERIOD: f32 = 0.8;
 const LAMP_PULSE_LERP_TO_WHITE: f32 = 0.70;
+const NEW_BADGE_PULSE_PERIOD: f32 = 1.2;
+const NEW_BADGE_COLOR: [f32; 4] = [0.3, 1.0, 0.3, 1.0];
+const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 const fn col_quint_lamp() -> [f32; 4] {
     // zmod quint color: color("1,0.2,0.406,1")
@@ -129,6 +132,7 @@ pub struct MusicWheelParams<'a> {
     pub song_has_edit_ptrs: Option<&'a HashSet<usize>>,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub new_pack_names: Option<&'a HashSet<String>>,
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
@@ -218,7 +222,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     } else {
                         [1.0, 1.0, 1.0, 1.0]
                     };
-                    let mut slot_children = Vec::with_capacity(4);
+                    let show_new_badge = p.color_pack_headers
+                        && p.new_pack_names
+                            .is_some_and(|new_packs| new_packs.contains(name.as_str()));
+                    let mut slot_children = Vec::with_capacity(4 + usize::from(show_new_badge));
                     slot_children.push(act!(quad:
                         align(0.0, 0.5):
                         xy(0.0, half_item_h):
@@ -243,6 +250,22 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         diffuse(header_color[0], header_color[1], header_color[2], 1.0):
                         z(2)
                     ));
+                    if show_new_badge {
+                        let phase = (p.selection_animation_timer / NEW_BADGE_PULSE_PERIOD)
+                            * std::f32::consts::PI
+                            * 2.0;
+                        let pulse_t = f32::midpoint(phase.sin(), 1.0);
+                        let color = lerp_color(NEW_BADGE_COLOR, NEW_BADGE_COLOR_PEAK, pulse_t);
+                        slot_children.push(act!(text:
+                            font("miso"):
+                            settext("NEW"):
+                            align(1.0, 0.5):
+                            xy(pack_count_x_local - widescale(30.0, 40.0), half_item_h):
+                            zoom(0.6):
+                            diffuse(color[0], color[1], color[2], color[3]):
+                            z(2)
+                        ));
+                    }
                     if let Some(count) = p.pack_song_counts.get(name.as_str())
                         && *count > 0
                     {

@@ -189,6 +189,42 @@ impl FromStr for SelectMusicPatternInfoMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewPackMode {
+    Disabled,
+    OpenPack,
+    HasScore,
+}
+
+impl NewPackMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "Disabled",
+            Self::OpenPack => "OpenPack",
+            Self::HasScore => "HasScore",
+        }
+    }
+}
+
+impl FromStr for NewPackMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "disabled" | "disable" | "off" => Ok(Self::Disabled),
+            "openpack" | "open" => Ok(Self::OpenPack),
+            "hasscore" | "score" | "scored" => Ok(Self::HasScore),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectMusicScoreboxPlacement {
     Auto,
     StepPane,
@@ -632,6 +668,7 @@ pub struct Config {
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub select_music_new_pack_mode: NewPackMode,
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
@@ -748,6 +785,7 @@ impl Default for Config {
             show_select_music_cdtitles: true,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
+            select_music_new_pack_mode: NewPackMode::Disabled,
             show_select_music_previews: true,
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,
@@ -1325,6 +1363,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicNewPackMode={}\n",
+        default.select_music_new_pack_mode.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviews={}\n",
         if default.show_select_music_previews {
             "1"
@@ -1889,6 +1931,10 @@ pub fn load() {
                     .get("Options", "SelectMusicWheelLamps")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_music_wheel_lamps, |v| v != 0);
+                cfg.select_music_new_pack_mode = conf
+                    .get("Options", "SelectMusicNewPackMode")
+                    .and_then(|v| NewPackMode::from_str(&v).ok())
+                    .unwrap_or(default.select_music_new_pack_mode);
                 cfg.show_select_music_previews = conf
                     .get("Options", "SelectMusicPreviews")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -3338,6 +3384,10 @@ fn save_without_keymaps() {
         if cfg.show_music_wheel_lamps { "1" } else { "0" }
     ));
     content.push_str(&format!(
+        "SelectMusicNewPackMode={}\n",
+        cfg.select_music_new_pack_mode.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviews={}\n",
         if cfg.show_select_music_previews {
             "1"
@@ -4100,6 +4150,17 @@ pub fn update_show_music_wheel_lamps(enabled: bool) {
             return;
         }
         cfg.show_music_wheel_lamps = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_new_pack_mode(mode: NewPackMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_new_pack_mode == mode {
+            return;
+        }
+        cfg.select_music_new_pack_mode = mode;
     }
     save_without_keymaps();
 }

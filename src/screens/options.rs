@@ -6,7 +6,7 @@ use crate::core::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, SelectMusicPatternInfoMode,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SimpleIni, SyncGraphMode,
 };
 use crate::core::audio;
@@ -302,6 +302,7 @@ pub const ITEMS: &[Item] = &[
             "Show CDTitles",
             "Show Music Wheel Grades",
             "Show Music Wheel Lamps",
+            "New Pack Badge",
             "Show Pattern Info",
             "Music Previews",
             "Show Gameplay Timer",
@@ -599,6 +600,7 @@ const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Speed";
 const SELECT_MUSIC_ROW_CDTITLES: &str = "Show CDTitles";
 const SELECT_MUSIC_ROW_WHEEL_GRADES: &str = "Show Music Wheel Grades";
 const SELECT_MUSIC_ROW_WHEEL_LAMPS: &str = "Show Music Wheel Lamps";
+const SELECT_MUSIC_ROW_NEW_PACKS: &str = "New Pack Badge";
 const SELECT_MUSIC_ROW_PATTERN_INFO: &str = "Show Pattern Info";
 const SELECT_MUSIC_ROW_PREVIEWS: &str = "Music Previews";
 const SELECT_MUSIC_ROW_PREVIEW_MARKER: &str = "Preview Marker";
@@ -1621,6 +1623,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: SELECT_MUSIC_ROW_NEW_PACKS,
+        choices: &["Off", "Open Pack", "Has Score"],
+        inline: true,
+    },
+    SubRow {
         label: SELECT_MUSIC_ROW_PATTERN_INFO,
         choices: &["Auto", "Tech", "Stamina"],
         inline: true,
@@ -1711,6 +1718,15 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SELECT_MUSIC_ROW_WHEEL_LAMPS,
         help: &["Show or hide lamp indicators on wheel rows."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_NEW_PACKS,
+        help: &[
+            "Show NEW on newly-scanned pack headers in Group sort.",
+            "Open Pack clears the badge when you expand that pack.",
+            "Has Score clears the badge once any song in the pack has a cached local or imported score for a joined player.",
+            "Off disables the badge and treats newly-scanned packs as seen.",
+        ],
     },
     Item {
         name: SELECT_MUSIC_ROW_PATTERN_INFO,
@@ -3856,6 +3872,22 @@ const fn select_music_pattern_info_from_choice(idx: usize) -> SelectMusicPattern
     }
 }
 
+const fn new_pack_mode_choice_index(mode: NewPackMode) -> usize {
+    match mode {
+        NewPackMode::Disabled => 0,
+        NewPackMode::OpenPack => 1,
+        NewPackMode::HasScore => 2,
+    }
+}
+
+const fn new_pack_mode_from_choice(idx: usize) -> NewPackMode {
+    match idx {
+        1 => NewPackMode::OpenPack,
+        2 => NewPackMode::HasScore,
+        _ => NewPackMode::Disabled,
+    }
+}
+
 const fn select_music_scorebox_placement_choice_index(
     placement: SelectMusicScoreboxPlacement,
 ) -> usize {
@@ -4539,6 +4571,12 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_WHEEL_LAMPS,
         yes_no_choice_index(cfg.show_music_wheel_lamps),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_NEW_PACKS,
+        new_pack_mode_choice_index(cfg.select_music_new_pack_mode),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -6025,6 +6063,8 @@ fn apply_submenu_choice_delta(
             config::update_show_music_wheel_grades(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_WHEEL_LAMPS {
             config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
+        } else if row.label == SELECT_MUSIC_ROW_NEW_PACKS {
+            config::update_select_music_new_pack_mode(new_pack_mode_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_PATTERN_INFO {
             config::update_select_music_pattern_info_mode(select_music_pattern_info_from_choice(
                 new_index,

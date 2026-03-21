@@ -42,6 +42,7 @@ impl MusicWheelBenchFixture {
             song_has_edit_ptrs: Some(&self.song_has_edit_ptrs),
             show_music_wheel_grades: false,
             show_music_wheel_lamps: false,
+            new_pack_names: None,
         })
     }
 }

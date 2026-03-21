@@ -1,7 +1,8 @@
 use crate::act;
 use crate::assets::{self, AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{
-    self, BreakdownStyle, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SyncGraphMode,
+    self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SyncGraphMode,
 };
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
@@ -11,6 +12,7 @@ use crate::core::space::{
     widescale,
 };
 use crate::game::chart::ChartData;
+use crate::game::known_packs;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
@@ -905,6 +907,90 @@ pub struct State {
     meter_pack_song_counts: HashMap<String, usize>,
     popularity_pack_song_counts: HashMap<String, usize>,
     recent_pack_song_counts: HashMap<String, usize>,
+    new_pack_names: HashSet<String>,
+}
+
+#[inline(always)]
+fn cached_score_exists(score: scores::CachedScore) -> bool {
+    score.grade != scores::Grade::Failed || score.score_percent > 0.0
+}
+
+fn song_has_cached_score(song: &SongData) -> bool {
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        for chart in &song.charts {
+            if scores::get_cached_score_for_side(&chart.short_hash, side)
+                .is_some_and(cached_score_exists)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn joined_local_profile_ids() -> Vec<String> {
+    let mut profile_ids = Vec::with_capacity(2);
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+            continue;
+        };
+        if !profile_ids.iter().any(|id| id == &profile_id) {
+            profile_ids.push(profile_id);
+        }
+    }
+    profile_ids
+}
+
+fn sync_new_pack_names(
+    profile_ids: &[String],
+    scanned_pack_names: Vec<String>,
+    scored_pack_names: &HashSet<String>,
+    mode: NewPackMode,
+) -> HashSet<String> {
+    let mut new_pack_names = known_packs::sync_known_packs(profile_ids, &scanned_pack_names);
+    if new_pack_names.is_empty() {
+        return new_pack_names;
+    }
+    match mode {
+        NewPackMode::Disabled => {
+            known_packs::mark_packs_known(
+                profile_ids,
+                scanned_pack_names.iter().map(String::as_str),
+            );
+            HashSet::new()
+        }
+        NewPackMode::OpenPack => new_pack_names,
+        NewPackMode::HasScore => {
+            new_pack_names.retain(|name| !scored_pack_names.contains(name.as_str()));
+            new_pack_names
+        }
+    }
+}
+
+fn maybe_clear_selected_pack_on_score(state: &mut State, mode: NewPackMode) {
+    if mode != NewPackMode::HasScore
+        || state.sort_mode != WheelSortMode::Group
+        || state.new_pack_names.is_empty()
+    {
+        return;
+    }
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return;
+    };
+    let song = song.clone();
+    if !song_has_cached_score(&song) {
+        return;
+    }
+    let Some(pack_name) = group_name_for_song(&state.entries, &song) else {
+        return;
+    };
+    state.new_pack_names.remove(&pack_name);
 }
 
 pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usize) -> bool {
@@ -1808,11 +1894,15 @@ pub fn init() -> State {
     let target_chart_type = profile::get_session_play_style().chart_type();
     let total_packs = song_cache.len();
     let total_songs: usize = song_cache.iter().map(|p| p.songs.len()).sum();
+    let new_pack_mode = config::get().select_music_new_pack_mode;
+    let clear_new_packs_on_score = new_pack_mode == NewPackMode::HasScore;
+    let joined_profile_ids = joined_local_profile_ids();
 
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
     let mut pack_song_counts = HashMap::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
     let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
+    let mut scored_pack_names = HashSet::new();
 
     let profile_data = profile::get();
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
@@ -1834,6 +1924,7 @@ pub fn init() -> State {
         let mut pack_name: Option<String> = None;
         let mut pack_song_count = 0usize;
         let mut pack_total_seconds = 0.0_f64;
+        let mut pack_has_cached_score = false;
 
         for song in &pack.songs {
             let mut has_target_chart_type = false;
@@ -1853,6 +1944,9 @@ pub fn init() -> State {
             }
             if has_edit {
                 song_has_edit_ptrs.insert(Arc::as_ptr(song) as usize);
+            }
+            if clear_new_packs_on_score && !pack_has_cached_score && song_has_cached_score(song) {
+                pack_has_cached_score = true;
             }
 
             let pack_name = pack_name.get_or_insert_with(|| {
@@ -1891,6 +1985,9 @@ pub fn init() -> State {
 
         if let Some(name) = pack_name {
             // Compute cache for get_actors (HOT PATH OPTIMIZATION)
+            if pack_has_cached_score {
+                scored_pack_names.insert(name.clone());
+            }
             pack_song_counts.insert(name, pack_song_count);
             pack_total_seconds_by_index[i] = pack_total_seconds;
         }
@@ -1905,6 +2002,12 @@ pub fn init() -> State {
     let (popularity_entries, popularity_pack_song_counts) =
         build_popularity_grouped_entries(&all_entries);
     let (recent_entries, recent_pack_song_counts) = build_recent_grouped_entries(&all_entries);
+    let new_pack_names = sync_new_pack_names(
+        &joined_profile_ids,
+        pack_song_counts.keys().cloned().collect(),
+        &scored_pack_names,
+        new_pack_mode,
+    );
 
     let mut state = State {
         all_entries: all_entries.clone(),
@@ -2007,6 +2110,7 @@ pub fn init() -> State {
         meter_pack_song_counts,
         popularity_pack_song_counts,
         recent_pack_song_counts,
+        new_pack_names,
     };
 
     let built_entries_len = state.all_entries.len();
@@ -2186,6 +2290,7 @@ pub fn init_placeholder() -> State {
         meter_pack_song_counts: HashMap::new(),
         popularity_pack_song_counts: HashMap::new(),
         recent_pack_song_counts: HashMap::new(),
+        new_pack_names: HashSet::new(),
     }
 }
 
@@ -4987,6 +5092,12 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
         Some(MusicWheelEntry::PackHeader { name, .. }) => {
             audio::play_sfx("assets/sounds/expand.ogg");
             let target = name.clone();
+            if config::get().select_music_new_pack_mode == NewPackMode::OpenPack
+                && state.new_pack_names.remove(&target)
+            {
+                let profile_ids = joined_local_profile_ids();
+                known_packs::mark_pack_known(&profile_ids, &target);
+            }
             if state.expanded_pack_name.as_ref() == Some(&target) {
                 state.expanded_pack_name = None;
             } else {
@@ -5454,6 +5565,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     let cfg = config::get();
+    maybe_clear_selected_pack_on_score(state, cfg.select_music_new_pack_mode);
 
     // Keep banner/CDTitle aligned to the restored wheel selection even while
     // overlays are visible; only preview/GS fetches are paused under overlays.
@@ -6891,6 +7003,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
         show_music_wheel_grades: cfg.show_music_wheel_grades,
         show_music_wheel_lamps: cfg.show_music_wheel_lamps,
+        new_pack_names: (state.sort_mode == WheelSortMode::Group).then_some(&state.new_pack_names),
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 
