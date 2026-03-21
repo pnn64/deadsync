@@ -352,6 +352,12 @@ fn groovestats_ini_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("groovestats.ini")
 }
 
+fn parse_groovestats_is_pad_player(value: Option<String>, default: bool) -> bool {
+    value
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default, |v| v == 1)
+}
+
 #[inline(always)]
 fn arrowcloud_ini_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("arrowcloud.ini")
@@ -3008,10 +3014,10 @@ fn load_for_side(side: PlayerSide) {
             profile.groovestats_api_key = gs_conf
                 .get("GrooveStats", "ApiKey")
                 .unwrap_or(default_profile.groovestats_api_key.clone());
-            profile.groovestats_is_pad_player = gs_conf
-                .get("GrooveStats", "IsPadPlayer")
-                .and_then(|v| v.parse::<u8>().ok())
-                .map_or(default_profile.groovestats_is_pad_player, |v| v != 0);
+            profile.groovestats_is_pad_player = parse_groovestats_is_pad_player(
+                gs_conf.get("GrooveStats", "IsPadPlayer"),
+                default_profile.groovestats_is_pad_player,
+            );
             profile.groovestats_username = gs_conf
                 .get("GrooveStats", "Username")
                 .unwrap_or(default_profile.groovestats_username);
@@ -4519,4 +4525,43 @@ pub fn update_measure_lines_for_side(side: PlayerSide, setting: MeasureLines) {
         profile.measure_lines = setting;
     }
     save_profile_ini_for_side(side);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_groovestats_is_pad_player;
+
+    #[test]
+    fn groovestats_is_pad_player_requires_explicit_one() {
+        assert!(parse_groovestats_is_pad_player(
+            Some("1".to_string()),
+            false
+        ));
+        assert!(!parse_groovestats_is_pad_player(
+            Some("0".to_string()),
+            false
+        ));
+        assert!(!parse_groovestats_is_pad_player(
+            Some("2".to_string()),
+            false
+        ));
+        assert!(!parse_groovestats_is_pad_player(
+            Some("255".to_string()),
+            false
+        ));
+    }
+
+    #[test]
+    fn groovestats_is_pad_player_uses_default_on_invalid_value() {
+        assert!(parse_groovestats_is_pad_player(None, true));
+        assert!(!parse_groovestats_is_pad_player(None, false));
+        assert!(parse_groovestats_is_pad_player(
+            Some("abc".to_string()),
+            true
+        ));
+        assert!(!parse_groovestats_is_pad_player(
+            Some("abc".to_string()),
+            false
+        ));
+    }
 }

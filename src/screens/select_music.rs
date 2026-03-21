@@ -5785,6 +5785,10 @@ pub fn reset_preview_after_gameplay(state: &mut State) {
     state.currently_playing_preview_path = None;
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
+    // Treat evaluation -> SelectMusic like a fresh chart visit so the existing
+    // scorebox snapshot stays visible while the current chart is refreshed.
+    state.last_refreshed_leaderboard_hash = None;
+    state.last_refreshed_leaderboard_hash_p2 = None;
     trigger_immediate_refresh(state);
 }
 
@@ -7541,5 +7545,35 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         }
 
         _ => ScreenAction::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        PREVIEW_DELAY_SECONDS, WheelSortMode, init_placeholder, reset_preview_after_gameplay,
+    };
+
+    #[test]
+    fn reset_preview_after_gameplay_rearms_leaderboard_refresh() {
+        let mut state = init_placeholder();
+        state.last_refreshed_leaderboard_hash = Some("abc123".to_string());
+        state.last_refreshed_leaderboard_hash_p2 = Some("def456".to_string());
+
+        reset_preview_after_gameplay(&mut state);
+
+        assert_eq!(state.last_refreshed_leaderboard_hash, None);
+        assert_eq!(state.last_refreshed_leaderboard_hash_p2, None);
+        assert_eq!(state.time_since_selection_change, PREVIEW_DELAY_SECONDS);
+    }
+
+    #[test]
+    fn reset_preview_after_gameplay_preserves_non_group_sort_modes() {
+        let mut state = init_placeholder();
+        state.sort_mode = WheelSortMode::Group;
+
+        reset_preview_after_gameplay(&mut state);
+
+        assert_eq!(state.sort_mode, WheelSortMode::Group);
     }
 }

@@ -694,6 +694,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // Persist one score file per play (per local profile), including fails and replay lane
         // input, unless the run was ranking-invalid (autoplay, score-invalid modifiers, etc.).
         scores::save_local_scores_from_gameplay(&gs);
+        scores::submit_groovestats_payloads_from_gameplay(&gs);
         scores::submit_arrowcloud_payloads_from_gameplay(&gs);
 
         let cols_per_player = gs.cols_per_player;
@@ -2696,6 +2697,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // Auto-submit status text (SL/zmod parity with AutoSubmitScore.lua SubmitText actors):
     // Common Normal/ThemeFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
     // In SL/zmod, Common Normal.redir points to Miso/_miso light.
+    // When both GrooveStats/BoogieStats and ArrowCloud are active, stack them vertically.
     {
         for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
             if !profile::is_session_side_joined(side) {
@@ -2713,32 +2715,49 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-            let Some(status) = scores::get_arrowcloud_submit_ui_status_for_side(
+            let mut lines: Vec<&str> = Vec::with_capacity(2);
+            if let Some(status) = scores::get_groovestats_submit_ui_status_for_side(
                 si.chart.short_hash.as_str(),
                 side,
-            ) else {
+            ) {
+                lines.push(match status {
+                    scores::GrooveStatsSubmitUiStatus::Submitting => "Submitting ...",
+                    scores::GrooveStatsSubmitUiStatus::Submitted => "Submitted!",
+                    scores::GrooveStatsSubmitUiStatus::SubmitFailed => "Submit Failed",
+                    scores::GrooveStatsSubmitUiStatus::TimedOut => "Timed Out",
+                });
+            }
+            if let Some(status) =
+                scores::get_arrowcloud_submit_ui_status_for_side(si.chart.short_hash.as_str(), side)
+            {
+                lines.push(match status {
+                    scores::ArrowCloudSubmitUiStatus::Submitting => "Submitting ...",
+                    scores::ArrowCloudSubmitUiStatus::Submitted => "Submitted!",
+                    scores::ArrowCloudSubmitUiStatus::SubmitFailed => "Submit Failed",
+                    scores::ArrowCloudSubmitUiStatus::TimedOut => "Timed Out",
+                });
+            }
+            if lines.is_empty() {
                 continue;
-            };
-            let status_text = match status {
-                scores::ArrowCloudSubmitUiStatus::Submitting => "Submitting ...",
-                scores::ArrowCloudSubmitUiStatus::Submitted => "Submitted!",
-                scores::ArrowCloudSubmitUiStatus::SubmitFailed => "Submit Failed",
-                scores::ArrowCloudSubmitUiStatus::TimedOut => "Timed Out",
-            };
+            }
             let x = if side == profile::PlayerSide::P1 {
                 screen_width() * 0.25
             } else {
                 screen_width() * 0.75
             };
-            actors.push(act!(text:
-                font("miso"):
-                settext(status_text):
-                align(0.5, 0.5):
-                xy(x, screen_height() - 15.0):
-                zoom(0.8):
-                z(121):
-                diffuse(1.0, 1.0, 1.0, 1.0)
-            ));
+            let base_y = screen_height() - 15.0;
+            for (idx, status_text) in lines.iter().enumerate() {
+                let y = base_y - (lines.len().saturating_sub(1 + idx) as f32 * 12.0);
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(*status_text):
+                    align(0.5, 0.5):
+                    xy(x, y):
+                    zoom(0.8):
+                    z(121):
+                    diffuse(1.0, 1.0, 1.0, 1.0)
+                ));
+            }
         }
     }
 
