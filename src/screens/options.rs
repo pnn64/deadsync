@@ -1722,9 +1722,9 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SELECT_MUSIC_ROW_NEW_PACKS,
         help: &[
-            "Show NEW on newly-scanned pack headers in Group sort.",
+            "Show NEW on pack headers in Group sort.",
             "Open Pack clears the badge when you expand that pack.",
-            "Has Score clears the badge once any song in the pack has a cached local or imported score for a joined player.",
+            "Has Score shows NEW until any song in the pack has a cached local or imported score for a joined player.",
             "Off disables the badge and treats newly-scanned packs as seen.",
         ],
     },

@@ -953,10 +953,6 @@ fn sync_new_pack_names(
     scored_pack_names: &HashSet<String>,
     mode: NewPackMode,
 ) -> HashSet<String> {
-    let mut new_pack_names = known_packs::sync_known_packs(profile_ids, &scanned_pack_names);
-    if new_pack_names.is_empty() {
-        return new_pack_names;
-    }
     match mode {
         NewPackMode::Disabled => {
             known_packs::mark_packs_known(
@@ -965,11 +961,11 @@ fn sync_new_pack_names(
             );
             HashSet::new()
         }
-        NewPackMode::OpenPack => new_pack_names,
-        NewPackMode::HasScore => {
-            new_pack_names.retain(|name| !scored_pack_names.contains(name.as_str()));
-            new_pack_names
-        }
+        NewPackMode::OpenPack => known_packs::sync_known_packs(profile_ids, &scanned_pack_names),
+        NewPackMode::HasScore => scanned_pack_names
+            .into_iter()
+            .filter(|name| !scored_pack_names.contains(name.as_str()))
+            .collect(),
     }
 }
 
