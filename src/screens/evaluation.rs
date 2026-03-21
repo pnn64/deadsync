@@ -184,11 +184,13 @@ pub struct ScoreInfo {
     pub song: Arc<SongData>,
     pub chart: Arc<ChartData>,
     pub profile_name: String,
+    pub score_valid: bool,
     pub judgment_counts: HashMap<JudgeGrade, u32>,
     pub score_percent: f64,
     pub grade: scores::Grade,
     pub speed_mod: ScrollSpeedSetting,
     pub hands_achieved: u32,
+    pub hands_total: u32,
     pub holds_held: u32,
     pub holds_total: u32,
     pub rolls_held: u32,
@@ -227,6 +229,7 @@ pub struct ScoreInfo {
     pub show_ex_score: bool,
     pub show_hard_ex_score: bool,
     pub show_fa_plus_pane: bool,
+    pub track_early_judgments: bool,
     pub machine_records: Vec<scores::LeaderboardEntry>,
     pub machine_record_highlight_rank: Option<u32>,
     pub personal_records: Vec<scores::LeaderboardEntry>,
@@ -243,15 +246,52 @@ pub struct ColumnJudgments {
     pub w4: u32,
     pub w5: u32,
     pub miss: u32,
+    pub early_w1: u32,
+    pub early_w2: u32,
+    pub early_w3: u32,
     pub early_w4: u32,
     pub early_w5: u32,
+    pub early_total_w0: u32,
+    pub early_total_w1: u32,
+    pub early_total_w2: u32,
+    pub early_total_w3: u32,
+    pub early_total_w4: u32,
+    pub early_total_w5: u32,
     pub held_miss: u32,
+}
+
+#[inline(always)]
+fn add_early_total(
+    slot: &mut ColumnJudgments,
+    judgment: &crate::game::judgment::Judgment,
+    include_bad: bool,
+) {
+    if matches!(
+        judgment.window,
+        Some(crate::game::judgment::TimingWindow::W0)
+    ) {
+        slot.early_total_w0 = slot.early_total_w0.saturating_add(1);
+        return;
+    }
+    match judgment.grade {
+        JudgeGrade::Fantastic => slot.early_total_w1 = slot.early_total_w1.saturating_add(1),
+        JudgeGrade::Excellent => slot.early_total_w2 = slot.early_total_w2.saturating_add(1),
+        JudgeGrade::Great => slot.early_total_w3 = slot.early_total_w3.saturating_add(1),
+        JudgeGrade::Decent if include_bad => {
+            slot.early_total_w4 = slot.early_total_w4.saturating_add(1)
+        }
+        JudgeGrade::WayOff if include_bad => {
+            slot.early_total_w5 = slot.early_total_w5.saturating_add(1)
+        }
+        _ => {}
+    }
 }
 
 fn compute_column_judgments(
     notes: &[crate::game::note::Note],
     cols_per_player: usize,
     col_offset: usize,
+    show_fa_plus_window: bool,
 ) -> Vec<ColumnJudgments> {
     let cols = cols_per_player.max(0);
     let mut out = vec![ColumnJudgments::default(); cols];
@@ -277,10 +317,25 @@ fn compute_column_judgments(
                 Some(crate::game::judgment::TimingWindow::W0) => {
                     slot.w0 = slot.w0.saturating_add(1)
                 }
-                _ => slot.w1 = slot.w1.saturating_add(1),
+                _ => {
+                    slot.w1 = slot.w1.saturating_add(1);
+                    if show_fa_plus_window && j.time_error_ms < 0.0 {
+                        slot.early_w1 = slot.early_w1.saturating_add(1);
+                    }
+                }
             },
-            JudgeGrade::Excellent => slot.w2 = slot.w2.saturating_add(1),
-            JudgeGrade::Great => slot.w3 = slot.w3.saturating_add(1),
+            JudgeGrade::Excellent => {
+                slot.w2 = slot.w2.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w2 = slot.early_w2.saturating_add(1);
+                }
+            }
+            JudgeGrade::Great => {
+                slot.w3 = slot.w3.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w3 = slot.early_w3.saturating_add(1);
+                }
+            }
             JudgeGrade::Decent => {
                 slot.w4 = slot.w4.saturating_add(1);
                 if j.time_error_ms < 0.0 {
@@ -300,9 +355,93 @@ fn compute_column_judgments(
                 }
             }
         }
+
+        if let Some(early) = note.early_result.as_ref() {
+            add_early_total(slot, j, false);
+            add_early_total(slot, early, true);
+        }
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_column_judgments;
+    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use crate::game::note::{Note, NoteType};
+
+    fn tap_note(column: usize, result: Judgment, early_result: Option<Judgment>) -> Note {
+        Note {
+            beat: 0.0,
+            quantization_idx: 0,
+            column,
+            note_type: NoteType::Tap,
+            row_index: 0,
+            result: Some(result),
+            early_result,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    fn judgment(grade: JudgeGrade, window: Option<TimingWindow>, time_error_ms: f32) -> Judgment {
+        Judgment {
+            time_error_ms,
+            grade,
+            window,
+            miss_because_held: false,
+        }
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_split_white_early_fantastics() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Fantastic, Some(TimingWindow::W1), -8.0),
+            None,
+        )];
+
+        let with_fa = compute_column_judgments(&notes, 1, 0, true);
+        let without_fa = compute_column_judgments(&notes, 1, 0, false);
+
+        assert_eq!(with_fa[0].w1, 1);
+        assert_eq!(with_fa[0].early_w1, 1);
+        assert_eq!(without_fa[0].early_w1, 0);
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_rescored_early_totals() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Excellent, Some(TimingWindow::W2), -18.0),
+            Some(judgment(JudgeGrade::WayOff, Some(TimingWindow::W5), -18.0)),
+        )];
+
+        let out = compute_column_judgments(&notes, 1, 0, false);
+
+        assert_eq!(out[0].w2, 1);
+        assert_eq!(out[0].early_w2, 1);
+        assert_eq!(out[0].early_total_w2, 1);
+        assert_eq!(out[0].early_total_w5, 1);
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_w0_rescore_target() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Fantastic, Some(TimingWindow::W0), -4.0),
+            Some(judgment(JudgeGrade::Decent, Some(TimingWindow::W4), -16.0)),
+        )];
+
+        let out = compute_column_judgments(&notes, 1, 0, true);
+
+        assert_eq!(out[0].w0, 1);
+        assert_eq!(out[0].early_total_w0, 1);
+        assert_eq!(out[0].early_total_w4, 1);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -553,7 +692,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         stage_duration_seconds = gs.total_elapsed_in_screen;
 
         // Persist one score file per play (per local profile), including fails and replay lane
-        // input, unless gameplay was disqualified (e.g., autoplay used).
+        // input, unless the run was ranking-invalid (autoplay, score-invalid modifiers, etc.).
         scores::save_local_scores_from_gameplay(&gs);
         scores::submit_arrowcloud_payloads_from_gameplay(&gs);
 
@@ -567,6 +706,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let p = &gs.players[player_idx];
             let prof = &gs.player_profiles[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
+            let stream_segments =
+                crate::game::gameplay::stream_segments_for_results(&gs, player_idx);
 
             // Compute timing statistics across all non-miss tap judgments
             let stats = timing_stats::compute_note_timing_stats(notes);
@@ -576,7 +717,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 note_times,
                 col_offset,
                 cols_per_player,
-                &gs.mini_indicator_stream_segments[player_idx],
+                &stream_segments,
             );
             let histogram = timing_stats::build_histogram_ms(notes);
             let scatter_worst_window_ms = {
@@ -643,9 +784,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 &prof.player_initials,
                 score_percent,
             );
-            let earned_machine_record = machine_record_highlight_rank
-                .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
-            let earned_top2_personal = personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+            let score_valid = gs.score_valid[player_idx] && !gs.autoplay_used;
+            let earned_machine_record = score_valid
+                && machine_record_highlight_rank
+                    .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
+            let earned_top2_personal =
+                score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+            let machine_record_highlight_rank = score_valid
+                .then_some(machine_record_highlight_rank)
+                .flatten();
+            let personal_record_highlight_rank = score_valid
+                .then_some(personal_record_highlight_rank)
+                .flatten();
             let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
 
             let mut grade = if p.is_failing || !gs.song_completed_naturally {
@@ -694,12 +844,18 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 grade = scores::Grade::Quint;
             }
 
-            let column_judgments = compute_column_judgments(notes, cols_per_player, col_offset);
+            let column_judgments = compute_column_judgments(
+                notes,
+                cols_per_player,
+                col_offset,
+                prof.show_fa_plus_window,
+            );
 
             score_info[player_idx] = Some(ScoreInfo {
                 song: gs.song.clone(),
                 chart: gs.charts[player_idx].clone(),
                 profile_name: prof.display_name.clone(),
+                score_valid,
                 judgment_counts: HashMap::from([
                     (
                         JudgeGrade::Fantastic,
@@ -730,6 +886,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 grade,
                 speed_mod: gs.scroll_speed[player_idx],
                 hands_achieved: p.hands_achieved,
+                hands_total: gs.hands_total[player_idx],
                 holds_held: p.holds_held,
                 holds_total: gs.holds_total[player_idx],
                 rolls_held: p.rolls_held,
@@ -760,6 +917,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 show_ex_score: prof.show_ex_score,
                 show_hard_ex_score: prof.show_hard_ex_score,
                 show_fa_plus_pane: prof.show_fa_plus_pane,
+                track_early_judgments: prof.track_early_judgments,
                 machine_records,
                 machine_record_highlight_rank,
                 personal_records,
@@ -787,7 +945,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     crate::screens::components::shared::density_graph::build_density_histogram_mesh(
                         &si.chart.measure_nps_vec,
                         si.chart.max_nps,
-                        &si.chart.timing,
+                        &si.chart.measure_seconds_vec,
                         si.graph_first_second,
                         last_second,
                         graph_width,
@@ -1155,6 +1313,16 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
             linear(0.0): visible(false)
         ),
     ]
+}
+
+#[inline(always)]
+pub(crate) fn auto_screenshot_ready(state: &State) -> bool {
+    state.screen_elapsed >= auto_screenshot_ready_seconds()
+}
+
+#[inline(always)]
+pub(crate) fn auto_screenshot_ready_seconds() -> f32 {
+    EVAL_STAGE_IN_TOTAL_SECONDS.max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -1638,7 +1806,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
 
             // Record Texts (Simply Love PerPlayer/Upper/RecordTexts.lua)
-            let has_recordable_score = si.score_percent >= 0.01;
+            let has_recordable_score = si.score_valid && si.score_percent >= 0.01;
             let machine_record_rank = if has_recordable_score {
                 si.machine_record_highlight_rank.filter(|rank| *rank > 0)
             } else {
@@ -2487,6 +2655,41 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ],
             };
             actors.push(graph_frame);
+        }
+    }
+
+    // --- Disqualified text (Simply Love PerPlayer/Lower/Disqualified) ---
+    {
+        let label_y = screen_center_y() + 138.0;
+        let label_zoom = 0.23_f32;
+        let label_single = [(0, screen_center_x())];
+        let label_vs = [
+            (0, screen_center_x() - 155.0),
+            (1, screen_center_x() + 155.0),
+        ];
+        let label_players: &[(usize, f32)] = if play_style == profile::PlayStyle::Versus {
+            &label_vs
+        } else {
+            &label_single
+        };
+
+        for &(player_idx, center_x) in label_players {
+            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+                continue;
+            };
+            if si.score_valid {
+                continue;
+            }
+
+            actors.push(act!(text:
+                font("wendy"):
+                settext("Disqualified From Ranking"):
+                align(0.5, 0.5):
+                xy(center_x, label_y):
+                zoom(label_zoom):
+                z(103):
+                diffuse(1.0, 1.0, 1.0, 0.7)
+            ));
         }
     }
 

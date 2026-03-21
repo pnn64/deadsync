@@ -14,6 +14,11 @@ use super::utils::pane_origin_x;
 // Simply Love metrics.ini [RollingNumbersEvaluation]: ApproachSeconds=1
 const ROLLING_NUMBERS_APPROACH_SECONDS: f32 = 1.0;
 
+#[inline(always)]
+pub(crate) const fn rolling_numbers_approach_seconds() -> f32 {
+    ROLLING_NUMBERS_APPROACH_SECONDS
+}
+
 static JUDGMENT_ORDER: [JudgeGrade; 6] = [
     JudgeGrade::Fantastic,
     JudgeGrade::Excellent,
@@ -319,7 +324,7 @@ pub(crate) fn build_stats_pane(
 
         // --- RADAR LABELS & NUMBERS ---
         let radar_categories = [
-            ("hands", score_info.hands_achieved, score_info.chart.stats.hands),
+            ("hands", score_info.hands_achieved, score_info.hands_total),
             ("holds", score_info.holds_held, score_info.holds_total),
             ("mines", score_info.mines_avoided, score_info.mines_total),
             ("rolls", score_info.rolls_held, score_info.rolls_total),

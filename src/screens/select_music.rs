@@ -5,7 +5,7 @@ use crate::config::{
 };
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
-use crate::core::input::{InputEvent, PadDir, VirtualAction};
+use crate::core::input::{InputEvent, PadDir, RawKeyboardEvent, VirtualAction};
 use crate::core::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
@@ -39,7 +39,6 @@ use std::sync::mpsc;
 use std::sync::{Arc, OnceLock};
 use std::thread::LocalKey;
 use std::time::{Duration, Instant};
-use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -433,18 +432,12 @@ fn sec_at_beat(song: &SongData, target_beat: f64) -> f64 {
     if !target_beat.is_finite() || target_beat <= 0.0 {
         return 0.0;
     }
-    if let Some(chart) = song.charts.first() {
-        return chart.timing.get_time_for_beat(target_beat as f32).max(0.0) as f64;
-    }
     sec_at_beat_from_bpms(&song.normalized_bpms, target_beat)
 }
 
 fn beat_at_sec(song: &SongData, target_sec: f64) -> f64 {
     if !target_sec.is_finite() || target_sec <= 0.0 {
         return 0.0;
-    }
-    if let Some(chart) = song.charts.first() {
-        return chart.timing.get_beat_for_time(target_sec as f32).max(0.0) as f64;
     }
     beat_at_sec_from_bpms(&song.normalized_bpms, target_sec)
 }
@@ -483,7 +476,7 @@ fn preview_marker(
     if graph_w <= 0.0 || !preview_sec.is_finite() {
         return None;
     }
-    let first_second = 0.0_f32.min(chart.timing.get_time_for_beat(0.0));
+    let first_second = chart.first_second;
     let last_second = displayed
         .song
         .precise_last_second()
@@ -1511,7 +1504,7 @@ fn song_meter_for_sort(song: &SongData, chart_type: &str) -> Option<u32> {
     let mut best_non_edit: Option<u32> = None;
     let mut best_any: Option<u32> = None;
     for chart in &song.charts {
-        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || chart.notes.is_empty() {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
             continue;
         }
         best_any = Some(best_any.map_or(chart.meter, |m| m.max(chart.meter)));
@@ -1583,7 +1576,7 @@ fn build_popularity_grouped_entries(
         HashMap::with_capacity(songs.len().saturating_mul(8));
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
-            if chart.notes.is_empty() {
+            if !chart.has_note_data {
                 continue;
             }
             hash_to_song_ix
@@ -1642,7 +1635,7 @@ fn build_recent_grouped_entries(
         HashMap::with_capacity(songs.len().saturating_mul(8));
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
-            if chart.notes.is_empty() {
+            if !chart.has_note_data {
                 continue;
             }
             hash_to_song_ix
@@ -2472,6 +2465,7 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
     if page == sort_menu::Page::Sorts {
         return &sort_menu::ITEMS_SORTS;
     }
+    let replays_enabled = config::get().machine_enable_replays;
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
@@ -2484,15 +2478,26 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
         single_player_joined,
         has_song_selected,
     ) {
-        (profile::PlayStyle::Single, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE,
+        (profile::PlayStyle::Single, true, true) if replays_enabled => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE
+        }
+        (profile::PlayStyle::Single, true, true) => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE_NO_REPLAY
+        }
         (profile::PlayStyle::Single, true, false) => {
             &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE[..6]
         }
-        (profile::PlayStyle::Double, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE,
+        (profile::PlayStyle::Double, true, true) if replays_enabled => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE
+        }
+        (profile::PlayStyle::Double, true, true) => {
+            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE_NO_REPLAY
+        }
         (profile::PlayStyle::Double, true, false) => {
             &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE[..6]
         }
-        (_, _, true) => &sort_menu::ITEMS_MAIN,
+        (_, _, true) if replays_enabled => &sort_menu::ITEMS_MAIN,
+        (_, _, true) => &sort_menu::ITEMS_MAIN_NO_REPLAY,
         (_, _, false) => &sort_menu::ITEMS_MAIN[..5],
     }
 }
@@ -3964,6 +3969,9 @@ fn show_leaderboard_overlay(state: &mut State) {
 }
 
 fn show_replay_overlay(state: &mut State) {
+    if !config::get().machine_enable_replays {
+        return;
+    }
     let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
         return;
     };
@@ -5000,18 +5008,17 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
     }
 }
 
-pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
+pub fn handle_raw_key_event(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+    text: Option<&str>,
+) -> ScreenAction {
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
 
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
-        if key.state == ElementState::Pressed
-            && matches!(
-                key.physical_key,
-                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
-            )
-        {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             hide_sync_overlay(state);
             state.song_search_ignore_next_back_select = true;
         }
@@ -5019,12 +5026,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
     }
 
     if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
-        if key.state == ElementState::Pressed
-            && matches!(
-                key.physical_key,
-                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
-            )
-        {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
             state.song_search_ignore_next_back_select = true;
             return ScreenAction::None;
@@ -5038,9 +5040,9 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    if key.state == ElementState::Pressed {
+    if key.is_some_and(|key| key.pressed) {
         if matches!(state.song_search, sort_menu::SongSearchState::Results(_))
-            && let winit::keyboard::PhysicalKey::Code(KeyCode::Escape) = key.physical_key
+            && key.is_some_and(|key| key.code == KeyCode::Escape)
         {
             cancel_song_search(state);
             return ScreenAction::None;
@@ -5048,7 +5050,8 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
         if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
-            if let winit::keyboard::PhysicalKey::Code(code) = key.physical_key {
+            if let Some(key) = key {
+                let code = key.code;
                 match code {
                     KeyCode::Backspace => {
                         sort_menu::song_search_backspace(entry);
@@ -5066,7 +5069,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 
             if !prompt_close
                 && prompt_start.is_none()
-                && let Some(text) = key.text.as_ref()
+                && let Some(text) = text
             {
                 sort_menu::song_search_add_text(entry, text);
             }
@@ -5083,10 +5086,10 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         }
     }
 
-    if key.state != ElementState::Pressed {
+    if !key.is_some_and(|key| key.pressed) {
         return ScreenAction::None;
     }
-    if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key {
+    if key.is_some_and(|key| key.code == KeyCode::F7) {
         let target_chart_type = profile::get_session_play_style().chart_type();
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
             if let Some(chart) =
@@ -5517,7 +5520,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         let play_style = profile::get_session_play_style();
         let target_chart_type = play_style.chart_type();
         let show_select_music_leaderboards = cfg.show_select_music_scorebox
-            && !cfg.scorebox_cycle.is_empty();
+            && (cfg.select_music_scorebox_cycle_itg
+                || cfg.select_music_scorebox_cycle_ex
+                || cfg.select_music_scorebox_cycle_hard_ex
+                || cfg.select_music_scorebox_cycle_tournaments);
 
         if let Some(song) = selected_song.as_ref() {
             let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
@@ -5547,8 +5553,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                         DensityGraphSource {
                             max_nps: c.max_nps,
                             measure_nps_vec: c.measure_nps_vec.clone(),
-                            timing: c.timing.clone(),
-                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                            measure_seconds_vec: c.measure_seconds_vec.clone(),
+                            first_second: c.first_second,
                             last_second: song.precise_last_second(),
                         }
                     }),
@@ -5580,8 +5586,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                             DensityGraphSource {
                                 max_nps: c.max_nps,
                                 measure_nps_vec: c.measure_nps_vec.clone(),
-                                timing: c.timing.clone(),
-                                first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                                measure_seconds_vec: c.measure_seconds_vec.clone(),
+                                first_second: c.first_second,
                                 last_second: song.precise_last_second(),
                             }
                         }),
@@ -5899,7 +5905,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         profile::PlayerSide::P1
     };
-    let scorebox_cycle_enabled = !cfg.scorebox_cycle.is_empty();
+    let scorebox_cycle_enabled = cfg.select_music_scorebox_cycle_itg
+        || cfg.select_music_scorebox_cycle_ex
+        || cfg.select_music_scorebox_cycle_hard_ex
+        || cfg.select_music_scorebox_cycle_tournaments;
     let mode_chart_hash =
         if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
             let mode_chart = if mode_side == profile::PlayerSide::P2 && is_versus {
