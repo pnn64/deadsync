@@ -111,16 +111,16 @@ ash = { version = "0.38.0", features = ["linked"] }
 ash-window = "0.13.0"
 
 [target.'cfg(all(not(target_pointer_width = "32"), target_os = "windows"))'.dependencies]
-wgpu = { version = "28.0.0", features = ["dx12", "vulkan", "gles"] }
+wgpu = { version = "29.0.0", features = ["dx12", "vulkan", "gles"] }
 
 [target.'cfg(all(not(target_pointer_width = "32"), not(target_os = "windows")))'.dependencies]
-wgpu = { version = "28.0.0", features = ["vulkan", "gles"] }
+wgpu = { version = "29.0.0", features = ["vulkan", "gles"] }
 
 [target.'cfg(all(target_pointer_width = "32", target_os = "windows"))'.dependencies]
-wgpu = { version = "28.0.0", features = ["dx12", "gles"] }
+wgpu = { version = "29.0.0", features = ["dx12", "gles"] }
 
 [target.'cfg(all(target_pointer_width = "32", not(target_os = "windows")))'.dependencies]
-wgpu = { version = "28.0.0", features = ["gles"] }
+wgpu = { version = "29.0.0", features = ["gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 libc = "0.2.183"
