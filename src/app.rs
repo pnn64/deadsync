@@ -5717,6 +5717,10 @@ impl App {
 
         match self.state.shell.display_mode {
             DisplayMode::Fullscreen(fullscreen_type) => {
+                // Set inner size first to provide proper size hints on X11/Linux.
+                // This ensures the window has the correct dimensions before fullscreen is applied.
+                window_attributes = window_attributes
+                    .with_inner_size(PhysicalSize::new(window_width, window_height));
                 let fullscreen = display::fullscreen_mode(
                     fullscreen_type,
                     window_width,
@@ -5974,7 +5978,28 @@ impl App {
                         monitor_handle,
                         event_loop,
                     );
+                    let _ = window.request_inner_size(PhysicalSize::new(
+                        self.state.shell.display_width,
+                        self.state.shell.display_height,
+                    ));
                     window.set_fullscreen(fullscreen);
+                    // Don't resize backend yet; wait for WindowEvent::Resized to ensure
+                    // window.inner_size() is up-to-date (compositors may report stale size
+                    // immediately after set_fullscreen on X11/Wayland).
+                    
+                    // Update state before returning
+                    self.state.shell.display_mode = mode;
+                    let fullscreen_type_copy = fullscreen_type;
+                    config::update_display_mode(mode);
+                    config::update_display_monitor(self.state.shell.display_monitor);
+                    options::sync_display_mode(
+                        &mut self.state.screens.options_state,
+                        mode,
+                        fullscreen_type_copy,
+                        self.state.shell.display_monitor,
+                        monitor_count,
+                    );
+                    return Ok(());
                 }
             }
 
@@ -6033,7 +6058,12 @@ impl App {
                         monitor_handle,
                         event_loop,
                     );
+                    let _ = window.request_inner_size(PhysicalSize::new(width, height));
                     window.set_fullscreen(fullscreen);
+                    // Don't resize backend yet; wait for WindowEvent::Resized to ensure
+                    // window.inner_size() is up-to-date (compositors may report stale size
+                    // immediately after set_fullscreen on X11/Wayland).
+                    return Ok(());
                 }
             }
 
