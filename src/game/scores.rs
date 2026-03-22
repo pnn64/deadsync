@@ -89,6 +89,13 @@ pub struct CachedScore {
     pub lamp_judge_count: Option<u8>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CachedItlScore {
+    pub ex_hundredths: u32,
+    pub clear_type: u8,
+    pub points: u32,
+}
+
 // --- GrooveStats grade cache (on-disk + network-fetched) ---
 
 #[derive(Default)]
@@ -255,6 +262,14 @@ struct MachineLocalScoreCacheState {
 
 static MACHINE_LOCAL_SCORE_CACHE: std::sync::LazyLock<Mutex<MachineLocalScoreCacheState>> =
     std::sync::LazyLock::new(|| Mutex::new(MachineLocalScoreCacheState::default()));
+
+#[derive(Default)]
+struct ItlScoreCacheState {
+    loaded_profiles: HashMap<String, ItlFileData>,
+}
+
+static ITL_SCORE_CACHE: std::sync::LazyLock<Mutex<ItlScoreCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(ItlScoreCacheState::default()));
 
 fn local_scores_root_for_profile(profile_id: &str) -> PathBuf {
     PathBuf::from("save/profiles")
@@ -712,6 +727,35 @@ pub fn get_machine_record_local(chart_hash: &str) -> Option<(String, CachedScore
         .best_itg
         .get(chart_hash)
         .map(|m| (m.initials.clone(), m.score))
+}
+
+pub fn get_cached_itl_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<CachedItlScore> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    ensure_itl_score_cache_loaded(&profile_id);
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(&profile_id)
+        .and_then(|data| data.hash_map.get(chart_hash))
+        .map(itl_score_from_entry)
+}
+
+pub fn get_cached_itl_score_for_song(
+    song: &crate::game::song::SongData,
+    side: profile::PlayerSide,
+) -> Option<CachedItlScore> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    ensure_itl_score_cache_loaded(&profile_id);
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(&profile_id)
+        .and_then(|data| itl_score_for_song(song, data))
 }
 
 // --- On-disk GrooveStats score storage ---
@@ -1570,7 +1614,7 @@ pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
         let max_points = passing_points.saturating_add(max_scoring_points);
         let judgments = itl_judgments_from_gameplay(gs, player_idx);
         let (start, end) = gs.note_ranges[player_idx];
-        let ex = judgment::calculate_ex_score_from_notes(
+        let ex_percent = judgment::calculate_ex_score_from_notes(
             &gs.notes[start..end],
             &gs.note_time_cache[start..end],
             &gs.hold_end_time_cache[start..end],
@@ -1583,9 +1627,9 @@ pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
         );
         let new_entry = ItlHashEntry {
             judgments: judgments.clone(),
-            ex,
+            ex: itl_ex_hundredths(ex_percent),
             clear_type: itl_clear_type(&judgments),
-            points: itl_points_for_song(passing_points, max_scoring_points, ex),
+            points: itl_points_for_song(passing_points, max_scoring_points, ex_percent),
             used_cmod: eval.used_cmod,
             date: Local::now().format("%Y-%m-%d").to_string(),
             no_cmod: eval.chart_no_cmod,
@@ -1601,8 +1645,8 @@ pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
                 updated = true;
             }
             Some(existing) => {
-                let ex_improved = new_entry.ex > existing.ex + 0.0001;
-                let ex_tied = (new_entry.ex - existing.ex).abs() <= 0.0001;
+                let ex_improved = new_entry.ex > existing.ex;
+                let ex_tied = new_entry.ex == existing.ex;
                 if ex_improved {
                     existing.ex = new_entry.ex;
                     existing.points = new_entry.points;
@@ -1630,6 +1674,7 @@ pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
 
         if updated || path_changed {
             write_itl_file(profile_id.as_str(), &data);
+            set_cached_itl_file(profile_id.as_str(), data);
         }
     }
 }
@@ -1659,7 +1704,7 @@ pub struct ItlEvalState {
     pub reason_lines: Vec<String>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct ItlFileData {
     #[serde(rename = "pathMap", default)]
     path_map: HashMap<String, String>,
@@ -1673,8 +1718,8 @@ struct ItlFileData {
 struct ItlHashEntry {
     #[serde(default)]
     judgments: ItlJudgments,
-    #[serde(default)]
-    ex: f64,
+    #[serde(default, deserialize_with = "deserialize_itl_ex")]
+    ex: u32,
     #[serde(rename = "clearType", default)]
     clear_type: u8,
     #[serde(default)]
@@ -2038,6 +2083,54 @@ fn itl_file_path(profile_id: &str) -> PathBuf {
     profile::local_profile_dir_for_id(profile_id).join(ITL_FILE_NAME)
 }
 
+fn ensure_itl_score_cache_loaded(profile_id: &str) {
+    let needs_load = {
+        let state = ITL_SCORE_CACHE.lock().unwrap();
+        !state.loaded_profiles.contains_key(profile_id)
+    };
+    if !needs_load {
+        return;
+    }
+
+    let data = read_itl_file(profile_id);
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_insert(data);
+}
+
+fn set_cached_itl_file(profile_id: &str, data: ItlFileData) {
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .insert(profile_id.to_string(), data);
+}
+
+fn deserialize_itl_ex<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<f64>::deserialize(deserializer)?.unwrap_or(0.0);
+    if !raw.is_finite() || raw <= 0.0 {
+        return Ok(0);
+    }
+    let scaled = if raw <= 100.0001 { raw * 100.0 } else { raw };
+    Ok(scaled.round().clamp(0.0, 10_000.0) as u32)
+}
+
+#[inline(always)]
+fn itl_ex_hundredths(ex_percent: f64) -> u32 {
+    let ex = if ex_percent.is_finite() {
+        ex_percent.clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+    (ex * 100.0).round() as u32
+}
+
 fn read_itl_file(profile_id: &str) -> ItlFileData {
     let path = itl_file_path(profile_id);
     let Ok(text) = fs::read_to_string(&path) else {
@@ -2074,6 +2167,24 @@ fn write_itl_file(profile_id: &str, data: &ItlFileData) {
         warn!("Failed to commit ITL file {path:?}: {error}");
         let _ = fs::remove_file(&tmp);
     }
+}
+
+#[inline(always)]
+fn itl_score_from_entry(entry: &ItlHashEntry) -> CachedItlScore {
+    CachedItlScore {
+        ex_hundredths: entry.ex,
+        clear_type: entry.clear_type,
+        points: entry.points,
+    }
+}
+
+fn itl_score_for_song(
+    song: &crate::game::song::SongData,
+    data: &ItlFileData,
+) -> Option<CachedItlScore> {
+    let song_dir = itl_song_dir(song)?;
+    let chart_hash = data.path_map.get(song_dir.as_str())?;
+    data.hash_map.get(chart_hash).map(itl_score_from_entry)
 }
 
 fn itl_song_dir(song: &crate::game::song::SongData) -> Option<String> {
@@ -5361,9 +5472,11 @@ mod tests {
     use super::*;
     use crate::game::chart::{ChartData, StaminaCounts};
     use crate::game::scroll::ScrollSpeedSetting;
+    use crate::game::song::SongData;
     use crate::game::timing::ScatterPoint;
     use rssp::{TechCounts, stats::ArrowStats};
     use serde_json::{Value, json};
+    use std::path::PathBuf;
 
     fn sample_scatter(time_sec: f32, offset_ms: Option<f32>) -> ScatterPoint {
         ScatterPoint {
@@ -5408,6 +5521,34 @@ mod tests {
             holds_total: 0,
             rolls_total: 0,
             mines_total: 12,
+        }
+    }
+
+    fn sample_song(dir: &str) -> SongData {
+        SongData {
+            simfile_path: PathBuf::from(dir).join("song.ssc"),
+            title: "Song".to_string(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
         }
     }
 
@@ -5640,6 +5781,53 @@ mod tests {
 
         assert!(itl_judgments_better(&better, &prev));
         assert!(!itl_judgments_better(&worse, &prev));
+    }
+
+    #[test]
+    fn itl_file_reads_simply_love_and_legacy_ex_values() {
+        let sl: ItlFileData = serde_json::from_value(json!({
+            "hashMap": {
+                "sl": { "ex": 9437 }
+            }
+        }))
+        .unwrap();
+        let legacy: ItlFileData = serde_json::from_value(json!({
+            "hashMap": {
+                "legacy": { "ex": 94.37 }
+            }
+        }))
+        .unwrap();
+
+        assert_eq!(sl.hash_map["sl"].ex, 9437);
+        assert_eq!(legacy.hash_map["legacy"].ex, 9437);
+    }
+
+    #[test]
+    fn itl_score_lookup_uses_song_path_map() {
+        let song = sample_song("/Songs/ITL Online 2026/Example");
+        let mut data = ItlFileData::default();
+        data.path_map.insert(
+            "/Songs/ITL Online 2026/Example".to_string(),
+            "deadbeefcafebabe".to_string(),
+        );
+        data.hash_map.insert(
+            "deadbeefcafebabe".to_string(),
+            ItlHashEntry {
+                ex: 9754,
+                clear_type: 4,
+                points: 12345,
+                ..ItlHashEntry::default()
+            },
+        );
+
+        assert_eq!(
+            itl_score_for_song(&song, &data),
+            Some(CachedItlScore {
+                ex_hundredths: 9754,
+                clear_type: 4,
+                points: 12345,
+            })
+        );
     }
 
     #[test]

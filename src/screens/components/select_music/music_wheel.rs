@@ -8,7 +8,9 @@ use crate::game::song::SongData;
 use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 // --- Colors ---
 fn col_music_wheel_box() -> [f32; 4] {
@@ -35,6 +37,12 @@ const LAMP_PULSE_LERP_TO_WHITE: f32 = 0.70;
 const NEW_BADGE_PULSE_PERIOD: f32 = 1.2;
 const NEW_BADGE_COLOR: [f32; 4] = [0.3, 1.0, 0.3, 1.0];
 const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
+
+thread_local! {
+    static ITL_EX_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
+        RefCell::new(HashMap::with_capacity(256));
+}
 
 const fn col_quint_lamp() -> [f32; 4] {
     // zmod quint color: color("1,0.2,0.406,1")
@@ -66,6 +74,25 @@ fn lamp_judge_count_color(lamp_index: u8) -> [f32; 4] {
 fn digit_text(digit: u8) -> &'static str {
     const DIGITS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
     DIGITS[digit as usize]
+}
+
+#[inline(always)]
+fn cached_itl_ex_text(ex_hundredths: u32) -> Arc<str> {
+    ITL_EX_TEXT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&ex_hundredths) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(format!(
+            "{}.{:02}",
+            ex_hundredths / 100,
+            ex_hundredths % 100
+        ));
+        if cache.len() < ITL_EX_TEXT_CACHE_LIMIT {
+            cache.insert(ex_hundredths, text.clone());
+        }
+        text
+    })
 }
 
 // Helper from select_music.rs
@@ -188,6 +215,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let grade_zoom = widescale(0.18, 0.3);
     let grade_x_p1 = widescale(10.0, 17.0);
     let grade_x_p2 = widescale(26.0, 47.0);
+    let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
+    let itl_ex_color = color::JUDGMENT_RGBA[0];
+    let joined_sides = usize::from(profile::is_session_side_joined(profile::PlayerSide::P1))
+        + usize::from(profile::is_session_side_joined(profile::PlayerSide::P2));
 
     let num_entries = p.entries.len();
 
@@ -319,6 +350,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     if p.show_music_wheel_lamps {
                         slot_capacity += 4;
                     }
+                    slot_capacity += joined_sides;
                     let mut slot_children = Vec::with_capacity(slot_capacity);
                     slot_children.push(act!(quad:
                         align(0.0, 0.5):
@@ -490,6 +522,35 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 }
                             }
                         }
+                    }
+
+                    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                        if !profile::is_session_side_joined(side) {
+                            continue;
+                        }
+                        let Some(itl_score) = scores::get_cached_itl_score_for_song(info, side)
+                        else {
+                            continue;
+                        };
+                        let y = if joined_sides >= 2 {
+                            if side == profile::PlayerSide::P1 {
+                                -11.0
+                            } else {
+                                4.0
+                            }
+                        } else {
+                            -4.0
+                        };
+                        slot_children.push(act!(text:
+                            font("wendy_monospace_numbers"):
+                            settext(cached_itl_ex_text(itl_score.ex_hundredths)):
+                            align(1.0, 0.5):
+                            horizalign(right):
+                            xy(itl_ex_x, half_item_h + y):
+                            zoom(0.2):
+                            diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
+                            z(2)
+                        ));
                     }
 
                     actors.push(Actor::Frame {
