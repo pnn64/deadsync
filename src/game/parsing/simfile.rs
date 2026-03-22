@@ -15,6 +15,7 @@ use crate::game::{
 };
 use log::{debug, info, warn};
 use rssp::pack::{PackScan, SongScan};
+use rssp::parse::{decode_bytes, extract_bgchanges_values, unescape_tag};
 use rssp::patterns::{PatternVariant, compute_box_counts, count_pattern};
 use rssp::{AnalysisOptions, analyze};
 use std::collections::HashMap;
@@ -31,7 +32,9 @@ use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-// Bump when the serialized song payload changes or resolved asset semantics change.
+// Keep this at 1 throughout alpha, even if the serialized song payload changes.
+// Old caches already fall back on decode/schema mismatch. Start bumping this only
+// once we have a public beta/release and want explicit cache-version invalidation.
 const SONG_CACHE_VERSION: u8 = 1;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE2";
 
@@ -505,6 +508,7 @@ struct SerializableSongData {
     banner_path: Option<String>,
     background_path: Option<String>,
     background_changes: Vec<SerializableSongBackgroundChange>,
+    has_lua: bool,
     cdtitle_path: Option<String>,
     music_path: Option<String>,
     display_bpm: String,
@@ -565,6 +569,7 @@ struct CachedSongMeta {
     banner_path: Option<String>,
     background_path: Option<String>,
     background_changes: Vec<SerializableSongBackgroundChange>,
+    has_lua: bool,
     cdtitle_path: Option<String>,
     music_path: Option<String>,
     display_bpm: String,
@@ -885,6 +890,7 @@ fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -> So
             .into_iter()
             .map(SongBackgroundChange::from)
             .collect(),
+        has_lua: song.has_lua,
         cdtitle_path: song.cdtitle_path.map(PathBuf::from),
         music_path: song.music_path.map(PathBuf::from),
         display_bpm: song.display_bpm,
@@ -920,6 +926,7 @@ fn build_cached_song_meta(
         banner_path: song.banner_path.clone(),
         background_path: song.background_path.clone(),
         background_changes: song.background_changes.clone(),
+        has_lua: song.has_lua,
         cdtitle_path: song.cdtitle_path.clone(),
         music_path: song.music_path.clone(),
         display_bpm: song.display_bpm.clone(),
@@ -955,6 +962,7 @@ fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
             .into_iter()
             .map(SongBackgroundChange::from)
             .collect(),
+        has_lua: song.has_lua,
         cdtitle_path: song.cdtitle_path.map(PathBuf::from),
         music_path: song.music_path.map(PathBuf::from),
         display_bpm: song.display_bpm,
@@ -2654,37 +2662,357 @@ fn collapse_song_asset_path(path: &str) -> String {
 }
 
 #[inline(always)]
-fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
+fn resolve_song_dir_entry_ci(base: &Path, name: &str) -> Option<PathBuf> {
+    let want = name.to_ascii_lowercase();
+    let entries = fs::read_dir(base).ok()?;
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().to_ascii_lowercase() == want {
+            return Some(entry.path());
+        }
+    }
+    None
+}
+
+#[inline(always)]
+fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
     let asset_tag = asset_tag.trim();
     if asset_tag.is_empty() {
         return None;
     }
 
-    let asset_tag_slash = asset_tag.replace('\\', "/");
-    let rel_path = song_dir.join(&asset_tag_slash);
-    if rel_path.is_file() {
-        return Some(rel_path);
-    }
-    if !asset_tag_slash.contains('/') {
+    let collapsed = collapse_song_asset_path(&asset_tag.replace('\\', "/"));
+    if collapsed.is_empty() {
         return None;
     }
-
-    let mut song_dir_slash = song_dir.to_string_lossy().replace('\\', "/");
-    if !song_dir_slash.ends_with('/') {
-        song_dir_slash.push('/');
+    if collapsed.starts_with('/') {
+        let path = PathBuf::from(&collapsed);
+        return path.exists().then_some(path);
     }
 
-    let collapsed = if asset_tag_slash.starts_with("../") {
-        collapse_song_asset_path(&(song_dir_slash + asset_tag_slash.as_str()))
-    } else {
-        collapse_song_asset_path(&asset_tag_slash)
-    };
-    if collapsed.starts_with("../") {
-        return None;
+    let direct = song_dir.join(&collapsed);
+    if direct.exists() {
+        return Some(direct);
     }
 
-    let collapsed_path = PathBuf::from(collapsed);
-    collapsed_path.is_file().then_some(collapsed_path)
+    let mut path = song_dir.to_path_buf();
+    let mut parts = collapsed
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .peekable();
+    while let Some(part) = parts.next() {
+        if part == "." {
+            continue;
+        }
+        if part == ".." {
+            if !path.pop() {
+                return None;
+            }
+            continue;
+        }
+        let next = resolve_song_dir_entry_ci(&path, part).or_else(|| {
+            let next = path.join(part);
+            next.exists().then_some(next)
+        })?;
+        if parts.peek().is_some() && !next.is_dir() {
+            return None;
+        }
+        path = next;
+    }
+    Some(path)
+}
+
+#[inline(always)]
+fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
+    resolve_song_path_like_itg(song_dir, asset_tag).filter(|path| path.is_file())
+}
+
+#[inline(always)]
+fn path_uses_lua_like_itg(path: &Path) -> bool {
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
+    {
+        return true;
+    }
+    path.is_dir() && path.join("default.lua").is_file()
+}
+
+#[inline(always)]
+fn starts_with_ci(slice: &[u8], tag: &[u8]) -> bool {
+    slice
+        .get(..tag.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(tag))
+}
+
+#[inline(always)]
+fn find_byte(slice: &[u8], needle: u8) -> Option<usize> {
+    let mut i = 0usize;
+    while i < slice.len() {
+        if slice[i] == needle {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+#[inline(always)]
+fn find_either_byte(slice: &[u8], a: u8, b: u8) -> Option<usize> {
+    let mut i = 0usize;
+    while i < slice.len() {
+        if slice[i] == a || slice[i] == b {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+#[inline(always)]
+fn find_unescaped_semi_no_hash(slice: &[u8]) -> Option<usize> {
+    let mut off = 0usize;
+    let mut has_hash = false;
+    while off < slice.len() {
+        let rel = find_either_byte(&slice[off..], b';', b'#')?;
+        let idx = off + rel;
+        if slice[idx] == b'#' {
+            has_hash = true;
+            off = idx + 1;
+            continue;
+        }
+        let mut bs = 0usize;
+        let mut i = idx;
+        while i > 0 && slice[i - 1] == b'\\' {
+            bs += 1;
+            i -= 1;
+        }
+        if bs & 1 == 0 {
+            return (!has_hash).then_some(idx);
+        }
+        off = idx + 1;
+    }
+    None
+}
+
+#[inline(always)]
+fn scan_tag_end(slice: &[u8], allow_nl: bool) -> Option<(usize, usize)> {
+    if allow_nl && let Some(end) = find_unescaped_semi_no_hash(slice) {
+        return Some((end, end + 1));
+    }
+
+    let mut i = 0usize;
+    let mut bs_odd = false;
+    while i < slice.len() {
+        let b = slice[i];
+        if b == b'\\' {
+            bs_odd = !bs_odd;
+            i += 1;
+            continue;
+        }
+        let escaped = bs_odd;
+        bs_odd = false;
+        if b == b';' {
+            if !escaped {
+                return Some((i, i + 1));
+            }
+            i += 1;
+            continue;
+        }
+        if b == b':' {
+            if !allow_nl && !escaped {
+                return Some((i, i + 1));
+            }
+            i += 1;
+            continue;
+        }
+        if matches!(b, b'\n' | b'\r') {
+            let mut j = i + 1;
+            if b == b'\r' && slice.get(j) == Some(&b'\n') {
+                j += 1;
+            }
+            while j < slice.len()
+                && slice[j].is_ascii_whitespace()
+                && !matches!(slice[j], b'\n' | b'\r')
+            {
+                j += 1;
+            }
+            if slice.get(j) == Some(&b'#') {
+                return Some((i, j));
+            }
+            if !allow_nl && slice.get(j) != Some(&b';') {
+                return None;
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+#[inline(always)]
+fn parse_tag_val(data: &[u8], tag_len: usize, allow_nl: bool) -> Option<(&[u8], usize)> {
+    let slice = data.get(tag_len..)?;
+    let (end, next) = scan_tag_end(slice, allow_nl)?;
+    Some((&slice[..end], tag_len + next))
+}
+
+fn extract_named_tag_values<'a>(data: &'a [u8], tags: &[&[u8]]) -> Vec<&'a [u8]> {
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < data.len() {
+        let Some(pos) = find_byte(&data[i..], b'#') else {
+            break;
+        };
+        i += pos;
+        let slice = &data[i..];
+        let Some(tag) = tags.iter().copied().find(|tag| starts_with_ci(slice, tag)) else {
+            i += 1;
+            continue;
+        };
+        if let Some((value, adv)) = parse_tag_val(slice, tag.len(), true) {
+            out.push(value);
+            i += adv;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+fn list_song_dir_rel_entries(song_dir: &Path) -> Vec<String> {
+    let mut dirs = vec![song_dir.to_path_buf()];
+    let mut entries = Vec::new();
+    while let Some(dir) = dirs.pop() {
+        let Ok(read_dir) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            let Ok(rel) = path.strip_prefix(song_dir) else {
+                continue;
+            };
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            if path.is_dir() {
+                dirs.push(path);
+                entries.push(rel);
+                continue;
+            }
+            if path.is_file() {
+                entries.push(rel);
+            }
+        }
+    }
+    entries.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+    entries
+}
+
+#[inline(always)]
+fn strip_newlines(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for line in text.lines() {
+        out.push_str(line);
+    }
+    out
+}
+
+fn match_bgchange_entry<'a>(changes: &'a str, start: usize, entries: &[String]) -> Option<&'a str> {
+    for entry in entries {
+        let Some(head) = changes.get(start..start + entry.len()) else {
+            continue;
+        };
+        if !head.eq_ignore_ascii_case(entry) {
+            continue;
+        }
+        let next = start + entry.len();
+        if matches!(changes.as_bytes().get(next), None | Some(b'=') | Some(b',')) {
+            return Some(head);
+        }
+    }
+    None
+}
+
+fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
+    let changes = strip_newlines(changes);
+    if changes.is_empty() {
+        return Vec::new();
+    }
+    let mut out: Vec<Vec<String>> = Vec::new();
+    let mut start = 0usize;
+    let mut pnum = 0u8;
+    while start <= changes.len() {
+        if matches!(pnum, 1 | 7)
+            && let Some(found) = match_bgchange_entry(&changes, start, entries)
+        {
+            out.last_mut().unwrap().push(found.to_string());
+            start += found.len();
+            if let Some(&delim) = changes.as_bytes().get(start) {
+                pnum = if delim == b'=' { pnum + 1 } else { 0 };
+                start += 1;
+            }
+            continue;
+        }
+        if pnum == 0 {
+            out.push(Vec::new());
+        }
+        let rem = &changes[start..];
+        let eq = rem.find('=').map(|i| start + i);
+        let comma = rem.find(',').map(|i| start + i);
+        let Some((end, next_pnum)) = eq
+            .zip(comma)
+            .map(|(e, c)| if e < c { (e, pnum + 1) } else { (c, 0) })
+            .or_else(|| eq.map(|e| (e, pnum + 1)))
+            .or_else(|| comma.map(|c| (c, 0)))
+        else {
+            out.last_mut().unwrap().push(changes[start..].to_string());
+            break;
+        };
+        out.last_mut()
+            .unwrap()
+            .push(changes[start..end].to_string());
+        start = end + 1;
+        pnum = next_pnum;
+    }
+    out
+}
+
+#[inline(always)]
+fn bgchange_target_uses_lua(song_dir: &Path, target: &str) -> bool {
+    let target = target.trim();
+    if target.is_empty()
+        || target.eq_ignore_ascii_case("-nosongbg-")
+        || target.eq_ignore_ascii_case("-random-")
+    {
+        return false;
+    }
+    resolve_song_path_like_itg(song_dir, target).is_some_and(|path| path_uses_lua_like_itg(&path))
+}
+
+fn bgchange_values_use_lua(song_dir: &Path, values: &[&[u8]], entries: &[String]) -> bool {
+    values.iter().copied().any(|raw| {
+        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
+        split_bgchange_sets_like_itg(&text, entries)
+            .into_iter()
+            .any(|fields| {
+                fields
+                    .get(1)
+                    .is_some_and(|target| bgchange_target_uses_lua(song_dir, target))
+            })
+    })
+}
+
+fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &str) -> bool {
+    if resolve_song_path_like_itg(song_dir, background_tag)
+        .is_some_and(|path| path_uses_lua_like_itg(&path))
+    {
+        return true;
+    }
+    let entries = list_song_dir_rel_entries(song_dir);
+    bgchange_values_use_lua(song_dir, &extract_bgchanges_values(simfile_data), &entries)
+        || bgchange_values_use_lua(
+            song_dir,
+            &extract_named_tag_values(simfile_data, &[b"#FGCHANGES:"]),
+            &entries,
+        )
 }
 
 fn convert_background_change(
@@ -2774,6 +3102,7 @@ fn parse_and_process_song_file(
         &summary.banner_path,
         &summary.background_path,
     );
+    let has_lua = simfile_uses_lua(simfile_dir, &simfile_data, &summary.background_path);
     let background_changes =
         rssp::assets::resolve_background_changes_like_itg(simfile_dir, &simfile_data)
             .into_iter()
@@ -2814,6 +3143,7 @@ fn parse_and_process_song_file(
             banner_path: banner_path.map(|p| p.to_string_lossy().into_owned()),
             background_path: background_path_opt.map(|p| p.to_string_lossy().into_owned()),
             background_changes,
+            has_lua,
             cdtitle_path: cdtitle_path.map(|p| p.to_string_lossy().into_owned()),
             display_bpm: summary.display_bpm_str,
             offset: summary.offset as f32,
@@ -2857,7 +3187,7 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{merge_pack_scans, resolve_course_group_dir, resolve_song_dir};
+    use super::{merge_pack_scans, resolve_course_group_dir, resolve_song_dir, simfile_uses_lua};
     use std::collections::HashMap;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -2904,6 +3234,35 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn simfile_uses_lua_detects_background_lua_file() {
+        let root = test_dir("lua-background-file");
+        let song_dir = root.join("Song");
+        fs::create_dir_all(&song_dir).unwrap();
+        fs::write(song_dir.join("modchart.lua"), "return Def.ActorFrame{}").unwrap();
+
+        assert!(simfile_uses_lua(
+            &song_dir,
+            b"#TITLE:Lua Test;#BACKGROUND:modchart.lua;",
+            "modchart.lua",
+        ));
+    }
+
+    #[test]
+    fn simfile_uses_lua_detects_fgchange_dir_default_lua() {
+        let root = test_dir("lua-fgchange-dir");
+        let song_dir = root.join("Song");
+        let fg_dir = song_dir.join("Visuals");
+        fs::create_dir_all(&fg_dir).unwrap();
+        fs::write(fg_dir.join("default.lua"), "return Def.ActorFrame{}").unwrap();
+
+        assert!(simfile_uses_lua(
+            &song_dir,
+            b"#TITLE:Lua Test;#FGCHANGES:0=Visuals=1=0=0=0=0;",
+            "",
+        ));
     }
 
     #[test]

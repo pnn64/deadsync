@@ -164,7 +164,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let pack_count_x_local: f32 = screen_width() / 2.0 - widescale(9.0, 10.0) - sl_shift;
 
     // "Has Edit" icon (Simply Love: Graphics/MusicWheelItem Song NormalPart/default.lua)
-    let has_edit_right_x_local: f32 = screen_width() / widescale(2.15, 2.14) - 8.0;
+    let badge_right_x_local: f32 = screen_width() / widescale(2.15, 2.14) - 8.0;
+    let badge_gap_x: f32 = widescale(18.0, 24.0);
 
     // --- VERTICAL GEOMETRY (1:1 with Simply Love Lua) ---
     let slot_spacing: f32 = screen_height() / (num_visible_items as f32);
@@ -307,7 +308,11 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 && c.difficulty.eq_ignore_ascii_case("edit")
                         })
                     };
-                    let mut slot_capacity = 4 + usize::from(has_subtitle) + usize::from(has_edit);
+                    let has_lua = info.has_lua;
+                    let mut slot_capacity = 4
+                        + usize::from(has_subtitle)
+                        + usize::from(has_edit)
+                        + usize::from(has_lua);
                     if p.show_music_wheel_grades {
                         slot_capacity += 2;
                     }
@@ -353,10 +358,23 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             z(2)
                         ));
                     }
+                    if has_lua {
+                        let lua_x = if has_edit {
+                            badge_right_x_local - badge_gap_x
+                        } else {
+                            badge_right_x_local
+                        };
+                        slot_children.push(act!(sprite("has_lua.png"):
+                            align(1.0, 0.5):
+                            xy(lua_x, half_item_h):
+                            zoom(0.1875):
+                            z(2)
+                        ));
+                    }
                     if has_edit {
                         slot_children.push(act!(sprite("has_edit.png"):
                             align(1.0, 0.5):
-                            xy(has_edit_right_x_local, half_item_h):
+                            xy(badge_right_x_local, half_item_h):
                             zoom(0.1875):
                             z(2)
                         ));

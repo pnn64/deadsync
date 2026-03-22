@@ -26,6 +26,7 @@ pub struct SongData {
     pub banner_path: Option<PathBuf>,
     pub background_path: Option<PathBuf>,
     pub background_changes: Vec<SongBackgroundChange>,
+    pub has_lua: bool,
     pub cdtitle_path: Option<PathBuf>,
     pub music_path: Option<PathBuf>,
     pub display_bpm: String,

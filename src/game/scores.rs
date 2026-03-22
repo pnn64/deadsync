@@ -1733,9 +1733,13 @@ fn groovestats_submit_url() -> String {
 
 fn groovestats_submit_invalid_reason(
     chart: &crate::game::chart::ChartData,
+    song_has_lua: bool,
     profile: &Profile,
     music_rate: f32,
 ) -> Option<&'static str> {
+    if song_has_lua {
+        return Some("simfile relies on lua");
+    }
     let chart_type = chart.chart_type.trim().to_ascii_lowercase();
     if !chart_type.starts_with("dance") {
         return Some("unsupported non-dance chart type");
@@ -2028,6 +2032,13 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         );
         return;
     }
+    if gs.song.has_lua {
+        debug!(
+            "Skipping {} submit: simfile relies on lua.",
+            network::groovestats_service_name()
+        );
+        return;
+    }
 
     let network::ConnectionStatus::Connected(services) = network::get_status() else {
         debug!(
@@ -2063,7 +2074,9 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         let profile = &gs.player_profiles[player_idx];
         let chart = gs.charts[player_idx].as_ref();
 
-        if let Some(reason) = groovestats_submit_invalid_reason(chart, profile, gs.music_rate) {
+        if let Some(reason) =
+            groovestats_submit_invalid_reason(chart, gs.song.has_lua, profile, gs.music_rate)
+        {
             debug!(
                 "Skipping {} submit for {:?} ({}): {}.",
                 network::groovestats_service_name(),
@@ -2929,6 +2942,10 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
     }
     if gs.course_display_totals.is_some() && !cfg.autosubmit_course_scores_individually {
         debug!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
+        return;
+    }
+    if gs.song.has_lua {
+        debug!("Skipping ArrowCloud submit: simfile relies on lua.");
         return;
     }
     if let network::ArrowCloudConnectionStatus::Error(msg) = network::get_arrowcloud_status() {
@@ -5030,7 +5047,7 @@ mod tests {
         profile.remove_active_mask = 1u8 << 1;
 
         assert_eq!(
-            groovestats_submit_invalid_reason(&sample_chart("dance-single"), &profile, 1.5),
+            groovestats_submit_invalid_reason(&sample_chart("dance-single"), false, &profile, 1.5),
             None
         );
     }
@@ -5041,16 +5058,30 @@ mod tests {
         profile.custom_fantastic_window = true;
 
         assert_eq!(
-            groovestats_submit_invalid_reason(&sample_chart("dance-single"), &profile, 1.0),
+            groovestats_submit_invalid_reason(&sample_chart("dance-single"), false, &profile, 1.0),
             Some("custom fantastic window is enabled")
         );
         assert_eq!(
             groovestats_submit_invalid_reason(
                 &sample_chart("dance-solo"),
+                false,
                 &Profile::default(),
                 1.0
             ),
             Some("dance-solo is unsupported")
+        );
+    }
+
+    #[test]
+    fn groovestats_validity_rejects_lua_simfiles() {
+        assert_eq!(
+            groovestats_submit_invalid_reason(
+                &sample_chart("dance-single"),
+                true,
+                &Profile::default(),
+                1.0,
+            ),
+            Some("simfile relies on lua")
         );
     }
 
