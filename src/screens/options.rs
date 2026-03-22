@@ -6,8 +6,8 @@ use crate::core::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SimpleIni, SyncGraphMode,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlWheelMode,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SimpleIni, SyncGraphMode,
 };
 use crate::core::audio;
 #[cfg(target_os = "windows")]
@@ -602,6 +602,7 @@ const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Speed";
 const SELECT_MUSIC_ROW_CDTITLES: &str = "Show CDTitles";
 const SELECT_MUSIC_ROW_WHEEL_GRADES: &str = "Show Music Wheel Grades";
 const SELECT_MUSIC_ROW_WHEEL_LAMPS: &str = "Show Music Wheel Lamps";
+const SELECT_MUSIC_ROW_WHEEL_ITL: &str = "ITL Wheel Data";
 const SELECT_MUSIC_ROW_NEW_PACKS: &str = "New Pack Badge";
 const SELECT_MUSIC_ROW_PATTERN_INFO: &str = "Show Pattern Info";
 const SELECT_MUSIC_ROW_PREVIEWS: &str = "Music Previews";
@@ -1625,6 +1626,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: SELECT_MUSIC_ROW_WHEEL_ITL,
+        choices: &["Off", "Score", "Points+Score"],
+        inline: true,
+    },
+    SubRow {
         label: SELECT_MUSIC_ROW_NEW_PACKS,
         choices: &["Off", "Open Pack", "Has Score"],
         inline: true,
@@ -1720,6 +1726,14 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SELECT_MUSIC_ROW_WHEEL_LAMPS,
         help: &["Show or hide lamp indicators on wheel rows."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_WHEEL_ITL,
+        help: &[
+            "Choose how local ITL song data appears on wheel rows.",
+            "Score matches the original single-line EX display.",
+            "Points+Score stacks song points above EX with a smaller Wendy readout.",
+        ],
     },
     Item {
         name: SELECT_MUSIC_ROW_NEW_PACKS,
@@ -3898,6 +3912,22 @@ const fn select_music_pattern_info_from_choice(idx: usize) -> SelectMusicPattern
     }
 }
 
+const fn select_music_itl_wheel_choice_index(mode: SelectMusicItlWheelMode) -> usize {
+    match mode {
+        SelectMusicItlWheelMode::Off => 0,
+        SelectMusicItlWheelMode::Score => 1,
+        SelectMusicItlWheelMode::PointsAndScore => 2,
+    }
+}
+
+const fn select_music_itl_wheel_from_choice(idx: usize) -> SelectMusicItlWheelMode {
+    match idx {
+        1 => SelectMusicItlWheelMode::Score,
+        2 => SelectMusicItlWheelMode::PointsAndScore,
+        _ => SelectMusicItlWheelMode::Off,
+    }
+}
+
 const fn new_pack_mode_choice_index(mode: NewPackMode) -> usize {
     match mode {
         NewPackMode::Disabled => 0,
@@ -4597,6 +4627,12 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_WHEEL_LAMPS,
         yes_no_choice_index(cfg.show_music_wheel_lamps),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_WHEEL_ITL,
+        select_music_itl_wheel_choice_index(cfg.select_music_itl_wheel_mode),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -6101,6 +6137,10 @@ fn apply_submenu_choice_delta(
             config::update_show_music_wheel_grades(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_WHEEL_LAMPS {
             config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
+        } else if row.label == SELECT_MUSIC_ROW_WHEEL_ITL {
+            config::update_select_music_itl_wheel_mode(select_music_itl_wheel_from_choice(
+                new_index,
+            ));
         } else if row.label == SELECT_MUSIC_ROW_NEW_PACKS {
             config::update_select_music_new_pack_mode(new_pack_mode_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_PATTERN_INFO {

@@ -1,4 +1,5 @@
 use crate::act;
+use crate::config::SelectMusicItlWheelMode;
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::chart::ChartData;
@@ -38,9 +39,14 @@ const NEW_BADGE_PULSE_PERIOD: f32 = 1.2;
 const NEW_BADGE_COLOR: [f32; 4] = [0.3, 1.0, 0.3, 1.0];
 const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
+const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
+const ITL_SCORE_ZOOM: f32 = 0.2;
+const ITL_POINTS_SCORE_ZOOM: f32 = 0.16;
 
 thread_local! {
     static ITL_EX_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
+        RefCell::new(HashMap::with_capacity(256));
+    static ITL_POINTS_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
 }
 
@@ -93,6 +99,46 @@ fn cached_itl_ex_text(ex_hundredths: u32) -> Arc<str> {
         }
         text
     })
+}
+
+#[inline(always)]
+fn cached_itl_points_text(points: u32) -> Arc<str> {
+    ITL_POINTS_TEXT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&points) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(points.to_string());
+        if cache.len() < ITL_POINTS_TEXT_CACHE_LIMIT {
+            cache.insert(points, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn itl_score_line_y(side: profile::PlayerSide, joined_sides: usize) -> (f32, f32) {
+    if joined_sides >= 2 {
+        return if side == profile::PlayerSide::P1 {
+            (-15.0, -6.0)
+        } else {
+            (0.0, 9.0)
+        };
+    }
+    (-7.0, 3.0)
+}
+
+#[inline(always)]
+fn itl_score_y(side: profile::PlayerSide, joined_sides: usize) -> f32 {
+    if joined_sides >= 2 {
+        if side == profile::PlayerSide::P1 {
+            -11.0
+        } else {
+            4.0
+        }
+    } else {
+        -4.0
+    }
 }
 
 // Helper from select_music.rs
@@ -159,6 +205,7 @@ pub struct MusicWheelParams<'a> {
     pub song_has_edit_ptrs: Option<&'a HashSet<usize>>,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub new_pack_names: Option<&'a HashSet<String>>,
 }
 
@@ -217,6 +264,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let grade_x_p2 = widescale(26.0, 47.0);
     let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
     let itl_ex_color = color::JUDGMENT_RGBA[0];
+    let itl_points_color = [1.0, 1.0, 1.0, 1.0];
     let joined_sides = usize::from(profile::is_session_side_joined(profile::PlayerSide::P1))
         + usize::from(profile::is_session_side_joined(profile::PlayerSide::P2));
 
@@ -525,6 +573,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     }
 
                     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                        if matches!(p.itl_wheel_mode, SelectMusicItlWheelMode::Off) {
+                            continue;
+                        }
                         if !profile::is_session_side_joined(side) {
                             continue;
                         }
@@ -532,25 +583,49 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         else {
                             continue;
                         };
-                        let y = if joined_sides >= 2 {
-                            if side == profile::PlayerSide::P1 {
-                                -11.0
-                            } else {
-                                4.0
+                        match p.itl_wheel_mode {
+                            SelectMusicItlWheelMode::Off => {}
+                            SelectMusicItlWheelMode::Score => {
+                                slot_children.push(act!(text:
+                                    font("wendy_monospace_numbers"):
+                                    settext(cached_itl_ex_text(itl_score.ex_hundredths)):
+                                    align(1.0, 0.5):
+                                    horizalign(right):
+                                    xy(itl_ex_x, half_item_h + itl_score_y(side, joined_sides)):
+                                    zoom(ITL_SCORE_ZOOM):
+                                    diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
+                                    z(2)
+                                ));
                             }
-                        } else {
-                            -4.0
-                        };
-                        slot_children.push(act!(text:
-                            font("wendy_monospace_numbers"):
-                            settext(cached_itl_ex_text(itl_score.ex_hundredths)):
-                            align(1.0, 0.5):
-                            horizalign(right):
-                            xy(itl_ex_x, half_item_h + y):
-                            zoom(0.2):
-                            diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
-                            z(2)
-                        ));
+                            SelectMusicItlWheelMode::PointsAndScore => {
+                                let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
+                                slot_children.push(act!(text:
+                                    font("wendy_monospace_numbers"):
+                                    settext(cached_itl_points_text(itl_score.points)):
+                                    align(1.0, 0.5):
+                                    horizalign(right):
+                                    xy(itl_ex_x, half_item_h + points_y):
+                                    zoom(ITL_POINTS_SCORE_ZOOM):
+                                    diffuse(
+                                        itl_points_color[0],
+                                        itl_points_color[1],
+                                        itl_points_color[2],
+                                        itl_points_color[3]
+                                    ):
+                                    z(2)
+                                ));
+                                slot_children.push(act!(text:
+                                    font("wendy_monospace_numbers"):
+                                    settext(cached_itl_ex_text(itl_score.ex_hundredths)):
+                                    align(1.0, 0.5):
+                                    horizalign(right):
+                                    xy(itl_ex_x, half_item_h + ex_y):
+                                    zoom(ITL_POINTS_SCORE_ZOOM):
+                                    diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
+                                    z(2)
+                                ));
+                            }
+                        }
                     }
 
                     actors.push(Actor::Frame {
