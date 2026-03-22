@@ -575,6 +575,20 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         }
                     }
 
+                    let itl_chart_hash = if is_selected_slot {
+                        crate::screens::select_music::chart_for_steps_index(
+                            info,
+                            target_chart_type,
+                            p.selected_steps_index,
+                        )
+                    } else {
+                        chart_for_preferred_or_nearest_standard(
+                            info,
+                            target_chart_type,
+                            p.preferred_difficulty_index,
+                        )
+                    }
+                    .map(|chart| chart.short_hash.as_str());
                     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
                         if matches!(p.itl_wheel_mode, SelectMusicItlWheelMode::Off) {
                             continue;
@@ -582,8 +596,22 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         if !profile::is_session_side_joined(side) {
                             continue;
                         }
-                        let Some(itl_score) = scores::get_cached_itl_score_for_song(info, side)
-                        else {
+                        let local_itl = scores::get_cached_itl_score_for_song(info, side);
+                        let ex_hundredths = local_itl
+                            .as_ref()
+                            .map(|score| score.ex_hundredths)
+                            .or_else(|| {
+                                itl_chart_hash.and_then(|chart_hash| {
+                                    if is_selected_slot {
+                                        scores::get_or_fetch_itl_self_score_for_side(
+                                            chart_hash, side,
+                                        )
+                                    } else {
+                                        scores::get_cached_itl_self_score_for_side(chart_hash, side)
+                                    }
+                                })
+                            });
+                        let Some(ex_hundredths) = ex_hundredths else {
                             continue;
                         };
                         match p.itl_wheel_mode {
@@ -591,7 +619,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             SelectMusicItlWheelMode::Score => {
                                 slot_children.push(act!(text:
                                     font("wendy_monospace_numbers"):
-                                    settext(cached_itl_ex_text(itl_score.ex_hundredths)):
+                                    settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
                                     xy(itl_ex_x, half_item_h + itl_score_y(side, joined_sides)):
@@ -601,6 +629,19 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 ));
                             }
                             SelectMusicItlWheelMode::PointsAndScore => {
+                                let Some(itl_score) = local_itl else {
+                                    slot_children.push(act!(text:
+                                        font("wendy_monospace_numbers"):
+                                        settext(cached_itl_ex_text(ex_hundredths)):
+                                        align(1.0, 0.5):
+                                        horizalign(right):
+                                        xy(itl_ex_x, half_item_h + itl_score_y(side, joined_sides)):
+                                        zoom(ITL_SCORE_ZOOM):
+                                        diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
+                                        z(2)
+                                    ));
+                                    continue;
+                                };
                                 let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
                                 slot_children.push(act!(text:
                                     font("wendy_monospace_numbers"):
@@ -619,7 +660,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 ));
                                 slot_children.push(act!(text:
                                     font("wendy_monospace_numbers"):
-                                    settext(cached_itl_ex_text(itl_score.ex_hundredths)):
+                                    settext(cached_itl_ex_text(ex_hundredths)):
                                     align(1.0, 0.5):
                                     horizalign(right):
                                     xy(itl_ex_x, half_item_h + ex_y):

@@ -97,6 +97,7 @@ const CREDITS: &[CreditLine] = &[
     spacer(),
     spacer(),
     section("rssp Contributors"),
+    name("adstep"),
     name("Celeste Clark (celex3)"),
     spacer(),
     spacer(),

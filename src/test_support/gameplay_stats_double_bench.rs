@@ -100,6 +100,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
                         ],
                     },
                 ],
+                itl_self_score: None,
             }),
         });
     }

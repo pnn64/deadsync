@@ -107,6 +107,57 @@ struct GsScoreCacheState {
 static GS_SCORE_CACHE: std::sync::LazyLock<Mutex<GsScoreCacheState>> =
     std::sync::LazyLock::new(|| Mutex::new(GsScoreCacheState::default()));
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct OnlineItlSelfScoreKey {
+    chart_hash: String,
+    api_key: String,
+}
+
+#[derive(Default)]
+struct OnlineItlSelfScoreCacheState {
+    by_key: HashMap<OnlineItlSelfScoreKey, u32>,
+}
+
+static ONLINE_ITL_SELF_SCORE_CACHE: std::sync::LazyLock<Mutex<OnlineItlSelfScoreCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(OnlineItlSelfScoreCacheState::default()));
+
+fn online_itl_self_score_key_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<OnlineItlSelfScoreKey> {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() || !profile::is_session_side_joined(side) {
+        return None;
+    }
+    let side_profile = profile::get_for_side(side);
+    let api_key = side_profile.groovestats_api_key.trim();
+    if api_key.is_empty() {
+        return None;
+    }
+    Some(OnlineItlSelfScoreKey {
+        chart_hash: chart_hash.to_string(),
+        api_key: api_key.to_string(),
+    })
+}
+
+fn set_cached_online_itl_self_score(api_key: &str, chart_hash: &str, score: Option<u32>) {
+    let api_key = api_key.trim();
+    let chart_hash = chart_hash.trim();
+    if api_key.is_empty() || chart_hash.is_empty() {
+        return;
+    }
+    let key = OnlineItlSelfScoreKey {
+        chart_hash: chart_hash.to_string(),
+        api_key: api_key.to_string(),
+    };
+    let mut cache = ONLINE_ITL_SELF_SCORE_CACHE.lock().unwrap();
+    if let Some(score) = score {
+        cache.by_key.insert(key, score);
+    } else {
+        cache.by_key.remove(&key);
+    }
+}
+
 fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
     PathBuf::from("save/profiles")
         .join(profile_id)
@@ -2408,7 +2459,7 @@ fn groovestats_manual_qr_url(
 
     Some(
         format!(
-            "{}/qr/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F{}R{:x}C{}V{:x}",
+            "{}/QR/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F{}R{:x}C{}V{:x}",
             base_url.trim_end_matches('/'),
             counts.total_steps,
             counts.fantastic_plus,
@@ -2428,8 +2479,7 @@ fn groovestats_manual_qr_url(
             rate,
             if used_cmod { '1' } else { '0' },
             hash_version,
-        )
-        .to_ascii_uppercase(),
+        ),
     )
 }
 
@@ -4665,6 +4715,7 @@ impl LeaderboardPane {
 #[derive(Debug, Clone)]
 pub struct PlayerLeaderboardData {
     pub panes: Vec<LeaderboardPane>,
+    pub itl_self_score: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -4920,6 +4971,21 @@ struct FetchedPlayerLeaderboards {
 }
 
 #[inline(always)]
+fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
+    let entry = entries.iter().find(|entry| entry.is_self).or_else(|| {
+        (!username.trim().is_empty()).then(|| {
+            entries
+                .iter()
+                .find(|entry| entry.name.eq_ignore_ascii_case(username))
+        })?
+    })?;
+    if entry.is_fail || !entry.score.is_finite() {
+        return None;
+    }
+    Some(entry.score.round().clamp(0.0, 10000.0) as u32)
+}
+
+#[inline(always)]
 const fn cached_failed_gs_score() -> CachedScore {
     CachedScore {
         grade: Grade::Failed,
@@ -5083,6 +5149,7 @@ fn fetch_arrowcloud_hard_ex_pane(
 fn fetch_player_leaderboards_internal(
     chart_hash: &str,
     api_key: &str,
+    username: &str,
     arrowcloud_api_key: Option<&str>,
     show_ex_score: bool,
     max_entries: usize,
@@ -5112,6 +5179,7 @@ fn fetch_player_leaderboards_internal(
     let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
     let mut panes = Vec::with_capacity(5);
     let mut gs_entries = Vec::new();
+    let mut itl_self_score = None;
     if let Some(player) = decoded.player1 {
         let LeaderboardApiPlayer {
             is_ranked: _is_ranked,
@@ -5143,6 +5211,7 @@ fn fetch_player_leaderboards_internal(
         if let Some(itl) = itl
             && !itl.itl_leaderboard.is_empty()
         {
+            itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
             let name = if itl.name.trim().is_empty() {
                 "ITL"
             } else {
@@ -5164,7 +5233,10 @@ fn fetch_player_leaderboards_internal(
     }
 
     Ok(FetchedPlayerLeaderboards {
-        data: PlayerLeaderboardData { panes },
+        data: PlayerLeaderboardData {
+            panes,
+            itl_self_score,
+        },
         gs_entries,
     })
 }
@@ -5258,9 +5330,9 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
     } else {
         None
     };
-    let auto_username = side_profile.groovestats_username.trim().to_string();
+    let gs_username = side_profile.groovestats_username.trim().to_string();
     let should_auto_populate =
-        auto_populate && auto_profile_id.is_some() && !auto_username.is_empty();
+        auto_populate && auto_profile_id.is_some() && !gs_username.is_empty();
 
     let key = PlayerLeaderboardCacheKey {
         chart_hash: chart_hash.to_string(),
@@ -5323,6 +5395,7 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
             let fetched = fetch_player_leaderboards_internal(
                 &key.chart_hash,
                 &key.api_key,
+                gs_username.as_str(),
                 if key.include_arrowcloud {
                     Some(key.arrowcloud_api_key.as_str())
                 } else {
@@ -5337,10 +5410,15 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
 
             match fetched {
                 Ok(fetched) => {
+                    set_cached_online_itl_self_score(
+                        key.api_key.as_str(),
+                        key.chart_hash.as_str(),
+                        fetched.data.itl_self_score,
+                    );
                     if should_auto_populate && let Some(profile_id) = auto_profile_id.as_deref() {
                         cache_gs_score_from_leaderboard(
                             profile_id,
-                            auto_username.as_str(),
+                            gs_username.as_str(),
                             key.chart_hash.as_str(),
                             fetched.gs_entries.as_slice(),
                         );
@@ -5390,6 +5468,36 @@ pub fn get_or_fetch_player_leaderboards_for_side(
     max_entries: usize,
 ) -> Option<CachedPlayerLeaderboardData> {
     get_or_fetch_player_leaderboards_for_side_inner(chart_hash, side, max_entries, false)
+}
+
+pub fn get_cached_itl_self_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<u32> {
+    let key = online_itl_self_score_key_for_side(chart_hash, side)?;
+    ONLINE_ITL_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .by_key
+        .get(&key)
+        .copied()
+}
+
+pub fn get_or_fetch_itl_self_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<u32> {
+    if let Some(score) = get_cached_itl_self_score_for_side(chart_hash, side) {
+        return Some(score);
+    }
+    const ITL_SELF_SCORE_FETCH_ENTRIES: usize = 3;
+    let _ = get_or_fetch_player_leaderboards_for_side_inner(
+        chart_hash,
+        side,
+        ITL_SELF_SCORE_FETCH_ENTRIES,
+        false,
+    )?;
+    get_cached_itl_self_score_for_side(chart_hash, side)
 }
 
 pub fn refresh_player_leaderboards_for_side(
@@ -6617,7 +6725,7 @@ mod tests {
     }
 
     #[test]
-    fn groovestats_manual_qr_url_matches_simply_love_shape() {
+    fn groovestats_manual_qr_url_preserves_base_url_case() {
         let counts = GrooveStatsJudgmentCounts {
             fantastic_plus: 0x0a,
             fantastic: 0x0b,
@@ -6657,7 +6765,7 @@ mod tests {
 
         assert_eq!(
             url,
-            "HTTPS://WWW.GROOVESTATS.COM/QR/DEADBEEF/T1DGAHBICJDKELFM10H11T12R13T14M15T16G1H2I3J4K5L6/F1R96C1V3"
+            "https://www.groovestats.com/QR/deadbeef/T1dGaHbIcJdKeLfM10H11T12R13T14M15T16G1H2I3J4K5L6/F1R96C1V3"
         );
     }
 
@@ -6866,9 +6974,65 @@ mod tests {
     }
 
     #[test]
+    fn leaderboard_self_score_prefers_self_flag_for_itl() {
+        let entries = vec![
+            LeaderboardApiEntry {
+                rank: 10,
+                name: "Other".to_string(),
+                machine_tag: None,
+                score: 9321.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+                comments: None,
+            },
+            LeaderboardApiEntry {
+                rank: 25,
+                name: "Player".to_string(),
+                machine_tag: None,
+                score: 9789.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: true,
+                is_fail: false,
+                comments: None,
+            },
+        ];
+
+        assert_eq!(
+            leaderboard_self_score_10000(&entries, "ignored"),
+            Some(9789)
+        );
+    }
+
+    #[test]
+    fn leaderboard_self_score_falls_back_to_username_match() {
+        let entries = vec![LeaderboardApiEntry {
+            rank: 25,
+            name: "PerfectTaste".to_string(),
+            machine_tag: None,
+            score: 9712.0,
+            date: String::new(),
+            is_rival: false,
+            is_self: false,
+            is_fail: false,
+            comments: None,
+        }];
+
+        assert_eq!(
+            leaderboard_self_score_10000(&entries, "perfecttaste"),
+            Some(9712)
+        );
+    }
+
+    #[test]
     fn player_leaderboard_cache_reuses_success_until_more_rows_are_needed() {
         let ready = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData { panes: Vec::new() }),
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                itl_self_score: None,
+            }),
             max_entries: 5,
             refreshed_at: Instant::now(),
             retry_after: None,
@@ -6891,7 +7055,10 @@ mod tests {
         assert!(should_fetch_player_leaderboard_entry(Some(&ready), 5, true));
 
         let cooled_down_ready = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData { panes: Vec::new() }),
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                itl_self_score: None,
+            }),
             max_entries: 5,
             refreshed_at: Instant::now(),
             retry_after: Some(Instant::now() + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL),

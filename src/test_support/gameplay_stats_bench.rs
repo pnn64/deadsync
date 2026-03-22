@@ -98,6 +98,7 @@ pub fn fixture() -> GameplayStatsBenchFixture {
                         ],
                     },
                 ],
+                itl_self_score: None,
             }),
         });
     }
