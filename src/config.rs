@@ -731,11 +731,13 @@ pub struct Config {
     pub linux_audio_backend: LinuxAudioBackend,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
+    pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
     pub rate_mod_preserves_pitch: bool,
     pub enable_arrowcloud: bool,
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
+    pub separate_unlocks_by_player: bool,
     pub fastload: bool,
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
@@ -829,11 +831,13 @@ impl Default for Config {
             audio_output_mode: AudioOutputMode::Auto,
             linux_audio_backend: LinuxAudioBackend::Auto,
             audio_sample_rate_hz: None,
+            auto_download_unlocks: false,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: true,
             enable_arrowcloud: false,
             enable_boogiestats: false,
             enable_groovestats: false,
+            separate_unlocks_by_player: false,
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
@@ -1168,6 +1172,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str("AudioSampleRateHz=Auto\n");
     content.push_str("AdditionalSongFolders=\n");
     content.push_str(&format!(
+        "AutoDownloadUnlocks={}\n",
+        if default.auto_download_unlocks {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "AutoPopulateGrooveStatsScores={}\n",
         if default.auto_populate_gs_scores {
             "1"
@@ -1433,6 +1445,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "SelectMusicScoreboxCycleTournaments={}\n",
         if default.select_music_scorebox_cycle_tournaments {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SeparateUnlocksByPlayer={}\n",
+        if default.separate_unlocks_by_player {
             "1"
         } else {
             "0"
@@ -1707,6 +1727,10 @@ pub fn load() {
                     .get("Options", "DisplayMonitor")
                     .and_then(|v| v.parse::<usize>().ok())
                     .unwrap_or(default.display_monitor);
+                cfg.auto_download_unlocks = conf
+                    .get("Options", "AutoDownloadUnlocks")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.auto_download_unlocks, |v| v != 0);
                 cfg.auto_populate_gs_scores = conf
                     .get("Options", "AutoPopulateGrooveStatsScores")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1723,6 +1747,10 @@ pub fn load() {
                     .get("Options", "EnableBoogieStats")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.enable_boogiestats, |v| v != 0);
+                cfg.separate_unlocks_by_player = conf
+                    .get("Options", "SeparateUnlocksByPlayer")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.separate_unlocks_by_player, |v| v != 0);
                 cfg.mine_hit_sound = conf
                     .get("Options", "MineHitSound")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -2295,6 +2323,7 @@ pub fn load() {
                     "AudioOutputMode",
                     "AudioSampleRateHz",
                     "AdditionalSongFolders",
+                    "AutoDownloadUnlocks",
                     "AutoPopulateGrooveStatsScores",
                     "BGBrightness",
                     "BannerCache",
@@ -2345,6 +2374,7 @@ pub fn load() {
                     "SelectMusicScoreboxCycleEx",
                     "SelectMusicScoreboxCycleHardEx",
                     "SelectMusicScoreboxCycleTournaments",
+                    "SeparateUnlocksByPlayer",
                     "ShowStats",
                     "ShowStatsMode",
                     "SmoothHistogram",
@@ -3197,6 +3227,10 @@ fn save_without_keymaps() {
         "AdditionalSongFolders={additional_song_folders}\n"
     ));
     content.push_str(&format!(
+        "AutoDownloadUnlocks={}\n",
+        if cfg.auto_download_unlocks { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
         "AutoPopulateGrooveStatsScores={}\n",
         if cfg.auto_populate_gs_scores {
             "1"
@@ -3454,6 +3488,14 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "SelectMusicScoreboxCycleTournaments={}\n",
         if cfg.select_music_scorebox_cycle_tournaments {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SeparateUnlocksByPlayer={}\n",
+        if cfg.separate_unlocks_by_player {
             "1"
         } else {
             "0"
@@ -4575,6 +4617,17 @@ pub fn update_enable_arrowcloud(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_auto_download_unlocks(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.auto_download_unlocks == enabled {
+            return;
+        }
+        cfg.auto_download_unlocks = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_auto_populate_gs_scores(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -4582,6 +4635,17 @@ pub fn update_auto_populate_gs_scores(enabled: bool) {
             return;
         }
         cfg.auto_populate_gs_scores = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_separate_unlocks_by_player(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.separate_unlocks_by_player == enabled {
+            return;
+        }
+        cfg.separate_unlocks_by_player = enabled;
     }
     save_without_keymaps();
 }

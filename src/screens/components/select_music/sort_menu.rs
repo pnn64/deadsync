@@ -192,6 +192,7 @@ pub enum Action {
     SongSearch,
     SwitchProfile,
     ReloadSongsCourses,
+    ViewDownloads,
     SyncSong,
     PlayReplay,
     ShowLeaderboard,
@@ -204,7 +205,7 @@ pub struct Item {
     pub action: Action,
 }
 
-const ITEM_CATEGORY_SORTS: Item = Item {
+pub const ITEM_CATEGORY_SORTS: Item = Item {
     top_label: "",
     bottom_label: "SORTS...",
     action: Action::OpenSorts,
@@ -249,47 +250,52 @@ const ITEM_SORT_BY_RECENT: Item = Item {
     bottom_label: "Recently Played",
     action: Action::SortByRecent,
 };
-const ITEM_SWITCH_TO_SINGLE: Item = Item {
+pub const ITEM_SWITCH_TO_SINGLE: Item = Item {
     top_label: "Change Style To",
     bottom_label: "Single",
     action: Action::SwitchToSingle,
 };
-const ITEM_SWITCH_TO_DOUBLE: Item = Item {
+pub const ITEM_SWITCH_TO_DOUBLE: Item = Item {
     top_label: "Change Style To",
     bottom_label: "Double",
     action: Action::SwitchToDouble,
 };
-const ITEM_TEST_INPUT: Item = Item {
+pub const ITEM_TEST_INPUT: Item = Item {
     top_label: "Feeling salty?",
     bottom_label: "Test Input",
     action: Action::TestInput,
 };
-const ITEM_SONG_SEARCH: Item = Item {
+pub const ITEM_SONG_SEARCH: Item = Item {
     top_label: "Wherefore Art Thou?",
     bottom_label: "Song Search",
     action: Action::SongSearch,
 };
-const ITEM_SWITCH_PROFILE: Item = Item {
+pub const ITEM_SWITCH_PROFILE: Item = Item {
     top_label: "Next Please",
     bottom_label: "Switch Profile",
     action: Action::SwitchProfile,
 };
-const ITEM_RELOAD_SONGS_COURSES: Item = Item {
+pub const ITEM_RELOAD_SONGS_COURSES: Item = Item {
     top_label: "Take a Breather~",
     bottom_label: "Load New Songs",
     action: Action::ReloadSongsCourses,
 };
-const ITEM_SYNC_SONG: Item = Item {
+pub const ITEM_VIEW_DOWNLOADS: Item = Item {
+    top_label: "Need More RAM",
+    bottom_label: "View Downloads",
+    action: Action::ViewDownloads,
+};
+pub const ITEM_SYNC_SONG: Item = Item {
     top_label: "Sync",
     bottom_label: "null-or-die",
     action: Action::SyncSong,
 };
-const ITEM_PLAY_REPLAY: Item = Item {
+pub const ITEM_PLAY_REPLAY: Item = Item {
     top_label: "Machine Data",
     bottom_label: "Play Replay",
     action: Action::PlayReplay,
 };
-const ITEM_SHOW_LEADERBOARD: Item = Item {
+pub const ITEM_SHOW_LEADERBOARD: Item = Item {
     top_label: "GrooveStats",
     bottom_label: "Leaderboard",
     action: Action::ShowLeaderboard,
@@ -299,73 +305,6 @@ const ITEM_GO_BACK: Item = Item {
     bottom_label: "Go Back",
     action: Action::BackToMain,
 };
-
-pub const ITEMS_MAIN: [Item; 8] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_PLAY_REPLAY,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_NO_REPLAY: [Item; 7] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_WITH_SWITCH_TO_SINGLE: [Item; 9] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_SWITCH_TO_SINGLE,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_PLAY_REPLAY,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_WITH_SWITCH_TO_SINGLE_NO_REPLAY: [Item; 8] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_SWITCH_TO_SINGLE,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE: [Item; 9] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_SWITCH_TO_DOUBLE,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_PLAY_REPLAY,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE_NO_REPLAY: [Item; 8] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_SWITCH_TO_DOUBLE,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_SHOW_LEADERBOARD,
-];
 
 pub const ITEMS_SORTS: [Item; 9] = [
     ITEM_SORT_BY_GROUP,

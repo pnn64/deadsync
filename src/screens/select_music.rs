@@ -2562,11 +2562,12 @@ fn show_sorts_submenu(state: &mut State) {
 }
 
 #[inline(always)]
-fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
+fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item> {
     if page == sort_menu::Page::Sorts {
-        return &sort_menu::ITEMS_SORTS;
+        return sort_menu::ITEMS_SORTS.to_vec();
     }
     let replays_enabled = config::get().machine_enable_replays;
+    let downloads_enabled = crate::game::downloads::sort_menu_available();
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
@@ -2574,33 +2575,28 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
     let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
-    match (
-        profile::get_session_play_style(),
-        single_player_joined,
-        has_song_selected,
-    ) {
-        (profile::PlayStyle::Single, true, true) if replays_enabled => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE
-        }
-        (profile::PlayStyle::Single, true, true) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE_NO_REPLAY
-        }
-        (profile::PlayStyle::Single, true, false) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE[..6]
-        }
-        (profile::PlayStyle::Double, true, true) if replays_enabled => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE
-        }
-        (profile::PlayStyle::Double, true, true) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE_NO_REPLAY
-        }
-        (profile::PlayStyle::Double, true, false) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE[..6]
-        }
-        (_, _, true) if replays_enabled => &sort_menu::ITEMS_MAIN,
-        (_, _, true) => &sort_menu::ITEMS_MAIN_NO_REPLAY,
-        (_, _, false) => &sort_menu::ITEMS_MAIN[..5],
+    let mut items = Vec::with_capacity(10);
+    items.push(sort_menu::ITEM_CATEGORY_SORTS);
+    match (profile::get_session_play_style(), single_player_joined) {
+        (profile::PlayStyle::Single, true) => items.push(sort_menu::ITEM_SWITCH_TO_DOUBLE),
+        (profile::PlayStyle::Double, true) => items.push(sort_menu::ITEM_SWITCH_TO_SINGLE),
+        _ => {}
     }
+    items.push(sort_menu::ITEM_TEST_INPUT);
+    items.push(sort_menu::ITEM_SONG_SEARCH);
+    items.push(sort_menu::ITEM_SWITCH_PROFILE);
+    items.push(sort_menu::ITEM_RELOAD_SONGS_COURSES);
+    if downloads_enabled {
+        items.push(sort_menu::ITEM_VIEW_DOWNLOADS);
+    }
+    if has_song_selected {
+        items.push(sort_menu::ITEM_SYNC_SONG);
+        if replays_enabled {
+            items.push(sort_menu::ITEM_PLAY_REPLAY);
+        }
+        items.push(sort_menu::ITEM_SHOW_LEADERBOARD);
+    }
+    items
 }
 
 #[inline(always)]
@@ -4611,6 +4607,10 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
             hide_sort_menu(state);
             start_reload_songs_and_courses(state);
             ScreenAction::None
+        }
+        sort_menu::Action::ViewDownloads => {
+            hide_sort_menu(state);
+            ScreenAction::Navigate(Screen::ViewDownloads)
         }
         sort_menu::Action::SyncSong => {
             hide_sort_menu(state);
@@ -7278,8 +7278,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         selected_index,
     } = state.sort_menu
     {
+        let items = sort_menu_items(state, page);
         actors.extend(sort_menu::build_overlay(sort_menu::RenderParams {
-            items: sort_menu_items(state, page),
+            items: items.as_slice(),
             selected_index,
             prev_selected_index: state.sort_menu_prev_selected_index,
             focus_anim_elapsed: state.sort_menu_focus_anim_elapsed,

@@ -570,6 +570,8 @@ pub struct SubRow<'a> {
 const GS_ROW_ENABLE: &str = "Enable GrooveStats";
 const GS_ROW_ENABLE_BOOGIE: &str = "Enable BoogieStats";
 const GS_ROW_AUTO_POPULATE: &str = "Auto Populate GS Scores";
+const GS_ROW_AUTO_DOWNLOAD_UNLOCKS: &str = "Auto Download Unlocks";
+const GS_ROW_SEPARATE_UNLOCKS: &str = "Separate Unlocks By Player";
 const SYSTEM_ROW_LOG_FILE: &str = "Log File";
 const INPUT_ROW_CONFIGURE_MAPPINGS: &str = "Configure Keyboard/Pad Mappings";
 const INPUT_ROW_TEST: &str = "Test Input";
@@ -1895,6 +1897,16 @@ pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["No", "Yes"],
         inline: true,
     },
+    SubRow {
+        label: GS_ROW_AUTO_DOWNLOAD_UNLOCKS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: GS_ROW_SEPARATE_UNLOCKS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
 ];
 
 pub const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[SubRow {
@@ -1964,6 +1976,20 @@ pub const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: GS_ROW_AUTO_POPULATE,
         help: &["Import GS grade/lamp/score when scorebox leaderboard requests complete."],
+    },
+    Item {
+        name: GS_ROW_AUTO_DOWNLOAD_UNLOCKS,
+        help: &[
+            "Automatically download unlock packs returned by GrooveStats event submits.",
+            "Enables the Sort Menu View Downloads screen when the service is connected.",
+        ],
+    },
+    Item {
+        name: GS_ROW_SEPARATE_UNLOCKS,
+        help: &[
+            "Download unlock packs into per-player folders instead of a shared event folder.",
+            "Matches Simply Love's SeparateUnlocksByPlayer preference.",
+        ],
     },
     Item {
         name: "Exit",
@@ -4650,6 +4676,18 @@ pub fn init() -> State {
         yes_no_choice_index(cfg.auto_populate_gs_scores),
     );
     set_choice_by_label(
+        &mut state.sub_choice_indices_groovestats,
+        GROOVESTATS_OPTIONS_ROWS,
+        GS_ROW_AUTO_DOWNLOAD_UNLOCKS,
+        yes_no_choice_index(cfg.auto_download_unlocks),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_groovestats,
+        GROOVESTATS_OPTIONS_ROWS,
+        GS_ROW_SEPARATE_UNLOCKS,
+        yes_no_choice_index(cfg.separate_unlocks_by_player),
+    );
+    set_choice_by_label(
         &mut state.sub_choice_indices_arrowcloud,
         ARROWCLOUD_OPTIONS_ROWS,
         ARROWCLOUD_ROW_ENABLE,
@@ -6096,6 +6134,10 @@ fn apply_submenu_choice_delta(
             crate::core::network::init();
         } else if row.label == GS_ROW_AUTO_POPULATE {
             config::update_auto_populate_gs_scores(yes_no_from_choice(new_index));
+        } else if row.label == GS_ROW_AUTO_DOWNLOAD_UNLOCKS {
+            config::update_auto_download_unlocks(yes_no_from_choice(new_index));
+        } else if row.label == GS_ROW_SEPARATE_UNLOCKS {
+            config::update_separate_unlocks_by_player(yes_no_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::ArrowCloud) {
         let row = &rows[row_index];

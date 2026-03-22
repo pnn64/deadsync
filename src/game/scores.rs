@@ -1,6 +1,7 @@
 use crate::config::SimpleIni;
 use crate::core::input::InputSource;
 use crate::core::network;
+use crate::game::downloads;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::profile::{self, Profile};
@@ -1937,6 +1938,7 @@ struct GrooveStatsSubmitPlayerJob {
     slot: u8,
     chart_hash: String,
     username: String,
+    profile_name: String,
     profile_id: Option<String>,
     token: u64,
 }
@@ -1984,6 +1986,34 @@ struct GrooveStatsSubmitApiPlayer {
     result: String,
     #[serde(rename = "gsLeaderboard", default)]
     gs_leaderboard: Vec<LeaderboardApiEntry>,
+    rpg: Option<GrooveStatsSubmitApiEvent>,
+    itl: Option<GrooveStatsSubmitApiEvent>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiEvent {
+    #[serde(default)]
+    name: String,
+    progress: Option<GrooveStatsSubmitApiProgress>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiProgress {
+    #[serde(rename = "questsCompleted", default)]
+    quests_completed: Vec<GrooveStatsSubmitApiQuest>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiQuest {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    song_download_url: String,
+    #[serde(rename = "songDownloadFolders", default)]
+    song_download_folders: Vec<String>,
 }
 
 #[inline(always)]
@@ -2266,6 +2296,92 @@ fn write_itl_file(profile_id: &str, data: &ItlFileData) {
     if let Err(error) = fs::rename(&tmp, &path) {
         warn!("Failed to commit ITL file {path:?}: {error}");
         let _ = fs::remove_file(&tmp);
+    }
+}
+
+fn update_itl_unlock_folders(profile_id: &str, folders: &[String]) {
+    if folders.is_empty() {
+        return;
+    }
+    let mut data = read_itl_file(profile_id);
+    let mut changed = false;
+    for folder in folders {
+        let folder = folder.trim();
+        if folder.is_empty() {
+            continue;
+        }
+        changed |= data.unlock_folders.insert(folder.to_string(), true) != Some(true);
+    }
+    if changed {
+        write_itl_file(profile_id, &data);
+        set_cached_itl_file(profile_id, data);
+    }
+}
+
+fn event_name_or_unknown(name: &str) -> &str {
+    if name.trim().is_empty() {
+        "Unknown Event"
+    } else {
+        name.trim()
+    }
+}
+
+fn handle_submit_event_unlocks(
+    player: &GrooveStatsSubmitPlayerJob,
+    event: &GrooveStatsSubmitApiEvent,
+) {
+    let cfg = crate::config::get();
+    if !cfg.auto_download_unlocks {
+        return;
+    }
+    let Some(progress) = event.progress.as_ref() else {
+        return;
+    };
+    let event_name = event_name_or_unknown(event.name.as_str());
+    let profile_name = if player.profile_name.trim().is_empty() {
+        "NoName"
+    } else {
+        player.profile_name.trim()
+    };
+
+    for quest in &progress.quests_completed {
+        let url = quest.song_download_url.trim();
+        if url.is_empty() {
+            continue;
+        }
+        let title = quest.title.trim();
+        let (download_name, pack_name) = if cfg.separate_unlocks_by_player {
+            (
+                format!("[{event_name}] {title} - {profile_name}"),
+                format!("{event_name} Unlocks - {profile_name}"),
+            )
+        } else {
+            (
+                format!("[{event_name}] {title}"),
+                format!("{event_name} Unlocks"),
+            )
+        };
+        downloads::queue_event_unlock_download(url, download_name.trim_end(), pack_name.as_str());
+    }
+}
+
+fn handle_submit_player_unlocks(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) {
+    if let Some(itl) = response.itl.as_ref()
+        && let Some(profile_id) = player.profile_id.as_deref()
+        && let Some(progress) = itl.progress.as_ref()
+    {
+        for quest in &progress.quests_completed {
+            update_itl_unlock_folders(profile_id, quest.song_download_folders.as_slice());
+        }
+    }
+    if let Some(rpg) = response.rpg.as_ref() {
+        handle_submit_event_unlocks(player, rpg);
+    }
+    if let Some(itl) = response.itl.as_ref() {
+        handle_submit_event_unlocks(player, itl);
     }
 }
 
@@ -2995,6 +3111,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             slot,
             chart_hash: chart.short_hash.clone(),
             username: profile.groovestats_username.trim().to_string(),
+            profile_name: profile.display_name.clone(),
             profile_id: profile::active_local_profile_id_for_side(side),
             token,
         });
@@ -3076,6 +3193,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
                         player_response.gs_leaderboard.as_slice(),
                     );
                 }
+                handle_submit_player_unlocks(player, player_response);
                 debug!(
                     "{} submit succeeded for {:?} ({}) result='{}'",
                     network::groovestats_service_name(),
