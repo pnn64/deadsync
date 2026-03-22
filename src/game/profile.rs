@@ -343,6 +343,11 @@ fn local_profile_dir(id: &str) -> PathBuf {
 }
 
 #[inline(always)]
+pub fn local_profile_dir_for_id(id: &str) -> PathBuf {
+    local_profile_dir(id)
+}
+
+#[inline(always)]
 fn profile_ini_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("profile.ini")
 }

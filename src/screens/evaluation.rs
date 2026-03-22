@@ -55,8 +55,7 @@ const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
 const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
-// Keep QR hidden until score submit/upload exists end-to-end.
-const ENABLE_GS_QR_PANE: bool = false;
+const ENABLE_GS_QR_PANE: bool = true;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const BANNER_FALLBACK_KEYS: [&str; 12] = [
     "banner1.png",
@@ -185,6 +184,8 @@ pub struct ScoreInfo {
     pub chart: Arc<ChartData>,
     pub profile_name: String,
     pub score_valid: bool,
+    pub groovestats: scores::GrooveStatsEvalState,
+    pub itl: scores::ItlEvalState,
     pub judgment_counts: HashMap<JudgeGrade, u32>,
     pub score_percent: f64,
     pub grade: scores::Grade,
@@ -694,6 +695,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // Persist one score file per play (per local profile), including fails and replay lane
         // input, unless the run was ranking-invalid (autoplay, score-invalid modifiers, etc.).
         scores::save_local_scores_from_gameplay(&gs);
+        scores::save_itl_data_from_gameplay(&gs);
         scores::submit_groovestats_payloads_from_gameplay(&gs);
         scores::submit_arrowcloud_payloads_from_gameplay(&gs);
 
@@ -786,6 +788,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 score_percent,
             );
             let score_valid = gs.score_valid[player_idx] && !gs.autoplay_used;
+            let groovestats = scores::groovestats_eval_state_from_gameplay(&gs, player_idx);
+            let itl = scores::itl_eval_state_from_gameplay(&gs, player_idx);
             let earned_machine_record = score_valid
                 && machine_record_highlight_rank
                     .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
@@ -857,6 +861,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 chart: gs.charts[player_idx].clone(),
                 profile_name: prof.display_name.clone(),
                 score_valid,
+                groovestats,
+                itl,
                 judgment_counts: HashMap::from([
                     (
                         JudgeGrade::Fantastic,
@@ -1499,7 +1505,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         } else {
             None
         };
-        let has_gs = leaderboard_snapshot.is_some();
+        let has_gs = crate::config::get().enable_groovestats;
         let has_arrowcloud = leaderboard_snapshot
             .as_ref()
             .and_then(|snapshot| snapshot.data.as_ref())
