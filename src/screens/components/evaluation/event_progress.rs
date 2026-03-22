@@ -4,21 +4,18 @@ use crate::game::{profile, scores};
 use crate::ui::actors::{Actor, SizeSpec};
 
 const ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
-const POSITIVE_GREEN: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
-const NEGATIVE_RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-
-struct RowData {
-    label: &'static str,
-    current: String,
-    delta: String,
-    delta_value: i32,
-}
+const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+const BODY_FONT_HEIGHT: f32 = 19.0;
+const BODY_LINE_SPACING: f32 = 24.0;
+const BODY_AVG_CHAR_WIDTH: f32 = 8.0;
+const UPPER_ROW_HEIGHT: f32 = 25.0;
+const OVERLAY_ROW_HEIGHT: f32 = 24.0;
 
 #[inline(always)]
-fn short_event_name(name: &str, is_doubles: bool) -> String {
+fn header_name(name: &str, is_doubles: bool) -> String {
     let mut text = name.replacen("ITL Online", "ITL", 1);
-    if is_doubles {
+    if is_doubles && !text.contains("Doubles") {
         text.push_str(" Doubles");
     }
     text
@@ -42,17 +39,6 @@ fn format_signed_points(value: i32) -> String {
 }
 
 #[inline(always)]
-fn delta_color(delta: i32) -> [f32; 4] {
-    if delta > 0 {
-        POSITIVE_GREEN
-    } else if delta < 0 {
-        NEGATIVE_RED
-    } else {
-        WHITE
-    }
-}
-
-#[inline(always)]
 fn clear_type_name(clear_type: u8) -> &'static str {
     match clear_type {
         0 => "No Play",
@@ -66,86 +52,143 @@ fn clear_type_name(clear_type: u8) -> &'static str {
 }
 
 #[inline(always)]
-fn build_rows(progress: &scores::ItlEventProgress, compact: bool) -> [RowData; 6] {
-    let rank_label = if compact {
-        "Rank Pts"
-    } else {
-        "Ranking Points"
-    };
-    let song_label = if compact { "Song Pts" } else { "Song Points" };
-    let ex_label = if compact { "EX Pts" } else { "EX Points" };
-    let total_label = if compact { "Total Pts" } else { "Total Points" };
-    [
-        RowData {
-            label: "EX Score",
-            current: format_pct_hundredths(progress.score_hundredths),
-            delta: format_signed_pct_hundredths(progress.score_delta_hundredths),
-            delta_value: progress.score_delta_hundredths,
-        },
-        RowData {
-            label: "Points",
-            current: progress.current_points.to_string(),
-            delta: format_signed_points(progress.point_delta),
-            delta_value: progress.point_delta,
-        },
-        RowData {
-            label: rank_label,
-            current: progress.current_ranking_points.to_string(),
-            delta: format_signed_points(progress.ranking_delta),
-            delta_value: progress.ranking_delta,
-        },
-        RowData {
-            label: song_label,
-            current: progress.current_song_points.to_string(),
-            delta: format_signed_points(progress.song_delta),
-            delta_value: progress.song_delta,
-        },
-        RowData {
-            label: ex_label,
-            current: progress.current_ex_points.to_string(),
-            delta: format_signed_points(progress.ex_delta),
-            delta_value: progress.ex_delta,
-        },
-        RowData {
-            label: total_label,
-            current: progress.current_total_points.to_string(),
-            delta: format_signed_points(progress.total_delta),
-            delta_value: progress.total_delta,
-        },
-    ]
+fn build_box_body(progress: &scores::ItlEventProgress) -> String {
+    format!(
+        "EX Score: {} {}\n\
+         Points: {} {}\n\n\
+         Ranking Points: {} {}\n\
+         Song Points: {} {}\n\
+         EX Points: {} {}\n\
+         Total Points: {} {}",
+        format_pct_hundredths(progress.score_hundredths),
+        format_signed_pct_hundredths(progress.score_delta_hundredths),
+        progress.current_points,
+        format_signed_points(progress.point_delta),
+        progress.current_ranking_points,
+        format_signed_points(progress.ranking_delta),
+        progress.current_song_points,
+        format_signed_points(progress.song_delta),
+        progress.current_ex_points,
+        format_signed_points(progress.ex_delta),
+        progress.current_total_points,
+        format_signed_points(progress.total_delta),
+    )
 }
 
-fn build_panel(
+#[inline(always)]
+fn build_stat_improvements(progress: &scores::ItlEventProgress) -> Option<String> {
+    let (Some(before), Some(after)) = (progress.clear_type_before, progress.clear_type_after)
+    else {
+        return None;
+    };
+    (after > before).then(|| {
+        format!(
+            "Clear Type: {} >>> {}",
+            clear_type_name(before),
+            clear_type_name(after)
+        )
+    })
+}
+
+#[inline(always)]
+fn build_overlay_body(progress: &scores::ItlEventProgress) -> String {
+    let mut text = format!(
+        "EX Score: {} {}\n\
+         Points: {} {}\n\n\
+         Ranking Points: {} {}\n\
+         Song Points: {} {}\n\
+         EX Points: {} {}\n\
+         Total Points: {} {}\n\n\
+         You've passed the chart {} times",
+        format_pct_hundredths(progress.score_hundredths),
+        format_signed_pct_hundredths(progress.score_delta_hundredths),
+        progress.current_points,
+        format_signed_points(progress.point_delta),
+        progress.current_ranking_points,
+        format_signed_points(progress.ranking_delta),
+        progress.current_song_points,
+        format_signed_points(progress.song_delta),
+        progress.current_ex_points,
+        format_signed_points(progress.ex_delta),
+        progress.current_total_points,
+        format_signed_points(progress.total_delta),
+        progress.total_passes,
+    );
+    if let Some(improvement) = build_stat_improvements(progress) {
+        text.push_str("\n\n");
+        text.push_str(improvement.as_str());
+    }
+    text
+}
+
+#[inline(always)]
+fn quantize_zoom(zoom: f32) -> f32 {
+    ((zoom * 20.0).floor() / 20.0).clamp(0.1, 1.0)
+}
+
+#[inline(always)]
+fn fit_body_zoom(text: &str, pane_width: f32, pane_height: f32, row_height: f32) -> f32 {
+    let lines: Vec<&str> = text.lines().collect();
+    let line_count = lines.len().max(1) as f32;
+    let max_line_chars = lines
+        .iter()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(1) as f32;
+    let block_height = BODY_FONT_HEIGHT + (line_count - 1.0).max(0.0) * BODY_LINE_SPACING;
+    let fit_height = ((pane_height - 2.0 - row_height * 1.5) / block_height.max(1.0)).min(1.0);
+    let fit_width = (pane_width / (max_line_chars.max(1.0) * BODY_AVG_CHAR_WIDTH)).min(1.0);
+    quantize_zoom(fit_height.min(fit_width))
+}
+
+#[inline(always)]
+fn build_header_text(text: String, pane_width: f32, y: f32, z: i16) -> Actor {
+    act!(text:
+        font("wendy"):
+        settext(text):
+        align(0.5, 0.5):
+        xy(0.0, y):
+        zoom(0.5):
+        maxwidth((pane_width - 6.0) / 0.5):
+        horizalign(center):
+        diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
+        z(z)
+    )
+}
+
+#[inline(always)]
+fn build_body_text(
+    text: String,
+    pane_width: f32,
+    pane_height: f32,
+    row_height: f32,
+    z: i16,
+) -> Actor {
+    let zoom = fit_body_zoom(text.as_str(), pane_width, pane_height, row_height);
+    act!(text:
+        font("miso"):
+        settext(text):
+        align(0.5, 0.0):
+        xy(0.0, -pane_height * 0.5 + row_height * 1.5):
+        zoom(zoom):
+        wrapwidthpixels(pane_width / zoom):
+        horizalign(left):
+        valign(top):
+        diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
+        z(z)
+    )
+}
+
+fn build_upper_panel(
     center_x: f32,
     center_y: f32,
     pane_width: f32,
     pane_height: f32,
     progress: &scores::ItlEventProgress,
-    compact: bool,
-    show_passes: bool,
     z: i16,
 ) -> Actor {
     let border_width = 2.0;
-    let header_y = -pane_height * 0.5 + 14.0;
-    let body_start_y = if compact {
-        -pane_height * 0.5 + 40.0
-    } else {
-        -pane_height * 0.5 + 60.0
-    };
-    let row_step = if compact { 19.0 } else { 31.0 };
-    let label_zoom = if compact { 0.41 } else { 0.60 };
-    let value_zoom = if compact { 0.39 } else { 0.56 };
-    let delta_zoom = if compact { 0.33 } else { 0.46 };
-    let label_x = -pane_width * 0.5 + 8.0;
-    let value_x = if compact {
-        pane_width * 0.5 - 38.0
-    } else {
-        pane_width * 0.5 - 60.0
-    };
-    let delta_x = pane_width * 0.5 - 8.0;
-    let rows = build_rows(progress, compact);
-
-    let mut children = Vec::with_capacity(24);
+    let mut children = Vec::with_capacity(4);
     children.push(act!(quad:
         align(0.5, 0.5):
         xy(0.0, 0.0):
@@ -160,124 +203,100 @@ fn build_panel(
         diffuse(0.0, 0.0, 0.0, 0.85):
         z(1)
     ));
-    children.push(act!(quad:
-        align(0.5, 0.5):
-        xy(0.0, -pane_height * 0.5 + 12.5):
-        setsize(pane_width - border_width, 25.0):
-        diffuse(0.157, 0.157, 0.165, 1.0):
-        z(2)
+    children.push(build_header_text(
+        header_name(progress.name.as_str(), progress.is_doubles),
+        pane_width,
+        -pane_height * 0.5 + 15.0,
+        2,
     ));
-    children.push(act!(quad:
-        align(0.5, 0.5):
-        xy(0.0, -pane_height * 0.5 + 12.5):
-        setsize(pane_width - border_width, 25.0):
-        diffuse(0.3, 0.3, 0.3, 0.55):
-        fadebottom(1.0):
-        z(2)
+    children.push(build_body_text(
+        build_box_body(progress),
+        pane_width,
+        pane_height,
+        UPPER_ROW_HEIGHT,
+        2,
     ));
-    children.push(act!(sprite("ITL.png"):
+
+    Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [center_x, center_y],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        children,
+        background: None,
+        z,
+    }
+}
+
+fn build_overlay_panel(
+    center_x: f32,
+    center_y: f32,
+    pane_width: f32,
+    pane_height: f32,
+    progress: &scores::ItlEventProgress,
+    z: i16,
+) -> Actor {
+    let border_width = 2.0;
+    let header_y = -pane_height * 0.5 + 12.0;
+    let header_bar_y = -pane_height * 0.5 + OVERLAY_ROW_HEIGHT * 0.5;
+    let mut children = Vec::with_capacity(8);
+    children.push(act!(quad:
         align(0.5, 0.5):
         xy(0.0, 0.0):
-        zoom(if compact { 0.16 } else { 0.24 }):
-        diffuse(1.0, 1.0, 1.0, if compact { 0.14 } else { 0.18 }):
+        setsize(pane_width + border_width, pane_height + border_width + 1.0):
+        diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
+        z(0)
+    ));
+    children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(0.0, 0.0):
+        setsize(pane_width, pane_height):
+        diffuse(BLACK[0], BLACK[1], BLACK[2], BLACK[3]):
+        z(1)
+    ));
+    children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(0.0, header_bar_y):
+        setsize(pane_width + border_width, OVERLAY_ROW_HEIGHT + border_width + 1.0):
+        diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
         z(2)
+    ));
+    children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(0.0, header_bar_y):
+        setsize(pane_width, OVERLAY_ROW_HEIGHT):
+        diffuse(0.157, 0.157, 0.165, 1.0):
+        z(3)
+    ));
+    children.push(act!(quad:
+        align(0.5, 0.5):
+        xy(0.0, header_bar_y):
+        setsize(pane_width, OVERLAY_ROW_HEIGHT):
+        diffuse(0.3, 0.3, 0.3, 0.55):
+        fadebottom(1.0):
+        z(3)
+    ));
+    children.push(build_header_text(
+        header_name(progress.name.as_str(), progress.is_doubles),
+        pane_width,
+        header_y,
+        4,
     ));
     children.push(act!(text:
         font("wendy"):
-        settext(short_event_name(progress.name.as_str(), progress.is_doubles)):
+        settext("EX"):
         align(0.5, 0.5):
-        xy(0.0, header_y):
-        zoom(if compact { 0.34 } else { 0.52 }):
-        maxwidth((pane_width - 8.0) / if compact { 0.34 } else { 0.52 }):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(3)
+        xy(pane_width * 0.5 - 18.0, header_y):
+        zoom(0.5):
+        diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
+        z(4)
     ));
-
-    for (idx, row) in rows.iter().enumerate() {
-        let y = body_start_y + row_step * idx as f32;
-        children.push(act!(text:
-            font("miso"):
-            settext(row.label):
-            align(0.0, 0.5):
-            xy(label_x, y):
-            zoom(label_zoom):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(3)
-        ));
-        children.push(act!(text:
-            font("miso"):
-            settext(row.current.clone()):
-            align(1.0, 0.5):
-            xy(value_x, y):
-            zoom(value_zoom):
-            diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
-            horizalign(right):
-            z(3)
-        ));
-        children.push(act!(text:
-            font("miso"):
-            settext(row.delta.clone()):
-            align(1.0, 0.5):
-            xy(delta_x, y):
-            zoom(delta_zoom):
-            diffuse(
-                delta_color(row.delta_value)[0],
-                delta_color(row.delta_value)[1],
-                delta_color(row.delta_value)[2],
-                delta_color(row.delta_value)[3]
-            ):
-            horizalign(right):
-            z(3)
-        ));
-    }
-
-    if show_passes {
-        let passes_y = body_start_y + row_step * rows.len() as f32 + 12.0;
-        children.push(act!(text:
-            font("miso"):
-            settext("Chart Passes"):
-            align(0.0, 0.5):
-            xy(label_x, passes_y):
-            zoom(if compact { 0.41 } else { 0.52 }):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(3)
-        ));
-        children.push(act!(text:
-            font("miso"):
-            settext(progress.total_passes.to_string()):
-            align(1.0, 0.5):
-            xy(delta_x, passes_y):
-            zoom(if compact { 0.39 } else { 0.50 }):
-            diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
-            horizalign(right):
-            z(3)
-        ));
-
-        if let (Some(before), Some(after)) = (progress.clear_type_before, progress.clear_type_after)
-            && after > before
-        {
-            let clear_y = passes_y + 28.0;
-            children.push(act!(text:
-                font("miso"):
-                settext("Clear Type"):
-                align(0.0, 0.5):
-                xy(label_x, clear_y):
-                zoom(if compact { 0.41 } else { 0.52 }):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(3)
-            ));
-            children.push(act!(text:
-                font("miso"):
-                settext(format!("{} -> {}", clear_type_name(before), clear_type_name(after))):
-                align(1.0, 0.5):
-                xy(delta_x, clear_y):
-                zoom(if compact { 0.33 } else { 0.44 }):
-                diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
-                horizalign(right):
-                z(3)
-            ));
-        }
-    }
+    children.push(build_body_text(
+        build_overlay_body(progress),
+        pane_width,
+        pane_height,
+        OVERLAY_ROW_HEIGHT,
+        4,
+    ));
 
     Actor::Frame {
         align: [0.5, 0.5],
@@ -308,14 +327,12 @@ pub fn build_itl_progress_box(
     } else {
         (upper_origin_x + 211.0 * dir, 274.0, 118.0, 180.0)
     };
-    vec![build_panel(
+    vec![build_upper_panel(
         center_x,
         center_y,
         pane_width,
         pane_height,
         progress,
-        true,
-        false,
         104,
     )]
 }
@@ -351,14 +368,12 @@ pub fn build_itl_event_overlay(
         } else {
             screen_center_x() + 160.0
         };
-        actors.push(build_panel(
+        actors.push(build_overlay_panel(
             center_x,
             center_y,
             pane_width,
             pane_height,
             progress,
-            false,
-            true,
             2001,
         ));
     }
@@ -368,8 +383,8 @@ pub fn build_itl_event_overlay(
         settext("Press Start or Back to dismiss"):
         align(0.5, 0.5):
         xy(screen_center_x(), screen_height() - 50.0):
-        zoom(0.75):
-        diffuse(1.0, 1.0, 1.0, 1.0):
+        zoom(1.1):
+        diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
         z(2002)
     ));
 
