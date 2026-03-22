@@ -1639,6 +1639,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let mut meter_count = 0u32;
         let mut any_failed = false;
         let mut score_valid = true;
+        let mut disqualified = false;
         let mut show_w0 = false;
         let mut show_fa_plus_pane = false;
         let mut show_ex = false;
@@ -1664,6 +1665,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             meter_count = meter_count.saturating_add(1);
             any_failed |= player.grade == scores::Grade::Failed;
             score_valid &= player.score_valid;
+            disqualified |= player.disqualified;
             show_w0 |= player.show_w0;
             show_fa_plus_pane |= player.show_fa_plus_pane;
             show_ex |= player.show_ex_score;
@@ -1713,6 +1715,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             profile_name: first_player.profile_name.clone(),
             chart: Arc::new(summary_chart),
             score_valid,
+            disqualified,
             groovestats: scores::GrooveStatsEvalState {
                 valid: false,
                 reason_lines: vec!["GrooveStats QR is unavailable in course mode.".to_string()],
@@ -1830,6 +1833,7 @@ fn score_info_from_stage(
         chart: player.chart.clone(),
         profile_name: player.profile_name.clone(),
         score_valid: player.score_valid,
+        disqualified: player.disqualified,
         groovestats: player.groovestats.clone(),
         itl: player.itl.clone(),
         judgment_counts,
@@ -2063,6 +2067,7 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         profile_name: si.profile_name.clone(),
         chart: si.chart.clone(),
         score_valid: si.score_valid,
+        disqualified: si.disqualified,
         groovestats: si.groovestats.clone(),
         itl: si.itl.clone(),
         grade: si.grade,

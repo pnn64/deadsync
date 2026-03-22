@@ -2207,17 +2207,25 @@ fn itl_group_name(song: &crate::game::song::SongData) -> Option<String> {
     None
 }
 
+#[inline(always)]
+fn itl_group_name_matches(group_name: &str) -> bool {
+    let group = group_name.to_ascii_lowercase();
+    group.contains("itl online 2026") || group.contains("itl 2026")
+}
+
 fn itl_is_song(
     song: &crate::game::song::SongData,
     song_dir: Option<&str>,
     data: &ItlFileData,
 ) -> bool {
     let song_dir_known = song_dir.is_some_and(|dir| data.path_map.contains_key(dir));
+    if song_dir_known {
+        return true;
+    }
     let Some(group_name) = itl_group_name(song) else {
-        return song_dir_known;
+        return false;
     };
-    let group = group_name.to_ascii_lowercase();
-    group.contains("itl online 2026") || group.contains("itl 2026") || song_dir_known
+    itl_group_name_matches(group_name.as_str())
 }
 
 fn itl_chart_no_cmod(song: &crate::game::song::SongData, prev: Option<&ItlHashEntry>) -> bool {
@@ -2229,6 +2237,46 @@ fn itl_chart_no_cmod(song: &crate::game::song::SongData, prev: Option<&ItlHashEn
         },
         |data| data.no_cmod,
     )
+}
+
+fn loaded_itl_chart_no_cmod_for_gameplay(
+    gs: &gameplay::State,
+    player_idx: usize,
+    profile_id: &str,
+) -> Option<bool> {
+    let song_dir = itl_song_dir(gs.song.as_ref())?;
+    let state = ITL_SCORE_CACHE.lock().unwrap();
+    let data = state.loaded_profiles.get(profile_id)?;
+    if !itl_is_song(gs.song.as_ref(), Some(song_dir.as_str()), data) {
+        return Some(false);
+    }
+    let prev = data.hash_map.get(gs.charts[player_idx].short_hash.as_str());
+    Some(itl_chart_no_cmod(gs.song.as_ref(), prev))
+}
+
+pub fn should_warn_cmod_for_itl_chart(gs: &gameplay::State, player_idx: usize) -> bool {
+    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS)
+        || gs.course_display_totals.is_some()
+        || !matches!(
+            gs.player_profiles[player_idx].scroll_speed,
+            crate::game::scroll::ScrollSpeedSetting::CMod(_)
+        )
+    {
+        return false;
+    }
+
+    let side = gameplay_side_for_player(gs, player_idx);
+    if let Some(profile_id) = profile::active_local_profile_id_for_side(side)
+        && let Some(no_cmod) =
+            loaded_itl_chart_no_cmod_for_gameplay(gs, player_idx, profile_id.as_str())
+    {
+        return no_cmod;
+    }
+
+    let Some(group_name) = itl_group_name(gs.song.as_ref()) else {
+        return false;
+    };
+    itl_group_name_matches(group_name.as_str()) && itl_chart_no_cmod(gs.song.as_ref(), None)
 }
 
 fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
@@ -5828,6 +5876,30 @@ mod tests {
                 points: 12345,
             })
         );
+    }
+
+    #[test]
+    fn itl_chart_no_cmod_uses_subtitle_fallback() {
+        let mut song = sample_song("/Songs/ITL Online 2026/Example");
+        song.subtitle = "(NO CMOD)".to_string();
+
+        assert!(itl_chart_no_cmod(&song, None));
+    }
+
+    #[test]
+    fn itl_is_song_accepts_cached_path_map_without_group_lookup() {
+        let song = sample_song("/Songs/Custom Pack/Example");
+        let mut data = ItlFileData::default();
+        data.path_map.insert(
+            "/Songs/Custom Pack/Example".to_string(),
+            "deadbeefcafebabe".to_string(),
+        );
+
+        assert!(itl_is_song(
+            &song,
+            Some("/Songs/Custom Pack/Example"),
+            &data
+        ));
     }
 
     #[test]

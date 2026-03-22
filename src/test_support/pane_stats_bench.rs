@@ -70,6 +70,7 @@ fn bench_score_info() -> ScoreInfo {
         chart,
         profile_name: "BenchPlayer".to_string(),
         score_valid: true,
+        disqualified: false,
         groovestats: GrooveStatsEvalState {
             valid: true,
             reason_lines: Vec::new(),

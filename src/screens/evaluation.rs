@@ -184,6 +184,7 @@ pub struct ScoreInfo {
     pub chart: Arc<ChartData>,
     pub profile_name: String,
     pub score_valid: bool,
+    pub disqualified: bool,
     pub groovestats: scores::GrooveStatsEvalState,
     pub itl: scores::ItlEvalState,
     pub judgment_counts: HashMap<JudgeGrade, u32>,
@@ -788,6 +789,9 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 score_percent,
             );
             let score_valid = gs.score_valid[player_idx] && !gs.autoplay_used;
+            // Simply Love's "Disqualified" label is driven by PlayerStageStats:IsDisqualified(),
+            // not by our broader local ranking-validity heuristics.
+            let disqualified = gs.autoplay_used;
             let groovestats = scores::groovestats_eval_state_from_gameplay(&gs, player_idx);
             let itl = scores::itl_eval_state_from_gameplay(&gs, player_idx);
             let earned_machine_record = score_valid
@@ -861,6 +865,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 chart: gs.charts[player_idx].clone(),
                 profile_name: prof.display_name.clone(),
                 score_valid,
+                disqualified,
                 groovestats,
                 itl,
                 judgment_counts: HashMap::from([
@@ -2684,7 +2689,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-            if si.score_valid {
+            if !si.disqualified {
                 continue;
             }
 

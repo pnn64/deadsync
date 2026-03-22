@@ -19,6 +19,7 @@ pub struct PlayerStageSummary {
     pub profile_name: String,
     pub chart: Arc<ChartData>,
     pub score_valid: bool,
+    pub disqualified: bool,
     pub groovestats: scores::GrooveStatsEvalState,
     pub itl: scores::ItlEvalState,
     pub grade: scores::Grade,
