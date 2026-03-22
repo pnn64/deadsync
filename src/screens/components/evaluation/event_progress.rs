@@ -2,7 +2,7 @@ use crate::act;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height};
 use crate::game::{profile, scores};
 use crate::ui::actors::{Actor, SizeSpec, TextAttribute};
-use crate::ui::color::JUDGMENT_RGBA;
+use crate::ui::color::{self, JUDGMENT_RGBA};
 
 const ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
 const POSITIVE_GREEN: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
@@ -15,6 +15,12 @@ const BODY_AVG_CHAR_WIDTH: f32 = 8.0;
 const UPPER_ROW_HEIGHT: f32 = 25.0;
 const OVERLAY_ROW_HEIGHT: f32 = 24.0;
 const POPUP_DISMISS_TEXT: &str = "Press &START; to dismiss.";
+const MORE_INFO_TEXT: &str = "More Information";
+const OVERLAY_PANE_NAV_WIDTH: f32 = 230.0;
+const TIER_BRONZE: [f32; 4] = color::rgba_hex("#966832");
+const TIER_SILVER: [f32; 4] = color::rgba_hex("#A1AEC1");
+const TIER_GOLD: [f32; 4] = color::rgba_hex("#F6AB2D");
+const TIER_PRISMATIC: [f32; 4] = color::rgba_hex("#8731D2");
 
 #[inline(always)]
 fn header_name(name: &str, is_doubles: bool) -> String {
@@ -126,6 +132,16 @@ fn build_overlay_body(progress: &scores::ItlEventProgress) -> String {
 }
 
 #[inline(always)]
+fn active_overlay_page_text(progress: &scores::ItlEventProgress, page_idx: usize) -> String {
+    progress
+        .overlay_pages
+        .get(page_idx)
+        .or_else(|| progress.overlay_pages.first())
+        .cloned()
+        .unwrap_or_else(|| build_overlay_body(progress))
+}
+
+#[inline(always)]
 fn quantize_zoom(zoom: f32) -> f32 {
     ((zoom * 20.0).floor() / 20.0).clamp(0.1, 1.0)
 }
@@ -209,7 +225,15 @@ fn build_body_attributes(text: &str) -> Vec<TextAttribute> {
             break;
         };
         let end = start + 1 + rel_end + 1;
-        push_attr(&mut attrs, text, start, end - start, POSITIVE_GREEN);
+        let quoted = &text[start + 1..end - 1];
+        let quoted_color = match quoted {
+            "Bronze" => TIER_BRONZE,
+            "Silver" => TIER_SILVER,
+            "Gold" => TIER_GOLD,
+            "Prismatic" => TIER_PRISMATIC,
+            _ => POSITIVE_GREEN,
+        };
+        push_attr(&mut attrs, text, start, end - start, quoted_color);
         offset = end;
     }
 
@@ -225,6 +249,17 @@ fn build_body_attributes(text: &str) -> Vec<TextAttribute> {
                 let byte_start = search_from + found;
                 push_attr(&mut attrs, text, byte_start, clear.len(), color);
                 search_from = byte_start + clear.len();
+            }
+        }
+    }
+
+    if let Some(start) = text.find("New ") {
+        for (grade, color) in [("Quad", JUDGMENT_RGBA[0]), ("Quint", ITL_PINK)] {
+            let mut search_from = start;
+            while let Some(found) = text[search_from..].find(grade) {
+                let byte_start = search_from + found;
+                push_attr(&mut attrs, text, byte_start, grade.len(), color);
+                search_from = byte_start + grade.len();
             }
         }
     }
@@ -333,12 +368,15 @@ fn build_overlay_panel(
     pane_width: f32,
     pane_height: f32,
     progress: &scores::ItlEventProgress,
+    page_idx: usize,
     z: i16,
 ) -> Actor {
     let border_width = 2.0;
     let header_y = -pane_height * 0.5 + 12.0;
     let header_bar_y = -pane_height * 0.5 + OVERLAY_ROW_HEIGHT * 0.5;
-    let mut children = Vec::with_capacity(8);
+    let body = active_overlay_page_text(progress, page_idx);
+    let has_more_info = progress.overlay_pages.len() > 1;
+    let mut children = Vec::with_capacity(11);
     children.push(act!(quad:
         align(0.5, 0.5):
         xy(0.0, 0.0):
@@ -391,12 +429,44 @@ fn build_overlay_panel(
         z(4)
     ));
     children.push(build_body_text(
-        build_overlay_body(progress),
+        body,
         pane_width,
         pane_height,
         OVERLAY_ROW_HEIGHT,
         4,
     ));
+    if has_more_info {
+        let nav_y = pane_height * 0.5 - OVERLAY_ROW_HEIGHT * 0.5;
+        let icon_x = OVERLAY_PANE_NAV_WIDTH * 0.5 - 10.0;
+        children.push(act!(text:
+            font("miso"):
+            settext("&MENULEFT;"):
+            align(0.5, 0.5):
+            xy(-icon_x, nav_y):
+            zoom(1.0):
+            diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
+            z(4)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext(MORE_INFO_TEXT):
+            align(0.5, 0.5):
+            xy(0.0, nav_y - 2.0):
+            zoom(1.0):
+            diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
+            horizalign(center):
+            z(4)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext("&MENURiGHT;"):
+            align(0.5, 0.5):
+            xy(icon_x, nav_y):
+            zoom(1.0):
+            diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
+            z(4)
+        ));
+    }
 
     Actor::Frame {
         align: [0.5, 0.5],
@@ -438,7 +508,7 @@ pub fn build_itl_progress_box(
 }
 
 pub fn build_itl_event_overlay(
-    panels: &[(profile::PlayerSide, &scores::ItlEventProgress)],
+    panels: &[(profile::PlayerSide, &scores::ItlEventProgress, usize)],
 ) -> Vec<Actor> {
     if panels.is_empty() {
         return Vec::new();
@@ -456,7 +526,7 @@ pub fn build_itl_event_overlay(
         z(2000)
     ));
 
-    for (idx, (side, progress)) in panels.iter().enumerate() {
+    for (idx, (side, progress, page_idx)) in panels.iter().enumerate() {
         let center_x = if panels.len() == 1 {
             screen_center_x()
         } else if idx == 0 && *side == profile::PlayerSide::P1 {
@@ -474,6 +544,7 @@ pub fn build_itl_event_overlay(
             pane_width,
             pane_height,
             progress,
+            *page_idx,
             2001,
         ));
     }

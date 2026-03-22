@@ -1710,7 +1710,7 @@ pub fn save_itl_data_from_gameplay(
             .cloned()
             .unwrap_or(new_entry.clone());
         let prev_entry = prev.unwrap_or_default();
-        progress[player_idx] = Some(ItlEventProgress {
+        let mut event_progress = ItlEventProgress {
             name: itl_event_name(gs.song.as_ref()),
             is_doubles: current_entry.steps_type.eq_ignore_ascii_case("double"),
             score_hundredths: current_run_ex,
@@ -1728,7 +1728,10 @@ pub fn save_itl_data_from_gameplay(
             total_passes: current_entry.passes.max(1),
             clear_type_before: Some(prev_entry.clear_type),
             clear_type_after: Some(current_entry.clear_type),
-        });
+            overlay_pages: Vec::new(),
+        };
+        event_progress.overlay_pages = itl_overlay_pages(&event_progress, None);
+        progress[player_idx] = Some(event_progress);
 
         if needs_write {
             write_itl_file(profile_id.as_str(), &data);
@@ -1783,6 +1786,7 @@ pub struct ItlEventProgress {
     pub total_passes: u32,
     pub clear_type_before: Option<u8>,
     pub clear_type_after: Option<u8>,
+    pub overlay_pages: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -2043,6 +2047,8 @@ struct GrooveStatsSubmitApiProgress {
     stat_improvements: Vec<GrooveStatsSubmitApiStatImprovement>,
     #[serde(rename = "questsCompleted", default)]
     quests_completed: Vec<GrooveStatsSubmitApiQuest>,
+    #[serde(rename = "achievementsCompleted", default)]
+    achievements_completed: Vec<GrooveStatsSubmitApiAchievement>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -2062,9 +2068,40 @@ struct GrooveStatsSubmitApiQuest {
     #[serde(default)]
     title: String,
     #[serde(default)]
+    rewards: Vec<GrooveStatsSubmitApiQuestReward>,
+    #[serde(default)]
     song_download_url: String,
     #[serde(rename = "songDownloadFolders", default)]
     song_download_folders: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiQuestReward {
+    #[serde(rename = "type", default)]
+    reward_type: String,
+    #[serde(default)]
+    description: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiAchievement {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    rewards: Vec<GrooveStatsSubmitApiAchievementReward>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiAchievementReward {
+    #[serde(default, deserialize_with = "de_string_from_string_or_number")]
+    tier: String,
+    #[serde(default)]
+    requirements: Vec<String>,
+    #[serde(rename = "titleUnlocked", default)]
+    title_unlocked: String,
 }
 
 #[inline(always)]
@@ -2455,6 +2492,191 @@ fn event_name_or_unknown(name: &str) -> &str {
     }
 }
 
+#[inline(always)]
+fn itl_clear_type_name(clear_type: u8) -> &'static str {
+    match clear_type {
+        0 => "No Play",
+        1 => "Clear",
+        2 => "FC",
+        3 => "FEC",
+        4 => "FFC",
+        5 => "FBFC",
+        _ => "Clear",
+    }
+}
+
+fn trim_blank_lines(text: String) -> String {
+    text.trim_end_matches(['\n', '\r']).to_string()
+}
+
+fn capitalize_ascii_first(text: &str) -> String {
+    let mut chars = text.chars();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
+    let mut out = String::new();
+    out.extend(first.to_uppercase());
+    out.extend(chars);
+    out
+}
+
+fn itl_stat_improvement_lines(progress: Option<&GrooveStatsSubmitApiProgress>) -> Vec<String> {
+    let Some(progress) = progress else {
+        return Vec::new();
+    };
+    let mut lines = Vec::new();
+    for improvement in &progress.stat_improvements {
+        if improvement.gained == 0 {
+            continue;
+        }
+        if improvement.name.eq_ignore_ascii_case("clearType") {
+            let after = improvement.current.clamp(0, i32::from(u8::MAX)) as u8;
+            let before = after.saturating_sub(improvement.gained.min(u32::from(u8::MAX)) as u8);
+            lines.push(format!(
+                "Clear Type: {} >>> {}",
+                itl_clear_type_name(before),
+                itl_clear_type_name(after)
+            ));
+            continue;
+        }
+        if improvement.name.eq_ignore_ascii_case("grade") {
+            let curr = improvement.current;
+            let prev = curr - improvement.gained as i32;
+            if curr != 0 && prev != curr {
+                let grade = match curr {
+                    1 => Some("Quad"),
+                    2 => Some("Quint"),
+                    _ => None,
+                };
+                if let Some(grade) = grade {
+                    lines.push(format!("New {grade}!"));
+                }
+            }
+            continue;
+        }
+        let stat_name = capitalize_ascii_first(improvement.name.trim_end_matches("Level"));
+        lines.push(format!(
+            "{stat_name} Lvl: {} (+{})",
+            improvement.current, improvement.gained
+        ));
+    }
+    lines
+}
+
+fn itl_summary_page_text(
+    progress: &ItlEventProgress,
+    submit_progress: Option<&GrooveStatsSubmitApiProgress>,
+) -> String {
+    let mut text = format!(
+        "EX Score: {:.2}% ({:+.2}%)\n\
+         Points: {} ({:+})\n\n\
+         Ranking Points: {} ({:+})\n\
+         Song Points: {} ({:+})\n\
+         EX Points: {} ({:+})\n\
+         Total Points: {} ({:+})\n\n\
+         You've passed the chart {} times",
+        progress.score_hundredths as f64 / 100.0,
+        progress.score_delta_hundredths as f64 / 100.0,
+        progress.current_points,
+        progress.point_delta,
+        progress.current_ranking_points,
+        progress.ranking_delta,
+        progress.current_song_points,
+        progress.song_delta,
+        progress.current_ex_points,
+        progress.ex_delta,
+        progress.current_total_points,
+        progress.total_delta,
+        progress.total_passes,
+    );
+    let lines = itl_stat_improvement_lines(submit_progress);
+    if !lines.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(lines.join("\n").as_str());
+    }
+    trim_blank_lines(text)
+}
+
+fn append_grouped_reward_text(out: &mut String, reward_type: &str, descriptions: &[String]) {
+    if descriptions.is_empty() {
+        return;
+    }
+    if !out.is_empty() {
+        out.push_str("\n\n");
+    }
+    if !reward_type.eq_ignore_ascii_case("ad-hoc") {
+        out.push_str(reward_type.trim().to_ascii_uppercase().as_str());
+        out.push_str(":\n");
+    }
+    out.push_str(descriptions.join("\n").as_str());
+}
+
+fn itl_quest_page_text(quest: &GrooveStatsSubmitApiQuest) -> String {
+    let mut body = format!("Completed \"{}\"!", quest.title.trim());
+    let mut grouped: Vec<(String, Vec<String>)> = Vec::new();
+    for reward in &quest.rewards {
+        let reward_type = reward.reward_type.trim();
+        let description = reward.description.trim();
+        if description.is_empty() {
+            continue;
+        }
+        if let Some((_, descriptions)) = grouped
+            .iter_mut()
+            .find(|(kind, _)| kind.eq_ignore_ascii_case(reward_type))
+        {
+            descriptions.push(description.to_string());
+        } else {
+            grouped.push((reward_type.to_string(), vec![description.to_string()]));
+        }
+    }
+    for (reward_type, descriptions) in &grouped {
+        append_grouped_reward_text(&mut body, reward_type.as_str(), descriptions.as_slice());
+    }
+    trim_blank_lines(body)
+}
+
+fn itl_achievement_page_text(achievement: &GrooveStatsSubmitApiAchievement) -> String {
+    let mut lines = vec![format!(
+        "Completed the \"{}\" Achievement!",
+        achievement.title.trim()
+    )];
+    for reward in &achievement.rewards {
+        let tier = reward.tier.trim();
+        if !tier.is_empty() && tier != "0" {
+            lines.push(format!("Tier {tier}"));
+        }
+        for requirement in &reward.requirements {
+            let requirement = requirement.trim();
+            if !requirement.is_empty() {
+                lines.push(requirement.to_string());
+            }
+        }
+        let title = reward.title_unlocked.trim();
+        if !title.is_empty() {
+            lines.push(format!("Unlocked the \"{}\" Title!", title));
+        }
+        lines.push(String::new());
+    }
+    trim_blank_lines(lines.join("\n"))
+}
+
+fn itl_overlay_pages(
+    progress: &ItlEventProgress,
+    submit_progress: Option<&GrooveStatsSubmitApiProgress>,
+) -> Vec<String> {
+    let mut pages = vec![itl_summary_page_text(progress, submit_progress)];
+    let Some(submit_progress) = submit_progress else {
+        return pages;
+    };
+    for quest in &submit_progress.quests_completed {
+        pages.push(itl_quest_page_text(quest));
+    }
+    for achievement in &submit_progress.achievements_completed {
+        pages.push(itl_achievement_page_text(achievement));
+    }
+    pages
+}
+
 fn handle_submit_event_unlocks(
     player: &GrooveStatsSubmitPlayerJob,
     event: &GrooveStatsSubmitApiEvent,
@@ -2538,7 +2760,7 @@ fn itl_progress_from_submit(
     let itl = response.itl.as_ref()?;
     let score_hundredths = player.itl_score_hundredths?;
     let (clear_type_before, clear_type_after) = itl_clear_type_change(itl.progress.as_ref());
-    Some(ItlEventProgress {
+    let mut progress = ItlEventProgress {
         name: event_name_or_unknown(itl.name.as_str()).to_string(),
         is_doubles: itl.is_doubles,
         score_hundredths,
@@ -2559,7 +2781,10 @@ fn itl_progress_from_submit(
         total_passes: itl.total_passes,
         clear_type_before,
         clear_type_after,
-    })
+        overlay_pages: Vec::new(),
+    };
+    progress.overlay_pages = itl_overlay_pages(&progress, itl.progress.as_ref());
+    Some(progress)
 }
 
 #[inline(always)]
@@ -4461,6 +4686,15 @@ enum F64OrString {
     String(String),
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum StringOrNumber {
+    String(String),
+    I64(i64),
+    U64(u64),
+    F64(f64),
+}
+
 fn de_f64_from_string_or_number<'de, D>(deserializer: D) -> Result<f64, D::Error>
 where
     D: Deserializer<'de>,
@@ -4469,6 +4703,19 @@ where
         Some(F64OrString::F64(v)) => Ok(v),
         Some(F64OrString::String(text)) => Ok(text.trim().parse::<f64>().unwrap_or(0.0)),
         None => Ok(0.0),
+    }
+}
+
+fn de_string_from_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<StringOrNumber>::deserialize(deserializer)? {
+        Some(StringOrNumber::String(text)) => Ok(text),
+        Some(StringOrNumber::I64(v)) => Ok(v.to_string()),
+        Some(StringOrNumber::U64(v)) => Ok(v.to_string()),
+        Some(StringOrNumber::F64(v)) => Ok(compact_f32_text(v as f32)),
+        None => Ok(String::new()),
     }
 }
 
