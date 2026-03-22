@@ -1891,6 +1891,17 @@ static GROOVESTATS_SUBMIT_UI_STATUS: std::sync::LazyLock<
 > = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
 static GROOVESTATS_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Debug, Clone)]
+struct GrooveStatsSubmitEventUiEntry {
+    chart_hash: String,
+    token: u64,
+    itl_progress: Option<ItlEventProgress>,
+}
+
+static GROOVESTATS_SUBMIT_EVENT_UI: std::sync::LazyLock<
+    Mutex<[Option<GrooveStatsSubmitEventUiEntry>; 2]>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GrooveStatsJudgmentCounts {
@@ -1941,6 +1952,7 @@ struct GrooveStatsSubmitPlayerJob {
     profile_name: String,
     profile_id: Option<String>,
     token: u64,
+    itl_score_hundredths: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -1995,14 +2007,53 @@ struct GrooveStatsSubmitApiPlayer {
 struct GrooveStatsSubmitApiEvent {
     #[serde(default)]
     name: String,
+    #[serde(default, deserialize_with = "de_i32_from_string_or_number")]
+    score_delta: i32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    top_score_points: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    prev_top_score_points: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    total_passes: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    current_ranking_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    previous_ranking_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    current_song_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    previous_song_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    current_ex_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    previous_ex_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    current_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    previous_point_total: u32,
+    #[serde(default)]
+    is_doubles: bool,
     progress: Option<GrooveStatsSubmitApiProgress>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GrooveStatsSubmitApiProgress {
+    #[serde(rename = "statImprovements", default)]
+    stat_improvements: Vec<GrooveStatsSubmitApiStatImprovement>,
     #[serde(rename = "questsCompleted", default)]
     quests_completed: Vec<GrooveStatsSubmitApiQuest>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiStatImprovement {
+    #[serde(default)]
+    name: String,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    gained: u32,
+    #[serde(default, deserialize_with = "de_i32_from_string_or_number")]
+    current: i32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -2023,6 +2074,22 @@ fn groovestats_reset_submit_ui_status(side: profile::PlayerSide, chart_hash: &st
         return;
     }
     let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
+    let slot = &mut state[arrowcloud_side_ix(side)];
+    if slot
+        .as_ref()
+        .is_some_and(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    {
+        *slot = None;
+    }
+}
+
+#[inline(always)]
+fn groovestats_reset_submit_event_ui(side: profile::PlayerSide, chart_hash: &str) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
     let slot = &mut state[arrowcloud_side_ix(side)];
     if slot
         .as_ref()
@@ -2069,6 +2136,37 @@ fn groovestats_update_submit_ui_status_if_token(
 }
 
 #[inline(always)]
+fn groovestats_arm_submit_event_ui(side: profile::PlayerSide, chart_hash: &str, token: u64) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[arrowcloud_side_ix(side)] =
+        Some(GrooveStatsSubmitEventUiEntry {
+            chart_hash: hash.to_string(),
+            token,
+            itl_progress: None,
+        });
+}
+
+#[inline(always)]
+fn groovestats_update_submit_event_ui_if_token(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    itl_progress: Option<ItlEventProgress>,
+) {
+    let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
+    let Some(entry) = state[arrowcloud_side_ix(side)].as_mut() else {
+        return;
+    };
+    if entry.token != token || !entry.chart_hash.eq_ignore_ascii_case(chart_hash) {
+        return;
+    }
+    entry.itl_progress = itl_progress;
+}
+
+#[inline(always)]
 fn groovestats_next_submit_ui_token() -> u64 {
     GROOVESTATS_SUBMIT_UI_TOKEN.fetch_add(1, AtomicOrdering::Relaxed)
 }
@@ -2087,6 +2185,20 @@ pub fn get_groovestats_submit_ui_status_for_side(
         .map(|entry| entry.status)
 }
 
+pub fn get_groovestats_submit_itl_progress_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<ItlEventProgress> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[arrowcloud_side_ix(side)]
+        .as_ref()
+        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        .and_then(|entry| entry.itl_progress.clone())
+}
+
 #[inline(always)]
 fn compact_f32_text(value: f32) -> String {
     let mut text = format!("{value:.2}");
@@ -2097,6 +2209,23 @@ fn compact_f32_text(value: f32) -> String {
         text.pop();
     }
     text
+}
+
+#[inline(always)]
+fn current_itl_score_hundredths(gs: &gameplay::State, player_idx: usize) -> u32 {
+    let (start, end) = gs.note_ranges[player_idx];
+    let ex_percent = judgment::calculate_ex_score_from_notes(
+        &gs.notes[start..end],
+        &gs.note_time_cache[start..end],
+        &gs.hold_end_time_cache[start..end],
+        gs.total_steps[player_idx],
+        gs.holds_total[player_idx],
+        gs.rolls_total[player_idx],
+        gs.mines_total[player_idx],
+        gs.players[player_idx].fail_time,
+        false,
+    );
+    itl_ex_hundredths(ex_percent)
 }
 
 #[inline(always)]
@@ -2383,6 +2512,54 @@ fn handle_submit_player_unlocks(
     if let Some(itl) = response.itl.as_ref() {
         handle_submit_event_unlocks(player, itl);
     }
+}
+
+fn itl_clear_type_change(
+    progress: Option<&GrooveStatsSubmitApiProgress>,
+) -> (Option<u8>, Option<u8>) {
+    let Some(progress) = progress else {
+        return (None, None);
+    };
+    for improvement in &progress.stat_improvements {
+        if improvement.gained == 0 || !improvement.name.eq_ignore_ascii_case("clearType") {
+            continue;
+        }
+        let after = improvement.current.clamp(0, i32::from(u8::MAX)) as u8;
+        let before = after.saturating_sub(improvement.gained.min(u32::from(u8::MAX)) as u8);
+        return (Some(before), Some(after));
+    }
+    (None, None)
+}
+
+fn itl_progress_from_submit(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) -> Option<ItlEventProgress> {
+    let itl = response.itl.as_ref()?;
+    let score_hundredths = player.itl_score_hundredths?;
+    let (clear_type_before, clear_type_after) = itl_clear_type_change(itl.progress.as_ref());
+    Some(ItlEventProgress {
+        name: event_name_or_unknown(itl.name.as_str()).to_string(),
+        is_doubles: itl.is_doubles,
+        score_hundredths,
+        score_delta_hundredths: itl.score_delta,
+        current_points: itl.top_score_points,
+        point_delta: itl_delta_i32(itl.top_score_points, itl.prev_top_score_points),
+        current_ranking_points: itl.current_ranking_point_total,
+        ranking_delta: itl_delta_i32(
+            itl.current_ranking_point_total,
+            itl.previous_ranking_point_total,
+        ),
+        current_song_points: itl.current_song_point_total,
+        song_delta: itl_delta_i32(itl.current_song_point_total, itl.previous_song_point_total),
+        current_ex_points: itl.current_ex_point_total,
+        ex_delta: itl_delta_i32(itl.current_ex_point_total, itl.previous_ex_point_total),
+        current_total_points: itl.current_point_total,
+        total_delta: itl_delta_i32(itl.current_point_total, itl.previous_point_total),
+        total_passes: itl.total_passes,
+        clear_type_before,
+        clear_type_after,
+    })
 }
 
 #[inline(always)]
@@ -2999,6 +3176,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         groovestats_reset_submit_ui_status(side, gs.charts[player_idx].short_hash.as_str());
+        groovestats_reset_submit_event_ui(side, gs.charts[player_idx].short_hash.as_str());
     }
 
     let cfg = crate::config::get();
@@ -3106,6 +3284,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             token,
             GrooveStatsSubmitUiStatus::Submitting,
         );
+        groovestats_arm_submit_event_ui(side, chart.short_hash.as_str(), token);
         players.push(GrooveStatsSubmitPlayerJob {
             side,
             slot,
@@ -3114,6 +3293,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             profile_name: profile.display_name.clone(),
             profile_id: profile::active_local_profile_id_for_side(side),
             token,
+            itl_score_hundredths: Some(current_itl_score_hundredths(gs, player_idx)),
         });
         headers.push((
             format!("x-api-key-player-{slot}"),
@@ -3181,6 +3361,12 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
                     player.chart_hash.as_str(),
                     player.token,
                     GrooveStatsSubmitUiStatus::Submitted,
+                );
+                groovestats_update_submit_event_ui_if_token(
+                    player.side,
+                    player.chart_hash.as_str(),
+                    player.token,
+                    itl_progress_from_submit(player, player_response),
                 );
                 if let Some(profile_id) = player.profile_id.as_deref()
                     && !player.username.is_empty()
@@ -4240,6 +4426,30 @@ where
         Some(U32OrString::U32(v)) => Ok(v),
         Some(U32OrString::F64(v)) => Ok(v.max(0.0).floor() as u32),
         Some(U32OrString::String(text)) => Ok(text.trim().parse::<u32>().unwrap_or(0)),
+        None => Ok(0),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum I32OrString {
+    I32(i32),
+    I64(i64),
+    F64(f64),
+    String(String),
+}
+
+fn de_i32_from_string_or_number<'de, D>(deserializer: D) -> Result<i32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<I32OrString>::deserialize(deserializer)? {
+        Some(I32OrString::I32(v)) => Ok(v),
+        Some(I32OrString::I64(v)) => Ok(v.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32),
+        Some(I32OrString::F64(v)) => {
+            Ok(v.clamp(f64::from(i32::MIN), f64::from(i32::MAX)).round() as i32)
+        }
+        Some(I32OrString::String(text)) => Ok(text.trim().parse::<i32>().unwrap_or(0)),
         None => Ok(0),
     }
 }

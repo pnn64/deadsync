@@ -126,21 +126,21 @@ fn build_panel(
     z: i16,
 ) -> Actor {
     let border_width = 2.0;
-    let header_y = -pane_height * 0.5 + 15.0;
+    let header_y = -pane_height * 0.5 + 14.0;
     let body_start_y = if compact {
-        -pane_height * 0.5 + 38.0
+        -pane_height * 0.5 + 40.0
     } else {
-        -pane_height * 0.5 + 56.0
+        -pane_height * 0.5 + 60.0
     };
-    let row_step = if compact { 18.0 } else { 28.0 };
-    let label_zoom = if compact { 0.36 } else { 0.50 };
-    let value_zoom = if compact { 0.34 } else { 0.46 };
-    let delta_zoom = if compact { 0.30 } else { 0.38 };
+    let row_step = if compact { 19.0 } else { 31.0 };
+    let label_zoom = if compact { 0.41 } else { 0.60 };
+    let value_zoom = if compact { 0.39 } else { 0.56 };
+    let delta_zoom = if compact { 0.33 } else { 0.46 };
     let label_x = -pane_width * 0.5 + 8.0;
     let value_x = if compact {
-        pane_width * 0.5 - 34.0
+        pane_width * 0.5 - 38.0
     } else {
-        pane_width * 0.5 - 52.0
+        pane_width * 0.5 - 60.0
     };
     let delta_x = pane_width * 0.5 - 8.0;
     let rows = build_rows(progress, compact);
@@ -187,8 +187,8 @@ fn build_panel(
         settext(short_event_name(progress.name.as_str(), progress.is_doubles)):
         align(0.5, 0.5):
         xy(0.0, header_y):
-        zoom(if compact { 0.30 } else { 0.46 }):
-        maxwidth((pane_width - 8.0) / if compact { 0.30 } else { 0.46 }):
+        zoom(if compact { 0.34 } else { 0.52 }):
+        maxwidth((pane_width - 8.0) / if compact { 0.34 } else { 0.52 }):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(3)
     ));
@@ -238,7 +238,7 @@ fn build_panel(
             settext("Chart Passes"):
             align(0.0, 0.5):
             xy(label_x, passes_y):
-            zoom(0.44):
+            zoom(if compact { 0.41 } else { 0.52 }):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(3)
         ));
@@ -247,7 +247,7 @@ fn build_panel(
             settext(progress.total_passes.to_string()):
             align(1.0, 0.5):
             xy(delta_x, passes_y):
-            zoom(0.42):
+            zoom(if compact { 0.39 } else { 0.50 }):
             diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
             horizalign(right):
             z(3)
@@ -262,7 +262,7 @@ fn build_panel(
                 settext("Clear Type"):
                 align(0.0, 0.5):
                 xy(label_x, clear_y):
-                zoom(0.44):
+                zoom(if compact { 0.41 } else { 0.52 }):
                 diffuse(1.0, 1.0, 1.0, 1.0):
                 z(3)
             ));
@@ -271,7 +271,7 @@ fn build_panel(
                 settext(format!("{} -> {}", clear_type_name(before), clear_type_name(after))):
                 align(1.0, 0.5):
                 xy(delta_x, clear_y):
-                zoom(0.36):
+                zoom(if compact { 0.33 } else { 0.44 }):
                 diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
                 horizalign(right):
                 z(3)

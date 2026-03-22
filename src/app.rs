@@ -11,7 +11,7 @@ use crate::screens::{
     Screen as CurrentScreen, ScreenAction, credits, evaluation, evaluation_summary, gameover,
     gameplay, init, initials, input as input_screen, manage_local_profiles, mappings, menu,
     options, player_options, profile_load, sandbox, select_color, select_course, select_mode,
-    select_music, select_profile, select_style, view_downloads,
+    select_music, select_profile, select_style,
 };
 use crate::ui::color;
 use chrono::Local;
@@ -983,7 +983,6 @@ pub struct ScreensState {
     select_play_mode_state: select_mode::State,
     profile_load_state: profile_load::State,
     select_music_state: select_music::State,
-    view_downloads_state: view_downloads::State,
     select_course_state: select_course::State,
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
@@ -1832,6 +1831,7 @@ fn score_info_from_stage(
     Some(evaluation::ScoreInfo {
         song: stage.song.clone(),
         chart: player.chart.clone(),
+        side,
         profile_name: player.profile_name.clone(),
         score_valid: player.score_valid,
         disqualified: player.disqualified,
@@ -2297,9 +2297,6 @@ impl ScreensState {
         let mut evaluation_summary_state = evaluation_summary::init();
         evaluation_summary_state.active_color_index = color_index;
 
-        let mut view_downloads_state = view_downloads::init();
-        view_downloads_state.active_color_index = color_index;
-
         let mut initials_state = initials::init();
         initials_state.active_color_index = color_index;
 
@@ -2323,7 +2320,6 @@ impl ScreensState {
             select_play_mode_state,
             profile_load_state,
             select_music_state,
-            view_downloads_state,
             select_course_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
@@ -2457,9 +2453,6 @@ impl ScreensState {
                     &mut self.select_music_state,
                     delta_time,
                 ))
-            }
-            CurrentScreen::ViewDownloads => {
-                view_downloads::update(&mut self.view_downloads_state, delta_time)
             }
             CurrentScreen::SelectCourse => {
                 if let Some(start) = session.session_start_time {
@@ -4254,10 +4247,6 @@ impl App {
                 &mut self.state.screens.select_music_state,
                 &ev,
             ),
-            CurrentScreen::ViewDownloads => crate::screens::view_downloads::handle_input(
-                &mut self.state.screens.view_downloads_state,
-                &ev,
-            ),
             CurrentScreen::SelectCourse => crate::screens::select_course::handle_input(
                 &mut self.state.screens.select_course_state,
                 &ev,
@@ -5162,9 +5151,6 @@ impl App {
                 &self.state.screens.select_music_state,
                 &self.asset_manager,
             ),
-            CurrentScreen::ViewDownloads => {
-                view_downloads::get_actors(&self.state.screens.view_downloads_state)
-            }
             CurrentScreen::SelectCourse => select_course::get_actors(
                 &self.state.screens.select_course_state,
                 &self.asset_manager,
@@ -5276,7 +5262,6 @@ impl App {
             CurrentScreen::SelectPlayMode => select_mode::out_transition(),
             CurrentScreen::ProfileLoad => profile_load::out_transition(),
             CurrentScreen::SelectMusic => select_music::out_transition(),
-            CurrentScreen::ViewDownloads => view_downloads::out_transition(),
             CurrentScreen::SelectCourse => select_course::out_transition(),
             CurrentScreen::Sandbox => sandbox::out_transition(),
             CurrentScreen::Init => init::out_transition(),
@@ -5305,7 +5290,6 @@ impl App {
             CurrentScreen::SelectPlayMode => select_mode::in_transition(),
             CurrentScreen::ProfileLoad => profile_load::in_transition(),
             CurrentScreen::SelectMusic => select_music::in_transition(),
-            CurrentScreen::ViewDownloads => view_downloads::in_transition(),
             CurrentScreen::SelectCourse => select_course::in_transition(),
             CurrentScreen::Sandbox => sandbox::in_transition(),
             CurrentScreen::Evaluation => evaluation::in_transition(),
@@ -6561,7 +6545,6 @@ impl App {
             self.state.screens.select_play_mode_state.active_color_index = idx;
             self.state.screens.profile_load_state.active_color_index = idx;
             self.state.screens.select_music_state.active_color_index = idx;
-            self.state.screens.view_downloads_state.active_color_index = idx;
             self.state.screens.select_course_state.active_color_index = idx;
             self.state.screens.options_state.active_color_index = idx;
             self.state.screens.credits_state.active_color_index = idx;
@@ -6677,15 +6660,6 @@ impl App {
             self.state.screens.profile_load_state = profile_load::init();
             self.state.screens.profile_load_state.active_color_index = current_color_index;
             profile_load::on_enter(&mut self.state.screens.profile_load_state);
-        } else if target == CurrentScreen::ViewDownloads {
-            let current_color_index = match prev {
-                CurrentScreen::SelectMusic => {
-                    self.state.screens.select_music_state.active_color_index
-                }
-                _ => self.state.screens.view_downloads_state.active_color_index,
-            };
-            self.state.screens.view_downloads_state = view_downloads::init();
-            self.state.screens.view_downloads_state.active_color_index = current_color_index;
         } else if target == CurrentScreen::PlayerOptions {
             if prev == CurrentScreen::SelectCourse {
                 if !self.start_course_run_from_selected() {

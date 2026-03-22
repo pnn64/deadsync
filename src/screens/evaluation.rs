@@ -182,6 +182,7 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 pub struct ScoreInfo {
     pub song: Arc<SongData>,
     pub chart: Arc<ChartData>,
+    pub side: profile::PlayerSide,
     pub profile_name: String,
     pub score_valid: bool,
     pub disqualified: bool,
@@ -662,14 +663,13 @@ pub struct State {
     pub allow_online_panes: bool,
     pub auto_screenshot_taken: bool,
     pub itl_overlay_visible: bool,
+    itl_overlay_shown: bool,
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let mut score_info: [Option<ScoreInfo>; MAX_PLAYERS] = std::array::from_fn(|_| None);
-    let mut itl_progress: [Option<scores::ItlEventProgress>; MAX_PLAYERS] =
-        std::array::from_fn(|_| None);
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
@@ -700,7 +700,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // Persist one score file per play (per local profile), including fails and replay lane
         // input, unless the run was ranking-invalid (autoplay, score-invalid modifiers, etc.).
         scores::save_local_scores_from_gameplay(&gs);
-        itl_progress = scores::save_itl_data_from_gameplay(&gs);
+        let _ = scores::save_itl_data_from_gameplay(&gs);
         scores::submit_groovestats_payloads_from_gameplay(&gs);
         scores::submit_arrowcloud_payloads_from_gameplay(&gs);
 
@@ -867,6 +867,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             score_info[player_idx] = Some(ScoreInfo {
                 song: gs.song.clone(),
                 chart: gs.charts[player_idx].clone(),
+                side,
                 profile_name: prof.display_name.clone(),
                 score_valid,
                 disqualified,
@@ -1131,8 +1132,6 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         }
     }
 
-    let itl_overlay_visible = itl_progress.iter().flatten().next().is_some();
-
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app.rs
         bg: heart_bg::State::new(),
@@ -1141,7 +1140,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
-        itl_progress,
+        itl_progress: std::array::from_fn(|_| None),
         density_graph_mesh,
         timing_hist_mesh,
         timing_hist_mesh_ex,
@@ -1156,7 +1155,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         auto_advance_seconds: None,
         allow_online_panes: true,
         auto_screenshot_taken: false,
-        itl_overlay_visible,
+        itl_overlay_visible: false,
+        itl_overlay_shown: false,
         active_pane,
         active_graph,
     }
@@ -1215,6 +1215,7 @@ pub fn init_from_score_info(
         allow_online_panes: true,
         auto_screenshot_taken: false,
         itl_overlay_visible: false,
+        itl_overlay_shown: false,
         active_pane,
         active_graph,
     }
@@ -1222,7 +1223,29 @@ pub fn init_from_score_info(
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
+fn sync_submit_itl_progress(state: &mut State) {
+    let mut found_new = false;
+    for player_idx in 0..MAX_PLAYERS {
+        let Some(si) = state.score_info[player_idx].as_ref() else {
+            continue;
+        };
+        let Some(progress) = scores::get_groovestats_submit_itl_progress_for_side(
+            si.chart.short_hash.as_str(),
+            si.side,
+        ) else {
+            continue;
+        };
+        found_new |= state.itl_progress[player_idx].is_none();
+        state.itl_progress[player_idx] = Some(progress);
+    }
+    if found_new && !state.itl_overlay_shown {
+        state.itl_overlay_visible = true;
+        state.itl_overlay_shown = true;
+    }
+}
+
 pub fn update(state: &mut State, dt: f32) {
+    sync_submit_itl_progress(state);
     if dt > 0.0 {
         state.screen_elapsed += dt;
     }

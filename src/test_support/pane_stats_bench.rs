@@ -68,6 +68,7 @@ fn bench_score_info() -> ScoreInfo {
     ScoreInfo {
         song,
         chart,
+        side: profile::PlayerSide::P1,
         profile_name: "BenchPlayer".to_string(),
         score_valid: true,
         disqualified: false,

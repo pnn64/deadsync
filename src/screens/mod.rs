@@ -20,7 +20,6 @@ pub mod select_mode;
 pub mod select_music;
 pub mod select_profile;
 pub mod select_style;
-pub mod view_downloads;
 use std::path::PathBuf;
 
 use crate::assets::{DensityGraphSlot, DensityGraphSource};
@@ -81,7 +80,6 @@ pub enum Screen {
     SelectPlayMode,
     ProfileLoad,
     SelectMusic,
-    ViewDownloads,
     SelectCourse,
     Sandbox,
     Evaluation,

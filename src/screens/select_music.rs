@@ -838,6 +838,7 @@ pub struct State {
     pending_replay: Option<sort_menu::ReplayStartPayload>,
     sort_menu: sort_menu::State,
     leaderboard: sort_menu::LeaderboardOverlayState,
+    downloads_overlay: sort_menu::DownloadsOverlayState,
     sort_mode: WheelSortMode,
     all_entries: Vec<MusicWheelEntry>,
     group_entries: Vec<MusicWheelEntry>,
@@ -2037,6 +2038,7 @@ pub fn init() -> State {
         pending_replay: None,
         sort_menu: sort_menu::State::Hidden,
         leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
+        downloads_overlay: sort_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
@@ -2217,6 +2219,7 @@ pub fn init_placeholder() -> State {
         pending_replay: None,
         sort_menu: sort_menu::State::Hidden,
         leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
+        downloads_overlay: sort_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: None,
         bg: heart_bg::State::new(),
@@ -2604,6 +2607,7 @@ fn show_test_input_overlay(state: &mut State) {
     clear_preview(state);
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
@@ -2624,6 +2628,7 @@ fn start_song_search_prompt(state: &mut State) {
     clear_preview(state);
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
@@ -2641,6 +2646,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     hide_test_input_overlay(state);
@@ -4057,12 +4063,23 @@ fn show_leaderboard_overlay(state: &mut State) {
     let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
     if let Some(overlay) = sort_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
         state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+        state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
         state.sync_overlay = SyncOverlayState::Hidden;
         state.profile_switch_overlay = None;
         hide_test_input_overlay(state);
         state.leaderboard = overlay;
         clear_preview(state);
     }
+}
+
+fn show_downloads_overlay(state: &mut State) {
+    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
+    state.profile_switch_overlay = None;
+    hide_test_input_overlay(state);
+    state.downloads_overlay = sort_menu::show_downloads_overlay();
+    clear_preview(state);
 }
 
 fn show_replay_overlay(state: &mut State) {
@@ -4081,6 +4098,7 @@ fn show_replay_overlay(state: &mut State) {
         return;
     }
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
@@ -4225,6 +4243,7 @@ fn show_sync_overlay(state: &mut State) {
     clear_preview(state);
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
@@ -4458,6 +4477,20 @@ fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
     ScreenAction::None
 }
 
+fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    match sort_menu::handle_downloads_input(&mut state.downloads_overlay, ev) {
+        sort_menu::DownloadsInputOutcome::ChangedSelection => {
+            audio::play_sfx("assets/sounds/change.ogg");
+        }
+        sort_menu::DownloadsInputOutcome::Closed => {
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
+        sort_menu::DownloadsInputOutcome::None => {}
+    }
+
+    ScreenAction::None
+}
+
 fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match sort_menu::handle_replay_input(&mut state.replay_overlay, ev) {
         sort_menu::ReplayInputOutcome::ChangedSelection => {
@@ -4610,7 +4643,8 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
         }
         sort_menu::Action::ViewDownloads => {
             hide_sort_menu(state);
-            ScreenAction::Navigate(Screen::ViewDownloads)
+            show_downloads_overlay(state);
+            ScreenAction::None
         }
         sort_menu::Action::SyncSong => {
             hide_sort_menu(state);
@@ -5278,6 +5312,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return handle_leaderboard_input(state, ev);
     }
 
+    if !matches!(
+        state.downloads_overlay,
+        sort_menu::DownloadsOverlayState::Hidden
+    ) {
+        return handle_downloads_overlay_input(state, ev);
+    }
+
     if state.sort_menu != sort_menu::State::Hidden {
         return handle_sort_menu_input(state, ev);
     }
@@ -5463,6 +5504,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     sort_menu::update_leaderboard_overlay(&mut state.leaderboard, dt);
+    sort_menu::update_downloads_overlay(&mut state.downloads_overlay, dt);
 
     state.time_since_selection_change += dt;
     if dt > 0.0 {
@@ -7290,6 +7332,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     if let Some(leaderboard_overlay) = sort_menu::build_leaderboard_overlay(&state.leaderboard) {
         actors.extend(leaderboard_overlay);
+    }
+    if let Some(downloads_overlay) = sort_menu::build_downloads_overlay(&state.downloads_overlay) {
+        actors.extend(downloads_overlay);
     }
 
     // Simply Love ScreenSelectMusic out transition: "Press &START; for options"
