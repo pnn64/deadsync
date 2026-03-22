@@ -75,6 +75,7 @@ fn bench_score_info() -> ScoreInfo {
         groovestats: GrooveStatsEvalState {
             valid: true,
             reason_lines: Vec::new(),
+            manual_qr_url: None,
         },
         itl: ItlEvalState::default(),
         judgment_counts,

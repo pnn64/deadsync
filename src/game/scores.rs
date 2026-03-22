@@ -1750,12 +1750,14 @@ const GS_INVALID_REMOVE_MASK: u8 =
 const GS_INVALID_INSERT_MASK: u8 = u8::MAX;
 const GS_INVALID_HOLDS_MASK: u8 = 1u8 << 3;
 const GROOVESTATS_REASON_COUNT: usize = 13;
+const GROOVESTATS_CHART_HASH_VERSION: u8 = 3;
 const ITL_FILE_NAME: &str = "ITL2026.json";
 
 #[derive(Clone, Debug, Default)]
 pub struct GrooveStatsEvalState {
     pub valid: bool,
     pub reason_lines: Vec<String>,
+    pub manual_qr_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -2364,7 +2366,93 @@ fn groovestats_eval_state(
     GrooveStatsEvalState {
         valid: checks.iter().all(|passed| *passed),
         reason_lines: groovestats_reason_lines(&checks, bad.as_slice()),
+        manual_qr_url: None,
     }
+}
+
+#[inline(always)]
+fn groovestats_qr_append_rescore(out: &mut String, label: char, value: u32) {
+    if value == 0 {
+        return;
+    }
+    out.push(label);
+    out.push_str(format!("{value:x}").as_str());
+}
+
+fn groovestats_manual_qr_url(
+    base_url: &str,
+    chart_hash: &str,
+    hash_version: u8,
+    counts: &GrooveStatsJudgmentCounts,
+    rescored: &GrooveStatsRescoreCounts,
+    failed: bool,
+    rate: u32,
+    used_cmod: bool,
+) -> Option<String> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+
+    let mut rescored_str = String::with_capacity(24);
+    for (label, value) in [
+        ('G', rescored.fantastic_plus),
+        ('H', rescored.fantastic),
+        ('I', rescored.excellent),
+        ('J', rescored.great),
+        ('K', rescored.decent),
+        ('L', rescored.way_off),
+    ] {
+        groovestats_qr_append_rescore(&mut rescored_str, label, value);
+    }
+
+    Some(
+        format!(
+            "{}/qr/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F{}R{:x}C{}V{:x}",
+            base_url.trim_end_matches('/'),
+            counts.total_steps,
+            counts.fantastic_plus,
+            counts.fantastic,
+            counts.excellent,
+            counts.great,
+            counts.decent,
+            counts.way_off,
+            counts.miss,
+            counts.holds_held,
+            counts.total_holds,
+            counts.rolls_held,
+            counts.total_rolls,
+            counts.mines_hit,
+            counts.total_mines,
+            if failed { '1' } else { '0' },
+            rate,
+            if used_cmod { '1' } else { '0' },
+            hash_version,
+        )
+        .to_ascii_uppercase(),
+    )
+}
+
+fn groovestats_manual_qr_url_from_gameplay(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> Option<String> {
+    if player_idx >= gs.num_players {
+        return None;
+    }
+    let Some(payload) = groovestats_payload_for_player(gs, player_idx) else {
+        return None;
+    };
+    groovestats_manual_qr_url(
+        network::groovestats_qr_base_url(),
+        gs.charts[player_idx].short_hash.as_str(),
+        GROOVESTATS_CHART_HASH_VERSION,
+        &payload.judgment_counts,
+        &payload.rescore_counts,
+        gs.players[player_idx].fail_time.is_some() || gs.players[player_idx].is_failing,
+        payload.rate,
+        payload.used_cmod,
+    )
 }
 
 pub fn groovestats_eval_state_from_gameplay(
@@ -2374,13 +2462,17 @@ pub fn groovestats_eval_state_from_gameplay(
     if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) {
         return GrooveStatsEvalState::default();
     }
-    groovestats_eval_state(
+    let mut state = groovestats_eval_state(
         gs.charts[player_idx].as_ref(),
         &gs.player_profiles[player_idx],
         gs.music_rate,
         gs.autoplay_used,
         gs.course_display_totals.is_some(),
-    )
+    );
+    if state.valid {
+        state.manual_qr_url = groovestats_manual_qr_url_from_gameplay(gs, player_idx);
+    }
+    state
 }
 
 fn itl_file_path(profile_id: &str) -> PathBuf {
@@ -6522,6 +6614,51 @@ mod tests {
         assert_eq!(value["rescoreCounts"]["wayOff"], json!(6));
         assert_eq!(value["usedCmod"], json!(true));
         assert_eq!(value["comment"], json!("[DS], FA+, 99.50EX, 2w, 1m, C650"));
+    }
+
+    #[test]
+    fn groovestats_manual_qr_url_matches_simply_love_shape() {
+        let counts = GrooveStatsJudgmentCounts {
+            fantastic_plus: 0x0a,
+            fantastic: 0x0b,
+            excellent: 0x0c,
+            great: 0x0d,
+            decent: 0x0e,
+            way_off: 0x0f,
+            miss: 0x10,
+            total_steps: 0x1d,
+            holds_held: 0x11,
+            total_holds: 0x12,
+            mines_hit: 0x15,
+            total_mines: 0x16,
+            rolls_held: 0x13,
+            total_rolls: 0x14,
+        };
+        let rescored = GrooveStatsRescoreCounts {
+            fantastic_plus: 0x01,
+            fantastic: 0x02,
+            excellent: 0x03,
+            great: 0x04,
+            decent: 0x05,
+            way_off: 0x06,
+        };
+
+        let url = groovestats_manual_qr_url(
+            "https://www.groovestats.com",
+            "deadbeef",
+            3,
+            &counts,
+            &rescored,
+            true,
+            150,
+            true,
+        )
+        .expect("manual qr url");
+
+        assert_eq!(
+            url,
+            "HTTPS://WWW.GROOVESTATS.COM/QR/DEADBEEF/T1DGAHBICJDKELFM10H11T12R13T14M15T16G1H2I3J4K5L6/F1R96C1V3"
+        );
     }
 
     #[test]

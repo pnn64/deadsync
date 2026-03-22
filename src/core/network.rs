@@ -6,6 +6,7 @@ use std::time::Duration;
 
 const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
 const BOOGIESTATS_API_BASE_URL: &str = "https://boogiestats.andr.host";
+const GROOVESTATS_QR_BASE_URL: &str = "https://www.groovestats.com";
 const GROOVESTATS_NEW_SESSION_PATH: &str = "new-session.php?chartHashVersion=3";
 const ARROWCLOUD_API_URL: &str = "https://api.arrowcloud.dance/";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -78,6 +79,10 @@ pub fn groovestats_api_base_url() -> &'static str {
     } else {
         GROOVESTATS_API_BASE_URL
     }
+}
+
+pub fn groovestats_qr_base_url() -> &'static str {
+    GROOVESTATS_QR_BASE_URL
 }
 
 pub fn groovestats_player_leaderboards_url() -> String {
