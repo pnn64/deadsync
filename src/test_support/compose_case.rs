@@ -841,6 +841,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             glow,
             font,
             content,
+            attributes: _,
             align_text,
             z,
             scale,
@@ -1058,6 +1059,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
                 .get(font)
                 .unwrap_or_else(|| panic!("missing font mapping for '{font}'")),
             content: TextContent::Owned(content.clone()),
+            attributes: Vec::new(),
             align_text: TextAlign::from(*align_text),
             z: *z,
             scale: *scale,

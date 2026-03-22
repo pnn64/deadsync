@@ -1,9 +1,12 @@
 use crate::act;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height};
 use crate::game::{profile, scores};
-use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::actors::{Actor, SizeSpec, TextAttribute};
+use crate::ui::color::JUDGMENT_RGBA;
 
 const ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
+const POSITIVE_GREEN: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
+const NEGATIVE_RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const BODY_FONT_HEIGHT: f32 = 19.0;
@@ -11,6 +14,7 @@ const BODY_LINE_SPACING: f32 = 24.0;
 const BODY_AVG_CHAR_WIDTH: f32 = 8.0;
 const UPPER_ROW_HEIGHT: f32 = 25.0;
 const OVERLAY_ROW_HEIGHT: f32 = 24.0;
+const POPUP_DISMISS_TEXT: &str = "Press &START; to dismiss.";
 
 #[inline(always)]
 fn header_name(name: &str, is_doubles: bool) -> String {
@@ -142,6 +146,93 @@ fn fit_body_zoom(text: &str, pane_width: f32, pane_height: f32, row_height: f32)
 }
 
 #[inline(always)]
+fn push_attr(
+    attrs: &mut Vec<TextAttribute>,
+    text: &str,
+    byte_start: usize,
+    byte_len: usize,
+    color: [f32; 4],
+) {
+    let char_start = text[..byte_start].chars().count();
+    let char_len = text[byte_start..byte_start + byte_len].chars().count();
+    if char_len > 0 {
+        attrs.push(TextAttribute {
+            start: char_start,
+            length: char_len,
+            color,
+        });
+    }
+}
+
+fn build_body_attributes(text: &str) -> Vec<TextAttribute> {
+    let mut attrs = Vec::new();
+    let bytes = text.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let start = i;
+        let mut j = i;
+        if matches!(bytes[j], b'+' | b'-') {
+            j += 1;
+        }
+        let mut has_digit = false;
+        while j < bytes.len() && bytes[j].is_ascii_digit() {
+            has_digit = true;
+            j += 1;
+        }
+        if j < bytes.len() && bytes[j] == b'.' {
+            j += 1;
+            while j < bytes.len() && bytes[j].is_ascii_digit() {
+                has_digit = true;
+                j += 1;
+            }
+        }
+        if has_digit {
+            if j < bytes.len() && matches!(bytes[j], b'%' | b'x') {
+                j += 1;
+            }
+            let color = match bytes[start] {
+                b'+' => POSITIVE_GREEN,
+                b'-' => NEGATIVE_RED,
+                _ => ITL_PINK,
+            };
+            push_attr(&mut attrs, text, start, j - start, color);
+            i = j;
+            continue;
+        }
+        i += 1;
+    }
+
+    let mut offset = 0usize;
+    while let Some(rel_start) = text[offset..].find('"') {
+        let start = offset + rel_start;
+        let Some(rel_end) = text[start + 1..].find('"') else {
+            break;
+        };
+        let end = start + 1 + rel_end + 1;
+        push_attr(&mut attrs, text, start, end - start, POSITIVE_GREEN);
+        offset = end;
+    }
+
+    if let Some(start) = text.find("Clear Type: ") {
+        for (clear, color) in [
+            ("FC", JUDGMENT_RGBA[2]),
+            ("FEC", JUDGMENT_RGBA[1]),
+            ("FFC", JUDGMENT_RGBA[0]),
+            ("FBFC", ITL_PINK),
+        ] {
+            let mut search_from = start;
+            while let Some(found) = text[search_from..].find(clear) {
+                let byte_start = search_from + found;
+                push_attr(&mut attrs, text, byte_start, clear.len(), color);
+                search_from = byte_start + clear.len();
+            }
+        }
+    }
+
+    attrs
+}
+
+#[inline(always)]
 fn build_header_text(text: String, pane_width: f32, y: f32, z: i16) -> Actor {
     act!(text:
         font("wendy"):
@@ -165,18 +256,27 @@ fn build_body_text(
     z: i16,
 ) -> Actor {
     let zoom = fit_body_zoom(text.as_str(), pane_width, pane_height, row_height);
-    act!(text:
+    let mut actor = act!(text:
         font("miso"):
         settext(text):
         align(0.5, 0.0):
         xy(0.0, -pane_height * 0.5 + row_height * 1.5):
         zoom(zoom):
         wrapwidthpixels(pane_width / zoom):
-        horizalign(left):
+        horizalign(center):
         valign(top):
         diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
         z(z)
-    )
+    );
+    if let Actor::Text {
+        content,
+        attributes,
+        ..
+    } = &mut actor
+    {
+        *attributes = build_body_attributes(content.as_str());
+    }
+    actor
 }
 
 fn build_upper_panel(
@@ -380,10 +480,11 @@ pub fn build_itl_event_overlay(
 
     actors.push(act!(text:
         font("miso"):
-        settext("Press Start or Back to dismiss"):
+        settext(POPUP_DISMISS_TEXT):
         align(0.5, 0.5):
         xy(screen_center_x(), screen_height() - 50.0):
         zoom(1.1):
+        horizalign(center):
         diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
         z(2002)
     ));

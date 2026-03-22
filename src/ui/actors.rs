@@ -86,6 +86,7 @@ pub enum Actor {
         glow: [f32; 4],
         font: &'static str,
         content: TextContent,
+        attributes: Vec<TextAttribute>,
         align_text: TextAlign, // talign: left/center/right
         z: i16,
         scale: [f32; 2],
@@ -155,6 +156,13 @@ pub enum Actor {
         color: [f32; 4],  // shadow color; alpha multiplies the child's alpha
         child: Box<Self>, // wrapped actor
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextAttribute {
+    pub start: usize,
+    pub length: usize,
+    pub color: [f32; 4],
 }
 
 #[derive(Clone, Debug)]

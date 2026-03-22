@@ -993,6 +993,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
         glow,
         font,
         content,
+        attributes: Vec::new(),
         align_text: talign,
         z,
         scale: [sx, sy],
