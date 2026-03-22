@@ -3,6 +3,7 @@ use crate::config::{self, SimpleIni};
 use bincode::{Decode, Encode};
 use chrono::Local;
 use log::{debug, info, warn};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -342,6 +343,11 @@ fn local_profile_dir(id: &str) -> PathBuf {
 }
 
 #[inline(always)]
+pub fn local_profile_dir_for_id(id: &str) -> PathBuf {
+    local_profile_dir(id)
+}
+
+#[inline(always)]
 fn profile_ini_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("profile.ini")
 }
@@ -349,6 +355,12 @@ fn profile_ini_path(id: &str) -> PathBuf {
 #[inline(always)]
 fn groovestats_ini_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("groovestats.ini")
+}
+
+fn parse_groovestats_is_pad_player(value: Option<String>, default: bool) -> bool {
+    value
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default, |v| v == 1)
 }
 
 #[inline(always)]
@@ -392,9 +404,22 @@ fn profile_stats_tmp_path(id: &str) -> PathBuf {
 }
 
 #[derive(Debug, Clone, Copy, Encode, Decode)]
+struct LegacyProfileStatsV1 {
+    version: u16,
+    current_combo: u32,
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
 struct ProfileStatsV1 {
     version: u16,
     current_combo: u32,
+    known_pack_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ProfileStats {
+    current_combo: u32,
+    known_pack_names: HashSet<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1211,6 +1236,7 @@ pub struct Profile {
     pub combo_mode: ComboMode,
     pub carry_combo_between_songs: bool,
     pub current_combo: u32,
+    pub known_pack_names: HashSet<String>,
     pub noteskin: NoteSkin,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
@@ -1338,6 +1364,7 @@ impl Default for Profile {
             combo_mode: ComboMode::default(),
             carry_combo_between_songs: true,
             current_combo: 0,
+            known_pack_names: HashSet::new(),
             noteskin: NoteSkin::default(),
             avatar_path: None,
             avatar_texture_key: None,
@@ -2311,25 +2338,44 @@ fn save_profile_ini_for_side(side: PlayerSide) {
 }
 
 #[inline(always)]
-fn decode_profile_stats_current_combo(bytes: &[u8], path: &Path) -> Option<u32> {
-    let Ok((stats, _)) =
+fn decode_profile_stats(bytes: &[u8], path: &Path) -> Option<ProfileStats> {
+    if let Ok((stats, _)) =
         bincode::decode_from_slice::<ProfileStatsV1, _>(bytes, bincode::config::standard())
-    else {
-        warn!("Failed to decode profile stats '{}'.", path.display());
-        return None;
-    };
-    if stats.version != PROFILE_STATS_VERSION_V1 {
-        warn!(
-            "Unsupported profile stats version {} in '{}'.",
-            stats.version,
-            path.display()
-        );
-        return None;
+    {
+        if stats.version != PROFILE_STATS_VERSION_V1 {
+            warn!(
+                "Unsupported profile stats version {} in '{}'.",
+                stats.version,
+                path.display()
+            );
+            return None;
+        }
+        return Some(ProfileStats {
+            current_combo: stats.current_combo,
+            known_pack_names: stats.known_pack_names.into_iter().collect(),
+        });
     }
-    Some(stats.current_combo)
+    if let Ok((stats, _)) =
+        bincode::decode_from_slice::<LegacyProfileStatsV1, _>(bytes, bincode::config::standard())
+    {
+        if stats.version != PROFILE_STATS_VERSION_V1 {
+            warn!(
+                "Unsupported profile stats version {} in '{}'.",
+                stats.version,
+                path.display()
+            );
+            return None;
+        }
+        return Some(ProfileStats {
+            current_combo: stats.current_combo,
+            known_pack_names: HashSet::new(),
+        });
+    }
+    warn!("Failed to decode profile stats '{}'.", path.display());
+    None
 }
 
-fn load_profile_stats_current_combo(path: &Path) -> Option<u32> {
+fn load_profile_stats(path: &Path) -> Option<ProfileStats> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(e) => {
@@ -2339,25 +2385,32 @@ fn load_profile_stats_current_combo(path: &Path) -> Option<u32> {
             return None;
         }
     };
-    decode_profile_stats_current_combo(&bytes, path)
+    decode_profile_stats(&bytes, path)
 }
 
 fn save_profile_stats_for_side(side: PlayerSide) {
-    let profile_id = {
+    let maybe_payload = {
         let session = lock_session();
         match &session.active_profiles[side_ix(side)] {
-            ActiveProfile::Local { id } => Some(id.clone()),
+            ActiveProfile::Local { id } => {
+                let profile = lock_profiles()[side_ix(side)].clone();
+                let mut known_pack_names: Vec<String> =
+                    profile.known_pack_names.into_iter().collect();
+                known_pack_names.sort_unstable();
+                Some((
+                    id.clone(),
+                    ProfileStatsV1 {
+                        version: PROFILE_STATS_VERSION_V1,
+                        current_combo: profile.current_combo,
+                        known_pack_names,
+                    },
+                ))
+            }
             ActiveProfile::Guest => None,
         }
     };
-    let Some(profile_id) = profile_id else {
+    let Some((profile_id, payload)) = maybe_payload else {
         return;
-    };
-
-    let current_combo = lock_profiles()[side_ix(side)].current_combo;
-    let payload = ProfileStatsV1 {
-        version: PROFILE_STATS_VERSION_V1,
-        current_combo,
     };
     let Ok(buf) = bincode::encode_to_vec(payload, bincode::config::standard()) else {
         warn!("Failed to encode profile stats for '{}'.", profile_id);
@@ -2952,8 +3005,13 @@ fn load_for_side(side: PlayerSide) {
             );
         }
 
-        profile.current_combo = load_profile_stats_current_combo(&profile_stats_path(&profile_id))
-            .unwrap_or(default_profile.current_combo);
+        let stats =
+            load_profile_stats(&profile_stats_path(&profile_id)).unwrap_or_else(|| ProfileStats {
+                current_combo: default_profile.current_combo,
+                known_pack_names: HashSet::new(),
+            });
+        profile.current_combo = stats.current_combo;
+        profile.known_pack_names = stats.known_pack_names;
 
         // Load groovestats.ini
         let mut gs_conf = SimpleIni::new();
@@ -2961,10 +3019,10 @@ fn load_for_side(side: PlayerSide) {
             profile.groovestats_api_key = gs_conf
                 .get("GrooveStats", "ApiKey")
                 .unwrap_or(default_profile.groovestats_api_key.clone());
-            profile.groovestats_is_pad_player = gs_conf
-                .get("GrooveStats", "IsPadPlayer")
-                .and_then(|v| v.parse::<u8>().ok())
-                .map_or(default_profile.groovestats_is_pad_player, |v| v != 0);
+            profile.groovestats_is_pad_player = parse_groovestats_is_pad_player(
+                gs_conf.get("GrooveStats", "IsPadPlayer"),
+                default_profile.groovestats_is_pad_player,
+            );
             profile.groovestats_username = gs_conf
                 .get("GrooveStats", "Username")
                 .unwrap_or(default_profile.groovestats_username);
@@ -3082,6 +3140,55 @@ pub fn active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
     match &session.active_profiles[side_ix(side)] {
         ActiveProfile::Local { id } => Some(id.clone()),
         ActiveProfile::Guest => None,
+    }
+}
+
+pub fn known_pack_names_for_local_profile(profile_id: &str) -> Option<HashSet<String>> {
+    let session = lock_session();
+    let profiles = lock_profiles();
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let ActiveProfile::Local { id } = &session.active_profiles[side_ix(side)] else {
+            continue;
+        };
+        if id == profile_id {
+            return Some(profiles[side_ix(side)].known_pack_names.clone());
+        }
+    }
+    None
+}
+
+pub fn mark_known_pack_names_for_local_profile<'a>(
+    profile_id: &str,
+    pack_names: impl IntoIterator<Item = &'a str>,
+) {
+    let pack_names: Vec<&str> = pack_names.into_iter().collect();
+    if profile_id.is_empty() || pack_names.is_empty() {
+        return;
+    }
+    let save_side = {
+        let session = lock_session();
+        let mut profiles = lock_profiles();
+        let mut save_side = None;
+        for side in [PlayerSide::P1, PlayerSide::P2] {
+            let ActiveProfile::Local { id } = &session.active_profiles[side_ix(side)] else {
+                continue;
+            };
+            if id != profile_id {
+                continue;
+            }
+            let profile = &mut profiles[side_ix(side)];
+            let mut changed = false;
+            for name in &pack_names {
+                changed |= profile.known_pack_names.insert((*name).to_owned());
+            }
+            if changed && save_side.is_none() {
+                save_side = Some(side);
+            }
+        }
+        save_side
+    };
+    if let Some(side) = save_side {
+        save_profile_stats_for_side(side);
     }
 }
 
@@ -4423,4 +4530,43 @@ pub fn update_measure_lines_for_side(side: PlayerSide, setting: MeasureLines) {
         profile.measure_lines = setting;
     }
     save_profile_ini_for_side(side);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_groovestats_is_pad_player;
+
+    #[test]
+    fn groovestats_is_pad_player_requires_explicit_one() {
+        assert!(parse_groovestats_is_pad_player(
+            Some("1".to_string()),
+            false
+        ));
+        assert!(!parse_groovestats_is_pad_player(
+            Some("0".to_string()),
+            false
+        ));
+        assert!(!parse_groovestats_is_pad_player(
+            Some("2".to_string()),
+            false
+        ));
+        assert!(!parse_groovestats_is_pad_player(
+            Some("255".to_string()),
+            false
+        ));
+    }
+
+    #[test]
+    fn groovestats_is_pad_player_uses_default_on_invalid_value() {
+        assert!(parse_groovestats_is_pad_player(None, true));
+        assert!(!parse_groovestats_is_pad_player(None, false));
+        assert!(parse_groovestats_is_pad_player(
+            Some("abc".to_string()),
+            true
+        ));
+        assert!(!parse_groovestats_is_pad_player(
+            Some("abc".to_string()),
+            false
+        ));
+    }
 }

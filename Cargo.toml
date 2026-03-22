@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.84"
+version = "0.3.98"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -67,12 +67,16 @@ rubato = "0.16.2"
 memmap2 = "0.9.10"
 
 # Networking
-ureq = { version = "3.2.0", features = ["json", "rustls"] }
+ureq = { version = "3.3.0", features = ["json", "rustls"] }
+
+# Unlocks
+zip = { version = "8.3.1", default-features = false, features = ["deflate"] }
 
 # Song cache
 bincode = "2.0.1"
 twox-hash = "2.1.2"
 tokio = { version = "1.50.0", features = ["rt"] }
+bitflags = "2.11.0"
 
 # DirectX + Input (Windows)
 [target.'cfg(windows)'.dependencies]
@@ -110,16 +114,16 @@ ash = { version = "0.38.0", features = ["linked"] }
 ash-window = "0.13.0"
 
 [target.'cfg(all(not(target_pointer_width = "32"), target_os = "windows"))'.dependencies]
-wgpu = { version = "28.0.0", features = ["dx12", "vulkan", "gles"] }
+wgpu = { version = "29.0.0", features = ["dx12", "vulkan", "gles"] }
 
 [target.'cfg(all(not(target_pointer_width = "32"), not(target_os = "windows")))'.dependencies]
-wgpu = { version = "28.0.0", features = ["vulkan", "gles"] }
+wgpu = { version = "29.0.0", features = ["vulkan", "gles"] }
 
 [target.'cfg(all(target_pointer_width = "32", target_os = "windows"))'.dependencies]
-wgpu = { version = "28.0.0", features = ["dx12", "gles"] }
+wgpu = { version = "29.0.0", features = ["dx12", "gles"] }
 
 [target.'cfg(all(target_pointer_width = "32", not(target_os = "windows")))'.dependencies]
-wgpu = { version = "28.0.0", features = ["gles"] }
+wgpu = { version = "29.0.0", features = ["gles"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 libc = "0.2.183"

@@ -1,6 +1,7 @@
 use crate::config::SimpleIni;
 use crate::core::input::InputSource;
 use crate::core::network;
+use crate::game::downloads;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::profile::{self, Profile};
@@ -10,6 +11,7 @@ use chrono::{Local, TimeZone};
 use log::{debug, warn};
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -86,6 +88,13 @@ pub struct CachedScore {
     pub lamp_index: Option<u8>,
     /// Optional single-digit judge count for the lamp (e.g. 1..=9).
     pub lamp_judge_count: Option<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CachedItlScore {
+    pub ex_hundredths: u32,
+    pub clear_type: u8,
+    pub points: u32,
 }
 
 // --- GrooveStats grade cache (on-disk + network-fetched) ---
@@ -254,6 +263,14 @@ struct MachineLocalScoreCacheState {
 
 static MACHINE_LOCAL_SCORE_CACHE: std::sync::LazyLock<Mutex<MachineLocalScoreCacheState>> =
     std::sync::LazyLock::new(|| Mutex::new(MachineLocalScoreCacheState::default()));
+
+#[derive(Default)]
+struct ItlScoreCacheState {
+    loaded_profiles: HashMap<String, ItlFileData>,
+}
+
+static ITL_SCORE_CACHE: std::sync::LazyLock<Mutex<ItlScoreCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(ItlScoreCacheState::default()));
 
 fn local_scores_root_for_profile(profile_id: &str) -> PathBuf {
     PathBuf::from("save/profiles")
@@ -711,6 +728,35 @@ pub fn get_machine_record_local(chart_hash: &str) -> Option<(String, CachedScore
         .best_itg
         .get(chart_hash)
         .map(|m| (m.initials.clone(), m.score))
+}
+
+pub fn get_cached_itl_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<CachedItlScore> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    ensure_itl_score_cache_loaded(&profile_id);
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(&profile_id)
+        .and_then(|data| data.hash_map.get(chart_hash))
+        .map(itl_score_from_entry)
+}
+
+pub fn get_cached_itl_score_for_song(
+    song: &crate::game::song::SongData,
+    side: profile::PlayerSide,
+) -> Option<CachedItlScore> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    ensure_itl_score_cache_loaded(&profile_id);
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(&profile_id)
+        .and_then(|data| itl_score_for_song(song, data))
 }
 
 // --- On-disk GrooveStats score storage ---
@@ -1515,6 +1561,1848 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     }
 }
 
+pub fn save_itl_data_from_gameplay(
+    gs: &gameplay::State,
+) -> [Option<ItlEventProgress>; gameplay::MAX_PLAYERS] {
+    let mut progress: [Option<ItlEventProgress>; gameplay::MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
+    if gs.autoplay_used {
+        debug!("Skipping ITL save: autoplay or replay was used during this stage.");
+        return progress;
+    }
+
+    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        let side = gameplay_side_for_player(gs, player_idx);
+        let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+            continue;
+        };
+        let chart_hash = gs.charts[player_idx].short_hash.trim();
+        if chart_hash.is_empty() {
+            continue;
+        }
+
+        let mut data = read_itl_file(profile_id.as_str());
+        itl_rebuild_song_ranks(&mut data);
+        let eval = itl_eval_state(gs, player_idx, &data);
+        if !eval.active {
+            continue;
+        }
+        if !eval.eligible {
+            debug!(
+                "Skipping ITL save for {:?} ({}): {}",
+                side,
+                chart_hash,
+                eval.reason_lines.join("; ")
+            );
+            continue;
+        }
+        let prev_totals = itl_point_totals(&data);
+
+        let Some(song_dir) = itl_song_dir(gs.song.as_ref()) else {
+            continue;
+        };
+        let path_changed = data
+            .path_map
+            .get(song_dir.as_str())
+            .is_none_or(|hash| !hash.eq_ignore_ascii_case(chart_hash));
+        if path_changed {
+            data.path_map
+                .insert(song_dir.clone(), chart_hash.to_string());
+        }
+
+        let prev = data.hash_map.get(chart_hash).cloned();
+        let (passing_points, max_scoring_points) =
+            parse_itl_points(gs.charts[player_idx].chart_name.as_str())
+                .or_else(|| {
+                    prev.as_ref()
+                        .map(|entry| (entry.passing_points, entry.max_scoring_points))
+                })
+                .unwrap_or((0, 0));
+        let max_points = passing_points.saturating_add(max_scoring_points);
+        let judgments = itl_judgments_from_gameplay(gs, player_idx);
+        let (start, end) = gs.note_ranges[player_idx];
+        let ex_percent = judgment::calculate_ex_score_from_notes(
+            &gs.notes[start..end],
+            &gs.note_time_cache[start..end],
+            &gs.hold_end_time_cache[start..end],
+            gs.total_steps[player_idx],
+            gs.holds_total[player_idx],
+            gs.rolls_total[player_idx],
+            gs.mines_total[player_idx],
+            gs.players[player_idx].fail_time,
+            false,
+        );
+        let current_run_ex = itl_ex_hundredths(ex_percent);
+        let new_entry = ItlHashEntry {
+            judgments: judgments.clone(),
+            ex: current_run_ex,
+            clear_type: itl_clear_type(&judgments),
+            points: itl_points_for_song(passing_points, max_scoring_points, ex_percent),
+            used_cmod: eval.used_cmod,
+            date: Local::now().format("%Y-%m-%d").to_string(),
+            no_cmod: eval.chart_no_cmod,
+            passing_points,
+            max_scoring_points,
+            max_points,
+            rank: None,
+            steps_type: itl_steps_type(gs.charts[player_idx].as_ref()).to_string(),
+            passes: prev
+                .as_ref()
+                .map_or(1, |entry| entry.passes.saturating_add(1)),
+        };
+
+        let mut needs_write = path_changed;
+        let mut best_changed = false;
+        match data.hash_map.get_mut(chart_hash) {
+            None => {
+                data.hash_map
+                    .insert(chart_hash.to_string(), new_entry.clone());
+                needs_write = true;
+            }
+            Some(existing) => {
+                if existing.passes != new_entry.passes {
+                    existing.passes = new_entry.passes;
+                    needs_write = true;
+                }
+                if !existing
+                    .steps_type
+                    .eq_ignore_ascii_case(new_entry.steps_type.as_str())
+                {
+                    existing.steps_type = new_entry.steps_type.clone();
+                    needs_write = true;
+                }
+
+                let ex_improved = new_entry.ex > existing.ex;
+                let ex_tied = new_entry.ex == existing.ex;
+                if ex_improved {
+                    existing.ex = new_entry.ex;
+                    existing.points = new_entry.points;
+                    existing.judgments = new_entry.judgments.clone();
+                    needs_write = true;
+                    best_changed = true;
+                } else if ex_tied && itl_judgments_better(&new_entry.judgments, &existing.judgments)
+                {
+                    existing.judgments = new_entry.judgments.clone();
+                    needs_write = true;
+                    best_changed = true;
+                }
+                if new_entry.clear_type > existing.clear_type {
+                    existing.clear_type = new_entry.clear_type;
+                    needs_write = true;
+                    best_changed = true;
+                }
+                if best_changed {
+                    existing.used_cmod = new_entry.used_cmod;
+                    existing.date = new_entry.date.clone();
+                    existing.no_cmod = new_entry.no_cmod;
+                    existing.passing_points = new_entry.passing_points;
+                    existing.max_scoring_points = new_entry.max_scoring_points;
+                    existing.max_points = new_entry.max_points;
+                }
+            }
+        }
+
+        itl_rebuild_song_ranks(&mut data);
+        let current_totals = itl_point_totals(&data);
+        let current_entry = data
+            .hash_map
+            .get(chart_hash)
+            .cloned()
+            .unwrap_or(new_entry.clone());
+        let prev_entry = prev.unwrap_or_default();
+        progress[player_idx] = Some(ItlEventProgress {
+            name: itl_event_name(gs.song.as_ref()),
+            is_doubles: current_entry.steps_type.eq_ignore_ascii_case("double"),
+            score_hundredths: current_run_ex,
+            score_delta_hundredths: itl_delta_i32(current_run_ex, prev_entry.ex),
+            current_points: current_entry.points,
+            point_delta: itl_delta_i32(current_entry.points, prev_entry.points),
+            current_ranking_points: current_totals.ranking_points,
+            ranking_delta: itl_delta_i32(current_totals.ranking_points, prev_totals.ranking_points),
+            current_song_points: current_totals.song_points,
+            song_delta: itl_delta_i32(current_totals.song_points, prev_totals.song_points),
+            current_ex_points: current_totals.ex_points,
+            ex_delta: itl_delta_i32(current_totals.ex_points, prev_totals.ex_points),
+            current_total_points: current_totals.total_points,
+            total_delta: itl_delta_i32(current_totals.total_points, prev_totals.total_points),
+            total_passes: current_entry.passes.max(1),
+            clear_type_before: Some(prev_entry.clear_type),
+            clear_type_after: Some(current_entry.clear_type),
+        });
+
+        if needs_write {
+            write_itl_file(profile_id.as_str(), &data);
+            set_cached_itl_file(profile_id.as_str(), data);
+        }
+    }
+
+    progress
+}
+
+const GROOVESTATS_SUBMIT_MAX_ENTRIES: usize = 10;
+const GROOVESTATS_COMMENT_PREFIX: &str = "[DS]";
+// Mirrors zmod's old-api submit path bit layout from gameplay.rs/player options.
+const GS_INVALID_REMOVE_MASK: u8 =
+    (1u8 << 0) | (1u8 << 2) | (1u8 << 3) | (1u8 << 4) | (1u8 << 5) | (1u8 << 6) | (1u8 << 7);
+const GS_INVALID_INSERT_MASK: u8 = u8::MAX;
+const GS_INVALID_HOLDS_MASK: u8 = 1u8 << 3;
+const GROOVESTATS_REASON_COUNT: usize = 13;
+const ITL_FILE_NAME: &str = "ITL2026.json";
+
+#[derive(Clone, Debug, Default)]
+pub struct GrooveStatsEvalState {
+    pub valid: bool,
+    pub reason_lines: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ItlEvalState {
+    pub active: bool,
+    pub eligible: bool,
+    pub chart_no_cmod: bool,
+    pub used_cmod: bool,
+    pub reason_lines: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ItlEventProgress {
+    pub name: String,
+    pub is_doubles: bool,
+    pub score_hundredths: u32,
+    pub score_delta_hundredths: i32,
+    pub current_points: u32,
+    pub point_delta: i32,
+    pub current_ranking_points: u32,
+    pub ranking_delta: i32,
+    pub current_song_points: u32,
+    pub song_delta: i32,
+    pub current_ex_points: u32,
+    pub ex_delta: i32,
+    pub current_total_points: u32,
+    pub total_delta: i32,
+    pub total_passes: u32,
+    pub clear_type_before: Option<u8>,
+    pub clear_type_after: Option<u8>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct ItlFileData {
+    #[serde(rename = "pathMap", default)]
+    path_map: HashMap<String, String>,
+    #[serde(rename = "hashMap", default)]
+    hash_map: HashMap<String, ItlHashEntry>,
+    #[serde(default)]
+    points: Vec<u32>,
+    #[serde(rename = "pointsSingle", default)]
+    points_single: Vec<u32>,
+    #[serde(rename = "pointsDouble", default)]
+    points_double: Vec<u32>,
+    #[serde(rename = "unlockFolders", default)]
+    unlock_folders: HashMap<String, bool>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct ItlHashEntry {
+    #[serde(default)]
+    judgments: ItlJudgments,
+    #[serde(default, deserialize_with = "deserialize_itl_ex")]
+    ex: u32,
+    #[serde(rename = "clearType", default)]
+    clear_type: u8,
+    #[serde(default)]
+    points: u32,
+    #[serde(rename = "usedCmod", default)]
+    used_cmod: bool,
+    #[serde(default)]
+    date: String,
+    #[serde(rename = "noCmod", default)]
+    no_cmod: bool,
+    #[serde(rename = "passingPoints", default)]
+    passing_points: u32,
+    #[serde(rename = "maxScoringPoints", default)]
+    max_scoring_points: u32,
+    #[serde(rename = "maxPoints", default)]
+    max_points: u32,
+    #[serde(default)]
+    rank: Option<u32>,
+    #[serde(rename = "stepsType", default)]
+    steps_type: String,
+    #[serde(default)]
+    passes: u32,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct ItlJudgments {
+    #[serde(rename = "W0", default)]
+    w0: u32,
+    #[serde(rename = "W1", default)]
+    w1: u32,
+    #[serde(rename = "W2", default)]
+    w2: u32,
+    #[serde(rename = "W3", default)]
+    w3: u32,
+    #[serde(rename = "W4", default)]
+    w4: u32,
+    #[serde(rename = "W5", default)]
+    w5: u32,
+    #[serde(rename = "Miss", default)]
+    miss: u32,
+    #[serde(rename = "totalSteps", default)]
+    total_steps: u32,
+    #[serde(rename = "Holds", default)]
+    holds: u32,
+    #[serde(rename = "totalHolds", default)]
+    total_holds: u32,
+    #[serde(rename = "Mines", default)]
+    mines: u32,
+    #[serde(rename = "totalMines", default)]
+    total_mines: u32,
+    #[serde(rename = "Rolls", default)]
+    rolls: u32,
+    #[serde(rename = "totalRolls", default)]
+    total_rolls: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ItlPointTotals {
+    ranking_points: u32,
+    song_points: u32,
+    ex_points: u32,
+    total_points: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrooveStatsSubmitUiStatus {
+    Submitting,
+    Submitted,
+    SubmitFailed,
+    TimedOut,
+}
+
+#[derive(Debug, Clone)]
+struct GrooveStatsSubmitUiEntry {
+    chart_hash: String,
+    token: u64,
+    status: GrooveStatsSubmitUiStatus,
+}
+
+static GROOVESTATS_SUBMIT_UI_STATUS: std::sync::LazyLock<
+    Mutex<[Option<GrooveStatsSubmitUiEntry>; 2]>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+static GROOVESTATS_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone)]
+struct GrooveStatsSubmitEventUiEntry {
+    chart_hash: String,
+    token: u64,
+    itl_progress: Option<ItlEventProgress>,
+}
+
+static GROOVESTATS_SUBMIT_EVENT_UI: std::sync::LazyLock<
+    Mutex<[Option<GrooveStatsSubmitEventUiEntry>; 2]>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsJudgmentCounts {
+    fantastic_plus: u32,
+    fantastic: u32,
+    excellent: u32,
+    great: u32,
+    decent: u32,
+    way_off: u32,
+    miss: u32,
+    total_steps: u32,
+    holds_held: u32,
+    total_holds: u32,
+    mines_hit: u32,
+    total_mines: u32,
+    rolls_held: u32,
+    total_rolls: u32,
+}
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsRescoreCounts {
+    fantastic_plus: u32,
+    fantastic: u32,
+    excellent: u32,
+    great: u32,
+    decent: u32,
+    way_off: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitPlayerPayload {
+    rate: u32,
+    score: u32,
+    judgment_counts: GrooveStatsJudgmentCounts,
+    rescore_counts: GrooveStatsRescoreCounts,
+    used_cmod: bool,
+    comment: String,
+}
+
+#[derive(Debug)]
+struct GrooveStatsSubmitPlayerJob {
+    side: profile::PlayerSide,
+    slot: u8,
+    chart_hash: String,
+    username: String,
+    profile_name: String,
+    profile_id: Option<String>,
+    token: u64,
+    itl_score_hundredths: Option<u32>,
+}
+
+#[derive(Debug)]
+struct GrooveStatsSubmitRequest {
+    players: Vec<GrooveStatsSubmitPlayerJob>,
+    headers: Vec<(String, String)>,
+    query: Vec<(String, String)>,
+    body: JsonValue,
+}
+
+#[derive(Debug)]
+struct GrooveStatsSubmitError {
+    status: GrooveStatsSubmitUiStatus,
+    message: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiResponse {
+    #[serde(default)]
+    error: String,
+    player1: Option<GrooveStatsSubmitApiPlayer>,
+    player2: Option<GrooveStatsSubmitApiPlayer>,
+}
+
+impl GrooveStatsSubmitApiResponse {
+    #[inline(always)]
+    fn player_for_slot(&self, slot: u8) -> Option<&GrooveStatsSubmitApiPlayer> {
+        match slot {
+            1 => self.player1.as_ref(),
+            2 => self.player2.as_ref(),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiPlayer {
+    #[serde(default)]
+    chart_hash: String,
+    #[serde(default)]
+    result: String,
+    #[serde(rename = "gsLeaderboard", default)]
+    gs_leaderboard: Vec<LeaderboardApiEntry>,
+    rpg: Option<GrooveStatsSubmitApiEvent>,
+    itl: Option<GrooveStatsSubmitApiEvent>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiEvent {
+    #[serde(default)]
+    name: String,
+    #[serde(default, deserialize_with = "de_i32_from_string_or_number")]
+    score_delta: i32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    top_score_points: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    prev_top_score_points: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    total_passes: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    current_ranking_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    previous_ranking_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    current_song_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    previous_song_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    current_ex_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    previous_ex_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    current_point_total: u32,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    previous_point_total: u32,
+    #[serde(default)]
+    is_doubles: bool,
+    progress: Option<GrooveStatsSubmitApiProgress>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiProgress {
+    #[serde(rename = "statImprovements", default)]
+    stat_improvements: Vec<GrooveStatsSubmitApiStatImprovement>,
+    #[serde(rename = "questsCompleted", default)]
+    quests_completed: Vec<GrooveStatsSubmitApiQuest>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiStatImprovement {
+    #[serde(default)]
+    name: String,
+    #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
+    gained: u32,
+    #[serde(default, deserialize_with = "de_i32_from_string_or_number")]
+    current: i32,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiQuest {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    song_download_url: String,
+    #[serde(rename = "songDownloadFolders", default)]
+    song_download_folders: Vec<String>,
+}
+
+#[inline(always)]
+fn groovestats_reset_submit_ui_status(side: profile::PlayerSide, chart_hash: &str) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
+    let slot = &mut state[arrowcloud_side_ix(side)];
+    if slot
+        .as_ref()
+        .is_some_and(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    {
+        *slot = None;
+    }
+}
+
+#[inline(always)]
+fn groovestats_reset_submit_event_ui(side: profile::PlayerSide, chart_hash: &str) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
+    let slot = &mut state[arrowcloud_side_ix(side)];
+    if slot
+        .as_ref()
+        .is_some_and(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    {
+        *slot = None;
+    }
+}
+
+#[inline(always)]
+fn groovestats_set_submit_ui_status(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    status: GrooveStatsSubmitUiStatus,
+) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap()[arrowcloud_side_ix(side)] =
+        Some(GrooveStatsSubmitUiEntry {
+            chart_hash: hash.to_string(),
+            token,
+            status,
+        });
+}
+
+#[inline(always)]
+fn groovestats_update_submit_ui_status_if_token(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    status: GrooveStatsSubmitUiStatus,
+) {
+    let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
+    let Some(entry) = state[arrowcloud_side_ix(side)].as_mut() else {
+        return;
+    };
+    if entry.token != token || !entry.chart_hash.eq_ignore_ascii_case(chart_hash) {
+        return;
+    }
+    entry.status = status;
+}
+
+#[inline(always)]
+fn groovestats_arm_submit_event_ui(side: profile::PlayerSide, chart_hash: &str, token: u64) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[arrowcloud_side_ix(side)] =
+        Some(GrooveStatsSubmitEventUiEntry {
+            chart_hash: hash.to_string(),
+            token,
+            itl_progress: None,
+        });
+}
+
+#[inline(always)]
+fn groovestats_update_submit_event_ui_if_token(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    itl_progress: Option<ItlEventProgress>,
+) {
+    let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
+    let Some(entry) = state[arrowcloud_side_ix(side)].as_mut() else {
+        return;
+    };
+    if entry.token != token || !entry.chart_hash.eq_ignore_ascii_case(chart_hash) {
+        return;
+    }
+    entry.itl_progress = itl_progress;
+}
+
+#[inline(always)]
+fn groovestats_next_submit_ui_token() -> u64 {
+    GROOVESTATS_SUBMIT_UI_TOKEN.fetch_add(1, AtomicOrdering::Relaxed)
+}
+
+pub fn get_groovestats_submit_ui_status_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<GrooveStatsSubmitUiStatus> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap()[arrowcloud_side_ix(side)]
+        .as_ref()
+        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        .map(|entry| entry.status)
+}
+
+pub fn get_groovestats_submit_itl_progress_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<ItlEventProgress> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[arrowcloud_side_ix(side)]
+        .as_ref()
+        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        .and_then(|entry| entry.itl_progress.clone())
+}
+
+#[inline(always)]
+fn compact_f32_text(value: f32) -> String {
+    let mut text = format!("{value:.2}");
+    while text.contains('.') && text.ends_with('0') {
+        text.pop();
+    }
+    if text.ends_with('.') {
+        text.pop();
+    }
+    text
+}
+
+#[inline(always)]
+fn current_itl_score_hundredths(gs: &gameplay::State, player_idx: usize) -> u32 {
+    let (start, end) = gs.note_ranges[player_idx];
+    let ex_percent = judgment::calculate_ex_score_from_notes(
+        &gs.notes[start..end],
+        &gs.note_time_cache[start..end],
+        &gs.hold_end_time_cache[start..end],
+        gs.total_steps[player_idx],
+        gs.holds_total[player_idx],
+        gs.rolls_total[player_idx],
+        gs.mines_total[player_idx],
+        gs.players[player_idx].fail_time,
+        false,
+    );
+    itl_ex_hundredths(ex_percent)
+}
+
+#[inline(always)]
+fn groovestats_submit_url() -> String {
+    format!(
+        "{}/score-submit.php",
+        network::groovestats_api_base_url().trim_end_matches('/')
+    )
+}
+
+fn groovestats_reason_lines(
+    checks: &[bool; GROOVESTATS_REASON_COUNT],
+    bad: &[String],
+) -> Vec<String> {
+    let mut out = Vec::with_capacity(6);
+    for (idx, passed) in checks.iter().enumerate() {
+        if *passed {
+            continue;
+        }
+        match idx {
+            0 => out.push("GrooveStats only supports dance and pump charts.".to_string()),
+            1 => out.push("GrooveStats does not support dance-solo charts.".to_string()),
+            2 => out.push("GrooveStats QR is unavailable in course mode.".to_string()),
+            3 => out.push("GrooveStats requires ITG mode.".to_string()),
+            4 => out.push("Timing windows must be at ITG or harder.".to_string()),
+            5 => out.push("Life difficulty must be at ITG or harder.".to_string()),
+            6 => {
+                out.push("Metrics or preferences are incorrect.".to_string());
+                out.extend(bad.iter().cloned());
+            }
+            7 => out.push("Music rate must be between 1.0x and 3.0x.".to_string()),
+            8 => out.push("Note-removal modifiers are enabled.".to_string()),
+            9 => out.push("Note-insertion modifiers are enabled.".to_string()),
+            10 => out.push("Fail type must be Immediate or ImmediateContinue.".to_string()),
+            11 => out.push("Autoplay or replay is not allowed.".to_string()),
+            12 => out.push("MinTNSToScoreNotes cannot be W1 or W2.".to_string()),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn groovestats_eval_state(
+    chart: &crate::game::chart::ChartData,
+    profile: &Profile,
+    music_rate: f32,
+    autoplay_used: bool,
+    is_course_mode: bool,
+) -> GrooveStatsEvalState {
+    let chart_type = chart.chart_type.trim().to_ascii_lowercase();
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    let remove_mask = profile::normalize_remove_mask(profile.remove_active_mask);
+    let insert_mask = profile::normalize_insert_mask(profile.insert_active_mask);
+    let holds_mask = profile::normalize_holds_mask(profile.holds_active_mask);
+    let fail_type_ok = matches!(
+        crate::config::get().default_fail_type,
+        crate::config::DefaultFailType::Immediate
+            | crate::config::DefaultFailType::ImmediateContinue
+    );
+
+    let mut checks = [true; GROOVESTATS_REASON_COUNT];
+    checks[0] = chart_type.starts_with("dance") || chart_type.starts_with("pump");
+    checks[1] = !chart_type.contains("solo");
+    checks[2] = !is_course_mode;
+    checks[3] = true;
+    checks[4] = true;
+    checks[5] = true;
+    checks[6] = !profile.custom_fantastic_window;
+    checks[7] = (1.0..=3.0).contains(&rate);
+    checks[8] = (remove_mask & GS_INVALID_REMOVE_MASK) == 0;
+    checks[9] = (insert_mask & GS_INVALID_INSERT_MASK) == 0;
+    checks[10] = fail_type_ok;
+    checks[11] = !autoplay_used;
+    checks[12] = true;
+    if (holds_mask & GS_INVALID_HOLDS_MASK) != 0 {
+        checks[8] = false;
+    }
+
+    let mut bad = Vec::with_capacity(1);
+    if profile.custom_fantastic_window {
+        bad.push(format!(
+            "- Custom Fantastic window ({}ms)",
+            profile.custom_fantastic_window_ms
+        ));
+    }
+
+    GrooveStatsEvalState {
+        valid: checks.iter().all(|passed| *passed),
+        reason_lines: groovestats_reason_lines(&checks, bad.as_slice()),
+    }
+}
+
+pub fn groovestats_eval_state_from_gameplay(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> GrooveStatsEvalState {
+    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) {
+        return GrooveStatsEvalState::default();
+    }
+    groovestats_eval_state(
+        gs.charts[player_idx].as_ref(),
+        &gs.player_profiles[player_idx],
+        gs.music_rate,
+        gs.autoplay_used,
+        gs.course_display_totals.is_some(),
+    )
+}
+
+fn itl_file_path(profile_id: &str) -> PathBuf {
+    profile::local_profile_dir_for_id(profile_id).join(ITL_FILE_NAME)
+}
+
+fn ensure_itl_score_cache_loaded(profile_id: &str) {
+    let needs_load = {
+        let state = ITL_SCORE_CACHE.lock().unwrap();
+        !state.loaded_profiles.contains_key(profile_id)
+    };
+    if !needs_load {
+        return;
+    }
+
+    let data = read_itl_file(profile_id);
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .entry(profile_id.to_string())
+        .or_insert(data);
+}
+
+fn set_cached_itl_file(profile_id: &str, data: ItlFileData) {
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .insert(profile_id.to_string(), data);
+}
+
+fn deserialize_itl_ex<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<f64>::deserialize(deserializer)?.unwrap_or(0.0);
+    if !raw.is_finite() || raw <= 0.0 {
+        return Ok(0);
+    }
+    let scaled = if raw <= 100.0001 { raw * 100.0 } else { raw };
+    Ok(scaled.round().clamp(0.0, 10_000.0) as u32)
+}
+
+#[inline(always)]
+fn itl_ex_hundredths(ex_percent: f64) -> u32 {
+    let ex = if ex_percent.is_finite() {
+        ex_percent.clamp(0.0, 100.0)
+    } else {
+        0.0
+    };
+    (ex * 100.0).round() as u32
+}
+
+fn read_itl_file(profile_id: &str) -> ItlFileData {
+    let path = itl_file_path(profile_id);
+    let Ok(text) = fs::read_to_string(&path) else {
+        return ItlFileData::default();
+    };
+    serde_json::from_str(text.as_str()).unwrap_or_else(|error| {
+        warn!("Failed to parse ITL data file {path:?}: {error}");
+        ItlFileData::default()
+    })
+}
+
+fn write_itl_file(profile_id: &str, data: &ItlFileData) {
+    if data.path_map.is_empty() && data.hash_map.is_empty() && data.unlock_folders.is_empty() {
+        return;
+    }
+    let path = itl_file_path(profile_id);
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if let Err(error) = fs::create_dir_all(parent) {
+        warn!("Failed to create ITL profile dir {parent:?}: {error}");
+        return;
+    }
+    let Ok(text) = serde_json::to_string(data) else {
+        warn!("Failed to encode ITL data for profile {profile_id}");
+        return;
+    };
+    let tmp = path.with_extension("tmp");
+    if let Err(error) = fs::write(&tmp, text) {
+        warn!("Failed to write ITL temp file {tmp:?}: {error}");
+        return;
+    }
+    if let Err(error) = fs::rename(&tmp, &path) {
+        warn!("Failed to commit ITL file {path:?}: {error}");
+        let _ = fs::remove_file(&tmp);
+    }
+}
+
+fn update_itl_unlock_folders(profile_id: &str, folders: &[String]) {
+    if folders.is_empty() {
+        return;
+    }
+    let mut data = read_itl_file(profile_id);
+    let mut changed = false;
+    for folder in folders {
+        let folder = folder.trim();
+        if folder.is_empty() {
+            continue;
+        }
+        changed |= data.unlock_folders.insert(folder.to_string(), true) != Some(true);
+    }
+    if changed {
+        write_itl_file(profile_id, &data);
+        set_cached_itl_file(profile_id, data);
+    }
+}
+
+fn event_name_or_unknown(name: &str) -> &str {
+    if name.trim().is_empty() {
+        "Unknown Event"
+    } else {
+        name.trim()
+    }
+}
+
+fn handle_submit_event_unlocks(
+    player: &GrooveStatsSubmitPlayerJob,
+    event: &GrooveStatsSubmitApiEvent,
+) {
+    let cfg = crate::config::get();
+    if !cfg.auto_download_unlocks {
+        return;
+    }
+    let Some(progress) = event.progress.as_ref() else {
+        return;
+    };
+    let event_name = event_name_or_unknown(event.name.as_str());
+    let profile_name = if player.profile_name.trim().is_empty() {
+        "NoName"
+    } else {
+        player.profile_name.trim()
+    };
+
+    for quest in &progress.quests_completed {
+        let url = quest.song_download_url.trim();
+        if url.is_empty() {
+            continue;
+        }
+        let title = quest.title.trim();
+        let (download_name, pack_name) = if cfg.separate_unlocks_by_player {
+            (
+                format!("[{event_name}] {title} - {profile_name}"),
+                format!("{event_name} Unlocks - {profile_name}"),
+            )
+        } else {
+            (
+                format!("[{event_name}] {title}"),
+                format!("{event_name} Unlocks"),
+            )
+        };
+        downloads::queue_event_unlock_download(url, download_name.trim_end(), pack_name.as_str());
+    }
+}
+
+fn handle_submit_player_unlocks(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) {
+    if let Some(itl) = response.itl.as_ref()
+        && let Some(profile_id) = player.profile_id.as_deref()
+        && let Some(progress) = itl.progress.as_ref()
+    {
+        for quest in &progress.quests_completed {
+            update_itl_unlock_folders(profile_id, quest.song_download_folders.as_slice());
+        }
+    }
+    if let Some(rpg) = response.rpg.as_ref() {
+        handle_submit_event_unlocks(player, rpg);
+    }
+    if let Some(itl) = response.itl.as_ref() {
+        handle_submit_event_unlocks(player, itl);
+    }
+}
+
+fn itl_clear_type_change(
+    progress: Option<&GrooveStatsSubmitApiProgress>,
+) -> (Option<u8>, Option<u8>) {
+    let Some(progress) = progress else {
+        return (None, None);
+    };
+    for improvement in &progress.stat_improvements {
+        if improvement.gained == 0 || !improvement.name.eq_ignore_ascii_case("clearType") {
+            continue;
+        }
+        let after = improvement.current.clamp(0, i32::from(u8::MAX)) as u8;
+        let before = after.saturating_sub(improvement.gained.min(u32::from(u8::MAX)) as u8);
+        return (Some(before), Some(after));
+    }
+    (None, None)
+}
+
+fn itl_progress_from_submit(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) -> Option<ItlEventProgress> {
+    let itl = response.itl.as_ref()?;
+    let score_hundredths = player.itl_score_hundredths?;
+    let (clear_type_before, clear_type_after) = itl_clear_type_change(itl.progress.as_ref());
+    Some(ItlEventProgress {
+        name: event_name_or_unknown(itl.name.as_str()).to_string(),
+        is_doubles: itl.is_doubles,
+        score_hundredths,
+        score_delta_hundredths: itl.score_delta,
+        current_points: itl.top_score_points,
+        point_delta: itl_delta_i32(itl.top_score_points, itl.prev_top_score_points),
+        current_ranking_points: itl.current_ranking_point_total,
+        ranking_delta: itl_delta_i32(
+            itl.current_ranking_point_total,
+            itl.previous_ranking_point_total,
+        ),
+        current_song_points: itl.current_song_point_total,
+        song_delta: itl_delta_i32(itl.current_song_point_total, itl.previous_song_point_total),
+        current_ex_points: itl.current_ex_point_total,
+        ex_delta: itl_delta_i32(itl.current_ex_point_total, itl.previous_ex_point_total),
+        current_total_points: itl.current_point_total,
+        total_delta: itl_delta_i32(itl.current_point_total, itl.previous_point_total),
+        total_passes: itl.total_passes,
+        clear_type_before,
+        clear_type_after,
+    })
+}
+
+#[inline(always)]
+fn itl_score_from_entry(entry: &ItlHashEntry) -> CachedItlScore {
+    CachedItlScore {
+        ex_hundredths: entry.ex,
+        clear_type: entry.clear_type,
+        points: entry.points,
+    }
+}
+
+fn itl_score_for_song(
+    song: &crate::game::song::SongData,
+    data: &ItlFileData,
+) -> Option<CachedItlScore> {
+    let song_dir = itl_song_dir(song)?;
+    let chart_hash = data.path_map.get(song_dir.as_str())?;
+    data.hash_map.get(chart_hash).map(itl_score_from_entry)
+}
+
+fn itl_song_dir(song: &crate::game::song::SongData) -> Option<String> {
+    song.simfile_path
+        .parent()
+        .map(|dir| dir.to_string_lossy().into_owned())
+}
+
+fn itl_group_name(song: &crate::game::song::SongData) -> Option<String> {
+    let song_cache = get_song_cache();
+    for pack in song_cache.iter() {
+        if pack
+            .songs
+            .iter()
+            .any(|candidate| candidate.simfile_path == song.simfile_path)
+        {
+            return Some(pack.group_name.clone());
+        }
+    }
+    None
+}
+
+#[inline(always)]
+fn itl_group_name_matches(group_name: &str) -> bool {
+    let group = group_name.to_ascii_lowercase();
+    group.contains("itl online 2026") || group.contains("itl 2026")
+}
+
+fn itl_is_song(
+    song: &crate::game::song::SongData,
+    song_dir: Option<&str>,
+    data: &ItlFileData,
+) -> bool {
+    let song_dir_known = song_dir.is_some_and(|dir| data.path_map.contains_key(dir));
+    if song_dir_known {
+        return true;
+    }
+    let Some(group_name) = itl_group_name(song) else {
+        return false;
+    };
+    itl_group_name_matches(group_name.as_str())
+}
+
+fn itl_chart_no_cmod(song: &crate::game::song::SongData, prev: Option<&ItlHashEntry>) -> bool {
+    prev.map_or_else(
+        || {
+            song.display_subtitle(false)
+                .to_ascii_lowercase()
+                .contains("no cmod")
+        },
+        |data| data.no_cmod,
+    )
+}
+
+#[inline(always)]
+fn itl_event_name(song: &crate::game::song::SongData) -> String {
+    itl_group_name(song).unwrap_or_else(|| "ITL Online 2026".to_string())
+}
+
+#[inline(always)]
+fn itl_steps_type(chart: &crate::game::chart::ChartData) -> &'static str {
+    if chart.chart_type.to_ascii_lowercase().contains("double") {
+        "double"
+    } else {
+        "single"
+    }
+}
+
+#[inline(always)]
+fn itl_rank_for_points(sorted_points: &[u32], points: u32) -> Option<u32> {
+    sorted_points
+        .iter()
+        .position(|value| *value == points)
+        .map(|idx| idx.saturating_add(1) as u32)
+}
+
+fn itl_rebuild_song_ranks(data: &mut ItlFileData) {
+    let mut points: Vec<u32> = data.hash_map.values().map(|entry| entry.points).collect();
+    points.sort_unstable_by(|a, b| b.cmp(a));
+
+    let mut points_single = Vec::with_capacity(points.len());
+    let mut points_double = Vec::with_capacity(points.len());
+    let mut unknown_points = Vec::new();
+    let mut plays_single = 0usize;
+    let mut plays_double = 0usize;
+
+    for entry in data.hash_map.values_mut() {
+        entry.rank = itl_rank_for_points(points.as_slice(), entry.points);
+        if entry.steps_type.eq_ignore_ascii_case("single") {
+            points_single.push(entry.points);
+            plays_single = plays_single.saturating_add(1);
+        } else if entry.steps_type.eq_ignore_ascii_case("double") {
+            points_double.push(entry.points);
+            plays_double = plays_double.saturating_add(1);
+        } else {
+            unknown_points.push(entry.points);
+        }
+    }
+
+    if plays_single > plays_double {
+        points_single.extend(unknown_points);
+    } else {
+        points_double.extend(unknown_points);
+    }
+
+    points_single.sort_unstable_by(|a, b| b.cmp(a));
+    points_double.sort_unstable_by(|a, b| b.cmp(a));
+
+    for entry in data.hash_map.values_mut() {
+        if entry.steps_type.eq_ignore_ascii_case("single") {
+            entry.rank = itl_rank_for_points(points_single.as_slice(), entry.points);
+        } else if entry.steps_type.eq_ignore_ascii_case("double") {
+            entry.rank = itl_rank_for_points(points_double.as_slice(), entry.points);
+        }
+    }
+
+    data.points = points;
+    data.points_single = points_single;
+    data.points_double = points_double;
+}
+
+fn itl_point_totals(data: &ItlFileData) -> ItlPointTotals {
+    let ranking_points = data.points.iter().take(75).copied().sum();
+    let mut song_points = 0u32;
+    let mut ex_points = 0u32;
+    let mut total_points = 0u32;
+    for entry in data.hash_map.values() {
+        song_points = song_points.saturating_add(entry.passing_points);
+        ex_points = ex_points.saturating_add(entry.points.saturating_sub(entry.passing_points));
+        total_points = total_points.saturating_add(entry.points);
+    }
+    ItlPointTotals {
+        ranking_points,
+        song_points,
+        ex_points,
+        total_points,
+    }
+}
+
+#[inline(always)]
+fn itl_delta_i32(current: u32, previous: u32) -> i32 {
+    (i64::from(current) - i64::from(previous)).clamp(i64::from(i32::MIN), i64::from(i32::MAX))
+        as i32
+}
+
+fn loaded_itl_chart_no_cmod_for_gameplay(
+    gs: &gameplay::State,
+    player_idx: usize,
+    profile_id: &str,
+) -> Option<bool> {
+    let song_dir = itl_song_dir(gs.song.as_ref())?;
+    let state = ITL_SCORE_CACHE.lock().unwrap();
+    let data = state.loaded_profiles.get(profile_id)?;
+    if !itl_is_song(gs.song.as_ref(), Some(song_dir.as_str()), data) {
+        return Some(false);
+    }
+    let prev = data.hash_map.get(gs.charts[player_idx].short_hash.as_str());
+    Some(itl_chart_no_cmod(gs.song.as_ref(), prev))
+}
+
+pub fn should_warn_cmod_for_itl_chart(gs: &gameplay::State, player_idx: usize) -> bool {
+    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS)
+        || gs.course_display_totals.is_some()
+        || !matches!(
+            gs.player_profiles[player_idx].scroll_speed,
+            crate::game::scroll::ScrollSpeedSetting::CMod(_)
+        )
+    {
+        return false;
+    }
+
+    let side = gameplay_side_for_player(gs, player_idx);
+    if let Some(profile_id) = profile::active_local_profile_id_for_side(side)
+        && let Some(no_cmod) =
+            loaded_itl_chart_no_cmod_for_gameplay(gs, player_idx, profile_id.as_str())
+    {
+        return no_cmod;
+    }
+
+    let Some(group_name) = itl_group_name(gs.song.as_ref()) else {
+        return false;
+    };
+    itl_group_name_matches(group_name.as_str()) && itl_chart_no_cmod(gs.song.as_ref(), None)
+}
+
+fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
+    let mut nums = chart_name
+        .split(|ch: char| !ch.is_ascii_digit())
+        .filter(|part| !part.is_empty())
+        .filter_map(|part| part.parse::<u32>().ok());
+    Some((nums.next()?, nums.next()?))
+}
+
+fn itl_points_for_song(passing_points: u32, max_scoring_points: u32, ex_score: f64) -> u32 {
+    let scalar = 40.0_f64;
+    let curve = (scalar.powf(ex_score.max(0.0) / scalar) - 1.0)
+        * (100.0 / (scalar.powf(100.0 / scalar) - 1.0));
+    let percent = ((curve / 100.0) * 1_000_000.0).round() / 1_000_000.0;
+    passing_points.saturating_add((f64::from(max_scoring_points) * percent).floor() as u32)
+}
+
+fn itl_judgments_better(cur: &ItlJudgments, prev: &ItlJudgments) -> bool {
+    for (cur_value, prev_value) in [
+        (cur.w0, prev.w0),
+        (cur.w1, prev.w1),
+        (cur.w2, prev.w2),
+        (cur.w3, prev.w3),
+        (cur.w4, prev.w4),
+        (cur.w5, prev.w5),
+        (cur.miss, prev.miss),
+    ] {
+        match cur_value.cmp(&prev_value) {
+            Ordering::Greater => return true,
+            Ordering::Less => return false,
+            Ordering::Equal => {}
+        }
+    }
+    false
+}
+
+fn itl_clear_type(judgments: &ItlJudgments) -> u8 {
+    if judgments.total_rolls.saturating_sub(judgments.rolls) > 0
+        || judgments.total_holds.saturating_sub(judgments.holds) > 0
+    {
+        return 1;
+    }
+
+    let mut clear_type = 1;
+    let mut taps = judgments
+        .miss
+        .saturating_add(judgments.w5)
+        .saturating_add(judgments.w4);
+    if taps == 0 {
+        clear_type = 2;
+    }
+    taps = taps.saturating_add(judgments.w3);
+    if taps == 0 {
+        clear_type = 3;
+    }
+    taps = taps.saturating_add(judgments.w2);
+    if taps == 0 {
+        clear_type = 4;
+    }
+    taps = taps.saturating_add(judgments.w1);
+    if taps == 0 {
+        clear_type = 5;
+    }
+    clear_type
+}
+
+fn itl_judgments_from_gameplay(gs: &gameplay::State, player_idx: usize) -> ItlJudgments {
+    let counts = groovestats_judgment_counts(gs, player_idx);
+    ItlJudgments {
+        w0: counts.fantastic_plus,
+        w1: counts.fantastic,
+        w2: counts.excellent,
+        w3: counts.great,
+        w4: counts.decent,
+        w5: counts.way_off,
+        miss: counts.miss,
+        total_steps: counts.total_steps,
+        holds: counts.holds_held,
+        total_holds: counts.total_holds,
+        mines: counts.mines_hit,
+        total_mines: counts.total_mines,
+        rolls: counts.rolls_held,
+        total_rolls: counts.total_rolls,
+    }
+}
+
+fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -> ItlEvalState {
+    let used_cmod = matches!(
+        gs.player_profiles[player_idx].scroll_speed,
+        crate::game::scroll::ScrollSpeedSetting::CMod(_)
+    );
+    let Some(song_dir) = itl_song_dir(gs.song.as_ref()) else {
+        return ItlEvalState {
+            active: false,
+            eligible: false,
+            chart_no_cmod: false,
+            used_cmod,
+            reason_lines: Vec::new(),
+        };
+    };
+    if !itl_is_song(gs.song.as_ref(), Some(song_dir.as_str()), data) {
+        return ItlEvalState {
+            active: false,
+            eligible: false,
+            chart_no_cmod: false,
+            used_cmod,
+            reason_lines: Vec::new(),
+        };
+    }
+
+    let chart_hash = gs.charts[player_idx].short_hash.as_str();
+    let prev = data.hash_map.get(chart_hash);
+    let chart_no_cmod = itl_chart_no_cmod(gs.song.as_ref(), prev);
+    let gs_valid = groovestats_eval_state_from_gameplay(gs, player_idx);
+    let rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
+        gs.music_rate
+    } else {
+        1.0
+    };
+    let remove_mask =
+        profile::normalize_remove_mask(gs.player_profiles[player_idx].remove_active_mask);
+    let mines_enabled = (remove_mask & (1u8 << 1)) == 0;
+    let passed = !gs.players[player_idx].is_failing && gs.song_completed_naturally;
+
+    let mut reason_lines = Vec::with_capacity(4);
+    if !gs_valid.valid {
+        if gs_valid.reason_lines.is_empty() {
+            reason_lines.push("Score is not valid for GrooveStats.".to_string());
+        } else {
+            reason_lines.extend(gs_valid.reason_lines);
+        }
+    }
+    if (rate - 1.0).abs() > 0.0001 {
+        reason_lines.push("ITL requires 1.00x music rate.".to_string());
+    }
+    if !mines_enabled {
+        reason_lines.push("ITL requires mines to be enabled.".to_string());
+    }
+    if !passed {
+        reason_lines.push("ITL only saves passing scores.".to_string());
+    }
+    if chart_no_cmod && used_cmod {
+        reason_lines.push("This ITL chart does not allow CMod.".to_string());
+    }
+
+    ItlEvalState {
+        active: true,
+        eligible: reason_lines.is_empty(),
+        chart_no_cmod,
+        used_cmod,
+        reason_lines,
+    }
+}
+
+pub fn itl_eval_state_from_gameplay(gs: &gameplay::State, player_idx: usize) -> ItlEvalState {
+    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) {
+        return ItlEvalState::default();
+    }
+    let side = gameplay_side_for_player(gs, player_idx);
+    let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+        return ItlEvalState::default();
+    };
+    let data = read_itl_file(profile_id.as_str());
+    itl_eval_state(gs, player_idx, &data)
+}
+
+fn groovestats_submit_invalid_reason(
+    chart: &crate::game::chart::ChartData,
+    song_has_lua: bool,
+    profile: &Profile,
+    music_rate: f32,
+) -> Option<String> {
+    if song_has_lua {
+        return Some("simfile relies on lua".to_string());
+    }
+    groovestats_eval_state(chart, profile, music_rate, false, false)
+        .reason_lines
+        .into_iter()
+        .next()
+}
+
+#[inline(always)]
+fn groovestats_judgment_counts(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> GrooveStatsJudgmentCounts {
+    let player = &gs.players[player_idx];
+    let windows = gs.live_window_counts[player_idx];
+    GrooveStatsJudgmentCounts {
+        fantastic_plus: windows.w0,
+        fantastic: windows.w1,
+        excellent: windows.w2,
+        great: windows.w3,
+        decent: windows.w4,
+        way_off: windows.w5,
+        miss: windows.miss,
+        total_steps: gs.total_steps[player_idx],
+        holds_held: player.holds_held,
+        total_holds: gs.holds_total[player_idx],
+        mines_hit: player.mines_hit,
+        total_mines: gs.mines_total[player_idx],
+        rolls_held: player.rolls_held,
+        total_rolls: gs.rolls_total[player_idx],
+    }
+}
+
+#[inline(always)]
+fn groovestats_rescore_add_target(counts: &mut GrooveStatsRescoreCounts, j: &judgment::Judgment) {
+    if matches!(j.window, Some(judgment::TimingWindow::W0)) {
+        counts.fantastic_plus = counts.fantastic_plus.saturating_add(1);
+        return;
+    }
+    match j.grade {
+        judgment::JudgeGrade::Fantastic => counts.fantastic = counts.fantastic.saturating_add(1),
+        judgment::JudgeGrade::Excellent => counts.excellent = counts.excellent.saturating_add(1),
+        judgment::JudgeGrade::Great => counts.great = counts.great.saturating_add(1),
+        judgment::JudgeGrade::Decent => counts.decent = counts.decent.saturating_add(1),
+        judgment::JudgeGrade::WayOff => counts.way_off = counts.way_off.saturating_add(1),
+        judgment::JudgeGrade::Miss => {}
+    }
+}
+
+fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> GrooveStatsRescoreCounts {
+    let (start, end) = gs.note_ranges[player_idx];
+    let mut counts = GrooveStatsRescoreCounts::default();
+    for note in &gs.notes[start..end] {
+        let Some(final_result) = note.result.as_ref() else {
+            continue;
+        };
+        let Some(early_result) = note.early_result.as_ref() else {
+            continue;
+        };
+        groovestats_rescore_add_target(&mut counts, final_result);
+        groovestats_rescore_add_target(&mut counts, early_result);
+    }
+    counts
+}
+
+fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String {
+    let profile = &gs.player_profiles[player_idx];
+    let counts = groovestats_judgment_counts(gs, player_idx);
+    let mut parts: Vec<String> = Vec::with_capacity(10);
+
+    if profile.show_fa_plus_window {
+        let (start, end) = gs.note_ranges[player_idx];
+        let ex = judgment::calculate_ex_score_from_notes(
+            &gs.notes[start..end],
+            &gs.note_time_cache[start..end],
+            &gs.hold_end_time_cache[start..end],
+            gs.total_steps[player_idx],
+            gs.holds_total[player_idx],
+            gs.rolls_total[player_idx],
+            gs.mines_total[player_idx],
+            gs.players[player_idx].fail_time,
+            false,
+        );
+        parts.push("FA+".to_string());
+        parts.push(format!("{ex:.2}EX"));
+    }
+
+    let rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
+        gs.music_rate
+    } else {
+        1.0
+    };
+    if (rate - 1.0).abs() > 0.0001 {
+        parts.push(format!("{}x Rate", compact_f32_text(rate)));
+    }
+
+    for (count, suffix) in [
+        (counts.fantastic, "w"),
+        (counts.excellent, "e"),
+        (counts.great, "g"),
+        (counts.decent, "d"),
+        (counts.way_off, "wo"),
+        (counts.miss, "m"),
+    ] {
+        if count != 0 {
+            parts.push(format!("{count}{suffix}"));
+        }
+    }
+
+    if let crate::game::scroll::ScrollSpeedSetting::CMod(value) = profile.scroll_speed {
+        parts.push(format!("C{}", compact_f32_text(value)));
+    }
+
+    if parts.is_empty() {
+        GROOVESTATS_COMMENT_PREFIX.to_string()
+    } else {
+        format!("{GROOVESTATS_COMMENT_PREFIX}, {}", parts.join(", "))
+    }
+}
+
+fn groovestats_payload_for_player(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> Option<GrooveStatsSubmitPlayerPayload> {
+    if player_idx >= gs.num_players {
+        return None;
+    }
+    let score_percent = judgment::calculate_itg_score_percent_from_counts(
+        &gs.players[player_idx].scoring_counts,
+        gs.players[player_idx].holds_held_for_score,
+        gs.players[player_idx].rolls_held_for_score,
+        gs.players[player_idx].mines_hit_for_score,
+        gs.possible_grade_points[player_idx],
+    );
+    let score = (score_percent * 10000.0).round().clamp(0.0, 10000.0) as u32;
+    let rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
+        (gs.music_rate * 100.0).round().clamp(0.0, u32::MAX as f32) as u32
+    } else {
+        100
+    };
+
+    Some(GrooveStatsSubmitPlayerPayload {
+        rate,
+        score,
+        judgment_counts: groovestats_judgment_counts(gs, player_idx),
+        rescore_counts: groovestats_rescore_counts(gs, player_idx),
+        used_cmod: matches!(
+            gs.player_profiles[player_idx].scroll_speed,
+            crate::game::scroll::ScrollSpeedSetting::CMod(_)
+        ),
+        comment: groovestats_comment_string(gs, player_idx),
+    })
+}
+
+fn log_body_snippet(text: &str) -> String {
+    const MAX_LOG_CHARS: usize = 256;
+    if text.is_empty() {
+        return String::new();
+    }
+    let mut out = String::with_capacity(text.len().min(MAX_LOG_CHARS));
+    for ch in text.chars().take(MAX_LOG_CHARS) {
+        out.push(ch);
+    }
+    out
+}
+
+fn submit_groovestats_request(
+    job: &GrooveStatsSubmitRequest,
+) -> Result<GrooveStatsSubmitApiResponse, GrooveStatsSubmitError> {
+    let service_name = network::groovestats_service_name();
+    let mut request = network::get_agent()
+        .post(&groovestats_submit_url())
+        .header("Content-Type", "application/json");
+    for (name, value) in &job.headers {
+        request = request.header(name, value);
+    }
+    for (name, value) in &job.query {
+        request = request.query(name, value);
+    }
+
+    let response = request.send_json(&job.body).map_err(|e| {
+        let message = format!("network error: {e}");
+        let lower = message.to_ascii_lowercase();
+        GrooveStatsSubmitError {
+            status: if lower.contains("timeout") || lower.contains("timed out") {
+                GrooveStatsSubmitUiStatus::TimedOut
+            } else {
+                GrooveStatsSubmitUiStatus::SubmitFailed
+            },
+            message,
+        }
+    })?;
+
+    let status = response.status();
+    let status_code = status.as_u16();
+    let body = response.into_body().read_to_string().unwrap_or_default();
+    if !status.is_success() {
+        let snippet = log_body_snippet(body.as_str());
+        let status_kind = if status_code == 408 || status_code == 504 {
+            GrooveStatsSubmitUiStatus::TimedOut
+        } else {
+            GrooveStatsSubmitUiStatus::SubmitFailed
+        };
+        return Err(GrooveStatsSubmitError {
+            status: status_kind,
+            message: if snippet.is_empty() {
+                format!("{service_name} submit returned HTTP {status_code}")
+            } else {
+                format!("{service_name} submit returned HTTP {status_code}: {snippet}")
+            },
+        });
+    }
+
+    let decoded: GrooveStatsSubmitApiResponse =
+        serde_json::from_str(body.as_str()).map_err(|error| GrooveStatsSubmitError {
+            status: GrooveStatsSubmitUiStatus::SubmitFailed,
+            message: format!(
+                "failed to parse {service_name} submit response: {}",
+                log_body_snippet(error.to_string().as_str())
+            ),
+        })?;
+    if !decoded.error.trim().is_empty() {
+        return Err(GrooveStatsSubmitError {
+            status: GrooveStatsSubmitUiStatus::SubmitFailed,
+            message: format!("{service_name} submit error: {}", decoded.error.trim()),
+        });
+    }
+
+    let snippet = log_body_snippet(body.as_str());
+    if !snippet.is_empty() {
+        debug!("{service_name} submit success body='{}'", snippet.as_str());
+    } else {
+        debug!("{service_name} submit success");
+    }
+    Ok(decoded)
+}
+
+pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
+    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        let side = gameplay_side_for_player(gs, player_idx);
+        groovestats_reset_submit_ui_status(side, gs.charts[player_idx].short_hash.as_str());
+        groovestats_reset_submit_event_ui(side, gs.charts[player_idx].short_hash.as_str());
+    }
+
+    let cfg = crate::config::get();
+    if !cfg.enable_groovestats || gs.num_players == 0 {
+        return;
+    }
+    if gs.autoplay_used {
+        debug!(
+            "Skipping {} submit: autoplay/replay was used.",
+            network::groovestats_service_name()
+        );
+        return;
+    }
+    if gs.course_display_totals.is_some() {
+        debug!(
+            "Skipping {} submit: course mode is unsupported by the old submit API.",
+            network::groovestats_service_name()
+        );
+        return;
+    }
+    if gs.song.has_lua {
+        debug!(
+            "Skipping {} submit: simfile relies on lua.",
+            network::groovestats_service_name()
+        );
+        return;
+    }
+
+    let network::ConnectionStatus::Connected(services) = network::get_status() else {
+        debug!(
+            "Skipping {} submit: service connection is not ready.",
+            network::groovestats_service_name()
+        );
+        return;
+    };
+    if !services.auto_submit {
+        debug!(
+            "Skipping {} submit: auto-submit is not enabled by the service.",
+            network::groovestats_service_name()
+        );
+        return;
+    }
+
+    let mut body = JsonMap::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
+    let mut headers = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
+    let mut query = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS) + 1);
+    let mut players = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
+    query.push((
+        "maxLeaderboardResults".to_string(),
+        GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
+    ));
+
+    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        let side = gameplay_side_for_player(gs, player_idx);
+        let slot = if side == profile::PlayerSide::P1 {
+            1
+        } else {
+            2
+        };
+        let profile = &gs.player_profiles[player_idx];
+        let chart = gs.charts[player_idx].as_ref();
+
+        if let Some(reason) =
+            groovestats_submit_invalid_reason(chart, gs.song.has_lua, profile, gs.music_rate)
+        {
+            debug!(
+                "Skipping {} submit for {:?} ({}): {}.",
+                network::groovestats_service_name(),
+                side,
+                chart.short_hash,
+                reason
+            );
+            continue;
+        }
+        if !profile.groovestats_is_pad_player {
+            debug!(
+                "Skipping {} submit for {:?} ({}): profile is not marked as a pad player.",
+                network::groovestats_service_name(),
+                side,
+                chart.short_hash
+            );
+            continue;
+        }
+        if profile.groovestats_api_key.trim().is_empty() {
+            continue;
+        }
+        let passed = !gs.players[player_idx].is_failing && gs.song_completed_naturally;
+        if !passed {
+            debug!(
+                "Skipping {} submit for {:?} ({}): song was not passed.",
+                network::groovestats_service_name(),
+                side,
+                chart.short_hash
+            );
+            continue;
+        }
+
+        let Some(payload) = groovestats_payload_for_player(gs, player_idx) else {
+            continue;
+        };
+        let token = groovestats_next_submit_ui_token();
+        groovestats_set_submit_ui_status(
+            side,
+            chart.short_hash.as_str(),
+            token,
+            GrooveStatsSubmitUiStatus::Submitting,
+        );
+        groovestats_arm_submit_event_ui(side, chart.short_hash.as_str(), token);
+        players.push(GrooveStatsSubmitPlayerJob {
+            side,
+            slot,
+            chart_hash: chart.short_hash.clone(),
+            username: profile.groovestats_username.trim().to_string(),
+            profile_name: profile.display_name.clone(),
+            profile_id: profile::active_local_profile_id_for_side(side),
+            token,
+            itl_score_hundredths: Some(current_itl_score_hundredths(gs, player_idx)),
+        });
+        headers.push((
+            format!("x-api-key-player-{slot}"),
+            profile.groovestats_api_key.trim().to_string(),
+        ));
+        query.push((format!("chartHashP{slot}"), chart.short_hash.clone()));
+        body.insert(
+            format!("player{slot}"),
+            serde_json::to_value(payload).expect("serialize GrooveStats submit payload"),
+        );
+    }
+
+    if players.is_empty() {
+        return;
+    }
+
+    let job = GrooveStatsSubmitRequest {
+        players,
+        headers,
+        query,
+        body: JsonValue::Object(body),
+    };
+    std::thread::spawn(move || match submit_groovestats_request(&job) {
+        Ok(response) => {
+            for player in &job.players {
+                let Some(player_response) = response.player_for_slot(player.slot) else {
+                    groovestats_update_submit_ui_status_if_token(
+                        player.side,
+                        player.chart_hash.as_str(),
+                        player.token,
+                        GrooveStatsSubmitUiStatus::SubmitFailed,
+                    );
+                    warn!(
+                        "{} submit response omitted player{} for {:?} ({}).",
+                        network::groovestats_service_name(),
+                        player.slot,
+                        player.side,
+                        player.chart_hash
+                    );
+                    continue;
+                };
+                if !player_response.chart_hash.trim().is_empty()
+                    && !player_response
+                        .chart_hash
+                        .eq_ignore_ascii_case(player.chart_hash.as_str())
+                {
+                    groovestats_update_submit_ui_status_if_token(
+                        player.side,
+                        player.chart_hash.as_str(),
+                        player.token,
+                        GrooveStatsSubmitUiStatus::SubmitFailed,
+                    );
+                    warn!(
+                        "{} submit response hash mismatch for {:?}: expected {}, got {}.",
+                        network::groovestats_service_name(),
+                        player.side,
+                        player.chart_hash,
+                        player_response.chart_hash
+                    );
+                    continue;
+                }
+
+                groovestats_update_submit_ui_status_if_token(
+                    player.side,
+                    player.chart_hash.as_str(),
+                    player.token,
+                    GrooveStatsSubmitUiStatus::Submitted,
+                );
+                groovestats_update_submit_event_ui_if_token(
+                    player.side,
+                    player.chart_hash.as_str(),
+                    player.token,
+                    itl_progress_from_submit(player, player_response),
+                );
+                if let Some(profile_id) = player.profile_id.as_deref()
+                    && !player.username.is_empty()
+                    && !player_response.gs_leaderboard.is_empty()
+                {
+                    cache_gs_score_from_leaderboard(
+                        profile_id,
+                        player.username.as_str(),
+                        player.chart_hash.as_str(),
+                        player_response.gs_leaderboard.as_slice(),
+                    );
+                }
+                handle_submit_player_unlocks(player, player_response);
+                debug!(
+                    "{} submit succeeded for {:?} ({}) result='{}'",
+                    network::groovestats_service_name(),
+                    player.side,
+                    player.chart_hash,
+                    player_response.result
+                );
+            }
+        }
+        Err(err) => {
+            for player in &job.players {
+                groovestats_update_submit_ui_status_if_token(
+                    player.side,
+                    player.chart_hash.as_str(),
+                    player.token,
+                    err.status,
+                );
+            }
+            warn!("{}", err.message);
+        }
+    });
+}
+
 const ARROWCLOUD_BODY_VERSION: &str = "1.4";
 const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
 const ARROWCLOUD_ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -2133,18 +4021,6 @@ fn arrowcloud_submit_url(chart_hash: &str) -> Option<String> {
 }
 
 #[inline(always)]
-fn arrowcloud_log_snippet(text: &str) -> String {
-    const MAX_LOG_CHARS: usize = 256;
-    if text.is_empty() {
-        return String::new();
-    }
-    let mut out = String::with_capacity(text.len().min(MAX_LOG_CHARS));
-    for ch in text.chars().take(MAX_LOG_CHARS) {
-        out.push(ch);
-    }
-    out
-}
-
 fn submit_arrowcloud_payload(
     side: profile::PlayerSide,
     api_key: &str,
@@ -2187,7 +4063,7 @@ fn submit_arrowcloud_payload(
     let status_code = status.as_u16();
     let body = response.into_body().read_to_string().unwrap_or_default();
     if status.is_success() {
-        let snippet = arrowcloud_log_snippet(body.as_str());
+        let snippet = log_body_snippet(body.as_str());
         if !snippet.is_empty() {
             debug!(
                 "ArrowCloud submit success for {:?} ({}) status={} body='{}'",
@@ -2205,7 +4081,7 @@ fn submit_arrowcloud_payload(
         return Ok(());
     }
 
-    let snippet = arrowcloud_log_snippet(body.as_str());
+    let snippet = log_body_snippet(body.as_str());
     let status_kind = if status_code == 408 || status_code == 504 {
         ArrowCloudSubmitUiStatus::TimedOut
     } else {
@@ -2241,6 +4117,10 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
     }
     if gs.course_display_totals.is_some() && !cfg.autosubmit_course_scores_individually {
         debug!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
+        return;
+    }
+    if gs.song.has_lua {
+        debug!("Skipping ArrowCloud submit: simfile relies on lua.");
         return;
     }
     if let network::ArrowCloudConnectionStatus::Error(msg) = network::get_arrowcloud_status() {
@@ -2546,6 +4426,30 @@ where
         Some(U32OrString::U32(v)) => Ok(v),
         Some(U32OrString::F64(v)) => Ok(v.max(0.0).floor() as u32),
         Some(U32OrString::String(text)) => Ok(text.trim().parse::<u32>().unwrap_or(0)),
+        None => Ok(0),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum I32OrString {
+    I32(i32),
+    I64(i64),
+    F64(f64),
+    String(String),
+}
+
+fn de_i32_from_string_or_number<'de, D>(deserializer: D) -> Result<i32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<I32OrString>::deserialize(deserializer)? {
+        Some(I32OrString::I32(v)) => Ok(v),
+        Some(I32OrString::I64(v)) => Ok(v.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32),
+        Some(I32OrString::F64(v)) => {
+            Ok(v.clamp(f64::from(i32::MIN), f64::from(i32::MAX)).round() as i32)
+        }
+        Some(I32OrString::String(text)) => Ok(text.trim().parse::<i32>().unwrap_or(0)),
         None => Ok(0),
     }
 }
@@ -4133,8 +6037,13 @@ pub fn fetch_and_store_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::chart::{ChartData, StaminaCounts};
+    use crate::game::scroll::ScrollSpeedSetting;
+    use crate::game::song::SongData;
     use crate::game::timing::ScatterPoint;
+    use rssp::{TechCounts, stats::ArrowStats};
     use serde_json::{Value, json};
+    use std::path::PathBuf;
 
     fn sample_scatter(time_sec: f32, offset_ms: Option<f32>) -> ScatterPoint {
         ScatterPoint {
@@ -4144,6 +6053,69 @@ mod tests {
             is_stream: false,
             is_left_foot: false,
             miss_because_held: false,
+        }
+    }
+
+    fn sample_chart(chart_type: &str) -> ChartData {
+        ChartData {
+            chart_type: chart_type.to_string(),
+            difficulty: "Challenge".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 12,
+            step_artist: String::new(),
+            short_hash: "deadbeefcafebabe".to_string(),
+            stats: ArrowStats::default(),
+            tech_counts: TechCounts::default(),
+            mines_nonfake: 12,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: false,
+            has_significant_timing_changes: true,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 12,
+        }
+    }
+
+    fn sample_song(dir: &str) -> SongData {
+        SongData {
+            simfile_path: PathBuf::from(dir).join("song.ssc"),
+            title: "Song".to_string(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
         }
     }
 
@@ -4237,6 +6209,253 @@ mod tests {
         assert_eq!(
             value["_arrowCloudBodyVersion"],
             Value::String("1.4".to_string())
+        );
+    }
+
+    #[test]
+    fn groovestats_payload_serializes_old_api_shape() {
+        let payload = GrooveStatsSubmitPlayerPayload {
+            rate: 150,
+            score: 9_975,
+            judgment_counts: GrooveStatsJudgmentCounts {
+                fantastic_plus: 7,
+                fantastic: 12,
+                excellent: 18,
+                great: 4,
+                decent: 1,
+                way_off: 0,
+                miss: 2,
+                total_steps: 213,
+                holds_held: 5,
+                total_holds: 6,
+                mines_hit: 1,
+                total_mines: 8,
+                rolls_held: 2,
+                total_rolls: 3,
+            },
+            rescore_counts: GrooveStatsRescoreCounts {
+                fantastic_plus: 1,
+                fantastic: 2,
+                excellent: 3,
+                great: 4,
+                decent: 5,
+                way_off: 6,
+            },
+            used_cmod: true,
+            comment: "[DS], FA+, 99.50EX, 2w, 1m, C650".to_string(),
+        };
+
+        let value = serde_json::to_value(&payload).expect("serialize GrooveStats submit payload");
+        assert_eq!(value["rate"], json!(150));
+        assert_eq!(value["score"], json!(9_975));
+        assert_eq!(value["judgmentCounts"]["fantasticPlus"], json!(7));
+        assert_eq!(value["judgmentCounts"]["totalMines"], json!(8));
+        assert_eq!(value["rescoreCounts"]["wayOff"], json!(6));
+        assert_eq!(value["usedCmod"], json!(true));
+        assert_eq!(value["comment"], json!("[DS], FA+, 99.50EX, 2w, 1m, C650"));
+    }
+
+    #[test]
+    fn groovestats_comment_counts_ignore_ds_prefix() {
+        let counts = parse_comment_counts("[DS], 15e, 2g, 2m");
+        assert_eq!(counts.e, 15);
+        assert_eq!(counts.g, 2);
+        assert_eq!(counts.m, 2);
+    }
+
+    #[test]
+    fn groovestats_lamp_judge_count_ignores_ds_prefix() {
+        assert_eq!(compute_lamp_judge_count(Some(2), Some("[DS], 5e")), Some(5));
+        assert_eq!(compute_lamp_judge_count(Some(3), Some("[DS], 2g")), Some(2));
+    }
+
+    #[test]
+    fn groovestats_validity_allows_cmod_and_no_mines() {
+        let mut profile = Profile::default();
+        profile.scroll_speed = ScrollSpeedSetting::CMod(650.0);
+        profile.remove_active_mask = 1u8 << 1;
+
+        assert_eq!(
+            groovestats_submit_invalid_reason(&sample_chart("dance-single"), false, &profile, 1.5),
+            None
+        );
+    }
+
+    #[test]
+    fn groovestats_validity_rejects_custom_window_and_solo() {
+        let mut profile = Profile::default();
+        profile.custom_fantastic_window = true;
+
+        assert_eq!(
+            groovestats_submit_invalid_reason(&sample_chart("dance-single"), false, &profile, 1.0),
+            Some("Metrics or preferences are incorrect.".to_string())
+        );
+        assert_eq!(
+            groovestats_submit_invalid_reason(
+                &sample_chart("dance-solo"),
+                false,
+                &Profile::default(),
+                1.0
+            ),
+            Some("GrooveStats does not support dance-solo charts.".to_string())
+        );
+    }
+
+    #[test]
+    fn groovestats_validity_rejects_lua_simfiles() {
+        assert_eq!(
+            groovestats_submit_invalid_reason(
+                &sample_chart("dance-single"),
+                true,
+                &Profile::default(),
+                1.0,
+            ),
+            Some("simfile relies on lua".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_itl_points_reads_chart_name_values() {
+        assert_eq!(
+            parse_itl_points("7500 (P) + 12000 (S)"),
+            Some((7500, 12000))
+        );
+        assert_eq!(parse_itl_points("No points here"), None);
+    }
+
+    #[test]
+    fn itl_points_curve_keeps_full_ex_exact() {
+        assert_eq!(itl_points_for_song(7500, 12000, 100.0), 19_500);
+    }
+
+    #[test]
+    fn itl_judgments_compare_from_top_window() {
+        let prev = ItlJudgments {
+            w0: 10,
+            w1: 20,
+            ..ItlJudgments::default()
+        };
+        let better = ItlJudgments {
+            w0: 11,
+            w1: 19,
+            ..ItlJudgments::default()
+        };
+        let worse = ItlJudgments {
+            w0: 9,
+            w1: 25,
+            ..ItlJudgments::default()
+        };
+
+        assert!(itl_judgments_better(&better, &prev));
+        assert!(!itl_judgments_better(&worse, &prev));
+    }
+
+    #[test]
+    fn itl_file_reads_simply_love_and_legacy_ex_values() {
+        let sl: ItlFileData = serde_json::from_value(json!({
+            "hashMap": {
+                "sl": { "ex": 9437 }
+            }
+        }))
+        .unwrap();
+        let legacy: ItlFileData = serde_json::from_value(json!({
+            "hashMap": {
+                "legacy": { "ex": 94.37 }
+            }
+        }))
+        .unwrap();
+
+        assert_eq!(sl.hash_map["sl"].ex, 9437);
+        assert_eq!(legacy.hash_map["legacy"].ex, 9437);
+    }
+
+    #[test]
+    fn itl_score_lookup_uses_song_path_map() {
+        let song = sample_song("/Songs/ITL Online 2026/Example");
+        let mut data = ItlFileData::default();
+        data.path_map.insert(
+            "/Songs/ITL Online 2026/Example".to_string(),
+            "deadbeefcafebabe".to_string(),
+        );
+        data.hash_map.insert(
+            "deadbeefcafebabe".to_string(),
+            ItlHashEntry {
+                ex: 9754,
+                clear_type: 4,
+                points: 12345,
+                ..ItlHashEntry::default()
+            },
+        );
+
+        assert_eq!(
+            itl_score_for_song(&song, &data),
+            Some(CachedItlScore {
+                ex_hundredths: 9754,
+                clear_type: 4,
+                points: 12345,
+            })
+        );
+    }
+
+    #[test]
+    fn itl_chart_no_cmod_uses_subtitle_fallback() {
+        let mut song = sample_song("/Songs/ITL Online 2026/Example");
+        song.subtitle = "(NO CMOD)".to_string();
+
+        assert!(itl_chart_no_cmod(&song, None));
+    }
+
+    #[test]
+    fn itl_is_song_accepts_cached_path_map_without_group_lookup() {
+        let song = sample_song("/Songs/Custom Pack/Example");
+        let mut data = ItlFileData::default();
+        data.path_map.insert(
+            "/Songs/Custom Pack/Example".to_string(),
+            "deadbeefcafebabe".to_string(),
+        );
+
+        assert!(itl_is_song(
+            &song,
+            Some("/Songs/Custom Pack/Example"),
+            &data
+        ));
+    }
+
+    #[test]
+    fn itl_totals_split_song_and_ex_points() {
+        let mut data = ItlFileData::default();
+        data.hash_map.insert(
+            "a".to_string(),
+            ItlHashEntry {
+                points: 100,
+                passing_points: 60,
+                steps_type: "single".to_string(),
+                ..ItlHashEntry::default()
+            },
+        );
+        data.hash_map.insert(
+            "b".to_string(),
+            ItlHashEntry {
+                points: 50,
+                passing_points: 20,
+                steps_type: "double".to_string(),
+                ..ItlHashEntry::default()
+            },
+        );
+
+        itl_rebuild_song_ranks(&mut data);
+
+        assert_eq!(data.points, vec![100, 50]);
+        assert_eq!(data.hash_map["a"].rank, Some(1));
+        assert_eq!(data.hash_map["b"].rank, Some(1));
+        assert_eq!(
+            itl_point_totals(&data),
+            ItlPointTotals {
+                ranking_points: 150,
+                song_points: 80,
+                ex_points: 70,
+                total_points: 150,
+            }
         );
     }
 

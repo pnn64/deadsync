@@ -1,7 +1,8 @@
 use crate::act;
 use crate::assets::{self, AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{
-    self, BreakdownStyle, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SyncGraphMode,
+    self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SyncGraphMode,
 };
 use crate::core::audio;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
@@ -11,6 +12,7 @@ use crate::core::space::{
     widescale,
 };
 use crate::game::chart::ChartData;
+use crate::game::known_packs;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
@@ -836,6 +838,7 @@ pub struct State {
     pending_replay: Option<sort_menu::ReplayStartPayload>,
     sort_menu: sort_menu::State,
     leaderboard: sort_menu::LeaderboardOverlayState,
+    downloads_overlay: sort_menu::DownloadsOverlayState,
     sort_mode: WheelSortMode,
     all_entries: Vec<MusicWheelEntry>,
     group_entries: Vec<MusicWheelEntry>,
@@ -905,6 +908,86 @@ pub struct State {
     meter_pack_song_counts: HashMap<String, usize>,
     popularity_pack_song_counts: HashMap<String, usize>,
     recent_pack_song_counts: HashMap<String, usize>,
+    new_pack_names: HashSet<String>,
+}
+
+#[inline(always)]
+fn cached_score_exists(score: scores::CachedScore) -> bool {
+    score.grade != scores::Grade::Failed || score.score_percent > 0.0
+}
+
+fn song_has_cached_score(song: &SongData) -> bool {
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        for chart in &song.charts {
+            if scores::get_cached_score_for_side(&chart.short_hash, side)
+                .is_some_and(cached_score_exists)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn joined_local_profile_ids() -> Vec<String> {
+    let mut profile_ids = Vec::with_capacity(2);
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+            continue;
+        };
+        if !profile_ids.iter().any(|id| id == &profile_id) {
+            profile_ids.push(profile_id);
+        }
+    }
+    profile_ids
+}
+
+fn sync_new_pack_names(
+    profile_ids: &[String],
+    scanned_pack_names: Vec<String>,
+    scored_pack_names: &HashSet<String>,
+    mode: NewPackMode,
+) -> HashSet<String> {
+    match mode {
+        NewPackMode::Disabled => {
+            known_packs::mark_packs_known(
+                profile_ids,
+                scanned_pack_names.iter().map(String::as_str),
+            );
+            HashSet::new()
+        }
+        NewPackMode::OpenPack => known_packs::sync_known_packs(profile_ids, &scanned_pack_names),
+        NewPackMode::HasScore => scanned_pack_names
+            .into_iter()
+            .filter(|name| !scored_pack_names.contains(name.as_str()))
+            .collect(),
+    }
+}
+
+fn maybe_clear_selected_pack_on_score(state: &mut State, mode: NewPackMode) {
+    if mode != NewPackMode::HasScore
+        || state.sort_mode != WheelSortMode::Group
+        || state.new_pack_names.is_empty()
+    {
+        return;
+    }
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return;
+    };
+    let song = song.clone();
+    if !song_has_cached_score(&song) {
+        return;
+    }
+    let Some(pack_name) = group_name_for_song(&state.entries, &song) else {
+        return;
+    };
+    state.new_pack_names.remove(&pack_name);
 }
 
 pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usize) -> bool {
@@ -1808,11 +1891,15 @@ pub fn init() -> State {
     let target_chart_type = profile::get_session_play_style().chart_type();
     let total_packs = song_cache.len();
     let total_songs: usize = song_cache.iter().map(|p| p.songs.len()).sum();
+    let new_pack_mode = config::get().select_music_new_pack_mode;
+    let clear_new_packs_on_score = new_pack_mode == NewPackMode::HasScore;
+    let joined_profile_ids = joined_local_profile_ids();
 
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
     let mut pack_song_counts = HashMap::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
     let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
+    let mut scored_pack_names = HashSet::new();
 
     let profile_data = profile::get();
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
@@ -1834,6 +1921,7 @@ pub fn init() -> State {
         let mut pack_name: Option<String> = None;
         let mut pack_song_count = 0usize;
         let mut pack_total_seconds = 0.0_f64;
+        let mut pack_has_cached_score = false;
 
         for song in &pack.songs {
             let mut has_target_chart_type = false;
@@ -1853,6 +1941,9 @@ pub fn init() -> State {
             }
             if has_edit {
                 song_has_edit_ptrs.insert(Arc::as_ptr(song) as usize);
+            }
+            if clear_new_packs_on_score && !pack_has_cached_score && song_has_cached_score(song) {
+                pack_has_cached_score = true;
             }
 
             let pack_name = pack_name.get_or_insert_with(|| {
@@ -1891,6 +1982,9 @@ pub fn init() -> State {
 
         if let Some(name) = pack_name {
             // Compute cache for get_actors (HOT PATH OPTIMIZATION)
+            if pack_has_cached_score {
+                scored_pack_names.insert(name.clone());
+            }
             pack_song_counts.insert(name, pack_song_count);
             pack_total_seconds_by_index[i] = pack_total_seconds;
         }
@@ -1905,6 +1999,12 @@ pub fn init() -> State {
     let (popularity_entries, popularity_pack_song_counts) =
         build_popularity_grouped_entries(&all_entries);
     let (recent_entries, recent_pack_song_counts) = build_recent_grouped_entries(&all_entries);
+    let new_pack_names = sync_new_pack_names(
+        &joined_profile_ids,
+        pack_song_counts.keys().cloned().collect(),
+        &scored_pack_names,
+        new_pack_mode,
+    );
 
     let mut state = State {
         all_entries: all_entries.clone(),
@@ -1938,6 +2038,7 @@ pub fn init() -> State {
         pending_replay: None,
         sort_menu: sort_menu::State::Hidden,
         leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
+        downloads_overlay: sort_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
@@ -2007,6 +2108,7 @@ pub fn init() -> State {
         meter_pack_song_counts,
         popularity_pack_song_counts,
         recent_pack_song_counts,
+        new_pack_names,
     };
 
     let built_entries_len = state.all_entries.len();
@@ -2117,6 +2219,7 @@ pub fn init_placeholder() -> State {
         pending_replay: None,
         sort_menu: sort_menu::State::Hidden,
         leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
+        downloads_overlay: sort_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: None,
         bg: heart_bg::State::new(),
@@ -2186,6 +2289,7 @@ pub fn init_placeholder() -> State {
         meter_pack_song_counts: HashMap::new(),
         popularity_pack_song_counts: HashMap::new(),
         recent_pack_song_counts: HashMap::new(),
+        new_pack_names: HashSet::new(),
     }
 }
 
@@ -2461,11 +2565,12 @@ fn show_sorts_submenu(state: &mut State) {
 }
 
 #[inline(always)]
-fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
+fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item> {
     if page == sort_menu::Page::Sorts {
-        return &sort_menu::ITEMS_SORTS;
+        return sort_menu::ITEMS_SORTS.to_vec();
     }
     let replays_enabled = config::get().machine_enable_replays;
+    let downloads_enabled = crate::game::downloads::sort_menu_available();
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
@@ -2473,33 +2578,28 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
     let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
-    match (
-        profile::get_session_play_style(),
-        single_player_joined,
-        has_song_selected,
-    ) {
-        (profile::PlayStyle::Single, true, true) if replays_enabled => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE
-        }
-        (profile::PlayStyle::Single, true, true) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE_NO_REPLAY
-        }
-        (profile::PlayStyle::Single, true, false) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE[..6]
-        }
-        (profile::PlayStyle::Double, true, true) if replays_enabled => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE
-        }
-        (profile::PlayStyle::Double, true, true) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE_NO_REPLAY
-        }
-        (profile::PlayStyle::Double, true, false) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE[..6]
-        }
-        (_, _, true) if replays_enabled => &sort_menu::ITEMS_MAIN,
-        (_, _, true) => &sort_menu::ITEMS_MAIN_NO_REPLAY,
-        (_, _, false) => &sort_menu::ITEMS_MAIN[..5],
+    let mut items = Vec::with_capacity(10);
+    items.push(sort_menu::ITEM_CATEGORY_SORTS);
+    match (profile::get_session_play_style(), single_player_joined) {
+        (profile::PlayStyle::Single, true) => items.push(sort_menu::ITEM_SWITCH_TO_DOUBLE),
+        (profile::PlayStyle::Double, true) => items.push(sort_menu::ITEM_SWITCH_TO_SINGLE),
+        _ => {}
     }
+    items.push(sort_menu::ITEM_TEST_INPUT);
+    items.push(sort_menu::ITEM_SONG_SEARCH);
+    items.push(sort_menu::ITEM_SWITCH_PROFILE);
+    items.push(sort_menu::ITEM_RELOAD_SONGS_COURSES);
+    if downloads_enabled {
+        items.push(sort_menu::ITEM_VIEW_DOWNLOADS);
+    }
+    if has_song_selected {
+        items.push(sort_menu::ITEM_SYNC_SONG);
+        if replays_enabled {
+            items.push(sort_menu::ITEM_PLAY_REPLAY);
+        }
+        items.push(sort_menu::ITEM_SHOW_LEADERBOARD);
+    }
+    items
 }
 
 #[inline(always)]
@@ -2507,6 +2607,7 @@ fn show_test_input_overlay(state: &mut State) {
     clear_preview(state);
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
@@ -2527,6 +2628,7 @@ fn start_song_search_prompt(state: &mut State) {
     clear_preview(state);
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
@@ -2544,6 +2646,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     hide_test_input_overlay(state);
@@ -3960,12 +4063,23 @@ fn show_leaderboard_overlay(state: &mut State) {
     let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
     if let Some(overlay) = sort_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
         state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+        state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
         state.sync_overlay = SyncOverlayState::Hidden;
         state.profile_switch_overlay = None;
         hide_test_input_overlay(state);
         state.leaderboard = overlay;
         clear_preview(state);
     }
+}
+
+fn show_downloads_overlay(state: &mut State) {
+    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
+    state.profile_switch_overlay = None;
+    hide_test_input_overlay(state);
+    state.downloads_overlay = sort_menu::show_downloads_overlay();
+    clear_preview(state);
 }
 
 fn show_replay_overlay(state: &mut State) {
@@ -3984,6 +4098,7 @@ fn show_replay_overlay(state: &mut State) {
         return;
     }
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
@@ -4128,6 +4243,7 @@ fn show_sync_overlay(state: &mut State) {
     clear_preview(state);
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
@@ -4361,6 +4477,20 @@ fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
     ScreenAction::None
 }
 
+fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    match sort_menu::handle_downloads_input(&mut state.downloads_overlay, ev) {
+        sort_menu::DownloadsInputOutcome::ChangedSelection => {
+            audio::play_sfx("assets/sounds/change.ogg");
+        }
+        sort_menu::DownloadsInputOutcome::Closed => {
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
+        sort_menu::DownloadsInputOutcome::None => {}
+    }
+
+    ScreenAction::None
+}
+
 fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match sort_menu::handle_replay_input(&mut state.replay_overlay, ev) {
         sort_menu::ReplayInputOutcome::ChangedSelection => {
@@ -4509,6 +4639,11 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
         sort_menu::Action::ReloadSongsCourses => {
             hide_sort_menu(state);
             start_reload_songs_and_courses(state);
+            ScreenAction::None
+        }
+        sort_menu::Action::ViewDownloads => {
+            hide_sort_menu(state);
+            show_downloads_overlay(state);
             ScreenAction::None
         }
         sort_menu::Action::SyncSong => {
@@ -4987,6 +5122,12 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
         Some(MusicWheelEntry::PackHeader { name, .. }) => {
             audio::play_sfx("assets/sounds/expand.ogg");
             let target = name.clone();
+            if config::get().select_music_new_pack_mode == NewPackMode::OpenPack
+                && state.new_pack_names.remove(&target)
+            {
+                let profile_ids = joined_local_profile_ids();
+                known_packs::mark_pack_known(&profile_ids, &target);
+            }
             if state.expanded_pack_name.as_ref() == Some(&target) {
                 state.expanded_pack_name = None;
             } else {
@@ -5169,6 +5310,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         sort_menu::LeaderboardOverlayState::Hidden
     ) {
         return handle_leaderboard_input(state, ev);
+    }
+
+    if !matches!(
+        state.downloads_overlay,
+        sort_menu::DownloadsOverlayState::Hidden
+    ) {
+        return handle_downloads_overlay_input(state, ev);
     }
 
     if state.sort_menu != sort_menu::State::Hidden {
@@ -5356,6 +5504,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     sort_menu::update_leaderboard_overlay(&mut state.leaderboard, dt);
+    sort_menu::update_downloads_overlay(&mut state.downloads_overlay, dt);
 
     state.time_since_selection_change += dt;
     if dt > 0.0 {
@@ -5454,6 +5603,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     let cfg = config::get();
+    maybe_clear_selected_pack_on_score(state, cfg.select_music_new_pack_mode);
 
     // Keep banner/CDTitle aligned to the restored wheel selection even while
     // overlays are visible; only preview/GS fetches are paused under overlays.
@@ -5677,6 +5827,10 @@ pub fn reset_preview_after_gameplay(state: &mut State) {
     state.currently_playing_preview_path = None;
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
+    // Treat evaluation -> SelectMusic like a fresh chart visit so the existing
+    // scorebox snapshot stays visible while the current chart is refreshed.
+    state.last_refreshed_leaderboard_hash = None;
+    state.last_refreshed_leaderboard_hash_p2 = None;
     trigger_immediate_refresh(state);
 }
 
@@ -6891,6 +7045,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
         show_music_wheel_grades: cfg.show_music_wheel_grades,
         show_music_wheel_lamps: cfg.show_music_wheel_lamps,
+        new_pack_names: (state.sort_mode == WheelSortMode::Group).then_some(&state.new_pack_names),
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 
@@ -7165,8 +7320,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         selected_index,
     } = state.sort_menu
     {
+        let items = sort_menu_items(state, page);
         actors.extend(sort_menu::build_overlay(sort_menu::RenderParams {
-            items: sort_menu_items(state, page),
+            items: items.as_slice(),
             selected_index,
             prev_selected_index: state.sort_menu_prev_selected_index,
             focus_anim_elapsed: state.sort_menu_focus_anim_elapsed,
@@ -7176,6 +7332,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     if let Some(leaderboard_overlay) = sort_menu::build_leaderboard_overlay(&state.leaderboard) {
         actors.extend(leaderboard_overlay);
+    }
+    if let Some(downloads_overlay) = sort_menu::build_downloads_overlay(&state.downloads_overlay) {
+        actors.extend(downloads_overlay);
     }
 
     // Simply Love ScreenSelectMusic out transition: "Press &START; for options"
@@ -7432,5 +7591,35 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         }
 
         _ => ScreenAction::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        PREVIEW_DELAY_SECONDS, WheelSortMode, init_placeholder, reset_preview_after_gameplay,
+    };
+
+    #[test]
+    fn reset_preview_after_gameplay_rearms_leaderboard_refresh() {
+        let mut state = init_placeholder();
+        state.last_refreshed_leaderboard_hash = Some("abc123".to_string());
+        state.last_refreshed_leaderboard_hash_p2 = Some("def456".to_string());
+
+        reset_preview_after_gameplay(&mut state);
+
+        assert_eq!(state.last_refreshed_leaderboard_hash, None);
+        assert_eq!(state.last_refreshed_leaderboard_hash_p2, None);
+        assert_eq!(state.time_since_selection_change, PREVIEW_DELAY_SECONDS);
+    }
+
+    #[test]
+    fn reset_preview_after_gameplay_preserves_non_group_sort_modes() {
+        let mut state = init_placeholder();
+        state.sort_mode = WheelSortMode::Group;
+
+        reset_preview_after_gameplay(&mut state);
+
+        assert_eq!(state.sort_mode, WheelSortMode::Group);
     }
 }

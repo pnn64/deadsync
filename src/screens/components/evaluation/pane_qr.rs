@@ -10,11 +10,19 @@ use super::utils::pane_origin_x;
 const MACHINE_RECORD_DEFAULT_ROW_HEIGHT: f32 = 22.0;
 const GS_QR_URL: &str = "https://www.groovestats.com";
 const GS_QR_TITLE: &str = "GrooveStats QR";
-const GS_QR_HELP_TEXT: &str =
+const GS_QR_HELP_TEXT_VALID: &str =
     "Scan with your phone\nto upload this score\nto your GrooveStats\naccount.";
 const GS_QR_FALLBACK_TEXT: &str = "QR Unavailable";
 
 pub fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide) -> Vec<Actor> {
+    let gs_valid = score_info.groovestats.valid;
+    let help_text = if gs_valid {
+        GS_QR_HELP_TEXT_VALID.to_string()
+    } else if score_info.groovestats.reason_lines.is_empty() {
+        "This score is invalid for GrooveStats.".to_string()
+    } else {
+        score_info.groovestats.reason_lines.join("\n")
+    };
     let pane_origin_x = pane_origin_x(controller);
     let pane_origin_y = crate::core::space::screen_center_y() - 62.0;
     let top_y = MACHINE_RECORD_DEFAULT_ROW_HEIGHT * 0.8;
@@ -33,7 +41,8 @@ pub fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide)
     let left_col_x = -150.0;
     let score_y = qr_top_y - 6.0;
 
-    let mut children = Vec::with_capacity(8);
+    let help_zoom = if gs_valid { 0.80 } else { 0.675 };
+    let mut children = Vec::with_capacity(10);
 
     children.push(act!(quad:
         align(0.0, 0.0):
@@ -74,10 +83,11 @@ pub fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide)
 
     children.push(act!(text:
         font("miso"):
-        settext(GS_QR_HELP_TEXT):
+        settext(help_text):
         align(0.0, 0.0):
         xy(left_col_x + 1.0, title_y + 31.0):
-        zoom(0.80):
+        zoom(help_zoom):
+        maxwidth(98.0 / help_zoom):
         z(101):
         diffuse(1.0, 1.0, 1.0, 1.0)
     ));
@@ -103,6 +113,19 @@ pub fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide)
         ));
     } else {
         children.extend(qr_actors);
+    }
+
+    if !gs_valid {
+        for rotation in [45.0_f32, -45.0_f32] {
+            children.push(act!(quad:
+                align(0.5, 0.5):
+                xy(qr_center_x, qr_center_y):
+                setsize(qr_size * 1.15, 12.0):
+                rotationz(rotation):
+                z(102):
+                diffuse(0.95, 0.05, 0.05, 0.92)
+            ));
+        }
     }
 
     vec![Actor::Frame {

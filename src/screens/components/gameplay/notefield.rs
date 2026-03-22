@@ -22,7 +22,7 @@ use crate::game::parsing::noteskin::{
 };
 use crate::game::{
     gameplay::{ActiveHold, PlayerRuntime, State},
-    profile,
+    profile, scores,
     scroll::ScrollSpeedSetting,
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
@@ -83,6 +83,10 @@ const ERROR_BAR_LABEL_HOLD_S: f32 = 2.0;
 const OFFSET_INDICATOR_DUR_S: f32 = 0.5;
 const DISPLAY_MODS_ZOOM: f32 = 0.8;
 const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
+const DISPLAY_MODS_LINE_STEP: f32 = 15.0;
+const DISPLAY_MODS_WARNING_W: f32 = 90.0;
+const DISPLAY_MODS_WARNING_H: f32 = 30.0;
+const DISPLAY_MODS_WARNING_ZOOM: f32 = 1.5;
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
 const TEXT_CACHE_LIMIT: usize = 8192;
@@ -5241,6 +5245,7 @@ pub fn build(
     }
     // Simply Love: ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua
     // shows the current mod string for 5s, then decelerates out over 0.5s.
+    // Arrow Cloud/zmod add a CMod warning below this block for ITL no-CMod charts.
     {
         // Simply Love DisplayMods.lua uses sleep(5), but ScreenGameplay in/default.lua
         // keeps a full-screen intro cover up for 2.0s. Since deadsync's gameplay
@@ -5264,16 +5269,39 @@ pub fn build(
 
         if alpha > 0.0 {
             let mods_text = gameplay_mods_text(state, player_idx);
+            let mods_line_y =
+                screen_height() * 0.25 * 1.3 + DISPLAY_MODS_LINE_STEP + notefield_offset_y;
+            let mods_line_count = mods_text
+                .split(", ")
+                .filter(|part| !part.is_empty())
+                .count()
+                .max(1) as f32;
             if !mods_text.is_empty() {
-                let y = screen_height() * 0.25 * 1.3 + 15.0 + notefield_offset_y;
                 hud_actors.push(act!(text:
                     font("miso"): settext(mods_text):
-                    align(0.5, 0.5): xy(playfield_center_x, y):
+                    align(0.5, 0.5): xy(playfield_center_x, mods_line_y):
                     zoom(DISPLAY_MODS_ZOOM): wrapwidthpixels(DISPLAY_MODS_WRAP_WIDTH_PX): horizalign(center):
                     shadowcolor(0.0, 0.0, 0.0, 1.0):
                     shadowlength(1.0):
                     diffuse(1.0, 1.0, 1.0, alpha):
                     z(84)
+                ));
+            }
+            if scores::should_warn_cmod_for_itl_chart(state, player_idx) {
+                let warning_y = mods_line_y + DISPLAY_MODS_LINE_STEP * mods_line_count;
+                hud_actors.push(act!(quad:
+                    align(0.5, 0.5):
+                    xy(playfield_center_x, warning_y):
+                    setsize(DISPLAY_MODS_WARNING_W, DISPLAY_MODS_WARNING_H):
+                    diffuse(0.0, 0.0, 0.0, 0.8 * alpha):
+                    z(84)
+                ));
+                hud_actors.push(act!(text:
+                    font("miso"): settext("CMod On"):
+                    align(0.5, 0.5): xy(playfield_center_x, warning_y):
+                    zoom(DISPLAY_MODS_WARNING_ZOOM):
+                    diffuse(1.0, 0.0, 0.0, alpha):
+                    z(85)
                 ));
             }
         }

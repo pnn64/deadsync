@@ -1,7 +1,9 @@
 pub mod chart;
 pub mod course;
+pub mod downloads;
 pub mod gameplay;
 pub mod judgment;
+pub mod known_packs;
 pub mod life;
 pub mod note;
 pub mod parsing;

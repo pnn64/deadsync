@@ -742,6 +742,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         banner_path: meta.banner_path.clone(),
         background_path: None,
         background_changes: Vec::new(),
+        has_lua: false,
         cdtitle_path: None,
         music_path: None,
         display_bpm: String::new(),
@@ -2287,6 +2288,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         song_has_edit_ptrs: None,
         show_music_wheel_grades: true,
         show_music_wheel_lamps: true,
+        new_pack_names: None,
     }));
 
     if !matches!(selected_entry, Some(MusicWheelEntry::Song(_))) {

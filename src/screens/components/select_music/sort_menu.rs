@@ -2,6 +2,7 @@ use crate::act;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::network::{self, ConnectionStatus};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::game::downloads;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::SongData;
@@ -70,6 +71,21 @@ const GS_LEADERBOARD_MORE_TEXT: &str = "More Leaderboards";
 const GS_LEADERBOARD_CLOSE_HINT: &str = "Press &START; to dismiss.";
 const GS_LEADERBOARD_RIVAL_COLOR: [f32; 4] = color::rgba_hex("#BD94FF");
 const GS_LEADERBOARD_SELF_COLOR: [f32; 4] = color::rgba_hex("#A1FF94");
+const DOWNLOADS_Z: i16 = 1480;
+const DOWNLOADS_PANEL_W: f32 = 520.0;
+const DOWNLOADS_PANEL_H: f32 = 388.0;
+const DOWNLOADS_ROW_STEP: f32 = 55.0;
+const DOWNLOADS_VIEW_ROWS: usize = 6;
+const DOWNLOADS_BAR_W: f32 = 350.0;
+const DOWNLOADS_BAR_H: f32 = 20.0;
+const DOWNLOADS_SEP_W: f32 = 480.0;
+const DOWNLOADS_TITLE_Y: f32 = -170.0;
+const DOWNLOADS_LIST_X: f32 = -240.0;
+const DOWNLOADS_LIST_Y: f32 = -120.0;
+const DOWNLOADS_PERCENT_X: f32 = DOWNLOADS_BAR_W + 50.0;
+const DOWNLOADS_AMOUNT_X: f32 = DOWNLOADS_BAR_W + 60.0;
+const DOWNLOADS_CLOSE_HINT: &str = "Press &START; to dismiss.";
+const DOWNLOADS_EMPTY_TEXT: &str = "No Downloads to view";
 const SORTS_INACTIVE_COLOR: [f32; 4] = color::rgba_hex("#005D7F");
 const SORTS_ACTIVE_COLOR: [f32; 4] = color::rgba_hex("#0030A8");
 const REPLAY_MAX_ENTRIES: usize = 1024;
@@ -144,6 +160,24 @@ pub enum LeaderboardInputOutcome {
 }
 
 #[derive(Clone, Debug)]
+pub struct DownloadsOverlayStateData {
+    scroll_index: usize,
+}
+
+#[derive(Clone, Debug)]
+pub enum DownloadsOverlayState {
+    Hidden,
+    Visible(DownloadsOverlayStateData),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DownloadsInputOutcome {
+    None,
+    ChangedSelection,
+    Closed,
+}
+
+#[derive(Clone, Debug)]
 pub struct ReplayOverlayStateData {
     pub entries: Vec<scores::MachineReplayEntry>,
     pub selected_index: usize,
@@ -192,6 +226,7 @@ pub enum Action {
     SongSearch,
     SwitchProfile,
     ReloadSongsCourses,
+    ViewDownloads,
     SyncSong,
     PlayReplay,
     ShowLeaderboard,
@@ -204,7 +239,7 @@ pub struct Item {
     pub action: Action,
 }
 
-const ITEM_CATEGORY_SORTS: Item = Item {
+pub const ITEM_CATEGORY_SORTS: Item = Item {
     top_label: "",
     bottom_label: "SORTS...",
     action: Action::OpenSorts,
@@ -249,47 +284,52 @@ const ITEM_SORT_BY_RECENT: Item = Item {
     bottom_label: "Recently Played",
     action: Action::SortByRecent,
 };
-const ITEM_SWITCH_TO_SINGLE: Item = Item {
+pub const ITEM_SWITCH_TO_SINGLE: Item = Item {
     top_label: "Change Style To",
     bottom_label: "Single",
     action: Action::SwitchToSingle,
 };
-const ITEM_SWITCH_TO_DOUBLE: Item = Item {
+pub const ITEM_SWITCH_TO_DOUBLE: Item = Item {
     top_label: "Change Style To",
     bottom_label: "Double",
     action: Action::SwitchToDouble,
 };
-const ITEM_TEST_INPUT: Item = Item {
+pub const ITEM_TEST_INPUT: Item = Item {
     top_label: "Feeling salty?",
     bottom_label: "Test Input",
     action: Action::TestInput,
 };
-const ITEM_SONG_SEARCH: Item = Item {
+pub const ITEM_SONG_SEARCH: Item = Item {
     top_label: "Wherefore Art Thou?",
     bottom_label: "Song Search",
     action: Action::SongSearch,
 };
-const ITEM_SWITCH_PROFILE: Item = Item {
+pub const ITEM_SWITCH_PROFILE: Item = Item {
     top_label: "Next Please",
     bottom_label: "Switch Profile",
     action: Action::SwitchProfile,
 };
-const ITEM_RELOAD_SONGS_COURSES: Item = Item {
+pub const ITEM_RELOAD_SONGS_COURSES: Item = Item {
     top_label: "Take a Breather~",
     bottom_label: "Load New Songs",
     action: Action::ReloadSongsCourses,
 };
-const ITEM_SYNC_SONG: Item = Item {
+pub const ITEM_VIEW_DOWNLOADS: Item = Item {
+    top_label: "Need More RAM",
+    bottom_label: "View Downloads",
+    action: Action::ViewDownloads,
+};
+pub const ITEM_SYNC_SONG: Item = Item {
     top_label: "Sync",
     bottom_label: "null-or-die",
     action: Action::SyncSong,
 };
-const ITEM_PLAY_REPLAY: Item = Item {
+pub const ITEM_PLAY_REPLAY: Item = Item {
     top_label: "Machine Data",
     bottom_label: "Play Replay",
     action: Action::PlayReplay,
 };
-const ITEM_SHOW_LEADERBOARD: Item = Item {
+pub const ITEM_SHOW_LEADERBOARD: Item = Item {
     top_label: "GrooveStats",
     bottom_label: "Leaderboard",
     action: Action::ShowLeaderboard,
@@ -299,73 +339,6 @@ const ITEM_GO_BACK: Item = Item {
     bottom_label: "Go Back",
     action: Action::BackToMain,
 };
-
-pub const ITEMS_MAIN: [Item; 8] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_PLAY_REPLAY,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_NO_REPLAY: [Item; 7] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_WITH_SWITCH_TO_SINGLE: [Item; 9] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_SWITCH_TO_SINGLE,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_PLAY_REPLAY,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_WITH_SWITCH_TO_SINGLE_NO_REPLAY: [Item; 8] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_SWITCH_TO_SINGLE,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE: [Item; 9] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_SWITCH_TO_DOUBLE,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_PLAY_REPLAY,
-    ITEM_SHOW_LEADERBOARD,
-];
-
-pub const ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE_NO_REPLAY: [Item; 8] = [
-    ITEM_CATEGORY_SORTS,
-    ITEM_SWITCH_TO_DOUBLE,
-    ITEM_TEST_INPUT,
-    ITEM_SONG_SEARCH,
-    ITEM_SWITCH_PROFILE,
-    ITEM_RELOAD_SONGS_COURSES,
-    ITEM_SYNC_SONG,
-    ITEM_SHOW_LEADERBOARD,
-];
 
 pub const ITEMS_SORTS: [Item; 9] = [
     ITEM_SORT_BY_GROUP,
@@ -1522,6 +1495,292 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             &overlay.p2,
             screen_center_x() + GS_LEADERBOARD_PANE_SIDE_OFFSET,
         );
+    }
+
+    Some(actors)
+}
+
+#[inline(always)]
+fn downloads_scroll_limit(total: usize) -> usize {
+    total.saturating_sub(DOWNLOADS_VIEW_ROWS)
+}
+
+pub fn show_downloads_overlay() -> DownloadsOverlayState {
+    DownloadsOverlayState::Visible(DownloadsOverlayStateData { scroll_index: 0 })
+}
+
+#[inline(always)]
+pub fn hide_downloads_overlay(state: &mut DownloadsOverlayState) {
+    *state = DownloadsOverlayState::Hidden;
+}
+
+pub fn update_downloads_overlay(state: &mut DownloadsOverlayState, _dt: f32) {
+    let DownloadsOverlayState::Visible(overlay) = state else {
+        return;
+    };
+    overlay.scroll_index = overlay
+        .scroll_index
+        .min(downloads_scroll_limit(downloads::snapshots().len()));
+}
+
+#[inline(always)]
+fn downloads_shift(overlay: &mut DownloadsOverlayStateData, delta: isize) -> bool {
+    let limit = downloads_scroll_limit(downloads::snapshots().len());
+    let next = (overlay.scroll_index as isize + delta).clamp(0, limit as isize) as usize;
+    if next == overlay.scroll_index {
+        return false;
+    }
+    overlay.scroll_index = next;
+    true
+}
+
+pub fn handle_downloads_input(
+    state: &mut DownloadsOverlayState,
+    ev: &InputEvent,
+) -> DownloadsInputOutcome {
+    if !ev.pressed {
+        return DownloadsInputOutcome::None;
+    }
+    let DownloadsOverlayState::Visible(overlay) = state else {
+        return DownloadsInputOutcome::None;
+    };
+
+    match ev.action {
+        VirtualAction::p1_up
+        | VirtualAction::p1_left
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_menu_left => {
+            if downloads_shift(overlay, -1) {
+                return DownloadsInputOutcome::ChangedSelection;
+            }
+        }
+        VirtualAction::p1_down
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_menu_right => {
+            if downloads_shift(overlay, 1) {
+                return DownloadsInputOutcome::ChangedSelection;
+            }
+        }
+        VirtualAction::p1_start
+        | VirtualAction::p2_start
+        | VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => {
+            hide_downloads_overlay(state);
+            return DownloadsInputOutcome::Closed;
+        }
+        _ => {}
+    }
+
+    DownloadsInputOutcome::None
+}
+
+#[inline(always)]
+fn download_percent(current_bytes: u64, total_bytes: u64) -> u32 {
+    if total_bytes == 0 {
+        return 0;
+    }
+    (((current_bytes.min(total_bytes)) * 100) / total_bytes) as u32
+}
+
+fn download_amount_text(current_bytes: u64, total_bytes: u64) -> String {
+    let (suffix, divisor) = download_size(total_bytes);
+    format!(
+        "{}/{} {}",
+        current_bytes / divisor,
+        total_bytes / divisor,
+        suffix
+    )
+}
+
+#[inline(always)]
+fn download_size(bytes: u64) -> (&'static str, u64) {
+    if bytes >= 1024 * 1024 {
+        ("MiB", 1024 * 1024)
+    } else if bytes >= 1024 {
+        ("KiB", 1024)
+    } else {
+        ("bytes", 1)
+    }
+}
+
+pub fn build_downloads_overlay(state: &DownloadsOverlayState) -> Option<Vec<Actor>> {
+    let DownloadsOverlayState::Visible(overlay) = state else {
+        return None;
+    };
+    let snapshots = downloads::snapshots();
+    let (finished, total) = downloads::completion_counts();
+    let mut actors = Vec::new();
+    let center_x = screen_center_x();
+    let center_y = screen_center_y();
+
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, GS_LEADERBOARD_DIM_ALPHA):
+        z(DOWNLOADS_Z)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(center_x, center_y):
+        zoomto(DOWNLOADS_PANEL_W + 2.0, DOWNLOADS_PANEL_H + 2.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(DOWNLOADS_Z + 1)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(center_x, center_y):
+        zoomto(DOWNLOADS_PANEL_W, DOWNLOADS_PANEL_H):
+        diffuse(0.0, 0.0, 0.0, 0.96):
+        z(DOWNLOADS_Z + 2)
+    ));
+    actors.push(act!(text:
+        font("wendy"):
+        settext("View Downloads"):
+        align(0.5, 0.5):
+        xy(center_x, center_y + DOWNLOADS_TITLE_Y):
+        zoom(0.54):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(DOWNLOADS_Z + 3)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(DOWNLOADS_CLOSE_HINT):
+        align(0.5, 0.5):
+        xy(center_x, screen_height() - 50.0):
+        zoom(0.95):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(DOWNLOADS_Z + 3):
+        horizalign(center)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(format!("{finished}/{total}")):
+        align(1.0, 0.5):
+        xy(center_x + DOWNLOADS_PANEL_W * 0.5 - 18.0, center_y + DOWNLOADS_TITLE_Y):
+        zoom(0.85):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(DOWNLOADS_Z + 3):
+        horizalign(right)
+    ));
+
+    if snapshots.is_empty() {
+        actors.push(act!(text:
+            font("miso"):
+            settext(DOWNLOADS_EMPTY_TEXT):
+            align(0.5, 0.5):
+            xy(center_x, center_y):
+            zoom(1.25):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(DOWNLOADS_Z + 3):
+            horizalign(center)
+        ));
+        return Some(actors);
+    }
+
+    let start = overlay
+        .scroll_index
+        .min(downloads_scroll_limit(snapshots.len()));
+    for (slot, snapshot) in snapshots
+        .iter()
+        .skip(start)
+        .take(DOWNLOADS_VIEW_ROWS)
+        .enumerate()
+    {
+        let row_y = center_y + DOWNLOADS_LIST_Y + DOWNLOADS_ROW_STEP * slot as f32;
+        let row_x = center_x + DOWNLOADS_LIST_X;
+        let percent = download_percent(snapshot.current_bytes, snapshot.total_bytes);
+        let fill_width = DOWNLOADS_BAR_W * percent as f32 / 100.0;
+        let amount_text = download_amount_text(snapshot.current_bytes, snapshot.total_bytes);
+        actors.push(act!(text:
+            font("miso"):
+            settext(format!("{}. {}", start + slot + 1, snapshot.name)):
+            align(0.0, 0.5):
+            xy(row_x, row_y):
+            zoom(0.82):
+            maxwidth(470.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(DOWNLOADS_Z + 3):
+            horizalign(left)
+        ));
+        actors.push(act!(quad:
+            align(0.0, 0.5):
+            xy(row_x, row_y + 24.0):
+            zoomto(fill_width, DOWNLOADS_BAR_H):
+            diffuse(1.0, 1.0, 1.0, if snapshot.complete { 1.0 } else { 0.8 }):
+            z(DOWNLOADS_Z + 3)
+        ));
+        actors.push(act!(quad:
+            align(0.5, 0.5):
+            xy(row_x + DOWNLOADS_BAR_W, row_y + 24.0):
+            zoomto(3.0, DOWNLOADS_BAR_H):
+            diffuse(1.0, 0.0, 0.0, 1.0):
+            z(DOWNLOADS_Z + 3)
+        ));
+        if !snapshot.complete && fill_width > 0.0 {
+            actors.push(act!(sprite("swoosh.png"):
+                align(0.0, 0.5):
+                xy(row_x, row_y + 24.0):
+                zoomto(fill_width, DOWNLOADS_BAR_H):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                texcoordvelocity(-1.0, 0.0):
+                z(DOWNLOADS_Z + 4)
+            ));
+        }
+        actors.push(act!(text:
+            font("miso"):
+            settext(format!("{percent}%")):
+            align(1.0, 0.5):
+            xy(row_x + DOWNLOADS_PERCENT_X, row_y + 24.0):
+            zoom(0.82):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(DOWNLOADS_Z + 4):
+            horizalign(right)
+        ));
+        actors.push(act!(text:
+            font("miso"):
+            settext(amount_text):
+            align(0.0, 0.5):
+            xy(row_x + DOWNLOADS_AMOUNT_X, row_y + 24.0):
+            zoom(0.82):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(DOWNLOADS_Z + 4):
+            horizalign(left)
+        ));
+        actors.push(act!(quad:
+            align(0.0, 0.5):
+            xy(row_x, row_y + 40.0):
+            zoomto(DOWNLOADS_SEP_W, 1.0):
+            diffuse(1.0, 1.0, 1.0, 0.7):
+            z(DOWNLOADS_Z + 2)
+        ));
+        if snapshot.complete {
+            let (text, color) = match snapshot.error_message.as_deref() {
+                Some(message) => (format!("Error: {message}"), [1.0, 0.0, 0.0, 1.0]),
+                None => ("Done!".to_string(), [0.0, 1.0, 0.0, 1.0]),
+            };
+            actors.push(act!(text:
+                font("miso"):
+                settext(text):
+                align(0.0, 0.5):
+                xy(row_x, row_y + 24.0):
+                zoom(0.82):
+                maxwidth(DOWNLOADS_BAR_W):
+                diffuse(color[0], color[1], color[2], color[3]):
+                z(DOWNLOADS_Z + 5):
+                horizalign(left)
+            ));
+        }
     }
 
     Some(actors)

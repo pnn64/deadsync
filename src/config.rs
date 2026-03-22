@@ -189,6 +189,42 @@ impl FromStr for SelectMusicPatternInfoMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewPackMode {
+    Disabled,
+    OpenPack,
+    HasScore,
+}
+
+impl NewPackMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "Disabled",
+            Self::OpenPack => "OpenPack",
+            Self::HasScore => "HasScore",
+        }
+    }
+}
+
+impl FromStr for NewPackMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "disabled" | "disable" | "off" => Ok(Self::Disabled),
+            "openpack" | "open" => Ok(Self::OpenPack),
+            "hasscore" | "score" | "scored" => Ok(Self::HasScore),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectMusicScoreboxPlacement {
     Auto,
     StepPane,
@@ -219,6 +255,59 @@ impl FromStr for SelectMusicScoreboxPlacement {
             _ => Err(()),
         }
     }
+}
+
+pub const AUTO_SS_NUM_FLAGS: usize = 5;
+pub const AUTO_SS_FLAG_NAMES: [&str; AUTO_SS_NUM_FLAGS] =
+    ["PBs", "Fails", "Clears", "Quads", "Quints"];
+pub const AUTO_SS_PBS: u8 = 1 << 0;
+pub const AUTO_SS_FAILS: u8 = 1 << 1;
+pub const AUTO_SS_CLEARS: u8 = 1 << 2;
+pub const AUTO_SS_QUADS: u8 = 1 << 3;
+pub const AUTO_SS_QUINTS: u8 = 1 << 4;
+
+#[inline(always)]
+pub const fn auto_screenshot_bit(idx: usize) -> u8 {
+    match idx {
+        0 => AUTO_SS_PBS,
+        1 => AUTO_SS_FAILS,
+        2 => AUTO_SS_CLEARS,
+        3 => AUTO_SS_QUADS,
+        4 => AUTO_SS_QUINTS,
+        _ => 0,
+    }
+}
+
+pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
+    if mask == 0 {
+        return "Off".to_string();
+    }
+    let mut parts = Vec::with_capacity(AUTO_SS_NUM_FLAGS);
+    for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
+        if (mask & auto_screenshot_bit(idx)) != 0 {
+            parts.push(*name);
+        }
+    }
+    parts.join("|")
+}
+
+pub fn auto_screenshot_mask_from_str(s: &str) -> u8 {
+    let trimmed = s.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+        return 0;
+    }
+    let mut mask = 0u8;
+    for part in trimmed.split('|') {
+        match part.trim().to_ascii_lowercase().as_str() {
+            "pbs" => mask |= AUTO_SS_PBS,
+            "fails" => mask |= AUTO_SS_FAILS,
+            "clears" => mask |= AUTO_SS_CLEARS,
+            "quads" => mask |= AUTO_SS_QUADS,
+            "quints" => mask |= AUTO_SS_QUINTS,
+            _ => {}
+        }
+    }
+    mask
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -579,6 +668,7 @@ pub struct Config {
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub select_music_new_pack_mode: NewPackMode,
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
@@ -641,15 +731,19 @@ pub struct Config {
     pub linux_audio_backend: LinuxAudioBackend,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
+    pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
     pub rate_mod_preserves_pitch: bool,
     pub enable_arrowcloud: bool,
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
+    pub separate_unlocks_by_player: bool,
     pub fastload: bool,
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
     pub smooth_histogram: bool,
+    /// Conditions for auto-screenshotting the Evaluation screen.
+    pub auto_screenshot_eval: u8,
     /// ITGmania InputFilter parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
@@ -693,6 +787,7 @@ impl Default for Config {
             show_select_music_cdtitles: true,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
+            select_music_new_pack_mode: NewPackMode::Disabled,
             show_select_music_previews: true,
             show_select_music_preview_marker: false,
             select_music_preview_loop: true,
@@ -736,14 +831,17 @@ impl Default for Config {
             audio_output_mode: AudioOutputMode::Auto,
             linux_audio_backend: LinuxAudioBackend::Auto,
             audio_sample_rate_hz: None,
+            auto_download_unlocks: false,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: true,
             enable_arrowcloud: false,
             enable_boogiestats: false,
             enable_groovestats: false,
+            separate_unlocks_by_player: false,
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
+            auto_screenshot_eval: 0,
             input_debounce_seconds: 0.02,
             only_dedicated_menu_buttons: false,
         }
@@ -1074,6 +1172,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str("AudioSampleRateHz=Auto\n");
     content.push_str("AdditionalSongFolders=\n");
     content.push_str(&format!(
+        "AutoDownloadUnlocks={}\n",
+        if default.auto_download_unlocks {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "AutoPopulateGrooveStatsScores={}\n",
         if default.auto_populate_gs_scores {
             "1"
@@ -1269,6 +1375,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicNewPackMode={}\n",
+        default.select_music_new_pack_mode.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviews={}\n",
         if default.show_select_music_previews {
             "1"
@@ -1339,6 +1449,18 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "SeparateUnlocksByPlayer={}\n",
+        if default.separate_unlocks_by_player {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_mask_to_str(default.auto_screenshot_eval)
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
@@ -1605,6 +1727,10 @@ pub fn load() {
                     .get("Options", "DisplayMonitor")
                     .and_then(|v| v.parse::<usize>().ok())
                     .unwrap_or(default.display_monitor);
+                cfg.auto_download_unlocks = conf
+                    .get("Options", "AutoDownloadUnlocks")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.auto_download_unlocks, |v| v != 0);
                 cfg.auto_populate_gs_scores = conf
                     .get("Options", "AutoPopulateGrooveStatsScores")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1621,6 +1747,10 @@ pub fn load() {
                     .get("Options", "EnableBoogieStats")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.enable_boogiestats, |v| v != 0);
+                cfg.separate_unlocks_by_player = conf
+                    .get("Options", "SeparateUnlocksByPlayer")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.separate_unlocks_by_player, |v| v != 0);
                 cfg.mine_hit_sound = conf
                     .get("Options", "MineHitSound")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1829,6 +1959,10 @@ pub fn load() {
                     .get("Options", "SelectMusicWheelLamps")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_music_wheel_lamps, |v| v != 0);
+                cfg.select_music_new_pack_mode = conf
+                    .get("Options", "SelectMusicNewPackMode")
+                    .and_then(|v| NewPackMode::from_str(&v).ok())
+                    .unwrap_or(default.select_music_new_pack_mode);
                 cfg.show_select_music_previews = conf
                     .get("Options", "SelectMusicPreviews")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1869,6 +2003,10 @@ pub fn load() {
                     .get("Options", "SelectMusicScoreboxCycleTournaments")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.select_music_scorebox_cycle_tournaments, |v| v != 0);
+                cfg.auto_screenshot_eval = conf
+                    .get("Options", "AutoScreenshotEval")
+                    .map(|v| auto_screenshot_mask_from_str(&v))
+                    .unwrap_or(default.auto_screenshot_eval);
                 cfg.fastload = conf
                     .get("Options", "FastLoad")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -2185,6 +2323,7 @@ pub fn load() {
                     "AudioOutputMode",
                     "AudioSampleRateHz",
                     "AdditionalSongFolders",
+                    "AutoDownloadUnlocks",
                     "AutoPopulateGrooveStatsScores",
                     "BGBrightness",
                     "BannerCache",
@@ -2235,6 +2374,7 @@ pub fn load() {
                     "SelectMusicScoreboxCycleEx",
                     "SelectMusicScoreboxCycleHardEx",
                     "SelectMusicScoreboxCycleTournaments",
+                    "SeparateUnlocksByPlayer",
                     "ShowStats",
                     "ShowStatsMode",
                     "SmoothHistogram",
@@ -3087,6 +3227,10 @@ fn save_without_keymaps() {
         "AdditionalSongFolders={additional_song_folders}\n"
     ));
     content.push_str(&format!(
+        "AutoDownloadUnlocks={}\n",
+        if cfg.auto_download_unlocks { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
         "AutoPopulateGrooveStatsScores={}\n",
         if cfg.auto_populate_gs_scores {
             "1"
@@ -3274,6 +3418,10 @@ fn save_without_keymaps() {
         if cfg.show_music_wheel_lamps { "1" } else { "0" }
     ));
     content.push_str(&format!(
+        "SelectMusicNewPackMode={}\n",
+        cfg.select_music_new_pack_mode.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviews={}\n",
         if cfg.show_select_music_previews {
             "1"
@@ -3344,6 +3492,18 @@ fn save_without_keymaps() {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "SeparateUnlocksByPlayer={}\n",
+        if cfg.separate_unlocks_by_player {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_mask_to_str(cfg.auto_screenshot_eval)
     ));
     content.push_str(&format!(
         "ShowStats={}\n",
@@ -4036,6 +4196,17 @@ pub fn update_show_music_wheel_lamps(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_select_music_new_pack_mode(mode: NewPackMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_new_pack_mode == mode {
+            return;
+        }
+        cfg.select_music_new_pack_mode = mode;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_previews(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -4153,6 +4324,17 @@ pub fn update_select_music_scorebox_cycle_tournaments(enabled: bool) {
             return;
         }
         cfg.select_music_scorebox_cycle_tournaments = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_auto_screenshot_eval(mask: u8) {
+    {
+        let mut cfg = lock_config();
+        if cfg.auto_screenshot_eval == mask {
+            return;
+        }
+        cfg.auto_screenshot_eval = mask;
     }
     save_without_keymaps();
 }
@@ -4435,6 +4617,17 @@ pub fn update_enable_arrowcloud(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_auto_download_unlocks(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.auto_download_unlocks == enabled {
+            return;
+        }
+        cfg.auto_download_unlocks = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_auto_populate_gs_scores(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -4442,6 +4635,17 @@ pub fn update_auto_populate_gs_scores(enabled: bool) {
             return;
         }
         cfg.auto_populate_gs_scores = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_separate_unlocks_by_player(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.separate_unlocks_by_player == enabled {
+            return;
+        }
+        cfg.separate_unlocks_by_player = enabled;
     }
     save_without_keymaps();
 }
@@ -4519,6 +4723,24 @@ mod tests {
                 "failed for {token}"
             );
         }
+    }
+
+    #[test]
+    fn auto_screenshot_mask_roundtrips() {
+        let mask = AUTO_SS_PBS | AUTO_SS_CLEARS | AUTO_SS_QUINTS;
+        let encoded = auto_screenshot_mask_to_str(mask);
+        assert_eq!(encoded, "PBs|Clears|Quints");
+        assert_eq!(auto_screenshot_mask_from_str(&encoded), mask);
+    }
+
+    #[test]
+    fn auto_screenshot_mask_handles_off_and_unknown_tokens() {
+        assert_eq!(auto_screenshot_mask_from_str(""), 0);
+        assert_eq!(auto_screenshot_mask_from_str("Off"), 0);
+        assert_eq!(
+            auto_screenshot_mask_from_str("PBs|unknown|Fails"),
+            AUTO_SS_PBS | AUTO_SS_FAILS
+        );
     }
 
     #[test]

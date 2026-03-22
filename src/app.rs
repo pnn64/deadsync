@@ -1639,6 +1639,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let mut meter_count = 0u32;
         let mut any_failed = false;
         let mut score_valid = true;
+        let mut disqualified = false;
         let mut show_w0 = false;
         let mut show_fa_plus_pane = false;
         let mut show_ex = false;
@@ -1664,6 +1665,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             meter_count = meter_count.saturating_add(1);
             any_failed |= player.grade == scores::Grade::Failed;
             score_valid &= player.score_valid;
+            disqualified |= player.disqualified;
             show_w0 |= player.show_w0;
             show_fa_plus_pane |= player.show_fa_plus_pane;
             show_ex |= player.show_ex_score;
@@ -1713,6 +1715,12 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             profile_name: first_player.profile_name.clone(),
             chart: Arc::new(summary_chart),
             score_valid,
+            disqualified,
+            groovestats: scores::GrooveStatsEvalState {
+                valid: false,
+                reason_lines: vec!["GrooveStats QR is unavailable in course mode.".to_string()],
+            },
+            itl: scores::ItlEvalState::default(),
             grade,
             score_percent,
             ex_score_percent,
@@ -1823,8 +1831,12 @@ fn score_info_from_stage(
     Some(evaluation::ScoreInfo {
         song: stage.song.clone(),
         chart: player.chart.clone(),
+        side,
         profile_name: player.profile_name.clone(),
         score_valid: player.score_valid,
+        disqualified: player.disqualified,
+        groovestats: player.groovestats.clone(),
+        itl: player.itl.clone(),
         judgment_counts,
         score_percent: player.score_percent,
         grade: player.grade,
@@ -1888,6 +1900,34 @@ fn build_course_summary_eval_state(
     state.return_to_course = true;
     state.allow_online_panes = false;
     state
+}
+
+fn should_auto_screenshot_eval(eval: &evaluation::State, mask: u8) -> bool {
+    if mask == 0 {
+        return false;
+    }
+    for info in eval.score_info.iter().flatten() {
+        let is_fail = info.fail_time.is_some();
+        let is_pb = info.personal_record_highlight_rank.is_some();
+        let is_quad = matches!(info.grade, scores::Grade::Tier01);
+        let is_quint = matches!(info.grade, scores::Grade::Quint);
+        if (mask & config::AUTO_SS_PBS) != 0 && is_pb {
+            return true;
+        }
+        if (mask & config::AUTO_SS_FAILS) != 0 && is_fail {
+            return true;
+        }
+        if (mask & config::AUTO_SS_CLEARS) != 0 && !is_fail && !is_pb {
+            return true;
+        }
+        if (mask & config::AUTO_SS_QUADS) != 0 && is_quad {
+            return true;
+        }
+        if (mask & config::AUTO_SS_QUINTS) != 0 && is_quint {
+            return true;
+        }
+    }
+    false
 }
 
 fn save_screenshot_image(image: &image::RgbaImage) -> Result<PathBuf, Box<dyn Error>> {
@@ -2028,6 +2068,9 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         profile_name: si.profile_name.clone(),
         chart: si.chart.clone(),
         score_valid: si.score_valid,
+        disqualified: si.disqualified,
+        groovestats: si.groovestats.clone(),
+        itl: si.itl.clone(),
         grade: si.grade,
         score_percent: si.score_percent,
         ex_score_percent: si.ex_score_percent,
@@ -2847,6 +2890,19 @@ impl App {
                     ) && !matches!(action, ScreenAction::None)
                     {
                         let _ = self.handle_action(action, event_loop);
+                    }
+                }
+                if self.state.screens.current_screen == CurrentScreen::Evaluation
+                    && !self.state.screens.evaluation_state.auto_screenshot_taken
+                    && evaluation::auto_screenshot_ready(&self.state.screens.evaluation_state)
+                {
+                    self.state.screens.evaluation_state.auto_screenshot_taken = true;
+                    if should_auto_screenshot_eval(
+                        &self.state.screens.evaluation_state,
+                        config::get().auto_screenshot_eval,
+                    ) {
+                        self.state.shell.screenshot_pending = true;
+                        self.state.shell.screenshot_request_side = None;
                     }
                 }
             }

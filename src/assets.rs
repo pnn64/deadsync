@@ -1435,6 +1435,7 @@ impl AssetManager {
                 "name_entry_cursor.png".to_string(),
                 "name_entry_cursor.png".to_string(),
             ),
+            ("has_lua.png".to_string(), "has_lua.png".to_string()),
             ("has_edit.png".to_string(), "has_edit.png".to_string()),
             (
                 "rounded-square.png".to_string(),

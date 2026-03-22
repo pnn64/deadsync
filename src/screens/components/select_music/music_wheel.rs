@@ -8,7 +8,9 @@ use crate::game::song::SongData;
 use crate::screens::select_music::MusicWheelEntry;
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 // --- Colors ---
 fn col_music_wheel_box() -> [f32; 4] {
@@ -32,6 +34,15 @@ const WHEEL_DRAW_RADIUS: f32 = (NUM_WHEEL_ITEMS_TO_DRAW as f32) * 0.5; // 8.5
 const SELECTION_HIGHLIGHT_BEAT_PERIOD: f32 = 2.0;
 const LAMP_PULSE_PERIOD: f32 = 0.8;
 const LAMP_PULSE_LERP_TO_WHITE: f32 = 0.70;
+const NEW_BADGE_PULSE_PERIOD: f32 = 1.2;
+const NEW_BADGE_COLOR: [f32; 4] = [0.3, 1.0, 0.3, 1.0];
+const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
+
+thread_local! {
+    static ITL_EX_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
+        RefCell::new(HashMap::with_capacity(256));
+}
 
 const fn col_quint_lamp() -> [f32; 4] {
     // zmod quint color: color("1,0.2,0.406,1")
@@ -63,6 +74,25 @@ fn lamp_judge_count_color(lamp_index: u8) -> [f32; 4] {
 fn digit_text(digit: u8) -> &'static str {
     const DIGITS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
     DIGITS[digit as usize]
+}
+
+#[inline(always)]
+fn cached_itl_ex_text(ex_hundredths: u32) -> Arc<str> {
+    ITL_EX_TEXT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&ex_hundredths) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(format!(
+            "{}.{:02}",
+            ex_hundredths / 100,
+            ex_hundredths % 100
+        ));
+        if cache.len() < ITL_EX_TEXT_CACHE_LIMIT {
+            cache.insert(ex_hundredths, text.clone());
+        }
+        text
+    })
 }
 
 // Helper from select_music.rs
@@ -129,6 +159,7 @@ pub struct MusicWheelParams<'a> {
     pub song_has_edit_ptrs: Option<&'a HashSet<usize>>,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub new_pack_names: Option<&'a HashSet<String>>,
 }
 
 pub fn build(p: MusicWheelParams) -> Vec<Actor> {
@@ -160,7 +191,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let pack_count_x_local: f32 = screen_width() / 2.0 - widescale(9.0, 10.0) - sl_shift;
 
     // "Has Edit" icon (Simply Love: Graphics/MusicWheelItem Song NormalPart/default.lua)
-    let has_edit_right_x_local: f32 = screen_width() / widescale(2.15, 2.14) - 8.0;
+    let badge_right_x_local: f32 = screen_width() / widescale(2.15, 2.14) - 8.0;
+    let badge_gap_x: f32 = widescale(18.0, 24.0);
 
     // --- VERTICAL GEOMETRY (1:1 with Simply Love Lua) ---
     let slot_spacing: f32 = screen_height() / (num_visible_items as f32);
@@ -183,6 +215,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let grade_zoom = widescale(0.18, 0.3);
     let grade_x_p1 = widescale(10.0, 17.0);
     let grade_x_p2 = widescale(26.0, 47.0);
+    let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
+    let itl_ex_color = color::JUDGMENT_RGBA[0];
+    let joined_sides = usize::from(profile::is_session_side_joined(profile::PlayerSide::P1))
+        + usize::from(profile::is_session_side_joined(profile::PlayerSide::P2));
 
     let num_entries = p.entries.len();
 
@@ -218,7 +254,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                     } else {
                         [1.0, 1.0, 1.0, 1.0]
                     };
-                    let mut slot_children = Vec::with_capacity(4);
+                    let show_new_badge = p.color_pack_headers
+                        && p.new_pack_names
+                            .is_some_and(|new_packs| new_packs.contains(name.as_str()));
+                    let mut slot_children = Vec::with_capacity(4 + usize::from(show_new_badge));
                     slot_children.push(act!(quad:
                         align(0.0, 0.5):
                         xy(0.0, half_item_h):
@@ -243,6 +282,22 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         diffuse(header_color[0], header_color[1], header_color[2], 1.0):
                         z(2)
                     ));
+                    if show_new_badge {
+                        let phase = (p.selection_animation_timer / NEW_BADGE_PULSE_PERIOD)
+                            * std::f32::consts::PI
+                            * 2.0;
+                        let pulse_t = f32::midpoint(phase.sin(), 1.0);
+                        let color = lerp_color(NEW_BADGE_COLOR, NEW_BADGE_COLOR_PEAK, pulse_t);
+                        slot_children.push(act!(text:
+                            font("miso"):
+                            settext("NEW"):
+                            align(1.0, 0.5):
+                            xy(pack_count_x_local - widescale(30.0, 40.0), half_item_h):
+                            zoom(0.6):
+                            diffuse(color[0], color[1], color[2], color[3]):
+                            z(2)
+                        ));
+                    }
                     if let Some(count) = p.pack_song_counts.get(name.as_str())
                         && *count > 0
                     {
@@ -284,13 +339,18 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 && c.difficulty.eq_ignore_ascii_case("edit")
                         })
                     };
-                    let mut slot_capacity = 4 + usize::from(has_subtitle) + usize::from(has_edit);
+                    let has_lua = info.has_lua;
+                    let mut slot_capacity = 4
+                        + usize::from(has_subtitle)
+                        + usize::from(has_edit)
+                        + usize::from(has_lua);
                     if p.show_music_wheel_grades {
                         slot_capacity += 2;
                     }
                     if p.show_music_wheel_lamps {
                         slot_capacity += 4;
                     }
+                    slot_capacity += joined_sides;
                     let mut slot_children = Vec::with_capacity(slot_capacity);
                     slot_children.push(act!(quad:
                         align(0.0, 0.5):
@@ -330,10 +390,23 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             z(2)
                         ));
                     }
+                    if has_lua {
+                        let lua_x = if has_edit {
+                            badge_right_x_local - badge_gap_x
+                        } else {
+                            badge_right_x_local
+                        };
+                        slot_children.push(act!(sprite("has_lua.png"):
+                            align(1.0, 0.5):
+                            xy(lua_x, half_item_h):
+                            zoom(0.1875):
+                            z(2)
+                        ));
+                    }
                     if has_edit {
                         slot_children.push(act!(sprite("has_edit.png"):
                             align(1.0, 0.5):
-                            xy(has_edit_right_x_local, half_item_h):
+                            xy(badge_right_x_local, half_item_h):
                             zoom(0.1875):
                             z(2)
                         ));
@@ -449,6 +522,35 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 }
                             }
                         }
+                    }
+
+                    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                        if !profile::is_session_side_joined(side) {
+                            continue;
+                        }
+                        let Some(itl_score) = scores::get_cached_itl_score_for_song(info, side)
+                        else {
+                            continue;
+                        };
+                        let y = if joined_sides >= 2 {
+                            if side == profile::PlayerSide::P1 {
+                                -11.0
+                            } else {
+                                4.0
+                            }
+                        } else {
+                            -4.0
+                        };
+                        slot_children.push(act!(text:
+                            font("wendy_monospace_numbers"):
+                            settext(cached_itl_ex_text(itl_score.ex_hundredths)):
+                            align(1.0, 0.5):
+                            horizalign(right):
+                            xy(itl_ex_x, half_item_h + y):
+                            zoom(0.2):
+                            diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
+                            z(2)
+                        ));
                     }
 
                     actors.push(Actor::Frame {

@@ -6,7 +6,7 @@ use crate::core::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app.rs via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, SelectMusicPatternInfoMode,
+    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SimpleIni, SyncGraphMode,
 };
 use crate::core::audio;
@@ -302,6 +302,7 @@ pub const ITEMS: &[Item] = &[
             "Show CDTitles",
             "Show Music Wheel Grades",
             "Show Music Wheel Lamps",
+            "New Pack Badge",
             "Show Pattern Info",
             "Music Previews",
             "Show Gameplay Timer",
@@ -569,6 +570,8 @@ pub struct SubRow<'a> {
 const GS_ROW_ENABLE: &str = "Enable GrooveStats";
 const GS_ROW_ENABLE_BOOGIE: &str = "Enable BoogieStats";
 const GS_ROW_AUTO_POPULATE: &str = "Auto Populate GS Scores";
+const GS_ROW_AUTO_DOWNLOAD_UNLOCKS: &str = "Auto Download Unlocks";
+const GS_ROW_SEPARATE_UNLOCKS: &str = "Separate Unlocks By Player";
 const SYSTEM_ROW_LOG_FILE: &str = "Log File";
 const INPUT_ROW_CONFIGURE_MAPPINGS: &str = "Configure Keyboard/Pad Mappings";
 const INPUT_ROW_TEST: &str = "Test Input";
@@ -599,6 +602,7 @@ const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Speed";
 const SELECT_MUSIC_ROW_CDTITLES: &str = "Show CDTitles";
 const SELECT_MUSIC_ROW_WHEEL_GRADES: &str = "Show Music Wheel Grades";
 const SELECT_MUSIC_ROW_WHEEL_LAMPS: &str = "Show Music Wheel Lamps";
+const SELECT_MUSIC_ROW_NEW_PACKS: &str = "New Pack Badge";
 const SELECT_MUSIC_ROW_PATTERN_INFO: &str = "Show Pattern Info";
 const SELECT_MUSIC_ROW_PREVIEWS: &str = "Music Previews";
 const SELECT_MUSIC_ROW_PREVIEW_MARKER: &str = "Preview Marker";
@@ -657,6 +661,7 @@ const GAMEPLAY_ROW_BG_BRIGHTNESS: &str = "BG Brightness";
 const GAMEPLAY_ROW_CENTERED_P1: &str = "Centered P1 Notefield";
 const GAMEPLAY_ROW_ZMOD_RATING_BOX: &str = "Zmod Rating Box";
 const GAMEPLAY_ROW_BPM_DECIMAL: &str = "Show Decimal in BPM";
+const GAMEPLAY_ROW_AUTO_SCREENSHOT: &str = "Auto Screenshot";
 const SCORE_IMPORT_ROW_ENDPOINT: &str = "API Endpoint";
 const SCORE_IMPORT_ROW_PROFILE: &str = "Profile";
 const SCORE_IMPORT_ROW_PACK: &str = "Pack";
@@ -1385,6 +1390,11 @@ pub const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["Off", "On"],
         inline: true,
     },
+    SubRow {
+        label: GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        choices: &config::AUTO_SS_FLAG_NAMES,
+        inline: true,
+    },
 ];
 
 pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
@@ -1403,6 +1413,15 @@ pub const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: GAMEPLAY_ROW_BPM_DECIMAL,
         help: &["Show one decimal place for live gameplay BPM when BPM is non-integer."],
+    },
+    Item {
+        name: GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        help: &[
+            "Automatically screenshot the Evaluation screen.",
+            "Use Left/Right to pick a condition, then Start to toggle it.",
+            "PBs: personal bests. Fails: failed scores.",
+            "Clears: non-PB clears. Quads: 100%. Quints: perfect EX.",
+        ],
     },
     Item {
         name: "Exit",
@@ -1606,6 +1625,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: SELECT_MUSIC_ROW_NEW_PACKS,
+        choices: &["Off", "Open Pack", "Has Score"],
+        inline: true,
+    },
+    SubRow {
         label: SELECT_MUSIC_ROW_PATTERN_INFO,
         choices: &["Auto", "Tech", "Stamina"],
         inline: true,
@@ -1696,6 +1720,15 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SELECT_MUSIC_ROW_WHEEL_LAMPS,
         help: &["Show or hide lamp indicators on wheel rows."],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_NEW_PACKS,
+        help: &[
+            "Show NEW on pack headers in Group sort.",
+            "Open Pack clears the badge when you expand that pack.",
+            "Has Score shows NEW until any song in the pack has a cached local or imported score for a joined player.",
+            "Off disables the badge and treats newly-scanned packs as seen.",
+        ],
     },
     Item {
         name: SELECT_MUSIC_ROW_PATTERN_INFO,
@@ -1864,6 +1897,16 @@ pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["No", "Yes"],
         inline: true,
     },
+    SubRow {
+        label: GS_ROW_AUTO_DOWNLOAD_UNLOCKS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: GS_ROW_SEPARATE_UNLOCKS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
 ];
 
 pub const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[SubRow {
@@ -1933,6 +1976,20 @@ pub const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: GS_ROW_AUTO_POPULATE,
         help: &["Import GS grade/lamp/score when scorebox leaderboard requests complete."],
+    },
+    Item {
+        name: GS_ROW_AUTO_DOWNLOAD_UNLOCKS,
+        help: &[
+            "Automatically download unlock packs returned by GrooveStats event submits.",
+            "Enables the Sort Menu View Downloads screen when the service is connected.",
+        ],
+    },
+    Item {
+        name: GS_ROW_SEPARATE_UNLOCKS,
+        help: &[
+            "Download unlock packs into per-player folders instead of a shared event folder.",
+            "Matches Simply Love's SeparateUnlocksByPlayer preference.",
+        ],
     },
     Item {
         name: "Exit",
@@ -3629,6 +3686,23 @@ const fn scorebox_cycle_mask(itg: bool, ex: bool, hard_ex: bool, tournaments: bo
 }
 
 #[inline(always)]
+const fn auto_screenshot_cursor_index(mask: u8) -> usize {
+    if (mask & config::AUTO_SS_PBS) != 0 {
+        0
+    } else if (mask & config::AUTO_SS_FAILS) != 0 {
+        1
+    } else if (mask & config::AUTO_SS_CLEARS) != 0 {
+        2
+    } else if (mask & config::AUTO_SS_QUADS) != 0 {
+        3
+    } else if (mask & config::AUTO_SS_QUINTS) != 0 {
+        4
+    } else {
+        0
+    }
+}
+
+#[inline(always)]
 const fn scorebox_cycle_cursor_index(
     itg: bool,
     ex: bool,
@@ -3709,6 +3783,45 @@ fn select_music_scorebox_cycle_enabled_mask() -> u8 {
     scorebox_cycle_mask_from_config(&config::get())
 }
 
+#[inline(always)]
+const fn auto_screenshot_bit_from_choice(idx: usize) -> u8 {
+    config::auto_screenshot_bit(idx)
+}
+
+#[inline(always)]
+fn auto_screenshot_enabled_mask() -> u8 {
+    config::get().auto_screenshot_eval
+}
+
+fn toggle_auto_screenshot_option(state: &mut State, choice_idx: usize) {
+    let bit = auto_screenshot_bit_from_choice(choice_idx);
+    if bit == 0 {
+        return;
+    }
+    let mut mask = config::get().auto_screenshot_eval;
+    if (mask & bit) != 0 {
+        mask &= !bit;
+    } else {
+        mask |= bit;
+    }
+    config::update_auto_screenshot_eval(mask);
+
+    let clamped = choice_idx.min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
+    set_choice_by_label(
+        &mut state.sub_choice_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
+        GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        clamped,
+    );
+    set_choice_by_label(
+        &mut state.sub_cursor_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
+        GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        clamped,
+    );
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
 const fn breakdown_style_choice_index(style: BreakdownStyle) -> usize {
     match style {
         BreakdownStyle::Sl => 0,
@@ -3782,6 +3895,22 @@ const fn select_music_pattern_info_from_choice(idx: usize) -> SelectMusicPattern
         1 => SelectMusicPatternInfoMode::Tech,
         2 => SelectMusicPatternInfoMode::Stamina,
         _ => SelectMusicPatternInfoMode::Auto,
+    }
+}
+
+const fn new_pack_mode_choice_index(mode: NewPackMode) -> usize {
+    match mode {
+        NewPackMode::Disabled => 0,
+        NewPackMode::OpenPack => 1,
+        NewPackMode::HasScore => 2,
+    }
+}
+
+const fn new_pack_mode_from_choice(idx: usize) -> NewPackMode {
+    match idx {
+        1 => NewPackMode::OpenPack,
+        2 => NewPackMode::HasScore,
+        _ => NewPackMode::Disabled,
     }
 }
 
@@ -4352,6 +4481,12 @@ pub fn init() -> State {
         GAMEPLAY_ROW_BPM_DECIMAL,
         usize::from(cfg.show_bpm_decimal),
     );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_gameplay,
+        GAMEPLAY_OPTIONS_ROWS,
+        GAMEPLAY_ROW_AUTO_SCREENSHOT,
+        auto_screenshot_cursor_index(cfg.auto_screenshot_eval),
+    );
 
     set_choice_by_label(
         &mut state.sub_choice_indices_sound,
@@ -4466,6 +4601,12 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_NEW_PACKS,
+        new_pack_mode_choice_index(cfg.select_music_new_pack_mode),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_PATTERN_INFO,
         select_music_pattern_info_choice_index(cfg.select_music_pattern_info_mode),
     );
@@ -4533,6 +4674,18 @@ pub fn init() -> State {
         GROOVESTATS_OPTIONS_ROWS,
         GS_ROW_AUTO_POPULATE,
         yes_no_choice_index(cfg.auto_populate_gs_scores),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_groovestats,
+        GROOVESTATS_OPTIONS_ROWS,
+        GS_ROW_AUTO_DOWNLOAD_UNLOCKS,
+        yes_no_choice_index(cfg.auto_download_unlocks),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_groovestats,
+        GROOVESTATS_OPTIONS_ROWS,
+        GS_ROW_SEPARATE_UNLOCKS,
+        yes_no_choice_index(cfg.separate_unlocks_by_player),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_arrowcloud,
@@ -5948,6 +6101,8 @@ fn apply_submenu_choice_delta(
             config::update_show_music_wheel_grades(yes_no_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_WHEEL_LAMPS {
             config::update_show_music_wheel_lamps(yes_no_from_choice(new_index));
+        } else if row.label == SELECT_MUSIC_ROW_NEW_PACKS {
+            config::update_select_music_new_pack_mode(new_pack_mode_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_PATTERN_INFO {
             config::update_select_music_pattern_info_mode(select_music_pattern_info_from_choice(
                 new_index,
@@ -5979,6 +6134,10 @@ fn apply_submenu_choice_delta(
             crate::core::network::init();
         } else if row.label == GS_ROW_AUTO_POPULATE {
             config::update_auto_populate_gs_scores(yes_no_from_choice(new_index));
+        } else if row.label == GS_ROW_AUTO_DOWNLOAD_UNLOCKS {
+            config::update_auto_download_unlocks(yes_no_from_choice(new_index));
+        } else if row.label == GS_ROW_SEPARATE_UNLOCKS {
+            config::update_separate_unlocks_by_player(yes_no_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::ArrowCloud) {
         let row = &rows[row_index];
@@ -6261,6 +6420,23 @@ pub fn handle_input(
                                 .unwrap_or(0)
                                 .min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
                             toggle_select_music_scorebox_cycle_option(state, choice_idx);
+                            return ScreenAction::None;
+                        }
+                    }
+                    if matches!(kind, SubmenuKind::Gameplay)
+                        && let Some(row_idx) =
+                            submenu_visible_row_to_actual(state, kind, selected_row)
+                    {
+                        let rows = submenu_rows(kind);
+                        if rows.get(row_idx).map(|row| row.label)
+                            == Some(GAMEPLAY_ROW_AUTO_SCREENSHOT)
+                        {
+                            let choice_idx = submenu_cursor_indices(state, kind)
+                                .get(row_idx)
+                                .copied()
+                                .unwrap_or(0)
+                                .min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
+                            toggle_auto_screenshot_option(state, choice_idx);
                             return ScreenAction::None;
                         }
                     }
@@ -7625,8 +7801,17 @@ pub fn get_actors(
                                 .min(layout.texts.len().saturating_sub(1));
                             let is_scorebox_cycle_row = matches!(kind, SubmenuKind::SelectMusic)
                                 && row.label == SELECT_MUSIC_ROW_SCOREBOX_CYCLE;
+                            let is_auto_screenshot_row = matches!(kind, SubmenuKind::Gameplay)
+                                && row.label == GAMEPLAY_ROW_AUTO_SCREENSHOT;
+                            let is_multi_toggle_row =
+                                is_scorebox_cycle_row || is_auto_screenshot_row;
                             let scorebox_enabled_mask = if is_scorebox_cycle_row {
                                 select_music_scorebox_cycle_enabled_mask()
+                            } else {
+                                0
+                            };
+                            let auto_screenshot_mask = if is_auto_screenshot_row {
+                                auto_screenshot_enabled_mask()
                             } else {
                                 0
                             };
@@ -7642,13 +7827,20 @@ pub fn get_actors(
                                     if is_choice_selected {
                                         selected_left_x = Some(x);
                                     }
-                                    let is_choice_enabled = is_scorebox_cycle_row
-                                        && (scorebox_enabled_mask
+                                    let is_choice_enabled = if is_scorebox_cycle_row {
+                                        (scorebox_enabled_mask
                                             & scorebox_cycle_bit_from_choice(idx))
-                                            != 0;
+                                            != 0
+                                    } else if is_auto_screenshot_row {
+                                        (auto_screenshot_mask
+                                            & auto_screenshot_bit_from_choice(idx))
+                                            != 0
+                                    } else {
+                                        false
+                                    };
                                     let mut choice_color = if is_disabled && !is_choice_selected {
                                         sl_gray
-                                    } else if is_scorebox_cycle_row {
+                                    } else if is_multi_toggle_row {
                                         if is_choice_enabled {
                                             col_white
                                         } else {
@@ -7694,8 +7886,8 @@ pub fn get_actors(
                             }
 
                             // For normal rows, underline the selected option.
-                            // For GS Box Leaderboards, underline each enabled option (multi-select).
-                            if layout.inline_row && is_scorebox_cycle_row {
+                            // For multi-toggle rows, underline each enabled option.
+                            if layout.inline_row && is_multi_toggle_row {
                                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                                 let offset = widescale(3.0, 4.0);
                                 let underline_y = row_mid_y + layout.text_h * 0.5 + offset;
@@ -7703,8 +7895,14 @@ pub fn get_actors(
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
                                 for idx in 0..layout.texts.len() {
-                                    let bit = scorebox_cycle_bit_from_choice(idx);
-                                    if bit == 0 || (scorebox_enabled_mask & bit) == 0 {
+                                    let enabled = if is_scorebox_cycle_row {
+                                        let bit = scorebox_cycle_bit_from_choice(idx);
+                                        bit != 0 && (scorebox_enabled_mask & bit) != 0
+                                    } else {
+                                        let bit = auto_screenshot_bit_from_choice(idx);
+                                        bit != 0 && (auto_screenshot_mask & bit) != 0
+                                    };
+                                    if !enabled {
                                         continue;
                                     }
                                     let underline_left_x = choice_inner_left

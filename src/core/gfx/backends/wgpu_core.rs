@@ -212,6 +212,12 @@ enum Op {
 
 struct OwnedWindowHandle(pub Arc<Window>);
 
+impl std::fmt::Debug for OwnedWindowHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("OwnedWindowHandle(..)")
+    }
+}
+
 impl HasWindowHandle for OwnedWindowHandle {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
         self.0.window_handle()
@@ -338,11 +344,12 @@ fn init(
         wgpu::InstanceFlags::empty()
     };
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: api.backends(),
         flags: instance_flags,
         memory_budget_thresholds: Default::default(),
         backend_options: Default::default(),
+        display: Some(Box::new(OwnedWindowHandle(window.clone()))),
     });
 
     let surface_target = OwnedWindowHandle(window.clone());
@@ -1157,26 +1164,23 @@ pub fn draw(
     upload_projections(state, &render_list.cameras);
 
     let acquire_started = Instant::now();
-    let frame = match state.surface.get_current_texture() {
-        Ok(f) => f,
-        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+    let (frame, suboptimal) = match state.surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
+        wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (frame, true),
+        wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
             stats.acquire_us = elapsed_us_since(acquire_started);
             reconfigure_surface(state);
             return Ok(stats);
         }
-        Err(wgpu::SurfaceError::OutOfMemory) => return Err("Surface out of memory".into()),
-        Err(wgpu::SurfaceError::Timeout) => {
-            stats.acquire_us = elapsed_us_since(acquire_started);
-            return Ok(stats);
-        }
-        Err(wgpu::SurfaceError::Other) => {
+        wgpu::CurrentSurfaceTexture::Timeout
+        | wgpu::CurrentSurfaceTexture::Occluded
+        | wgpu::CurrentSurfaceTexture::Validation => {
             stats.acquire_us = elapsed_us_since(acquire_started);
             return Ok(stats);
         }
     };
     stats.acquire_us = elapsed_us_since(acquire_started);
     let waited_for_image = stats.acquire_us >= WGPU_IMAGE_WAIT_THRESHOLD_US;
-    let suboptimal = frame.suboptimal;
     let view = frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
@@ -1512,6 +1516,9 @@ pub fn draw(
         host_present_ns: completion.host_ns,
         calibration_error_ns: 0,
     };
+    if suboptimal {
+        reconfigure_surface(state);
+    }
 
     let mut tmesh_vpf = 0u32;
     for op in &state.scratch_ops {
@@ -1888,7 +1895,7 @@ fn build_pipeline_set(
 
     let pipeline_layout = match proj {
         ProjState::Immediates => {
-            let layouts = [bind_layout];
+            let layouts = [Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wgpu pipeline layout"),
                 bind_group_layouts: &layouts,
@@ -1896,7 +1903,7 @@ fn build_pipeline_set(
             })
         }
         ProjState::Uniform { layout, .. } => {
-            let layouts = [layout, bind_layout];
+            let layouts = [Some(layout), Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wgpu pipeline layout"),
                 bind_group_layouts: &layouts,
@@ -1948,7 +1955,7 @@ fn build_mesh_pipeline_set(
             immediate_size: PROJ_BYTES as u32,
         }),
         ProjState::Uniform { layout, .. } => {
-            let layouts = [layout];
+            let layouts = [Some(layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wgpu mesh pipeline layout"),
                 bind_group_layouts: &layouts,
@@ -1996,7 +2003,7 @@ fn build_textured_mesh_pipeline_set(
 
     let pipeline_layout = match proj {
         ProjState::Immediates => {
-            let layouts = [bind_layout];
+            let layouts = [Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wgpu textured-mesh pipeline layout"),
                 bind_group_layouts: &layouts,
@@ -2004,7 +2011,7 @@ fn build_textured_mesh_pipeline_set(
             })
         }
         ProjState::Uniform { layout, .. } => {
-            let layouts = [layout, bind_layout];
+            let layouts = [Some(layout), Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wgpu textured-mesh pipeline layout"),
                 bind_group_layouts: &layouts,

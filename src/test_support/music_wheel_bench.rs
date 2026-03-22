@@ -42,6 +42,7 @@ impl MusicWheelBenchFixture {
             song_has_edit_ptrs: Some(&self.song_has_edit_ptrs),
             show_music_wheel_grades: false,
             show_music_wheel_lamps: false,
+            new_pack_names: None,
         })
     }
 }
@@ -112,6 +113,7 @@ fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
         banner_path: None,
         background_path: None,
         background_changes: Vec::new(),
+        has_lua: song_idx % 4 == 0,
         cdtitle_path: None,
         music_path: None,
         display_bpm: String::from("160"),

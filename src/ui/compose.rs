@@ -1545,6 +1545,33 @@ fn calculate_uvs(
 }
 
 #[inline(always)]
+fn fold_sprite_xy_rot(
+    mut flip_x: bool,
+    mut flip_y: bool,
+    mut size_x: f32,
+    mut size_y: f32,
+    rot_x_deg: f32,
+    rot_y_deg: f32,
+) -> (bool, bool, f32, f32) {
+    // Sprite instances only preserve 2D rotation in the fast path. Fold SM's
+    // X/Y rotations into foreshortening plus texture flips so Y=180 mirrors
+    // horizontally instead of becoming an accidental in-plane 180-degree turn.
+    let cos_y = rot_y_deg.to_radians().cos();
+    size_x *= cos_y.abs();
+    if cos_y.is_sign_negative() {
+        flip_x = !flip_x;
+    }
+
+    let cos_x = rot_x_deg.to_radians().cos();
+    size_y *= cos_x.abs();
+    if cos_x.is_sign_negative() {
+        flip_y = !flip_y;
+    }
+
+    (flip_x, flip_y, size_x, size_y)
+}
+
+#[inline(always)]
 fn push_sprite<'a>(
     out: &mut Vec<renderer::RenderObject<'a>>,
     camera: u8,
@@ -1599,6 +1626,8 @@ fn push_sprite<'a>(
     let center_y = ((cb - ct) * base_size.y).mul_add(0.5, base_center.y);
     let size_x = base_size.x * sx_crop;
     let size_y = base_size.y * sy_crop;
+    let (flip_x, flip_y, size_x, size_y) =
+        fold_sprite_xy_rot(flip_x, flip_y, size_x, size_y, rot_x_deg, rot_y_deg);
 
     let (uv_scale, uv_offset) = if is_solid {
         ([1.0, 1.0], [0.0, 0.0])
@@ -1660,12 +1689,10 @@ fn push_sprite<'a>(
     }
 
     // Matrix = T * R * S
-    // SM->world flips Y, so rotationx sign flips; rotationy/z keep sign.
+    // Sprite fast-path rendering only preserves in-plane rotation; X/Y folding
+    // above already handled their SM parity.
     let transform = {
-        let rx = Matrix4::from_angle_x(Rad((-rot_x_deg).to_radians()));
-        let ry = Matrix4::from_angle_y(Rad(rot_y_deg.to_radians()));
-        let rz = Matrix4::from_angle_z(Rad(rot_z_deg.to_radians()));
-        let r = rx * ry * rz;
+        let r = Matrix4::from_angle_z(Rad(rot_z_deg.to_radians()));
         let s = Matrix4::from_nonuniform_scale(size_x, size_y, 1.0);
         let t = Matrix4::from_translation(Vector3::new(center_x, center_y, world_z));
         t * r * s
@@ -2325,7 +2352,7 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
 
 #[cfg(test)]
 mod tests {
-    use super::wrap_text_lines_by_words;
+    use super::{fold_sprite_xy_rot, wrap_text_lines_by_words};
 
     fn boxed_lines(lines: &[&str]) -> Vec<Box<str>> {
         lines.iter().map(|line| Box::<str>::from(*line)).collect()
@@ -2347,5 +2374,25 @@ mod tests {
     fn wrapwidthpixels_keeps_long_word_on_own_line() {
         let lines = wrap_text_lines_by_words("AAAA BB", 3, 1, |word| word.len() as i32);
         assert_eq!(lines, boxed_lines(&["AAAA", "BB"]));
+    }
+
+    #[test]
+    fn sprite_rotationy_180_folds_to_horizontal_flip() {
+        let (flip_x, flip_y, size_x, size_y) =
+            fold_sprite_xy_rot(false, false, 22.0, 10.0, 0.0, 180.0);
+        assert!(flip_x);
+        assert!(!flip_y);
+        assert!((size_x - 22.0).abs() < 0.0001);
+        assert!((size_y - 10.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn sprite_rotationx_180_folds_to_vertical_flip() {
+        let (flip_x, flip_y, size_x, size_y) =
+            fold_sprite_xy_rot(false, false, 22.0, 10.0, 180.0, 0.0);
+        assert!(!flip_x);
+        assert!(flip_y);
+        assert!((size_x - 22.0).abs() < 0.0001);
+        assert!((size_y - 10.0).abs() < 0.0001);
     }
 }

@@ -2,7 +2,7 @@ use crate::assets::AssetManager;
 use crate::game::chart::{ChartData, StaminaCounts};
 use crate::game::judgment::JudgeGrade;
 use crate::game::profile;
-use crate::game::scores::Grade;
+use crate::game::scores::{Grade, GrooveStatsEvalState, ItlEvalState};
 use crate::game::scroll::ScrollSpeedSetting;
 use crate::game::song::SongData;
 use crate::game::timing::{HistogramMs, TimingStats, WindowCounts};
@@ -68,8 +68,15 @@ fn bench_score_info() -> ScoreInfo {
     ScoreInfo {
         song,
         chart,
+        side: profile::PlayerSide::P1,
         profile_name: "BenchPlayer".to_string(),
         score_valid: true,
+        disqualified: false,
+        groovestats: GrooveStatsEvalState {
+            valid: true,
+            reason_lines: Vec::new(),
+        },
+        itl: ItlEvalState::default(),
         judgment_counts,
         score_percent: 0.9765,
         grade: Grade::Tier02,
@@ -143,6 +150,7 @@ fn bench_song() -> SongData {
         banner_path: None,
         background_path: None,
         background_changes: Vec::new(),
+        has_lua: false,
         cdtitle_path: None,
         music_path: None,
         display_bpm: "180".to_string(),
