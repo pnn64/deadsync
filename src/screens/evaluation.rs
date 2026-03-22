@@ -646,6 +646,7 @@ pub struct State {
     pub gameplay_elapsed: f32,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    pub itl_progress: [Option<scores::ItlEventProgress>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -660,12 +661,15 @@ pub struct State {
     pub auto_advance_seconds: Option<f32>,
     pub allow_online_panes: bool,
     pub auto_screenshot_taken: bool,
+    pub itl_overlay_visible: bool,
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let mut score_info: [Option<ScoreInfo>; MAX_PLAYERS] = std::array::from_fn(|_| None);
+    let mut itl_progress: [Option<scores::ItlEventProgress>; MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
@@ -696,7 +700,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         // Persist one score file per play (per local profile), including fails and replay lane
         // input, unless the run was ranking-invalid (autoplay, score-invalid modifiers, etc.).
         scores::save_local_scores_from_gameplay(&gs);
-        scores::save_itl_data_from_gameplay(&gs);
+        itl_progress = scores::save_itl_data_from_gameplay(&gs);
         scores::submit_groovestats_payloads_from_gameplay(&gs);
         scores::submit_arrowcloud_payloads_from_gameplay(&gs);
 
@@ -1127,6 +1131,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         }
     }
 
+    let itl_overlay_visible = itl_progress.iter().flatten().next().is_some();
+
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app.rs
         bg: heart_bg::State::new(),
@@ -1135,6 +1141,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
+        itl_progress,
         density_graph_mesh,
         timing_hist_mesh,
         timing_hist_mesh_ex,
@@ -1149,6 +1156,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         auto_advance_seconds: None,
         allow_online_panes: true,
         auto_screenshot_taken: false,
+        itl_overlay_visible,
         active_pane,
         active_graph,
     }
@@ -1191,6 +1199,7 @@ pub fn init_from_score_info(
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
+        itl_progress: std::array::from_fn(|_| None),
         density_graph_mesh: std::array::from_fn(|_| None),
         timing_hist_mesh: std::array::from_fn(|_| None),
         timing_hist_mesh_ex: std::array::from_fn(|_| None),
@@ -1205,6 +1214,7 @@ pub fn init_from_score_info(
         auto_advance_seconds: None,
         allow_online_panes: true,
         auto_screenshot_taken: false,
+        itl_overlay_visible: false,
         active_pane,
         active_graph,
     }
@@ -1469,6 +1479,18 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     if state.auto_advance_seconds.is_some() {
         return ScreenAction::None;
+    }
+    if state.itl_overlay_visible {
+        return match ev.action {
+            VirtualAction::p1_back
+            | VirtualAction::p1_start
+            | VirtualAction::p2_back
+            | VirtualAction::p2_start => {
+                state.itl_overlay_visible = false;
+                ScreenAction::None
+            }
+            _ => ScreenAction::None,
+        };
     }
     let return_target = if state.return_to_course {
         Screen::SelectCourse
@@ -2197,6 +2219,27 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
+    if !state.itl_overlay_visible {
+        let progress_single = [(0, player_side)];
+        let progress_vs = [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)];
+        let progress_players: &[(usize, profile::PlayerSide)] =
+            if play_style == profile::PlayStyle::Versus {
+                &progress_vs
+            } else {
+                &progress_single
+            };
+        for &(player_idx, side) in progress_players {
+            let Some(progress) = state.itl_progress[player_idx].as_ref() else {
+                continue;
+            };
+            actors.extend(eval_panes::build_itl_progress_box(
+                side,
+                play_style != profile::PlayStyle::Versus,
+                progress,
+            ));
+        }
+    }
+
     // --- Panes (Simply Love ScreenEvaluation common/Panes) ---
     {
         for controller in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
@@ -2868,6 +2911,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // ScreenEvaluationStage in stinger (standard Simply Love visual style).
     actors.extend(build_stage_in_stinger(state));
+
+    if state.itl_overlay_visible {
+        let progress_single = [(0, player_side)];
+        let progress_vs = [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)];
+        let progress_players: &[(usize, profile::PlayerSide)] =
+            if play_style == profile::PlayStyle::Versus {
+                &progress_vs
+            } else {
+                &progress_single
+            };
+        let mut panels = Vec::with_capacity(progress_players.len());
+        for &(player_idx, side) in progress_players {
+            let Some(progress) = state.itl_progress[player_idx].as_ref() else {
+                continue;
+            };
+            panels.push((side, progress));
+        }
+        actors.extend(eval_panes::build_itl_event_overlay(panels.as_slice()));
+    }
 
     actors
 }

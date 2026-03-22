@@ -1560,10 +1560,14 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     }
 }
 
-pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
+pub fn save_itl_data_from_gameplay(
+    gs: &gameplay::State,
+) -> [Option<ItlEventProgress>; gameplay::MAX_PLAYERS] {
+    let mut progress: [Option<ItlEventProgress>; gameplay::MAX_PLAYERS] =
+        std::array::from_fn(|_| None);
     if gs.autoplay_used {
         debug!("Skipping ITL save: autoplay or replay was used during this stage.");
-        return;
+        return progress;
     }
 
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
@@ -1577,6 +1581,7 @@ pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
         }
 
         let mut data = read_itl_file(profile_id.as_str());
+        itl_rebuild_song_ranks(&mut data);
         let eval = itl_eval_state(gs, player_idx, &data);
         if !eval.active {
             continue;
@@ -1590,6 +1595,7 @@ pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
             );
             continue;
         }
+        let prev_totals = itl_point_totals(&data);
 
         let Some(song_dir) = itl_song_dir(gs.song.as_ref()) else {
             continue;
@@ -1625,9 +1631,10 @@ pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
             gs.players[player_idx].fail_time,
             false,
         );
+        let current_run_ex = itl_ex_hundredths(ex_percent);
         let new_entry = ItlHashEntry {
             judgments: judgments.clone(),
-            ex: itl_ex_hundredths(ex_percent),
+            ex: current_run_ex,
             clear_type: itl_clear_type(&judgments),
             points: itl_points_for_song(passing_points, max_scoring_points, ex_percent),
             used_cmod: eval.used_cmod,
@@ -1636,34 +1643,56 @@ pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
             passing_points,
             max_scoring_points,
             max_points,
+            rank: None,
+            steps_type: itl_steps_type(gs.charts[player_idx].as_ref()).to_string(),
+            passes: prev
+                .as_ref()
+                .map_or(1, |entry| entry.passes.saturating_add(1)),
         };
 
-        let mut updated = false;
+        let mut needs_write = path_changed;
+        let mut best_changed = false;
         match data.hash_map.get_mut(chart_hash) {
             None => {
-                data.hash_map.insert(chart_hash.to_string(), new_entry);
-                updated = true;
+                data.hash_map
+                    .insert(chart_hash.to_string(), new_entry.clone());
+                needs_write = true;
             }
             Some(existing) => {
+                if existing.passes != new_entry.passes {
+                    existing.passes = new_entry.passes;
+                    needs_write = true;
+                }
+                if !existing
+                    .steps_type
+                    .eq_ignore_ascii_case(new_entry.steps_type.as_str())
+                {
+                    existing.steps_type = new_entry.steps_type.clone();
+                    needs_write = true;
+                }
+
                 let ex_improved = new_entry.ex > existing.ex;
                 let ex_tied = new_entry.ex == existing.ex;
                 if ex_improved {
                     existing.ex = new_entry.ex;
                     existing.points = new_entry.points;
                     existing.judgments = new_entry.judgments.clone();
-                    updated = true;
+                    needs_write = true;
+                    best_changed = true;
                 } else if ex_tied && itl_judgments_better(&new_entry.judgments, &existing.judgments)
                 {
                     existing.judgments = new_entry.judgments.clone();
-                    updated = true;
+                    needs_write = true;
+                    best_changed = true;
                 }
                 if new_entry.clear_type > existing.clear_type {
                     existing.clear_type = new_entry.clear_type;
-                    updated = true;
+                    needs_write = true;
+                    best_changed = true;
                 }
-                if updated {
+                if best_changed {
                     existing.used_cmod = new_entry.used_cmod;
-                    existing.date = new_entry.date;
+                    existing.date = new_entry.date.clone();
                     existing.no_cmod = new_entry.no_cmod;
                     existing.passing_points = new_entry.passing_points;
                     existing.max_scoring_points = new_entry.max_scoring_points;
@@ -1672,11 +1701,41 @@ pub fn save_itl_data_from_gameplay(gs: &gameplay::State) {
             }
         }
 
-        if updated || path_changed {
+        itl_rebuild_song_ranks(&mut data);
+        let current_totals = itl_point_totals(&data);
+        let current_entry = data
+            .hash_map
+            .get(chart_hash)
+            .cloned()
+            .unwrap_or(new_entry.clone());
+        let prev_entry = prev.unwrap_or_default();
+        progress[player_idx] = Some(ItlEventProgress {
+            name: itl_event_name(gs.song.as_ref()),
+            is_doubles: current_entry.steps_type.eq_ignore_ascii_case("double"),
+            score_hundredths: current_run_ex,
+            score_delta_hundredths: itl_delta_i32(current_run_ex, prev_entry.ex),
+            current_points: current_entry.points,
+            point_delta: itl_delta_i32(current_entry.points, prev_entry.points),
+            current_ranking_points: current_totals.ranking_points,
+            ranking_delta: itl_delta_i32(current_totals.ranking_points, prev_totals.ranking_points),
+            current_song_points: current_totals.song_points,
+            song_delta: itl_delta_i32(current_totals.song_points, prev_totals.song_points),
+            current_ex_points: current_totals.ex_points,
+            ex_delta: itl_delta_i32(current_totals.ex_points, prev_totals.ex_points),
+            current_total_points: current_totals.total_points,
+            total_delta: itl_delta_i32(current_totals.total_points, prev_totals.total_points),
+            total_passes: current_entry.passes.max(1),
+            clear_type_before: Some(prev_entry.clear_type),
+            clear_type_after: Some(current_entry.clear_type),
+        });
+
+        if needs_write {
             write_itl_file(profile_id.as_str(), &data);
             set_cached_itl_file(profile_id.as_str(), data);
         }
     }
+
+    progress
 }
 
 const GROOVESTATS_SUBMIT_MAX_ENTRIES: usize = 10;
@@ -1704,12 +1763,39 @@ pub struct ItlEvalState {
     pub reason_lines: Vec<String>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct ItlEventProgress {
+    pub name: String,
+    pub is_doubles: bool,
+    pub score_hundredths: u32,
+    pub score_delta_hundredths: i32,
+    pub current_points: u32,
+    pub point_delta: i32,
+    pub current_ranking_points: u32,
+    pub ranking_delta: i32,
+    pub current_song_points: u32,
+    pub song_delta: i32,
+    pub current_ex_points: u32,
+    pub ex_delta: i32,
+    pub current_total_points: u32,
+    pub total_delta: i32,
+    pub total_passes: u32,
+    pub clear_type_before: Option<u8>,
+    pub clear_type_after: Option<u8>,
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct ItlFileData {
     #[serde(rename = "pathMap", default)]
     path_map: HashMap<String, String>,
     #[serde(rename = "hashMap", default)]
     hash_map: HashMap<String, ItlHashEntry>,
+    #[serde(default)]
+    points: Vec<u32>,
+    #[serde(rename = "pointsSingle", default)]
+    points_single: Vec<u32>,
+    #[serde(rename = "pointsDouble", default)]
+    points_double: Vec<u32>,
     #[serde(rename = "unlockFolders", default)]
     unlock_folders: HashMap<String, bool>,
 }
@@ -1736,6 +1822,12 @@ struct ItlHashEntry {
     max_scoring_points: u32,
     #[serde(rename = "maxPoints", default)]
     max_points: u32,
+    #[serde(default)]
+    rank: Option<u32>,
+    #[serde(rename = "stepsType", default)]
+    steps_type: String,
+    #[serde(default)]
+    passes: u32,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1768,6 +1860,14 @@ struct ItlJudgments {
     rolls: u32,
     #[serde(rename = "totalRolls", default)]
     total_rolls: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ItlPointTotals {
+    ranking_points: u32,
+    song_points: u32,
+    ex_points: u32,
+    total_points: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2237,6 +2337,97 @@ fn itl_chart_no_cmod(song: &crate::game::song::SongData, prev: Option<&ItlHashEn
         },
         |data| data.no_cmod,
     )
+}
+
+#[inline(always)]
+fn itl_event_name(song: &crate::game::song::SongData) -> String {
+    itl_group_name(song).unwrap_or_else(|| "ITL Online 2026".to_string())
+}
+
+#[inline(always)]
+fn itl_steps_type(chart: &crate::game::chart::ChartData) -> &'static str {
+    if chart.chart_type.to_ascii_lowercase().contains("double") {
+        "double"
+    } else {
+        "single"
+    }
+}
+
+#[inline(always)]
+fn itl_rank_for_points(sorted_points: &[u32], points: u32) -> Option<u32> {
+    sorted_points
+        .iter()
+        .position(|value| *value == points)
+        .map(|idx| idx.saturating_add(1) as u32)
+}
+
+fn itl_rebuild_song_ranks(data: &mut ItlFileData) {
+    let mut points: Vec<u32> = data.hash_map.values().map(|entry| entry.points).collect();
+    points.sort_unstable_by(|a, b| b.cmp(a));
+
+    let mut points_single = Vec::with_capacity(points.len());
+    let mut points_double = Vec::with_capacity(points.len());
+    let mut unknown_points = Vec::new();
+    let mut plays_single = 0usize;
+    let mut plays_double = 0usize;
+
+    for entry in data.hash_map.values_mut() {
+        entry.rank = itl_rank_for_points(points.as_slice(), entry.points);
+        if entry.steps_type.eq_ignore_ascii_case("single") {
+            points_single.push(entry.points);
+            plays_single = plays_single.saturating_add(1);
+        } else if entry.steps_type.eq_ignore_ascii_case("double") {
+            points_double.push(entry.points);
+            plays_double = plays_double.saturating_add(1);
+        } else {
+            unknown_points.push(entry.points);
+        }
+    }
+
+    if plays_single > plays_double {
+        points_single.extend(unknown_points);
+    } else {
+        points_double.extend(unknown_points);
+    }
+
+    points_single.sort_unstable_by(|a, b| b.cmp(a));
+    points_double.sort_unstable_by(|a, b| b.cmp(a));
+
+    for entry in data.hash_map.values_mut() {
+        if entry.steps_type.eq_ignore_ascii_case("single") {
+            entry.rank = itl_rank_for_points(points_single.as_slice(), entry.points);
+        } else if entry.steps_type.eq_ignore_ascii_case("double") {
+            entry.rank = itl_rank_for_points(points_double.as_slice(), entry.points);
+        }
+    }
+
+    data.points = points;
+    data.points_single = points_single;
+    data.points_double = points_double;
+}
+
+fn itl_point_totals(data: &ItlFileData) -> ItlPointTotals {
+    let ranking_points = data.points.iter().take(75).copied().sum();
+    let mut song_points = 0u32;
+    let mut ex_points = 0u32;
+    let mut total_points = 0u32;
+    for entry in data.hash_map.values() {
+        song_points = song_points.saturating_add(entry.passing_points);
+        ex_points = ex_points.saturating_add(entry.points.saturating_sub(entry.passing_points));
+        total_points = total_points.saturating_add(entry.points);
+    }
+    ItlPointTotals {
+        ranking_points,
+        song_points,
+        ex_points,
+        total_points,
+    }
+}
+
+#[inline(always)]
+fn itl_delta_i32(current: u32, previous: u32) -> i32 {
+    (i64::from(current) - i64::from(previous)).clamp(i64::from(i32::MIN), i64::from(i32::MAX))
+        as i32
 }
 
 fn loaded_itl_chart_no_cmod_for_gameplay(
@@ -5900,6 +6091,44 @@ mod tests {
             Some("/Songs/Custom Pack/Example"),
             &data
         ));
+    }
+
+    #[test]
+    fn itl_totals_split_song_and_ex_points() {
+        let mut data = ItlFileData::default();
+        data.hash_map.insert(
+            "a".to_string(),
+            ItlHashEntry {
+                points: 100,
+                passing_points: 60,
+                steps_type: "single".to_string(),
+                ..ItlHashEntry::default()
+            },
+        );
+        data.hash_map.insert(
+            "b".to_string(),
+            ItlHashEntry {
+                points: 50,
+                passing_points: 20,
+                steps_type: "double".to_string(),
+                ..ItlHashEntry::default()
+            },
+        );
+
+        itl_rebuild_song_ranks(&mut data);
+
+        assert_eq!(data.points, vec![100, 50]);
+        assert_eq!(data.hash_map["a"].rank, Some(1));
+        assert_eq!(data.hash_map["b"].rank, Some(1));
+        assert_eq!(
+            itl_point_totals(&data),
+            ItlPointTotals {
+                ranking_points: 150,
+                song_points: 80,
+                ex_points: 70,
+                total_points: 150,
+            }
+        );
     }
 
     #[test]

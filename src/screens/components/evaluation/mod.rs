@@ -1,5 +1,6 @@
 pub mod eval_grades;
 pub mod eval_graphs;
+pub mod event_progress;
 pub mod pane_column;
 pub mod pane_gs_records;
 pub mod pane_machine_records;
@@ -10,6 +11,8 @@ pub mod pane_stats;
 pub mod pane_timing;
 mod utils;
 
+pub use event_progress::build_itl_event_overlay;
+pub use event_progress::build_itl_progress_box;
 pub use pane_column::build_column_judgments_pane;
 pub use pane_gs_records::build_arrowcloud_records_pane;
 pub use pane_gs_records::build_gs_records_pane;
