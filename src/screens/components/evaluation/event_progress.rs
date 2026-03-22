@@ -1,6 +1,7 @@
 use crate::act;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height};
-use crate::game::{profile, scores};
+use crate::game::{profile, scores, song::SongData};
+use crate::screens::components::shared::banner as shared_banner;
 use crate::ui::actors::{Actor, SizeSpec, TextAttribute};
 use crate::ui::color::{self, JUDGMENT_RGBA};
 
@@ -463,6 +464,29 @@ fn build_overlay_leaderboard(
     children
 }
 
+fn build_overlay_banner_and_song(song: &SongData, z: i16) -> Vec<Actor> {
+    let mut children = Vec::with_capacity(2);
+    if let Some(banner_path) = song.banner_path.as_ref() {
+        let banner_key = banner_path.to_string_lossy().into_owned();
+        children.push(shared_banner::sprite(
+            banner_key, 0.0, 112.0, 418.0, 164.0, 0.34, z,
+        ));
+    }
+    children.push(act!(text:
+        font("miso"):
+        settext(song.display_full_title(crate::config::get().translated_titles)):
+        align(0.5, 0.0):
+        xy(0.0, 142.6):
+        zoom(0.68):
+        maxwidth(500.0 / 0.68):
+        horizalign(center):
+        valign(top):
+        diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
+        z(z + 1)
+    ));
+    children
+}
+
 fn build_upper_panel(
     center_x: f32,
     center_y: f32,
@@ -516,6 +540,7 @@ fn build_overlay_panel(
     center_y: f32,
     pane_width: f32,
     pane_height: f32,
+    song: Option<&SongData>,
     progress: &scores::ItlEventProgress,
     page_idx: usize,
     z: i16,
@@ -578,9 +603,17 @@ fn build_overlay_panel(
         z(4)
     ));
     match active_overlay_page(progress, page_idx) {
-        Some(scores::ItlOverlayPage::Leaderboard(entries)) => children.extend(
-            build_overlay_leaderboard(entries.as_slice(), pane_width, single_player, 4),
-        ),
+        Some(scores::ItlOverlayPage::Leaderboard(entries)) => {
+            children.extend(build_overlay_leaderboard(
+                entries.as_slice(),
+                pane_width,
+                single_player,
+                4,
+            ));
+            if let Some(song) = song {
+                children.extend(build_overlay_banner_and_song(song, 4));
+            }
+        }
         Some(scores::ItlOverlayPage::Text(text)) => children.push(build_body_text(
             text.clone(),
             pane_width,
@@ -670,6 +703,7 @@ pub fn build_itl_progress_box(
 
 pub fn build_itl_event_overlay(
     single_player: bool,
+    song: Option<&SongData>,
     panels: &[(profile::PlayerSide, &scores::ItlEventProgress, usize)],
 ) -> Vec<Actor> {
     if panels.is_empty() {
@@ -705,6 +739,7 @@ pub fn build_itl_event_overlay(
             center_y,
             pane_width,
             pane_height,
+            song,
             progress,
             *page_idx,
             2001,

@@ -40,8 +40,11 @@ const NEW_BADGE_COLOR: [f32; 4] = [0.3, 1.0, 0.3, 1.0];
 const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
+// Simply Love and Arrow Cloud both use zoom(0.2) for the single-line ITL wheel value.
+// Our stacked Points+Score mode is deadsync-only, so it needs a smaller zoom to
+// keep both lines within that same visual footprint.
 const ITL_SCORE_ZOOM: f32 = 0.2;
-const ITL_POINTS_SCORE_ZOOM: f32 = 0.16;
+const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
 
 thread_local! {
     static ITL_EX_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =

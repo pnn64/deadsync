@@ -3004,8 +3004,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
             panels.push((side, progress, state.itl_overlay_page[player_idx]));
         }
+        let overlay_song = state
+            .score_info
+            .iter()
+            .flatten()
+            .next()
+            .map(|si| si.song.as_ref());
         actors.extend(eval_panes::build_itl_event_overlay(
             play_style != profile::PlayStyle::Versus,
+            overlay_song,
             panels.as_slice(),
         ));
     }
