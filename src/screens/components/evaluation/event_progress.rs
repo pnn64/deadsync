@@ -4,6 +4,8 @@ use crate::game::{profile, scores};
 use crate::ui::actors::{Actor, SizeSpec, TextAttribute};
 use crate::ui::color::{self, JUDGMENT_RGBA};
 
+use super::utils::format_machine_record_date;
+
 const ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
 const POSITIVE_GREEN: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
 const NEGATIVE_RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
@@ -17,6 +19,10 @@ const OVERLAY_ROW_HEIGHT: f32 = 24.0;
 const POPUP_DISMISS_TEXT: &str = "Press &START; to dismiss.";
 const MORE_INFO_TEXT: &str = "More Information";
 const OVERLAY_PANE_NAV_WIDTH: f32 = 230.0;
+const OVERLAY_LB_ROWS: usize = 13;
+const OVERLAY_LB_GRID_W: f32 = 230.0;
+const OVERLAY_LB_RIVAL: [f32; 4] = color::rgba_hex("#BD94FF");
+const OVERLAY_LB_SELF: [f32; 4] = color::rgba_hex("#A1FF94");
 const TIER_BRONZE: [f32; 4] = color::rgba_hex("#966832");
 const TIER_SILVER: [f32; 4] = color::rgba_hex("#A1AEC1");
 const TIER_GOLD: [f32; 4] = color::rgba_hex("#F6AB2D");
@@ -132,13 +138,24 @@ fn build_overlay_body(progress: &scores::ItlEventProgress) -> String {
 }
 
 #[inline(always)]
-fn active_overlay_page_text(progress: &scores::ItlEventProgress, page_idx: usize) -> String {
+fn active_overlay_page(
+    progress: &scores::ItlEventProgress,
+    page_idx: usize,
+) -> Option<&scores::ItlOverlayPage> {
     progress
         .overlay_pages
         .get(page_idx)
         .or_else(|| progress.overlay_pages.first())
-        .cloned()
-        .unwrap_or_else(|| build_overlay_body(progress))
+}
+
+#[inline(always)]
+fn leaderboard_name(entry: &scores::LeaderboardEntry) -> String {
+    let name = entry.name.trim();
+    if name.is_empty() {
+        "----".to_string()
+    } else {
+        name.to_string()
+    }
 }
 
 #[inline(always)]
@@ -314,6 +331,138 @@ fn build_body_text(
     actor
 }
 
+fn build_overlay_leaderboard(
+    entries: &[scores::LeaderboardEntry],
+    pane_width: f32,
+    single_player: bool,
+    z: i16,
+) -> Vec<Actor> {
+    let rank_x = -(pane_width - OVERLAY_LB_GRID_W) * 0.5 - OVERLAY_LB_GRID_W * 0.5 + 32.0;
+    let name_x = -(pane_width - OVERLAY_LB_GRID_W) * 0.5 - OVERLAY_LB_GRID_W * 0.5 + 100.0;
+    let score_x = -(pane_width - OVERLAY_LB_GRID_W) * 0.5 + OVERLAY_LB_GRID_W * 0.5 - 2.0;
+    let date_x = score_x + 100.0;
+    let first_row_y = -OVERLAY_ROW_HEIGHT * ((OVERLAY_LB_ROWS - 1) as f32 * 0.5);
+    let mut rows: Vec<(
+        String,
+        String,
+        String,
+        String,
+        [f32; 4],
+        [f32; 4],
+        Option<[f32; 4]>,
+    )> = Vec::with_capacity(OVERLAY_LB_ROWS);
+
+    if entries.is_empty() {
+        rows.push((
+            String::new(),
+            "No Scores".to_string(),
+            String::new(),
+            String::new(),
+            WHITE,
+            WHITE,
+            None,
+        ));
+    } else {
+        for entry in entries.iter().take(OVERLAY_LB_ROWS) {
+            let bg = if entry.is_rival {
+                Some(OVERLAY_LB_RIVAL)
+            } else if entry.is_self {
+                Some(OVERLAY_LB_SELF)
+            } else {
+                None
+            };
+            let row_color = if bg.is_some() { BLACK } else { WHITE };
+            let score_color = if entry.is_fail {
+                NEGATIVE_RED
+            } else {
+                row_color
+            };
+            rows.push((
+                format!("{}.", entry.rank),
+                leaderboard_name(entry),
+                format!("{:.2}%", entry.score / 100.0),
+                format_machine_record_date(&entry.date),
+                row_color,
+                score_color,
+                bg,
+            ));
+        }
+    }
+
+    while rows.len() < OVERLAY_LB_ROWS {
+        rows.push((
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            WHITE,
+            WHITE,
+            None,
+        ));
+    }
+
+    let mut children = Vec::with_capacity(OVERLAY_LB_ROWS * 5);
+    for (idx, (rank, name, score, date, row_color, score_color, bg)) in rows.into_iter().enumerate()
+    {
+        let y = first_row_y + OVERLAY_ROW_HEIGHT * idx as f32;
+        if let Some(bg) = bg {
+            children.push(act!(quad:
+                align(0.5, 0.5):
+                xy(0.0, y):
+                setsize(pane_width, OVERLAY_ROW_HEIGHT):
+                diffuse(bg[0], bg[1], bg[2], bg[3]):
+                z(z)
+            ));
+        }
+        children.push(act!(text:
+            font("miso"):
+            settext(rank):
+            align(1.0, 0.5):
+            xy(rank_x, y):
+            zoom(0.82):
+            maxwidth(30.0):
+            horizalign(right):
+            diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
+            z(z + 1)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext(name):
+            align(0.5, 0.5):
+            xy(name_x, y):
+            zoom(0.82):
+            maxwidth(130.0):
+            horizalign(center):
+            diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
+            z(z + 1)
+        ));
+        children.push(act!(text:
+            font("miso"):
+            settext(score):
+            align(1.0, 0.5):
+            xy(score_x, y):
+            zoom(0.82):
+            horizalign(right):
+            diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
+            z(z + 1)
+        ));
+        if single_player {
+            children.push(act!(text:
+                font("miso"):
+                settext(date):
+                align(1.0, 0.5):
+                xy(date_x, y):
+                zoom(0.82):
+                horizalign(right):
+                diffuse(row_color[0], row_color[1], row_color[2], row_color[3]):
+                z(z + 1)
+            ));
+        }
+    }
+
+    children
+}
+
 fn build_upper_panel(
     center_x: f32,
     center_y: f32,
@@ -374,9 +523,9 @@ fn build_overlay_panel(
     let border_width = 2.0;
     let header_y = -pane_height * 0.5 + 12.0;
     let header_bar_y = -pane_height * 0.5 + OVERLAY_ROW_HEIGHT * 0.5;
-    let body = active_overlay_page_text(progress, page_idx);
     let has_more_info = progress.overlay_pages.len() > 1;
-    let mut children = Vec::with_capacity(11);
+    let single_player = pane_width > OVERLAY_LB_GRID_W;
+    let mut children = Vec::with_capacity(11 + OVERLAY_LB_ROWS * 5);
     children.push(act!(quad:
         align(0.5, 0.5):
         xy(0.0, 0.0):
@@ -428,13 +577,25 @@ fn build_overlay_panel(
         diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
         z(4)
     ));
-    children.push(build_body_text(
-        body,
-        pane_width,
-        pane_height,
-        OVERLAY_ROW_HEIGHT,
-        4,
-    ));
+    match active_overlay_page(progress, page_idx) {
+        Some(scores::ItlOverlayPage::Leaderboard(entries)) => children.extend(
+            build_overlay_leaderboard(entries.as_slice(), pane_width, single_player, 4),
+        ),
+        Some(scores::ItlOverlayPage::Text(text)) => children.push(build_body_text(
+            text.clone(),
+            pane_width,
+            pane_height,
+            OVERLAY_ROW_HEIGHT,
+            4,
+        )),
+        None => children.push(build_body_text(
+            build_overlay_body(progress),
+            pane_width,
+            pane_height,
+            OVERLAY_ROW_HEIGHT,
+            4,
+        )),
+    }
     if has_more_info {
         let nav_y = pane_height * 0.5 - OVERLAY_ROW_HEIGHT * 0.5;
         let icon_x = OVERLAY_PANE_NAV_WIDTH * 0.5 - 10.0;
@@ -508,6 +669,7 @@ pub fn build_itl_progress_box(
 }
 
 pub fn build_itl_event_overlay(
+    single_player: bool,
     panels: &[(profile::PlayerSide, &scores::ItlEventProgress, usize)],
 ) -> Vec<Actor> {
     if panels.is_empty() {
@@ -527,7 +689,7 @@ pub fn build_itl_event_overlay(
     ));
 
     for (idx, (side, progress, page_idx)) in panels.iter().enumerate() {
-        let center_x = if panels.len() == 1 {
+        let center_x = if single_player {
             screen_center_x()
         } else if idx == 0 && *side == profile::PlayerSide::P1 {
             screen_center_x() - 160.0

@@ -3004,7 +3004,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
             panels.push((side, progress, state.itl_overlay_page[player_idx]));
         }
-        actors.extend(eval_panes::build_itl_event_overlay(panels.as_slice()));
+        actors.extend(eval_panes::build_itl_event_overlay(
+            play_style != profile::PlayStyle::Versus,
+            panels.as_slice(),
+        ));
     }
 
     actors

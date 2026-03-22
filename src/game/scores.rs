@@ -1730,7 +1730,7 @@ pub fn save_itl_data_from_gameplay(
             clear_type_after: Some(current_entry.clear_type),
             overlay_pages: Vec::new(),
         };
-        event_progress.overlay_pages = itl_overlay_pages(&event_progress, None);
+        event_progress.overlay_pages = itl_overlay_pages(&event_progress, None, &[]);
         progress[player_idx] = Some(event_progress);
 
         if needs_write {
@@ -1767,6 +1767,12 @@ pub struct ItlEvalState {
     pub reason_lines: Vec<String>,
 }
 
+#[derive(Clone, Debug)]
+pub enum ItlOverlayPage {
+    Text(String),
+    Leaderboard(Vec<LeaderboardEntry>),
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ItlEventProgress {
     pub name: String,
@@ -1786,7 +1792,7 @@ pub struct ItlEventProgress {
     pub total_passes: u32,
     pub clear_type_before: Option<u8>,
     pub clear_type_after: Option<u8>,
-    pub overlay_pages: Vec<String>,
+    pub overlay_pages: Vec<ItlOverlayPage>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -2035,6 +2041,8 @@ struct GrooveStatsSubmitApiEvent {
     current_point_total: u32,
     #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
     previous_point_total: u32,
+    #[serde(rename = "itlLeaderboard", default)]
+    itl_leaderboard: Vec<LeaderboardApiEntry>,
     #[serde(default)]
     is_doubles: bool,
     progress: Option<GrooveStatsSubmitApiProgress>,
@@ -2663,17 +2671,27 @@ fn itl_achievement_page_text(achievement: &GrooveStatsSubmitApiAchievement) -> S
 fn itl_overlay_pages(
     progress: &ItlEventProgress,
     submit_progress: Option<&GrooveStatsSubmitApiProgress>,
-) -> Vec<String> {
-    let mut pages = vec![itl_summary_page_text(progress, submit_progress)];
+    submit_leaderboard: &[LeaderboardApiEntry],
+) -> Vec<ItlOverlayPage> {
+    let mut pages = vec![ItlOverlayPage::Text(itl_summary_page_text(
+        progress,
+        submit_progress,
+    ))];
     let Some(submit_progress) = submit_progress else {
+        pages.push(ItlOverlayPage::Leaderboard(leaderboard_entries_from_api(
+            submit_leaderboard.to_vec(),
+        )));
         return pages;
     };
     for quest in &submit_progress.quests_completed {
-        pages.push(itl_quest_page_text(quest));
+        pages.push(ItlOverlayPage::Text(itl_quest_page_text(quest)));
     }
     for achievement in &submit_progress.achievements_completed {
-        pages.push(itl_achievement_page_text(achievement));
+        pages.push(ItlOverlayPage::Text(itl_achievement_page_text(achievement)));
     }
+    pages.push(ItlOverlayPage::Leaderboard(leaderboard_entries_from_api(
+        submit_leaderboard.to_vec(),
+    )));
     pages
 }
 
@@ -2783,7 +2801,11 @@ fn itl_progress_from_submit(
         clear_type_after,
         overlay_pages: Vec::new(),
     };
-    progress.overlay_pages = itl_overlay_pages(&progress, itl.progress.as_ref());
+    progress.overlay_pages = itl_overlay_pages(
+        &progress,
+        itl.progress.as_ref(),
+        itl.itl_leaderboard.as_slice(),
+    );
     Some(progress)
 }
 
