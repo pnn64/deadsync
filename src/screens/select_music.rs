@@ -7334,7 +7334,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     if let Some(leaderboard_overlay) = sort_menu::build_leaderboard_overlay(&state.leaderboard) {
         actors.extend(leaderboard_overlay);
     }
-    if let Some(downloads_overlay) = sort_menu::build_downloads_overlay(&state.downloads_overlay) {
+    if let Some(downloads_overlay) =
+        sort_menu::build_downloads_overlay(&state.downloads_overlay, state.active_color_index)
+    {
         actors.extend(downloads_overlay);
     }
 

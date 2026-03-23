@@ -4,7 +4,7 @@ use crate::core::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use crate::game::parsing::{noteskin, simfile as song_loading};
-use crate::screens::components::shared::heart_bg;
+use crate::screens::components::shared::{heart_bg, loading_bar};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -127,6 +127,7 @@ impl LoadingState {
 
 static EMPTY_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from(""));
 static INIT_TITLE_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("DEAD SYNC"));
+static DONE_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("Done!"));
 static INITIALIZING_TEXT: LazyLock<Arc<str>> =
     LazyLock::new(|| Arc::<str>::from("Initializing..."));
 static SONGS_PHASE_TEXT: LazyLock<Arc<str>> =
@@ -324,7 +325,9 @@ fn loading_progress_values(loading: &LoadingState) -> (usize, usize, f32) {
 
 fn refresh_loading_count_text(loading: &mut LoadingState) {
     let (done, total, _) = loading_progress_values(loading);
-    loading.count_text = if total == 0 {
+    loading.count_text = if loading.done || (total > 0 && done >= total) {
+        DONE_TEXT.clone()
+    } else if total == 0 {
         EMPTY_TEXT.clone()
     } else {
         Arc::<str>::from(crate::screens::progress_count_text(done, total))
@@ -645,8 +648,6 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_
     let bar_h = LOADING_BAR_H;
     let bar_cx = screen_center_x();
     let bar_cy = screen_center_y() + 34.0;
-    let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
-
     actors.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
@@ -701,50 +702,22 @@ fn push_loading_overlay(state: &State, actors: &mut Vec<Actor>, loading_elapsed_
         ));
     }
 
-    let mut bar_children = Vec::with_capacity(4);
-    bar_children.push(act!(quad:
-        align(0.5, 0.5):
-        xy(bar_w / 2.0, bar_h / 2.0):
-        zoomto(bar_w, bar_h):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(0)
-    ));
-    bar_children.push(act!(quad:
-        align(0.5, 0.5):
-        xy(bar_w / 2.0, bar_h / 2.0):
-        zoomto(bar_w - 4.0, bar_h - 4.0):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(1)
-    ));
-    if fill_w > 0.0 {
-        bar_children.push(act!(quad:
-            align(0.0, 0.5):
-            xy(2.0, bar_h / 2.0):
-            zoomto(fill_w, bar_h - 4.0):
-            diffuse(fill[0], fill[1], fill[2], 1.0):
-            z(2)
-        ));
-    }
-    bar_children.push(act!(text:
-        font("miso"):
-        settext(loading.map_or_else(|| EMPTY_TEXT.clone(), |loading| loading.count_text.clone())):
-        align(0.5, 0.5):
-        xy(bar_w / 2.0, bar_h / 2.0):
-        zoom(0.9):
-        horizalign(center):
-        z(3)
-    ));
-    actors.push(Actor::Frame {
+    actors.push(loading_bar::build(loading_bar::LoadingBarParams {
         align: [0.5, 0.5],
         offset: [bar_cx, bar_cy],
-        size: [
-            crate::ui::actors::SizeSpec::Px(bar_w),
-            crate::ui::actors::SizeSpec::Px(bar_h),
-        ],
-        background: None,
+        width: bar_w,
+        height: bar_h,
+        progress,
+        label: loading
+            .map_or_else(|| EMPTY_TEXT.clone(), |loading| loading.count_text.clone())
+            .into(),
+        fill_rgba: [fill[0], fill[1], fill[2], 1.0],
+        bg_rgba: [0.0, 0.0, 0.0, 1.0],
+        border_rgba: [1.0, 1.0, 1.0, 1.0],
+        text_rgba: [1.0, 1.0, 1.0, 1.0],
+        text_zoom: 0.9,
         z: 110,
-        children: bar_children,
-    });
+    }));
 
     if let Some(speed_text) = speed_text {
         actors.push(act!(text:
