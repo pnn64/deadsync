@@ -2457,30 +2457,28 @@ fn groovestats_manual_qr_url(
         groovestats_qr_append_rescore(&mut rescored_str, label, value);
     }
 
-    Some(
-        format!(
-            "{}/QR/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F{}R{:x}C{}V{:x}",
-            base_url.trim_end_matches('/'),
-            counts.total_steps,
-            counts.fantastic_plus,
-            counts.fantastic,
-            counts.excellent,
-            counts.great,
-            counts.decent,
-            counts.way_off,
-            counts.miss,
-            counts.holds_held,
-            counts.total_holds,
-            counts.rolls_held,
-            counts.total_rolls,
-            counts.mines_hit,
-            counts.total_mines,
-            if failed { '1' } else { '0' },
-            rate,
-            if used_cmod { '1' } else { '0' },
-            hash_version,
-        ),
-    )
+    Some(format!(
+        "{}/QR/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F{}R{:x}C{}V{:x}",
+        base_url.trim_end_matches('/'),
+        counts.total_steps,
+        counts.fantastic_plus,
+        counts.fantastic,
+        counts.excellent,
+        counts.great,
+        counts.decent,
+        counts.way_off,
+        counts.miss,
+        counts.holds_held,
+        counts.total_holds,
+        counts.rolls_held,
+        counts.total_rolls,
+        counts.mines_hit,
+        counts.total_mines,
+        if failed { '1' } else { '0' },
+        rate,
+        if used_cmod { '1' } else { '0' },
+        hash_version,
+    ))
 }
 
 fn groovestats_manual_qr_url_from_gameplay(
@@ -3158,6 +3156,18 @@ fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
         .filter(|part| !part.is_empty())
         .filter_map(|part| part.parse::<u32>().ok());
     Some((nums.next()?, nums.next()?))
+}
+
+pub fn itl_points_for_chart(
+    chart: &crate::game::chart::ChartData,
+    ex_hundredths: u32,
+) -> Option<u32> {
+    let (passing_points, max_scoring_points) = parse_itl_points(chart.chart_name.as_str())?;
+    Some(itl_points_for_song(
+        passing_points,
+        max_scoring_points,
+        f64::from(ex_hundredths) / 100.0,
+    ))
 }
 
 fn itl_points_for_song(passing_points: u32, max_scoring_points: u32, ex_score: f64) -> u32 {
@@ -6835,6 +6845,14 @@ mod tests {
             Some((7500, 12000))
         );
         assert_eq!(parse_itl_points("No points here"), None);
+    }
+
+    #[test]
+    fn itl_points_for_chart_uses_chart_name_curve() {
+        let mut chart = sample_chart("dance-single");
+        chart.chart_name = "7500 (P) + 12000 (S)".to_string();
+
+        assert_eq!(itl_points_for_chart(&chart, 10_000), Some(19_500));
     }
 
     #[test]

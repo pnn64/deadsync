@@ -463,119 +463,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         ));
                     }
 
-                    if p.show_music_wheel_grades || p.show_music_wheel_lamps {
-                        let chart = if is_selected_slot {
-                            crate::screens::select_music::chart_for_steps_index(
-                                info,
-                                target_chart_type,
-                                p.selected_steps_index,
-                            )
-                        } else {
-                            chart_for_preferred_or_nearest_standard(
-                                info,
-                                target_chart_type,
-                                p.preferred_difficulty_index,
-                            )
-                        };
-
-                        if let Some(chart) = chart {
-                            for (side, grade_x) in [
-                                (profile::PlayerSide::P1, grade_x_p1),
-                                (profile::PlayerSide::P2, grade_x_p2),
-                            ] {
-                                if !profile::is_session_side_joined(side) {
-                                    continue;
-                                }
-                                let Some(cached_score) =
-                                    scores::get_cached_score_for_side(&chart.short_hash, side)
-                                else {
-                                    continue;
-                                };
-                                let has_score = cached_score.grade != scores::Grade::Failed
-                                    || cached_score.score_percent > 0.0;
-                                if !has_score {
-                                    continue;
-                                }
-
-                                if p.show_music_wheel_grades {
-                                    let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
-                                        align(0.5, 0.5):
-                                        xy(grade_x, grade_y):
-                                        zoom(grade_zoom):
-                                        z(2):
-                                        visible(true)
-                                    );
-                                    if let Actor::Sprite { cell, .. } = &mut grade_actor {
-                                        *cell =
-                                            Some((cached_score.grade.to_sprite_state(), u32::MAX));
-                                    }
-                                    slot_children.push(grade_actor);
-                                }
-
-                                if p.show_music_wheel_lamps {
-                                    let lamp_dir = if side == profile::PlayerSide::P1 {
-                                        -1.0
-                                    } else {
-                                        1.0
-                                    };
-                                    let lamp_x = grade_x + lamp_dir * widescale(13.0, 20.0);
-                                    let lamp_w = widescale(5.0, 6.0);
-                                    let lamp_h = 31.0;
-                                    let (lamp_color, lamp_pulsing, lamp_index) =
-                                        match cached_score.lamp_index {
-                                            Some(0) => (col_quint_lamp(), true, Some(0u8)),
-                                            Some(idx @ 1..=4) => {
-                                                let color_index = (idx - 1) as usize;
-                                                let base = color::JUDGMENT_RGBA[color_index.min(5)];
-                                                (base, true, Some(idx))
-                                            }
-                                            Some(_) => (col_clear_lamp(), false, None),
-                                            None if cached_score.grade == scores::Grade::Failed => {
-                                                (col_fail_lamp(), false, None)
-                                            }
-                                            None => (col_clear_lamp(), false, None),
-                                        };
-                                    let lamp_color_final = if lamp_pulsing {
-                                        let lamp_color2 = lerp_color(
-                                            [1.0; 4],
-                                            lamp_color,
-                                            LAMP_PULSE_LERP_TO_WHITE,
-                                        );
-                                        lerp_color(lamp_color, lamp_color2, lamp_pulse_t)
-                                    } else {
-                                        lamp_color
-                                    };
-                                    slot_children.push(act!(quad:
-                                        align(0.5, 0.5):
-                                        xy(lamp_x, grade_y):
-                                        zoomto(lamp_w, lamp_h):
-                                        diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
-                                        z(2)
-                                    ));
-                                    if let Some(lamp_index) = lamp_index
-                                        && let Some(count) = cached_score.lamp_judge_count
-                                        && count < 10
-                                    {
-                                        let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
-                                        let judge_y = grade_y + 10.0;
-                                        let judge_col = lamp_judge_count_color(lamp_index);
-                                        slot_children.push(act!(text:
-                                            font("wendy_screenevaluation"):
-                                            settext(digit_text(count)):
-                                            align(0.5, 0.5):
-                                            horizalign(center):
-                                            xy(judge_x, judge_y):
-                                            zoom(0.15):
-                                            diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
-                                            z(10)
-                                        ));
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    let itl_chart_hash = if is_selected_slot {
+                    let wheel_chart = if is_selected_slot {
                         crate::screens::select_music::chart_for_steps_index(
                             info,
                             target_chart_type,
@@ -587,8 +475,102 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             target_chart_type,
                             p.preferred_difficulty_index,
                         )
+                    };
+                    if (p.show_music_wheel_grades || p.show_music_wheel_lamps)
+                        && let Some(chart) = wheel_chart
+                    {
+                        for (side, grade_x) in [
+                            (profile::PlayerSide::P1, grade_x_p1),
+                            (profile::PlayerSide::P2, grade_x_p2),
+                        ] {
+                            if !profile::is_session_side_joined(side) {
+                                continue;
+                            }
+                            let Some(cached_score) =
+                                scores::get_cached_score_for_side(&chart.short_hash, side)
+                            else {
+                                continue;
+                            };
+                            let has_score = cached_score.grade != scores::Grade::Failed
+                                || cached_score.score_percent > 0.0;
+                            if !has_score {
+                                continue;
+                            }
+
+                            if p.show_music_wheel_grades {
+                                let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
+                                    align(0.5, 0.5):
+                                    xy(grade_x, grade_y):
+                                    zoom(grade_zoom):
+                                    z(2):
+                                    visible(true)
+                                );
+                                if let Actor::Sprite { cell, .. } = &mut grade_actor {
+                                    *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
+                                }
+                                slot_children.push(grade_actor);
+                            }
+
+                            if p.show_music_wheel_lamps {
+                                let lamp_dir = if side == profile::PlayerSide::P1 {
+                                    -1.0
+                                } else {
+                                    1.0
+                                };
+                                let lamp_x = grade_x + lamp_dir * widescale(13.0, 20.0);
+                                let lamp_w = widescale(5.0, 6.0);
+                                let lamp_h = 31.0;
+                                let (lamp_color, lamp_pulsing, lamp_index) =
+                                    match cached_score.lamp_index {
+                                        Some(0) => (col_quint_lamp(), true, Some(0u8)),
+                                        Some(idx @ 1..=4) => {
+                                            let color_index = (idx - 1) as usize;
+                                            let base = color::JUDGMENT_RGBA[color_index.min(5)];
+                                            (base, true, Some(idx))
+                                        }
+                                        Some(_) => (col_clear_lamp(), false, None),
+                                        None if cached_score.grade == scores::Grade::Failed => {
+                                            (col_fail_lamp(), false, None)
+                                        }
+                                        None => (col_clear_lamp(), false, None),
+                                    };
+                                let lamp_color_final = if lamp_pulsing {
+                                    let lamp_color2 =
+                                        lerp_color([1.0; 4], lamp_color, LAMP_PULSE_LERP_TO_WHITE);
+                                    lerp_color(lamp_color, lamp_color2, lamp_pulse_t)
+                                } else {
+                                    lamp_color
+                                };
+                                slot_children.push(act!(quad:
+                                    align(0.5, 0.5):
+                                    xy(lamp_x, grade_y):
+                                    zoomto(lamp_w, lamp_h):
+                                    diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
+                                    z(2)
+                                ));
+                                if let Some(lamp_index) = lamp_index
+                                    && let Some(count) = cached_score.lamp_judge_count
+                                    && count < 10
+                                {
+                                    let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
+                                    let judge_y = grade_y + 10.0;
+                                    let judge_col = lamp_judge_count_color(lamp_index);
+                                    slot_children.push(act!(text:
+                                        font("wendy_screenevaluation"):
+                                        settext(digit_text(count)):
+                                        align(0.5, 0.5):
+                                        horizalign(center):
+                                        xy(judge_x, judge_y):
+                                        zoom(0.15):
+                                        diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
+                                        z(10)
+                                    ));
+                                }
+                            }
+                        }
                     }
-                    .map(|chart| chart.short_hash.as_str());
+
+                    let itl_chart_hash = wheel_chart.map(|chart| chart.short_hash.as_str());
                     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
                         if matches!(p.itl_wheel_mode, SelectMusicItlWheelMode::Off) {
                             continue;
@@ -629,7 +611,13 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 ));
                             }
                             SelectMusicItlWheelMode::PointsAndScore => {
-                                let Some(itl_score) = local_itl else {
+                                let Some(points) =
+                                    local_itl.map(|score| score.points).or_else(|| {
+                                        wheel_chart.and_then(|chart| {
+                                            scores::itl_points_for_chart(chart, ex_hundredths)
+                                        })
+                                    })
+                                else {
                                     slot_children.push(act!(text:
                                         font("wendy_monospace_numbers"):
                                         settext(cached_itl_ex_text(ex_hundredths)):
@@ -645,7 +633,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
                                 slot_children.push(act!(text:
                                     font("wendy_monospace_numbers"):
-                                    settext(cached_itl_points_text(itl_score.points)):
+                                    settext(cached_itl_points_text(points)):
                                     align(1.0, 0.5):
                                     horizalign(right):
                                     xy(itl_ex_x, half_item_h + points_y):
