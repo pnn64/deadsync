@@ -439,6 +439,8 @@ const MAX_HOLD_LIFE: f32 = 1.0;
 const INITIAL_HOLD_LIFE: f32 = 1.0;
 const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
 const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35;
+// ITGmania _fallback defaults this off, and Simply Love relies on that dance parity.
+const COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO: bool = false;
 
 // Simply Love: ScreenGameplay GiveUpSeconds=0.33
 const GIVE_UP_HOLD_SECONDS: f32 = 0.33;
@@ -3950,6 +3952,14 @@ const fn judge_life_delta(grade: JudgeGrade) -> f32 {
         JudgeGrade::WayOff => LIFE_WAY_OFF,
         JudgeGrade::Miss => LIFE_MISS,
     }
+}
+
+#[inline(always)]
+fn score_missed_holds_and_rolls(chart_type: &str) -> bool {
+    // ITGmania _fallback metrics:
+    // ScoreMissedHoldsAndRolls = not IsGame("pump") and not IsGame("dance")
+    let chart_type = chart_type.trim().to_ascii_lowercase();
+    !(chart_type.starts_with("dance") || chart_type.starts_with("pump"))
 }
 
 fn init_player_runtime() -> PlayerRuntime {
@@ -7923,14 +7933,13 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
             return;
         }
         hold.result = Some(HoldResult::LetGo);
-        if hold.let_go_started_at.is_none() {
-            hold.let_go_started_at = Some(state.current_music_time);
-            hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
-            if note_index < state.hold_decay_active.len() && !state.hold_decay_active[note_index] {
-                state.hold_decay_active[note_index] = true;
-                state.decaying_hold_indices.push(note_index);
-            }
-        }
+        begin_hold_life_decay(
+            hold,
+            &mut state.hold_decay_active,
+            &mut state.decaying_hold_indices,
+            note_index,
+            state.current_music_time,
+        );
     }
     if !scoring_blocked && !is_state_dead(state, player) {
         match state.notes[note_index].note_type {
@@ -7967,15 +7976,35 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
         update_itg_grade_totals(&mut state.players[player]);
     }
     if !scoring_blocked {
-        state.players[player].combo = 0;
-        state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
         if state.players[player].full_combo_grade.is_some() {
             state.players[player].first_fc_attempt_broken = true;
         }
         state.players[player].full_combo_grade = None;
-        state.players[player].current_combo_grade = None;
+        if COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO {
+            state.players[player].combo = 0;
+            state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
+            state.players[player].current_combo_grade = None;
+        }
     }
     state.receptor_glow_timers[column] = 0.0;
+}
+
+#[inline(always)]
+fn begin_hold_life_decay(
+    hold: &mut HoldData,
+    hold_decay_active: &mut [bool],
+    decaying_hold_indices: &mut Vec<usize>,
+    note_index: usize,
+    start_time: f32,
+) {
+    if hold.let_go_started_at.is_none() {
+        hold.let_go_started_at = Some(start_time);
+        hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+    }
+    if note_index < hold_decay_active.len() && !hold_decay_active[note_index] {
+        hold_decay_active[note_index] = true;
+        decaying_hold_indices.push(note_index);
+    }
 }
 
 fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
@@ -8482,56 +8511,61 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
 
         if abs_time_error <= way_off_window {
-            let mut notes_on_row = [usize::MAX; MAX_COLS];
-            let mut notes_on_row_len = 0usize;
+            let mut row_note_indices = [usize::MAX; MAX_COLS];
+            let mut row_note_count = 0usize;
+            let mut row_has_hold_or_roll = false;
             if let Some(&pos) = state
                 .row_map_cache
                 .get(note_row_index)
                 .filter(|&&x| x != u32::MAX)
             {
                 for &idx in &state.row_entries[pos as usize].nonmine_note_indices {
-                    let col = state.notes[idx].column;
-                    if col < col_start
-                        || col >= col_end
-                        || state.notes[idx].result.is_some()
-                        || state.notes[idx].note_type == NoteType::Lift
+                    let row_note = &state.notes[idx];
+                    if row_note.column < col_start
+                        || row_note.column >= col_end
+                        || row_note.result.is_some()
+                        || row_note.note_type == NoteType::Lift
                     {
                         continue;
                     }
-                    if notes_on_row_len < MAX_COLS {
-                        notes_on_row[notes_on_row_len] = idx;
-                        notes_on_row_len += 1;
+                    row_has_hold_or_roll |=
+                        matches!(row_note.note_type, NoteType::Hold | NoteType::Roll);
+                    if row_note_count < MAX_COLS {
+                        row_note_indices[row_note_count] = idx;
+                        row_note_count += 1;
                     }
                 }
             } else {
-                for (idx, n) in state.notes.iter().enumerate() {
-                    if n.row_index != note_row_index
-                        || n.column < col_start
-                        || n.column >= col_end
-                        || matches!(n.note_type, NoteType::Mine | NoteType::Lift)
-                        || n.is_fake
-                        || n.result.is_some()
+                for (idx, row_note) in state.notes.iter().enumerate() {
+                    if row_note.row_index != note_row_index
+                        || row_note.column < col_start
+                        || row_note.column >= col_end
+                        || matches!(row_note.note_type, NoteType::Mine | NoteType::Lift)
+                        || row_note.is_fake
+                        || row_note.result.is_some()
                     {
                         continue;
                     }
-                    if notes_on_row_len < MAX_COLS {
-                        notes_on_row[notes_on_row_len] = idx;
-                        notes_on_row_len += 1;
+                    row_has_hold_or_roll |=
+                        matches!(row_note.note_type, NoteType::Hold | NoteType::Roll);
+                    if row_note_count < MAX_COLS {
+                        row_note_indices[row_note_count] = idx;
+                        row_note_count += 1;
                     }
                 }
             }
-
-            if notes_on_row_len == 0 {
+            if row_note_count == 0 {
                 return false;
             }
-            let all_pressed = notes_on_row[..notes_on_row_len].iter().all(|&idx| {
-                let col = state.notes[idx].column;
-                lane_is_pressed(state, col)
-            });
-            if !all_pressed {
-                return false;
+            if !matches!(note_type, NoteType::Hold | NoteType::Roll) && row_has_hold_or_roll {
+                let all_pressed = row_note_indices[..row_note_count].iter().all(|&idx| {
+                    let row_note_col = state.notes[idx].column;
+                    lane_is_pressed(state, row_note_col)
+                });
+                if !all_pressed {
+                    return false;
+                }
             }
-
             let mut timing_profile = state.timing_profile;
             timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
             let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
@@ -8546,24 +8580,23 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 (0.0, 0.0, 0.0, 0.0)
             };
 
-            if rescore_early_hits && notes_on_row_len == 1 {
-                let idx = notes_on_row[0];
-                let note_col = state.notes[idx].column;
-                let row_note_time = state.note_time_cache[idx];
+            if rescore_early_hits && row_note_count == 1 {
+                let note_col = state.notes[note_index].column;
+                let row_note_time = state.note_time_cache[note_index];
                 let te_music = current_time - row_note_time;
                 let te_real = te_music / rate;
                 let is_early = te_real < 0.0;
                 let is_bad = matches!(grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
                 if is_early && is_bad {
-                    if state.notes[idx].early_result.is_none() {
+                    if state.notes[note_index].early_result.is_none() {
                         let judgment = Judgment {
                             time_error_ms: te_real * 1000.0,
                             grade,
                             window: Some(window),
                             miss_because_held: false,
                         };
-                        state.notes[idx].early_result = Some(judgment.clone());
+                        state.notes[note_index].early_result = Some(judgment.clone());
                         let life_delta = judge_life_delta(grade);
                         {
                             let p = &mut state.players[player];
@@ -8585,7 +8618,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             grade,
                             note_row_index,
                             note_col,
-                            state.notes[idx].beat,
+                            state.notes[note_index].beat,
                             song_offset_s,
                             global_offset_s,
                             row_note_time,
@@ -8600,16 +8633,19 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             trigger_tap_explosion(state, note_col, grade);
                         }
 
-                        if let Some(end_time) = state.hold_end_time_cache[idx]
-                            && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+                        if let Some(end_time) = state.hold_end_time_cache[note_index]
+                            && matches!(
+                                state.notes[note_index].note_type,
+                                NoteType::Hold | NoteType::Roll
+                            )
                         {
-                            if let Some(hold) = state.notes[idx].hold.as_mut() {
+                            if let Some(hold) = state.notes[note_index].hold.as_mut() {
                                 hold.life = MAX_HOLD_LIFE;
                             }
                             state.active_holds[note_col] = Some(ActiveHold {
-                                note_index: idx,
+                                note_index,
                                 end_time,
-                                note_type: state.notes[idx].note_type,
+                                note_type: state.notes[note_index].note_type,
                                 let_go: false,
                                 is_pressed: true,
                                 life: MAX_HOLD_LIFE,
@@ -8619,7 +8655,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     return true;
                 }
 
-                if state.notes[idx].early_result.is_some()
+                if state.notes[note_index].early_result.is_some()
                     && !matches!(
                         grade,
                         JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
@@ -8635,7 +8671,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     miss_because_held: false,
                 };
                 error_bar_register_tap(state, player, &judgment, current_time);
-                state.notes[idx].result = Some(judgment);
+                state.notes[note_index].result = Some(judgment);
 
                 log_timing_hit_detail(
                     timing_hit_log,
@@ -8643,7 +8679,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     grade,
                     note_row_index,
                     note_col,
-                    state.notes[idx].beat,
+                    state.notes[note_index].beat,
                     song_offset_s,
                     global_offset_s,
                     row_note_time,
@@ -8654,21 +8690,24 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 );
 
                 let col_arrows = &mut state.arrows[note_col];
-                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
+                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
                     col_arrows.remove(pos);
                 }
                 trigger_receptor_glow_pulse(state, note_col);
                 trigger_tap_explosion(state, note_col, grade);
-                if let Some(end_time) = state.hold_end_time_cache[idx]
-                    && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+                if let Some(end_time) = state.hold_end_time_cache[note_index]
+                    && matches!(
+                        state.notes[note_index].note_type,
+                        NoteType::Hold | NoteType::Roll
+                    )
                 {
-                    if let Some(hold) = state.notes[idx].hold.as_mut() {
+                    if let Some(hold) = state.notes[note_index].hold.as_mut() {
                         hold.life = MAX_HOLD_LIFE;
                     }
                     state.active_holds[note_col] = Some(ActiveHold {
-                        note_index: idx,
+                        note_index,
                         end_time,
-                        note_type: state.notes[idx].note_type,
+                        note_type: state.notes[note_index].note_type,
                         let_go: false,
                         is_pressed: true,
                         life: MAX_HOLD_LIFE,
@@ -8677,57 +8716,55 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 return true;
             }
 
-            for &idx in &notes_on_row[..notes_on_row_len] {
-                let note_col = state.notes[idx].column;
-                let row_note_time = state.note_time_cache[idx];
-                let te_music = current_time - row_note_time;
-                let te_real = te_music / rate;
-                let judgment = Judgment {
-                    time_error_ms: te_real * 1000.0,
-                    grade,
-                    window: Some(window),
-                    miss_because_held: false,
-                };
-                error_bar_register_tap(state, player, &judgment, current_time);
-                state.notes[idx].result = Some(judgment);
+            let note_col = state.notes[note_index].column;
+            let judgment = Judgment {
+                time_error_ms: time_error_real * 1000.0,
+                grade,
+                window: Some(window),
+                miss_because_held: false,
+            };
+            error_bar_register_tap(state, player, &judgment, current_time);
+            state.notes[note_index].result = Some(judgment);
 
-                log_timing_hit_detail(
-                    timing_hit_log,
-                    stream_pos_s,
-                    grade,
-                    note_row_index,
-                    note_col,
-                    state.notes[idx].beat,
-                    song_offset_s,
-                    global_offset_s,
-                    row_note_time,
-                    current_time,
-                    state.current_music_time,
-                    rate,
-                    lead_in_s,
-                );
+            log_timing_hit_detail(
+                timing_hit_log,
+                stream_pos_s,
+                grade,
+                note_row_index,
+                note_col,
+                state.notes[note_index].beat,
+                song_offset_s,
+                global_offset_s,
+                note_time,
+                current_time,
+                state.current_music_time,
+                rate,
+                lead_in_s,
+            );
 
-                let col_arrows = &mut state.arrows[note_col];
-                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
-                    col_arrows.remove(pos);
+            let col_arrows = &mut state.arrows[note_col];
+            if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
+                col_arrows.remove(pos);
+            }
+            trigger_receptor_glow_pulse(state, note_col);
+            trigger_tap_explosion(state, note_col, grade);
+            if let Some(end_time) = state.hold_end_time_cache[note_index]
+                && matches!(
+                    state.notes[note_index].note_type,
+                    NoteType::Hold | NoteType::Roll
+                )
+            {
+                if let Some(hold) = state.notes[note_index].hold.as_mut() {
+                    hold.life = MAX_HOLD_LIFE;
                 }
-                trigger_receptor_glow_pulse(state, note_col);
-                trigger_tap_explosion(state, note_col, grade);
-                if let Some(end_time) = state.hold_end_time_cache[idx]
-                    && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
-                {
-                    if let Some(hold) = state.notes[idx].hold.as_mut() {
-                        hold.life = MAX_HOLD_LIFE;
-                    }
-                    state.active_holds[note_col] = Some(ActiveHold {
-                        note_index: idx,
-                        end_time,
-                        note_type: state.notes[idx].note_type,
-                        let_go: false,
-                        is_pressed: true,
-                        life: MAX_HOLD_LIFE,
-                    });
-                }
+                state.active_holds[note_col] = Some(ActiveHold {
+                    note_index,
+                    end_time,
+                    note_type: state.notes[note_index].note_type,
+                    let_go: false,
+                    is_pressed: true,
+                    life: MAX_HOLD_LIFE,
+                });
             }
             return true;
         }
@@ -8736,8 +8773,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     try_hit_mine_while_held(state, column, current_time)
 }
 
-/// Judge lift notes on button release. Mirrors judge_a_tap but only matches
-/// NoteType::Lift and judges a single note (no row-wide all-pressed check).
+/// Judge lift notes on button release. Mirrors tap judging's per-note path but
+/// only matches NoteType::Lift.
 pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool {
     let windows = state.timing_profile.windows_s;
     let way_off_window = windows[4];
@@ -10277,6 +10314,11 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
             continue;
         }
         if music_time_sec - note_time > way_off_window * rate {
+            let player = if num_players <= 1 || cols_per_player == 0 {
+                0
+            } else {
+                (col_idx / cols_per_player).min(num_players.saturating_sub(1))
+            };
             let time_err_music = music_time_sec - note_time;
             let time_err_real = time_err_music / rate;
             let miss_because_held = lane_counts_pressed(
@@ -10290,20 +10332,22 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 miss_because_held,
             };
             let judgment = state.notes[note_index].early_result.clone().unwrap_or(miss);
-            if judgment.grade == JudgeGrade::Miss
-                && let Some(hold) = state.notes[note_index].hold.as_mut()
-                && hold.result != Some(HoldResult::Held)
-            {
-                hold.result = Some(HoldResult::LetGo);
-                if hold.let_go_started_at.is_none() {
-                    hold.let_go_started_at = Some(music_time_sec);
-                    hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
-                    if note_index < state.hold_decay_active.len()
-                        && !state.hold_decay_active[note_index]
-                    {
-                        state.hold_decay_active[note_index] = true;
-                        state.decaying_hold_indices.push(note_index);
+            if judgment.grade == JudgeGrade::Miss {
+                let should_score_miss =
+                    score_missed_holds_and_rolls(&state.charts[player].chart_type);
+                if let Some(hold) = state.notes[note_index].hold.as_mut()
+                    && hold.result != Some(HoldResult::Held)
+                {
+                    if should_score_miss {
+                        hold.result = Some(HoldResult::LetGo);
                     }
+                    begin_hold_life_decay(
+                        hold,
+                        &mut state.hold_decay_active,
+                        &mut state.decaying_hold_indices,
+                        note_index,
+                        music_time_sec,
+                    );
                 }
             }
             state.notes[note_index].result = Some(judgment);
@@ -10353,20 +10397,22 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 let judgment = state.notes[cursor].early_result.clone().unwrap_or(miss);
                 let judgment_grade = judgment.grade;
                 let judgment_time_error_ms = judgment.time_error_ms;
-                if judgment_grade == JudgeGrade::Miss
-                    && let Some(hold) = state.notes[cursor].hold.as_mut()
-                    && hold.result != Some(HoldResult::Held)
-                {
-                    hold.result = Some(HoldResult::LetGo);
-                    if hold.let_go_started_at.is_none() {
-                        hold.let_go_started_at = Some(music_time_sec);
-                        hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
-                        if cursor < state.hold_decay_active.len()
-                            && !state.hold_decay_active[cursor]
-                        {
-                            state.hold_decay_active[cursor] = true;
-                            state.decaying_hold_indices.push(cursor);
+                if judgment_grade == JudgeGrade::Miss {
+                    let should_score_miss =
+                        score_missed_holds_and_rolls(&state.charts[player].chart_type);
+                    if let Some(hold) = state.notes[cursor].hold.as_mut()
+                        && hold.result != Some(HoldResult::Held)
+                    {
+                        if should_score_miss {
+                            hold.result = Some(HoldResult::LetGo);
                         }
+                        begin_hold_life_decay(
+                            hold,
+                            &mut state.hold_decay_active,
+                            &mut state.decaying_hold_indices,
+                            cursor,
+                            music_time_sec,
+                        );
                     }
                 }
                 state.notes[cursor].result = Some(judgment);
@@ -10564,7 +10610,18 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         false
                     };
 
-                    let note_time_chart = state.note_time_cache[arrow.note_index];
+                    let note_time_chart =
+                        if matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+                            && note
+                                .result
+                                .as_ref()
+                                .is_some_and(|j| j.grade == JudgeGrade::Miss)
+                        {
+                            state.hold_end_time_cache[arrow.note_index]
+                                .unwrap_or(state.note_time_cache[arrow.note_index])
+                        } else {
+                            state.note_time_cache[arrow.note_index]
+                        };
                     let y_pos = if use_raw_pos {
                         note_time_chart.mul_add(cmod_raw_slope, cmod_raw_base)
                     } else {
@@ -10597,7 +10654,18 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         }
                     }
 
-                    let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
+                    let note_disp_beat =
+                        if matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+                            && note
+                                .result
+                                .as_ref()
+                                .is_some_and(|j| j.grade == JudgeGrade::Miss)
+                        {
+                            state.hold_end_display_beat_cache[arrow.note_index]
+                                .unwrap_or(state.note_display_beat_cache[arrow.note_index])
+                        } else {
+                            state.note_display_beat_cache[arrow.note_index]
+                        };
                     let y_pos = note_disp_beat.mul_add(beat_slope, beat_base);
                     (y_pos - miss_cull_threshold) * cmp_sign >= 0.0_f32
                 });
@@ -11036,15 +11104,15 @@ fn update_danger_fx(state: &mut State) {
 #[cfg(test)]
 mod tests {
     use super::{
-        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES,
-        REPLAY_EDGE_RATE_PER_SEC, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode,
-        apply_mines_insert, build_assist_clap_rows, build_attack_mask_windows_for_player,
-        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_press_started, lane_release_finished,
+        COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
+        INSERT_MASK_BIT_MINES, REPLAY_EDGE_RATE_PER_SEC, ScrollEffects, ScrollSpeedSetting,
+        SongClockSnapshot, TickMode, apply_mines_insert, build_assist_clap_rows,
+        build_attack_mask_windows_for_player, frame_stable_display_music_time, input_queue_cap,
+        lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals, replay_edge_cap,
-        score_valid_for_chart, scored_hold_totals_with_carry, stage_music_cut,
-        tick_mode_status_line, turn_option_bits, update_lane_count,
+        score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
+        stage_music_cut, tick_mode_status_line, turn_option_bits, update_lane_count,
     };
     use crate::core::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
@@ -11314,6 +11382,18 @@ mod tests {
     #[test]
     fn scored_hold_totals_with_carry_include_prior_let_go() {
         assert_eq!(scored_hold_totals_with_carry(3, 2, 4, 5), (7, 14));
+    }
+
+    #[test]
+    fn immediate_hold_let_go_does_not_break_combo_by_default() {
+        assert!(!COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO);
+    }
+
+    #[test]
+    fn missed_holds_and_rolls_are_not_scored_for_dance_or_pump() {
+        assert!(!score_missed_holds_and_rolls("dance-single"));
+        assert!(!score_missed_holds_and_rolls("pump-single"));
+        assert!(score_missed_holds_and_rolls("kb7-single"));
     }
 
     #[test]
