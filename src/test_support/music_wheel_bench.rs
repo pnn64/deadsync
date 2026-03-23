@@ -105,7 +105,7 @@ fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
         String::new()
     };
     Arc::new(SongData {
-        simfile_path: PathBuf::from(format!("Songs/Bench/{base}.ssc")),
+        simfile_path: PathBuf::from(format!("songs/Bench/{base}.ssc")),
         title: title.clone(),
         subtitle: subtitle.clone(),
         translit_title: String::new(),

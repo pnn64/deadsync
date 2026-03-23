@@ -142,7 +142,7 @@ fn bench_score_info() -> ScoreInfo {
 
 fn bench_song() -> SongData {
     SongData {
-        simfile_path: PathBuf::from("Songs/Bench/Pane Stats/pane-stats.ssc"),
+        simfile_path: PathBuf::from("songs/Bench/Pane Stats/pane-stats.ssc"),
         title: "Pane Stats Benchmark".to_string(),
         subtitle: "Optimization Pass".to_string(),
         translit_title: String::new(),

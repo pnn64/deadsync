@@ -223,7 +223,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
 fn bench_song() -> SongData {
     let chart = bench_chart();
     SongData {
-        simfile_path: PathBuf::from("Songs/Bench/Notefield/notefield-bench.ssc"),
+        simfile_path: PathBuf::from("songs/Bench/Notefield/notefield-bench.ssc"),
         title: "Notefield Benchmark".to_string(),
         subtitle: "Cache Warmup".to_string(),
         translit_title: String::new(),

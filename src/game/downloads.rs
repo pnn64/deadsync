@@ -343,11 +343,11 @@ fn unlock_cache_path() -> PathBuf {
 }
 
 fn songs_dir() -> PathBuf {
-    PathBuf::from("Songs")
+    PathBuf::from("songs")
 }
 
 fn downloads_dir() -> PathBuf {
-    PathBuf::from("Downloads")
+    PathBuf::from("cache/downloads")
 }
 
 fn download_filename(id: u64) -> String {
