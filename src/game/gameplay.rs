@@ -8716,55 +8716,73 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 return true;
             }
 
-            let note_col = state.notes[note_index].column;
-            let judgment = Judgment {
-                time_error_ms: time_error_real * 1000.0,
-                grade,
-                window: Some(window),
-                miss_because_held: false,
-            };
-            error_bar_register_tap(state, player, &judgment, current_time);
-            state.notes[note_index].result = Some(judgment);
-
-            log_timing_hit_detail(
-                timing_hit_log,
-                stream_pos_s,
-                grade,
-                note_row_index,
-                note_col,
-                state.notes[note_index].beat,
-                song_offset_s,
-                global_offset_s,
-                note_time,
-                current_time,
-                state.current_music_time,
-                rate,
-                lead_in_s,
-            );
-
-            let col_arrows = &mut state.arrows[note_col];
-            if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
-                col_arrows.remove(pos);
-            }
-            trigger_receptor_glow_pulse(state, note_col);
-            trigger_tap_explosion(state, note_col, grade);
-            if let Some(end_time) = state.hold_end_time_cache[note_index]
-                && matches!(
-                    state.notes[note_index].note_type,
-                    NoteType::Hold | NoteType::Roll
-                )
-            {
-                if let Some(hold) = state.notes[note_index].hold.as_mut() {
-                    hold.life = MAX_HOLD_LIFE;
+            let mut judge_indices = [usize::MAX; MAX_COLS];
+            let mut judge_count = 1usize;
+            judge_indices[0] = note_index;
+            if matches!(note_type, NoteType::Hold | NoteType::Roll) {
+                for &idx in &row_note_indices[..row_note_count] {
+                    if idx == note_index {
+                        continue;
+                    }
+                    let row_note_col = state.notes[idx].column;
+                    if lane_is_pressed(state, row_note_col) && judge_count < MAX_COLS {
+                        judge_indices[judge_count] = idx;
+                        judge_count += 1;
+                    }
                 }
-                state.active_holds[note_col] = Some(ActiveHold {
-                    note_index,
-                    end_time,
-                    note_type: state.notes[note_index].note_type,
-                    let_go: false,
-                    is_pressed: true,
-                    life: MAX_HOLD_LIFE,
-                });
+            }
+
+            for &idx in &judge_indices[..judge_count] {
+                let note_col = state.notes[idx].column;
+                let row_note_time = state.note_time_cache[idx];
+                let te_music = current_time - row_note_time;
+                let te_real = te_music / rate;
+                let judgment = Judgment {
+                    time_error_ms: te_real * 1000.0,
+                    grade,
+                    window: Some(window),
+                    miss_because_held: false,
+                };
+                error_bar_register_tap(state, player, &judgment, current_time);
+                state.notes[idx].result = Some(judgment);
+
+                log_timing_hit_detail(
+                    timing_hit_log,
+                    stream_pos_s,
+                    grade,
+                    note_row_index,
+                    note_col,
+                    state.notes[idx].beat,
+                    song_offset_s,
+                    global_offset_s,
+                    row_note_time,
+                    current_time,
+                    state.current_music_time,
+                    rate,
+                    lead_in_s,
+                );
+
+                let col_arrows = &mut state.arrows[note_col];
+                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
+                    col_arrows.remove(pos);
+                }
+                trigger_receptor_glow_pulse(state, note_col);
+                trigger_tap_explosion(state, note_col, grade);
+                if let Some(end_time) = state.hold_end_time_cache[idx]
+                    && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+                {
+                    if let Some(hold) = state.notes[idx].hold.as_mut() {
+                        hold.life = MAX_HOLD_LIFE;
+                    }
+                    state.active_holds[note_col] = Some(ActiveHold {
+                        note_index: idx,
+                        end_time,
+                        note_type: state.notes[idx].note_type,
+                        let_go: false,
+                        is_pressed: true,
+                        life: MAX_HOLD_LIFE,
+                    });
+                }
             }
             return true;
         }
