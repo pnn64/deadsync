@@ -42,6 +42,7 @@ pub fn fixture() -> GsScoreboxBenchFixture {
                     leaderboard_pane("Stamina RPG 9", false, scores_rpg()),
                     leaderboard_pane("ITL Online 2024", false, scores_itl()),
                 ],
+                itl_self_score: None,
             }),
         },
         side: profile::PlayerSide::P1,

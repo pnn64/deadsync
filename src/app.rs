@@ -1719,6 +1719,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             groovestats: scores::GrooveStatsEvalState {
                 valid: false,
                 reason_lines: vec!["GrooveStats QR is unavailable in course mode.".to_string()],
+                manual_qr_url: None,
             },
             itl: scores::ItlEvalState::default(),
             grade,

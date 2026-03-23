@@ -82,10 +82,15 @@ const DOWNLOADS_SEP_W: f32 = 480.0;
 const DOWNLOADS_TITLE_Y: f32 = -170.0;
 const DOWNLOADS_LIST_X: f32 = -240.0;
 const DOWNLOADS_LIST_Y: f32 = -120.0;
-const DOWNLOADS_PERCENT_X: f32 = DOWNLOADS_BAR_W + 50.0;
 const DOWNLOADS_AMOUNT_X: f32 = DOWNLOADS_BAR_W + 60.0;
+const DOWNLOADS_CLOSE_HINT_Y: f32 = DOWNLOADS_PANEL_H * 0.5 + 36.0;
 const DOWNLOADS_CLOSE_HINT: &str = "Press &START; to dismiss.";
 const DOWNLOADS_EMPTY_TEXT: &str = "No Downloads to view";
+const DOWNLOADS_BAR_BG_COLOR: [f32; 4] = color::rgba_hex("#0A1A23");
+const DOWNLOADS_BAR_FILL_COLOR: [f32; 4] = color::SIMPLY_LOVE_RGBA[6];
+const DOWNLOADS_BAR_DONE_COLOR: [f32; 4] = color::SIMPLY_LOVE_RGBA[7];
+const DOWNLOADS_BAR_ERROR_COLOR: [f32; 4] = color::rgba_hex("#FF5D47");
+const DOWNLOADS_BAR_SWOOSH_COLOR: [f32; 4] = color::rgba_hex("#FFFFFFA6");
 const SORTS_INACTIVE_COLOR: [f32; 4] = color::rgba_hex("#005D7F");
 const SORTS_ACTIVE_COLOR: [f32; 4] = color::rgba_hex("#0030A8");
 const REPLAY_MAX_ENTRIES: usize = 1024;
@@ -1657,7 +1662,7 @@ pub fn build_downloads_overlay(state: &DownloadsOverlayState) -> Option<Vec<Acto
         font("miso"):
         settext(DOWNLOADS_CLOSE_HINT):
         align(0.5, 0.5):
-        xy(center_x, screen_height() - 50.0):
+        xy(center_x, center_y + DOWNLOADS_CLOSE_HINT_Y):
         zoom(0.95):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(DOWNLOADS_Z + 3):
@@ -1716,36 +1721,66 @@ pub fn build_downloads_overlay(state: &DownloadsOverlayState) -> Option<Vec<Acto
         actors.push(act!(quad:
             align(0.0, 0.5):
             xy(row_x, row_y + 24.0):
-            zoomto(fill_width, DOWNLOADS_BAR_H):
-            diffuse(1.0, 1.0, 1.0, if snapshot.complete { 1.0 } else { 0.8 }):
+            zoomto(DOWNLOADS_BAR_W, DOWNLOADS_BAR_H):
+            diffuse(
+                DOWNLOADS_BAR_BG_COLOR[0],
+                DOWNLOADS_BAR_BG_COLOR[1],
+                DOWNLOADS_BAR_BG_COLOR[2],
+                DOWNLOADS_BAR_BG_COLOR[3]
+            ):
             z(DOWNLOADS_Z + 3)
+        ));
+        let fill_color = if snapshot.complete && snapshot.error_message.is_none() {
+            DOWNLOADS_BAR_DONE_COLOR
+        } else {
+            DOWNLOADS_BAR_FILL_COLOR
+        };
+        actors.push(act!(quad:
+            align(0.0, 0.5):
+            xy(row_x, row_y + 24.0):
+            zoomto(fill_width, DOWNLOADS_BAR_H):
+            diffuse(fill_color[0], fill_color[1], fill_color[2], if snapshot.complete { 1.0 } else { 0.9 }):
+            z(DOWNLOADS_Z + 4)
         ));
         actors.push(act!(quad:
             align(0.5, 0.5):
             xy(row_x + DOWNLOADS_BAR_W, row_y + 24.0):
             zoomto(3.0, DOWNLOADS_BAR_H):
-            diffuse(1.0, 0.0, 0.0, 1.0):
-            z(DOWNLOADS_Z + 3)
+            diffuse(fill_color[0], fill_color[1], fill_color[2], 1.0):
+            z(DOWNLOADS_Z + 4)
         ));
         if !snapshot.complete && fill_width > 0.0 {
             actors.push(act!(sprite("swoosh.png"):
                 align(0.0, 0.5):
                 xy(row_x, row_y + 24.0):
                 zoomto(fill_width, DOWNLOADS_BAR_H):
-                diffuse(1.0, 1.0, 1.0, 1.0):
+                diffuse(
+                    DOWNLOADS_BAR_SWOOSH_COLOR[0],
+                    DOWNLOADS_BAR_SWOOSH_COLOR[1],
+                    DOWNLOADS_BAR_SWOOSH_COLOR[2],
+                    DOWNLOADS_BAR_SWOOSH_COLOR[3]
+                ):
                 texcoordvelocity(-1.0, 0.0):
-                z(DOWNLOADS_Z + 4)
+                z(DOWNLOADS_Z + 5)
             ));
         }
+        let (bar_text, bar_color) = match snapshot.error_message.as_deref() {
+            Some(message) if snapshot.complete => {
+                (format!("Error: {message}"), DOWNLOADS_BAR_ERROR_COLOR)
+            }
+            None if snapshot.complete => ("Done!".to_string(), DOWNLOADS_BAR_DONE_COLOR),
+            _ => (format!("{percent}%"), [1.0, 1.0, 1.0, 1.0]),
+        };
         actors.push(act!(text:
             font("miso"):
-            settext(format!("{percent}%")):
-            align(1.0, 0.5):
-            xy(row_x + DOWNLOADS_PERCENT_X, row_y + 24.0):
+            settext(bar_text):
+            align(0.5, 0.5):
+            xy(row_x + DOWNLOADS_BAR_W * 0.5, row_y + 24.0):
             zoom(0.82):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(DOWNLOADS_Z + 4):
-            horizalign(right)
+            maxwidth(DOWNLOADS_BAR_W - 12.0):
+            diffuse(bar_color[0], bar_color[1], bar_color[2], bar_color[3]):
+            z(DOWNLOADS_Z + 6):
+            horizalign(center)
         ));
         actors.push(act!(text:
             font("miso"):
@@ -1754,7 +1789,7 @@ pub fn build_downloads_overlay(state: &DownloadsOverlayState) -> Option<Vec<Acto
             xy(row_x + DOWNLOADS_AMOUNT_X, row_y + 24.0):
             zoom(0.82):
             diffuse(1.0, 1.0, 1.0, 1.0):
-            z(DOWNLOADS_Z + 4):
+            z(DOWNLOADS_Z + 6):
             horizalign(left)
         ));
         actors.push(act!(quad:
@@ -1764,23 +1799,6 @@ pub fn build_downloads_overlay(state: &DownloadsOverlayState) -> Option<Vec<Acto
             diffuse(1.0, 1.0, 1.0, 0.7):
             z(DOWNLOADS_Z + 2)
         ));
-        if snapshot.complete {
-            let (text, color) = match snapshot.error_message.as_deref() {
-                Some(message) => (format!("Error: {message}"), [1.0, 0.0, 0.0, 1.0]),
-                None => ("Done!".to_string(), [0.0, 1.0, 0.0, 1.0]),
-            };
-            actors.push(act!(text:
-                font("miso"):
-                settext(text):
-                align(0.0, 0.5):
-                xy(row_x, row_y + 24.0):
-                zoom(0.82):
-                maxwidth(DOWNLOADS_BAR_W):
-                diffuse(color[0], color[1], color[2], color[3]):
-                z(DOWNLOADS_Z + 5):
-                horizalign(left)
-            ));
-        }
     }
 
     Some(actors)

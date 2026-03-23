@@ -189,6 +189,42 @@ impl FromStr for SelectMusicPatternInfoMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicItlWheelMode {
+    Off,
+    Score,
+    PointsAndScore,
+}
+
+impl SelectMusicItlWheelMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Score => "Score",
+            Self::PointsAndScore => "PointsAndScore",
+        }
+    }
+}
+
+impl FromStr for SelectMusicItlWheelMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "off" | "disable" | "disabled" => Ok(Self::Off),
+            "score" | "scores" => Ok(Self::Score),
+            "pointsandscore" | "pointsscore" | "points" => Ok(Self::PointsAndScore),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NewPackMode {
     Disabled,
     OpenPack,
@@ -668,6 +704,7 @@ pub struct Config {
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
     pub select_music_new_pack_mode: NewPackMode,
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
@@ -787,6 +824,7 @@ impl Default for Config {
             show_select_music_cdtitles: true,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
+            select_music_itl_wheel_mode: SelectMusicItlWheelMode::Score,
             select_music_new_pack_mode: NewPackMode::Disabled,
             show_select_music_previews: true,
             show_select_music_preview_marker: false,
@@ -1959,6 +1997,10 @@ pub fn load() {
                     .get("Options", "SelectMusicWheelLamps")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_music_wheel_lamps, |v| v != 0);
+                cfg.select_music_itl_wheel_mode = conf
+                    .get("Options", "SelectMusicWheelITL")
+                    .and_then(|v| SelectMusicItlWheelMode::from_str(&v).ok())
+                    .unwrap_or(default.select_music_itl_wheel_mode);
                 cfg.select_music_new_pack_mode = conf
                     .get("Options", "SelectMusicNewPackMode")
                     .and_then(|v| NewPackMode::from_str(&v).ok())
@@ -3418,6 +3460,10 @@ fn save_without_keymaps() {
         if cfg.show_music_wheel_lamps { "1" } else { "0" }
     ));
     content.push_str(&format!(
+        "SelectMusicWheelITL={}\n",
+        cfg.select_music_itl_wheel_mode.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicNewPackMode={}\n",
         cfg.select_music_new_pack_mode.as_str()
     ));
@@ -4192,6 +4238,17 @@ pub fn update_show_music_wheel_lamps(enabled: bool) {
             return;
         }
         cfg.show_music_wheel_lamps = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_itl_wheel_mode(mode: SelectMusicItlWheelMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_itl_wheel_mode == mode {
+            return;
+        }
+        cfg.select_music_itl_wheel_mode = mode;
     }
     save_without_keymaps();
 }

@@ -603,6 +603,7 @@ fn stroked_text_actor(text: &'static str, x: f32, y: f32, row: usize) -> Actor {
         glow: [0.0; 4],
         font: BENCH_FONT,
         content: TextContent::Shared(Arc::<str>::from(text)),
+        attributes: Vec::new(),
         align_text: if row % 2 == 0 {
             TextAlign::Left
         } else {
@@ -937,6 +938,7 @@ fn text_actor(
         glow: [0.0; 4],
         font: BENCH_FONT,
         content: TextContent::Shared(Arc::<str>::from(text)),
+        attributes: Vec::new(),
         align_text: TextAlign::Left,
         z,
         scale: [1.0, 1.0],

@@ -7045,6 +7045,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
         show_music_wheel_grades: cfg.show_music_wheel_grades,
         show_music_wheel_lamps: cfg.show_music_wheel_lamps,
+        itl_wheel_mode: cfg.select_music_itl_wheel_mode,
         new_pack_names: (state.sort_mode == WheelSortMode::Group).then_some(&state.new_pack_names),
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());

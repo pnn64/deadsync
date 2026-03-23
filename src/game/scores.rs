@@ -107,6 +107,57 @@ struct GsScoreCacheState {
 static GS_SCORE_CACHE: std::sync::LazyLock<Mutex<GsScoreCacheState>> =
     std::sync::LazyLock::new(|| Mutex::new(GsScoreCacheState::default()));
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct OnlineItlSelfScoreKey {
+    chart_hash: String,
+    api_key: String,
+}
+
+#[derive(Default)]
+struct OnlineItlSelfScoreCacheState {
+    by_key: HashMap<OnlineItlSelfScoreKey, u32>,
+}
+
+static ONLINE_ITL_SELF_SCORE_CACHE: std::sync::LazyLock<Mutex<OnlineItlSelfScoreCacheState>> =
+    std::sync::LazyLock::new(|| Mutex::new(OnlineItlSelfScoreCacheState::default()));
+
+fn online_itl_self_score_key_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<OnlineItlSelfScoreKey> {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() || !profile::is_session_side_joined(side) {
+        return None;
+    }
+    let side_profile = profile::get_for_side(side);
+    let api_key = side_profile.groovestats_api_key.trim();
+    if api_key.is_empty() {
+        return None;
+    }
+    Some(OnlineItlSelfScoreKey {
+        chart_hash: chart_hash.to_string(),
+        api_key: api_key.to_string(),
+    })
+}
+
+fn set_cached_online_itl_self_score(api_key: &str, chart_hash: &str, score: Option<u32>) {
+    let api_key = api_key.trim();
+    let chart_hash = chart_hash.trim();
+    if api_key.is_empty() || chart_hash.is_empty() {
+        return;
+    }
+    let key = OnlineItlSelfScoreKey {
+        chart_hash: chart_hash.to_string(),
+        api_key: api_key.to_string(),
+    };
+    let mut cache = ONLINE_ITL_SELF_SCORE_CACHE.lock().unwrap();
+    if let Some(score) = score {
+        cache.by_key.insert(key, score);
+    } else {
+        cache.by_key.remove(&key);
+    }
+}
+
 fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
     PathBuf::from("save/profiles")
         .join(profile_id)
@@ -1710,7 +1761,7 @@ pub fn save_itl_data_from_gameplay(
             .cloned()
             .unwrap_or(new_entry.clone());
         let prev_entry = prev.unwrap_or_default();
-        progress[player_idx] = Some(ItlEventProgress {
+        let mut event_progress = ItlEventProgress {
             name: itl_event_name(gs.song.as_ref()),
             is_doubles: current_entry.steps_type.eq_ignore_ascii_case("double"),
             score_hundredths: current_run_ex,
@@ -1728,7 +1779,10 @@ pub fn save_itl_data_from_gameplay(
             total_passes: current_entry.passes.max(1),
             clear_type_before: Some(prev_entry.clear_type),
             clear_type_after: Some(current_entry.clear_type),
-        });
+            overlay_pages: Vec::new(),
+        };
+        event_progress.overlay_pages = itl_overlay_pages(&event_progress, None, &[]);
+        progress[player_idx] = Some(event_progress);
 
         if needs_write {
             write_itl_file(profile_id.as_str(), &data);
@@ -1747,12 +1801,14 @@ const GS_INVALID_REMOVE_MASK: u8 =
 const GS_INVALID_INSERT_MASK: u8 = u8::MAX;
 const GS_INVALID_HOLDS_MASK: u8 = 1u8 << 3;
 const GROOVESTATS_REASON_COUNT: usize = 13;
+const GROOVESTATS_CHART_HASH_VERSION: u8 = 3;
 const ITL_FILE_NAME: &str = "ITL2026.json";
 
 #[derive(Clone, Debug, Default)]
 pub struct GrooveStatsEvalState {
     pub valid: bool,
     pub reason_lines: Vec<String>,
+    pub manual_qr_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1762,6 +1818,12 @@ pub struct ItlEvalState {
     pub chart_no_cmod: bool,
     pub used_cmod: bool,
     pub reason_lines: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub enum ItlOverlayPage {
+    Text(String),
+    Leaderboard(Vec<LeaderboardEntry>),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1783,6 +1845,7 @@ pub struct ItlEventProgress {
     pub total_passes: u32,
     pub clear_type_before: Option<u8>,
     pub clear_type_after: Option<u8>,
+    pub overlay_pages: Vec<ItlOverlayPage>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -2031,6 +2094,8 @@ struct GrooveStatsSubmitApiEvent {
     current_point_total: u32,
     #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
     previous_point_total: u32,
+    #[serde(rename = "itlLeaderboard", default)]
+    itl_leaderboard: Vec<LeaderboardApiEntry>,
     #[serde(default)]
     is_doubles: bool,
     progress: Option<GrooveStatsSubmitApiProgress>,
@@ -2043,6 +2108,8 @@ struct GrooveStatsSubmitApiProgress {
     stat_improvements: Vec<GrooveStatsSubmitApiStatImprovement>,
     #[serde(rename = "questsCompleted", default)]
     quests_completed: Vec<GrooveStatsSubmitApiQuest>,
+    #[serde(rename = "achievementsCompleted", default)]
+    achievements_completed: Vec<GrooveStatsSubmitApiAchievement>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -2062,9 +2129,40 @@ struct GrooveStatsSubmitApiQuest {
     #[serde(default)]
     title: String,
     #[serde(default)]
+    rewards: Vec<GrooveStatsSubmitApiQuestReward>,
+    #[serde(default)]
     song_download_url: String,
     #[serde(rename = "songDownloadFolders", default)]
     song_download_folders: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiQuestReward {
+    #[serde(rename = "type", default)]
+    reward_type: String,
+    #[serde(default)]
+    description: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiAchievement {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    rewards: Vec<GrooveStatsSubmitApiAchievementReward>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct GrooveStatsSubmitApiAchievementReward {
+    #[serde(default, deserialize_with = "de_string_from_string_or_number")]
+    tier: String,
+    #[serde(default)]
+    requirements: Vec<String>,
+    #[serde(rename = "titleUnlocked", default)]
+    title_unlocked: String,
 }
 
 #[inline(always)]
@@ -2319,7 +2417,90 @@ fn groovestats_eval_state(
     GrooveStatsEvalState {
         valid: checks.iter().all(|passed| *passed),
         reason_lines: groovestats_reason_lines(&checks, bad.as_slice()),
+        manual_qr_url: None,
     }
+}
+
+#[inline(always)]
+fn groovestats_qr_append_rescore(out: &mut String, label: char, value: u32) {
+    if value == 0 {
+        return;
+    }
+    out.push(label);
+    out.push_str(format!("{value:x}").as_str());
+}
+
+fn groovestats_manual_qr_url(
+    base_url: &str,
+    chart_hash: &str,
+    hash_version: u8,
+    counts: &GrooveStatsJudgmentCounts,
+    rescored: &GrooveStatsRescoreCounts,
+    failed: bool,
+    rate: u32,
+    used_cmod: bool,
+) -> Option<String> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+
+    let mut rescored_str = String::with_capacity(24);
+    for (label, value) in [
+        ('G', rescored.fantastic_plus),
+        ('H', rescored.fantastic),
+        ('I', rescored.excellent),
+        ('J', rescored.great),
+        ('K', rescored.decent),
+        ('L', rescored.way_off),
+    ] {
+        groovestats_qr_append_rescore(&mut rescored_str, label, value);
+    }
+
+    Some(format!(
+        "{}/QR/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F{}R{:x}C{}V{:x}",
+        base_url.trim_end_matches('/'),
+        counts.total_steps,
+        counts.fantastic_plus,
+        counts.fantastic,
+        counts.excellent,
+        counts.great,
+        counts.decent,
+        counts.way_off,
+        counts.miss,
+        counts.holds_held,
+        counts.total_holds,
+        counts.rolls_held,
+        counts.total_rolls,
+        counts.mines_hit,
+        counts.total_mines,
+        if failed { '1' } else { '0' },
+        rate,
+        if used_cmod { '1' } else { '0' },
+        hash_version,
+    ))
+}
+
+fn groovestats_manual_qr_url_from_gameplay(
+    gs: &gameplay::State,
+    player_idx: usize,
+) -> Option<String> {
+    if player_idx >= gs.num_players {
+        return None;
+    }
+    let Some(payload) = groovestats_payload_for_player(gs, player_idx) else {
+        return None;
+    };
+    groovestats_manual_qr_url(
+        network::groovestats_qr_base_url(),
+        gs.charts[player_idx].short_hash.as_str(),
+        GROOVESTATS_CHART_HASH_VERSION,
+        &payload.judgment_counts,
+        &payload.rescore_counts,
+        gs.players[player_idx].fail_time.is_some() || gs.players[player_idx].is_failing,
+        payload.rate,
+        payload.used_cmod,
+    )
 }
 
 pub fn groovestats_eval_state_from_gameplay(
@@ -2329,13 +2510,17 @@ pub fn groovestats_eval_state_from_gameplay(
     if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) {
         return GrooveStatsEvalState::default();
     }
-    groovestats_eval_state(
+    let mut state = groovestats_eval_state(
         gs.charts[player_idx].as_ref(),
         &gs.player_profiles[player_idx],
         gs.music_rate,
         gs.autoplay_used,
         gs.course_display_totals.is_some(),
-    )
+    );
+    if state.valid {
+        state.manual_qr_url = groovestats_manual_qr_url_from_gameplay(gs, player_idx);
+    }
+    state
 }
 
 fn itl_file_path(profile_id: &str) -> PathBuf {
@@ -2455,6 +2640,201 @@ fn event_name_or_unknown(name: &str) -> &str {
     }
 }
 
+#[inline(always)]
+fn itl_clear_type_name(clear_type: u8) -> &'static str {
+    match clear_type {
+        0 => "No Play",
+        1 => "Clear",
+        2 => "FC",
+        3 => "FEC",
+        4 => "FFC",
+        5 => "FBFC",
+        _ => "Clear",
+    }
+}
+
+fn trim_blank_lines(text: String) -> String {
+    text.trim_end_matches(['\n', '\r']).to_string()
+}
+
+fn capitalize_ascii_first(text: &str) -> String {
+    let mut chars = text.chars();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
+    let mut out = String::new();
+    out.extend(first.to_uppercase());
+    out.extend(chars);
+    out
+}
+
+fn itl_stat_improvement_lines(progress: Option<&GrooveStatsSubmitApiProgress>) -> Vec<String> {
+    let Some(progress) = progress else {
+        return Vec::new();
+    };
+    let mut lines = Vec::new();
+    for improvement in &progress.stat_improvements {
+        if improvement.gained == 0 {
+            continue;
+        }
+        if improvement.name.eq_ignore_ascii_case("clearType") {
+            let after = improvement.current.clamp(0, i32::from(u8::MAX)) as u8;
+            let before = after.saturating_sub(improvement.gained.min(u32::from(u8::MAX)) as u8);
+            lines.push(format!(
+                "Clear Type: {} >>> {}",
+                itl_clear_type_name(before),
+                itl_clear_type_name(after)
+            ));
+            continue;
+        }
+        if improvement.name.eq_ignore_ascii_case("grade") {
+            let curr = improvement.current;
+            let prev = curr - improvement.gained as i32;
+            if curr != 0 && prev != curr {
+                let grade = match curr {
+                    1 => Some("Quad"),
+                    2 => Some("Quint"),
+                    _ => None,
+                };
+                if let Some(grade) = grade {
+                    lines.push(format!("New {grade}!"));
+                }
+            }
+            continue;
+        }
+        let stat_name = capitalize_ascii_first(improvement.name.trim_end_matches("Level"));
+        lines.push(format!(
+            "{stat_name} Lvl: {} (+{})",
+            improvement.current, improvement.gained
+        ));
+    }
+    lines
+}
+
+fn itl_summary_page_text(
+    progress: &ItlEventProgress,
+    submit_progress: Option<&GrooveStatsSubmitApiProgress>,
+) -> String {
+    let mut text = format!(
+        "EX Score: {:.2}% ({:+.2}%)\n\
+         Points: {} ({:+})\n\n\
+         Ranking Points: {} ({:+})\n\
+         Song Points: {} ({:+})\n\
+         EX Points: {} ({:+})\n\
+         Total Points: {} ({:+})\n\n\
+         You've passed the chart {} times",
+        progress.score_hundredths as f64 / 100.0,
+        progress.score_delta_hundredths as f64 / 100.0,
+        progress.current_points,
+        progress.point_delta,
+        progress.current_ranking_points,
+        progress.ranking_delta,
+        progress.current_song_points,
+        progress.song_delta,
+        progress.current_ex_points,
+        progress.ex_delta,
+        progress.current_total_points,
+        progress.total_delta,
+        progress.total_passes,
+    );
+    let lines = itl_stat_improvement_lines(submit_progress);
+    if !lines.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(lines.join("\n").as_str());
+    }
+    trim_blank_lines(text)
+}
+
+fn append_grouped_reward_text(out: &mut String, reward_type: &str, descriptions: &[String]) {
+    if descriptions.is_empty() {
+        return;
+    }
+    if !out.is_empty() {
+        out.push_str("\n\n");
+    }
+    if !reward_type.eq_ignore_ascii_case("ad-hoc") {
+        out.push_str(reward_type.trim().to_ascii_uppercase().as_str());
+        out.push_str(":\n");
+    }
+    out.push_str(descriptions.join("\n").as_str());
+}
+
+fn itl_quest_page_text(quest: &GrooveStatsSubmitApiQuest) -> String {
+    let mut body = format!("Completed \"{}\"!", quest.title.trim());
+    let mut grouped: Vec<(String, Vec<String>)> = Vec::new();
+    for reward in &quest.rewards {
+        let reward_type = reward.reward_type.trim();
+        let description = reward.description.trim();
+        if description.is_empty() {
+            continue;
+        }
+        if let Some((_, descriptions)) = grouped
+            .iter_mut()
+            .find(|(kind, _)| kind.eq_ignore_ascii_case(reward_type))
+        {
+            descriptions.push(description.to_string());
+        } else {
+            grouped.push((reward_type.to_string(), vec![description.to_string()]));
+        }
+    }
+    for (reward_type, descriptions) in &grouped {
+        append_grouped_reward_text(&mut body, reward_type.as_str(), descriptions.as_slice());
+    }
+    trim_blank_lines(body)
+}
+
+fn itl_achievement_page_text(achievement: &GrooveStatsSubmitApiAchievement) -> String {
+    let mut lines = vec![format!(
+        "Completed the \"{}\" Achievement!",
+        achievement.title.trim()
+    )];
+    for reward in &achievement.rewards {
+        let tier = reward.tier.trim();
+        if !tier.is_empty() && tier != "0" {
+            lines.push(format!("Tier {tier}"));
+        }
+        for requirement in &reward.requirements {
+            let requirement = requirement.trim();
+            if !requirement.is_empty() {
+                lines.push(requirement.to_string());
+            }
+        }
+        let title = reward.title_unlocked.trim();
+        if !title.is_empty() {
+            lines.push(format!("Unlocked the \"{}\" Title!", title));
+        }
+        lines.push(String::new());
+    }
+    trim_blank_lines(lines.join("\n"))
+}
+
+fn itl_overlay_pages(
+    progress: &ItlEventProgress,
+    submit_progress: Option<&GrooveStatsSubmitApiProgress>,
+    submit_leaderboard: &[LeaderboardApiEntry],
+) -> Vec<ItlOverlayPage> {
+    let mut pages = vec![ItlOverlayPage::Text(itl_summary_page_text(
+        progress,
+        submit_progress,
+    ))];
+    let Some(submit_progress) = submit_progress else {
+        pages.push(ItlOverlayPage::Leaderboard(leaderboard_entries_from_api(
+            submit_leaderboard.to_vec(),
+        )));
+        return pages;
+    };
+    for quest in &submit_progress.quests_completed {
+        pages.push(ItlOverlayPage::Text(itl_quest_page_text(quest)));
+    }
+    for achievement in &submit_progress.achievements_completed {
+        pages.push(ItlOverlayPage::Text(itl_achievement_page_text(achievement)));
+    }
+    pages.push(ItlOverlayPage::Leaderboard(leaderboard_entries_from_api(
+        submit_leaderboard.to_vec(),
+    )));
+    pages
+}
+
 fn handle_submit_event_unlocks(
     player: &GrooveStatsSubmitPlayerJob,
     event: &GrooveStatsSubmitApiEvent,
@@ -2538,7 +2918,7 @@ fn itl_progress_from_submit(
     let itl = response.itl.as_ref()?;
     let score_hundredths = player.itl_score_hundredths?;
     let (clear_type_before, clear_type_after) = itl_clear_type_change(itl.progress.as_ref());
-    Some(ItlEventProgress {
+    let mut progress = ItlEventProgress {
         name: event_name_or_unknown(itl.name.as_str()).to_string(),
         is_doubles: itl.is_doubles,
         score_hundredths,
@@ -2559,7 +2939,14 @@ fn itl_progress_from_submit(
         total_passes: itl.total_passes,
         clear_type_before,
         clear_type_after,
-    })
+        overlay_pages: Vec::new(),
+    };
+    progress.overlay_pages = itl_overlay_pages(
+        &progress,
+        itl.progress.as_ref(),
+        itl.itl_leaderboard.as_slice(),
+    );
+    Some(progress)
 }
 
 #[inline(always)]
@@ -2769,6 +3156,18 @@ fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
         .filter(|part| !part.is_empty())
         .filter_map(|part| part.parse::<u32>().ok());
     Some((nums.next()?, nums.next()?))
+}
+
+pub fn itl_points_for_chart(
+    chart: &crate::game::chart::ChartData,
+    ex_hundredths: u32,
+) -> Option<u32> {
+    let (passing_points, max_scoring_points) = parse_itl_points(chart.chart_name.as_str())?;
+    Some(itl_points_for_song(
+        passing_points,
+        max_scoring_points,
+        f64::from(ex_hundredths) / 100.0,
+    ))
 }
 
 fn itl_points_for_song(passing_points: u32, max_scoring_points: u32, ex_score: f64) -> u32 {
@@ -4326,6 +4725,7 @@ impl LeaderboardPane {
 #[derive(Debug, Clone)]
 pub struct PlayerLeaderboardData {
     pub panes: Vec<LeaderboardPane>,
+    pub itl_self_score: Option<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -4461,6 +4861,15 @@ enum F64OrString {
     String(String),
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum StringOrNumber {
+    String(String),
+    I64(i64),
+    U64(u64),
+    F64(f64),
+}
+
 fn de_f64_from_string_or_number<'de, D>(deserializer: D) -> Result<f64, D::Error>
 where
     D: Deserializer<'de>,
@@ -4469,6 +4878,19 @@ where
         Some(F64OrString::F64(v)) => Ok(v),
         Some(F64OrString::String(text)) => Ok(text.trim().parse::<f64>().unwrap_or(0.0)),
         None => Ok(0.0),
+    }
+}
+
+fn de_string_from_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<StringOrNumber>::deserialize(deserializer)? {
+        Some(StringOrNumber::String(text)) => Ok(text),
+        Some(StringOrNumber::I64(v)) => Ok(v.to_string()),
+        Some(StringOrNumber::U64(v)) => Ok(v.to_string()),
+        Some(StringOrNumber::F64(v)) => Ok(compact_f32_text(v as f32)),
+        None => Ok(String::new()),
     }
 }
 
@@ -4556,6 +4978,21 @@ fn push_leaderboard_pane(
 struct FetchedPlayerLeaderboards {
     data: PlayerLeaderboardData,
     gs_entries: Vec<LeaderboardApiEntry>,
+}
+
+#[inline(always)]
+fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
+    let entry = entries.iter().find(|entry| entry.is_self).or_else(|| {
+        (!username.trim().is_empty()).then(|| {
+            entries
+                .iter()
+                .find(|entry| entry.name.eq_ignore_ascii_case(username))
+        })?
+    })?;
+    if entry.is_fail || !entry.score.is_finite() {
+        return None;
+    }
+    Some(entry.score.round().clamp(0.0, 10000.0) as u32)
 }
 
 #[inline(always)]
@@ -4722,6 +5159,7 @@ fn fetch_arrowcloud_hard_ex_pane(
 fn fetch_player_leaderboards_internal(
     chart_hash: &str,
     api_key: &str,
+    username: &str,
     arrowcloud_api_key: Option<&str>,
     show_ex_score: bool,
     max_entries: usize,
@@ -4751,6 +5189,7 @@ fn fetch_player_leaderboards_internal(
     let decoded: LeaderboardsApiResponse = response.into_body().read_json()?;
     let mut panes = Vec::with_capacity(5);
     let mut gs_entries = Vec::new();
+    let mut itl_self_score = None;
     if let Some(player) = decoded.player1 {
         let LeaderboardApiPlayer {
             is_ranked: _is_ranked,
@@ -4782,6 +5221,7 @@ fn fetch_player_leaderboards_internal(
         if let Some(itl) = itl
             && !itl.itl_leaderboard.is_empty()
         {
+            itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
             let name = if itl.name.trim().is_empty() {
                 "ITL"
             } else {
@@ -4803,7 +5243,10 @@ fn fetch_player_leaderboards_internal(
     }
 
     Ok(FetchedPlayerLeaderboards {
-        data: PlayerLeaderboardData { panes },
+        data: PlayerLeaderboardData {
+            panes,
+            itl_self_score,
+        },
         gs_entries,
     })
 }
@@ -4897,9 +5340,9 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
     } else {
         None
     };
-    let auto_username = side_profile.groovestats_username.trim().to_string();
+    let gs_username = side_profile.groovestats_username.trim().to_string();
     let should_auto_populate =
-        auto_populate && auto_profile_id.is_some() && !auto_username.is_empty();
+        auto_populate && auto_profile_id.is_some() && !gs_username.is_empty();
 
     let key = PlayerLeaderboardCacheKey {
         chart_hash: chart_hash.to_string(),
@@ -4962,6 +5405,7 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
             let fetched = fetch_player_leaderboards_internal(
                 &key.chart_hash,
                 &key.api_key,
+                gs_username.as_str(),
                 if key.include_arrowcloud {
                     Some(key.arrowcloud_api_key.as_str())
                 } else {
@@ -4976,10 +5420,15 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
 
             match fetched {
                 Ok(fetched) => {
+                    set_cached_online_itl_self_score(
+                        key.api_key.as_str(),
+                        key.chart_hash.as_str(),
+                        fetched.data.itl_self_score,
+                    );
                     if should_auto_populate && let Some(profile_id) = auto_profile_id.as_deref() {
                         cache_gs_score_from_leaderboard(
                             profile_id,
-                            auto_username.as_str(),
+                            gs_username.as_str(),
                             key.chart_hash.as_str(),
                             fetched.gs_entries.as_slice(),
                         );
@@ -5029,6 +5478,36 @@ pub fn get_or_fetch_player_leaderboards_for_side(
     max_entries: usize,
 ) -> Option<CachedPlayerLeaderboardData> {
     get_or_fetch_player_leaderboards_for_side_inner(chart_hash, side, max_entries, false)
+}
+
+pub fn get_cached_itl_self_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<u32> {
+    let key = online_itl_self_score_key_for_side(chart_hash, side)?;
+    ONLINE_ITL_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .by_key
+        .get(&key)
+        .copied()
+}
+
+pub fn get_or_fetch_itl_self_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<u32> {
+    if let Some(score) = get_cached_itl_self_score_for_side(chart_hash, side) {
+        return Some(score);
+    }
+    const ITL_SELF_SCORE_FETCH_ENTRIES: usize = 3;
+    let _ = get_or_fetch_player_leaderboards_for_side_inner(
+        chart_hash,
+        side,
+        ITL_SELF_SCORE_FETCH_ENTRIES,
+        false,
+    )?;
+    get_cached_itl_self_score_for_side(chart_hash, side)
 }
 
 pub fn refresh_player_leaderboards_for_side(
@@ -6256,6 +6735,51 @@ mod tests {
     }
 
     #[test]
+    fn groovestats_manual_qr_url_preserves_base_url_case() {
+        let counts = GrooveStatsJudgmentCounts {
+            fantastic_plus: 0x0a,
+            fantastic: 0x0b,
+            excellent: 0x0c,
+            great: 0x0d,
+            decent: 0x0e,
+            way_off: 0x0f,
+            miss: 0x10,
+            total_steps: 0x1d,
+            holds_held: 0x11,
+            total_holds: 0x12,
+            mines_hit: 0x15,
+            total_mines: 0x16,
+            rolls_held: 0x13,
+            total_rolls: 0x14,
+        };
+        let rescored = GrooveStatsRescoreCounts {
+            fantastic_plus: 0x01,
+            fantastic: 0x02,
+            excellent: 0x03,
+            great: 0x04,
+            decent: 0x05,
+            way_off: 0x06,
+        };
+
+        let url = groovestats_manual_qr_url(
+            "https://www.groovestats.com",
+            "deadbeef",
+            3,
+            &counts,
+            &rescored,
+            true,
+            150,
+            true,
+        )
+        .expect("manual qr url");
+
+        assert_eq!(
+            url,
+            "https://www.groovestats.com/QR/deadbeef/T1dGaHbIcJdKeLfM10H11T12R13T14M15T16G1H2I3J4K5L6/F1R96C1V3"
+        );
+    }
+
+    #[test]
     fn groovestats_comment_counts_ignore_ds_prefix() {
         let counts = parse_comment_counts("[DS], 15e, 2g, 2m");
         assert_eq!(counts.e, 15);
@@ -6321,6 +6845,14 @@ mod tests {
             Some((7500, 12000))
         );
         assert_eq!(parse_itl_points("No points here"), None);
+    }
+
+    #[test]
+    fn itl_points_for_chart_uses_chart_name_curve() {
+        let mut chart = sample_chart("dance-single");
+        chart.chart_name = "7500 (P) + 12000 (S)".to_string();
+
+        assert_eq!(itl_points_for_chart(&chart, 10_000), Some(19_500));
     }
 
     #[test]
@@ -6460,9 +6992,65 @@ mod tests {
     }
 
     #[test]
+    fn leaderboard_self_score_prefers_self_flag_for_itl() {
+        let entries = vec![
+            LeaderboardApiEntry {
+                rank: 10,
+                name: "Other".to_string(),
+                machine_tag: None,
+                score: 9321.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+                comments: None,
+            },
+            LeaderboardApiEntry {
+                rank: 25,
+                name: "Player".to_string(),
+                machine_tag: None,
+                score: 9789.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: true,
+                is_fail: false,
+                comments: None,
+            },
+        ];
+
+        assert_eq!(
+            leaderboard_self_score_10000(&entries, "ignored"),
+            Some(9789)
+        );
+    }
+
+    #[test]
+    fn leaderboard_self_score_falls_back_to_username_match() {
+        let entries = vec![LeaderboardApiEntry {
+            rank: 25,
+            name: "PerfectTaste".to_string(),
+            machine_tag: None,
+            score: 9712.0,
+            date: String::new(),
+            is_rival: false,
+            is_self: false,
+            is_fail: false,
+            comments: None,
+        }];
+
+        assert_eq!(
+            leaderboard_self_score_10000(&entries, "perfecttaste"),
+            Some(9712)
+        );
+    }
+
+    #[test]
     fn player_leaderboard_cache_reuses_success_until_more_rows_are_needed() {
         let ready = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData { panes: Vec::new() }),
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                itl_self_score: None,
+            }),
             max_entries: 5,
             refreshed_at: Instant::now(),
             retry_after: None,
@@ -6485,7 +7073,10 @@ mod tests {
         assert!(should_fetch_player_leaderboard_entry(Some(&ready), 5, true));
 
         let cooled_down_ready = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData { panes: Vec::new() }),
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                itl_self_score: None,
+            }),
             max_entries: 5,
             refreshed_at: Instant::now(),
             retry_after: Some(Instant::now() + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL),

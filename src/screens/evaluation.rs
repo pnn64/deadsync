@@ -664,6 +664,7 @@ pub struct State {
     pub auto_screenshot_taken: bool,
     pub itl_overlay_visible: bool,
     itl_overlay_shown: bool,
+    itl_overlay_page: [usize; MAX_PLAYERS],
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
 }
@@ -1157,6 +1158,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         auto_screenshot_taken: false,
         itl_overlay_visible: false,
         itl_overlay_shown: false,
+        itl_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
     }
@@ -1216,6 +1218,7 @@ pub fn init_from_score_info(
         auto_screenshot_taken: false,
         itl_overlay_visible: false,
         itl_overlay_shown: false,
+        itl_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
     }
@@ -1236,6 +1239,12 @@ fn sync_submit_itl_progress(state: &mut State) {
             continue;
         };
         found_new |= state.itl_progress[player_idx].is_none();
+        let page_count = progress.overlay_pages.len().max(1);
+        if state.itl_progress[player_idx].is_none() {
+            state.itl_overlay_page[player_idx] = 0;
+        } else if state.itl_overlay_page[player_idx] >= page_count {
+            state.itl_overlay_page[player_idx] = page_count - 1;
+        }
         state.itl_progress[player_idx] = Some(progress);
     }
     if found_new && !state.itl_overlay_shown {
@@ -1504,12 +1513,56 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
     if state.itl_overlay_visible {
+        let play_style = profile::get_session_play_style();
+        let side_idx = |side: profile::PlayerSide| match side {
+            profile::PlayerSide::P1 => 0,
+            profile::PlayerSide::P2 => 1,
+        };
+        let mut shift_itl_page = |controller: profile::PlayerSide, dir: i32| {
+            let player_idx = if play_style == profile::PlayStyle::Versus {
+                side_idx(controller)
+            } else {
+                0
+            };
+            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+                return;
+            };
+            if si.side != controller {
+                return;
+            }
+            let Some(progress) = state.itl_progress.get(player_idx).and_then(|p| p.as_ref()) else {
+                return;
+            };
+            let page_count = progress.overlay_pages.len();
+            if page_count <= 1 {
+                return;
+            }
+            state.itl_overlay_page[player_idx] = (state.itl_overlay_page[player_idx] as i32 + dir)
+                .rem_euclid(page_count as i32)
+                as usize;
+        };
         return match ev.action {
             VirtualAction::p1_back
             | VirtualAction::p1_start
             | VirtualAction::p2_back
             | VirtualAction::p2_start => {
                 state.itl_overlay_visible = false;
+                ScreenAction::None
+            }
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                shift_itl_page(profile::PlayerSide::P1, -1);
+                ScreenAction::None
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                shift_itl_page(profile::PlayerSide::P1, 1);
+                ScreenAction::None
+            }
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+                shift_itl_page(profile::PlayerSide::P2, -1);
+                ScreenAction::None
+            }
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+                shift_itl_page(profile::PlayerSide::P2, 1);
                 ScreenAction::None
             }
             _ => ScreenAction::None,
@@ -2949,9 +3002,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let Some(progress) = state.itl_progress[player_idx].as_ref() else {
                 continue;
             };
-            panels.push((side, progress));
+            panels.push((side, progress, state.itl_overlay_page[player_idx]));
         }
-        actors.extend(eval_panes::build_itl_event_overlay(panels.as_slice()));
+        let overlay_song = state
+            .score_info
+            .iter()
+            .flatten()
+            .next()
+            .map(|si| si.song.as_ref());
+        actors.extend(eval_panes::build_itl_event_overlay(
+            play_style != profile::PlayStyle::Versus,
+            overlay_song,
+            panels.as_slice(),
+        ));
     }
 
     actors

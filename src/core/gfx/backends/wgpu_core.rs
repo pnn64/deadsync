@@ -741,7 +741,7 @@ fn init_uniform_proj(
         layout: &layout,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
-            resource: buffer.as_entire_binding(),
+            resource: proj_binding(&buffer),
         }],
     });
 
@@ -752,6 +752,15 @@ fn init_uniform_proj(
         group,
         layout,
     }
+}
+
+#[inline(always)]
+fn proj_binding(buffer: &wgpu::Buffer) -> wgpu::BindingResource<'_> {
+    wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+        buffer,
+        offset: 0,
+        size: wgpu::BufferSize::new(PROJ_BYTES),
+    })
 }
 
 pub fn create_texture(
@@ -1676,7 +1685,7 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) {
         layout,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
-            resource: buffer.as_entire_binding(),
+            resource: proj_binding(buffer),
         }],
     });
     *capacity = new_cap;

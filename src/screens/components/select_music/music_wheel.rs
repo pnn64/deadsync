@@ -1,4 +1,5 @@
 use crate::act;
+use crate::config::SelectMusicItlWheelMode;
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::chart::ChartData;
@@ -38,9 +39,17 @@ const NEW_BADGE_PULSE_PERIOD: f32 = 1.2;
 const NEW_BADGE_COLOR: [f32; 4] = [0.3, 1.0, 0.3, 1.0];
 const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
+const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
+// Simply Love and Arrow Cloud both use zoom(0.2) for the single-line ITL wheel value.
+// Our stacked Points+Score mode is deadsync-only, so it needs a smaller zoom to
+// keep both lines within that same visual footprint.
+const ITL_SCORE_ZOOM: f32 = 0.2;
+const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
 
 thread_local! {
     static ITL_EX_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
+        RefCell::new(HashMap::with_capacity(256));
+    static ITL_POINTS_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
 }
 
@@ -93,6 +102,46 @@ fn cached_itl_ex_text(ex_hundredths: u32) -> Arc<str> {
         }
         text
     })
+}
+
+#[inline(always)]
+fn cached_itl_points_text(points: u32) -> Arc<str> {
+    ITL_POINTS_TEXT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&points) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(points.to_string());
+        if cache.len() < ITL_POINTS_TEXT_CACHE_LIMIT {
+            cache.insert(points, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn itl_score_line_y(side: profile::PlayerSide, joined_sides: usize) -> (f32, f32) {
+    if joined_sides >= 2 {
+        return if side == profile::PlayerSide::P1 {
+            (-15.0, -6.0)
+        } else {
+            (0.0, 9.0)
+        };
+    }
+    (-7.0, 3.0)
+}
+
+#[inline(always)]
+fn itl_score_y(side: profile::PlayerSide, joined_sides: usize) -> f32 {
+    if joined_sides >= 2 {
+        if side == profile::PlayerSide::P1 {
+            -11.0
+        } else {
+            4.0
+        }
+    } else {
+        -4.0
+    }
 }
 
 // Helper from select_music.rs
@@ -159,6 +208,7 @@ pub struct MusicWheelParams<'a> {
     pub song_has_edit_ptrs: Option<&'a HashSet<usize>>,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub new_pack_names: Option<&'a HashSet<String>>,
 }
 
@@ -217,6 +267,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     let grade_x_p2 = widescale(26.0, 47.0);
     let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
     let itl_ex_color = color::JUDGMENT_RGBA[0];
+    let itl_points_color = [1.0, 1.0, 1.0, 1.0];
     let joined_sides = usize::from(profile::is_session_side_joined(profile::PlayerSide::P1))
         + usize::from(profile::is_session_side_joined(profile::PlayerSide::P2));
 
@@ -412,145 +463,201 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         ));
                     }
 
-                    if p.show_music_wheel_grades || p.show_music_wheel_lamps {
-                        let chart = if is_selected_slot {
-                            crate::screens::select_music::chart_for_steps_index(
-                                info,
-                                target_chart_type,
-                                p.selected_steps_index,
-                            )
-                        } else {
-                            chart_for_preferred_or_nearest_standard(
-                                info,
-                                target_chart_type,
-                                p.preferred_difficulty_index,
-                            )
-                        };
+                    let wheel_chart = if is_selected_slot {
+                        crate::screens::select_music::chart_for_steps_index(
+                            info,
+                            target_chart_type,
+                            p.selected_steps_index,
+                        )
+                    } else {
+                        chart_for_preferred_or_nearest_standard(
+                            info,
+                            target_chart_type,
+                            p.preferred_difficulty_index,
+                        )
+                    };
+                    if (p.show_music_wheel_grades || p.show_music_wheel_lamps)
+                        && let Some(chart) = wheel_chart
+                    {
+                        for (side, grade_x) in [
+                            (profile::PlayerSide::P1, grade_x_p1),
+                            (profile::PlayerSide::P2, grade_x_p2),
+                        ] {
+                            if !profile::is_session_side_joined(side) {
+                                continue;
+                            }
+                            let Some(cached_score) =
+                                scores::get_cached_score_for_side(&chart.short_hash, side)
+                            else {
+                                continue;
+                            };
+                            let has_score = cached_score.grade != scores::Grade::Failed
+                                || cached_score.score_percent > 0.0;
+                            if !has_score {
+                                continue;
+                            }
 
-                        if let Some(chart) = chart {
-                            for (side, grade_x) in [
-                                (profile::PlayerSide::P1, grade_x_p1),
-                                (profile::PlayerSide::P2, grade_x_p2),
-                            ] {
-                                if !profile::is_session_side_joined(side) {
-                                    continue;
+                            if p.show_music_wheel_grades {
+                                let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
+                                    align(0.5, 0.5):
+                                    xy(grade_x, grade_y):
+                                    zoom(grade_zoom):
+                                    z(2):
+                                    visible(true)
+                                );
+                                if let Actor::Sprite { cell, .. } = &mut grade_actor {
+                                    *cell = Some((cached_score.grade.to_sprite_state(), u32::MAX));
                                 }
-                                let Some(cached_score) =
-                                    scores::get_cached_score_for_side(&chart.short_hash, side)
-                                else {
-                                    continue;
+                                slot_children.push(grade_actor);
+                            }
+
+                            if p.show_music_wheel_lamps {
+                                let lamp_dir = if side == profile::PlayerSide::P1 {
+                                    -1.0
+                                } else {
+                                    1.0
                                 };
-                                let has_score = cached_score.grade != scores::Grade::Failed
-                                    || cached_score.score_percent > 0.0;
-                                if !has_score {
-                                    continue;
-                                }
-
-                                if p.show_music_wheel_grades {
-                                    let mut grade_actor = act!(sprite("grades/grades 1x19.png"):
-                                        align(0.5, 0.5):
-                                        xy(grade_x, grade_y):
-                                        zoom(grade_zoom):
-                                        z(2):
-                                        visible(true)
-                                    );
-                                    if let Actor::Sprite { cell, .. } = &mut grade_actor {
-                                        *cell =
-                                            Some((cached_score.grade.to_sprite_state(), u32::MAX));
-                                    }
-                                    slot_children.push(grade_actor);
-                                }
-
-                                if p.show_music_wheel_lamps {
-                                    let lamp_dir = if side == profile::PlayerSide::P1 {
-                                        -1.0
-                                    } else {
-                                        1.0
+                                let lamp_x = grade_x + lamp_dir * widescale(13.0, 20.0);
+                                let lamp_w = widescale(5.0, 6.0);
+                                let lamp_h = 31.0;
+                                let (lamp_color, lamp_pulsing, lamp_index) =
+                                    match cached_score.lamp_index {
+                                        Some(0) => (col_quint_lamp(), true, Some(0u8)),
+                                        Some(idx @ 1..=4) => {
+                                            let color_index = (idx - 1) as usize;
+                                            let base = color::JUDGMENT_RGBA[color_index.min(5)];
+                                            (base, true, Some(idx))
+                                        }
+                                        Some(_) => (col_clear_lamp(), false, None),
+                                        None if cached_score.grade == scores::Grade::Failed => {
+                                            (col_fail_lamp(), false, None)
+                                        }
+                                        None => (col_clear_lamp(), false, None),
                                     };
-                                    let lamp_x = grade_x + lamp_dir * widescale(13.0, 20.0);
-                                    let lamp_w = widescale(5.0, 6.0);
-                                    let lamp_h = 31.0;
-                                    let (lamp_color, lamp_pulsing, lamp_index) =
-                                        match cached_score.lamp_index {
-                                            Some(0) => (col_quint_lamp(), true, Some(0u8)),
-                                            Some(idx @ 1..=4) => {
-                                                let color_index = (idx - 1) as usize;
-                                                let base = color::JUDGMENT_RGBA[color_index.min(5)];
-                                                (base, true, Some(idx))
-                                            }
-                                            Some(_) => (col_clear_lamp(), false, None),
-                                            None if cached_score.grade == scores::Grade::Failed => {
-                                                (col_fail_lamp(), false, None)
-                                            }
-                                            None => (col_clear_lamp(), false, None),
-                                        };
-                                    let lamp_color_final = if lamp_pulsing {
-                                        let lamp_color2 = lerp_color(
-                                            [1.0; 4],
-                                            lamp_color,
-                                            LAMP_PULSE_LERP_TO_WHITE,
-                                        );
-                                        lerp_color(lamp_color, lamp_color2, lamp_pulse_t)
-                                    } else {
-                                        lamp_color
-                                    };
-                                    slot_children.push(act!(quad:
+                                let lamp_color_final = if lamp_pulsing {
+                                    let lamp_color2 =
+                                        lerp_color([1.0; 4], lamp_color, LAMP_PULSE_LERP_TO_WHITE);
+                                    lerp_color(lamp_color, lamp_color2, lamp_pulse_t)
+                                } else {
+                                    lamp_color
+                                };
+                                slot_children.push(act!(quad:
+                                    align(0.5, 0.5):
+                                    xy(lamp_x, grade_y):
+                                    zoomto(lamp_w, lamp_h):
+                                    diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
+                                    z(2)
+                                ));
+                                if let Some(lamp_index) = lamp_index
+                                    && let Some(count) = cached_score.lamp_judge_count
+                                    && count < 10
+                                {
+                                    let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
+                                    let judge_y = grade_y + 10.0;
+                                    let judge_col = lamp_judge_count_color(lamp_index);
+                                    slot_children.push(act!(text:
+                                        font("wendy_screenevaluation"):
+                                        settext(digit_text(count)):
                                         align(0.5, 0.5):
-                                        xy(lamp_x, grade_y):
-                                        zoomto(lamp_w, lamp_h):
-                                        diffuse(lamp_color_final[0], lamp_color_final[1], lamp_color_final[2], lamp_color_final[3]):
-                                        z(2)
+                                        horizalign(center):
+                                        xy(judge_x, judge_y):
+                                        zoom(0.15):
+                                        diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
+                                        z(10)
                                     ));
-                                    if let Some(lamp_index) = lamp_index
-                                        && let Some(count) = cached_score.lamp_judge_count
-                                        && count < 10
-                                    {
-                                        let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);
-                                        let judge_y = grade_y + 10.0;
-                                        let judge_col = lamp_judge_count_color(lamp_index);
-                                        slot_children.push(act!(text:
-                                            font("wendy_screenevaluation"):
-                                            settext(digit_text(count)):
-                                            align(0.5, 0.5):
-                                            horizalign(center):
-                                            xy(judge_x, judge_y):
-                                            zoom(0.15):
-                                            diffuse(judge_col[0], judge_col[1], judge_col[2], judge_col[3]):
-                                            z(10)
-                                        ));
-                                    }
                                 }
                             }
                         }
                     }
 
+                    let itl_chart_hash = wheel_chart.map(|chart| chart.short_hash.as_str());
                     for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                        if matches!(p.itl_wheel_mode, SelectMusicItlWheelMode::Off) {
+                            continue;
+                        }
                         if !profile::is_session_side_joined(side) {
                             continue;
                         }
-                        let Some(itl_score) = scores::get_cached_itl_score_for_song(info, side)
-                        else {
+                        let local_itl = scores::get_cached_itl_score_for_song(info, side);
+                        let ex_hundredths = local_itl
+                            .as_ref()
+                            .map(|score| score.ex_hundredths)
+                            .or_else(|| {
+                                itl_chart_hash.and_then(|chart_hash| {
+                                    if is_selected_slot {
+                                        scores::get_or_fetch_itl_self_score_for_side(
+                                            chart_hash, side,
+                                        )
+                                    } else {
+                                        scores::get_cached_itl_self_score_for_side(chart_hash, side)
+                                    }
+                                })
+                            });
+                        let Some(ex_hundredths) = ex_hundredths else {
                             continue;
                         };
-                        let y = if joined_sides >= 2 {
-                            if side == profile::PlayerSide::P1 {
-                                -11.0
-                            } else {
-                                4.0
+                        match p.itl_wheel_mode {
+                            SelectMusicItlWheelMode::Off => {}
+                            SelectMusicItlWheelMode::Score => {
+                                slot_children.push(act!(text:
+                                    font("wendy_monospace_numbers"):
+                                    settext(cached_itl_ex_text(ex_hundredths)):
+                                    align(1.0, 0.5):
+                                    horizalign(right):
+                                    xy(itl_ex_x, half_item_h + itl_score_y(side, joined_sides)):
+                                    zoom(ITL_SCORE_ZOOM):
+                                    diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
+                                    z(2)
+                                ));
                             }
-                        } else {
-                            -4.0
-                        };
-                        slot_children.push(act!(text:
-                            font("wendy_monospace_numbers"):
-                            settext(cached_itl_ex_text(itl_score.ex_hundredths)):
-                            align(1.0, 0.5):
-                            horizalign(right):
-                            xy(itl_ex_x, half_item_h + y):
-                            zoom(0.2):
-                            diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
-                            z(2)
-                        ));
+                            SelectMusicItlWheelMode::PointsAndScore => {
+                                let Some(points) =
+                                    local_itl.map(|score| score.points).or_else(|| {
+                                        wheel_chart.and_then(|chart| {
+                                            scores::itl_points_for_chart(chart, ex_hundredths)
+                                        })
+                                    })
+                                else {
+                                    slot_children.push(act!(text:
+                                        font("wendy_monospace_numbers"):
+                                        settext(cached_itl_ex_text(ex_hundredths)):
+                                        align(1.0, 0.5):
+                                        horizalign(right):
+                                        xy(itl_ex_x, half_item_h + itl_score_y(side, joined_sides)):
+                                        zoom(ITL_SCORE_ZOOM):
+                                        diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
+                                        z(2)
+                                    ));
+                                    continue;
+                                };
+                                let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
+                                slot_children.push(act!(text:
+                                    font("wendy_monospace_numbers"):
+                                    settext(cached_itl_points_text(points)):
+                                    align(1.0, 0.5):
+                                    horizalign(right):
+                                    xy(itl_ex_x, half_item_h + points_y):
+                                    zoom(ITL_POINTS_SCORE_ZOOM):
+                                    diffuse(
+                                        itl_points_color[0],
+                                        itl_points_color[1],
+                                        itl_points_color[2],
+                                        itl_points_color[3]
+                                    ):
+                                    z(2)
+                                ));
+                                slot_children.push(act!(text:
+                                    font("wendy_monospace_numbers"):
+                                    settext(cached_itl_ex_text(ex_hundredths)):
+                                    align(1.0, 0.5):
+                                    horizalign(right):
+                                    xy(itl_ex_x, half_item_h + ex_y):
+                                    zoom(ITL_POINTS_SCORE_ZOOM):
+                                    diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
+                                    z(2)
+                                ));
+                            }
+                        }
                     }
 
                     actors.push(Actor::Frame {
