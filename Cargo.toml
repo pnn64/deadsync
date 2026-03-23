@@ -31,7 +31,7 @@ pipewire-audio = ["dep:pipewire"]
 [dependencies]
 winit = "0.30.13"
 log = "0.4.29"
-env_logger = "0.11.9"
+env_logger = "0.11.10"
 image = "0.25.10"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -70,7 +70,7 @@ memmap2 = "0.9.10"
 ureq = { version = "3.3.0", features = ["json", "rustls"] }
 
 # Unlocks
-zip = { version = "8.3.1", default-features = false, features = ["deflate"] }
+zip = { version = "8.4.0", default-features = false, features = ["deflate"] }
 
 # Song cache
 bincode = "2.0.1"
