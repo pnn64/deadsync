@@ -53,6 +53,9 @@ const GRAPH_BARELY_LIFE_MAX: f32 = 0.1;
 const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
 const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
 const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
+const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
+const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
+const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
 const ENABLE_GS_QR_PANE: bool = true;
@@ -153,6 +156,15 @@ fn cached_record_text(is_machine: bool, rank: u32) -> Arc<str> {
             }
         },
     )
+}
+
+#[inline(always)]
+const fn submit_record_text(banner: scores::GrooveStatsSubmitRecordBanner) -> &'static str {
+    match banner {
+        scores::GrooveStatsSubmitRecordBanner::PersonalBest => "Personal Best!",
+        scores::GrooveStatsSubmitRecordBanner::WorldRecord => "World Record!",
+        scores::GrooveStatsSubmitRecordBanner::WorldRecordEx => "World Record! (EX)",
+    }
 }
 
 #[inline(always)]
@@ -2824,7 +2836,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
-    // Auto-submit status text (SL/zmod parity with AutoSubmitScore.lua SubmitText actors):
+    // Auto-submit UI text (SL/zmod parity with AutoSubmitScore.lua):
+    // top PB/WR banner plus bottom submit-status actors.
     // Common Normal/ThemeFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
     // In SL/zmod, Common Normal.redir points to Miso/_miso light.
     // When both GrooveStats/BoogieStats and ArrowCloud are active, stack them vertically.
@@ -2845,6 +2858,29 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
+            if let Some(banner) = scores::get_groovestats_submit_record_banner_for_side(
+                si.chart.short_hash.as_str(),
+                side,
+            ) {
+                let x = if side == profile::PlayerSide::P1 {
+                    screen_center_x() - 225.0
+                } else {
+                    screen_center_x() + 225.0
+                };
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(cached_str_ref(submit_record_text(banner))):
+                    align(0.5, 0.5):
+                    xy(x, AUTO_SUBMIT_RECORD_TEXT_Y):
+                    zoom(AUTO_SUBMIT_RECORD_TEXT_ZOOM):
+                    z(121):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    diffuseshift():
+                    effectcolor1(1.0, 1.0, 1.0, 1.0):
+                    effectcolor2(1.0, 1.0, 0.0, 1.0):
+                    effectperiod(AUTO_SUBMIT_RECORD_TEXT_PERIOD)
+                ));
+            }
             let mut lines: Vec<&str> = Vec::with_capacity(2);
             if let Some(status) = scores::get_groovestats_submit_ui_status_for_side(
                 si.chart.short_hash.as_str(),

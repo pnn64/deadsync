@@ -1942,6 +1942,13 @@ pub enum GrooveStatsSubmitUiStatus {
     TimedOut,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GrooveStatsSubmitRecordBanner {
+    PersonalBest,
+    WorldRecord,
+    WorldRecordEx,
+}
+
 #[derive(Debug, Clone)]
 struct GrooveStatsSubmitUiEntry {
     chart_hash: String,
@@ -1959,6 +1966,7 @@ struct GrooveStatsSubmitEventUiEntry {
     chart_hash: String,
     token: u64,
     itl_progress: Option<ItlEventProgress>,
+    record_banner: Option<GrooveStatsSubmitRecordBanner>,
 }
 
 static GROOVESTATS_SUBMIT_EVENT_UI: std::sync::LazyLock<
@@ -2016,6 +2024,7 @@ struct GrooveStatsSubmitPlayerJob {
     profile_id: Option<String>,
     token: u64,
     itl_score_hundredths: Option<u32>,
+    show_ex_score: bool,
 }
 
 #[derive(Debug)]
@@ -2061,6 +2070,8 @@ struct GrooveStatsSubmitApiPlayer {
     result: String,
     #[serde(rename = "gsLeaderboard", default)]
     gs_leaderboard: Vec<LeaderboardApiEntry>,
+    #[serde(rename = "exLeaderboard", default)]
+    ex_leaderboard: Vec<LeaderboardApiEntry>,
     rpg: Option<GrooveStatsSubmitApiEvent>,
     itl: Option<GrooveStatsSubmitApiEvent>,
 }
@@ -2244,6 +2255,7 @@ fn groovestats_arm_submit_event_ui(side: profile::PlayerSide, chart_hash: &str, 
             chart_hash: hash.to_string(),
             token,
             itl_progress: None,
+            record_banner: None,
         });
 }
 
@@ -2253,6 +2265,7 @@ fn groovestats_update_submit_event_ui_if_token(
     chart_hash: &str,
     token: u64,
     itl_progress: Option<ItlEventProgress>,
+    record_banner: Option<GrooveStatsSubmitRecordBanner>,
 ) {
     let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
     let Some(entry) = state[arrowcloud_side_ix(side)].as_mut() else {
@@ -2262,6 +2275,7 @@ fn groovestats_update_submit_event_ui_if_token(
         return;
     }
     entry.itl_progress = itl_progress;
+    entry.record_banner = record_banner;
 }
 
 #[inline(always)]
@@ -2295,6 +2309,20 @@ pub fn get_groovestats_submit_itl_progress_for_side(
         .as_ref()
         .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
         .and_then(|entry| entry.itl_progress.clone())
+}
+
+pub fn get_groovestats_submit_record_banner_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<GrooveStatsSubmitRecordBanner> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[arrowcloud_side_ix(side)]
+        .as_ref()
+        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        .and_then(|entry| entry.record_banner)
 }
 
 #[inline(always)]
@@ -3693,6 +3721,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             profile_id: profile::active_local_profile_id_for_side(side),
             token,
             itl_score_hundredths: Some(current_itl_score_hundredths(gs, player_idx)),
+            show_ex_score: profile.show_ex_score,
         });
         headers.push((
             format!("x-api-key-player-{slot}"),
@@ -3766,6 +3795,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
                     player.chart_hash.as_str(),
                     player.token,
                     itl_progress_from_submit(player, player_response),
+                    submit_record_banner(player, player_response),
                 );
                 if let Some(profile_id) = player.profile_id.as_deref()
                     && !player.username.is_empty()
@@ -4993,6 +5023,50 @@ fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str)
         return None;
     }
     Some(entry.score.round().clamp(0.0, 10000.0) as u32)
+}
+
+#[inline(always)]
+fn leaderboard_self_rank(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
+    entries
+        .iter()
+        .find(|entry| entry.is_self)
+        .or_else(|| {
+            (!username.trim().is_empty()).then(|| {
+                entries
+                    .iter()
+                    .find(|entry| entry.name.eq_ignore_ascii_case(username))
+            })?
+        })
+        .map(|entry| entry.rank)
+}
+
+#[inline(always)]
+fn submit_result_improved(result: &str) -> bool {
+    result.eq_ignore_ascii_case("score-added") || result.eq_ignore_ascii_case("improved")
+}
+
+#[inline(always)]
+fn submit_record_banner(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) -> Option<GrooveStatsSubmitRecordBanner> {
+    if !submit_result_improved(response.result.as_str()) {
+        return None;
+    }
+    let use_ex = player.show_ex_score && !response.ex_leaderboard.is_empty();
+    let leaderboard = if use_ex {
+        response.ex_leaderboard.as_slice()
+    } else {
+        response.gs_leaderboard.as_slice()
+    };
+    if leaderboard_self_rank(leaderboard, player.username.as_str()) == Some(1) {
+        return Some(if use_ex {
+            GrooveStatsSubmitRecordBanner::WorldRecordEx
+        } else {
+            GrooveStatsSubmitRecordBanner::WorldRecord
+        });
+    }
+    Some(GrooveStatsSubmitRecordBanner::PersonalBest)
 }
 
 #[inline(always)]
@@ -7045,6 +7119,101 @@ mod tests {
             leaderboard_self_score_10000(&entries, "perfecttaste"),
             Some(9712)
         );
+    }
+
+    fn sample_submit_job(show_ex_score: bool) -> GrooveStatsSubmitPlayerJob {
+        GrooveStatsSubmitPlayerJob {
+            side: profile::PlayerSide::P1,
+            slot: 1,
+            chart_hash: "deadbeef".to_string(),
+            username: "PerfectTaste".to_string(),
+            profile_name: "PerfectTaste".to_string(),
+            profile_id: None,
+            token: 1,
+            itl_score_hundredths: None,
+            show_ex_score,
+        }
+    }
+
+    fn sample_submit_entry(rank: u32, is_self: bool) -> LeaderboardApiEntry {
+        LeaderboardApiEntry {
+            rank,
+            name: "PerfectTaste".to_string(),
+            machine_tag: None,
+            score: 9999.0,
+            date: String::new(),
+            is_rival: false,
+            is_self,
+            is_fail: false,
+            comments: None,
+        }
+    }
+
+    fn sample_submit_response(
+        result: &str,
+        gs_leaderboard: Vec<LeaderboardApiEntry>,
+        ex_leaderboard: Vec<LeaderboardApiEntry>,
+    ) -> GrooveStatsSubmitApiPlayer {
+        GrooveStatsSubmitApiPlayer {
+            chart_hash: "deadbeef".to_string(),
+            result: result.to_string(),
+            gs_leaderboard,
+            ex_leaderboard,
+            rpg: None,
+            itl: None,
+        }
+    }
+
+    #[test]
+    fn submit_record_banner_returns_world_record_for_top_gs_rank() {
+        let banner = submit_record_banner(
+            &sample_submit_job(false),
+            &sample_submit_response("improved", vec![sample_submit_entry(1, true)], Vec::new()),
+        );
+
+        assert_eq!(banner, Some(GrooveStatsSubmitRecordBanner::WorldRecord));
+    }
+
+    #[test]
+    fn submit_record_banner_prefers_ex_leaderboard_for_ex_mode() {
+        let banner = submit_record_banner(
+            &sample_submit_job(true),
+            &sample_submit_response(
+                "score-added",
+                vec![sample_submit_entry(2, true)],
+                vec![sample_submit_entry(1, true)],
+            ),
+        );
+
+        assert_eq!(banner, Some(GrooveStatsSubmitRecordBanner::WorldRecordEx));
+    }
+
+    #[test]
+    fn submit_record_banner_falls_back_to_personal_best() {
+        let banner = submit_record_banner(
+            &sample_submit_job(true),
+            &sample_submit_response(
+                "improved",
+                vec![sample_submit_entry(3, true)],
+                vec![sample_submit_entry(4, true)],
+            ),
+        );
+
+        assert_eq!(banner, Some(GrooveStatsSubmitRecordBanner::PersonalBest));
+    }
+
+    #[test]
+    fn submit_record_banner_ignores_non_improving_results() {
+        let banner = submit_record_banner(
+            &sample_submit_job(false),
+            &sample_submit_response(
+                "score-already-submitted",
+                vec![sample_submit_entry(1, true)],
+                Vec::new(),
+            ),
+        );
+
+        assert_eq!(banner, None);
     }
 
     #[test]
