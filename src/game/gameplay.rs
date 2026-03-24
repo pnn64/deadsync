@@ -706,6 +706,48 @@ const fn lane_edge_judges_lift(pressed: bool, was_down: bool) -> bool {
 }
 
 #[inline(always)]
+fn counts_for_early_rescore(note_type: NoteType) -> bool {
+    matches!(
+        note_type,
+        NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
+    )
+}
+
+#[inline(always)]
+fn count_rescore_tracks_on_row(
+    notes: &[Note],
+    row_entries: &[RowEntry],
+    row_map_cache: &[u32],
+    row_index: usize,
+    col_start: usize,
+    col_end: usize,
+) -> usize {
+    if let Some(&pos) = row_map_cache.get(row_index).filter(|&&x| x != u32::MAX) {
+        return row_entries[pos as usize]
+            .nonmine_note_indices
+            .iter()
+            .filter(|&&idx| {
+                let note = &notes[idx];
+                note.column >= col_start
+                    && note.column < col_end
+                    && counts_for_early_rescore(note.note_type)
+            })
+            .count();
+    }
+
+    notes
+        .iter()
+        .filter(|note| {
+            note.row_index == row_index
+                && note.column >= col_start
+                && note.column < col_end
+                && note.can_be_judged
+                && counts_for_early_rescore(note.note_type)
+        })
+        .count()
+}
+
+#[inline(always)]
 fn trigger_receptor_glow_pulse(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
     state.receptor_glow_press_timers[col] = 0.0;
@@ -8521,6 +8563,14 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
 
         if abs_time_error <= way_off_window {
+            let row_rescore_track_count = count_rescore_tracks_on_row(
+                &state.notes,
+                &state.row_entries,
+                &state.row_map_cache,
+                note_row_index,
+                col_start,
+                col_end,
+            );
             let mut row_note_indices = [usize::MAX; MAX_COLS];
             let mut row_note_count = 0usize;
             let mut row_has_hold_or_roll = false;
@@ -8590,7 +8640,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 (0.0, 0.0, 0.0, 0.0)
             };
 
-            if rescore_early_hits && row_note_count == 1 {
+            if rescore_early_hits && row_rescore_track_count == 1 {
                 let note_col = state.notes[note_index].column;
                 let row_note_time = state.note_time_cache[note_index];
                 let te_music = current_time - row_note_time;
@@ -11133,11 +11183,11 @@ fn update_danger_fx(state: &mut State) {
 mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
-        INSERT_MASK_BIT_MINES, REPLAY_EDGE_RATE_PER_SEC, ScrollEffects, ScrollSpeedSetting,
-        SongClockSnapshot, TickMode, advance_hold_last_held, apply_mines_insert,
-        build_assist_clap_rows, build_attack_mask_windows_for_player,
-        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_press_started, lane_release_finished,
+        INSERT_MASK_BIT_MINES, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
+        ScrollSpeedSetting, SongClockSnapshot, TickMode, advance_hold_last_held,
+        apply_mines_insert, build_assist_clap_rows, build_attack_mask_windows_for_player,
+        count_rescore_tracks_on_row, frame_stable_display_music_time, input_queue_cap,
+        lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals, replay_edge_cap,
         score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
@@ -11145,6 +11195,7 @@ mod tests {
     };
     use crate::core::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
+    use crate::game::judgment::{JudgeGrade, Judgment};
     use crate::game::note::{HoldData, Note, NoteType};
     use crate::game::profile;
     use crate::game::timing::{ROWS_PER_BEAT, StopSegment, TimingData, TimingSegments};
@@ -11184,6 +11235,17 @@ mod tests {
             let_go_starting_life: 0.0,
             last_held_row_index: row_index,
             last_held_beat: row_index as f32 / ROWS_PER_BEAT as f32,
+        });
+        note
+    }
+
+    fn judged_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
+        let mut note = test_note(column, row_index, note_type);
+        note.result = Some(Judgment {
+            time_error_ms: 0.0,
+            grade: JudgeGrade::Great,
+            window: None,
+            miss_because_held: false,
         });
         note
     }
@@ -11345,6 +11407,46 @@ mod tests {
         assert_eq!(
             glow_edges,
             vec![(true, false), (false, false), (false, false), (false, true)]
+        );
+    }
+
+    #[test]
+    fn rescore_track_count_keeps_chord_rows_multi_note_after_partial_judgment() {
+        let row_index = 48usize;
+        let notes = vec![
+            judged_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Tap),
+        ];
+        let row_entries = vec![RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        }];
+        let mut row_map_cache = vec![u32::MAX; row_index + 1];
+        row_map_cache[row_index] = 0;
+
+        assert_eq!(
+            count_rescore_tracks_on_row(&notes, &row_entries, &row_map_cache, row_index, 0, 4),
+            2
+        );
+    }
+
+    #[test]
+    fn rescore_track_count_includes_lifts_on_row() {
+        let row_index = 48usize;
+        let notes = vec![
+            test_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Lift),
+        ];
+        let row_entries = vec![RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        }];
+        let mut row_map_cache = vec![u32::MAX; row_index + 1];
+        row_map_cache[row_index] = 0;
+
+        assert_eq!(
+            count_rescore_tracks_on_row(&notes, &row_entries, &row_map_cache, row_index, 0, 4),
+            2
         );
     }
 
