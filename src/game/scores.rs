@@ -5500,7 +5500,10 @@ pub fn get_or_fetch_itl_self_score_for_side(
     if let Some(score) = get_cached_itl_self_score_for_side(chart_hash, side) {
         return Some(score);
     }
-    const ITL_SELF_SCORE_FETCH_ENTRIES: usize = 3;
+    // Keep the wheel's ITL prefetch aligned with the Select Music scorebox cache width.
+    // Smaller requests seed the shared leaderboard cache with partial panes, so the
+    // scorebox briefly renders a truncated list before refetching the remaining rows.
+    const ITL_SELF_SCORE_FETCH_ENTRIES: usize = 5;
     let _ = get_or_fetch_player_leaderboards_for_side_inner(
         chart_hash,
         side,
