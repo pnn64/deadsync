@@ -1973,7 +1973,25 @@ static GROOVESTATS_SUBMIT_EVENT_UI: std::sync::LazyLock<
     Mutex<[Option<GrooveStatsSubmitEventUiEntry>; 2]>,
 > = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Clone)]
+struct GrooveStatsSubmitRetryEntry {
+    side: profile::PlayerSide,
+    slot: u8,
+    chart_hash: String,
+    username: String,
+    profile_name: String,
+    profile_id: Option<String>,
+    itl_score_hundredths: Option<u32>,
+    show_ex_score: bool,
+    api_key: String,
+    payload: GrooveStatsSubmitPlayerPayload,
+}
+
+static GROOVESTATS_SUBMIT_RETRY: std::sync::LazyLock<
+    Mutex<[Option<GrooveStatsSubmitRetryEntry>; 2]>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GrooveStatsJudgmentCounts {
     fantastic_plus: u32,
@@ -1992,7 +2010,7 @@ struct GrooveStatsJudgmentCounts {
     total_rolls: u32,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GrooveStatsRescoreCounts {
     fantastic_plus: u32,
@@ -2003,7 +2021,7 @@ struct GrooveStatsRescoreCounts {
     way_off: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GrooveStatsSubmitPlayerPayload {
     rate: u32,
@@ -2209,6 +2227,22 @@ fn groovestats_reset_submit_event_ui(side: profile::PlayerSide, chart_hash: &str
 }
 
 #[inline(always)]
+fn groovestats_reset_submit_retry(side: profile::PlayerSide, chart_hash: &str) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    let mut state = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+    let slot = &mut state[arrowcloud_side_ix(side)];
+    if slot
+        .as_ref()
+        .is_some_and(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    {
+        *slot = None;
+    }
+}
+
+#[inline(always)]
 fn groovestats_set_submit_ui_status(
     side: profile::PlayerSide,
     chart_hash: &str,
@@ -2281,6 +2315,21 @@ fn groovestats_update_submit_event_ui_if_token(
 #[inline(always)]
 fn groovestats_next_submit_ui_token() -> u64 {
     GROOVESTATS_SUBMIT_UI_TOKEN.fetch_add(1, AtomicOrdering::Relaxed)
+}
+
+#[inline(always)]
+const fn groovestats_can_retry_submit(status: GrooveStatsSubmitUiStatus) -> bool {
+    matches!(status, GrooveStatsSubmitUiStatus::TimedOut)
+}
+
+#[inline(always)]
+fn groovestats_store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
+    let hash = entry.chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    let side = entry.side;
+    GROOVESTATS_SUBMIT_RETRY.lock().unwrap()[arrowcloud_side_ix(side)] = Some(entry);
 }
 
 pub fn get_groovestats_submit_ui_status_for_side(
@@ -3599,11 +3648,141 @@ fn submit_groovestats_request(
     Ok(decoded)
 }
 
+fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
+    std::thread::spawn(move || match submit_groovestats_request(&job) {
+        Ok(response) => {
+            for player in &job.players {
+                let Some(player_response) = response.player_for_slot(player.slot) else {
+                    groovestats_update_submit_ui_status_if_token(
+                        player.side,
+                        player.chart_hash.as_str(),
+                        player.token,
+                        GrooveStatsSubmitUiStatus::SubmitFailed,
+                    );
+                    warn!(
+                        "{} submit response omitted player{} for {:?} ({}).",
+                        network::groovestats_service_name(),
+                        player.slot,
+                        player.side,
+                        player.chart_hash
+                    );
+                    continue;
+                };
+                if !player_response.chart_hash.trim().is_empty()
+                    && !player_response
+                        .chart_hash
+                        .eq_ignore_ascii_case(player.chart_hash.as_str())
+                {
+                    groovestats_update_submit_ui_status_if_token(
+                        player.side,
+                        player.chart_hash.as_str(),
+                        player.token,
+                        GrooveStatsSubmitUiStatus::SubmitFailed,
+                    );
+                    warn!(
+                        "{} submit response hash mismatch for {:?}: expected {}, got {}.",
+                        network::groovestats_service_name(),
+                        player.side,
+                        player.chart_hash,
+                        player_response.chart_hash
+                    );
+                    continue;
+                }
+
+                groovestats_update_submit_ui_status_if_token(
+                    player.side,
+                    player.chart_hash.as_str(),
+                    player.token,
+                    GrooveStatsSubmitUiStatus::Submitted,
+                );
+                groovestats_update_submit_event_ui_if_token(
+                    player.side,
+                    player.chart_hash.as_str(),
+                    player.token,
+                    itl_progress_from_submit(player, player_response),
+                    submit_record_banner(player, player_response),
+                );
+                if let Some(profile_id) = player.profile_id.as_deref()
+                    && !player.username.is_empty()
+                    && !player_response.gs_leaderboard.is_empty()
+                {
+                    cache_gs_score_from_leaderboard(
+                        profile_id,
+                        player.username.as_str(),
+                        player.chart_hash.as_str(),
+                        player_response.gs_leaderboard.as_slice(),
+                    );
+                }
+                handle_submit_player_unlocks(player, player_response);
+                debug!(
+                    "{} submit succeeded for {:?} ({}) result='{}'",
+                    network::groovestats_service_name(),
+                    player.side,
+                    player.chart_hash,
+                    player_response.result
+                );
+            }
+        }
+        Err(err) => {
+            for player in &job.players {
+                groovestats_update_submit_ui_status_if_token(
+                    player.side,
+                    player.chart_hash.as_str(),
+                    player.token,
+                    err.status,
+                );
+            }
+            warn!("{}", err.message);
+        }
+    });
+}
+
+fn groovestats_retry_request(
+    entry: &GrooveStatsSubmitRetryEntry,
+    token: u64,
+) -> GrooveStatsSubmitRequest {
+    let player = GrooveStatsSubmitPlayerJob {
+        side: entry.side,
+        slot: entry.slot,
+        chart_hash: entry.chart_hash.clone(),
+        username: entry.username.clone(),
+        profile_name: entry.profile_name.clone(),
+        profile_id: entry.profile_id.clone(),
+        token,
+        itl_score_hundredths: entry.itl_score_hundredths,
+        show_ex_score: entry.show_ex_score,
+    };
+    let mut body = JsonMap::with_capacity(1);
+    body.insert(
+        format!("player{}", player.slot),
+        serde_json::to_value(&entry.payload).expect("serialize GrooveStats retry payload"),
+    );
+    GrooveStatsSubmitRequest {
+        players: vec![player],
+        headers: vec![(
+            format!("x-api-key-player-{}", entry.slot),
+            entry.api_key.clone(),
+        )],
+        query: vec![
+            (
+                "maxLeaderboardResults".to_string(),
+                GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
+            ),
+            (
+                format!("chartHashP{}", entry.slot),
+                entry.chart_hash.clone(),
+            ),
+        ],
+        body: JsonValue::Object(body),
+    }
+}
+
 pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         groovestats_reset_submit_ui_status(side, gs.charts[player_idx].short_hash.as_str());
         groovestats_reset_submit_event_ui(side, gs.charts[player_idx].short_hash.as_str());
+        groovestats_reset_submit_retry(side, gs.charts[player_idx].short_hash.as_str());
     }
 
     let cfg = crate::config::get();
@@ -3704,6 +3883,18 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         let Some(payload) = groovestats_payload_for_player(gs, player_idx) else {
             continue;
         };
+        groovestats_store_submit_retry(GrooveStatsSubmitRetryEntry {
+            side,
+            slot,
+            chart_hash: chart.short_hash.clone(),
+            username: profile.groovestats_username.trim().to_string(),
+            profile_name: profile.display_name.clone(),
+            profile_id: profile::active_local_profile_id_for_side(side),
+            itl_score_hundredths: Some(current_itl_score_hundredths(gs, player_idx)),
+            show_ex_score: profile.show_ex_score,
+            api_key: profile.groovestats_api_key.trim().to_string(),
+            payload: payload.clone(),
+        });
         let token = groovestats_next_submit_ui_token();
         groovestats_set_submit_ui_status(
             side,
@@ -3744,92 +3935,49 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         query,
         body: JsonValue::Object(body),
     };
-    std::thread::spawn(move || match submit_groovestats_request(&job) {
-        Ok(response) => {
-            for player in &job.players {
-                let Some(player_response) = response.player_for_slot(player.slot) else {
-                    groovestats_update_submit_ui_status_if_token(
-                        player.side,
-                        player.chart_hash.as_str(),
-                        player.token,
-                        GrooveStatsSubmitUiStatus::SubmitFailed,
-                    );
-                    warn!(
-                        "{} submit response omitted player{} for {:?} ({}).",
-                        network::groovestats_service_name(),
-                        player.slot,
-                        player.side,
-                        player.chart_hash
-                    );
-                    continue;
-                };
-                if !player_response.chart_hash.trim().is_empty()
-                    && !player_response
-                        .chart_hash
-                        .eq_ignore_ascii_case(player.chart_hash.as_str())
-                {
-                    groovestats_update_submit_ui_status_if_token(
-                        player.side,
-                        player.chart_hash.as_str(),
-                        player.token,
-                        GrooveStatsSubmitUiStatus::SubmitFailed,
-                    );
-                    warn!(
-                        "{} submit response hash mismatch for {:?}: expected {}, got {}.",
-                        network::groovestats_service_name(),
-                        player.side,
-                        player.chart_hash,
-                        player_response.chart_hash
-                    );
-                    continue;
-                }
+    spawn_groovestats_submit(job);
+}
 
-                groovestats_update_submit_ui_status_if_token(
-                    player.side,
-                    player.chart_hash.as_str(),
-                    player.token,
-                    GrooveStatsSubmitUiStatus::Submitted,
-                );
-                groovestats_update_submit_event_ui_if_token(
-                    player.side,
-                    player.chart_hash.as_str(),
-                    player.token,
-                    itl_progress_from_submit(player, player_response),
-                    submit_record_banner(player, player_response),
-                );
-                if let Some(profile_id) = player.profile_id.as_deref()
-                    && !player.username.is_empty()
-                    && !player_response.gs_leaderboard.is_empty()
-                {
-                    cache_gs_score_from_leaderboard(
-                        profile_id,
-                        player.username.as_str(),
-                        player.chart_hash.as_str(),
-                        player_response.gs_leaderboard.as_slice(),
-                    );
-                }
-                handle_submit_player_unlocks(player, player_response);
-                debug!(
-                    "{} submit succeeded for {:?} ({}) result='{}'",
-                    network::groovestats_service_name(),
-                    player.side,
-                    player.chart_hash,
-                    player_response.result
-                );
-            }
-        }
-        Err(err) => {
-            for player in &job.players {
-                groovestats_update_submit_ui_status_if_token(
-                    player.side,
-                    player.chart_hash.as_str(),
-                    player.token,
-                    err.status,
-                );
-            }
-            warn!("{}", err.message);
-        }
-    });
+pub fn retry_timed_out_groovestats_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return false;
+    }
+    let cfg = crate::config::get();
+    if !cfg.enable_groovestats {
+        return false;
+    }
+    let network::ConnectionStatus::Connected(services) = network::get_status() else {
+        return false;
+    };
+    if !services.auto_submit {
+        return false;
+    }
+    let Some(status) = get_groovestats_submit_ui_status_for_side(hash, side) else {
+        return false;
+    };
+    if !groovestats_can_retry_submit(status) {
+        return false;
+    }
+    let Some(entry) = GROOVESTATS_SUBMIT_RETRY.lock().unwrap()[arrowcloud_side_ix(side)]
+        .as_ref()
+        .filter(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        .cloned()
+    else {
+        return false;
+    };
+
+    let token = groovestats_next_submit_ui_token();
+    groovestats_set_submit_ui_status(side, hash, token, GrooveStatsSubmitUiStatus::Submitting);
+    groovestats_arm_submit_event_ui(side, hash, token);
+    debug!(
+        "Retrying {} submit for {:?} ({}).",
+        network::groovestats_service_name(),
+        side,
+        hash
+    );
+    spawn_groovestats_submit(groovestats_retry_request(&entry, token));
+    true
 }
 
 const ARROWCLOUD_BODY_VERSION: &str = "1.4";
@@ -3872,6 +4020,17 @@ static ARROWCLOUD_SUBMIT_UI_STATUS: std::sync::LazyLock<
 > = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
 static ARROWCLOUD_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Debug, Clone)]
+struct ArrowCloudSubmitRetryEntry {
+    side: profile::PlayerSide,
+    api_key: String,
+    payload: ArrowCloudPayload,
+}
+
+static ARROWCLOUD_SUBMIT_RETRY: std::sync::LazyLock<
+    Mutex<[Option<ArrowCloudSubmitRetryEntry>; 2]>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| None)));
+
 #[inline(always)]
 const fn arrowcloud_side_ix(side: profile::PlayerSide) -> usize {
     match side {
@@ -3891,6 +4050,22 @@ fn arrowcloud_reset_submit_ui_status(side: profile::PlayerSide, chart_hash: &str
     if slot
         .as_ref()
         .is_some_and(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+    {
+        *slot = None;
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_reset_submit_retry(side: profile::PlayerSide, chart_hash: &str) {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    let mut state = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+    let slot = &mut state[arrowcloud_side_ix(side)];
+    if slot
+        .as_ref()
+        .is_some_and(|entry| entry.payload.hash.eq_ignore_ascii_case(hash))
     {
         *slot = None;
     }
@@ -3937,6 +4112,21 @@ fn arrowcloud_next_submit_ui_token() -> u64 {
     ARROWCLOUD_SUBMIT_UI_TOKEN.fetch_add(1, AtomicOrdering::Relaxed)
 }
 
+#[inline(always)]
+const fn arrowcloud_can_retry_submit(status: ArrowCloudSubmitUiStatus) -> bool {
+    matches!(status, ArrowCloudSubmitUiStatus::TimedOut)
+}
+
+#[inline(always)]
+fn arrowcloud_store_submit_retry(entry: ArrowCloudSubmitRetryEntry) {
+    let hash = entry.payload.hash.trim();
+    if hash.is_empty() {
+        return;
+    }
+    let side = entry.side;
+    ARROWCLOUD_SUBMIT_RETRY.lock().unwrap()[arrowcloud_side_ix(side)] = Some(entry);
+}
+
 pub fn get_arrowcloud_submit_ui_status_for_side(
     chart_hash: &str,
     side: profile::PlayerSide,
@@ -3951,14 +4141,14 @@ pub fn get_arrowcloud_submit_ui_status_for_side(
         .map(|entry| entry.status)
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct ArrowCloudSpeed {
     value: f64,
     #[serde(rename = "type")]
     speed_type: &'static str,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct ArrowCloudModifiers {
     #[serde(rename = "visualDelay")]
     visual_delay: i32,
@@ -3976,7 +4166,7 @@ struct ArrowCloudModifiers {
     scroll: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct ArrowCloudRadar {
     #[serde(rename = "Holds")]
     holds: [u32; 2],
@@ -3986,13 +4176,13 @@ struct ArrowCloudRadar {
     rolls: [u32; 2],
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct ArrowCloudLifePoint {
     x: f64,
     y: f64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct ArrowCloudNpsPoint {
     x: f64,
     y: f64,
@@ -4000,14 +4190,14 @@ struct ArrowCloudNpsPoint {
     nps: f64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct ArrowCloudNpsInfo {
     #[serde(rename = "peakNPS")]
     peak_nps: f64,
     points: Vec<ArrowCloudNpsPoint>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 enum ArrowCloudTimingOffset {
     Seconds(f64),
@@ -4016,7 +4206,7 @@ enum ArrowCloudTimingOffset {
 
 type ArrowCloudTimingDatum = (f64, ArrowCloudTimingOffset);
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ArrowCloudJudgmentCounts {
     fantastic_plus: u32,
@@ -4035,7 +4225,7 @@ struct ArrowCloudJudgmentCounts {
     total_rolls: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct ArrowCloudPayload {
     #[serde(rename = "songName")]
     song_name: String,
@@ -4529,11 +4719,39 @@ fn submit_arrowcloud_payload(
     }
 }
 
+fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
+    std::thread::spawn(move || {
+        for job in jobs {
+            match submit_arrowcloud_payload(job.side, &job.api_key, &job.payload) {
+                Ok(()) => arrowcloud_update_submit_ui_status_if_token(
+                    job.side,
+                    job.payload.hash.as_str(),
+                    job.token,
+                    ArrowCloudSubmitUiStatus::Submitted,
+                ),
+                Err(err) => {
+                    arrowcloud_update_submit_ui_status_if_token(
+                        job.side,
+                        job.payload.hash.as_str(),
+                        job.token,
+                        err.status,
+                    );
+                    warn!(
+                        "ArrowCloud submit failed for {:?} ({}) : {}",
+                        job.side, job.payload.hash, err.message
+                    );
+                }
+            }
+        }
+    });
+}
+
 pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
         arrowcloud_reset_submit_ui_status(side, chart_hash);
+        arrowcloud_reset_submit_retry(side, chart_hash);
     }
 
     let cfg = crate::config::get();
@@ -4582,6 +4800,11 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             );
             continue;
         }
+        arrowcloud_store_submit_retry(ArrowCloudSubmitRetryEntry {
+            side,
+            api_key: api_key.to_string(),
+            payload: payload.clone(),
+        });
         let token = arrowcloud_next_submit_ui_token();
         arrowcloud_set_submit_ui_status(
             side,
@@ -4600,30 +4823,45 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         return;
     }
 
-    std::thread::spawn(move || {
-        for job in jobs {
-            match submit_arrowcloud_payload(job.side, &job.api_key, &job.payload) {
-                Ok(()) => arrowcloud_update_submit_ui_status_if_token(
-                    job.side,
-                    job.payload.hash.as_str(),
-                    job.token,
-                    ArrowCloudSubmitUiStatus::Submitted,
-                ),
-                Err(err) => {
-                    arrowcloud_update_submit_ui_status_if_token(
-                        job.side,
-                        job.payload.hash.as_str(),
-                        job.token,
-                        err.status,
-                    );
-                    warn!(
-                        "ArrowCloud submit failed for {:?} ({}) : {}",
-                        job.side, job.payload.hash, err.message
-                    );
-                }
-            }
-        }
-    });
+    spawn_arrowcloud_submit_jobs(jobs);
+}
+
+pub fn retry_timed_out_arrowcloud_submit(chart_hash: &str, side: profile::PlayerSide) -> bool {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return false;
+    }
+    let cfg = crate::config::get();
+    if !cfg.enable_arrowcloud {
+        return false;
+    }
+    if let network::ArrowCloudConnectionStatus::Error(_) = network::get_arrowcloud_status() {
+        return false;
+    }
+    let Some(status) = get_arrowcloud_submit_ui_status_for_side(hash, side) else {
+        return false;
+    };
+    if !arrowcloud_can_retry_submit(status) {
+        return false;
+    }
+    let Some(entry) = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap()[arrowcloud_side_ix(side)]
+        .as_ref()
+        .filter(|entry| entry.payload.hash.eq_ignore_ascii_case(hash))
+        .cloned()
+    else {
+        return false;
+    };
+
+    let token = arrowcloud_next_submit_ui_token();
+    arrowcloud_set_submit_ui_status(side, hash, token, ArrowCloudSubmitUiStatus::Submitting);
+    debug!("Retrying ArrowCloud submit for {:?} ({}).", side, hash);
+    spawn_arrowcloud_submit_jobs(vec![ArrowCloudSubmitJob {
+        side: entry.side,
+        api_key: entry.api_key,
+        token,
+        payload: entry.payload,
+    }]);
+    true
 }
 
 pub fn save_local_summary_score_for_side(
@@ -7214,6 +7452,38 @@ mod tests {
         );
 
         assert_eq!(banner, None);
+    }
+
+    #[test]
+    fn groovestats_retry_only_allows_timeouts() {
+        assert!(!groovestats_can_retry_submit(
+            GrooveStatsSubmitUiStatus::Submitting
+        ));
+        assert!(!groovestats_can_retry_submit(
+            GrooveStatsSubmitUiStatus::Submitted
+        ));
+        assert!(!groovestats_can_retry_submit(
+            GrooveStatsSubmitUiStatus::SubmitFailed
+        ));
+        assert!(groovestats_can_retry_submit(
+            GrooveStatsSubmitUiStatus::TimedOut
+        ));
+    }
+
+    #[test]
+    fn arrowcloud_retry_only_allows_timeouts() {
+        assert!(!arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::Submitting
+        ));
+        assert!(!arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::Submitted
+        ));
+        assert!(!arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::SubmitFailed
+        ));
+        assert!(arrowcloud_can_retry_submit(
+            ArrowCloudSubmitUiStatus::TimedOut
+        ));
     }
 
     #[test]

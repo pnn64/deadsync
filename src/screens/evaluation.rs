@@ -168,6 +168,26 @@ const fn submit_record_text(banner: scores::GrooveStatsSubmitRecordBanner) -> &'
 }
 
 #[inline(always)]
+const fn groovestats_submit_status_text(status: scores::GrooveStatsSubmitUiStatus) -> &'static str {
+    match status {
+        scores::GrooveStatsSubmitUiStatus::Submitting => "Submitting ...",
+        scores::GrooveStatsSubmitUiStatus::Submitted => "Submitted!",
+        scores::GrooveStatsSubmitUiStatus::SubmitFailed => "Submit Failed",
+        scores::GrooveStatsSubmitUiStatus::TimedOut => "Timed Out - F5 Retry",
+    }
+}
+
+#[inline(always)]
+const fn arrowcloud_submit_status_text(status: scores::ArrowCloudSubmitUiStatus) -> &'static str {
+    match status {
+        scores::ArrowCloudSubmitUiStatus::Submitting => "Submitting ...",
+        scores::ArrowCloudSubmitUiStatus::Submitted => "Submitted!",
+        scores::ArrowCloudSubmitUiStatus::SubmitFailed => "Submit Failed",
+        scores::ArrowCloudSubmitUiStatus::TimedOut => "Timed Out - F5 Retry",
+    }
+}
+
+#[inline(always)]
 fn cached_difficulty_text(style_label: &'static str, difficulty: &'static str) -> Arc<str> {
     cached_text(&DIFFICULTY_TEXT_CACHE, (style_label, difficulty), || {
         format!("{style_label} / {difficulty}")
@@ -1270,6 +1290,16 @@ pub fn update(state: &mut State, dt: f32) {
     if dt > 0.0 {
         state.screen_elapsed += dt;
     }
+}
+
+pub fn retry_timed_out_submissions(state: &State) -> bool {
+    let mut retried = false;
+    for si in state.score_info.iter().flatten() {
+        retried |=
+            scores::retry_timed_out_groovestats_submit(si.chart.short_hash.as_str(), si.side);
+        retried |= scores::retry_timed_out_arrowcloud_submit(si.chart.short_hash.as_str(), si.side);
+    }
+    retried
 }
 
 #[inline(always)]
@@ -2886,22 +2916,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 si.chart.short_hash.as_str(),
                 side,
             ) {
-                lines.push(match status {
-                    scores::GrooveStatsSubmitUiStatus::Submitting => "Submitting ...",
-                    scores::GrooveStatsSubmitUiStatus::Submitted => "Submitted!",
-                    scores::GrooveStatsSubmitUiStatus::SubmitFailed => "Submit Failed",
-                    scores::GrooveStatsSubmitUiStatus::TimedOut => "Timed Out",
-                });
+                lines.push(groovestats_submit_status_text(status));
             }
             if let Some(status) =
                 scores::get_arrowcloud_submit_ui_status_for_side(si.chart.short_hash.as_str(), side)
             {
-                lines.push(match status {
-                    scores::ArrowCloudSubmitUiStatus::Submitting => "Submitting ...",
-                    scores::ArrowCloudSubmitUiStatus::Submitted => "Submitted!",
-                    scores::ArrowCloudSubmitUiStatus::SubmitFailed => "Submit Failed",
-                    scores::ArrowCloudSubmitUiStatus::TimedOut => "Timed Out",
-                });
+                lines.push(arrowcloud_submit_status_text(status));
             }
             if lines.is_empty() {
                 continue;

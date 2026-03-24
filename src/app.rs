@@ -6274,6 +6274,15 @@ impl App {
                 return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+            if raw_key.pressed
+                && !raw_key.repeat
+                && raw_key.code == KeyCode::F5
+                && crate::screens::evaluation::retry_timed_out_submissions(
+                    &self.state.screens.evaluation_state,
+                )
+            {
+                return true;
+            }
             if raw_key.pressed && !self.state.session.course_eval_pages.is_empty() {
                 match raw_key.code {
                     KeyCode::KeyN => {
