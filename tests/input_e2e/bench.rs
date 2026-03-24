@@ -461,6 +461,7 @@ fn screen_action_hash(action: ScreenAction) -> u64 {
         ScreenAction::RequestCdTitle(_) => 0x6000,
         ScreenAction::RequestDensityGraph { .. } => 0x7000,
         ScreenAction::ApplySongOffsetSync { .. } => 0x8000,
+        ScreenAction::ApplySongOffsetSyncBatch { .. } => 0x8800,
         ScreenAction::FetchOnlineGrade(_) => 0x9000,
         ScreenAction::ChangeGraphics { .. } => 0xA000,
         ScreenAction::UpdateShowOverlay(mode) => 0xB000 | u64::from(mode),

@@ -229,6 +229,7 @@ pub enum Action {
     ReloadSongsCourses,
     ViewDownloads,
     SyncSong,
+    SyncPack,
     PlayReplay,
     ShowLeaderboard,
 }
@@ -324,6 +325,11 @@ pub const ITEM_SYNC_SONG: Item = Item {
     top_label: "Sync",
     bottom_label: "null-or-die",
     action: Action::SyncSong,
+};
+pub const ITEM_SYNC_PACK: Item = Item {
+    top_label: "Sync",
+    bottom_label: "Sync Pack",
+    action: Action::SyncPack,
 };
 pub const ITEM_PLAY_REPLAY: Item = Item {
     top_label: "Machine Data",

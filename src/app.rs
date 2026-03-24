@@ -8,10 +8,10 @@ use crate::core::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
-    Screen as CurrentScreen, ScreenAction, credits, evaluation, evaluation_summary, gameover,
-    gameplay, init, initials, input as input_screen, manage_local_profiles, mappings, menu,
-    options, player_options, profile_load, sandbox, select_color, select_course, select_mode,
-    select_music, select_profile, select_style,
+    Screen as CurrentScreen, ScreenAction, SongOffsetSyncChange, credits, evaluation,
+    evaluation_summary, gameover, gameplay, init, initials, input as input_screen,
+    manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
+    select_color, select_course, select_mode, select_music, select_profile, select_style,
 };
 use crate::ui::color;
 use chrono::Local;
@@ -3259,6 +3259,12 @@ impl App {
                 }
                 Vec::new()
             }
+            ScreenAction::ApplySongOffsetSyncBatch { changes } => {
+                if let Err(e) = self.save_song_offset_changes(&changes) {
+                    warn!("Failed to save pack sync changes: {e}");
+                }
+                Vec::new()
+            }
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
             ScreenAction::ChangeGraphics {
                 renderer,
@@ -3443,19 +3449,53 @@ impl App {
         text
     }
 
-    fn save_gameplay_song_offset(&mut self, simfile_path: &Path, delta: f32) -> Result<(), String> {
-        if delta.abs() < 0.000_001_f32 {
+    fn save_song_offset_changes(&mut self, changes: &[SongOffsetSyncChange]) -> Result<(), String> {
+        let mut saved_files = 0usize;
+        let mut changed_tags_total = 0usize;
+        let mut first_saved_path: Option<&Path> = None;
+
+        for change in changes {
+            if change.delta_seconds.abs() < 0.000_001_f32 {
+                continue;
+            }
+            changed_tags_total += save_song_offset_delta_to_simfile(
+                change.simfile_path.as_path(),
+                change.delta_seconds,
+            )?;
+            let _ = song_loading::reload_song_in_cache(change.simfile_path.as_path())?;
+            saved_files += 1;
+            if first_saved_path.is_none() {
+                first_saved_path = Some(change.simfile_path.as_path());
+            }
+        }
+
+        if saved_files == 0 {
             return Ok(());
         }
-        let changed_tags = save_song_offset_delta_to_simfile(simfile_path, delta)?;
-        let _ = song_loading::reload_song_in_cache(simfile_path)?;
+
         select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
-        info!(
-            "Saved song offset sync changes to '{}' (updated {} #OFFSET tags; refreshed song cache).",
-            simfile_path.display(),
-            changed_tags
-        );
+        if saved_files == 1 {
+            if let Some(path) = first_saved_path {
+                info!(
+                    "Saved song offset sync changes to '{}' (updated {} #OFFSET tags; refreshed song cache).",
+                    path.display(),
+                    changed_tags_total
+                );
+            }
+        } else {
+            info!(
+                "Saved pack sync changes to {} simfiles (updated {} #OFFSET tags; refreshed song cache).",
+                saved_files, changed_tags_total
+            );
+        }
         Ok(())
+    }
+
+    fn save_gameplay_song_offset(&mut self, simfile_path: &Path, delta: f32) -> Result<(), String> {
+        self.save_song_offset_changes(&[SongOffsetSyncChange {
+            simfile_path: simfile_path.to_path_buf(),
+            delta_seconds: delta,
+        }])
     }
 
     fn maybe_begin_gameplay_offset_prompt(

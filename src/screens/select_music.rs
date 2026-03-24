@@ -31,7 +31,7 @@ use crate::ui::color;
 use crate::ui::font;
 use image::{Rgba, RgbaImage};
 use log::debug;
-use nod::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
+use null_or_die::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
 use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
 use std::cmp::Reverse;
@@ -42,6 +42,9 @@ use std::sync::{Arc, OnceLock};
 use std::thread::LocalKey;
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
+
+#[path = "select_music/pack_sync.rs"]
+mod pack_sync;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
@@ -721,7 +724,7 @@ impl ReloadUiState {
 
 enum SyncWorkerMsg {
     Event(BiasStreamEvent),
-    Finished(Result<nod::api::SyncChartResult, String>),
+    Finished(Result<null_or_die::api::SyncChartResult, String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -832,6 +835,7 @@ pub struct State {
     song_search_ignore_next_back_select: bool,
     replay_overlay: sort_menu::ReplayOverlayState,
     sync_overlay: SyncOverlayState,
+    pack_sync_overlay: crate::screens::pack_sync::OverlayState,
     pub test_input_overlay_visible: bool,
     test_input_overlay: test_input::State,
     profile_switch_overlay: Option<profile_boxes::State>,
@@ -2032,6 +2036,7 @@ pub fn init() -> State {
         song_search_ignore_next_back_select: false,
         replay_overlay: sort_menu::ReplayOverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
+        pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
@@ -2213,6 +2218,7 @@ pub fn init_placeholder() -> State {
         song_search_ignore_next_back_select: false,
         replay_overlay: sort_menu::ReplayOverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
+        pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
@@ -2575,10 +2581,14 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item>
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
     );
+    let has_pack_selected = matches!(
+        state.entries.get(state.selected_index),
+        Some(MusicWheelEntry::PackHeader { .. })
+    );
     let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
-    let mut items = Vec::with_capacity(10);
+    let mut items = Vec::with_capacity(11);
     items.push(sort_menu::ITEM_CATEGORY_SORTS);
     match (profile::get_session_play_style(), single_player_joined) {
         (profile::PlayStyle::Single, true) => items.push(sort_menu::ITEM_SWITCH_TO_DOUBLE),
@@ -2591,6 +2601,9 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item>
     items.push(sort_menu::ITEM_RELOAD_SONGS_COURSES);
     if downloads_enabled {
         items.push(sort_menu::ITEM_VIEW_DOWNLOADS);
+    }
+    if has_pack_selected {
+        items.push(sort_menu::ITEM_SYNC_PACK);
     }
     if has_song_selected {
         items.push(sort_menu::ITEM_SYNC_SONG);
@@ -2610,6 +2623,7 @@ fn show_test_input_overlay(state: &mut State) {
     state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
@@ -2631,6 +2645,7 @@ fn start_song_search_prompt(state: &mut State) {
     state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
@@ -2649,6 +2664,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     hide_test_input_overlay(state);
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
@@ -2769,6 +2785,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
@@ -3449,7 +3466,7 @@ fn sync_overlay_apply_event(
 
 fn sync_overlay_apply_result(
     overlay: &mut SyncOverlayStateData,
-    result: Result<nod::api::SyncChartResult, String>,
+    result: Result<null_or_die::api::SyncChartResult, String>,
     refresh: &mut SyncOverlayRefresh,
 ) {
     match result {
@@ -4065,6 +4082,7 @@ fn show_leaderboard_overlay(state: &mut State) {
         state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
         state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
         state.sync_overlay = SyncOverlayState::Hidden;
+        pack_sync::hide_overlay(state);
         state.profile_switch_overlay = None;
         hide_test_input_overlay(state);
         state.leaderboard = overlay;
@@ -4076,6 +4094,7 @@ fn show_downloads_overlay(state: &mut State) {
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     state.downloads_overlay = sort_menu::show_downloads_overlay();
@@ -4100,6 +4119,7 @@ fn show_replay_overlay(state: &mut State) {
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     state.replay_overlay = overlay;
@@ -4122,7 +4142,15 @@ fn selected_steps_index_for_sync(state: &State) -> usize {
     }
 }
 
-fn selected_chart_ix_for_sync(
+fn sync_chart_label(chart: &ChartData) -> String {
+    if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.description.trim().is_empty() {
+        format!("{} ({})", chart.difficulty, chart.description)
+    } else {
+        chart.difficulty.clone()
+    }
+}
+
+pub(crate) fn selected_chart_ix_for_sync(
     song: &SongData,
     chart_type: &str,
     steps_index: usize,
@@ -4215,8 +4243,44 @@ fn sync_prompt_offset_line(old_offset: f32, new_offset: f32) -> Option<String> {
     ))
 }
 
-fn build_sync_save_prompt_text(_overlay: &SyncOverlayStateData) -> String {
-    "Would you like to save these changes?\nChoosing NO will discard your changes.".to_string()
+#[inline(always)]
+fn sync_confidence_threshold_percent() -> u8 {
+    config::get().null_or_die_confidence_percent.min(100)
+}
+
+#[inline(always)]
+fn sync_confidence_threshold() -> f64 {
+    f64::from(sync_confidence_threshold_percent()) / 100.0
+}
+
+#[inline(always)]
+fn sync_confidence_percent(confidence: Option<f64>) -> u32 {
+    (confidence.unwrap_or(0.0).clamp(0.0, 1.0) * 100.0).round() as u32
+}
+
+fn sync_low_confidence_warning(confidence: Option<f64>, threshold: f64) -> Option<String> {
+    let confidence = confidence?;
+    if confidence >= threshold {
+        return None;
+    }
+    let confidence_pct = sync_confidence_percent(Some(confidence));
+    let threshold_pct = (threshold.clamp(0.0, 1.0) * 100.0).round() as u32;
+    Some(format!(
+        "Warning: confidence {confidence_pct}% is below the {threshold_pct}% pack-sync threshold.\nSingle-song sync can still save it."
+    ))
+}
+
+fn build_sync_save_prompt_text(overlay: &SyncOverlayStateData) -> String {
+    let mut prompt = String::new();
+    if let Some(warning) =
+        sync_low_confidence_warning(overlay.final_confidence, sync_confidence_threshold())
+    {
+        prompt.push_str(&warning);
+        prompt.push_str("\n\n");
+    }
+    prompt.push_str("Would you like to save these changes?\n");
+    prompt.push_str("Choosing NO will discard your changes.");
+    prompt
 }
 
 fn show_sync_overlay(state: &mut State) {
@@ -4233,18 +4297,14 @@ fn show_sync_overlay(state: &mut State) {
     let Some(chart) = song.charts.get(chart_ix) else {
         return;
     };
-    let chart_label =
-        if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.description.trim().is_empty() {
-            format!("{} ({})", chart.difficulty, chart.description)
-        } else {
-            chart.difficulty.clone()
-        };
+    let chart_label = sync_chart_label(chart);
 
     clear_preview(state);
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
@@ -4258,7 +4318,7 @@ fn show_sync_overlay(state: &mut State) {
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
 
-    let cfg = nod::api::default_bias_cfg();
+    let cfg = null_or_die::api::default_bias_cfg();
     let kernel_target = cfg.kernel_target;
     let kernel_type = cfg.kernel_type;
     let graph_mode = config::get().null_or_die_sync_graph;
@@ -4272,7 +4332,7 @@ fn show_sync_overlay(state: &mut State) {
     let (tx, rx) = mpsc::sync_channel::<SyncWorkerMsg>(SYNC_OVERLAY_MAX_PENDING_MSGS);
     std::thread::spawn(move || {
         let tx_done = tx.clone();
-        let result = nod::api::analyze_chart_stream(
+        let result = null_or_die::api::analyze_chart_stream(
             simfile_path_thread.as_path(),
             chart_ix,
             &cfg,
@@ -4649,6 +4709,11 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
         sort_menu::Action::SyncSong => {
             hide_sort_menu(state);
             show_sync_overlay(state);
+            ScreenAction::None
+        }
+        sort_menu::Action::SyncPack => {
+            hide_sort_menu(state);
+            pack_sync::show_from_selected(state);
             ScreenAction::None
         }
         sort_menu::Action::PlayReplay => {
@@ -5158,6 +5223,17 @@ pub fn handle_raw_key_event(
         return ScreenAction::None;
     }
 
+    if !matches!(
+        state.pack_sync_overlay,
+        crate::screens::pack_sync::OverlayState::Hidden
+    ) {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
+            pack_sync::hide_overlay(state);
+            state.song_search_ignore_next_back_select = true;
+        }
+        return ScreenAction::None;
+    }
+
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
         if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             hide_sync_overlay(state);
@@ -5292,6 +5368,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if !matches!(state.song_search, sort_menu::SongSearchState::Hidden) {
         return handle_song_search_input(state, ev);
+    }
+
+    if !matches!(
+        state.pack_sync_overlay,
+        crate::screens::pack_sync::OverlayState::Hidden
+    ) {
+        return pack_sync::handle_input(state, ev);
     }
 
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
@@ -5458,6 +5541,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         update_overlay_nav_hold(state);
         return ScreenAction::None;
     }
+    if pack_sync::poll(state) {
+        return ScreenAction::None;
+    }
     if let SyncOverlayState::Visible(overlay) = &mut state.sync_overlay {
         poll_sync_overlay(overlay);
         return ScreenAction::None;
@@ -5600,6 +5686,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         || !matches!(
             state.leaderboard,
             sort_menu::LeaderboardOverlayState::Hidden
+        )
+        || !matches!(
+            state.pack_sync_overlay,
+            crate::screens::pack_sync::OverlayState::Hidden
         )
         || !matches!(state.sync_overlay, SyncOverlayState::Hidden)
         || !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden)
@@ -7294,6 +7384,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(replay_overlay);
         return actors;
     }
+    if let Some(pack_sync_overlay) =
+        pack_sync::build_overlay(&state.pack_sync_overlay, state.active_color_index)
+    {
+        actors.extend(pack_sync_overlay);
+        return actors;
+    }
     if let Some(sync_overlay) = build_sync_overlay(&state.sync_overlay, state.active_color_index) {
         actors.extend(sync_overlay);
         return actors;
@@ -7608,6 +7704,7 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
 mod tests {
     use super::{
         PREVIEW_DELAY_SECONDS, WheelSortMode, init_placeholder, reset_preview_after_gameplay,
+        sync_low_confidence_warning,
     };
 
     #[test]
@@ -7631,5 +7728,12 @@ mod tests {
         reset_preview_after_gameplay(&mut state);
 
         assert_eq!(state.sort_mode, WheelSortMode::Group);
+    }
+
+    #[test]
+    fn sync_low_confidence_warning_mentions_confidence_and_threshold() {
+        let warning = sync_low_confidence_warning(Some(0.73), 0.80).unwrap();
+        assert!(warning.contains("73%"));
+        assert!(warning.contains("80%"));
     }
 }

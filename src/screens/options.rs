@@ -15,6 +15,8 @@ use crate::core::input::WindowsPadBackend;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{profile, scores};
+use crate::screens::pack_sync as shared_pack_sync;
+use crate::screens::select_music;
 use crate::screens::{Screen, ScreenAction};
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
@@ -312,7 +314,7 @@ pub const ITEMS: &[Item] = &[
     Item {
         name: "Advanced Options",
         help: &[
-            "Adjust machine-level fail, cache/parsing, and null-or-die behavior.",
+            "Adjust machine-level fail and cache/parsing behavior.",
             "Default Fail Type",
             "Banner Cache",
             "CDTitle Cache",
@@ -320,7 +322,6 @@ pub const ITEMS: &[Item] = &[
             "Song Parsing Threads",
             "Cache Songs",
             "Fast Load",
-            "Sync Graph",
         ],
     },
     Item {
@@ -346,6 +347,14 @@ pub const ITEMS: &[Item] = &[
             ONLINE_SCORING_ROW_GS_BS,
             ONLINE_SCORING_ROW_ARROWCLOUD,
             ONLINE_SCORING_ROW_SCORE_IMPORT,
+        ],
+    },
+    Item {
+        name: "Null-or-Die Options",
+        help: &[
+            "Configure null-or-die analysis behavior and bulk sync tools.",
+            NULL_OR_DIE_ROW_OPTIONS,
+            NULL_OR_DIE_ROW_SYNC_PACKS,
         ],
     },
     Item {
@@ -375,6 +384,9 @@ pub enum SubmenuKind {
     Input,
     InputBackend,
     OnlineScoring,
+    NullOrDie,
+    NullOrDieOptions,
+    SyncPacks,
     Machine,
     Advanced,
     Course,
@@ -388,7 +400,10 @@ pub enum SubmenuKind {
 
 #[inline(always)]
 const fn is_launcher_submenu(kind: SubmenuKind) -> bool {
-    matches!(kind, SubmenuKind::Input | SubmenuKind::OnlineScoring)
+    matches!(
+        kind,
+        SubmenuKind::Input | SubmenuKind::OnlineScoring | SubmenuKind::NullOrDie
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -552,6 +567,18 @@ struct ScoreImportConfirmState {
 }
 
 #[derive(Clone, Debug)]
+struct SyncPackSelection {
+    pack_group: Option<String>,
+    pack_label: String,
+}
+
+#[derive(Clone, Debug)]
+struct SyncPackConfirmState {
+    selection: SyncPackSelection,
+    active_choice: u8, // 0 = Yes, 1 = No
+}
+
+#[derive(Clone, Debug)]
 struct SoundDeviceOption {
     label: String,
     config_index: Option<u16>,
@@ -632,9 +659,14 @@ const ADVANCED_ROW_CDTITLE_CACHE: &str = "CDTitle Cache";
 const ADVANCED_ROW_SONG_PARSING_THREADS: &str = "Song Parsing Threads";
 const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
 const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
-const ADVANCED_ROW_SYNC_GRAPH: &str = "Sync Graph";
-const ADVANCED_SYNC_GRAPH_CHOICES: &[&str] =
+const NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH: &str = "Sync Graph";
+const NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE: &str = "Sync Confidence";
+const NULL_OR_DIE_SYNC_GRAPH_CHOICES: &[&str] =
     &["Frequency", "Beat index", "Post-kernel fingerprint"];
+const NULL_OR_DIE_SYNC_CONFIDENCE_CHOICES: &[&str] = &[
+    "0%", "5%", "10%", "15%", "20%", "25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%",
+    "70%", "75%", "80%", "85%", "90%", "95%", "100%",
+];
 const SOUND_OUTPUT_MODE_CHOICES: &[&str] = &["Auto", "Shared"];
 const SOUND_ROW_MASTER_VOLUME: &str = "Master Volume";
 const SOUND_ROW_SFX_VOLUME: &str = "SFX Volume";
@@ -657,6 +689,8 @@ const COURSE_ROW_AUTOSUBMIT_INDIVIDUAL_SCORES: &str = "Autosubmit Scores in Cour
 const ONLINE_SCORING_ROW_GS_BS: &str = "GrooveStats / BoogieStats Options";
 const ONLINE_SCORING_ROW_ARROWCLOUD: &str = "ArrowCloud Options";
 const ONLINE_SCORING_ROW_SCORE_IMPORT: &str = "Score Import";
+const NULL_OR_DIE_ROW_OPTIONS: &str = "Null-or-Die Options";
+const NULL_OR_DIE_ROW_SYNC_PACKS: &str = "Sync Packs";
 const ARROWCLOUD_ROW_ENABLE: &str = "Enable ArrowCloud";
 const GAMEPLAY_ROW_BG_BRIGHTNESS: &str = "BG Brightness";
 const GAMEPLAY_ROW_CENTERED_P1: &str = "Centered P1 Notefield";
@@ -674,6 +708,10 @@ const SCORE_IMPORT_ROW_ENDPOINT_INDEX: usize = 0;
 const SCORE_IMPORT_ROW_PROFILE_INDEX: usize = 1;
 const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;
 const SCORE_IMPORT_ROW_ONLY_MISSING_INDEX: usize = 3;
+const SYNC_PACK_ROW_PACK: &str = "Pack";
+const SYNC_PACK_ROW_START: &str = "Start";
+const SYNC_PACK_ALL_FILES: &str = "All Files";
+const SYNC_PACK_ROW_PACK_INDEX: usize = 0;
 
 #[cfg(target_os = "linux")]
 const SOUND_LINUX_BACKEND_CHOICES: &[&str] = &["Auto"];
@@ -1828,11 +1866,6 @@ pub const ADVANCED_OPTIONS_ROWS: &[SubRow] = &[
         choices: &["Off", "On"],
         inline: true,
     },
-    SubRow {
-        label: ADVANCED_ROW_SYNC_GRAPH,
-        choices: ADVANCED_SYNC_GRAPH_CHOICES,
-        inline: false,
-    },
 ];
 
 pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
@@ -1878,15 +1911,6 @@ pub const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Enable startup shortcuts that reduce blocking load work.",
             "Default: On (FastLoad=1).",
-        ],
-    },
-    Item {
-        name: ADVANCED_ROW_SYNC_GRAPH,
-        help: &[
-            "Choose which null-or-die graph the Select Music sync overlay shows.",
-            "Frequency: weighted spectral accumulator.",
-            "Beat index: per-beat digest over time.",
-            "Post-kernel fingerprint: convolution heatmap with the final kernel response.",
         ],
     },
     Item {
@@ -1943,6 +1967,45 @@ pub const ONLINE_SCORING_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: ONLINE_SCORING_ROW_SCORE_IMPORT,
         choices: &[],
+        inline: false,
+    },
+];
+
+pub const NULL_OR_DIE_MENU_ROWS: &[SubRow] = &[
+    SubRow {
+        label: NULL_OR_DIE_ROW_OPTIONS,
+        choices: &[],
+        inline: false,
+    },
+    SubRow {
+        label: NULL_OR_DIE_ROW_SYNC_PACKS,
+        choices: &[],
+        inline: false,
+    },
+];
+
+pub const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH,
+        choices: NULL_OR_DIE_SYNC_GRAPH_CHOICES,
+        inline: false,
+    },
+    SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE,
+        choices: NULL_OR_DIE_SYNC_CONFIDENCE_CHOICES,
+        inline: false,
+    },
+];
+
+pub const SYNC_PACK_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: SYNC_PACK_ROW_PACK,
+        choices: &[SYNC_PACK_ALL_FILES],
+        inline: false,
+    },
+    SubRow {
+        label: SYNC_PACK_ROW_START,
+        choices: &["Start"],
         inline: false,
     },
 ];
@@ -2041,6 +2104,69 @@ pub const ONLINE_SCORING_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
+pub const NULL_OR_DIE_MENU_ITEMS: &[Item] = &[
+    Item {
+        name: NULL_OR_DIE_ROW_OPTIONS,
+        help: &["Open null-or-die analysis display and confidence settings."],
+    },
+    Item {
+        name: NULL_OR_DIE_ROW_SYNC_PACKS,
+        help: &[
+            "Open bulk sync tools for all files or a specific installed pack.",
+            "This opens a local review overlay here after you choose a target.",
+        ],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the main Options list."],
+    },
+];
+
+pub const NULL_OR_DIE_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH,
+        help: &[
+            "Choose which null-or-die graph the Select Music sync overlay shows.",
+            "Frequency: weighted spectral accumulator.",
+            "Beat index: per-beat digest over time.",
+            "Post-kernel fingerprint: convolution heatmap with the final kernel response.",
+        ],
+    },
+    Item {
+        name: NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE,
+        help: &[
+            "Set the minimum confidence required for Sync Pack saves.",
+            "Charts below this value are analyzed and shown, but skipped when saving a pack.",
+            "Single-song sync still allows saving below the threshold and shows a warning instead.",
+        ],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the previous menu."],
+    },
+];
+
+pub const SYNC_PACK_OPTIONS_ITEMS: &[Item] = &[
+    Item {
+        name: SYNC_PACK_ROW_PACK,
+        help: &[
+            "Choose which installed files to include in the sync run.",
+            "All Files analyzes every installed pack; any specific pack limits the run to that pack.",
+        ],
+    },
+    Item {
+        name: SYNC_PACK_ROW_START,
+        help: &[
+            "Open the local sync review overlay for the selected pack filter.",
+            "Use All Files to analyze every installed pack in one pass.",
+        ],
+    },
+    Item {
+        name: "Exit",
+        help: &["Return to the previous menu."],
+    },
+];
+
 pub const SCORE_IMPORT_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SCORE_IMPORT_ROW_ENDPOINT,
@@ -2104,6 +2230,9 @@ const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow<'static>] {
         SubmenuKind::Input => INPUT_OPTIONS_ROWS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ROWS,
         SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ROWS,
+        SubmenuKind::NullOrDie => NULL_OR_DIE_MENU_ROWS,
+        SubmenuKind::NullOrDieOptions => NULL_OR_DIE_OPTIONS_ROWS,
+        SubmenuKind::SyncPacks => SYNC_PACK_OPTIONS_ROWS,
         SubmenuKind::Machine => MACHINE_OPTIONS_ROWS,
         SubmenuKind::Advanced => ADVANCED_OPTIONS_ROWS,
         SubmenuKind::Course => COURSE_OPTIONS_ROWS,
@@ -2123,6 +2252,9 @@ const fn submenu_items(kind: SubmenuKind) -> &'static [Item<'static>] {
         SubmenuKind::Input => INPUT_OPTIONS_ITEMS,
         SubmenuKind::InputBackend => INPUT_BACKEND_OPTIONS_ITEMS,
         SubmenuKind::OnlineScoring => ONLINE_SCORING_OPTIONS_ITEMS,
+        SubmenuKind::NullOrDie => NULL_OR_DIE_MENU_ITEMS,
+        SubmenuKind::NullOrDieOptions => NULL_OR_DIE_OPTIONS_ITEMS,
+        SubmenuKind::SyncPacks => SYNC_PACK_OPTIONS_ITEMS,
         SubmenuKind::Machine => MACHINE_OPTIONS_ITEMS,
         SubmenuKind::Advanced => ADVANCED_OPTIONS_ITEMS,
         SubmenuKind::Course => COURSE_OPTIONS_ITEMS,
@@ -2142,6 +2274,9 @@ const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::Input => "INPUT OPTIONS",
         SubmenuKind::InputBackend => "INPUT OPTIONS",
         SubmenuKind::OnlineScoring => "ONLINE SCORE SERVICES",
+        SubmenuKind::NullOrDie => "NULL-OR-DIE OPTIONS",
+        SubmenuKind::NullOrDieOptions => "NULL-OR-DIE OPTIONS",
+        SubmenuKind::SyncPacks => "SYNC PACKS",
         SubmenuKind::Machine => "MACHINE OPTIONS",
         SubmenuKind::Advanced => "ADVANCED OPTIONS",
         SubmenuKind::Course => "COURSE OPTIONS",
@@ -2929,7 +3064,7 @@ fn score_import_selected_endpoint(state: &State) -> scores::ScoreImportEndpoint 
     score_import_endpoint_from_choice_index(idx)
 }
 
-fn score_import_pack_options() -> (Vec<String>, Vec<Option<String>>) {
+fn installed_pack_options(all_label: &str) -> (Vec<String>, Vec<Option<String>>) {
     let cache = crate::game::song::get_song_cache();
     let mut packs: Vec<(String, String)> = Vec::with_capacity(cache.len());
     let mut seen_groups: HashSet<String> = HashSet::with_capacity(cache.len());
@@ -2959,13 +3094,21 @@ fn score_import_pack_options() -> (Vec<String>, Vec<Option<String>>) {
 
     let mut choices = Vec::with_capacity(packs.len() + 1);
     let mut filters = Vec::with_capacity(packs.len() + 1);
-    choices.push(SCORE_IMPORT_ALL_PACKS.to_string());
+    choices.push(all_label.to_string());
     filters.push(None);
     for (display_name, group_name) in packs {
         choices.push(display_name);
         filters.push(Some(group_name));
     }
     (choices, filters)
+}
+
+fn score_import_pack_options() -> (Vec<String>, Vec<Option<String>>) {
+    installed_pack_options(SCORE_IMPORT_ALL_PACKS)
+}
+
+fn sync_pack_options() -> (Vec<String>, Vec<Option<String>>) {
+    installed_pack_options(SYNC_PACK_ALL_FILES)
 }
 
 fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
@@ -3081,10 +3224,33 @@ fn refresh_score_import_pack_options(state: &mut State) {
     }
 }
 
+fn refresh_sync_pack_options(state: &mut State) {
+    let (choices, filters) = sync_pack_options();
+    state.sync_pack_choices = choices;
+    state.sync_pack_filters = filters;
+    let max_idx = state.sync_pack_choices.len().saturating_sub(1);
+    if let Some(slot) = state
+        .sub_choice_indices_sync_packs
+        .get_mut(SYNC_PACK_ROW_PACK_INDEX)
+    {
+        *slot = (*slot).min(max_idx);
+    }
+    if let Some(slot) = state
+        .sub_cursor_indices_sync_packs
+        .get_mut(SYNC_PACK_ROW_PACK_INDEX)
+    {
+        *slot = (*slot).min(max_idx);
+    }
+}
+
 fn refresh_score_import_options(state: &mut State) {
     state.score_import_profiles = load_score_import_profiles();
     refresh_score_import_profile_options(state);
     refresh_score_import_pack_options(state);
+}
+
+fn refresh_null_or_die_options(state: &mut State) {
+    refresh_sync_pack_options(state);
 }
 
 fn selected_score_import_pack_group(state: &State) -> Option<String> {
@@ -3148,6 +3314,28 @@ fn selected_score_import_selection(state: &State) -> Option<ScoreImportSelection
         pack_label,
         only_missing_gs_scores,
     })
+}
+
+fn selected_sync_pack_selection(state: &State) -> SyncPackSelection {
+    let pack_idx = state
+        .sub_choice_indices_sync_packs
+        .get(SYNC_PACK_ROW_PACK_INDEX)
+        .copied()
+        .unwrap_or(0)
+        .min(state.sync_pack_filters.len().saturating_sub(1));
+    let pack_group = state
+        .sync_pack_filters
+        .get(pack_idx)
+        .and_then(|opt| opt.clone());
+    let pack_label = state
+        .sync_pack_choices
+        .get(pack_idx)
+        .cloned()
+        .unwrap_or_else(|| SYNC_PACK_ALL_FILES.to_string());
+    SyncPackSelection {
+        pack_group,
+        pack_label,
+    }
 }
 
 fn row_choices<'a>(
@@ -3280,6 +3468,17 @@ fn row_choices<'a>(
                 .map(Cow::Owned)
                 .collect();
         }
+    }
+    if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::SyncPacks)
+        && row.label == SYNC_PACK_ROW_PACK
+    {
+        return state
+            .sync_pack_choices
+            .iter()
+            .cloned()
+            .map(Cow::Owned)
+            .collect();
     }
     rows.get(row_idx)
         .map(|row| row.choices.iter().map(|c| Cow::Borrowed(*c)).collect())
@@ -3880,6 +4079,16 @@ const fn sync_graph_mode_from_choice(idx: usize) -> SyncGraphMode {
     }
 }
 
+const fn sync_confidence_choice_index(percent: u8) -> usize {
+    let capped = if percent > 100 { 100 } else { percent };
+    ((capped as usize) + 2) / 5
+}
+
+const fn sync_confidence_from_choice(idx: usize) -> u8 {
+    let capped = if idx > 20 { 20 } else { idx };
+    capped as u8 * 5
+}
+
 const fn yes_no_choice_index(enabled: bool) -> usize {
     if enabled { 1 } else { 0 }
 }
@@ -4030,7 +4239,9 @@ pub struct State {
     content_alpha: f32,
     reload_ui: Option<ReloadUiState>,
     score_import_ui: Option<ScoreImportUiState>,
+    pack_sync_overlay: shared_pack_sync::OverlayState,
     score_import_confirm: Option<ScoreImportConfirmState>,
+    sync_pack_confirm: Option<SyncPackConfirmState>,
     pending_dedicated_menu_buttons: Option<bool>,
     // Submenu state
     sub_selected: usize,
@@ -4041,6 +4252,9 @@ pub struct State {
     sub_choice_indices_input: Vec<usize>,
     sub_choice_indices_input_backend: Vec<usize>,
     sub_choice_indices_online_scoring: Vec<usize>,
+    sub_choice_indices_null_or_die: Vec<usize>,
+    sub_choice_indices_null_or_die_options: Vec<usize>,
+    sub_choice_indices_sync_packs: Vec<usize>,
     sub_choice_indices_machine: Vec<usize>,
     sub_choice_indices_advanced: Vec<usize>,
     sub_choice_indices_course: Vec<usize>,
@@ -4056,6 +4270,9 @@ pub struct State {
     sub_cursor_indices_input: Vec<usize>,
     sub_cursor_indices_input_backend: Vec<usize>,
     sub_cursor_indices_online_scoring: Vec<usize>,
+    sub_cursor_indices_null_or_die: Vec<usize>,
+    sub_cursor_indices_null_or_die_options: Vec<usize>,
+    sub_cursor_indices_sync_packs: Vec<usize>,
     sub_cursor_indices_machine: Vec<usize>,
     sub_cursor_indices_advanced: Vec<usize>,
     sub_cursor_indices_course: Vec<usize>,
@@ -4070,6 +4287,8 @@ pub struct State {
     score_import_profile_ids: Vec<Option<String>>,
     score_import_pack_choices: Vec<String>,
     score_import_pack_filters: Vec<Option<String>>,
+    sync_pack_choices: Vec<String>,
+    sync_pack_filters: Vec<Option<String>>,
     sound_device_options: Vec<SoundDeviceOption>,
     #[cfg(target_os = "linux")]
     linux_backend_choices: Vec<String>,
@@ -4153,7 +4372,9 @@ pub fn init() -> State {
         content_alpha: 1.0,
         reload_ui: None,
         score_import_ui: None,
+        pack_sync_overlay: shared_pack_sync::OverlayState::Hidden,
         score_import_confirm: None,
+        sync_pack_confirm: None,
         pending_dedicated_menu_buttons: None,
         view: OptionsView::Main,
         sub_selected: 0,
@@ -4164,6 +4385,9 @@ pub fn init() -> State {
         sub_choice_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
         sub_choice_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
         sub_choice_indices_online_scoring: vec![0; ONLINE_SCORING_OPTIONS_ROWS.len()],
+        sub_choice_indices_null_or_die: vec![0; NULL_OR_DIE_MENU_ROWS.len()],
+        sub_choice_indices_null_or_die_options: vec![0; NULL_OR_DIE_OPTIONS_ROWS.len()],
+        sub_choice_indices_sync_packs: vec![0; SYNC_PACK_OPTIONS_ROWS.len()],
         sub_choice_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
         sub_choice_indices_advanced: vec![0; ADVANCED_OPTIONS_ROWS.len()],
         sub_choice_indices_course: vec![0; COURSE_OPTIONS_ROWS.len()],
@@ -4179,6 +4403,9 @@ pub fn init() -> State {
         sub_cursor_indices_input: vec![0; INPUT_OPTIONS_ROWS.len()],
         sub_cursor_indices_input_backend: vec![0; INPUT_BACKEND_OPTIONS_ROWS.len()],
         sub_cursor_indices_online_scoring: vec![0; ONLINE_SCORING_OPTIONS_ROWS.len()],
+        sub_cursor_indices_null_or_die: vec![0; NULL_OR_DIE_MENU_ROWS.len()],
+        sub_cursor_indices_null_or_die_options: vec![0; NULL_OR_DIE_OPTIONS_ROWS.len()],
+        sub_cursor_indices_sync_packs: vec![0; SYNC_PACK_OPTIONS_ROWS.len()],
         sub_cursor_indices_machine: vec![0; MACHINE_OPTIONS_ROWS.len()],
         sub_cursor_indices_advanced: vec![0; ADVANCED_OPTIONS_ROWS.len()],
         sub_cursor_indices_course: vec![0; COURSE_OPTIONS_ROWS.len()],
@@ -4193,6 +4420,8 @@ pub fn init() -> State {
         score_import_profile_ids: vec![None],
         score_import_pack_choices: vec![SCORE_IMPORT_ALL_PACKS.to_string()],
         score_import_pack_filters: vec![None],
+        sync_pack_choices: vec![SYNC_PACK_ALL_FILES.to_string()],
+        sync_pack_filters: vec![None],
         sound_device_options,
         #[cfg(target_os = "linux")]
         linux_backend_choices,
@@ -4458,10 +4687,16 @@ pub fn init() -> State {
         usize::from(cfg.fastload),
     );
     set_choice_by_label(
-        &mut state.sub_choice_indices_advanced,
-        ADVANCED_OPTIONS_ROWS,
-        ADVANCED_ROW_SYNC_GRAPH,
+        &mut state.sub_choice_indices_null_or_die_options,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH,
         sync_graph_mode_choice_index(cfg.null_or_die_sync_graph),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_null_or_die_options,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE,
+        sync_confidence_choice_index(cfg.null_or_die_confidence_percent),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_course,
@@ -4730,6 +4965,7 @@ pub fn init() -> State {
         yes_no_choice_index(cfg.enable_arrowcloud),
     );
     refresh_score_import_options(&mut state);
+    refresh_null_or_die_options(&mut state);
     set_choice_by_label(
         &mut state.sub_choice_indices_score_import,
         SCORE_IMPORT_OPTIONS_ROWS,
@@ -4769,6 +5005,9 @@ fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Input => &state.sub_choice_indices_input,
         SubmenuKind::InputBackend => &state.sub_choice_indices_input_backend,
         SubmenuKind::OnlineScoring => &state.sub_choice_indices_online_scoring,
+        SubmenuKind::NullOrDie => &state.sub_choice_indices_null_or_die,
+        SubmenuKind::NullOrDieOptions => &state.sub_choice_indices_null_or_die_options,
+        SubmenuKind::SyncPacks => &state.sub_choice_indices_sync_packs,
         SubmenuKind::Machine => &state.sub_choice_indices_machine,
         SubmenuKind::Advanced => &state.sub_choice_indices_advanced,
         SubmenuKind::Course => &state.sub_choice_indices_course,
@@ -4788,6 +5027,9 @@ const fn submenu_choice_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Input => &mut state.sub_choice_indices_input,
         SubmenuKind::InputBackend => &mut state.sub_choice_indices_input_backend,
         SubmenuKind::OnlineScoring => &mut state.sub_choice_indices_online_scoring,
+        SubmenuKind::NullOrDie => &mut state.sub_choice_indices_null_or_die,
+        SubmenuKind::NullOrDieOptions => &mut state.sub_choice_indices_null_or_die_options,
+        SubmenuKind::SyncPacks => &mut state.sub_choice_indices_sync_packs,
         SubmenuKind::Machine => &mut state.sub_choice_indices_machine,
         SubmenuKind::Advanced => &mut state.sub_choice_indices_advanced,
         SubmenuKind::Course => &mut state.sub_choice_indices_course,
@@ -4807,6 +5049,9 @@ fn submenu_cursor_indices(state: &State, kind: SubmenuKind) -> &[usize] {
         SubmenuKind::Input => &state.sub_cursor_indices_input,
         SubmenuKind::InputBackend => &state.sub_cursor_indices_input_backend,
         SubmenuKind::OnlineScoring => &state.sub_cursor_indices_online_scoring,
+        SubmenuKind::NullOrDie => &state.sub_cursor_indices_null_or_die,
+        SubmenuKind::NullOrDieOptions => &state.sub_cursor_indices_null_or_die_options,
+        SubmenuKind::SyncPacks => &state.sub_cursor_indices_sync_packs,
         SubmenuKind::Machine => &state.sub_cursor_indices_machine,
         SubmenuKind::Advanced => &state.sub_cursor_indices_advanced,
         SubmenuKind::Course => &state.sub_cursor_indices_course,
@@ -4826,6 +5071,9 @@ const fn submenu_cursor_indices_mut(state: &mut State, kind: SubmenuKind) -> &mu
         SubmenuKind::Input => &mut state.sub_cursor_indices_input,
         SubmenuKind::InputBackend => &mut state.sub_cursor_indices_input_backend,
         SubmenuKind::OnlineScoring => &mut state.sub_cursor_indices_online_scoring,
+        SubmenuKind::NullOrDie => &mut state.sub_cursor_indices_null_or_die,
+        SubmenuKind::NullOrDieOptions => &mut state.sub_cursor_indices_null_or_die_options,
+        SubmenuKind::SyncPacks => &mut state.sub_cursor_indices_sync_packs,
         SubmenuKind::Machine => &mut state.sub_cursor_indices_machine,
         SubmenuKind::Advanced => &mut state.sub_cursor_indices_advanced,
         SubmenuKind::Course => &mut state.sub_cursor_indices_course,
@@ -4844,6 +5092,10 @@ fn sync_submenu_cursor_indices(state: &mut State) {
     state.sub_cursor_indices_input = state.sub_choice_indices_input.clone();
     state.sub_cursor_indices_input_backend = state.sub_choice_indices_input_backend.clone();
     state.sub_cursor_indices_online_scoring = state.sub_choice_indices_online_scoring.clone();
+    state.sub_cursor_indices_null_or_die = state.sub_choice_indices_null_or_die.clone();
+    state.sub_cursor_indices_null_or_die_options =
+        state.sub_choice_indices_null_or_die_options.clone();
+    state.sub_cursor_indices_sync_packs = state.sub_choice_indices_sync_packs.clone();
     state.sub_cursor_indices_machine = state.sub_choice_indices_machine.clone();
     state.sub_cursor_indices_advanced = state.sub_choice_indices_advanced.clone();
     state.sub_cursor_indices_course = state.sub_choice_indices_course.clone();
@@ -5086,6 +5338,83 @@ fn begin_score_import_from_confirm(state: &mut State) {
         return;
     };
     begin_score_import(state, confirm.selection);
+}
+
+#[inline(always)]
+fn sync_pack_preferred_difficulty_index() -> usize {
+    let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
+    if max_diff_index == 0 {
+        0
+    } else {
+        profile::get().last_difficulty_index.min(max_diff_index)
+    }
+}
+
+fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
+    if !matches!(
+        state.pack_sync_overlay,
+        shared_pack_sync::OverlayState::Hidden
+    ) {
+        return;
+    }
+
+    clear_navigation_holds(state);
+
+    let target_chart_type = profile::get_session_play_style().chart_type();
+    let preferred_difficulty_index = sync_pack_preferred_difficulty_index();
+    let pack_group = selection.pack_group.as_deref();
+    let song_cache = crate::game::song::get_song_cache();
+    let mut targets = Vec::new();
+
+    for pack in song_cache.iter() {
+        if pack_group.is_some() && Some(pack.group_name.as_str()) != pack_group {
+            continue;
+        }
+        for song in &pack.songs {
+            let Some(steps_index) = select_music::best_steps_index(
+                song.as_ref(),
+                target_chart_type,
+                preferred_difficulty_index,
+            ) else {
+                continue;
+            };
+            let Some(chart_ix) = select_music::selected_chart_ix_for_sync(
+                song.as_ref(),
+                target_chart_type,
+                steps_index,
+            ) else {
+                continue;
+            };
+            let Some(chart) = song.charts.get(chart_ix) else {
+                continue;
+            };
+            targets.push(shared_pack_sync::TargetSpec {
+                simfile_path: song.simfile_path.clone(),
+                song_title: song.display_full_title(false),
+                chart_label: shared_pack_sync::chart_label(chart),
+                chart_ix,
+            });
+        }
+    }
+    drop(song_cache);
+
+    if !shared_pack_sync::begin(
+        &mut state.pack_sync_overlay,
+        selection.pack_label.clone(),
+        targets,
+    ) {
+        log::warn!(
+            "Failed to start pack sync for {:?}: no matching charts were found.",
+            selection.pack_group
+        );
+    }
+}
+
+fn begin_pack_sync_from_confirm(state: &mut State) {
+    let Some(confirm) = state.sync_pack_confirm.take() else {
+        return;
+    };
+    begin_pack_sync(state, confirm.selection);
 }
 
 fn poll_reload_ui(reload: &mut ReloadUiState) {
@@ -5346,6 +5675,9 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         {
             state.score_import_ui = None;
         }
+        return None;
+    }
+    if shared_pack_sync::poll(&mut state.pack_sync_overlay) {
         return None;
     }
 
@@ -6012,8 +6344,13 @@ fn apply_submenu_choice_delta(
             config::update_cache_songs(new_index == 1);
         } else if row.label == ADVANCED_ROW_FAST_LOAD {
             config::update_fastload(new_index == 1);
-        } else if row.label == ADVANCED_ROW_SYNC_GRAPH {
+        }
+    } else if matches!(kind, SubmenuKind::NullOrDieOptions) {
+        let row = &rows[row_index];
+        if row.label == NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH {
             config::update_null_or_die_sync_graph(sync_graph_mode_from_choice(new_index));
+        } else if row.label == NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE {
+            config::update_null_or_die_confidence_percent(sync_confidence_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::Course) {
         let row = &rows[row_index];
@@ -6213,6 +6550,12 @@ pub fn handle_input(
         }
         return ScreenAction::None;
     }
+    if !matches!(
+        state.pack_sync_overlay,
+        shared_pack_sync::OverlayState::Hidden
+    ) {
+        return shared_pack_sync::handle_input(&mut state.pack_sync_overlay, ev);
+    }
     if let Some(confirm) = state.score_import_confirm.as_mut() {
         if !ev.pressed {
             return ScreenAction::None;
@@ -6244,6 +6587,42 @@ pub fn handle_input(
             VirtualAction::p1_back => {
                 clear_navigation_holds(state);
                 state.score_import_confirm = None;
+                audio::play_sfx("assets/sounds/change.ogg");
+            }
+            _ => {}
+        }
+        return ScreenAction::None;
+    }
+    if let Some(confirm) = state.sync_pack_confirm.as_mut() {
+        if !ev.pressed {
+            return ScreenAction::None;
+        }
+        match ev.action {
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                if confirm.active_choice > 0 {
+                    confirm.active_choice -= 1;
+                    audio::play_sfx("assets/sounds/change.ogg");
+                }
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                if confirm.active_choice < 1 {
+                    confirm.active_choice += 1;
+                    audio::play_sfx("assets/sounds/change.ogg");
+                }
+            }
+            VirtualAction::p1_start | VirtualAction::p1_select => {
+                let should_start = confirm.active_choice == 0;
+                audio::play_sfx("assets/sounds/start.ogg");
+                clear_navigation_holds(state);
+                if should_start {
+                    begin_pack_sync_from_confirm(state);
+                } else {
+                    state.sync_pack_confirm = None;
+                }
+            }
+            VirtualAction::p1_back => {
+                clear_navigation_holds(state);
+                state.sync_pack_confirm = None;
                 audio::play_sfx("assets/sounds/change.ogg");
             }
             _ => {}
@@ -6420,6 +6799,13 @@ pub fn handle_input(
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
                         }
+                        "Null-or-Die Options" => {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            refresh_null_or_die_options(state);
+                            state.pending_submenu_kind = Some(SubmenuKind::NullOrDie);
+                            state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                            state.submenu_fade_t = 0.0;
+                        }
                         "Manage Local Profiles" => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             return ScreenAction::Navigate(Screen::ManageLocalProfiles);
@@ -6555,6 +6941,36 @@ pub fn handle_input(
                                 _ => {}
                             }
                         }
+                    } else if matches!(kind, SubmenuKind::NullOrDie) {
+                        let rows = submenu_rows(kind);
+                        let Some(row_idx) =
+                            submenu_visible_row_to_actual(state, kind, selected_row)
+                        else {
+                            return ScreenAction::None;
+                        };
+                        if let Some(row) = rows.get(row_idx) {
+                            match row.label {
+                                NULL_OR_DIE_ROW_OPTIONS => {
+                                    audio::play_sfx("assets/sounds/start.ogg");
+                                    state.pending_submenu_kind =
+                                        Some(SubmenuKind::NullOrDieOptions);
+                                    state.pending_submenu_parent_kind =
+                                        Some(SubmenuKind::NullOrDie);
+                                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                                    state.submenu_fade_t = 0.0;
+                                }
+                                NULL_OR_DIE_ROW_SYNC_PACKS => {
+                                    audio::play_sfx("assets/sounds/start.ogg");
+                                    refresh_sync_pack_options(state);
+                                    state.pending_submenu_kind = Some(SubmenuKind::SyncPacks);
+                                    state.pending_submenu_parent_kind =
+                                        Some(SubmenuKind::NullOrDie);
+                                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                                    state.submenu_fade_t = 0.0;
+                                }
+                                _ => {}
+                            }
+                        }
                     } else if matches!(kind, SubmenuKind::ScoreImport) {
                         let rows = submenu_rows(kind);
                         let Some(row_idx) =
@@ -6580,6 +6996,28 @@ pub fn handle_input(
                                 log::warn!(
                                     "Score import start requested, but no eligible profile is selected."
                                 );
+                            }
+                        }
+                    } else if matches!(kind, SubmenuKind::SyncPacks) {
+                        let rows = submenu_rows(kind);
+                        let Some(row_idx) =
+                            submenu_visible_row_to_actual(state, kind, selected_row)
+                        else {
+                            return ScreenAction::None;
+                        };
+                        if let Some(row) = rows.get(row_idx)
+                            && row.label == SYNC_PACK_ROW_START
+                        {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            let selection = selected_sync_pack_selection(state);
+                            if selection.pack_group.is_none() {
+                                clear_navigation_holds(state);
+                                state.sync_pack_confirm = Some(SyncPackConfirmState {
+                                    selection,
+                                    active_choice: 1,
+                                });
+                            } else {
+                                begin_pack_sync(state, selection);
                             }
                         }
                     }
@@ -7325,6 +7763,70 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
     }
 }
 
+fn build_yes_no_confirm_overlay(
+    prompt_text: &str,
+    active_choice: u8,
+    active_color_index: i32,
+) -> Vec<Actor> {
+    let w = screen_width();
+    let h = screen_height();
+    let cx = w * 0.5;
+    let cy = h * 0.5;
+    let answer_y = cy + 118.0;
+    let yes_x = cx - 100.0;
+    let no_x = cx + 100.0;
+    let cursor_x = [yes_x, no_x][active_choice.min(1) as usize];
+    let cursor_color = color::simply_love_rgba(active_color_index);
+
+    vec![
+        act!(quad:
+            align(0.0, 0.0):
+            xy(0.0, 0.0):
+            zoomto(w, h):
+            diffuse(0.0, 0.0, 0.0, 0.9):
+            z(700)
+        ),
+        act!(quad:
+            align(0.5, 0.5):
+            xy(cursor_x, answer_y):
+            setsize(145.0, 40.0):
+            diffuse(cursor_color[0], cursor_color[1], cursor_color[2], 1.0):
+            z(701)
+        ),
+        act!(text:
+            align(0.5, 0.5):
+            xy(cx, cy - 65.0):
+            font("miso"):
+            zoom(0.95):
+            maxwidth(w - 90.0):
+            settext(prompt_text):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(702):
+            horizalign(center)
+        ),
+        act!(text:
+            align(0.5, 0.5):
+            xy(yes_x, answer_y):
+            font("wendy"):
+            zoom(0.72):
+            settext("YES"):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(702):
+            horizalign(center)
+        ),
+        act!(text:
+            align(0.5, 0.5):
+            xy(no_x, answer_y):
+            font("wendy"):
+            zoom(0.72):
+            settext("NO"):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(702):
+            horizalign(center)
+        ),
+    ]
+}
+
 pub fn get_actors(
     state: &State,
     asset_manager: &AssetManager,
@@ -7397,6 +7899,15 @@ pub fn get_actors(
             horizalign(center):
             z(301)
         ));
+        for actor in &mut ui_actors {
+            apply_alpha_to_actor(actor, alpha_multiplier);
+        }
+        actors.extend(ui_actors);
+        return actors;
+    }
+    if let Some(mut ui_actors) =
+        shared_pack_sync::build_overlay(&state.pack_sync_overlay, state.active_color_index)
+    {
         for actor in &mut ui_actors {
             apply_alpha_to_actor(actor, alpha_multiplier);
         }
@@ -8160,15 +8671,6 @@ pub fn get_actors(
         }
     }
     if let Some(confirm) = &state.score_import_confirm {
-        let w = screen_width();
-        let h = screen_height();
-        let cx = w * 0.5;
-        let cy = h * 0.5;
-        let answer_y = cy + 118.0;
-        let yes_x = cx - 100.0;
-        let no_x = cx + 100.0;
-        let cursor_x = [yes_x, no_x][confirm.active_choice.min(1) as usize];
-        let cursor_color = color::simply_love_rgba(state.active_color_index);
         let prompt_text = format!(
             "Import ALL packs for {} / {}?\nOnly missing GS scores: {}.\nRate limit is hard-capped at 3 requests per second.\nFor many charts this can take more than one hour.\nSpamming APIs can be problematic.\n\nStart now?",
             confirm.selection.endpoint.display_name(),
@@ -8183,51 +8685,25 @@ pub fn get_actors(
                 "No"
             }
         );
-
-        ui_actors.push(act!(quad:
-            align(0.0, 0.0):
-            xy(0.0, 0.0):
-            zoomto(w, h):
-            diffuse(0.0, 0.0, 0.0, 0.9):
-            z(700)
+        ui_actors.extend(build_yes_no_confirm_overlay(
+            &prompt_text,
+            confirm.active_choice,
+            state.active_color_index,
         ));
-        ui_actors.push(act!(quad:
-            align(0.5, 0.5):
-            xy(cursor_x, answer_y):
-            setsize(145.0, 40.0):
-            diffuse(cursor_color[0], cursor_color[1], cursor_color[2], 1.0):
-            z(701)
-        ));
-        ui_actors.push(act!(text:
-            align(0.5, 0.5):
-            xy(cx, cy - 65.0):
-            font("miso"):
-            zoom(0.95):
-            maxwidth(w - 90.0):
-            settext(prompt_text):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(702):
-            horizalign(center)
-        ));
-        ui_actors.push(act!(text:
-            align(0.5, 0.5):
-            xy(yes_x, answer_y):
-            font("wendy"):
-            zoom(0.72):
-            settext("YES"):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(702):
-            horizalign(center)
-        ));
-        ui_actors.push(act!(text:
-            align(0.5, 0.5):
-            xy(no_x, answer_y):
-            font("wendy"):
-            zoom(0.72):
-            settext("NO"):
-            diffuse(1.0, 1.0, 1.0, 1.0):
-            z(702):
-            horizalign(center)
+    }
+    if let Some(confirm) = &state.sync_pack_confirm {
+        let prompt_text = format!(
+            "Sync {}?\nThis will analyze every matching simfile here in Options.\nYou can review offsets and confidence before saving.\n\nStart now?",
+            if confirm.selection.pack_group.is_none() {
+                "ALL files"
+            } else {
+                confirm.selection.pack_label.as_str()
+            }
+        );
+        ui_actors.extend(build_yes_no_confirm_overlay(
+            &prompt_text,
+            confirm.active_choice,
+            state.active_color_index,
         ));
     }
 

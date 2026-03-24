@@ -741,6 +741,8 @@ pub struct Config {
     pub default_fail_type: DefaultFailType,
     /// Choose which null-or-die sync graph the Select Music overlay displays.
     pub null_or_die_sync_graph: SyncGraphMode,
+    /// Minimum confidence percent required for pack sync saves.
+    pub null_or_die_confidence_percent: u8,
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
@@ -845,6 +847,7 @@ impl Default for Config {
             show_bpm_decimal: false,
             default_fail_type: DefaultFailType::ImmediateContinue,
             null_or_die_sync_graph: SyncGraphMode::PostKernelFingerprint,
+            null_or_die_confidence_percent: 80,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
@@ -1195,6 +1198,11 @@ pub fn bootstrap_log_to_file() -> bool {
     conf.get("Options", "LogToFile")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default)
+}
+
+#[inline(always)]
+fn clamp_null_or_die_confidence_percent(value: u8) -> u8 {
+    value.min(100)
 }
 
 fn create_default_config_file() -> Result<(), std::io::Error> {
@@ -1863,6 +1871,11 @@ pub fn load() {
                     .get("Options", "NullOrDieSyncGraph")
                     .and_then(|v| SyncGraphMode::from_str(&v).ok())
                     .unwrap_or(default.null_or_die_sync_graph);
+                cfg.null_or_die_confidence_percent = conf
+                    .get("Options", "NullOrDieConfidencePercent")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map(clamp_null_or_die_confidence_percent)
+                    .unwrap_or(default.null_or_die_confidence_percent);
                 cfg.banner_cache = conf
                     .get("Options", "BannerCache")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -3340,6 +3353,10 @@ fn save_without_keymaps() {
         "NullOrDieSyncGraph={}\n",
         cfg.null_or_die_sync_graph.as_str()
     ));
+    content.push_str(&format!(
+        "NullOrDieConfidencePercent={}\n",
+        clamp_null_or_die_confidence_percent(cfg.null_or_die_confidence_percent)
+    ));
     content.push_str(&format!("DefaultNoteSkin={machine_default_noteskin}\n"));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
@@ -4484,6 +4501,18 @@ pub fn update_null_or_die_sync_graph(mode: SyncGraphMode) {
     save_without_keymaps();
 }
 
+pub fn update_null_or_die_confidence_percent(value: u8) {
+    let value = clamp_null_or_die_confidence_percent(value);
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_confidence_percent == value {
+            return;
+        }
+        cfg.null_or_die_confidence_percent = value;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_input_debounce_seconds(seconds: f32) {
     let seconds = seconds.clamp(0.0, 0.2);
     {
@@ -4755,6 +4784,13 @@ pub fn update_machine_default_noteskin(noteskin: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clamp_null_or_die_confidence_caps_at_100() {
+        assert_eq!(clamp_null_or_die_confidence_percent(0), 0);
+        assert_eq!(clamp_null_or_die_confidence_percent(80), 80);
+        assert_eq!(clamp_null_or_die_confidence_percent(120), 100);
+    }
 
     #[test]
     fn parse_keycode_common_keys() {

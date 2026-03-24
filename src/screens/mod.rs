@@ -11,6 +11,7 @@ pub mod manage_local_profiles;
 pub mod mappings;
 pub mod menu;
 pub mod options;
+pub(crate) mod pack_sync;
 pub mod player_options;
 pub mod profile_load;
 pub mod sandbox;
@@ -26,6 +27,13 @@ use crate::assets::{DensityGraphSlot, DensityGraphSource};
 use crate::config::DisplayMode;
 use crate::core::gfx::{BackendType, PresentModePolicy};
 use crate::game::profile::ActiveProfile;
+
+#[derive(Debug, Clone)]
+pub struct SongOffsetSyncChange {
+    pub simfile_path: PathBuf,
+    pub delta_seconds: f32,
+}
+
 #[derive(Debug, Clone)]
 pub enum ScreenAction {
     None,
@@ -48,6 +56,9 @@ pub enum ScreenAction {
     ApplySongOffsetSync {
         simfile_path: PathBuf,
         delta_seconds: f32,
+    },
+    ApplySongOffsetSyncBatch {
+        changes: Vec<SongOffsetSyncChange>,
     },
     FetchOnlineGrade(String),
     ChangeGraphics {
