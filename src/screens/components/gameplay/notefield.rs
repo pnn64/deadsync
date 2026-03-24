@@ -2401,6 +2401,16 @@ fn hold_head_render_flags(
     (engaged, use_active)
 }
 
+#[inline(always)]
+fn let_go_head_beat(note_beat: f32, end_beat: f32, last_held_beat: f32, visible_beat: f32) -> f32 {
+    // ITG updates and renders from one song position. deadsync keeps separate
+    // gameplay and display clocks, so a dropped hold head must never render
+    // ahead of the visible beat or it can jump above the receptor.
+    last_held_beat
+        .clamp(note_beat, end_beat)
+        .min(visible_beat.max(note_beat))
+}
+
 pub fn build(
     state: &State,
     profile: &profile::Profile,
@@ -3478,7 +3488,8 @@ pub fn build(
                 hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo);
 
             if is_head_dynamic {
-                head_beat = hold.last_held_beat.clamp(note.beat, hold.end_beat);
+                head_beat =
+                    let_go_head_beat(note.beat, hold.end_beat, hold.last_held_beat, current_beat);
             }
 
             let col_dir = column_dirs[local_col];
@@ -3738,15 +3749,14 @@ pub fn build(
                     let hold_length = natural_bottom - natural_top;
                     const SEGMENT_PHASE_EPS: f32 = 1e-4;
                     let max_segments = 2048;
-                    if hold_length > f32::EPSILON {
-                        let Some((clipped_top, clipped_bottom)) = clipped_hold_body_bounds(
+                    if hold_length > f32::EPSILON
+                        && let Some((clipped_top, clipped_bottom)) = clipped_hold_body_bounds(
                             body_top,
                             body_bottom,
                             natural_top,
                             natural_bottom,
-                        ) else {
-                            continue;
-                        };
+                        )
+                    {
                         let visible_top_distance = clipped_top - natural_top;
                         let visible_bottom_distance = clipped_bottom - natural_top;
                         let anchor_to_top =
@@ -6368,10 +6378,10 @@ mod tests {
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
-        hud_y, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_scale_height,
-        note_world_z, note_x_extra, offset_center, push_transform_parts, receptor_row_center,
-        tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits,
-        turn_option_name, zmod_subtractive_counter_state,
+        hud_y, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha,
+        note_scale_height, note_world_z, note_x_extra, offset_center, push_transform_parts,
+        receptor_row_center, tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg,
+        turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::note::NoteType;
@@ -6442,6 +6452,18 @@ mod tests {
             hold_head_render_flags(Some(&let_go), 200.0, 100.0),
             (false, false)
         );
+    }
+
+    #[test]
+    fn let_go_head_beat_stays_at_receptor_until_visible_clock_catches_up() {
+        let beat = let_go_head_beat(100.0, 108.0, 102.0, 101.25);
+        assert!((beat - 101.25).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn let_go_head_beat_uses_last_held_once_visible_clock_has_caught_up() {
+        let beat = let_go_head_beat(100.0, 108.0, 102.0, 103.0);
+        assert!((beat - 102.0).abs() <= 1e-6);
     }
 
     #[test]

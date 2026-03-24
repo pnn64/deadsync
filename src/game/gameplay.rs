@@ -8095,6 +8095,32 @@ fn refresh_roll_life_on_step(state: &mut State, column: usize) {
     hold.let_go_starting_life = 0.0;
 }
 
+#[inline(always)]
+fn advance_hold_last_held(
+    hold: &mut HoldData,
+    timing: &TimingData,
+    current_beat: f32,
+    note_start_row: usize,
+    note_start_beat: f32,
+) {
+    let prev_row = hold.last_held_row_index;
+    let prev_beat = hold.last_held_beat.clamp(note_start_beat, hold.end_beat);
+    let current_beat = current_beat.clamp(note_start_beat, hold.end_beat);
+    let mut current_row = timing
+        .get_row_for_beat(current_beat)
+        .unwrap_or(note_start_row);
+    current_row = current_row.clamp(note_start_row, hold.end_row_index);
+    let final_row = prev_row.max(current_row);
+    if final_row == prev_row {
+        hold.last_held_beat = prev_beat.max(current_beat);
+        return;
+    }
+    hold.last_held_row_index = final_row;
+    // Keep the row bookkeeping snapped like ITG, but preserve the exact beat for
+    // rendering so a let-go head doesn't visibly jump to a neighboring row.
+    hold.last_held_beat = prev_beat.max(current_beat);
+}
+
 fn update_active_holds(
     state: &mut State,
     inputs: &[bool; MAX_COLS],
@@ -8121,29 +8147,13 @@ fn update_active_holds(
                 active.is_pressed = pressed;
 
                 if !active.let_go && active.life > 0.0 {
-                    let prev_row = hold.last_held_row_index;
-                    let prev_beat = hold.last_held_beat;
-                    if pressed {
-                        let mut current_row = timing
-                            .get_row_for_beat(current_beat)
-                            .unwrap_or(note_start_row);
-                        current_row = current_row.clamp(note_start_row, hold.end_row_index);
-                        let final_row = prev_row.max(current_row);
-                        if final_row == prev_row {
-                            hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
-                        } else {
-                            hold.last_held_row_index = final_row;
-                            let mut new_beat =
-                                timing.get_beat_for_row(final_row).unwrap_or(current_beat);
-                            new_beat = new_beat.clamp(note_start_beat, hold.end_beat);
-                            if new_beat < prev_beat {
-                                new_beat = prev_beat;
-                            }
-                            hold.last_held_beat = new_beat;
-                        }
-                    } else {
-                        hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
-                    }
+                    advance_hold_last_held(
+                        hold,
+                        timing,
+                        current_beat,
+                        note_start_row,
+                        note_start_beat,
+                    );
                 }
 
                 if !active.let_go {
@@ -11124,9 +11134,10 @@ mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
         INSERT_MASK_BIT_MINES, REPLAY_EDGE_RATE_PER_SEC, ScrollEffects, ScrollSpeedSetting,
-        SongClockSnapshot, TickMode, apply_mines_insert, build_assist_clap_rows,
-        build_attack_mask_windows_for_player, frame_stable_display_music_time, input_queue_cap,
-        lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
+        SongClockSnapshot, TickMode, advance_hold_last_held, apply_mines_insert,
+        build_assist_clap_rows, build_attack_mask_windows_for_player,
+        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals, replay_edge_cap,
         score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
@@ -11175,6 +11186,34 @@ mod tests {
             last_held_beat: row_index as f32 / ROWS_PER_BEAT as f32,
         });
         note
+    }
+
+    #[test]
+    fn advance_hold_last_held_keeps_progressing_after_release_while_life_remains() {
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &test_row_to_beat(96));
+        let mut hold = test_hold(0, 0, 96).hold.expect("test hold has hold data");
+        hold.last_held_row_index = 24;
+        hold.last_held_beat = 24.0 / ROWS_PER_BEAT as f32;
+
+        advance_hold_last_held(&mut hold, &timing, 1.0, 0, 0.0);
+
+        assert_eq!(hold.last_held_row_index, 48);
+        assert!((hold.last_held_beat - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn advance_hold_last_held_keeps_exact_beat_between_rows() {
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &test_row_to_beat(96));
+        let mut hold = test_hold(0, 0, 96).hold.expect("test hold has hold data");
+        hold.last_held_row_index = 24;
+        hold.last_held_beat = 24.0 / ROWS_PER_BEAT as f32;
+
+        advance_hold_last_held(&mut hold, &timing, 0.99, 0, 0.0);
+
+        assert_eq!(hold.last_held_row_index, 48);
+        assert!((hold.last_held_beat - 0.99).abs() <= 1e-6);
     }
 
     fn test_chart(
