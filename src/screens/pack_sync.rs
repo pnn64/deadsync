@@ -22,7 +22,7 @@ const ROW_STEP: f32 = 43.0;
 const PROGRESS_STEP_BEATS: usize = 4;
 const MAX_MSGS_PER_FRAME: usize = 64;
 const POLL_BUDGET: Duration = Duration::from_millis(2);
-pub(crate) const ALL_LABEL: &str = "All Files";
+pub(crate) const ALL_LABEL: &str = "All Packs";
 
 pub(crate) struct TargetSpec {
     pub simfile_path: PathBuf,
@@ -490,7 +490,7 @@ pub(crate) fn begin(state: &mut OverlayState, pack_name: String, targets: Vec<Ta
     let rows = build_rows(&targets);
 
     std::thread::spawn(move || {
-        let cfg = null_or_die::api::default_bias_cfg();
+        let cfg = config::null_or_die_bias_cfg();
         let stream_cfg = BiasStreamCfg {
             emit_freq_delta: false,
             orientation: GraphOrientation::Horizontal,

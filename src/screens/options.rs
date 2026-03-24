@@ -32,6 +32,7 @@ use crate::ui::actors;
 use crate::ui::actors::Actor;
 use crate::ui::color;
 use crate::ui::font;
+use null_or_die::{BiasKernel, KernelTarget};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -60,6 +61,10 @@ const VOLUME_MIN_PERCENT: i32 = 0;
 const VOLUME_MAX_PERCENT: i32 = 100;
 const INPUT_DEBOUNCE_MIN_MS: i32 = 0;
 const INPUT_DEBOUNCE_MAX_MS: i32 = 200;
+const NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS: i32 = 1;
+const NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS: i32 = 1000;
+const NULL_OR_DIE_MAGIC_OFFSET_MIN_TENTHS: i32 = -1000;
+const NULL_OR_DIE_MAGIC_OFFSET_MAX_TENTHS: i32 = 1000;
 
 // --- Monitor & Video Mode Data Structures ---
 
@@ -106,6 +111,11 @@ fn format_percent(value: i32) -> String {
 }
 
 #[inline(always)]
+fn format_tenths_ms(value_tenths: i32) -> String {
+    format!("{:.1} ms", value_tenths as f64 / 10.0)
+}
+
+#[inline(always)]
 fn adjust_ms_value(value: &mut i32, delta: isize, min: i32, max: i32) -> bool {
     let new_value = (*value + delta as i32).clamp(min, max);
     if new_value == *value {
@@ -114,6 +124,27 @@ fn adjust_ms_value(value: &mut i32, delta: isize, min: i32, max: i32) -> bool {
         *value = new_value;
         true
     }
+}
+
+#[inline(always)]
+fn adjust_tenths_value(value: &mut i32, delta: isize, min: i32, max: i32) -> bool {
+    let new_value = (*value + delta as i32).clamp(min, max);
+    if new_value == *value {
+        false
+    } else {
+        *value = new_value;
+        true
+    }
+}
+
+#[inline(always)]
+fn tenths_from_f64(value: f64) -> i32 {
+    (value * 10.0).round() as i32
+}
+
+#[inline(always)]
+fn f64_from_tenths(value: i32) -> f64 {
+    value as f64 / 10.0
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
@@ -661,12 +692,21 @@ const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
 const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
 const NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH: &str = "Sync Graph";
 const NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE: &str = "Sync Confidence";
+const NULL_OR_DIE_SETTING_ROW_FINGERPRINT: &str = "Fingerprint (ms)";
+const NULL_OR_DIE_SETTING_ROW_WINDOW: &str = "Window (ms)";
+const NULL_OR_DIE_SETTING_ROW_STEP: &str = "Step (ms)";
+const NULL_OR_DIE_SETTING_ROW_MAGIC_OFFSET: &str = "Magic Offset (ms)";
+const NULL_OR_DIE_SETTING_ROW_KERNEL_TARGET: &str = "Kernel Target";
+const NULL_OR_DIE_SETTING_ROW_KERNEL_TYPE: &str = "Kernel Type";
+const NULL_OR_DIE_SETTING_ROW_FULL_SPECTROGRAM: &str = "Full Spectrogram";
 const NULL_OR_DIE_SYNC_GRAPH_CHOICES: &[&str] =
     &["Frequency", "Beat index", "Post-kernel fingerprint"];
 const NULL_OR_DIE_SYNC_CONFIDENCE_CHOICES: &[&str] = &[
     "0%", "5%", "10%", "15%", "20%", "25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%",
     "70%", "75%", "80%", "85%", "90%", "95%", "100%",
 ];
+const NULL_OR_DIE_KERNEL_TARGET_CHOICES: &[&str] = &["Digest", "Accumulator"];
+const NULL_OR_DIE_KERNEL_TYPE_CHOICES: &[&str] = &["Rising", "Loudest"];
 const SOUND_OUTPUT_MODE_CHOICES: &[&str] = &["Auto", "Shared"];
 const SOUND_ROW_MASTER_VOLUME: &str = "Master Volume";
 const SOUND_ROW_SFX_VOLUME: &str = "SFX Volume";
@@ -710,7 +750,7 @@ const SCORE_IMPORT_ROW_PACK_INDEX: usize = 2;
 const SCORE_IMPORT_ROW_ONLY_MISSING_INDEX: usize = 3;
 const SYNC_PACK_ROW_PACK: &str = "Pack";
 const SYNC_PACK_ROW_START: &str = "Start";
-const SYNC_PACK_ALL_FILES: &str = "All Files";
+const SYNC_PACK_ALL_PACKS: &str = "All Packs";
 const SYNC_PACK_ROW_PACK_INDEX: usize = 0;
 
 #[cfg(target_os = "linux")]
@@ -1995,12 +2035,47 @@ pub const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
         choices: NULL_OR_DIE_SYNC_CONFIDENCE_CHOICES,
         inline: false,
     },
+    SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_FINGERPRINT,
+        choices: &["50.0 ms"],
+        inline: false,
+    },
+    SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_WINDOW,
+        choices: &["10.0 ms"],
+        inline: false,
+    },
+    SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_STEP,
+        choices: &["0.2 ms"],
+        inline: false,
+    },
+    SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_MAGIC_OFFSET,
+        choices: &["0.0 ms"],
+        inline: false,
+    },
+    SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_KERNEL_TARGET,
+        choices: NULL_OR_DIE_KERNEL_TARGET_CHOICES,
+        inline: false,
+    },
+    SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_KERNEL_TYPE,
+        choices: NULL_OR_DIE_KERNEL_TYPE_CHOICES,
+        inline: false,
+    },
+    SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_FULL_SPECTROGRAM,
+        choices: &["No", "Yes"],
+        inline: false,
+    },
 ];
 
 pub const SYNC_PACK_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: SYNC_PACK_ROW_PACK,
-        choices: &[SYNC_PACK_ALL_FILES],
+        choices: &[SYNC_PACK_ALL_PACKS],
         inline: false,
     },
     SubRow {
@@ -2141,6 +2216,55 @@ pub const NULL_OR_DIE_OPTIONS_ITEMS: &[Item] = &[
         ],
     },
     Item {
+        name: NULL_OR_DIE_SETTING_ROW_FINGERPRINT,
+        help: &[
+            "Set the fingerprint width used around each beat during bias analysis.",
+            "Smaller values focus more tightly around each beat; larger values compare a wider window.",
+        ],
+    },
+    Item {
+        name: NULL_OR_DIE_SETTING_ROW_WINDOW,
+        help: &[
+            "Set the spectrogram window size in milliseconds.",
+            "This changes how much audio is analyzed per FFT slice.",
+        ],
+    },
+    Item {
+        name: NULL_OR_DIE_SETTING_ROW_STEP,
+        help: &[
+            "Set the spectrogram step size in milliseconds.",
+            "Lower values sample more densely and can increase analysis cost.",
+        ],
+    },
+    Item {
+        name: NULL_OR_DIE_SETTING_ROW_MAGIC_OFFSET,
+        help: &[
+            "Add a fixed offset to the final estimated bias.",
+            "Useful for testing alternate parity assumptions without editing simfiles.",
+        ],
+    },
+    Item {
+        name: NULL_OR_DIE_SETTING_ROW_KERNEL_TARGET,
+        help: &[
+            "Choose whether the kernel operates on digest or accumulator data.",
+            "Digest matches the current default.",
+        ],
+    },
+    Item {
+        name: NULL_OR_DIE_SETTING_ROW_KERNEL_TYPE,
+        help: &[
+            "Choose the kernel shape used for the post-processing convolution.",
+            "Rising matches the current default.",
+        ],
+    },
+    Item {
+        name: NULL_OR_DIE_SETTING_ROW_FULL_SPECTROGRAM,
+        help: &[
+            "Allow the full-spectrogram fingerprint path when null-or-die decides it is appropriate.",
+            "This may use more memory or work for some charts.",
+        ],
+    },
+    Item {
         name: "Exit",
         help: &["Return to the previous menu."],
     },
@@ -2150,15 +2274,15 @@ pub const SYNC_PACK_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: SYNC_PACK_ROW_PACK,
         help: &[
-            "Choose which installed files to include in the sync run.",
-            "All Files analyzes every installed pack; any specific pack limits the run to that pack.",
+            "Choose which installed packs to include in the sync run.",
+            "All Packs analyzes every installed pack; any specific pack limits the run to that pack.",
         ],
     },
     Item {
         name: SYNC_PACK_ROW_START,
         help: &[
             "Open the local sync review overlay for the selected pack filter.",
-            "Use All Files to analyze every installed pack in one pass.",
+            "Use All Packs to analyze every installed pack in one pass.",
         ],
     },
     Item {
@@ -3108,7 +3232,7 @@ fn score_import_pack_options() -> (Vec<String>, Vec<Option<String>>) {
 }
 
 fn sync_pack_options() -> (Vec<String>, Vec<Option<String>>) {
-    installed_pack_options(SYNC_PACK_ALL_FILES)
+    installed_pack_options(SYNC_PACK_ALL_PACKS)
 }
 
 fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
@@ -3331,7 +3455,7 @@ fn selected_sync_pack_selection(state: &State) -> SyncPackSelection {
         .sync_pack_choices
         .get(pack_idx)
         .cloned()
-        .unwrap_or_else(|| SYNC_PACK_ALL_FILES.to_string());
+        .unwrap_or_else(|| SYNC_PACK_ALL_PACKS.to_string());
     SyncPackSelection {
         pack_group,
         pack_label,
@@ -3512,6 +3636,14 @@ fn submenu_display_choice_texts<'a>(
         choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
     } else if row.label == INPUT_ROW_DEBOUNCE {
         choice_texts[0] = Cow::Owned(format_ms(state.input_debounce_ms));
+    } else if row.label == NULL_OR_DIE_SETTING_ROW_FINGERPRINT {
+        choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_fingerprint_tenths));
+    } else if row.label == NULL_OR_DIE_SETTING_ROW_WINDOW {
+        choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_window_tenths));
+    } else if row.label == NULL_OR_DIE_SETTING_ROW_STEP {
+        choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_step_tenths));
+    } else if row.label == NULL_OR_DIE_SETTING_ROW_MAGIC_OFFSET {
+        choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_magic_offset_tenths));
     }
     choice_texts
 }
@@ -4089,6 +4221,34 @@ const fn sync_confidence_from_choice(idx: usize) -> u8 {
     capped as u8 * 5
 }
 
+const fn null_or_die_kernel_target_choice_index(target: KernelTarget) -> usize {
+    match target {
+        KernelTarget::Digest => 0,
+        KernelTarget::Accumulator => 1,
+    }
+}
+
+const fn null_or_die_kernel_target_from_choice(idx: usize) -> KernelTarget {
+    match idx {
+        1 => KernelTarget::Accumulator,
+        _ => KernelTarget::Digest,
+    }
+}
+
+const fn null_or_die_kernel_type_choice_index(kind: BiasKernel) -> usize {
+    match kind {
+        BiasKernel::Rising => 0,
+        BiasKernel::Loudest => 1,
+    }
+}
+
+const fn null_or_die_kernel_type_from_choice(idx: usize) -> BiasKernel {
+    match idx {
+        1 => BiasKernel::Loudest,
+        _ => BiasKernel::Rising,
+    }
+}
+
 const fn yes_no_choice_index(enabled: bool) -> usize {
     if enabled { 1 } else { 0 }
 }
@@ -4299,6 +4459,10 @@ pub struct State {
     global_offset_ms: i32,
     visual_delay_ms: i32,
     input_debounce_ms: i32,
+    null_or_die_fingerprint_tenths: i32,
+    null_or_die_window_tenths: i32,
+    null_or_die_step_tenths: i32,
+    null_or_die_magic_offset_tenths: i32,
     video_renderer_at_load: BackendType,
     display_mode_at_load: DisplayMode,
     display_monitor_at_load: usize,
@@ -4420,7 +4584,7 @@ pub fn init() -> State {
         score_import_profile_ids: vec![None],
         score_import_pack_choices: vec![SCORE_IMPORT_ALL_PACKS.to_string()],
         score_import_pack_filters: vec![None],
-        sync_pack_choices: vec![SYNC_PACK_ALL_FILES.to_string()],
+        sync_pack_choices: vec![SYNC_PACK_ALL_PACKS.to_string()],
         sync_pack_filters: vec![None],
         sound_device_options,
         #[cfg(target_os = "linux")]
@@ -4441,6 +4605,22 @@ pub fn init() -> State {
             let ms = (cfg.input_debounce_seconds * 1000.0).round() as i32;
             ms.clamp(INPUT_DEBOUNCE_MIN_MS, INPUT_DEBOUNCE_MAX_MS)
         },
+        null_or_die_fingerprint_tenths: tenths_from_f64(cfg.null_or_die_fingerprint_ms).clamp(
+            NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS,
+            NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS,
+        ),
+        null_or_die_window_tenths: tenths_from_f64(cfg.null_or_die_window_ms).clamp(
+            NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS,
+            NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS,
+        ),
+        null_or_die_step_tenths: tenths_from_f64(cfg.null_or_die_step_ms).clamp(
+            NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS,
+            NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS,
+        ),
+        null_or_die_magic_offset_tenths: tenths_from_f64(cfg.null_or_die_magic_offset_ms).clamp(
+            NULL_OR_DIE_MAGIC_OFFSET_MIN_TENTHS,
+            NULL_OR_DIE_MAGIC_OFFSET_MAX_TENTHS,
+        ),
         video_renderer_at_load: cfg.video_renderer,
         display_mode_at_load: cfg.display_mode(),
         display_monitor_at_load: cfg.display_monitor,
@@ -4697,6 +4877,24 @@ pub fn init() -> State {
         NULL_OR_DIE_OPTIONS_ROWS,
         NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE,
         sync_confidence_choice_index(cfg.null_or_die_confidence_percent),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_null_or_die_options,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        NULL_OR_DIE_SETTING_ROW_KERNEL_TARGET,
+        null_or_die_kernel_target_choice_index(cfg.null_or_die_kernel_target),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_null_or_die_options,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        NULL_OR_DIE_SETTING_ROW_KERNEL_TYPE,
+        null_or_die_kernel_type_choice_index(cfg.null_or_die_kernel_type),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_null_or_die_options,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        NULL_OR_DIE_SETTING_ROW_FULL_SPECTROGRAM,
+        yes_no_choice_index(cfg.null_or_die_full_spectrogram),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_course,
@@ -6208,6 +6406,71 @@ fn apply_submenu_choice_delta(
             }
             return None;
         }
+        if matches!(kind, SubmenuKind::NullOrDieOptions) {
+            match row.label {
+                NULL_OR_DIE_SETTING_ROW_FINGERPRINT => {
+                    if adjust_tenths_value(
+                        &mut state.null_or_die_fingerprint_tenths,
+                        delta,
+                        NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS,
+                        NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS,
+                    ) {
+                        config::update_null_or_die_fingerprint_ms(f64_from_tenths(
+                            state.null_or_die_fingerprint_tenths,
+                        ));
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        clear_render_cache(state);
+                    }
+                    return None;
+                }
+                NULL_OR_DIE_SETTING_ROW_WINDOW => {
+                    if adjust_tenths_value(
+                        &mut state.null_or_die_window_tenths,
+                        delta,
+                        NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS,
+                        NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS,
+                    ) {
+                        config::update_null_or_die_window_ms(f64_from_tenths(
+                            state.null_or_die_window_tenths,
+                        ));
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        clear_render_cache(state);
+                    }
+                    return None;
+                }
+                NULL_OR_DIE_SETTING_ROW_STEP => {
+                    if adjust_tenths_value(
+                        &mut state.null_or_die_step_tenths,
+                        delta,
+                        NULL_OR_DIE_POSITIVE_MS_MIN_TENTHS,
+                        NULL_OR_DIE_POSITIVE_MS_MAX_TENTHS,
+                    ) {
+                        config::update_null_or_die_step_ms(f64_from_tenths(
+                            state.null_or_die_step_tenths,
+                        ));
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        clear_render_cache(state);
+                    }
+                    return None;
+                }
+                NULL_OR_DIE_SETTING_ROW_MAGIC_OFFSET => {
+                    if adjust_tenths_value(
+                        &mut state.null_or_die_magic_offset_tenths,
+                        delta,
+                        NULL_OR_DIE_MAGIC_OFFSET_MIN_TENTHS,
+                        NULL_OR_DIE_MAGIC_OFFSET_MAX_TENTHS,
+                    ) {
+                        config::update_null_or_die_magic_offset_ms(f64_from_tenths(
+                            state.null_or_die_magic_offset_tenths,
+                        ));
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        clear_render_cache(state);
+                    }
+                    return None;
+                }
+                _ => {}
+            }
+        }
     }
 
     let choices = row_choices(state, kind, rows, row_index);
@@ -6351,6 +6614,14 @@ fn apply_submenu_choice_delta(
             config::update_null_or_die_sync_graph(sync_graph_mode_from_choice(new_index));
         } else if row.label == NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE {
             config::update_null_or_die_confidence_percent(sync_confidence_from_choice(new_index));
+        } else if row.label == NULL_OR_DIE_SETTING_ROW_KERNEL_TARGET {
+            config::update_null_or_die_kernel_target(null_or_die_kernel_target_from_choice(
+                new_index,
+            ));
+        } else if row.label == NULL_OR_DIE_SETTING_ROW_KERNEL_TYPE {
+            config::update_null_or_die_kernel_type(null_or_die_kernel_type_from_choice(new_index));
+        } else if row.label == NULL_OR_DIE_SETTING_ROW_FULL_SPECTROGRAM {
+            config::update_null_or_die_full_spectrogram(yes_no_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::Course) {
         let row = &rows[row_index];

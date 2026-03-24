@@ -4318,7 +4318,7 @@ fn show_sync_overlay(state: &mut State) {
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
 
-    let cfg = null_or_die::api::default_bias_cfg();
+    let cfg = config::null_or_die_bias_cfg();
     let kernel_target = cfg.kernel_target;
     let kernel_type = cfg.kernel_type;
     let graph_mode = config::get().null_or_die_sync_graph;

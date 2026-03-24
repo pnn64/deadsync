@@ -4,6 +4,7 @@ use crate::core::input::{
 };
 use crate::core::logging;
 use log::{debug, info, warn};
+use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
@@ -743,6 +744,13 @@ pub struct Config {
     pub null_or_die_sync_graph: SyncGraphMode,
     /// Minimum confidence percent required for pack sync saves.
     pub null_or_die_confidence_percent: u8,
+    pub null_or_die_fingerprint_ms: f64,
+    pub null_or_die_window_ms: f64,
+    pub null_or_die_step_ms: f64,
+    pub null_or_die_magic_offset_ms: f64,
+    pub null_or_die_kernel_target: KernelTarget,
+    pub null_or_die_kernel_type: BiasKernel,
+    pub null_or_die_full_spectrogram: bool,
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
@@ -848,6 +856,13 @@ impl Default for Config {
             default_fail_type: DefaultFailType::ImmediateContinue,
             null_or_die_sync_graph: SyncGraphMode::PostKernelFingerprint,
             null_or_die_confidence_percent: 80,
+            null_or_die_fingerprint_ms: 50.0,
+            null_or_die_window_ms: 10.0,
+            null_or_die_step_ms: 0.2,
+            null_or_die_magic_offset_ms: 0.0,
+            null_or_die_kernel_target: KernelTarget::Digest,
+            null_or_die_kernel_type: BiasKernel::Rising,
+            null_or_die_full_spectrogram: false,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
@@ -1203,6 +1218,92 @@ pub fn bootstrap_log_to_file() -> bool {
 #[inline(always)]
 fn clamp_null_or_die_confidence_percent(value: u8) -> u8 {
     value.min(100)
+}
+
+const NULL_OR_DIE_POSITIVE_MS_MIN: f64 = 0.1;
+const NULL_OR_DIE_POSITIVE_MS_MAX: f64 = 100.0;
+const NULL_OR_DIE_MAGIC_OFFSET_MS_MIN: f64 = -100.0;
+const NULL_OR_DIE_MAGIC_OFFSET_MS_MAX: f64 = 100.0;
+
+#[inline(always)]
+fn quantize_tenths(value: f64) -> f64 {
+    (value * 10.0).round() * 0.1
+}
+
+#[inline(always)]
+fn clamp_null_or_die_positive_ms(value: f64) -> f64 {
+    if !value.is_finite() {
+        return NULL_OR_DIE_POSITIVE_MS_MIN;
+    }
+    quantize_tenths(value.clamp(NULL_OR_DIE_POSITIVE_MS_MIN, NULL_OR_DIE_POSITIVE_MS_MAX))
+}
+
+#[inline(always)]
+fn clamp_null_or_die_magic_offset_ms(value: f64) -> f64 {
+    if !value.is_finite() {
+        return 0.0;
+    }
+    quantize_tenths(value.clamp(
+        NULL_OR_DIE_MAGIC_OFFSET_MS_MIN,
+        NULL_OR_DIE_MAGIC_OFFSET_MS_MAX,
+    ))
+}
+
+#[inline(always)]
+fn null_or_die_kernel_target_str(target: KernelTarget) -> &'static str {
+    match target {
+        KernelTarget::Digest => "Digest",
+        KernelTarget::Accumulator => "Accumulator",
+    }
+}
+
+fn parse_null_or_die_kernel_target(raw: &str) -> Option<KernelTarget> {
+    let key = raw
+        .trim()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .map(|ch| ch.to_ascii_lowercase())
+        .collect::<String>();
+    match key.as_str() {
+        "digest" => Some(KernelTarget::Digest),
+        "accumulator" => Some(KernelTarget::Accumulator),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn null_or_die_kernel_type_str(kind: BiasKernel) -> &'static str {
+    match kind {
+        BiasKernel::Rising => "Rising",
+        BiasKernel::Loudest => "Loudest",
+    }
+}
+
+fn parse_null_or_die_kernel_type(raw: &str) -> Option<BiasKernel> {
+    let key = raw
+        .trim()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .map(|ch| ch.to_ascii_lowercase())
+        .collect::<String>();
+    match key.as_str() {
+        "rising" => Some(BiasKernel::Rising),
+        "loudest" => Some(BiasKernel::Loudest),
+        _ => None,
+    }
+}
+
+pub fn null_or_die_bias_cfg() -> BiasCfg {
+    let cfg = get();
+    BiasCfg {
+        fingerprint_ms: clamp_null_or_die_positive_ms(cfg.null_or_die_fingerprint_ms),
+        window_ms: clamp_null_or_die_positive_ms(cfg.null_or_die_window_ms),
+        step_ms: clamp_null_or_die_positive_ms(cfg.null_or_die_step_ms),
+        magic_offset_ms: clamp_null_or_die_magic_offset_ms(cfg.null_or_die_magic_offset_ms),
+        kernel_target: cfg.null_or_die_kernel_target,
+        kernel_type: cfg.null_or_die_kernel_type,
+        _full_spectrogram: cfg.null_or_die_full_spectrogram,
+    }
 }
 
 fn create_default_config_file() -> Result<(), std::io::Error> {
@@ -1703,6 +1804,46 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "ShowBpmDecimal={}\n",
         if default.show_bpm_decimal { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "NullOrDieSyncGraph={}\n",
+        default.null_or_die_sync_graph.as_str()
+    ));
+    content.push_str(&format!(
+        "NullOrDieConfidencePercent={}\n",
+        clamp_null_or_die_confidence_percent(default.null_or_die_confidence_percent)
+    ));
+    content.push_str(&format!(
+        "NullOrDieFingerprintMs={:.1}\n",
+        clamp_null_or_die_positive_ms(default.null_or_die_fingerprint_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieWindowMs={:.1}\n",
+        clamp_null_or_die_positive_ms(default.null_or_die_window_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieStepMs={:.1}\n",
+        clamp_null_or_die_positive_ms(default.null_or_die_step_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieMagicOffsetMs={:.1}\n",
+        clamp_null_or_die_magic_offset_ms(default.null_or_die_magic_offset_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieKernelTarget={}\n",
+        null_or_die_kernel_target_str(default.null_or_die_kernel_target)
+    ));
+    content.push_str(&format!(
+        "NullOrDieKernelType={}\n",
+        null_or_die_kernel_type_str(default.null_or_die_kernel_type)
+    ));
+    content.push_str(&format!(
+        "NullOrDieFullSpectrogram={}\n",
+        if default.null_or_die_full_spectrogram {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push('\n');
 
     std::fs::write(CONFIG_PATH, content)
@@ -1876,6 +2017,38 @@ pub fn load() {
                     .and_then(|v| v.parse::<u8>().ok())
                     .map(clamp_null_or_die_confidence_percent)
                     .unwrap_or(default.null_or_die_confidence_percent);
+                cfg.null_or_die_fingerprint_ms = conf
+                    .get("Options", "NullOrDieFingerprintMs")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(clamp_null_or_die_positive_ms)
+                    .unwrap_or(default.null_or_die_fingerprint_ms);
+                cfg.null_or_die_window_ms = conf
+                    .get("Options", "NullOrDieWindowMs")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(clamp_null_or_die_positive_ms)
+                    .unwrap_or(default.null_or_die_window_ms);
+                cfg.null_or_die_step_ms = conf
+                    .get("Options", "NullOrDieStepMs")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(clamp_null_or_die_positive_ms)
+                    .unwrap_or(default.null_or_die_step_ms);
+                cfg.null_or_die_magic_offset_ms = conf
+                    .get("Options", "NullOrDieMagicOffsetMs")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(clamp_null_or_die_magic_offset_ms)
+                    .unwrap_or(default.null_or_die_magic_offset_ms);
+                cfg.null_or_die_kernel_target = conf
+                    .get("Options", "NullOrDieKernelTarget")
+                    .and_then(|v| parse_null_or_die_kernel_target(&v))
+                    .unwrap_or(default.null_or_die_kernel_target);
+                cfg.null_or_die_kernel_type = conf
+                    .get("Options", "NullOrDieKernelType")
+                    .and_then(|v| parse_null_or_die_kernel_type(&v))
+                    .unwrap_or(default.null_or_die_kernel_type);
+                cfg.null_or_die_full_spectrogram = conf
+                    .get("Options", "NullOrDieFullSpectrogram")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.null_or_die_full_spectrogram, |v| v != 0);
                 cfg.banner_cache = conf
                     .get("Options", "BannerCache")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -3357,6 +3530,38 @@ fn save_without_keymaps() {
         "NullOrDieConfidencePercent={}\n",
         clamp_null_or_die_confidence_percent(cfg.null_or_die_confidence_percent)
     ));
+    content.push_str(&format!(
+        "NullOrDieFingerprintMs={:.1}\n",
+        clamp_null_or_die_positive_ms(cfg.null_or_die_fingerprint_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieWindowMs={:.1}\n",
+        clamp_null_or_die_positive_ms(cfg.null_or_die_window_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieStepMs={:.1}\n",
+        clamp_null_or_die_positive_ms(cfg.null_or_die_step_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieMagicOffsetMs={:.1}\n",
+        clamp_null_or_die_magic_offset_ms(cfg.null_or_die_magic_offset_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieKernelTarget={}\n",
+        null_or_die_kernel_target_str(cfg.null_or_die_kernel_target)
+    ));
+    content.push_str(&format!(
+        "NullOrDieKernelType={}\n",
+        null_or_die_kernel_type_str(cfg.null_or_die_kernel_type)
+    ));
+    content.push_str(&format!(
+        "NullOrDieFullSpectrogram={}\n",
+        if cfg.null_or_die_full_spectrogram {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push_str(&format!("DefaultNoteSkin={machine_default_noteskin}\n"));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
@@ -4513,6 +4718,87 @@ pub fn update_null_or_die_confidence_percent(value: u8) {
     save_without_keymaps();
 }
 
+pub fn update_null_or_die_fingerprint_ms(value: f64) {
+    let value = clamp_null_or_die_positive_ms(value);
+    {
+        let mut cfg = lock_config();
+        if (cfg.null_or_die_fingerprint_ms - value).abs() <= f64::EPSILON {
+            return;
+        }
+        cfg.null_or_die_fingerprint_ms = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_window_ms(value: f64) {
+    let value = clamp_null_or_die_positive_ms(value);
+    {
+        let mut cfg = lock_config();
+        if (cfg.null_or_die_window_ms - value).abs() <= f64::EPSILON {
+            return;
+        }
+        cfg.null_or_die_window_ms = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_step_ms(value: f64) {
+    let value = clamp_null_or_die_positive_ms(value);
+    {
+        let mut cfg = lock_config();
+        if (cfg.null_or_die_step_ms - value).abs() <= f64::EPSILON {
+            return;
+        }
+        cfg.null_or_die_step_ms = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_magic_offset_ms(value: f64) {
+    let value = clamp_null_or_die_magic_offset_ms(value);
+    {
+        let mut cfg = lock_config();
+        if (cfg.null_or_die_magic_offset_ms - value).abs() <= f64::EPSILON {
+            return;
+        }
+        cfg.null_or_die_magic_offset_ms = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_kernel_target(value: KernelTarget) {
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_kernel_target == value {
+            return;
+        }
+        cfg.null_or_die_kernel_target = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_kernel_type(value: BiasKernel) {
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_kernel_type == value {
+            return;
+        }
+        cfg.null_or_die_kernel_type = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_full_spectrogram(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_full_spectrogram == enabled {
+            return;
+        }
+        cfg.null_or_die_full_spectrogram = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_input_debounce_seconds(seconds: f32) {
     let seconds = seconds.clamp(0.0, 0.2);
     {
@@ -4790,6 +5076,21 @@ mod tests {
         assert_eq!(clamp_null_or_die_confidence_percent(0), 0);
         assert_eq!(clamp_null_or_die_confidence_percent(80), 80);
         assert_eq!(clamp_null_or_die_confidence_percent(120), 100);
+    }
+
+    #[test]
+    fn clamp_null_or_die_positive_ms_uses_tenths() {
+        assert!((clamp_null_or_die_positive_ms(0.0) - 0.1).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_positive_ms(10.04) - 10.0).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_positive_ms(10.05) - 10.1).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_positive_ms(1000.0) - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn clamp_null_or_die_magic_offset_uses_tenths() {
+        assert!((clamp_null_or_die_magic_offset_ms(-200.0) + 100.0).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_magic_offset_ms(0.04) - 0.0).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_magic_offset_ms(0.05) - 0.1).abs() < f64::EPSILON);
     }
 
     #[test]
