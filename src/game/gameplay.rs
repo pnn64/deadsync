@@ -9715,8 +9715,7 @@ fn finalize_row_judgment(
     let mut row_has_miss = false;
     let mut row_has_successful_hit = false;
     let mut row_has_wayoff = false;
-    let mut has_miss_winner = false;
-    let mut final_judgment: Option<Judgment> = None;
+    let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(row_len.min(MAX_COLS));
     let mut i = 0;
     while i < row_len {
         let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
@@ -9736,31 +9735,13 @@ fn finalize_row_judgment(
             judgment.grade,
             JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
         );
-
-        if judgment.grade == JudgeGrade::Miss {
-            if !has_miss_winner {
-                final_judgment = Some(judgment.clone());
-                has_miss_winner = true;
-            }
-            i += 1;
-            continue;
-        }
-        if has_miss_winner {
-            i += 1;
-            continue;
-        }
-
-        let should_replace = match final_judgment.as_ref() {
-            None => true,
-            Some(current) => judgment.time_error_ms.abs() > current.time_error_ms.abs(),
-        };
-        if should_replace {
-            final_judgment = Some(judgment.clone());
-        }
+        row_judgments.push(judgment);
         i += 1;
     }
 
-    let Some(final_judgment) = final_judgment else {
+    let Some(final_judgment) =
+        judgment::aggregate_row_final_judgment(row_judgments.iter().copied()).cloned()
+    else {
         return;
     };
     let scoring_blocked = autoplay_blocks_scoring(state);

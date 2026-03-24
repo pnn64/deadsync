@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::game::note::{HoldResult, MineResult, Note, NoteType};
 use crate::game::timing::{FA_PLUS_W0_MS, FA_PLUS_W010_MS, WindowCounts};
 
@@ -53,8 +51,8 @@ pub struct Judgment {
 /// Aggregates per-note judgments on a single row into the final row judgment,
 /// mirroring the logic used by gameplay scoring:
 /// - Any Miss on the row yields a Miss row judgment.
-/// - Otherwise, the note with the largest absolute timing error determines
-///   the row's grade and timing window.
+/// - Otherwise, the latest tap on the row determines the row's grade and timing
+///   window, matching ITGmania's LastTapNoteWithResult.
 #[inline(always)]
 pub fn aggregate_row_final_judgment<'a, I>(judgments: I) -> Option<&'a Judgment>
 where
@@ -79,10 +77,7 @@ where
         match chosen {
             None => chosen = Some(j),
             Some(current) => {
-                let a = j.time_error_ms.abs();
-                let b = current.time_error_ms.abs();
-                let ord = a.partial_cmp(&b).unwrap_or(Ordering::Equal);
-                if ord == Ordering::Greater {
+                if j.time_error_ms >= current.time_error_ms {
                     chosen = Some(j);
                 }
             }
@@ -611,6 +606,49 @@ mod tests {
             notes.push(make_tap(*row_index, grade, time_error_ms));
             *row_index = row_index.saturating_add(1);
         }
+    }
+
+    #[test]
+    fn row_judgment_uses_last_tap_offset_instead_of_worst_absolute_offset() {
+        let early = Judgment {
+            time_error_ms: -45.0,
+            grade: JudgeGrade::Decent,
+            window: Some(TimingWindow::W4),
+            miss_because_held: false,
+        };
+        let late = Judgment {
+            time_error_ms: 12.0,
+            grade: JudgeGrade::Great,
+            window: Some(TimingWindow::W3),
+            miss_because_held: false,
+        };
+
+        let chosen = aggregate_row_final_judgment([&early, &late])
+            .expect("row with judgments should aggregate");
+
+        assert_eq!(chosen.grade, JudgeGrade::Great);
+        assert!((chosen.time_error_ms - 12.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn row_judgment_keeps_miss_priority_over_later_hits() {
+        let miss = Judgment {
+            time_error_ms: 180.0,
+            grade: JudgeGrade::Miss,
+            window: None,
+            miss_because_held: false,
+        };
+        let late = Judgment {
+            time_error_ms: 15.0,
+            grade: JudgeGrade::Great,
+            window: Some(TimingWindow::W3),
+            miss_because_held: false,
+        };
+
+        let chosen = aggregate_row_final_judgment([&miss, &late])
+            .expect("row with judgments should aggregate");
+
+        assert_eq!(chosen.grade, JudgeGrade::Miss);
     }
 
     #[test]

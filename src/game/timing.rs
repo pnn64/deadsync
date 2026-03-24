@@ -1506,6 +1506,21 @@ mod tests {
     }
 
     #[test]
+    fn timing_stats_use_last_tap_on_row_instead_of_worst_absolute_offset() {
+        let notes = vec![
+            test_note(10, 0, JudgeGrade::Decent, -45.0),
+            test_note(10, 1, JudgeGrade::Great, 12.0),
+            test_note(11, 0, JudgeGrade::Excellent, -6.0),
+        ];
+
+        let stats = compute_note_timing_stats(&notes);
+        assert!((stats.mean_ms - 3.0).abs() < 0.0001);
+        assert!((stats.mean_abs_ms - 9.0).abs() < 0.0001);
+        assert!((stats.max_abs_ms - 12.0).abs() < 0.0001);
+        assert!((stats.stddev_ms - 9.0).abs() < 0.0002);
+    }
+
+    #[test]
     fn timing_stats_skip_miss_rows() {
         let notes = vec![
             test_note(20, 0, JudgeGrade::Miss, 0.0),
@@ -1549,6 +1564,20 @@ mod tests {
             hist.smoothed.len(),
             ((effective_windows_ms()[4] / HIST_BIN_MS).round() as usize * 2) + 1
         );
+    }
+
+    #[test]
+    fn scatter_points_use_last_tap_offset_for_rows() {
+        let notes = vec![
+            test_note(10, 0, JudgeGrade::Decent, -45.0),
+            test_note(10, 1, JudgeGrade::Great, 12.0),
+        ];
+        let note_time_cache = vec![1.0, 1.0];
+
+        let scatter = build_scatter_points(&notes, &note_time_cache, 0, 4, &[]);
+
+        assert_eq!(scatter.len(), 1);
+        assert_eq!(scatter[0].offset_ms, Some(12.0));
     }
 
     #[test]
