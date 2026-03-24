@@ -4354,7 +4354,7 @@ impl App {
             && matches!(self.state.shell.transition, TransitionState::Idle);
         let key_was_enabled = self.gameplay_key_ring.swap_enabled(ring_enabled);
         let pad_was_enabled = self.gameplay_pad_ring.swap_enabled(ring_enabled);
-        input::set_raw_keyboard_capture_enabled(capture_enabled);
+        input::set_raw_keyboard_capture_enabled(ring_enabled);
         if key_was_enabled != ring_enabled || !ring_enabled {
             self.gameplay_key_ring.clear();
             self.gameplay_key_ring.take_dropped();
