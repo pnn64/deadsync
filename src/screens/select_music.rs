@@ -5225,6 +5225,13 @@ pub fn handle_raw_key_event(
             }
             return ScreenAction::None;
         }
+    } else if key.is_none() && text.is_some() {
+        if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
+            if let Some(text) = text {
+                sort_menu::song_search_add_text(entry, text);
+            }
+            return ScreenAction::None;
+        }
     }
 
     if !key.is_some_and(|key| key.pressed) {
