@@ -717,7 +717,12 @@ fn remove_dev_by_path(
     }
 }
 
-pub fn run(
+pub fn run_pad_only(emit_pad: impl FnMut(PadEvent), emit_sys: impl FnMut(GpSystemEvent)) {
+    run_inner(false, emit_pad, emit_sys, |_| {});
+}
+
+fn run_inner(
+    scan_keyboards: bool,
     mut emit_pad: impl FnMut(PadEvent),
     mut emit_sys: impl FnMut(GpSystemEvent),
     mut emit_key: impl FnMut(RawKeyboardEvent),
@@ -739,13 +744,14 @@ pub fn run(
                     debug!("freebsd evdev skipped '{path}' during startup");
                 }
             }
-            DevClass::Keyboard => {
+            DevClass::Keyboard if scan_keyboards => {
                 if let Some(dev) = open_key_dev(spec) {
                     key_devs.push(dev);
                 } else {
                     debug!("freebsd evdev skipped '{path}' during startup");
                 }
             }
+            DevClass::Keyboard => {}
         }
     }
     if devs.is_empty() && key_devs.is_empty() {
@@ -998,7 +1004,9 @@ pub fn run(
             match event {
                 DevdEvent::Create(path) => {
                     add_dev_if_new(path.clone(), &mut devs, &mut next_id, false, &mut emit_sys);
-                    add_key_dev_if_new(path, &mut key_devs, false);
+                    if scan_keyboards {
+                        add_key_dev_if_new(path, &mut key_devs, false);
+                    }
                 }
                 DevdEvent::Destroy(path) => {
                     remove_dev_by_path(&path, &mut devs, &mut key_devs, &mut emit_sys)

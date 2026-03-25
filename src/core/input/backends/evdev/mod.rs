@@ -10,6 +10,6 @@ mod freebsd;
 mod linux;
 
 #[cfg(target_os = "freebsd")]
-pub use freebsd::{run, set_keyboard_capture_enabled, set_keyboard_window_focused};
+pub use freebsd::{run_pad_only, set_keyboard_capture_enabled, set_keyboard_window_focused};
 #[cfg(target_os = "linux")]
-pub use linux::{run, set_keyboard_capture_enabled, set_keyboard_window_focused};
+pub use linux::{run_pad_only, set_keyboard_capture_enabled, set_keyboard_window_focused};

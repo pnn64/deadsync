@@ -1001,6 +1001,7 @@ fn refresh_fallback(
     devs: &mut Vec<Dev>,
     key_devs: &mut Vec<KeyDev>,
     next_id: &mut u32,
+    scan_keyboards: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
 ) {
     let live_paths = scan_live_event_paths();
@@ -1036,7 +1037,8 @@ fn refresh_fallback(
     for spec in scan_fallback_specs(&open_paths) {
         match spec.class {
             DevClass::Pad => add_dev_if_new(spec, devs, next_id, false, emit_sys),
-            DevClass::Keyboard => add_key_dev_if_new(spec, key_devs),
+            DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, key_devs),
+            DevClass::Keyboard => {}
         }
     }
 }
@@ -1053,7 +1055,12 @@ fn init_discovery() -> Discovery {
     Discovery::None
 }
 
-pub fn run(
+pub fn run_pad_only(emit_pad: impl FnMut(PadEvent), emit_sys: impl FnMut(GpSystemEvent)) {
+    run_inner(false, emit_pad, emit_sys, |_| {});
+}
+
+fn run_inner(
+    scan_keyboards: bool,
     mut emit_pad: impl FnMut(PadEvent),
     mut emit_sys: impl FnMut(GpSystemEvent),
     mut emit_key: impl FnMut(RawKeyboardEvent),
@@ -1070,7 +1077,8 @@ pub fn run(
                     DevClass::Pad => {
                         add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys)
                     }
-                    DevClass::Keyboard => add_key_dev_if_new(spec, &mut key_devs),
+                    DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, &mut key_devs),
+                    DevClass::Keyboard => {}
                 }
             }
         }
@@ -1080,7 +1088,8 @@ pub fn run(
                     DevClass::Pad => {
                         add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys)
                     }
-                    DevClass::Keyboard => add_key_dev_if_new(spec, &mut key_devs),
+                    DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, &mut key_devs),
+                    DevClass::Keyboard => {}
                 }
             }
         }
@@ -1351,7 +1360,8 @@ pub fn run(
                     DevClass::Pad => {
                         add_dev_if_new(spec, &mut devs, &mut next_id, false, &mut emit_sys)
                     }
-                    DevClass::Keyboard => add_key_dev_if_new(spec, &mut key_devs),
+                    DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, &mut key_devs),
+                    DevClass::Keyboard => {}
                 },
                 HotplugEvent::Remove(path) => {
                     remove_dev_by_path(&path, &mut devs, &mut key_devs, &mut emit_sys)
@@ -1359,7 +1369,13 @@ pub fn run(
             }
         }
         if fallback_refresh {
-            refresh_fallback(&mut devs, &mut key_devs, &mut next_id, &mut emit_sys);
+            refresh_fallback(
+                &mut devs,
+                &mut key_devs,
+                &mut next_id,
+                scan_keyboards,
+                &mut emit_sys,
+            );
         }
     }
 }

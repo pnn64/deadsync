@@ -231,7 +231,7 @@ pub fn run_pad_backend(
         WindowsPadBackend::Wgi => backends::wgi::run(emit_pad, emit_sys),
     }
     #[cfg(target_os = "linux")]
-    return backends::evdev::run(emit_pad, emit_sys, |_| {});
+    return backends::evdev::run_pad_only(emit_pad, emit_sys);
     #[cfg(target_os = "freebsd")]
     {
         let mut emit_pad = emit_pad;
@@ -239,7 +239,7 @@ pub fn run_pad_backend(
         if let Err(err) = backends::hidraw::run(&mut emit_pad, &mut emit_sys) {
             log::warn!("freebsd hidraw unavailable or unusable ({err}); falling back to evdev");
         }
-        return backends::evdev::run(emit_pad, emit_sys, |_| {});
+        return backends::evdev::run_pad_only(emit_pad, emit_sys);
     }
     #[cfg(target_os = "macos")]
     return backends::iohid::run(emit_pad, emit_sys, |_| {});
@@ -265,7 +265,8 @@ pub fn run_linux_backend(
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
 ) {
-    backends::evdev::run(emit_pad, emit_sys, emit_key);
+    let _ = emit_key;
+    backends::evdev::run_pad_only(emit_pad, emit_sys);
 }
 
 #[cfg(target_os = "freebsd")]
@@ -274,7 +275,8 @@ pub fn run_freebsd_backend(
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
 ) {
-    backends::evdev::run(emit_pad, emit_sys, emit_key);
+    let _ = emit_key;
+    backends::evdev::run_pad_only(emit_pad, emit_sys);
 }
 
 #[cfg(target_os = "macos")]
