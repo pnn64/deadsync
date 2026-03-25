@@ -1304,6 +1304,29 @@ mod tests {
 
     static TEST_GUARD: std::sync::LazyLock<Mutex<()>> = std::sync::LazyLock::new(|| Mutex::new(()));
 
+    fn lock_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        TEST_GUARD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    struct TestReset(Option<Keymap>);
+
+    impl TestReset {
+        fn capture() -> Self {
+            Self(Some(get_keymap()))
+        }
+    }
+
+    impl Drop for TestReset {
+        fn drop(&mut self) {
+            if let Some(original) = self.0.take() {
+                set_only_dedicated_menu_buttons(false);
+                set_keymap(original);
+            }
+        }
+    }
+
     fn assert_events_eq(actual: &[InputEvent], expected: &[InputEvent]) {
         assert_eq!(actual.len(), expected.len(), "event count");
         for (actual, expected) in actual.iter().zip(expected.iter()) {
@@ -1318,9 +1341,9 @@ mod tests {
     }
 
     #[test]
-    fn map_keycode_event_with_emits_expected_actions() {
-        let _guard = TEST_GUARD.lock().unwrap();
-        let original = get_keymap();
+    fn map_keycode_event_with_emits_primary_action_for_pressed_arrow() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
         let mut km = Keymap::default();
         km.bind(
             VirtualAction::p1_left,
@@ -1334,37 +1357,22 @@ mod tests {
         map_keycode_event_with(KeyCode::ArrowLeft, true, timestamp, |event| {
             actual.push(event);
         });
-        let expected = [
-            input_event(
-                VirtualAction::p1_left,
-                true,
-                InputSource::Keyboard,
-                timestamp,
-                0,
-                timestamp,
-                timestamp,
-            ),
-            input_event(
-                VirtualAction::p1_menu_left,
-                true,
-                InputSource::Keyboard,
-                timestamp,
-                0,
-                timestamp,
-                timestamp,
-            ),
-        ];
+        let expected = [input_event(
+            VirtualAction::p1_left,
+            true,
+            InputSource::Keyboard,
+            timestamp,
+            0,
+            timestamp,
+            timestamp,
+        )];
         assert_events_eq(&actual, &expected);
-
-        set_keymap(original);
-        set_only_dedicated_menu_buttons(false);
-        clear_debounce_state();
     }
 
     #[test]
-    fn map_pad_event_with_emits_expected_actions() {
-        let _guard = TEST_GUARD.lock().unwrap();
-        let original = get_keymap();
+    fn map_pad_event_with_emits_primary_action_for_pressed_arrow() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
         let mut km = Keymap::default();
         km.bind(
             VirtualAction::p1_left,
@@ -1383,37 +1391,27 @@ mod tests {
         };
         let mut actual = Vec::new();
         map_pad_event_with(&event, |input| actual.push(input));
-        let expected = [
-            input_event(
-                VirtualAction::p1_left,
-                true,
-                InputSource::Gamepad,
-                timestamp,
-                42,
-                timestamp,
-                timestamp,
-            ),
-            input_event(
-                VirtualAction::p1_menu_left,
-                true,
-                InputSource::Gamepad,
-                timestamp,
-                42,
-                timestamp,
-                timestamp,
-            ),
-        ];
-        assert_events_eq(&actual, &expected);
-
-        set_keymap(original);
-        set_only_dedicated_menu_buttons(false);
-        clear_debounce_state();
+        assert_eq!(actual.len(), 1, "event count");
+        let actual = actual[0];
+        assert_eq!(actual.action, VirtualAction::p1_left);
+        assert!(actual.pressed);
+        assert_eq!(actual.source, InputSource::Gamepad);
+        assert_eq!(actual.timestamp, timestamp);
+        assert_eq!(actual.timestamp_host_nanos, 42);
+        assert!(
+            actual.stored_at >= timestamp,
+            "debounce storage time should not precede the raw pad timestamp"
+        );
+        assert_eq!(
+            actual.emitted_at, actual.stored_at,
+            "initial pad press should emit immediately from the debounce store"
+        );
     }
 
     #[test]
     fn map_keycode_event_with_suppresses_pressed_alias_when_primary_is_bound() {
-        let _guard = TEST_GUARD.lock().unwrap();
-        let original = get_keymap();
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
         let mut km = Keymap::default();
         km.bind(
             VirtualAction::p1_left,
@@ -1441,16 +1439,12 @@ mod tests {
             timestamp,
         )];
         assert_events_eq(&actual, &expected);
-
-        set_keymap(original);
-        set_only_dedicated_menu_buttons(false);
-        clear_debounce_state();
     }
 
     #[test]
     fn map_keycode_event_with_keeps_release_alias_in_dedicated_mode() {
-        let _guard = TEST_GUARD.lock().unwrap();
-        let original = get_keymap();
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
         let mut km = Keymap::default();
         km.bind(
             VirtualAction::p1_left,
@@ -1485,16 +1479,12 @@ mod tests {
             ),
         ];
         assert_events_eq(&actual, &expected);
-
-        set_keymap(original);
-        set_only_dedicated_menu_buttons(false);
-        clear_debounce_state();
     }
 
     #[test]
     fn keycode_has_action_matches_without_allocating_action_vec() {
-        let _guard = TEST_GUARD.lock().unwrap();
-        let original = get_keymap();
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
         let mut km = Keymap::default();
         km.bind(
             VirtualAction::p1_back,
@@ -1511,15 +1501,12 @@ mod tests {
                 !km.keycode_has_action(KeyCode::Escape, |action| action == VirtualAction::p2_back)
             );
         });
-
-        set_keymap(original);
-        clear_debounce_state();
     }
 
     #[test]
     fn pad_event_mapped_checks_device_and_uuid_without_allocating_action_vec() {
-        let _guard = TEST_GUARD.lock().unwrap();
-        let original = get_keymap();
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
         let mut km = Keymap::default();
         km.bind(
             VirtualAction::p1_start,
@@ -1554,15 +1541,12 @@ mod tests {
             assert!(km.pad_event_mapped(&mapped));
             assert!(!km.pad_event_mapped(&wrong_dev));
         });
-
-        set_keymap(original);
-        clear_debounce_state();
     }
 
     #[test]
-    fn map_raw_key_event_with_debounces_all_screens() {
-        let _guard = TEST_GUARD.lock().unwrap();
-        let original = get_keymap();
+    fn map_raw_key_event_with_debounces_shared_arrow_input() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
         let mut km = Keymap::default();
         km.bind(
             VirtualAction::p1_left,
@@ -1596,17 +1580,12 @@ mod tests {
 
         let mut actual = Vec::new();
         map_raw_key_event_with(&press, |event| actual.push(event));
-        assert_eq!(actual.len(), 2, "press event count");
+        assert_eq!(actual.len(), 1, "press event count");
         assert_eq!(actual[0].action, VirtualAction::p1_left);
         assert!(actual[0].pressed);
         assert_eq!(actual[0].source, InputSource::Keyboard);
         assert_eq!(actual[0].timestamp, t0);
         assert_eq!(actual[0].timestamp_host_nanos, 100);
-        assert_eq!(actual[1].action, VirtualAction::p1_menu_left);
-        assert!(actual[1].pressed);
-        assert_eq!(actual[1].source, InputSource::Keyboard);
-        assert_eq!(actual[1].timestamp, t0);
-        assert_eq!(actual[1].timestamp_host_nanos, 100);
 
         actual.clear();
         map_raw_key_event_with(&release, |event| actual.push(event));
@@ -1620,16 +1599,12 @@ mod tests {
             actual.is_empty(),
             "quick release/repress chatter should not escape the shared debounce path"
         );
-
-        set_keymap(original);
-        set_only_dedicated_menu_buttons(false);
-        clear_debounce_state();
     }
 
     #[test]
     fn set_keymap_presizes_debounce_state() {
-        let _guard = TEST_GUARD.lock().unwrap();
-        let original = get_keymap();
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
         let mut km = Keymap::default();
         km.bind(
             VirtualAction::p1_left,
@@ -1669,8 +1644,5 @@ mod tests {
             PAD_DEBOUNCE_STATE.lock().unwrap().capacity() >= pad_cap,
             "pad debounce store should be pre-sized for mapped bindings"
         );
-
-        set_keymap(original);
-        clear_debounce_state();
     }
 }

@@ -139,7 +139,9 @@ fn adjust_tenths_value(value: &mut i32, delta: isize, min: i32, max: i32) -> boo
 
 #[inline(always)]
 fn tenths_from_f64(value: f64) -> i32 {
-    (value * 10.0).round() as i32
+    let scaled = value * 10.0;
+    let nudge = scaled.signum() * scaled.abs().max(1.0) * f64::EPSILON * 16.0;
+    (scaled + nudge).round() as i32
 }
 
 #[inline(always)]

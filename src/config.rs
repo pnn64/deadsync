@@ -1231,7 +1231,11 @@ const NULL_OR_DIE_MAGIC_OFFSET_MS_MAX: f64 = 100.0;
 
 #[inline(always)]
 fn quantize_tenths(value: f64) -> f64 {
-    (value * 10.0).round() * 0.1
+    let scaled = value * 10.0;
+    // Nudge decimal half-steps across the IEEE-754 error margin so values like
+    // 10.05 round to 10.1 instead of falling back to 10.0.
+    let nudge = scaled.signum() * scaled.abs().max(1.0) * f64::EPSILON * 16.0;
+    (scaled + nudge).round() / 10.0
 }
 
 #[inline(always)]
@@ -5137,6 +5141,10 @@ pub fn update_machine_default_noteskin(noteskin: &str) {
 mod tests {
     use super::*;
 
+    fn assert_tenths_eq(actual: f64, expected_tenths: i32) {
+        assert_eq!((actual * 10.0).round() as i32, expected_tenths);
+    }
+
     #[test]
     fn clamp_null_or_die_confidence_caps_at_100() {
         assert_eq!(clamp_null_or_die_confidence_percent(0), 0);
@@ -5146,17 +5154,17 @@ mod tests {
 
     #[test]
     fn clamp_null_or_die_positive_ms_uses_tenths() {
-        assert!((clamp_null_or_die_positive_ms(0.0) - 0.1).abs() < f64::EPSILON);
-        assert!((clamp_null_or_die_positive_ms(10.04) - 10.0).abs() < f64::EPSILON);
-        assert!((clamp_null_or_die_positive_ms(10.05) - 10.1).abs() < f64::EPSILON);
-        assert!((clamp_null_or_die_positive_ms(1000.0) - 100.0).abs() < f64::EPSILON);
+        assert_tenths_eq(clamp_null_or_die_positive_ms(0.0), 1);
+        assert_tenths_eq(clamp_null_or_die_positive_ms(10.04), 100);
+        assert_tenths_eq(clamp_null_or_die_positive_ms(10.05), 101);
+        assert_tenths_eq(clamp_null_or_die_positive_ms(1000.0), 1000);
     }
 
     #[test]
     fn clamp_null_or_die_magic_offset_uses_tenths() {
-        assert!((clamp_null_or_die_magic_offset_ms(-200.0) + 100.0).abs() < f64::EPSILON);
-        assert!((clamp_null_or_die_magic_offset_ms(0.04) - 0.0).abs() < f64::EPSILON);
-        assert!((clamp_null_or_die_magic_offset_ms(0.05) - 0.1).abs() < f64::EPSILON);
+        assert_tenths_eq(clamp_null_or_die_magic_offset_ms(-200.0), -1000);
+        assert_tenths_eq(clamp_null_or_die_magic_offset_ms(0.04), 0);
+        assert_tenths_eq(clamp_null_or_die_magic_offset_ms(0.05), 1);
     }
 
     #[test]
