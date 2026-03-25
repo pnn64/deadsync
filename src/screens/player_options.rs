@@ -346,7 +346,7 @@ pub struct State {
     pub hide_active_mask: [u8; PLAYER_SLOTS],
     // For FA+ Options row: bitmask of which options are enabled.
     // bit0 = Display FA+ Window, bit1 = Display EX Score, bit2 = Display H.EX Score,
-    // bit3 = Display FA+ Pane, bit4 = 10ms Blue Window.
+    // bit3 = Display FA+ Pane, bit4 = 10ms Blue Window, bit5 = 15/10ms Split.
     pub fa_plus_active_mask: [u8; PLAYER_SLOTS],
     // For Early Decent/Way Off Options row: bitmask of which options are enabled.
     // bit0 = Hide Judgments, bit1 = Hide NoteField Flash.
@@ -1384,6 +1384,7 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
                 "Display H.EX Score".to_string(),
                 "Display FA+ Pane".to_string(),
                 "10ms Blue Window".to_string(),
+                "15/10ms Split".to_string(),
             ],
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
@@ -2047,6 +2048,9 @@ fn apply_profile_defaults(
     }
     if profile.fa_plus_10ms_blue_window {
         fa_plus_active_mask |= 1u8 << 4;
+    }
+    if profile.split_15_10ms {
+        fa_plus_active_mask |= 1u8 << 5;
     }
     if let Some(row) = rows
         .iter_mut()
@@ -4603,7 +4607,7 @@ fn toggle_holds_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 5 {
+    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4649,7 +4653,7 @@ fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 5 {
+    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4741,7 +4745,7 @@ fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 5 {
+    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4840,7 +4844,7 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 5 {
+    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4861,11 +4865,13 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     let hard_ex_enabled = (state.fa_plus_active_mask[idx] & (1u8 << 2)) != 0;
     let pane_enabled = (state.fa_plus_active_mask[idx] & (1u8 << 3)) != 0;
     let ten_ms_enabled = (state.fa_plus_active_mask[idx] & (1u8 << 4)) != 0;
+    let split_15_10ms_enabled = (state.fa_plus_active_mask[idx] & (1u8 << 5)) != 0;
     state.player_profiles[idx].show_fa_plus_window = window_enabled;
     state.player_profiles[idx].show_ex_score = ex_enabled;
     state.player_profiles[idx].show_hard_ex_score = hard_ex_enabled;
     state.player_profiles[idx].show_fa_plus_pane = pane_enabled;
     state.player_profiles[idx].fa_plus_10ms_blue_window = ten_ms_enabled;
+    state.player_profiles[idx].split_15_10ms = split_15_10ms_enabled;
     let play_style = crate::game::profile::get_session_play_style();
     let should_persist = play_style == crate::game::profile::PlayStyle::Versus
         || idx == session_persisted_player_idx();
@@ -4880,6 +4886,52 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         crate::game::profile::update_show_hard_ex_score_for_side(side, hard_ex_enabled);
         crate::game::profile::update_show_fa_plus_pane_for_side(side, pane_enabled);
         crate::game::profile::update_fa_plus_10ms_blue_window_for_side(side, ten_ms_enabled);
+        crate::game::profile::update_split_15_10ms_for_side(side, split_15_10ms_enabled);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
+fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != ROW_RESULTS_EXTRAS {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 1 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.results_extras_active_mask[idx] & bit) != 0 {
+        state.results_extras_active_mask[idx] &= !bit;
+    } else {
+        state.results_extras_active_mask[idx] |= bit;
+    }
+
+    let track_early_judgments = (state.results_extras_active_mask[idx] & (1u8 << 0)) != 0;
+    state.player_profiles[idx].track_early_judgments = track_early_judgments;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_track_early_judgments_for_side(side, track_early_judgments);
     }
 
     audio::play_sfx("assets/sounds/change_value.ogg");

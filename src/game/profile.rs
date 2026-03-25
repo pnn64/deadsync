@@ -1267,6 +1267,9 @@ pub struct Profile {
     pub show_fa_plus_pane: bool,
     // 10ms blue Fantastic window for FA+ window display (Arrow Cloud: "SmallerWhite").
     pub fa_plus_10ms_blue_window: bool,
+    // zmod SplitWhites: keep the 15ms blue FA+ judgment base and overlay the
+    // white Fantastic art for 10ms-15ms hits. Visual only.
+    pub split_15_10ms: bool,
     // Track and display per-column early judgment counts on evaluation (zmod/Arrow Cloud semantics).
     pub track_early_judgments: bool,
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
@@ -1388,6 +1391,7 @@ impl Default for Profile {
             show_hard_ex_score: false,
             show_fa_plus_pane: false,
             fa_plus_10ms_blue_window: false,
+            split_15_10ms: false,
             track_early_judgments: false,
             custom_fantastic_window: false,
             custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
@@ -1845,6 +1849,10 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
             i32::from(default_profile.fa_plus_10ms_blue_window)
         ));
         content.push_str(&format!(
+            "SplitWhites = {}\n",
+            i32::from(default_profile.split_15_10ms)
+        ));
+        content.push_str(&format!(
             "TrackEarlyJudgments = {}\n",
             i32::from(default_profile.track_early_judgments)
         ));
@@ -2168,6 +2176,10 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "SmallerWhite={}\n",
         i32::from(profile.fa_plus_10ms_blue_window)
+    ));
+    content.push_str(&format!(
+        "SplitWhites={}\n",
+        i32::from(profile.split_15_10ms)
     ));
     content.push_str(&format!(
         "TrackEarlyJudgments={}\n",
@@ -2632,6 +2644,11 @@ fn load_for_side(side: PlayerSide) {
                 .get("PlayerOptions", "SmallerWhite")
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.fa_plus_10ms_blue_window, |v| v != 0);
+            profile.split_15_10ms = profile_conf
+                .get("PlayerOptions", "SplitWhites")
+                .or_else(|| profile_conf.get("PlayerOptions", "Split1510ms"))
+                .and_then(|s| s.parse::<u8>().ok())
+                .map_or(default_profile.split_15_10ms, |v| v != 0);
             profile.track_early_judgments = profile_conf
                 .get("PlayerOptions", "TrackEarlyJudgments")
                 .and_then(|s| s.parse::<u8>().ok())
@@ -4249,6 +4266,18 @@ pub fn update_track_early_judgments_for_side(side: PlayerSide, enabled: bool) {
             return;
         }
         profile.track_early_judgments = enabled;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_split_15_10ms_for_side(side: PlayerSide, enabled: bool) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.split_15_10ms == enabled {
+            return;
+        }
+        profile.split_15_10ms = enabled;
     }
     save_profile_ini_for_side(side);
 }

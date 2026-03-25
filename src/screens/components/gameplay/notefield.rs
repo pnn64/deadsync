@@ -15,7 +15,7 @@ use crate::game::gameplay::{
     effective_visibility_effects_for_player, effective_visual_effects_for_player,
     receptor_glow_visual_for_col, scroll_receptor_y,
 };
-use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, TimingWindow};
+use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
 use crate::game::parsing::noteskin::{
     ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
@@ -118,6 +118,7 @@ const Z_JUDGMENT_BACK: i16 = 95;
 const Z_ERROR_BAR_BG_FRONT: i16 = 180;
 const Z_ERROR_BAR_BG_BACK: i16 = 86;
 const Z_ERROR_BAR_BAND_FRONT: i16 = 181;
+const SPLIT_15_10MS_OVERLAY_ALPHA: f32 = 0.5;
 const Z_ERROR_BAR_BAND_BACK: i16 = 87;
 const Z_ERROR_BAR_LINE_FRONT: i16 = 182;
 const Z_ERROR_BAR_LINE_BACK: i16 = 88;
@@ -1382,6 +1383,41 @@ fn error_bar_color_for_window(window: TimingWindow, show_fa_plus_window: bool) -
         TimingWindow::W3 => color::JUDGMENT_RGBA[2],
         TimingWindow::W4 => color::JUDGMENT_RGBA[3],
         TimingWindow::W5 => color::JUDGMENT_RGBA[4],
+    }
+}
+
+#[inline(always)]
+fn split_15_10ms_active(profile: &profile::Profile, judgment: &Judgment) -> bool {
+    profile.show_fa_plus_window
+        && profile.split_15_10ms
+        && !profile.custom_fantastic_window
+        && judgment.grade == JudgeGrade::Fantastic
+        && judgment.time_error_ms.abs() > crate::game::timing::FA_PLUS_W010_MS
+        && judgment.time_error_ms.abs() <= crate::game::timing::FA_PLUS_W0_MS
+}
+
+#[inline(always)]
+fn tap_judgment_rows(profile: &profile::Profile, judgment: &Judgment) -> (usize, Option<usize>) {
+    match judgment.grade {
+        JudgeGrade::Fantastic => {
+            if split_15_10ms_active(profile, judgment) {
+                // zmod SplitWhites keeps the 15ms blue base, then overlays the
+                // white Fantastic art at half alpha for the 10ms-15ms slice.
+                (0, Some(1))
+            } else if profile.show_fa_plus_window {
+                match judgment.window {
+                    Some(TimingWindow::W0) => (0, None),
+                    _ => (1, None),
+                }
+            } else {
+                (0, None)
+            }
+        }
+        JudgeGrade::Excellent => (2, None),
+        JudgeGrade::Great => (3, None),
+        JudgeGrade::Decent => (4, None),
+        JudgeGrade::WayOff => (5, None),
+        JudgeGrade::Miss => (6, None),
     }
 }
 
@@ -6216,28 +6252,7 @@ pub fn build(
                     0.75 * (1.0 - ease_t)
                 } * judgment_zoom_mod;
                 let offset_sec = judgment.time_error_ms / 1000.0;
-                let use_fa_plus_window = profile.show_fa_plus_window;
-                // Map JudgeGrade + TimingWindow to a row index in the 7-row sheet:
-                //  row 0: FA+ Fantastic (W0)
-                //  row 1: regular Fantastic (W1)
-                //  row 2..6: Excellent..Miss, matching our existing layout.
-                let frame_row = match judgment.grade {
-                    JudgeGrade::Fantastic => {
-                        if use_fa_plus_window {
-                            match judgment.window {
-                                Some(TimingWindow::W0) => 0,
-                                _ => 1,
-                            }
-                        } else {
-                            0
-                        }
-                    }
-                    JudgeGrade::Excellent => 2,
-                    JudgeGrade::Great => 3,
-                    JudgeGrade::Decent => 4,
-                    JudgeGrade::WayOff => 5,
-                    JudgeGrade::Miss => 6,
-                };
+                let (frame_row, overlay_row) = tap_judgment_rows(profile, judgment);
                 let frame_offset = if offset_sec < 0.0 { 0 } else { 1 };
                 let columns = match profile.judgment_graphic {
                     profile::JudgmentGraphic::Censored => 1,
@@ -6293,6 +6308,14 @@ pub fn build(
                     align(0.5, 0.5): xy(playfield_center_x, judgment_y):
                     z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
                 ));
+                if let Some(overlay_row) = overlay_row {
+                    let overlay_index = (overlay_row * columns + col_index) as u32;
+                    hud_actors.push(act!(sprite(judgment_texture):
+                        align(0.5, 0.5): xy(playfield_center_x, judgment_y):
+                        z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
+                        diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
+                    ));
+                }
             }
         }
     }
@@ -6380,15 +6403,25 @@ mod tests {
         clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hud_y, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha,
         note_scale_height, note_world_z, note_x_extra, offset_center, push_transform_parts,
-        receptor_row_center, tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg,
-        turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
+        receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tipsy_y_extra,
+        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
+    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::NoteType;
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
     use crate::game::profile;
+
+    fn fantastic_judgment(window: TimingWindow, time_error_ms: f32) -> Judgment {
+        Judgment {
+            time_error_ms,
+            grade: JudgeGrade::Fantastic,
+            window: Some(window),
+            miss_because_held: false,
+        }
+    }
 
     #[test]
     fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
@@ -6820,6 +6853,50 @@ mod tests {
         let centered_y = 300.0;
         assert!((hud_y(normal_y, reverse_y, centered_y, false, 0.3) - 160.0).abs() <= 1e-6);
         assert!((hud_y(normal_y, reverse_y, centered_y, true, 0.3) - 230.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn tap_judgment_rows_overlay_white_for_split_15_10_hits() {
+        let profile = profile::Profile {
+            show_fa_plus_window: true,
+            split_15_10ms: true,
+            ..profile::Profile::default()
+        };
+        let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
+        assert_eq!(tap_judgment_rows(&profile, &judgment), (0, Some(1)));
+    }
+
+    #[test]
+    fn tap_judgment_rows_keep_plain_blue_when_split_is_off() {
+        let profile = profile::Profile {
+            show_fa_plus_window: true,
+            ..profile::Profile::default()
+        };
+        let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
+        assert_eq!(tap_judgment_rows(&profile, &judgment), (0, None));
+    }
+
+    #[test]
+    fn tap_judgment_rows_ignore_split_without_fa_plus_window() {
+        let profile = profile::Profile {
+            split_15_10ms: true,
+            ..profile::Profile::default()
+        };
+        let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
+        assert_eq!(tap_judgment_rows(&profile, &judgment), (0, None));
+    }
+
+    #[test]
+    fn tap_judgment_rows_defer_to_custom_window_over_fixed_split() {
+        let profile = profile::Profile {
+            show_fa_plus_window: true,
+            split_15_10ms: true,
+            custom_fantastic_window: true,
+            custom_fantastic_window_ms: 12,
+            ..profile::Profile::default()
+        };
+        let judgment = fantastic_judgment(TimingWindow::W1, 14.0);
+        assert_eq!(tap_judgment_rows(&profile, &judgment), (1, None));
     }
 
     #[test]
