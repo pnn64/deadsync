@@ -2,6 +2,9 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::ui::anim::{Step, TweenSeq, TweenState};
 
+const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+const FNV_PRIME: u64 = 0x100000001b3;
+
 struct Entry {
     seq: TweenSeq,
     last_seen_frame: u64,
@@ -64,18 +67,24 @@ pub fn materialize(id: u64, initial: TweenState, steps: &[Step]) -> TweenState {
     })
 }
 
-/// Stable-ish id for a macro callsite, with an optional per-instance discriminator.
-pub fn site_id(file: &'static str, line: u32, col: u32, extra: u64) -> u64 {
-    // FNV-1a 64
-    let mut h = 0xcbf29ce484222325u64;
-    for &b in file.as_bytes() {
-        h ^= u64::from(b);
-        h = h.wrapping_mul(0x100000001b3);
+/// Stable-ish hash for a macro callsite before any per-instance salt is mixed in.
+pub const fn site_base(file: &'static str, line: u32, col: u32) -> u64 {
+    let bytes = file.as_bytes();
+    let mut h = FNV_OFFSET;
+    let mut i = 0;
+    while i < bytes.len() {
+        h ^= bytes[i] as u64;
+        h = h.wrapping_mul(FNV_PRIME);
+        i += 1;
     }
-    h ^= (u64::from(line) << 32) ^ u64::from(col);
-    h = h.wrapping_mul(0x100000001b3);
-    h ^= extra;
-    h
+    h ^= ((line as u64) << 32) ^ (col as u64);
+    h.wrapping_mul(FNV_PRIME)
+}
+
+/// Stable-ish id for a macro callsite, with an optional per-instance discriminator.
+#[inline(always)]
+pub const fn site_id(site_base: u64, extra: u64) -> u64 {
+    site_base ^ extra
 }
 
 // Optional manual clear (e.g., on screen swaps if desired).
@@ -98,6 +107,17 @@ mod tests {
 
     fn registry_len() -> usize {
         REG.with(|r| r.borrow().map.len())
+    }
+
+    fn legacy_site_id(file: &'static str, line: u32, col: u32, extra: u64) -> u64 {
+        let mut h = FNV_OFFSET;
+        for &b in file.as_bytes() {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(FNV_PRIME);
+        }
+        h ^= (u64::from(line) << 32) ^ u64::from(col);
+        h = h.wrapping_mul(FNV_PRIME);
+        h ^ extra
     }
 
     #[test]
@@ -130,5 +150,17 @@ mod tests {
 
         tick(0.0);
         assert_eq!(registry_len(), 0);
+    }
+
+    #[test]
+    fn split_site_hash_matches_legacy_id() {
+        const FILE: &str = "deadsync/src/ui/dsl.rs";
+        const LINE: u32 = 614;
+        const COL: u32 = 9;
+        const EXTRA: u64 = 0x53434F4C464F524D;
+        const BASE: u64 = site_base(FILE, LINE, COL);
+        const ID: u64 = site_id(BASE, EXTRA);
+
+        assert_eq!(ID, legacy_site_id(FILE, LINE, COL, EXTRA));
     }
 }

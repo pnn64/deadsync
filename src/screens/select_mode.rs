@@ -145,7 +145,8 @@ fn exit_anim_t(exiting: bool) -> f32 {
 
     let mut init = anim::TweenState::default();
     init.x = 0.0;
-    let sid = runtime::site_id(file!(), line!(), column!(), 0x53504D4F44455849u64); // "SPMODEXI"
+    const SITE_BASE: u64 = runtime::site_base(file!(), line!(), column!());
+    let sid = runtime::site_id(SITE_BASE, 0x53504D4F44455849u64); // "SPMODEXI"
     runtime::materialize(sid, init, steps).x.max(0.0)
 }
 

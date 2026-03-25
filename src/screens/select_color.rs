@@ -298,7 +298,8 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
         let mut init = anim::TweenState::default();
         init.x = 0.0;
-        let sid = runtime::site_id(file!(), line!(), column!(), 0x53434F4C464F524Du64); // "SCOLFORM"
+        const SITE_BASE: u64 = runtime::site_base(file!(), line!(), column!());
+        let sid = runtime::site_id(SITE_BASE, 0x53434F4C464F524Du64); // "SCOLFORM"
         runtime::materialize(sid, init, steps).x.clamp(0.0, 1.0)
     }
 
@@ -319,10 +320,9 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
         let mut init = anim::TweenState::default();
         init.x = 0.0;
+        const SITE_BASE: u64 = runtime::site_base(file!(), line!(), column!());
         let sid = runtime::site_id(
-            file!(),
-            line!(),
-            column!(),
+            SITE_BASE,
             if wide {
                 0x53434F4C45584954u64
             } else {

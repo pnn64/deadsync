@@ -805,7 +805,8 @@ fn exit_anim_t(exiting: bool) -> f32 {
 
     let mut init = anim::TweenState::default();
     init.x = 0.0;
-    let sid = runtime::site_id(file!(), line!(), column!(), 0x53454C5052455849u64); // "SELPREXI"
+    const SITE_BASE: u64 = runtime::site_base(file!(), line!(), column!());
+    let sid = runtime::site_id(SITE_BASE, 0x53454C5052455849u64); // "SELPREXI"
     runtime::materialize(sid, init, steps).x.max(0.0)
 }
 
@@ -1070,7 +1071,8 @@ fn box_inner_alpha() -> f32 {
 
     let mut init = anim::TweenState::default();
     init.x = 0.0;
-    let sid = runtime::site_id(file!(), line!(), column!(), 0x53454C50524F4649u64); // "SELPROFI"
+    const SITE_BASE: u64 = runtime::site_base(file!(), line!(), column!());
+    let sid = runtime::site_id(SITE_BASE, 0x53454C50524F4649u64); // "SELPROFI"
     runtime::materialize(sid, init, steps).x.clamp(0.0, 1.0)
 }
 

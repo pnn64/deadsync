@@ -250,13 +250,7 @@ fn sprite_native_dims(
 /* ======================== SPRITE/QUAD CORE ======================== */
 
 #[inline(always)]
-fn build_sprite_like<'a>(
-    source: SpriteSource,
-    mods: &[Mod<'a>],
-    file: &'static str,
-    line: u32,
-    col: u32,
-) -> Actor {
+fn build_sprite_like<'a>(source: SpriteSource, mods: &[Mod<'a>], site_base: u64) -> Actor {
     // defaults
     let (mut x, mut y, mut w, mut h) = (0.0, 0.0, 0.0, 0.0);
     let (mut hx, mut vy) = (0.5, 0.5);
@@ -611,7 +605,7 @@ fn build_sprite_like<'a>(
         }
 
         let salt = auto_salt(&source, &init, steps);
-        let sid = runtime::site_id(file, line, col, salt);
+        let sid = runtime::site_id(site_base, salt);
         let s = runtime::materialize(sid, init, steps);
 
         x = s.x;
@@ -718,25 +712,23 @@ fn build_sprite_like<'a>(
 }
 
 #[inline(always)]
-pub fn sprite<'a, T: IntoTextureKey>(
-    tex: T,
-    mods: &[Mod<'a>],
-    f: &'static str,
-    l: u32,
-    c: u32,
-) -> Actor {
-    build_sprite_like(SpriteSource::Texture(tex.into_texture_key()), mods, f, l, c)
+pub fn sprite<'a, T: IntoTextureKey>(tex: T, mods: &[Mod<'a>], site_base: u64) -> Actor {
+    build_sprite_like(
+        SpriteSource::Texture(tex.into_texture_key()),
+        mods,
+        site_base,
+    )
 }
 
 #[inline(always)]
-pub fn quad<'a>(mods: &[Mod<'a>], f: &'static str, l: u32, c: u32) -> Actor {
-    build_sprite_like(SpriteSource::Solid, mods, f, l, c)
+pub fn quad<'a>(mods: &[Mod<'a>], site_base: u64) -> Actor {
+    build_sprite_like(SpriteSource::Solid, mods, site_base)
 }
 
 /* ============================== TEXT =============================== */
 
 #[inline(always)]
-pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Actor {
+pub fn text<'a>(mods: &[Mod<'a>], site_base: u64) -> Actor {
     let (mut x, mut y) = (0.0, 0.0);
     let (mut hx, mut vy) = (0.5, 0.5);
     let mut color = [1.0, 1.0, 1.0, 1.0];
@@ -973,7 +965,7 @@ pub fn text<'a>(mods: &[Mod<'a>], file: &'static str, line: u32, col: u32) -> Ac
             h
         };
 
-        let sid = runtime::site_id(file, line, col, salt);
+        let sid = runtime::site_id(site_base, salt);
         let s = runtime::materialize(sid, init, steps);
 
         // Apply tweened state
@@ -1090,7 +1082,8 @@ macro_rules! act {
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
         if !__tw.is_empty(){ __mods.push($crate::ui::dsl::Mod::Tween(&__tw)); }
-        $crate::ui::dsl::sprite($tex, &__mods, file!(), line!(), column!())
+        const __SITE_BASE: u64 = $crate::ui::runtime::site_base(file!(), line!(), column!());
+        $crate::ui::dsl::sprite($tex, &__mods, __SITE_BASE)
     }};
     (quad: $($tail:tt)+) => {{
         let mut __mods = ::std::vec::Vec::new();
@@ -1099,7 +1092,8 @@ macro_rules! act {
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
         if !__tw.is_empty(){ __mods.push($crate::ui::dsl::Mod::Tween(&__tw)); }
-        $crate::ui::dsl::quad(&__mods, file!(), line!(), column!())
+        const __SITE_BASE: u64 = $crate::ui::runtime::site_base(file!(), line!(), column!());
+        $crate::ui::dsl::quad(&__mods, __SITE_BASE)
     }};
     (text: $($tail:tt)+) => {{
         let mut __mods = ::std::vec::Vec::new();
@@ -1108,7 +1102,8 @@ macro_rules! act {
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
         if !__tw.is_empty(){ __mods.push($crate::ui::dsl::Mod::Tween(&__tw)); }
-        $crate::ui::dsl::text(&__mods, file!(), line!(), column!())
+        const __SITE_BASE: u64 = $crate::ui::runtime::site_base(file!(), line!(), column!());
+        $crate::ui::dsl::text(&__mods, __SITE_BASE)
     }};
 }
 
