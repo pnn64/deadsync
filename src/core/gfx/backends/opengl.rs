@@ -1,134 +1,100 @@
 use crate::core::gfx::{
-    BlendMode, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    Texture as RendererTexture,
+    BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, Texture as RendererTexture, TextureHandle,
+    draw_prep::{
+        self, DrawOp, GlScratch, SpriteInstanceRaw, TexturedMeshInstanceRaw, TexturedMeshVertexRaw,
+    },
 };
 use crate::core::space::ortho_for_window;
 use cgmath::Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
 use glutin::{
-    config::ConfigTemplateBuilder,
-    context::{ContextAttributesBuilder, PossiblyCurrentContext},
+    config::{Api as ConfigApi, Config, ConfigTemplateBuilder},
+    context::{ContextAttributes, ContextAttributesBuilder, PossiblyCurrentContext},
     display::{Display, DisplayApiPreference},
     prelude::*,
-    surface::{Surface, SurfaceAttributesBuilder, WindowSurface},
+    surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
 };
 use image::RgbaImage;
 use log::{debug, info, warn};
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
 use std::{
-    collections::HashMap, error::Error, ffi::CStr, hash::Hasher, mem, num::NonZeroU32, sync::Arc,
+    collections::HashMap, error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant,
 };
-use twox_hash::XxHash64;
 use winit::window::Window;
+
+#[cfg(all(unix, not(target_os = "macos")))]
+use glutin::context::{ContextApi, GlProfile, Version};
+
+const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
+const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GlApi {
+    Desktop,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    Gles,
+}
+
+impl GlApi {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Desktop => "desktop OpenGL",
+            #[cfg(all(unix, not(target_os = "macos")))]
+            Self::Gles => "OpenGL ES",
+        }
+    }
+
+    const fn shaders(self) -> ShaderSet {
+        match self {
+            Self::Desktop => ShaderSet {
+                sprite_vert: include_str!("../shaders/opengl_shader.vert"),
+                sprite_frag: include_str!("../shaders/opengl_shader.frag"),
+                mesh_vert: include_str!("../shaders/opengl_mesh.vert"),
+                mesh_frag: include_str!("../shaders/opengl_mesh.frag"),
+                tmesh_vert: include_str!("../shaders/opengl_tmesh.vert"),
+                tmesh_frag: include_str!("../shaders/opengl_tmesh.frag"),
+            },
+            #[cfg(all(unix, not(target_os = "macos")))]
+            Self::Gles => ShaderSet {
+                sprite_vert: include_str!("../shaders/opengl_shader_gles.vert"),
+                sprite_frag: include_str!("../shaders/opengl_shader_gles.frag"),
+                mesh_vert: include_str!("../shaders/opengl_mesh_gles.vert"),
+                mesh_frag: include_str!("../shaders/opengl_mesh_gles.frag"),
+                tmesh_vert: include_str!("../shaders/opengl_tmesh_gles.vert"),
+                tmesh_frag: include_str!("../shaders/opengl_tmesh_gles.frag"),
+            },
+        }
+    }
+
+    const fn screenshot_read_buffer(self) -> u32 {
+        match self {
+            Self::Desktop => glow::FRONT,
+            #[cfg(all(unix, not(target_os = "macos")))]
+            Self::Gles => glow::BACK,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ShaderSet {
+    sprite_vert: &'static str,
+    sprite_frag: &'static str,
+    mesh_vert: &'static str,
+    mesh_frag: &'static str,
+    tmesh_vert: &'static str,
+    tmesh_frag: &'static str,
+}
 
 // A handle to an OpenGL texture on the GPU.
 #[derive(Debug, Clone, Copy)]
 pub struct Texture(pub glow::Texture);
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct TexturedMeshVertexRaw {
-    pos: [f32; 2],
-    uv: [f32; 2],
-    color: [f32; 4],
-    tex_matrix_scale: [f32; 2],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct TexturedMeshInstanceRaw {
-    model_col0: [f32; 4],
-    model_col1: [f32; 4],
-    model_col2: [f32; 4],
-    model_col3: [f32; 4],
-    uv_scale: [f32; 2],
-    uv_offset: [f32; 2],
-    uv_tex_shift: [f32; 2],
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TMeshGeomKey {
-    ptr: usize,
-    len: usize,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TMeshCacheKey {
-    hash: u64,
-    len: u32,
-}
-
-#[derive(Clone, Copy)]
-enum FrameTMeshGeom {
-    Dynamic {
-        vertex_start: u32,
-        vertex_count: u32,
-    },
-    Cached {
-        cache_id: u64,
-        vertex_count: u32,
-        buffer: glow::Buffer,
-    },
-}
-
-struct TMeshCacheEntry {
-    id: u64,
-    vertex_count: u32,
-    bytes: u64,
-    last_used_frame: u64,
-    buffer: glow::Buffer,
-}
-
-struct TMeshSeenEntry {
-    hits: u8,
-    last_seen_frame: u64,
-}
-
-#[derive(Clone, Copy, Default)]
-struct TMeshFrameDebug {
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
-}
-
-#[derive(Default)]
-struct TMeshDebugAccum {
-    frames: u32,
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
-}
-
-#[derive(Clone, Copy)]
-struct TexturedMeshRun {
-    vertex_start: u32,
-    vertex_count: u32,
-    dynamic_geom: bool,
-    geom_key: u64,
-    cached_vertex_buffer: Option<glow::Buffer>,
-    instance_start: u32,
-    instance_count: u32,
-    mode: MeshMode,
-    blend: BlendMode,
-    texture: glow::Texture,
-    camera: u8,
-}
-
-#[derive(Clone, Copy)]
-enum DrawOp {
-    Sprite(usize),
-    Mesh(usize),
-    TexturedMesh(TexturedMeshRun),
-}
-
 pub struct State {
     pub gl: glow::Context,
     gl_surface: Surface<WindowSurface>,
     gl_context: PossiblyCurrentContext,
+    api: GlApi,
     program: glow::Program,
     mesh_program: glow::Program,
     tmesh_program: glow::Program,
@@ -136,7 +102,6 @@ pub struct State {
     mesh_mvp_location: UniformLocation,
     tmesh_mvp_location: UniformLocation,
     tmesh_texture_location: UniformLocation,
-    color_location: UniformLocation,
     texture_location: UniformLocation,
     projection: Matrix4<f32>,
     window_size: (u32, u32),
@@ -144,28 +109,15 @@ pub struct State {
     shared_vao: glow::VertexArray,
     _shared_vbo: glow::Buffer,
     _shared_ibo: glow::Buffer,
+    shared_instance_vbo: glow::Buffer,
     index_count: i32,
     mesh_vao: glow::VertexArray,
     mesh_vbo: glow::Buffer,
     tmesh_vao: glow::VertexArray,
     tmesh_vbo: glow::Buffer,
     tmesh_instance_vbo: glow::Buffer,
-    scratch_tmesh_vertices: Vec<TexturedMeshVertexRaw>,
-    scratch_tmesh_instances: Vec<TexturedMeshInstanceRaw>,
-    scratch_ops: Vec<DrawOp>,
-    tmesh_cache_entries: HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    tmesh_cache_seen: HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    tmesh_cache_frame: u64,
-    tmesh_cache_total_bytes: u64,
-    next_tmesh_cache_id: u64,
-    tmesh_debug_enabled: bool,
-    tmesh_debug_accum: TMeshDebugAccum,
-    uv_scale_location: UniformLocation,
-    uv_offset_location: UniformLocation,
-    local_offset_location: UniformLocation,
-    local_offset_rot_location: UniformLocation,
-    edge_fade_location: UniformLocation,
-    instanced_location: UniformLocation,
+    prep: GlScratch<glow::Texture>,
+    vsync_enabled: bool,
 }
 
 pub fn init(
@@ -178,26 +130,23 @@ pub fn init(
         debug!("OpenGL debug context requested.");
     }
 
-    let (gl_surface, gl_context, gl) =
+    let (gl_surface, gl_context, gl, api) =
         create_opengl_context(&window, vsync_enabled, gfx_debug_enabled)?;
+    info!("OpenGL context API: {}", api.label());
     log_opengl_driver_info(&gl);
-    let (
-        program,
-        mvp_location,
-        color_location,
-        texture_location,
-        uv_scale_location,
-        uv_offset_location,
-        local_offset_location,
-        local_offset_rot_location,
-        edge_fade_location,
-        instanced_location,
-    ) = create_graphics_program(&gl)?;
-    let (mesh_program, mesh_mvp_location) = create_mesh_program(&gl)?;
-    let (tmesh_program, tmesh_mvp_location, tmesh_texture_location) = create_tmesh_program(&gl)?;
+    let shaders = api.shaders();
+    let (program, mvp_location, texture_location) =
+        create_graphics_program(&gl, shaders.sprite_vert, shaders.sprite_frag)?;
+    let (mesh_program, mesh_mvp_location) =
+        create_mesh_program(&gl, shaders.mesh_vert, shaders.mesh_frag)?;
+    let (tmesh_program, tmesh_mvp_location, tmesh_texture_location) =
+        create_tmesh_program(&gl, shaders.tmesh_vert, shaders.tmesh_frag)?;
 
     // Create shared static unit quad + index buffer.
-    let (shared_vao, _shared_vbo, _shared_ibo, index_count) = unsafe {
+    // SAFETY: the OpenGL context created above is current on this thread for the
+    // duration of initialization, so creating and configuring these GL objects is
+    // valid here.
+    let (shared_vao, _shared_vbo, _shared_ibo, shared_instance_vbo, index_count) = unsafe {
         const UNIT_QUAD_VERTICES: [[f32; 4]; 4] = [
             [-0.5, -0.5, 0.0, 1.0],
             [0.5, -0.5, 1.0, 1.0],
@@ -209,6 +158,7 @@ pub fn init(
         let vao = gl.create_vertex_array()?;
         let vbo = gl.create_buffer()?;
         let ibo = gl.create_buffer()?;
+        let instance_vbo = gl.create_buffer()?;
 
         gl.bind_vertex_array(Some(vao));
 
@@ -240,11 +190,89 @@ pub fn init(
             (2 * mem::size_of::<f32>()) as i32,
         );
 
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
+        gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
+
+        let inst_stride = mem::size_of::<SpriteInstanceRaw>() as i32;
+        let vec2_size = (2 * mem::size_of::<f32>()) as i32;
+        let vec4_size = (4 * mem::size_of::<f32>()) as i32;
+        gl.enable_vertex_attrib_array(2);
+        gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, inst_stride, 0);
+        gl.vertex_attrib_divisor(2, 1);
+        gl.enable_vertex_attrib_array(3);
+        gl.vertex_attrib_pointer_f32(3, 2, glow::FLOAT, false, inst_stride, vec4_size);
+        gl.vertex_attrib_divisor(3, 1);
+        gl.enable_vertex_attrib_array(4);
+        gl.vertex_attrib_pointer_f32(4, 2, glow::FLOAT, false, inst_stride, vec4_size + vec2_size);
+        gl.vertex_attrib_divisor(4, 1);
+        gl.enable_vertex_attrib_array(5);
+        gl.vertex_attrib_pointer_f32(
+            5,
+            4,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            vec4_size + 2 * vec2_size,
+        );
+        gl.vertex_attrib_divisor(5, 1);
+        gl.enable_vertex_attrib_array(6);
+        gl.vertex_attrib_pointer_f32(
+            6,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            2 * vec4_size + 2 * vec2_size,
+        );
+        gl.vertex_attrib_divisor(6, 1);
+        gl.enable_vertex_attrib_array(7);
+        gl.vertex_attrib_pointer_f32(
+            7,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            2 * vec4_size + 3 * vec2_size,
+        );
+        gl.vertex_attrib_divisor(7, 1);
+        gl.enable_vertex_attrib_array(8);
+        gl.vertex_attrib_pointer_f32(
+            8,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            2 * vec4_size + 4 * vec2_size,
+        );
+        gl.vertex_attrib_divisor(8, 1);
+        gl.enable_vertex_attrib_array(9);
+        gl.vertex_attrib_pointer_f32(
+            9,
+            2,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            2 * vec4_size + 5 * vec2_size,
+        );
+        gl.vertex_attrib_divisor(9, 1);
+        gl.enable_vertex_attrib_array(10);
+        gl.vertex_attrib_pointer_f32(
+            10,
+            4,
+            glow::FLOAT,
+            false,
+            inst_stride,
+            2 * vec4_size + 6 * vec2_size,
+        );
+        gl.vertex_attrib_divisor(10, 1);
+
         gl.bind_vertex_array(None);
 
-        (vao, vbo, ibo, QUAD_INDICES.len() as i32)
+        (vao, vbo, ibo, instance_vbo, QUAD_INDICES.len() as i32)
     };
 
+    // SAFETY: the OpenGL context is still current on this thread, so creating and
+    // configuring the mesh VAO/VBO pair is valid here.
     let (mesh_vao, mesh_vbo) = unsafe {
         let vao = gl.create_vertex_array()?;
         let vbo = gl.create_buffer()?;
@@ -270,6 +298,8 @@ pub fn init(
         gl.bind_vertex_array(None);
         (vao, vbo)
     };
+    // SAFETY: the OpenGL context is still current on this thread, so creating and
+    // configuring the textured-mesh VAO/VBO pair is valid here.
     let (tmesh_vao, tmesh_vbo, tmesh_instance_vbo) = unsafe {
         let vao = gl.create_vertex_array()?;
         let vbo = gl.create_buffer()?;
@@ -361,19 +391,13 @@ pub fn init(
     let initial_size = window.inner_size();
     let projection = ortho_for_window(initial_size.width, initial_size.height);
 
+    // SAFETY: the OpenGL context is current and all program/texture handles used
+    // below were created successfully in this function.
     unsafe {
         gl.viewport(0, 0, initial_size.width as i32, initial_size.height as i32);
         gl.use_program(Some(program));
         gl.active_texture(glow::TEXTURE0);
         gl.uniform_1_i32(Some(&texture_location), 0);
-        gl.uniform_1_i32(Some(&instanced_location), 0);
-
-        // Set default values for uniforms
-        gl.uniform_2_f32(Some(&uv_scale_location), 1.0, 1.0);
-        gl.uniform_2_f32(Some(&uv_offset_location), 0.0, 0.0);
-        gl.uniform_2_f32(Some(&local_offset_location), 0.0, 0.0);
-        gl.uniform_2_f32(Some(&local_offset_rot_location), 0.0, 1.0);
-        gl.uniform_4_f32(Some(&edge_fade_location), 0.0, 0.0, 0.0, 0.0);
         gl.use_program(None);
     }
 
@@ -381,6 +405,7 @@ pub fn init(
         gl,
         gl_surface,
         gl_context,
+        api,
         program,
         mesh_program,
         tmesh_program,
@@ -388,39 +413,48 @@ pub fn init(
         mesh_mvp_location,
         tmesh_mvp_location,
         tmesh_texture_location,
-        color_location,
         texture_location,
         projection,
         window_size: (initial_size.width, initial_size.height),
         shared_vao,
         _shared_vbo,
         _shared_ibo,
+        shared_instance_vbo,
         index_count,
         mesh_vao,
         mesh_vbo,
         tmesh_vao,
         tmesh_vbo,
         tmesh_instance_vbo,
-        scratch_tmesh_vertices: Vec::with_capacity(1024),
-        scratch_tmesh_instances: Vec::with_capacity(256),
-        scratch_ops: Vec::with_capacity(64),
-        tmesh_cache_entries: HashMap::new(),
-        tmesh_cache_seen: HashMap::new(),
-        tmesh_cache_frame: 0,
-        tmesh_cache_total_bytes: 0,
-        next_tmesh_cache_id: 1,
-        tmesh_debug_enabled: gfx_debug_enabled,
-        tmesh_debug_accum: TMeshDebugAccum::default(),
-        uv_scale_location,
-        uv_offset_location,
-        local_offset_location,
-        local_offset_rot_location,
-        edge_fade_location,
-        instanced_location,
+        prep: GlScratch::with_capacity(256, 1024, 256, 64),
+        vsync_enabled,
     };
 
     info!("OpenGL backend initialized successfully.");
     Ok(state)
+}
+
+pub fn set_vsync_enabled(state: &mut State, enabled: bool) {
+    if state.vsync_enabled == enabled {
+        return;
+    }
+    state.vsync_enabled = enabled;
+    let interval = if enabled {
+        SwapInterval::Wait(std::num::NonZeroU32::new(1).unwrap())
+    } else {
+        SwapInterval::DontWait
+    };
+    if let Err(e) = state
+        .gl_surface
+        .set_swap_interval(&state.gl_context, interval)
+    {
+        warn!("Failed to update OpenGL swap interval (VSync): {:?}", e);
+    } else {
+        debug!(
+            "Updated OpenGL VSync to {}",
+            if enabled { "on" } else { "off" }
+        );
+    }
 }
 
 fn log_opengl_driver_info(gl: &glow::Context) {
@@ -433,6 +467,8 @@ fn log_opengl_driver_info(gl: &glow::Context) {
             trimmed.to_string()
         }
     }
+    // SAFETY: driver string queries only read state from the current OpenGL
+    // context and do not retain Rust pointers.
     unsafe {
         let vendor = norm(gl.get_parameter_string(glow::VENDOR));
         let renderer = norm(gl.get_parameter_string(glow::RENDERER));
@@ -458,6 +494,9 @@ pub fn create_texture(
         SamplerFilter::Linear => glow::LINEAR,
         SamplerFilter::Nearest => glow::NEAREST,
     };
+    // SAFETY: the caller provides a live OpenGL context, and `image.as_raw()`
+    // exposes initialized RGBA bytes that stay alive for the duration of the GL
+    // upload call.
     unsafe {
         let t = gl.create_texture()?;
         gl.bind_texture(glow::TEXTURE_2D, Some(t));
@@ -504,30 +543,61 @@ pub fn create_texture(
     }
 }
 
+pub fn update_texture(
+    gl: &glow::Context,
+    texture: &Texture,
+    image: &RgbaImage,
+) -> Result<(), String> {
+    let w = i32::try_from(image.width()).map_err(|_| "texture width overflow".to_string())?;
+    let h = i32::try_from(image.height()).map_err(|_| "texture height overflow".to_string())?;
+    let raw = image.as_raw();
+    // SAFETY: `texture.0` is a live OpenGL texture handle owned by this backend,
+    // and `raw` exposes initialized RGBA bytes that stay alive for the duration of
+    // the update call.
+    unsafe {
+        gl.bind_texture(glow::TEXTURE_2D, Some(texture.0));
+        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+        gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, 0);
+        gl.pixel_store_i32(glow::UNPACK_SKIP_ROWS, 0);
+        gl.pixel_store_i32(glow::UNPACK_SKIP_PIXELS, 0);
+        gl.tex_sub_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            0,
+            0,
+            w,
+            h,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            PixelUnpackData::Slice(Some(raw)),
+        );
+        gl.bind_texture(glow::TEXTURE_2D, None);
+    }
+    Ok(())
+}
+
 #[inline(always)]
 pub const fn request_screenshot(_state: &mut State) {}
 
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<String, RendererTexture>,
-) -> Result<u32, Box<dyn Error>> {
-    let (width, height) = state.window_size;
-    if width == 0 || height == 0 {
-        return Ok(0);
+    textures: &HashMap<TextureHandle, RendererTexture>,
+    apply_present_back_pressure: bool,
+) -> Result<DrawStats, Box<dyn Error>> {
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
     }
 
-    #[inline(always)]
-    fn lookup_texture_case_insensitive<'a>(
-        textures: &'a HashMap<String, RendererTexture>,
-        key: &str,
-    ) -> Option<&'a RendererTexture> {
-        if let Some(tex) = textures.get(key) {
-            return Some(tex);
-        }
-        textures
-            .iter()
-            .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
+    let (width, height) = state.window_size;
+    if width == 0 || height == 0 {
+        return Ok(DrawStats::default());
     }
 
     #[inline(always)]
@@ -535,6 +605,8 @@ pub fn draw(
         if *last == Some(want) {
             return;
         }
+        // SAFETY: blend-state calls only mutate GL state on the current context and
+        // do not retain Rust pointers.
         unsafe {
             gl.enable(glow::BLEND);
             match want {
@@ -559,189 +631,36 @@ pub fn draw(
         *last = Some(want);
     }
 
-    state.tmesh_cache_frame = state.tmesh_cache_frame.wrapping_add(1);
-    prune_tmesh_seen_entries(&mut state.tmesh_cache_seen, state.tmesh_cache_frame);
-    let mut tmesh_debug_frame = TMeshFrameDebug::default();
-    tmesh_debug_frame.cache_evictions =
-        tmesh_debug_frame
-            .cache_evictions
-            .saturating_add(evict_tmesh_cache_entries(
-                &state.gl,
-                &mut state.tmesh_cache_entries,
-                &mut state.tmesh_cache_total_bytes,
-                state.tmesh_cache_frame,
-            ) as u64);
-
+    let backend_prepare_started = Instant::now();
     {
-        let objects_len = render_list.objects.len();
-        let tmesh_vertices = &mut state.scratch_tmesh_vertices;
-        tmesh_vertices.clear();
-        let want_tmesh = objects_len.saturating_mul(4);
-        if tmesh_vertices.capacity() < want_tmesh {
-            tmesh_vertices.reserve(want_tmesh - tmesh_vertices.capacity());
-        }
-
-        let tmesh_instances = &mut state.scratch_tmesh_instances;
-        tmesh_instances.clear();
-        if tmesh_instances.capacity() < objects_len {
-            tmesh_instances.reserve(objects_len - tmesh_instances.capacity());
-        }
-
-        let ops = &mut state.scratch_ops;
-        ops.clear();
-        if ops.capacity() < objects_len {
-            ops.reserve(objects_len - ops.capacity());
-        }
-
-        let cache_frame = state.tmesh_cache_frame;
-        let tmesh_cache_entries = &mut state.tmesh_cache_entries;
-        let tmesh_cache_seen = &mut state.tmesh_cache_seen;
-        let next_tmesh_cache_id = &mut state.next_tmesh_cache_id;
-        let tmesh_cache_total_bytes = &mut state.tmesh_cache_total_bytes;
-        let mut tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom> =
-            HashMap::with_capacity(objects_len);
-
-        for (idx, obj) in render_list.objects.iter().enumerate() {
-            match &obj.object_type {
-                ObjectType::Sprite { .. } => ops.push(DrawOp::Sprite(idx)),
-                ObjectType::Mesh { vertices, .. } => {
-                    if !vertices.is_empty() {
-                        ops.push(DrawOp::Mesh(idx));
-                    }
-                }
-                ObjectType::TexturedMesh {
-                    texture_id,
-                    vertices,
-                    mode,
-                    uv_scale,
-                    uv_offset,
-                    uv_tex_shift,
-                } => {
-                    if *mode != MeshMode::Triangles || vertices.is_empty() {
-                        continue;
-                    }
-
-                    let Some(RendererTexture::OpenGL(gl_tex)) =
-                        lookup_texture_case_insensitive(textures, texture_id.as_ref())
-                    else {
-                        continue;
-                    };
-
-                    let geom_key = TMeshGeomKey {
-                        ptr: vertices.as_ptr() as usize,
-                        len: vertices.len(),
-                    };
-                    let geom = if let Some(&geom) = tmesh_geom.get(&geom_key) {
-                        geom
-                    } else {
-                        let geom = if let Some(cached) = try_get_or_promote_cached_tmesh_geom(
-                            &state.gl,
-                            tmesh_cache_entries,
-                            tmesh_cache_seen,
-                            next_tmesh_cache_id,
-                            tmesh_cache_total_bytes,
-                            &mut tmesh_debug_frame,
-                            cache_frame,
-                            vertices,
-                        ) {
-                            cached
-                        } else {
-                            let start = tmesh_vertices.len() as u32;
-                            tmesh_vertices.reserve(vertices.len());
-                            for v in vertices.iter() {
-                                tmesh_vertices.push(TexturedMeshVertexRaw {
-                                    pos: v.pos,
-                                    uv: v.uv,
-                                    tex_matrix_scale: v.tex_matrix_scale,
-                                    color: v.color,
-                                });
-                            }
-                            tmesh_debug_frame.dynamic_upload_vertices = tmesh_debug_frame
-                                .dynamic_upload_vertices
-                                .saturating_add(vertices.len() as u64);
-                            FrameTMeshGeom::Dynamic {
-                                vertex_start: start,
-                                vertex_count: vertices.len() as u32,
-                            }
-                        };
-                        tmesh_geom.insert(geom_key, geom);
-                        geom
-                    };
-                    let (
-                        vertex_start,
-                        vertex_count,
-                        dynamic_geom,
-                        geom_run_key,
-                        cached_vertex_buffer,
-                    ) = match geom {
-                        FrameTMeshGeom::Dynamic {
-                            vertex_start,
-                            vertex_count,
-                        } => (
-                            vertex_start,
-                            vertex_count,
-                            true,
-                            (1u64 << 63) | u64::from(vertex_start),
-                            None,
-                        ),
-                        FrameTMeshGeom::Cached {
-                            cache_id,
-                            vertex_count,
-                            buffer,
-                        } => (0, vertex_count, false, cache_id, Some(buffer)),
-                    };
-
-                    let instance_start = tmesh_instances.len() as u32;
-                    let model: [[f32; 4]; 4] = obj.transform.into();
-                    tmesh_instances.push(TexturedMeshInstanceRaw {
-                        model_col0: model[0],
-                        model_col1: model[1],
-                        model_col2: model[2],
-                        model_col3: model[3],
-                        uv_scale: *uv_scale,
-                        uv_offset: *uv_offset,
-                        uv_tex_shift: *uv_tex_shift,
-                    });
-
-                    if let Some(DrawOp::TexturedMesh(last)) = ops.last_mut()
-                        && last.texture == gl_tex.0
-                        && last.blend == obj.blend
-                        && last.camera == obj.camera
-                        && last.mode == *mode
-                        && last.dynamic_geom == dynamic_geom
-                        && last.geom_key == geom_run_key
-                        && last.instance_start + last.instance_count == instance_start
-                    {
-                        last.instance_count += 1;
-                        continue;
-                    }
-
-                    ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
-                        vertex_start,
-                        vertex_count,
-                        dynamic_geom,
-                        geom_key: geom_run_key,
-                        cached_vertex_buffer,
-                        instance_start,
-                        instance_count: 1,
-                        mode: *mode,
-                        blend: obj.blend,
-                        texture: gl_tex.0,
-                        camera: obj.camera,
-                    }));
-                }
-            }
-        }
+        let prep = &mut state.prep;
+        let _prep_stats = draw_prep::prepare_gl(render_list, prep, |texture_handle| match textures
+            .get(&texture_handle)
+        {
+            Some(RendererTexture::OpenGL(gl_tex)) => Some(gl_tex.0),
+            _ => None,
+        });
     }
+    let mut stats = DrawStats::default();
+    stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
     let mut vertices: u32 = 0;
 
+    let backend_record_started = Instant::now();
+    // SAFETY: the OpenGL context in `state` is current on this thread for drawing,
+    // and all buffer uploads reference slices that remain alive for the duration of
+    // each call.
     unsafe {
         let gl = &state.gl;
 
         let c = render_list.clear_color;
-        gl.clear_color(c[0], c[1], c[2], c[3]);
+        gl.color_mask(true, true, true, true);
+        gl.clear_color(c[0], c[1], c[2], 1.0);
         gl.clear(glow::COLOR_BUFFER_BIT);
+        // Keep the presented window surface opaque even when EGL hands us an
+        // alpha-bearing default framebuffer. Otherwise Linux compositors can
+        // treat the game as translucent and the whole scene looks ghosted.
+        gl.color_mask(true, true, true, false);
 
         gl.enable(glow::BLEND);
         gl.blend_equation(glow::FUNC_ADD);
@@ -751,55 +670,44 @@ pub fn draw(
 
         let mut last_bound_tex: Option<glow::Texture> = None;
         let mut last_blend = Some(BlendMode::Alpha);
-        let mut last_uv_scale: Option<[f32; 2]> = None;
-        let mut last_uv_offset: Option<[f32; 2]> = None;
-        let mut last_local_offset: Option<[f32; 2]> = None;
-        let mut last_local_offset_rot: Option<[f32; 2]> = None;
-        let mut last_color: Option<[f32; 4]> = None;
-        let mut last_edge_fade: Option<[f32; 4]> = None;
         let mut last_prog: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
+        let mut last_sprite_instance_start: Option<u32> = None;
         let mut last_tmesh_instance_start: Option<u32> = None;
         let mut last_tmesh_geom_key: Option<u64> = None;
 
-        if !state.scratch_tmesh_vertices.is_empty() {
+        if !state.prep.sprite_instances.is_empty() {
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
+            gl.buffer_data_u8_slice(
+                glow::ARRAY_BUFFER,
+                bytemuck::cast_slice(state.prep.sprite_instances.as_slice()),
+                glow::DYNAMIC_DRAW,
+            );
+        }
+        if !state.prep.tmesh_vertices.is_empty() {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
-                bytemuck::cast_slice(state.scratch_tmesh_vertices.as_slice()),
+                bytemuck::cast_slice(state.prep.tmesh_vertices.as_slice()),
                 glow::DYNAMIC_DRAW,
             );
         }
-        if !state.scratch_tmesh_instances.is_empty() {
+        if !state.prep.tmesh_instances.is_empty() {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_instance_vbo));
             gl.buffer_data_u8_slice(
                 glow::ARRAY_BUFFER,
-                bytemuck::cast_slice(state.scratch_tmesh_instances.as_slice()),
+                bytemuck::cast_slice(state.prep.tmesh_instances.as_slice()),
                 glow::DYNAMIC_DRAW,
             );
         }
 
-        for op in state.scratch_ops.iter().copied() {
+        for op in state.prep.ops.iter().copied() {
             match op {
-                DrawOp::Sprite(idx) => {
-                    let obj = &render_list.objects[idx];
-                    let ObjectType::Sprite {
-                        texture_id,
-                        tint,
-                        uv_scale,
-                        uv_offset,
-                        local_offset,
-                        local_offset_rot_sin_cos,
-                        edge_fade,
-                    } = &obj.object_type
-                    else {
-                        continue;
-                    };
-
-                    apply_blend(gl, obj.blend, &mut last_blend);
+                DrawOp::Sprite(run) => {
+                    apply_blend(gl, run.blend, &mut last_blend);
 
                     let cam = render_list
                         .cameras
-                        .get(obj.camera as usize)
+                        .get(run.camera as usize)
                         .copied()
                         .unwrap_or(state.projection);
 
@@ -807,73 +715,105 @@ pub fn draw(
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(state.shared_vao));
                         gl.uniform_1_i32(Some(&state.texture_location), 0);
-                        gl.uniform_1_i32(Some(&state.instanced_location), 0);
                         last_prog = Some(0);
+                        last_sprite_instance_start = None;
                         last_tmesh_geom_key = None;
                     }
 
-                    let mvp_array: [[f32; 4]; 4] = (cam * obj.transform).into();
+                    if last_sprite_instance_start != Some(run.instance_start) {
+                        let inst_stride = std::mem::size_of::<SpriteInstanceRaw>() as i32;
+                        let vec2_size = (2 * std::mem::size_of::<f32>()) as i32;
+                        let vec4_size = (4 * std::mem::size_of::<f32>()) as i32;
+                        let base = (run.instance_start as i32) * inst_stride;
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_instance_vbo));
+                        gl.vertex_attrib_pointer_f32(2, 4, glow::FLOAT, false, inst_stride, base);
+                        gl.vertex_attrib_pointer_f32(
+                            3,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + vec4_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            4,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + vec4_size + vec2_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            5,
+                            4,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + vec4_size + 2 * vec2_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            6,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 2 * vec4_size + 2 * vec2_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            7,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 2 * vec4_size + 3 * vec2_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            8,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 2 * vec4_size + 4 * vec2_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            9,
+                            2,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 2 * vec4_size + 5 * vec2_size,
+                        );
+                        gl.vertex_attrib_pointer_f32(
+                            10,
+                            4,
+                            glow::FLOAT,
+                            false,
+                            inst_stride,
+                            base + 2 * vec4_size + 6 * vec2_size,
+                        );
+                        last_sprite_instance_start = Some(run.instance_start);
+                    }
+
+                    let mvp_array: [[f32; 4]; 4] = cam.into();
                     gl.uniform_matrix_4_f32_slice(
                         Some(&state.mvp_location),
                         false,
                         bytemuck::cast_slice(&mvp_array),
                     );
 
-                    if let Some(RendererTexture::OpenGL(gl_tex)) =
-                        lookup_texture_case_insensitive(textures, texture_id.as_ref())
-                    {
-                        if last_bound_tex != Some(gl_tex.0) {
-                            gl.bind_texture(glow::TEXTURE_2D, Some(gl_tex.0));
-                            last_bound_tex = Some(gl_tex.0);
-                        }
-                        if last_uv_scale != Some(*uv_scale) {
-                            gl.uniform_2_f32(
-                                Some(&state.uv_scale_location),
-                                uv_scale[0],
-                                uv_scale[1],
-                            );
-                            last_uv_scale = Some(*uv_scale);
-                        }
-                        if last_uv_offset != Some(*uv_offset) {
-                            gl.uniform_2_f32(
-                                Some(&state.uv_offset_location),
-                                uv_offset[0],
-                                uv_offset[1],
-                            );
-                            last_uv_offset = Some(*uv_offset);
-                        }
-                        if last_local_offset != Some(*local_offset) {
-                            gl.uniform_2_f32(
-                                Some(&state.local_offset_location),
-                                local_offset[0],
-                                local_offset[1],
-                            );
-                            last_local_offset = Some(*local_offset);
-                        }
-                        if last_local_offset_rot != Some(*local_offset_rot_sin_cos) {
-                            gl.uniform_2_f32(
-                                Some(&state.local_offset_rot_location),
-                                local_offset_rot_sin_cos[0],
-                                local_offset_rot_sin_cos[1],
-                            );
-                            last_local_offset_rot = Some(*local_offset_rot_sin_cos);
-                        }
-                        if last_color != Some(*tint) {
-                            gl.uniform_4_f32_slice(Some(&state.color_location), tint);
-                            last_color = Some(*tint);
-                        }
-                        if last_edge_fade != Some(*edge_fade) {
-                            gl.uniform_4_f32_slice(Some(&state.edge_fade_location), edge_fade);
-                            last_edge_fade = Some(*edge_fade);
-                        }
-                        gl.draw_elements(
-                            glow::TRIANGLES,
-                            state.index_count,
-                            glow::UNSIGNED_SHORT,
-                            0,
-                        );
-                        vertices += 4;
+                    if last_bound_tex != Some(run.texture) {
+                        gl.bind_texture(glow::TEXTURE_2D, Some(run.texture));
+                        last_bound_tex = Some(run.texture);
                     }
+
+                    gl.draw_elements_instanced(
+                        glow::TRIANGLES,
+                        state.index_count,
+                        glow::UNSIGNED_SHORT,
+                        0,
+                        run.instance_count as i32,
+                    );
+                    vertices = vertices.saturating_add(4 * run.instance_count);
                 }
                 DrawOp::Mesh(idx) => {
                     let obj = &render_list.objects[idx];
@@ -933,15 +873,7 @@ pub fn draw(
 
                     if last_tmesh_geom_key != Some(run.geom_key) {
                         let stride = std::mem::size_of::<TexturedMeshVertexRaw>() as i32;
-                        let vertex_buffer = if run.dynamic_geom {
-                            Some(state.tmesh_vbo)
-                        } else {
-                            run.cached_vertex_buffer
-                        };
-                        let Some(buffer) = vertex_buffer else {
-                            continue;
-                        };
-                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
+                        gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.tmesh_vbo));
                         gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, stride, 0);
                         gl.vertex_attrib_pointer_f32(
                             1,
@@ -1048,14 +980,9 @@ pub fn draw(
                     let prim = match run.mode {
                         MeshMode::Triangles => glow::TRIANGLES,
                     };
-                    let draw_start = if run.dynamic_geom {
-                        run.vertex_start as i32
-                    } else {
-                        0
-                    };
                     gl.draw_arrays_instanced(
                         prim,
-                        draw_start,
+                        run.vertex_start as i32,
                         run.vertex_count as i32,
                         run.instance_count as i32,
                     );
@@ -1068,10 +995,37 @@ pub fn draw(
         gl.bind_vertex_array(None);
         gl.use_program(None);
     }
+    stats.backend_record_us = elapsed_us_since(backend_record_started);
 
+    let present_started = Instant::now();
     state.gl_surface.swap_buffers(&state.gl_context)?;
-    push_tmesh_debug_sample(state, tmesh_debug_frame);
-    Ok(vertices)
+    stats.present_us = elapsed_us_since(present_started);
+    if apply_present_back_pressure {
+        // Mirror ITGmania's uncapped GL path: block here so the CPU does not
+        // run frames far ahead of the GPU when swap interval is disabled.
+        let wait_started = Instant::now();
+        // SAFETY: `finish` only blocks on the current GL context and does not
+        // retain Rust pointers.
+        unsafe {
+            state.gl.finish();
+        }
+        stats.gpu_wait_us = elapsed_us_since(wait_started);
+    }
+    if stats.present_us >= OPENGL_PRESENT_SPIKE_US || stats.gpu_wait_us >= OPENGL_GPU_WAIT_SPIKE_US
+    {
+        let (width, height) = state.window_size;
+        debug!(
+            "OpenGL present spike: swap_ms={:.3} gpu_wait_ms={:.3} back_pressure={} vertices={} viewport={}x{}",
+            stats.present_us as f32 / 1000.0,
+            stats.gpu_wait_us as f32 / 1000.0,
+            apply_present_back_pressure,
+            vertices,
+            width,
+            height
+        );
+    }
+    stats.vertices = vertices;
+    Ok(stats)
 }
 
 pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
@@ -1084,9 +1038,11 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 
     let byte_len = width as usize * height as usize * 4;
     let mut pixels = vec![0u8; byte_len];
+    // SAFETY: the current OpenGL context writes RGBA bytes into the owned `pixels`
+    // buffer for the exact viewport rectangle requested.
     unsafe {
         state.gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
-        state.gl.read_buffer(glow::FRONT);
+        state.gl.read_buffer(state.api.screenshot_read_buffer());
         state.gl.read_pixels(
             0,
             0,
@@ -1119,186 +1075,6 @@ fn flip_rows_rgba_in_place(width: usize, height: usize, pixels: &mut [u8]) {
     }
 }
 
-#[inline(always)]
-fn tmesh_cache_key(vertices: &[crate::core::gfx::TexturedMeshVertex]) -> TMeshCacheKey {
-    let mut hasher = XxHash64::with_seed(0);
-    hasher.write(bytemuck::cast_slice(vertices));
-    TMeshCacheKey {
-        hash: hasher.finish(),
-        len: vertices.len() as u32,
-    }
-}
-
-#[inline(always)]
-fn build_tmesh_vertex_raw(
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Vec<TexturedMeshVertexRaw> {
-    let mut out = Vec::with_capacity(vertices.len());
-    for v in vertices {
-        out.push(TexturedMeshVertexRaw {
-            pos: v.pos,
-            uv: v.uv,
-            tex_matrix_scale: v.tex_matrix_scale,
-            color: v.color,
-        });
-    }
-    out
-}
-
-fn try_get_or_promote_cached_tmesh_geom(
-    gl: &glow::Context,
-    cache_entries: &mut HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    next_cache_id: &mut u64,
-    cache_total_bytes: &mut u64,
-    debug_frame: &mut TMeshFrameDebug,
-    frame: u64,
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Option<FrameTMeshGeom> {
-    if vertices.len() < TMESH_CACHE_MIN_VERTS || vertices.is_empty() {
-        return None;
-    }
-
-    let cache_key = tmesh_cache_key(vertices);
-    if let Some(entry) = cache_entries.get_mut(&cache_key) {
-        entry.last_used_frame = frame;
-        debug_frame.cache_hits = debug_frame.cache_hits.saturating_add(1);
-        return Some(FrameTMeshGeom::Cached {
-            cache_id: entry.id,
-            vertex_count: entry.vertex_count,
-            buffer: entry.buffer,
-        });
-    }
-    debug_frame.cache_misses = debug_frame.cache_misses.saturating_add(1);
-
-    let promote = {
-        let seen = cache_seen.entry(cache_key).or_insert(TMeshSeenEntry {
-            hits: 0,
-            last_seen_frame: frame,
-        });
-        if frame.saturating_sub(seen.last_seen_frame) > TMESH_CACHE_SEEN_TTL_FRAMES {
-            seen.hits = 0;
-        }
-        seen.last_seen_frame = frame;
-        seen.hits = seen.hits.saturating_add(1);
-        seen.hits >= TMESH_CACHE_PROMOTE_HITS
-    };
-    if !promote {
-        return None;
-    }
-    debug_frame.cache_promotions = debug_frame.cache_promotions.saturating_add(1);
-
-    let raw = build_tmesh_vertex_raw(vertices);
-    let bytes = (raw.len() * std::mem::size_of::<TexturedMeshVertexRaw>()) as u64;
-    let buffer = match unsafe { gl.create_buffer() } {
-        Ok(buffer) => buffer,
-        Err(err) => {
-            warn!("OpenGL textured mesh cache allocation failed: {err}");
-            return None;
-        }
-    };
-    unsafe {
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
-        gl.buffer_data_u8_slice(
-            glow::ARRAY_BUFFER,
-            bytemuck::cast_slice(raw.as_slice()),
-            glow::STATIC_DRAW,
-        );
-    }
-
-    let cache_id = *next_cache_id;
-    *next_cache_id = (*next_cache_id).wrapping_add(1).max(1);
-    *cache_total_bytes = cache_total_bytes.saturating_add(bytes);
-    cache_entries.insert(
-        cache_key,
-        TMeshCacheEntry {
-            id: cache_id,
-            vertex_count: raw.len() as u32,
-            bytes,
-            last_used_frame: frame,
-            buffer,
-        },
-    );
-    debug_frame.cache_evictions =
-        debug_frame
-            .cache_evictions
-            .saturating_add(
-                evict_tmesh_cache_entries(gl, cache_entries, cache_total_bytes, frame) as u64,
-            );
-    Some(FrameTMeshGeom::Cached {
-        cache_id,
-        vertex_count: raw.len() as u32,
-        buffer,
-    })
-}
-
-fn evict_tmesh_cache_entries(
-    gl: &glow::Context,
-    cache_entries: &mut HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    cache_total_bytes: &mut u64,
-    frame: u64,
-) -> u32 {
-    let mut evicted: u32 = 0;
-    while *cache_total_bytes > TMESH_CACHE_MAX_BYTES {
-        let Some(oldest_key) = cache_entries
-            .iter()
-            .filter_map(|(key, entry)| (entry.last_used_frame != frame).then_some((*key, entry)))
-            .min_by_key(|(_, entry)| entry.last_used_frame)
-            .map(|(key, _)| key)
-        else {
-            break;
-        };
-        if let Some(entry) = cache_entries.remove(&oldest_key) {
-            *cache_total_bytes = cache_total_bytes.saturating_sub(entry.bytes);
-            unsafe {
-                gl.delete_buffer(entry.buffer);
-            }
-            evicted = evicted.saturating_add(1);
-        }
-    }
-    evicted
-}
-
-fn prune_tmesh_seen_entries(cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>, frame: u64) {
-    cache_seen.retain(|_, seen| {
-        frame.saturating_sub(seen.last_seen_frame) <= TMESH_CACHE_SEEN_TTL_FRAMES
-    });
-}
-
-fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
-    if !state.tmesh_debug_enabled {
-        return;
-    }
-    let accum = &mut state.tmesh_debug_accum;
-    accum.frames = accum.frames.saturating_add(1);
-    accum.cache_hits = accum.cache_hits.saturating_add(frame.cache_hits);
-    accum.cache_misses = accum.cache_misses.saturating_add(frame.cache_misses);
-    accum.cache_promotions = accum
-        .cache_promotions
-        .saturating_add(frame.cache_promotions);
-    accum.cache_evictions = accum.cache_evictions.saturating_add(frame.cache_evictions);
-    accum.dynamic_upload_vertices = accum
-        .dynamic_upload_vertices
-        .saturating_add(frame.dynamic_upload_vertices);
-
-    if accum.frames < TMESH_DEBUG_LOG_EVERY_FRAMES {
-        return;
-    }
-    let frames = u64::from(accum.frames).max(1);
-    let dyn_avg = accum.dynamic_upload_vertices / frames;
-    debug!(
-        "OpenGL tmesh-cache: hit={} miss={} promote={} evict={} dyn_upload_vtx/frame={} cache_entries={} cache_mb={:.2}",
-        accum.cache_hits,
-        accum.cache_misses,
-        accum.cache_promotions,
-        accum.cache_evictions,
-        dyn_avg,
-        state.tmesh_cache_entries.len(),
-        (state.tmesh_cache_total_bytes as f64) / (1024.0 * 1024.0)
-    );
-    *accum = TMeshDebugAccum::default();
-}
-
 pub fn resize(state: &mut State, width: u32, height: u32) {
     if width == 0 || height == 0 {
         warn!("Ignoring resize to zero dimensions.");
@@ -1308,6 +1084,8 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     let h = NonZeroU32::new(height).unwrap();
 
     state.gl_surface.resize(&state.gl_context, w, h);
+    // SAFETY: the OpenGL context remains current for this surface, so updating the
+    // viewport to match the resized window is valid here.
     unsafe {
         state.gl.viewport(0, 0, width as i32, height as i32);
     }
@@ -1317,18 +1095,16 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
 
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up OpenGL resources...");
+    // SAFETY: all GL object handles below were created by this backend and are
+    // still owned by `state`, so deleting them once during cleanup is valid.
     unsafe {
-        for (_, entry) in state.tmesh_cache_entries.drain() {
-            state.gl.delete_buffer(entry.buffer);
-        }
-        state.tmesh_cache_seen.clear();
-        state.tmesh_cache_total_bytes = 0;
         state.gl.delete_program(state.program);
         state.gl.delete_program(state.mesh_program);
         state.gl.delete_program(state.tmesh_program);
         state.gl.delete_vertex_array(state.shared_vao);
         state.gl.delete_buffer(state._shared_vbo);
         state.gl.delete_buffer(state._shared_ibo);
+        state.gl.delete_buffer(state.shared_instance_vbo);
         state.gl.delete_vertex_array(state.mesh_vao);
         state.gl.delete_buffer(state.mesh_vbo);
         state.gl.delete_vertex_array(state.tmesh_vao);
@@ -1337,12 +1113,6 @@ pub fn cleanup(state: &mut State) {
     }
     info!("OpenGL resources cleaned up.");
 }
-
-const TMESH_CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
-const TMESH_CACHE_MIN_VERTS: usize = 32;
-const TMESH_CACHE_PROMOTE_HITS: u8 = 2;
-const TMESH_CACHE_SEEN_TTL_FRAMES: u64 = 1800;
-const TMESH_DEBUG_LOG_EVERY_FRAMES: u32 = 300;
 
 fn create_opengl_context(
     window: &Window,
@@ -1353,6 +1123,7 @@ fn create_opengl_context(
         Surface<WindowSurface>,
         PossiblyCurrentContext,
         glow::Context,
+        GlApi,
     ),
     Box<dyn Error>,
 > {
@@ -1362,6 +1133,8 @@ fn create_opengl_context(
     let (display, vsync_logic) = {
         debug!("Using WGL for OpenGL context.");
         let preference = DisplayApiPreference::Wgl(None);
+        // SAFETY: `display_handle` comes from the live winit window and remains
+        // valid for the duration of context creation.
         let display = unsafe { Display::new(display_handle, preference)? };
 
         let vsync_logic = move |display: &Display| {
@@ -1370,6 +1143,9 @@ fn create_opengl_context(
             let proc_name = c"wglSwapIntervalEXT";
             let proc = display.get_proc_address(proc_name);
             if !proc.is_null() {
+                // SAFETY: `proc` was looked up specifically as `wglSwapIntervalEXT`
+                // and is only called when non-null, so this cast matches the WGL
+                // extension signature.
                 let f: SwapIntervalFn = unsafe { std::mem::transmute(proc) };
                 let interval = i32::from(vsync_enabled);
                 if f(interval) != 0 {
@@ -1403,6 +1179,8 @@ fn create_opengl_context(
         };
 
         // The rest of the logic is common for macOS and Linux/BSD
+        // SAFETY: `display_handle` comes from the live winit window and remains
+        // valid for the duration of context creation.
         let display = unsafe { Display::new(display_handle, preference)? };
 
         let vsync_logic = move |_display: &Display,
@@ -1427,58 +1205,132 @@ fn create_opengl_context(
         (display, vsync_logic)
     };
 
-    let template = ConfigTemplateBuilder::new()
-        .with_alpha_size(0)
-        .with_stencil_size(8)
-        .with_transparency(false)
-        .build();
-
-    let config = unsafe { display.find_configs(template)?.next() }
-        .ok_or("Failed to find a suitable GL config")?;
-
     let (width, height): (u32, u32) = window.inner_size().into();
     let raw_window_handle = window.window_handle()?.as_raw();
-    let surface_attributes = SurfaceAttributesBuilder::<WindowSurface>::new().build(
-        raw_window_handle,
-        NonZeroU32::new(width).unwrap(),
-        NonZeroU32::new(height).unwrap(),
-    );
-    let surface = unsafe { display.create_window_surface(&config, &surface_attributes)? };
+    #[cfg(target_os = "windows")]
+    let (surface, context, api) = {
+        let config = find_config(
+            &display,
+            raw_window_handle,
+            ConfigApi::OPENGL,
+            "desktop OpenGL",
+        )?;
+        let context_attributes = ContextAttributesBuilder::new()
+            .with_debug(gfx_debug_enabled)
+            .build(Some(raw_window_handle));
+        let (surface, context) = create_window_surface_context(
+            &display,
+            &config,
+            raw_window_handle,
+            width,
+            height,
+            context_attributes,
+        )?;
+        (surface, context, GlApi::Desktop)
+    };
 
-    let context_attributes = ContextAttributesBuilder::new()
-        .with_debug(gfx_debug_enabled)
-        .build(Some(raw_window_handle));
-    let context =
-        unsafe { display.create_context(&config, &context_attributes)? }.make_current(&surface)?;
+    #[cfg(target_os = "macos")]
+    let (surface, context, api) = {
+        let config = find_config(
+            &display,
+            raw_window_handle,
+            ConfigApi::OPENGL,
+            "desktop OpenGL",
+        )?;
+        let context_attributes = ContextAttributesBuilder::new()
+            .with_debug(gfx_debug_enabled)
+            .build(Some(raw_window_handle));
+        let (surface, context) = create_window_surface_context(
+            &display,
+            &config,
+            raw_window_handle,
+            width,
+            height,
+            context_attributes,
+        )?;
+        (surface, context, GlApi::Desktop)
+    };
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let (surface, context, api) = {
+        let try_desktop =
+            || -> Result<(Surface<WindowSurface>, PossiblyCurrentContext), Box<dyn Error>> {
+                let config = find_config(
+                    &display,
+                    raw_window_handle,
+                    ConfigApi::OPENGL,
+                    "desktop OpenGL",
+                )?;
+                let context_attributes = ContextAttributesBuilder::new()
+                    .with_debug(gfx_debug_enabled)
+                    .with_profile(GlProfile::Core)
+                    .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
+                    .build(Some(raw_window_handle));
+                create_window_surface_context(
+                    &display,
+                    &config,
+                    raw_window_handle,
+                    width,
+                    height,
+                    context_attributes,
+                )
+            };
+
+        match try_desktop() {
+            Ok((surface, context)) => (surface, context, GlApi::Desktop),
+            Err(desktop_err) => {
+                warn!(
+                    "Desktop OpenGL context creation failed over EGL: {desktop_err}. Retrying with OpenGL ES 3.0."
+                );
+                let config = find_config(
+                    &display,
+                    raw_window_handle,
+                    ConfigApi::GLES3,
+                    "OpenGL ES 3.x",
+                )?;
+                let context_attributes = ContextAttributesBuilder::new()
+                    .with_debug(gfx_debug_enabled)
+                    .with_context_api(ContextApi::Gles(Some(Version::new(3, 0))))
+                    .build(Some(raw_window_handle));
+                let (surface, context) = create_window_surface_context(
+                    &display,
+                    &config,
+                    raw_window_handle,
+                    width,
+                    height,
+                    context_attributes,
+                )
+                .map_err(|gles_err| {
+                    std::io::Error::other(format!(
+                        "Failed to create an OpenGL ES 3.0 context after desktop OpenGL fallback. desktop={desktop_err}; gles={gles_err}"
+                    ))
+                })?;
+                (surface, context, GlApi::Gles)
+            }
+        }
+    };
 
     #[cfg(target_os = "windows")]
     vsync_logic(&display);
     #[cfg(not(target_os = "windows"))]
     vsync_logic(&display, &surface, &context);
 
+    // SAFETY: `display.get_proc_address` is valid while the display/context are
+    // alive, and `glow` only stores the function pointers returned by this loader.
     unsafe {
         let gl = glow::Context::from_loader_function_cstr(|s: &CStr| display.get_proc_address(s));
-        Ok((surface, context, gl))
+        Ok((surface, context, gl, api))
     }
 }
 
 fn create_graphics_program(
     gl: &glow::Context,
-) -> Result<
-    (
-        glow::Program,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-        UniformLocation,
-    ),
-    String,
-> {
+    vert_src: &str,
+    frag_src: &str,
+) -> Result<(glow::Program, UniformLocation, UniformLocation), String> {
+    // SAFETY: shader/program creation and linkage only touch the current OpenGL
+    // context, and all temporary shader/program handles are cleaned up on every
+    // exit path below.
     unsafe {
         let program = gl.create_program()?;
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
@@ -1493,14 +1345,8 @@ fn create_graphics_program(
             Ok(sh)
         };
 
-        let vert = compile(
-            glow::VERTEX_SHADER,
-            include_str!("../shaders/opengl_shader.vert"),
-        )?;
-        let frag = compile(
-            glow::FRAGMENT_SHADER,
-            include_str!("../shaders/opengl_shader.frag"),
-        )?;
+        let vert = compile(glow::VERTEX_SHADER, vert_src)?;
+        let frag = compile(glow::FRAGMENT_SHADER, frag_src)?;
 
         gl.attach_shader(program, vert);
         gl.attach_shader(program, frag);
@@ -1524,31 +1370,20 @@ fn create_graphics_program(
                 .ok_or_else(|| name.to_string())
         };
         let mvp_location = get("u_model_view_proj")?;
-        let color_location = get("u_color")?;
         let texture_location = get("u_texture")?;
-        let uv_scale_location = get("u_uv_scale")?;
-        let uv_offset_location = get("u_uv_offset")?;
-        let local_offset_location = get("u_local_offset")?;
-        let local_offset_rot_location = get("u_local_offset_rot_sin_cos")?;
-        let edge_fade_location = get("u_edge_fade")?;
-        let instanced_location = get("u_instanced")?;
 
-        Ok((
-            program,
-            mvp_location,
-            color_location,
-            texture_location,
-            uv_scale_location,
-            uv_offset_location,
-            local_offset_location,
-            local_offset_rot_location,
-            edge_fade_location,
-            instanced_location,
-        ))
+        Ok((program, mvp_location, texture_location))
     }
 }
 
-fn create_mesh_program(gl: &glow::Context) -> Result<(glow::Program, UniformLocation), String> {
+fn create_mesh_program(
+    gl: &glow::Context,
+    vert_src: &str,
+    frag_src: &str,
+) -> Result<(glow::Program, UniformLocation), String> {
+    // SAFETY: shader/program creation and linkage only touch the current OpenGL
+    // context, and all temporary shader/program handles are cleaned up on every
+    // exit path below.
     unsafe {
         let program = gl.create_program()?;
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
@@ -1563,14 +1398,8 @@ fn create_mesh_program(gl: &glow::Context) -> Result<(glow::Program, UniformLoca
             Ok(sh)
         };
 
-        let vert = compile(
-            glow::VERTEX_SHADER,
-            include_str!("../shaders/opengl_mesh.vert"),
-        )?;
-        let frag = compile(
-            glow::FRAGMENT_SHADER,
-            include_str!("../shaders/opengl_mesh.frag"),
-        )?;
+        let vert = compile(glow::VERTEX_SHADER, vert_src)?;
+        let frag = compile(glow::FRAGMENT_SHADER, frag_src)?;
 
         gl.attach_shader(program, vert);
         gl.attach_shader(program, frag);
@@ -1599,7 +1428,12 @@ fn create_mesh_program(gl: &glow::Context) -> Result<(glow::Program, UniformLoca
 
 fn create_tmesh_program(
     gl: &glow::Context,
+    vert_src: &str,
+    frag_src: &str,
 ) -> Result<(glow::Program, UniformLocation, UniformLocation), String> {
+    // SAFETY: shader/program creation and linkage only touch the current OpenGL
+    // context, and all temporary shader/program handles are cleaned up on every
+    // exit path below.
     unsafe {
         let program = gl.create_program()?;
         let compile = |ty, src: &str| -> Result<glow::Shader, String> {
@@ -1614,14 +1448,8 @@ fn create_tmesh_program(
             Ok(sh)
         };
 
-        let vert = compile(
-            glow::VERTEX_SHADER,
-            include_str!("../shaders/opengl_tmesh.vert"),
-        )?;
-        let frag = compile(
-            glow::FRAGMENT_SHADER,
-            include_str!("../shaders/opengl_tmesh.frag"),
-        )?;
+        let vert = compile(glow::VERTEX_SHADER, vert_src)?;
+        let frag = compile(glow::FRAGMENT_SHADER, frag_src)?;
 
         gl.attach_shader(program, vert);
         gl.attach_shader(program, frag);
@@ -1651,14 +1479,48 @@ fn create_tmesh_program(
     }
 }
 
-mod bytemuck {
-    #[inline(always)]
-    pub fn cast_slice<T, U>(slice: &[T]) -> &[U] {
-        let (prefix, mid, suffix) = unsafe { slice.align_to::<U>() };
-        debug_assert!(
-            prefix.is_empty() && suffix.is_empty(),
-            "cast_slice: misaligned cast"
-        );
-        mid
-    }
+fn find_config(
+    display: &Display,
+    raw_window_handle: RawWindowHandle,
+    api: ConfigApi,
+    label: &str,
+) -> Result<Config, Box<dyn Error>> {
+    let template = ConfigTemplateBuilder::new()
+        .with_api(api)
+        .with_alpha_size(0)
+        .with_depth_size(0)
+        .with_stencil_size(0)
+        .with_transparency(false)
+        .compatible_with_native_window(raw_window_handle)
+        .build();
+    // SAFETY: `display` is live and `template` contains the raw window handle
+    // borrowed from the live winit window for the duration of this call.
+    unsafe { display.find_configs(template)?.next() }
+        .ok_or_else(|| std::io::Error::other(format!("Failed to find a suitable {label} config")))
+        .map_err(Into::into)
+}
+
+fn create_window_surface_context(
+    display: &Display,
+    config: &Config,
+    raw_window_handle: RawWindowHandle,
+    width: u32,
+    height: u32,
+    context_attributes: ContextAttributes,
+) -> Result<(Surface<WindowSurface>, PossiblyCurrentContext), Box<dyn Error>> {
+    let surface_attributes = SurfaceAttributesBuilder::<WindowSurface>::new().build(
+        raw_window_handle,
+        NonZeroU32::new(width).unwrap(),
+        NonZeroU32::new(height).unwrap(),
+    );
+    // SAFETY: `display`, `config`, and `surface_attributes` all refer to the live
+    // window and chosen GL config for this thread, so creating the window surface
+    // is valid here.
+    let surface = unsafe { display.create_window_surface(config, &surface_attributes)? };
+    // SAFETY: `display`, `config`, and `context_attributes` refer to the same live
+    // window/config pair as the surface above, so creating and making the GL
+    // context current on that surface is valid here.
+    let context =
+        unsafe { display.create_context(config, &context_attributes)? }.make_current(&surface)?;
+    Ok((surface, context))
 }

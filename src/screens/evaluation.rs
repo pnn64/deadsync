@@ -3,11 +3,12 @@ use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::Screen;
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::{
-    eval_grades, evaluation as eval_panes, heart_bg, pad_display, screen_bar, select_shared,
+    evaluation::{self as eval_panes, eval_grades},
+    shared::{banner as shared_banner, heart_bg, mode_pads, screen_bar, timers},
 };
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -52,10 +53,12 @@ const GRAPH_BARELY_LIFE_MAX: f32 = 0.1;
 const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
 const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
 const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
+const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
+const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
+const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
-// Keep QR hidden until score submit/upload exists end-to-end.
-const ENABLE_GS_QR_PANE: bool = false;
+const ENABLE_GS_QR_PANE: bool = true;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const BANNER_FALLBACK_KEYS: [&str; 12] = [
     "banner1.png",
@@ -156,6 +159,35 @@ fn cached_record_text(is_machine: bool, rank: u32) -> Arc<str> {
 }
 
 #[inline(always)]
+const fn submit_record_text(banner: scores::GrooveStatsSubmitRecordBanner) -> &'static str {
+    match banner {
+        scores::GrooveStatsSubmitRecordBanner::PersonalBest => "Personal Best!",
+        scores::GrooveStatsSubmitRecordBanner::WorldRecord => "World Record!",
+        scores::GrooveStatsSubmitRecordBanner::WorldRecordEx => "World Record! (EX)",
+    }
+}
+
+#[inline(always)]
+const fn groovestats_submit_status_text(status: scores::GrooveStatsSubmitUiStatus) -> &'static str {
+    match status {
+        scores::GrooveStatsSubmitUiStatus::Submitting => "Submitting ...",
+        scores::GrooveStatsSubmitUiStatus::Submitted => "Submitted!",
+        scores::GrooveStatsSubmitUiStatus::SubmitFailed => "Submit Failed",
+        scores::GrooveStatsSubmitUiStatus::TimedOut => "Timed Out - F5 Retry",
+    }
+}
+
+#[inline(always)]
+const fn arrowcloud_submit_status_text(status: scores::ArrowCloudSubmitUiStatus) -> &'static str {
+    match status {
+        scores::ArrowCloudSubmitUiStatus::Submitting => "Submitting ...",
+        scores::ArrowCloudSubmitUiStatus::Submitted => "Submitted!",
+        scores::ArrowCloudSubmitUiStatus::SubmitFailed => "Submit Failed",
+        scores::ArrowCloudSubmitUiStatus::TimedOut => "Timed Out - F5 Retry",
+    }
+}
+
+#[inline(always)]
 fn cached_difficulty_text(style_label: &'static str, difficulty: &'static str) -> Arc<str> {
     cached_text(&DIFFICULTY_TEXT_CACHE, (style_label, difficulty), || {
         format!("{style_label} / {difficulty}")
@@ -182,12 +214,18 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 pub struct ScoreInfo {
     pub song: Arc<SongData>,
     pub chart: Arc<ChartData>,
+    pub side: profile::PlayerSide,
     pub profile_name: String,
+    pub score_valid: bool,
+    pub disqualified: bool,
+    pub groovestats: scores::GrooveStatsEvalState,
+    pub itl: scores::ItlEvalState,
     pub judgment_counts: HashMap<JudgeGrade, u32>,
     pub score_percent: f64,
     pub grade: scores::Grade,
     pub speed_mod: ScrollSpeedSetting,
     pub hands_achieved: u32,
+    pub hands_total: u32,
     pub holds_held: u32,
     pub holds_total: u32,
     pub rolls_held: u32,
@@ -226,6 +264,7 @@ pub struct ScoreInfo {
     pub show_ex_score: bool,
     pub show_hard_ex_score: bool,
     pub show_fa_plus_pane: bool,
+    pub track_early_judgments: bool,
     pub machine_records: Vec<scores::LeaderboardEntry>,
     pub machine_record_highlight_rank: Option<u32>,
     pub personal_records: Vec<scores::LeaderboardEntry>,
@@ -242,15 +281,52 @@ pub struct ColumnJudgments {
     pub w4: u32,
     pub w5: u32,
     pub miss: u32,
+    pub early_w1: u32,
+    pub early_w2: u32,
+    pub early_w3: u32,
     pub early_w4: u32,
     pub early_w5: u32,
+    pub early_total_w0: u32,
+    pub early_total_w1: u32,
+    pub early_total_w2: u32,
+    pub early_total_w3: u32,
+    pub early_total_w4: u32,
+    pub early_total_w5: u32,
     pub held_miss: u32,
+}
+
+#[inline(always)]
+fn add_early_total(
+    slot: &mut ColumnJudgments,
+    judgment: &crate::game::judgment::Judgment,
+    include_bad: bool,
+) {
+    if matches!(
+        judgment.window,
+        Some(crate::game::judgment::TimingWindow::W0)
+    ) {
+        slot.early_total_w0 = slot.early_total_w0.saturating_add(1);
+        return;
+    }
+    match judgment.grade {
+        JudgeGrade::Fantastic => slot.early_total_w1 = slot.early_total_w1.saturating_add(1),
+        JudgeGrade::Excellent => slot.early_total_w2 = slot.early_total_w2.saturating_add(1),
+        JudgeGrade::Great => slot.early_total_w3 = slot.early_total_w3.saturating_add(1),
+        JudgeGrade::Decent if include_bad => {
+            slot.early_total_w4 = slot.early_total_w4.saturating_add(1)
+        }
+        JudgeGrade::WayOff if include_bad => {
+            slot.early_total_w5 = slot.early_total_w5.saturating_add(1)
+        }
+        _ => {}
+    }
 }
 
 fn compute_column_judgments(
     notes: &[crate::game::note::Note],
     cols_per_player: usize,
     col_offset: usize,
+    show_fa_plus_window: bool,
 ) -> Vec<ColumnJudgments> {
     let cols = cols_per_player.max(0);
     let mut out = vec![ColumnJudgments::default(); cols];
@@ -276,10 +352,25 @@ fn compute_column_judgments(
                 Some(crate::game::judgment::TimingWindow::W0) => {
                     slot.w0 = slot.w0.saturating_add(1)
                 }
-                _ => slot.w1 = slot.w1.saturating_add(1),
+                _ => {
+                    slot.w1 = slot.w1.saturating_add(1);
+                    if show_fa_plus_window && j.time_error_ms < 0.0 {
+                        slot.early_w1 = slot.early_w1.saturating_add(1);
+                    }
+                }
             },
-            JudgeGrade::Excellent => slot.w2 = slot.w2.saturating_add(1),
-            JudgeGrade::Great => slot.w3 = slot.w3.saturating_add(1),
+            JudgeGrade::Excellent => {
+                slot.w2 = slot.w2.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w2 = slot.early_w2.saturating_add(1);
+                }
+            }
+            JudgeGrade::Great => {
+                slot.w3 = slot.w3.saturating_add(1);
+                if j.time_error_ms < 0.0 {
+                    slot.early_w3 = slot.early_w3.saturating_add(1);
+                }
+            }
             JudgeGrade::Decent => {
                 slot.w4 = slot.w4.saturating_add(1);
                 if j.time_error_ms < 0.0 {
@@ -299,9 +390,93 @@ fn compute_column_judgments(
                 }
             }
         }
+
+        if let Some(early) = note.early_result.as_ref() {
+            add_early_total(slot, j, false);
+            add_early_total(slot, early, true);
+        }
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_column_judgments;
+    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use crate::game::note::{Note, NoteType};
+
+    fn tap_note(column: usize, result: Judgment, early_result: Option<Judgment>) -> Note {
+        Note {
+            beat: 0.0,
+            quantization_idx: 0,
+            column,
+            note_type: NoteType::Tap,
+            row_index: 0,
+            result: Some(result),
+            early_result,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    fn judgment(grade: JudgeGrade, window: Option<TimingWindow>, time_error_ms: f32) -> Judgment {
+        Judgment {
+            time_error_ms,
+            grade,
+            window,
+            miss_because_held: false,
+        }
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_split_white_early_fantastics() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Fantastic, Some(TimingWindow::W1), -8.0),
+            None,
+        )];
+
+        let with_fa = compute_column_judgments(&notes, 1, 0, true);
+        let without_fa = compute_column_judgments(&notes, 1, 0, false);
+
+        assert_eq!(with_fa[0].w1, 1);
+        assert_eq!(with_fa[0].early_w1, 1);
+        assert_eq!(without_fa[0].early_w1, 0);
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_rescored_early_totals() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Excellent, Some(TimingWindow::W2), -18.0),
+            Some(judgment(JudgeGrade::WayOff, Some(TimingWindow::W5), -18.0)),
+        )];
+
+        let out = compute_column_judgments(&notes, 1, 0, false);
+
+        assert_eq!(out[0].w2, 1);
+        assert_eq!(out[0].early_w2, 1);
+        assert_eq!(out[0].early_total_w2, 1);
+        assert_eq!(out[0].early_total_w5, 1);
+    }
+
+    #[test]
+    fn compute_column_judgments_tracks_w0_rescore_target() {
+        let notes = [tap_note(
+            0,
+            judgment(JudgeGrade::Fantastic, Some(TimingWindow::W0), -4.0),
+            Some(judgment(JudgeGrade::Decent, Some(TimingWindow::W4), -16.0)),
+        )];
+
+        let out = compute_column_judgments(&notes, 1, 0, true);
+
+        assert_eq!(out[0].w0, 1);
+        assert_eq!(out[0].early_total_w0, 1);
+        assert_eq!(out[0].early_total_w4, 1);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -504,6 +679,7 @@ pub struct State {
     pub gameplay_elapsed: f32,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    pub itl_progress: [Option<scores::ItlEventProgress>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -517,6 +693,10 @@ pub struct State {
     pub return_to_course: bool,
     pub auto_advance_seconds: Option<f32>,
     pub allow_online_panes: bool,
+    pub auto_screenshot_taken: bool,
+    pub itl_overlay_visible: bool,
+    itl_overlay_shown: bool,
+    itl_overlay_page: [usize; MAX_PLAYERS],
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
 }
@@ -551,13 +731,15 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         stage_duration_seconds = gs.total_elapsed_in_screen;
 
         // Persist one score file per play (per local profile), including fails and replay lane
-        // input, unless gameplay was disqualified (e.g., autoplay used).
+        // input, unless the run was ranking-invalid (autoplay, score-invalid modifiers, etc.).
         scores::save_local_scores_from_gameplay(&gs);
+        let _ = scores::save_itl_data_from_gameplay(&gs);
+        scores::submit_groovestats_payloads_from_gameplay(&gs);
         scores::submit_arrowcloud_payloads_from_gameplay(&gs);
 
         let cols_per_player = gs.cols_per_player;
         for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
-            let noteskin = gs.noteskin[player_idx].take().map(Arc::new);
+            let noteskin = gs.noteskin[player_idx].take();
             let (start, end) = gs.note_ranges[player_idx];
             let notes = &gs.notes[start..end];
             let note_times = &gs.note_time_cache[start..end];
@@ -565,6 +747,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let p = &gs.players[player_idx];
             let prof = &gs.player_profiles[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
+            let stream_segments =
+                crate::game::gameplay::stream_segments_for_results(&gs, player_idx);
 
             // Compute timing statistics across all non-miss tap judgments
             let stats = timing_stats::compute_note_timing_stats(notes);
@@ -574,7 +758,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 note_times,
                 col_offset,
                 cols_per_player,
-                &gs.mini_indicator_stream_segments[player_idx],
+                &stream_segments,
             );
             let histogram = timing_stats::build_histogram_ms(notes);
             let scatter_worst_window_ms = {
@@ -641,9 +825,23 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 &prof.player_initials,
                 score_percent,
             );
-            let earned_machine_record = machine_record_highlight_rank
-                .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
-            let earned_top2_personal = personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+            let score_valid = gs.score_valid[player_idx] && !gs.autoplay_used;
+            // Simply Love's "Disqualified" label is driven by PlayerStageStats:IsDisqualified(),
+            // not by our broader local ranking-validity heuristics.
+            let disqualified = gs.autoplay_used;
+            let groovestats = scores::groovestats_eval_state_from_gameplay(&gs, player_idx);
+            let itl = scores::itl_eval_state_from_gameplay(&gs, player_idx);
+            let earned_machine_record = score_valid
+                && machine_record_highlight_rank
+                    .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
+            let earned_top2_personal =
+                score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+            let machine_record_highlight_rank = score_valid
+                .then_some(machine_record_highlight_rank)
+                .flatten();
+            let personal_record_highlight_rank = score_valid
+                .then_some(personal_record_highlight_rank)
+                .flatten();
             let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
 
             let mut grade = if p.is_failing || !gs.song_completed_naturally {
@@ -692,12 +890,22 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 grade = scores::Grade::Quint;
             }
 
-            let column_judgments = compute_column_judgments(notes, cols_per_player, col_offset);
+            let column_judgments = compute_column_judgments(
+                notes,
+                cols_per_player,
+                col_offset,
+                prof.show_fa_plus_window,
+            );
 
             score_info[player_idx] = Some(ScoreInfo {
                 song: gs.song.clone(),
                 chart: gs.charts[player_idx].clone(),
+                side,
                 profile_name: prof.display_name.clone(),
+                score_valid,
+                disqualified,
+                groovestats,
+                itl,
                 judgment_counts: HashMap::from([
                     (
                         JudgeGrade::Fantastic,
@@ -728,6 +936,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 grade,
                 speed_mod: gs.scroll_speed[player_idx],
                 hands_achieved: p.hands_achieved,
+                hands_total: gs.hands_total[player_idx],
                 holds_held: p.holds_held,
                 holds_total: gs.holds_total[player_idx],
                 rolls_held: p.rolls_held,
@@ -758,6 +967,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 show_ex_score: prof.show_ex_score,
                 show_hard_ex_score: prof.show_hard_ex_score,
                 show_fa_plus_pane: prof.show_fa_plus_pane,
+                track_early_judgments: prof.track_early_judgments,
                 machine_records,
                 machine_record_highlight_rank,
                 personal_records,
@@ -781,88 +991,92 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             density_graph_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
                 let last_second = si.song.total_length_seconds.max(0) as f32;
-                let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
-                    &si.chart.measure_nps_vec,
-                    si.chart.max_nps,
-                    &si.chart.timing,
-                    si.graph_first_second,
-                    last_second,
-                    graph_width,
-                    GRAPH_H,
-                    0.0,
-                    graph_width,
-                    Some(0.5),
-                    0.5,
-                );
+                let verts =
+                    crate::screens::components::shared::density_graph::build_density_histogram_mesh(
+                        &si.chart.measure_nps_vec,
+                        si.chart.max_nps,
+                        &si.chart.measure_seconds_vec,
+                        si.graph_first_second,
+                        last_second,
+                        graph_width,
+                        GRAPH_H,
+                        0.0,
+                        graph_width,
+                        Some(0.5),
+                        0.5,
+                    );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_itg[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Itg,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Itg,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_ex[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Ex,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Ex,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_hard_ex[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let hard_ex_worst_window = si
+                    .scatter_worst_window_ms
+                    .min(timing_stats::effective_windows_ms()[1]);
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
-                    si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::HardEx,
+                    hard_ex_worst_window,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::HardEx,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_arrow[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Arrow,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Arrow,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 
             scatter_mesh_foot[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
-                let verts = crate::screens::components::eval_graphs::build_scatter_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_scatter_mesh(
                     &si.scatter,
                     si.graph_first_second,
                     si.graph_last_second,
                     graph_width,
                     GRAPH_H,
                     si.scatter_worst_window_ms,
-                    crate::screens::components::eval_graphs::ScatterPlotScale::Foot,
+                    crate::screens::components::evaluation::eval_graphs::ScatterPlotScale::Foot,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
@@ -874,12 +1088,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Itg,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Itg,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -892,12 +1106,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Ex,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Ex,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -910,12 +1124,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 const BOT_H: f32 = 13.0;
 
                 let graph_h = (PANE_H - TOP_H - BOT_H).max(0.0);
-                let verts = crate::screens::components::eval_graphs::build_offset_histogram_mesh(
+                let verts = crate::screens::components::evaluation::eval_graphs::build_offset_histogram_mesh(
                     &si.histogram,
                     PANE_W,
                     graph_h,
                     PANE_H,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::HardEx,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::HardEx,
                     crate::config::get().smooth_histogram,
                 );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
@@ -936,7 +1150,13 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
-                let secondary = EvalPane::Timing;
+                let secondary = score_info[0].as_ref().map_or(EvalPane::Timing, |si| {
+                    if si.show_fa_plus_pane {
+                        EvalPane::TimingEx
+                    } else {
+                        EvalPane::Timing
+                    }
+                });
                 active_pane = match joined {
                     profile::PlayerSide::P1 => [primary, secondary],
                     profile::PlayerSide::P2 => [secondary, primary],
@@ -953,6 +1173,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
+        itl_progress: std::array::from_fn(|_| None),
         density_graph_mesh,
         timing_hist_mesh,
         timing_hist_mesh_ex,
@@ -966,6 +1187,10 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
+        auto_screenshot_taken: false,
+        itl_overlay_visible: false,
+        itl_overlay_shown: false,
+        itl_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
     }
@@ -1008,6 +1233,7 @@ pub fn init_from_score_info(
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
+        itl_progress: std::array::from_fn(|_| None),
         density_graph_mesh: std::array::from_fn(|_| None),
         timing_hist_mesh: std::array::from_fn(|_| None),
         timing_hist_mesh_ex: std::array::from_fn(|_| None),
@@ -1021,6 +1247,10 @@ pub fn init_from_score_info(
         return_to_course: false,
         auto_advance_seconds: None,
         allow_online_panes: true,
+        auto_screenshot_taken: false,
+        itl_overlay_visible: false,
+        itl_overlay_shown: false,
+        itl_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
     }
@@ -1028,10 +1258,48 @@ pub fn init_from_score_info(
 
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 
+fn sync_submit_itl_progress(state: &mut State) {
+    let mut found_new = false;
+    for player_idx in 0..MAX_PLAYERS {
+        let Some(si) = state.score_info[player_idx].as_ref() else {
+            continue;
+        };
+        let Some(progress) = scores::get_groovestats_submit_itl_progress_for_side(
+            si.chart.short_hash.as_str(),
+            si.side,
+        ) else {
+            continue;
+        };
+        found_new |= state.itl_progress[player_idx].is_none();
+        let page_count = progress.overlay_pages.len().max(1);
+        if state.itl_progress[player_idx].is_none() {
+            state.itl_overlay_page[player_idx] = 0;
+        } else if state.itl_overlay_page[player_idx] >= page_count {
+            state.itl_overlay_page[player_idx] = page_count - 1;
+        }
+        state.itl_progress[player_idx] = Some(progress);
+    }
+    if found_new && !state.itl_overlay_shown {
+        state.itl_overlay_visible = true;
+        state.itl_overlay_shown = true;
+    }
+}
+
 pub fn update(state: &mut State, dt: f32) {
+    sync_submit_itl_progress(state);
     if dt > 0.0 {
         state.screen_elapsed += dt;
     }
+}
+
+pub fn retry_timed_out_submissions(state: &State) -> bool {
+    let mut retried = false;
+    for si in state.score_info.iter().flatten() {
+        retried |=
+            scores::retry_timed_out_groovestats_submit(si.chart.short_hash.as_str(), si.side);
+        retried |= scores::retry_timed_out_arrowcloud_submit(si.chart.short_hash.as_str(), si.side);
+    }
+    retried
 }
 
 #[inline(always)]
@@ -1141,6 +1409,16 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
             linear(0.0): visible(false)
         ),
     ]
+}
+
+#[inline(always)]
+pub(crate) fn auto_screenshot_ready(state: &State) -> bool {
+    state.screen_elapsed >= auto_screenshot_ready_seconds()
+}
+
+#[inline(always)]
+pub(crate) fn auto_screenshot_ready_seconds() -> f32 {
+    EVAL_STAGE_IN_TOTAL_SECONDS.max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -1276,6 +1554,62 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if state.auto_advance_seconds.is_some() {
         return ScreenAction::None;
     }
+    if state.itl_overlay_visible {
+        let play_style = profile::get_session_play_style();
+        let side_idx = |side: profile::PlayerSide| match side {
+            profile::PlayerSide::P1 => 0,
+            profile::PlayerSide::P2 => 1,
+        };
+        let mut shift_itl_page = |controller: profile::PlayerSide, dir: i32| {
+            let player_idx = if play_style == profile::PlayStyle::Versus {
+                side_idx(controller)
+            } else {
+                0
+            };
+            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+                return;
+            };
+            if si.side != controller {
+                return;
+            }
+            let Some(progress) = state.itl_progress.get(player_idx).and_then(|p| p.as_ref()) else {
+                return;
+            };
+            let page_count = progress.overlay_pages.len();
+            if page_count <= 1 {
+                return;
+            }
+            state.itl_overlay_page[player_idx] = (state.itl_overlay_page[player_idx] as i32 + dir)
+                .rem_euclid(page_count as i32)
+                as usize;
+        };
+        return match ev.action {
+            VirtualAction::p1_back
+            | VirtualAction::p1_start
+            | VirtualAction::p2_back
+            | VirtualAction::p2_start => {
+                state.itl_overlay_visible = false;
+                ScreenAction::None
+            }
+            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                shift_itl_page(profile::PlayerSide::P1, -1);
+                ScreenAction::None
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                shift_itl_page(profile::PlayerSide::P1, 1);
+                ScreenAction::None
+            }
+            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+                shift_itl_page(profile::PlayerSide::P2, -1);
+                ScreenAction::None
+            }
+            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+                shift_itl_page(profile::PlayerSide::P2, 1);
+                ScreenAction::None
+            }
+            _ => ScreenAction::None,
+        };
+    }
     let return_target = if state.return_to_course {
         Screen::SelectCourse
     } else {
@@ -1316,7 +1650,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         } else {
             None
         };
-        let has_gs = leaderboard_snapshot.is_some();
+        let has_gs = crate::config::get().enable_groovestats;
         let has_arrowcloud = leaderboard_snapshot
             .as_ref()
             .and_then(|snapshot| snapshot.data.as_ref())
@@ -1460,11 +1794,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }));
 
     // Header timers (zmod parity): session timer + optional cumulative gameplay timer.
-    actors.push(select_shared::build_session_timer(format_session_time(
+    actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
     if cfg.show_select_music_gameplay_timer {
-        actors.push(select_shared::build_gameplay_timer(format_session_time(
+        actors.push(timers::build_gameplay(format_session_time(
             state.gameplay_elapsed,
         )));
     }
@@ -1536,7 +1870,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             offset: [screen_center_x(), 46.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             children: vec![
-                act!(sprite(banner_key): align(0.5, 0.5): xy(0.0, 66.0): setsize(418.0, 164.0): zoom(0.7): z(0)),
+                shared_banner::sprite(banner_key, 0.0, 66.0, 418.0, 164.0, 0.7, 0),
                 act!(quad: align(0.5, 0.5): xy(0.0, 0.0): setsize(418.0, 25.0): zoom(0.7): diffuse(0.117, 0.157, 0.184, 1.0): z(1)),
                 act!(text: font("miso"): settext(full_title): align(0.5, 0.5): xy(0.0, 0.0): maxwidth(418.0 * 0.7): z(2)),
             ],
@@ -1624,7 +1958,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
 
             // Record Texts (Simply Love PerPlayer/Upper/RecordTexts.lua)
-            let has_recordable_score = si.score_percent >= 0.01;
+            let has_recordable_score = si.score_valid && si.score_percent >= 0.01;
             let machine_record_rank = if has_recordable_score {
                 si.machine_record_highlight_rank.filter(|rank| *rank > 0)
             } else {
@@ -1772,9 +2106,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
 
-            // Step artist / description:
-            // SL-style source list is [AuthorCredit, Description] (if distinct).
-            let mut step_artist_lines: Vec<String> = Vec::with_capacity(2);
+            // Step artist / description / chart name:
+            // SL-style source list is [AuthorCredit, Description, ChartName] (if distinct).
+            let mut step_artist_lines: Vec<String> = Vec::with_capacity(3);
             let author = si.chart.step_artist.trim();
             if !author.is_empty() {
                 step_artist_lines.push(author.to_owned());
@@ -1782,6 +2116,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let description = si.chart.description.trim();
             if !description.is_empty() && step_artist_lines.iter().all(|line| line != description) {
                 step_artist_lines.push(description.to_owned());
+            }
+            let chart_name = si.chart.chart_name.trim();
+            if !chart_name.is_empty() && step_artist_lines.iter().all(|line| line != chart_name) {
+                step_artist_lines.push(chart_name.to_owned());
             }
 
             if cfg.zmod_rating_box_text {
@@ -1999,6 +2337,27 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
+    if !state.itl_overlay_visible {
+        let progress_single = [(0, player_side)];
+        let progress_vs = [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)];
+        let progress_players: &[(usize, profile::PlayerSide)] =
+            if play_style == profile::PlayStyle::Versus {
+                &progress_vs
+            } else {
+                &progress_single
+            };
+        for &(player_idx, side) in progress_players {
+            let Some(progress) = state.itl_progress[player_idx].as_ref() else {
+                continue;
+            };
+            actors.extend(eval_panes::build_itl_progress_box(
+                side,
+                play_style != profile::PlayStyle::Versus,
+                progress,
+            ));
+        }
+    }
+
     // --- Panes (Simply Love ScreenEvaluation common/Panes) ---
     {
         for controller in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
@@ -2037,19 +2396,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     si,
                     state.timing_hist_mesh[player_idx].as_ref(),
                     controller,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Itg,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Itg,
                 )),
                 EvalPane::TimingEx => actors.extend(eval_panes::build_timing_pane(
                     si,
                     state.timing_hist_mesh_ex[player_idx].as_ref(),
                     controller,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::Ex,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::Ex,
                 )),
                 EvalPane::TimingHardEx => actors.extend(eval_panes::build_timing_pane(
                     si,
                     state.timing_hist_mesh_hard_ex[player_idx].as_ref(),
                     controller,
-                    crate::screens::components::eval_graphs::TimingHistogramScale::HardEx,
+                    crate::screens::components::evaluation::eval_graphs::TimingHistogramScale::HardEx,
                 )),
                 EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(si, controller)),
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
@@ -2472,9 +2831,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
-    // Auto-submit status text (SL/zmod parity with AutoSubmitScore.lua SubmitText actors):
+    // --- Disqualified text (Simply Love PerPlayer/Lower/Disqualified) ---
+    {
+        let label_y = screen_center_y() + 138.0;
+        let label_zoom = 0.23_f32;
+        let label_single = [(0, screen_center_x())];
+        let label_vs = [
+            (0, screen_center_x() - 155.0),
+            (1, screen_center_x() + 155.0),
+        ];
+        let label_players: &[(usize, f32)] = if play_style == profile::PlayStyle::Versus {
+            &label_vs
+        } else {
+            &label_single
+        };
+
+        for &(player_idx, center_x) in label_players {
+            let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
+                continue;
+            };
+            if !si.disqualified {
+                continue;
+            }
+
+            actors.push(act!(text:
+                font("wendy"):
+                settext("Disqualified From Ranking"):
+                align(0.5, 0.5):
+                xy(center_x, label_y):
+                zoom(label_zoom):
+                z(103):
+                diffuse(1.0, 1.0, 1.0, 0.7)
+            ));
+        }
+    }
+
+    // Auto-submit UI text (SL/zmod parity with AutoSubmitScore.lua):
+    // top PB/WR banner plus bottom submit-status actors.
     // Common Normal/ThemeFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
     // In SL/zmod, Common Normal.redir points to Miso/_miso light.
+    // When both GrooveStats/BoogieStats and ArrowCloud are active, stack them vertically.
     {
         for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
             if !profile::is_session_side_joined(side) {
@@ -2492,32 +2888,62 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-            let Some(status) = scores::get_arrowcloud_submit_ui_status_for_side(
+            if let Some(banner) = scores::get_groovestats_submit_record_banner_for_side(
                 si.chart.short_hash.as_str(),
                 side,
-            ) else {
+            ) {
+                let x = if side == profile::PlayerSide::P1 {
+                    screen_center_x() - 225.0
+                } else {
+                    screen_center_x() + 225.0
+                };
+                actors.push(act!(text:
+                    font("wendy"):
+                    settext(cached_str_ref(submit_record_text(banner))):
+                    align(0.5, 0.5):
+                    xy(x, AUTO_SUBMIT_RECORD_TEXT_Y):
+                    zoom(AUTO_SUBMIT_RECORD_TEXT_ZOOM):
+                    z(121):
+                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    diffuseshift():
+                    effectcolor1(1.0, 1.0, 1.0, 1.0):
+                    effectcolor2(1.0, 1.0, 0.0, 1.0):
+                    effectperiod(AUTO_SUBMIT_RECORD_TEXT_PERIOD)
+                ));
+            }
+            let mut lines: Vec<&str> = Vec::with_capacity(2);
+            if let Some(status) = scores::get_groovestats_submit_ui_status_for_side(
+                si.chart.short_hash.as_str(),
+                side,
+            ) {
+                lines.push(groovestats_submit_status_text(status));
+            }
+            if let Some(status) =
+                scores::get_arrowcloud_submit_ui_status_for_side(si.chart.short_hash.as_str(), side)
+            {
+                lines.push(arrowcloud_submit_status_text(status));
+            }
+            if lines.is_empty() {
                 continue;
-            };
-            let status_text = match status {
-                scores::ArrowCloudSubmitUiStatus::Submitting => "Submitting ...",
-                scores::ArrowCloudSubmitUiStatus::Submitted => "Submitted!",
-                scores::ArrowCloudSubmitUiStatus::SubmitFailed => "Submit Failed",
-                scores::ArrowCloudSubmitUiStatus::TimedOut => "Timed Out",
-            };
+            }
             let x = if side == profile::PlayerSide::P1 {
                 screen_width() * 0.25
             } else {
                 screen_width() * 0.75
             };
-            actors.push(act!(text:
-                font("miso"):
-                settext(status_text):
-                align(0.5, 0.5):
-                xy(x, screen_height() - 15.0):
-                zoom(0.8):
-                z(121):
-                diffuse(1.0, 1.0, 1.0, 1.0)
-            ));
+            let base_y = screen_height() - 15.0;
+            for (idx, status_text) in lines.iter().enumerate() {
+                let y = base_y - (lines.len().saturating_sub(1 + idx) as f32 * 12.0);
+                actors.push(act!(text:
+                    font("miso"):
+                    settext(*status_text):
+                    align(0.5, 0.5):
+                    xy(x, y):
+                    zoom(0.8):
+                    z(121):
+                    diffuse(1.0, 1.0, 1.0, 1.0)
+                ));
+            }
         }
     }
 
@@ -2525,21 +2951,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     {
         let itg_text_x = screen_width() - widescale(55.0, 62.0);
         actors.push(act!(text: font("wendy"): settext("ITG"): align(1.0, 0.5): xy(itg_text_x, 15.0): zoom(widescale(0.5, 0.6)): z(121): diffuse(1.0, 1.0, 1.0, 1.0) ));
-        let final_pad_zoom = 0.24 * widescale(0.435, 0.525);
-        actors.push(pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(35.0, 41.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: final_pad_zoom,
-            z: 121,
-            is_active: true,
-        }));
-        actors.push(pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(15.0, 17.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: final_pad_zoom,
-            z: 121,
-            is_active: false,
-        }));
+        actors.extend(mode_pads::build());
     }
 
     // 3. Bottom Bar
@@ -2631,6 +3043,35 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // ScreenEvaluationStage in stinger (standard Simply Love visual style).
     actors.extend(build_stage_in_stinger(state));
+
+    if state.itl_overlay_visible {
+        let progress_single = [(0, player_side)];
+        let progress_vs = [(0, profile::PlayerSide::P1), (1, profile::PlayerSide::P2)];
+        let progress_players: &[(usize, profile::PlayerSide)] =
+            if play_style == profile::PlayStyle::Versus {
+                &progress_vs
+            } else {
+                &progress_single
+            };
+        let mut panels = Vec::with_capacity(progress_players.len());
+        for &(player_idx, side) in progress_players {
+            let Some(progress) = state.itl_progress[player_idx].as_ref() else {
+                continue;
+            };
+            panels.push((side, progress, state.itl_overlay_page[player_idx]));
+        }
+        let overlay_song = state
+            .score_info
+            .iter()
+            .flatten()
+            .next()
+            .map(|si| si.song.as_ref());
+        actors.extend(eval_panes::build_itl_event_overlay(
+            play_style != profile::PlayStyle::Versus,
+            overlay_song,
+            panels.as_slice(),
+        ));
+    }
 
     actors
 }

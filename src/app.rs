@@ -2,32 +2,35 @@ use crate::act;
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{self, DisplayMode};
 use crate::core::display;
-use crate::core::gfx::{self as renderer, BackendType, create_backend};
+use crate::core::gfx::{self as renderer, BackendType, PresentModePolicy, create_backend};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::{
-    Screen as CurrentScreen, ScreenAction, credits, evaluation, evaluation_summary, gameover,
-    gameplay, init, initials, input as input_screen, manage_local_profiles, mappings, menu,
-    options, player_options, profile_load, sandbox, select_color, select_course, select_mode,
-    select_music, select_profile, select_style,
+    Screen as CurrentScreen, ScreenAction, SongOffsetSyncChange, credits, evaluation,
+    evaluation_summary, gameover, gameplay, init, initials, input as input_screen,
+    manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
+    select_color, select_course, select_mode, select_music, select_profile, select_style,
 };
 use crate::ui::color;
 use chrono::Local;
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalPosition, PhysicalSize},
-    event::WindowEvent,
+    event::{StartCause, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     monitor::MonitorHandle,
     window::{Icon, Window},
 };
 
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::borrow::Cow;
+use std::cell::UnsafeCell;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
+use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::{
     error::Error,
     ffi::OsString,
@@ -35,6 +38,16 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+
+#[cfg(all(
+    not(windows),
+    not(target_os = "linux"),
+    not(target_os = "freebsd"),
+    not(target_os = "macos")
+))]
+compile_error!(
+    "deadsync control input requires a raw keyboard backend; only Windows, Linux, FreeBSD, and macOS are wired for full app input"
+);
 
 use crate::ui::actors::Actor;
 /* -------------------- gamepad -------------------- */
@@ -44,7 +57,67 @@ use crate::core::input::{GpSystemEvent, PadEvent};
 #[derive(Debug, Clone)]
 pub enum UserEvent {
     Pad(PadEvent),
+    Key(input::RawKeyboardEvent),
     GamepadSystem(GpSystemEvent),
+    GameplayInputReady,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct GameplayRawKeyEvent {
+    code: winit::keyboard::KeyCode,
+    pressed: bool,
+    timestamp: Instant,
+    timestamp_host_nanos: u64,
+    stored_at: Instant,
+    emitted_at: Instant,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum GameplayQueuedEvent {
+    Input(InputEvent),
+    RawKey(GameplayRawKeyEvent),
+}
+
+impl GameplayQueuedEvent {
+    #[inline(always)]
+    const fn timestamp(self) -> Instant {
+        match self {
+            Self::Input(ev) => ev.timestamp,
+            Self::RawKey(ev) => ev.timestamp,
+        }
+    }
+
+    #[inline(always)]
+    const fn timestamp_host_nanos(self) -> u64 {
+        match self {
+            Self::Input(ev) => ev.timestamp_host_nanos,
+            Self::RawKey(ev) => ev.timestamp_host_nanos,
+        }
+    }
+
+    #[inline(always)]
+    const fn stored_at(self) -> Instant {
+        match self {
+            Self::Input(ev) => ev.stored_at,
+            Self::RawKey(ev) => ev.stored_at,
+        }
+    }
+
+    #[inline(always)]
+    const fn emitted_at(self) -> Instant {
+        match self {
+            Self::Input(ev) => ev.emitted_at,
+            Self::RawKey(ev) => ev.emitted_at,
+        }
+    }
+
+    #[inline(always)]
+    const fn source(self) -> input::InputSource {
+        match self {
+            Self::Input(ev) => ev.source,
+            Self::RawKey(_) => input::InputSource::Keyboard,
+        }
+    }
 }
 
 /// Imperative effects to be executed by the shell.
@@ -101,6 +174,18 @@ const SCREENSHOT_PREVIEW_Z: i16 = 32010;
 const GAMEPLAY_OFFSET_PROMPT_Z_BACKDROP: i16 = 31990;
 const GAMEPLAY_OFFSET_PROMPT_Z_CURSOR: i16 = 31991;
 const GAMEPLAY_OFFSET_PROMPT_Z_TEXT: i16 = 31993;
+const BACKGROUND_REDRAW_INTERVAL: Duration = Duration::from_millis(67);
+const GAMEPLAY_PACING_LOG_INTERVAL: Duration = Duration::from_secs(5);
+const SCHEDULED_REDRAW_POLL_GUARD: Duration = Duration::from_micros(1_000);
+const GAMEPLAY_REDRAW_DELIVERY_SLOW_US: u32 = 1_000;
+const GAMEPLAY_REDRAW_DELIVERY_BAD_US: u32 = 2_000;
+const GAMEPLAY_PRESENT_SLOW_US: u32 = 1_000;
+const GAMEPLAY_PRESENT_SPIKE_US: u32 = 3_000;
+const GAMEPLAY_EVENT_TRACE_INTERVAL: Duration = Duration::from_secs(1);
+const GAMEPLAY_EVENT_BATCH_SLOW_US: u32 = 1_000;
+const GAMEPLAY_EVENT_BATCH_BURST_KEYS: u32 = 8;
+const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 131_072;
+const GAMEPLAY_INPUT_RING_CAPACITY: usize = 1024;
 
 #[derive(Clone, Copy)]
 enum ScreenshotPreviewTarget {
@@ -146,6 +231,240 @@ struct CourseRunState {
     stage_eval_pages: Vec<evaluation::State>,
 }
 
+struct GameplayInputRing {
+    enabled: AtomicBool,
+    head: AtomicUsize,
+    tail: AtomicUsize,
+    dropped: AtomicU32,
+    slots: [UnsafeCell<MaybeUninit<GameplayQueuedEvent>>; GAMEPLAY_INPUT_RING_CAPACITY],
+}
+
+// SAFETY: `GameplayInputRing` is a single-producer/single-consumer ring. Slot
+// ownership is synchronized with the `head`/`tail` atomics, so moving the ring
+// between threads does not create unsynchronized aliasing of initialized items.
+unsafe impl Send for GameplayInputRing {}
+// SAFETY: readers and writers coordinate exclusively through atomics and only
+// touch disjoint slots at any instant. Shared references are therefore safe as
+// long as callers preserve the intended SPSC usage.
+unsafe impl Sync for GameplayInputRing {}
+
+impl GameplayInputRing {
+    #[inline(always)]
+    fn new() -> Self {
+        Self {
+            enabled: AtomicBool::new(false),
+            head: AtomicUsize::new(0),
+            tail: AtomicUsize::new(0),
+            dropped: AtomicU32::new(0),
+            slots: std::array::from_fn(|_| UnsafeCell::new(MaybeUninit::uninit())),
+        }
+    }
+
+    #[inline(always)]
+    fn set_enabled(&self, enabled: bool) {
+        self.enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    #[inline(always)]
+    fn swap_enabled(&self, enabled: bool) -> bool {
+        self.enabled.swap(enabled, Ordering::Relaxed)
+    }
+
+    #[inline(always)]
+    fn is_enabled(&self) -> bool {
+        self.enabled.load(Ordering::Relaxed)
+    }
+
+    #[inline(always)]
+    fn push(&self, ev: GameplayQueuedEvent) {
+        if !self.enabled.load(Ordering::Relaxed) {
+            return;
+        }
+        let tail = self.tail.load(Ordering::Relaxed);
+        let head = self.head.load(Ordering::Acquire);
+        if tail.wrapping_sub(head) == GAMEPLAY_INPUT_RING_CAPACITY {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        let slot = tail % GAMEPLAY_INPUT_RING_CAPACITY;
+        // SAFETY: `tail - head < capacity` guarantees this slot is not currently
+        // visible to the consumer. The write happens-before publication via the
+        // following Release store to `tail`.
+        unsafe { (*self.slots[slot].get()).write(ev) };
+        self.tail.store(tail.wrapping_add(1), Ordering::Release);
+    }
+
+    #[inline(always)]
+    fn pop(&self) -> Option<GameplayQueuedEvent> {
+        let head = self.head.load(Ordering::Relaxed);
+        let tail = self.tail.load(Ordering::Acquire);
+        if head == tail {
+            return None;
+        }
+        let slot = head % GAMEPLAY_INPUT_RING_CAPACITY;
+        // SAFETY: `head != tail` means the producer has already initialized this
+        // slot and published it with a Release store to `tail`. The Acquire load
+        // above pairs with that store before we read the item out exactly once.
+        let ev = unsafe { (*self.slots[slot].get()).assume_init_read() };
+        self.head.store(head.wrapping_add(1), Ordering::Release);
+        Some(ev)
+    }
+
+    #[inline(always)]
+    fn clear(&self) {
+        while self.pop().is_some() {}
+    }
+
+    #[inline(always)]
+    fn take_dropped(&self) -> u32 {
+        self.dropped.swap(0, Ordering::Relaxed)
+    }
+}
+
+#[inline(always)]
+fn gameplay_event_precedes(a: &GameplayQueuedEvent, b: &GameplayQueuedEvent) -> bool {
+    if a.timestamp_host_nanos() != 0
+        && b.timestamp_host_nanos() != 0
+        && a.timestamp_host_nanos() != b.timestamp_host_nanos()
+    {
+        return a.timestamp_host_nanos() < b.timestamp_host_nanos();
+    }
+    if a.timestamp() != b.timestamp() {
+        return a.timestamp() < b.timestamp();
+    }
+    if a.emitted_at() != b.emitted_at() {
+        return a.emitted_at() < b.emitted_at();
+    }
+    if a.stored_at() != b.stored_at() {
+        return a.stored_at() < b.stored_at();
+    }
+    matches!(
+        (a.source(), b.source()),
+        (input::InputSource::Keyboard, input::InputSource::Gamepad)
+    )
+}
+
+#[inline(always)]
+fn gameplay_raw_key_event(raw_key: &input::RawKeyboardEvent) -> Option<GameplayQueuedEvent> {
+    use winit::keyboard::KeyCode;
+
+    if raw_key.repeat {
+        return None;
+    }
+    match raw_key.code {
+        KeyCode::ShiftLeft
+        | KeyCode::ShiftRight
+        | KeyCode::ControlLeft
+        | KeyCode::ControlRight
+        | KeyCode::KeyR
+        | KeyCode::F6
+        | KeyCode::F7
+        | KeyCode::F8
+        | KeyCode::F11
+        | KeyCode::F12 => {}
+        _ => return None,
+    }
+    Some(GameplayQueuedEvent::RawKey(GameplayRawKeyEvent {
+        code: raw_key.code,
+        pressed: raw_key.pressed,
+        timestamp: raw_key.timestamp,
+        timestamp_host_nanos: raw_key.host_nanos,
+        stored_at: raw_key.timestamp,
+        emitted_at: raw_key.timestamp,
+    }))
+}
+
+#[inline(always)]
+fn proxy_gameplay_raw_key(raw_key: &input::RawKeyboardEvent) -> bool {
+    use winit::keyboard::KeyCode;
+
+    matches!(
+        raw_key.code,
+        KeyCode::ShiftLeft
+            | KeyCode::ShiftRight
+            | KeyCode::ControlLeft
+            | KeyCode::ControlRight
+            | KeyCode::F3
+            | KeyCode::F10
+    )
+}
+
+#[derive(Clone, Copy)]
+struct GameplayEventBatchTrace {
+    started_at: Instant,
+    gameplay_seen: bool,
+    key_events: u32,
+    key_repeat_events: u32,
+    pad_events: u32,
+    queued_events: u32,
+    app_handler_sum_us: u64,
+    app_handler_max_us: u32,
+}
+
+impl GameplayEventBatchTrace {
+    #[inline(always)]
+    fn new(now: Instant) -> Self {
+        Self {
+            started_at: now,
+            gameplay_seen: false,
+            key_events: 0,
+            key_repeat_events: 0,
+            pad_events: 0,
+            queued_events: 0,
+            app_handler_sum_us: 0,
+            app_handler_max_us: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn reset(&mut self, now: Instant) {
+        *self = Self::new(now);
+    }
+}
+
+#[derive(Clone, Copy)]
+struct GameplayEventTrace {
+    started_at: Instant,
+    batches: u32,
+    key_events: u32,
+    key_repeat_events: u32,
+    pad_events: u32,
+    queued_events: u32,
+    batch_sum_us: u64,
+    batch_max_us: u32,
+    app_handler_sum_us: u64,
+    app_handler_max_us: u32,
+    dispatch_overhead_sum_us: u64,
+    dispatch_overhead_max_us: u32,
+    slow_batches: u32,
+}
+
+impl GameplayEventTrace {
+    #[inline(always)]
+    fn new(now: Instant) -> Self {
+        Self {
+            started_at: now,
+            batches: 0,
+            key_events: 0,
+            key_repeat_events: 0,
+            pad_events: 0,
+            queued_events: 0,
+            batch_sum_us: 0,
+            batch_max_us: 0,
+            app_handler_sum_us: 0,
+            app_handler_max_us: 0,
+            dispatch_overhead_sum_us: 0,
+            dispatch_overhead_max_us: 0,
+            slow_batches: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn reset(&mut self, now: Instant) {
+        *self = Self::new(now);
+    }
+}
+
 /* -------------------- transition state machine -------------------- */
 #[derive(Debug)]
 enum TransitionState {
@@ -183,6 +502,19 @@ fn elapsed_us_since(started: Instant) -> u32 {
 }
 
 #[inline(always)]
+fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
+    let elapsed = later
+        .checked_duration_since(earlier)
+        .unwrap_or(Duration::ZERO)
+        .as_micros();
+    if elapsed > u128::from(u32::MAX) {
+        u32::MAX
+    } else {
+        elapsed as u32
+    }
+}
+
+#[inline(always)]
 fn stutter_severity(frame_seconds: f32, expected_seconds: f32) -> u8 {
     if expected_seconds <= 0.0 {
         return 0;
@@ -202,6 +534,7 @@ enum OverlayMode {
     Off,
     Fps,
     FpsAndStutter,
+    FpsStutterTiming,
 }
 
 impl OverlayMode {
@@ -210,6 +543,7 @@ impl OverlayMode {
         match mode {
             1 => Self::Fps,
             2 => Self::FpsAndStutter,
+            3 => Self::FpsStutterTiming,
             _ => Self::Off,
         }
     }
@@ -219,7 +553,8 @@ impl OverlayMode {
         match self {
             Self::Off => Self::Fps,
             Self::Fps => Self::FpsAndStutter,
-            Self::FpsAndStutter => Self::Off,
+            Self::FpsAndStutter => Self::FpsStutterTiming,
+            Self::FpsStutterTiming => Self::Off,
         }
     }
 
@@ -230,7 +565,12 @@ impl OverlayMode {
 
     #[inline(always)]
     const fn shows_stutter(self) -> bool {
-        matches!(self, Self::FpsAndStutter)
+        matches!(self, Self::FpsAndStutter | Self::FpsStutterTiming)
+    }
+
+    #[inline(always)]
+    const fn shows_timing(self) -> bool {
+        matches!(self, Self::FpsStutterTiming)
     }
 
     #[inline(always)]
@@ -239,6 +579,7 @@ impl OverlayMode {
             Self::Off => "OFF",
             Self::Fps => "FPS",
             Self::FpsAndStutter => "FPS+STUTTER",
+            Self::FpsStutterTiming => "FPS+STUTTER+TIMING",
         }
     }
 
@@ -248,6 +589,7 @@ impl OverlayMode {
             Self::Off => 0,
             Self::Fps => 1,
             Self::FpsAndStutter => 2,
+            Self::FpsStutterTiming => 3,
         }
     }
 }
@@ -272,20 +614,260 @@ impl StutterSample {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct ActorTreeStats {
+    total: u32,
+    sprites: u32,
+    texts: u32,
+    meshes: u32,
+    textured_meshes: u32,
+    frames: u32,
+    cameras: u32,
+    shadows: u32,
+    text_chars: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct ComposeBreakdown {
+    actor_build_us: u32,
+    build_screen_us: u32,
+    resolve_textures_us: u32,
+    actor_stats: ActorTreeStats,
+    render_objects: u32,
+    render_cameras: u32,
+    text_layout: crate::ui::compose::TextLayoutFrameStats,
+}
+
+#[inline(always)]
+const fn saturating_u32(value: usize) -> u32 {
+    if value > u32::MAX as usize {
+        u32::MAX
+    } else {
+        value as u32
+    }
+}
+
+fn actor_tree_stats(actors: &[crate::ui::actors::Actor]) -> ActorTreeStats {
+    fn visit(stats: &mut ActorTreeStats, actor: &crate::ui::actors::Actor) {
+        stats.total = stats.total.saturating_add(1);
+        match actor {
+            crate::ui::actors::Actor::Sprite { .. } => {
+                stats.sprites = stats.sprites.saturating_add(1);
+            }
+            crate::ui::actors::Actor::Text { content, .. } => {
+                stats.texts = stats.texts.saturating_add(1);
+                stats.text_chars = stats
+                    .text_chars
+                    .saturating_add(saturating_u32(content.len()));
+            }
+            crate::ui::actors::Actor::Mesh { .. } => {
+                stats.meshes = stats.meshes.saturating_add(1);
+            }
+            crate::ui::actors::Actor::TexturedMesh { .. } => {
+                stats.textured_meshes = stats.textured_meshes.saturating_add(1);
+            }
+            crate::ui::actors::Actor::Frame { children, .. } => {
+                stats.frames = stats.frames.saturating_add(1);
+                for child in children {
+                    visit(stats, child);
+                }
+            }
+            crate::ui::actors::Actor::Camera { children, .. } => {
+                stats.cameras = stats.cameras.saturating_add(1);
+                for child in children {
+                    visit(stats, child);
+                }
+            }
+            crate::ui::actors::Actor::Shadow { child, .. } => {
+                stats.shadows = stats.shadows.saturating_add(1);
+                visit(stats, child);
+            }
+        }
+    }
+
+    let mut stats = ActorTreeStats::default();
+    for actor in actors {
+        visit(&mut stats, actor);
+    }
+    stats
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FrameIntervalReason {
+    None,
+    MaxFps,
+    Background,
+    MaxFpsBackground,
+}
+
+impl FrameIntervalReason {
+    #[inline(always)]
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::MaxFps => "max_fps",
+            Self::Background => "background",
+            Self::MaxFpsBackground => "max_fps+background",
+        }
+    }
+
+    #[inline(always)]
+    const fn redraw_reason(self) -> &'static str {
+        match self {
+            Self::None => "scheduled",
+            Self::MaxFps => "scheduled_maxfps",
+            Self::Background => "scheduled_background",
+            Self::MaxFpsBackground => "scheduled_maxfps_background",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FrameIntervalState {
+    interval: Option<Duration>,
+    reason: FrameIntervalReason,
+}
+
+#[inline(always)]
+const fn should_background_throttle_unfocused(screen: CurrentScreen) -> bool {
+    !matches!(screen, CurrentScreen::Gameplay)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FrameLoopMode {
+    Poll,
+    WaitPending,
+    Scheduled(FrameIntervalReason, Duration),
+}
+
+#[derive(Clone, Copy)]
+struct GameplayPacingTrace {
+    started_at: Instant,
+    frames: u32,
+    chain_frames: u32,
+    other_frames: u32,
+    dt_sum_us: u64,
+    dt_max_us: u32,
+    redraw_late_sum_us: u64,
+    redraw_late_max_us: u32,
+    redraw_delivery_sum_us: u64,
+    redraw_delivery_max_us: u32,
+    redraw_delivery_over_1ms: u32,
+    redraw_delivery_over_2ms: u32,
+    draw_sum_us: u64,
+    draw_max_us: u32,
+    present_sum_us: u64,
+    present_max_us: u32,
+    present_over_1ms: u32,
+    present_over_3ms: u32,
+    draw_setup_sum_us: u64,
+    draw_prepare_sum_us: u64,
+    draw_record_sum_us: u64,
+    display_error_abs_sum_us: u64,
+    display_error_abs_max_us: u32,
+    display_error_last_us: i32,
+    display_catching_up_frames: u32,
+    display_catching_up_last: bool,
+    present_last_mode: renderer::PresentModeTrace,
+    present_display_clock_last: renderer::ClockDomainTrace,
+    present_host_clock_last: renderer::ClockDomainTrace,
+    present_inflight_sum: u64,
+    present_inflight_max: u8,
+    present_image_wait_frames: u32,
+    present_back_pressure_frames: u32,
+    present_queue_idle_frames: u32,
+    present_suboptimal_frames: u32,
+    present_host_mapped_frames: u32,
+    present_calibration_error_sum_ns: u64,
+    present_calibration_error_max_ns: u64,
+    present_interval_sum_ns: u64,
+    present_interval_max_ns: u64,
+    present_interval_samples: u32,
+    present_margin_sum_ns: u64,
+    present_margin_max_ns: u64,
+    present_margin_samples: u32,
+}
+
+impl GameplayPacingTrace {
+    #[inline(always)]
+    fn new(now: Instant) -> Self {
+        Self {
+            started_at: now,
+            frames: 0,
+            chain_frames: 0,
+            other_frames: 0,
+            dt_sum_us: 0,
+            dt_max_us: 0,
+            redraw_late_sum_us: 0,
+            redraw_late_max_us: 0,
+            redraw_delivery_sum_us: 0,
+            redraw_delivery_max_us: 0,
+            redraw_delivery_over_1ms: 0,
+            redraw_delivery_over_2ms: 0,
+            draw_sum_us: 0,
+            draw_max_us: 0,
+            present_sum_us: 0,
+            present_max_us: 0,
+            present_over_1ms: 0,
+            present_over_3ms: 0,
+            draw_setup_sum_us: 0,
+            draw_prepare_sum_us: 0,
+            draw_record_sum_us: 0,
+            display_error_abs_sum_us: 0,
+            display_error_abs_max_us: 0,
+            display_error_last_us: 0,
+            display_catching_up_frames: 0,
+            display_catching_up_last: false,
+            present_last_mode: renderer::PresentModeTrace::Unknown,
+            present_display_clock_last: renderer::ClockDomainTrace::Unknown,
+            present_host_clock_last: renderer::ClockDomainTrace::Unknown,
+            present_inflight_sum: 0,
+            present_inflight_max: 0,
+            present_image_wait_frames: 0,
+            present_back_pressure_frames: 0,
+            present_queue_idle_frames: 0,
+            present_suboptimal_frames: 0,
+            present_host_mapped_frames: 0,
+            present_calibration_error_sum_ns: 0,
+            present_calibration_error_max_ns: 0,
+            present_interval_sum_ns: 0,
+            present_interval_max_ns: 0,
+            present_interval_samples: 0,
+            present_margin_sum_ns: 0,
+            present_margin_max_ns: 0,
+            present_margin_samples: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn reset(&mut self, now: Instant) {
+        *self = Self::new(now);
+    }
+}
+
 /// Shell-level state: timing, window, renderer flags.
 pub struct ShellState {
     frame_count: u32,
     last_title_update: Instant,
     last_frame_time: Instant,
+    last_frame_end_time: Instant,
     start_time: Instant,
     vsync_enabled: bool,
     frame_interval: Option<Duration>,
+    present_mode_policy: PresentModePolicy,
     next_redraw_at: Instant,
+    pending_redraw_request_at: Option<Instant>,
+    pending_redraw_request_reason: &'static str,
+    last_logged_frame_loop_mode: Option<FrameLoopMode>,
+    gameplay_pacing_trace: GameplayPacingTrace,
+    gameplay_event_batch_trace: GameplayEventBatchTrace,
+    gameplay_event_trace: GameplayEventTrace,
     display_mode: DisplayMode,
     display_monitor: usize,
     metrics: Metrics,
     last_fps: f32,
     last_vpf: u32,
+    last_present_stats: renderer::PresentStats,
     current_frame_vpf: u32,
     overlay_mode: OverlayMode,
     stutter_samples: [StutterSample; STUTTER_SAMPLE_COUNT],
@@ -298,6 +880,9 @@ pub struct ShellState {
     pending_exit: bool,
     shift_held: bool,
     ctrl_held: bool,
+    window_focused: bool,
+    window_occluded: bool,
+    surface_active: bool,
     screenshot_pending: bool,
     screenshot_request_side: Option<profile::PlayerSide>,
     screenshot_flash_started_at: Option<Instant>,
@@ -311,6 +896,26 @@ fn frame_interval_for_max_fps(max_fps: u16) -> Option<Duration> {
     } else {
         Some(Duration::from_secs_f64(1.0 / f64::from(max_fps)))
     }
+}
+
+#[inline(always)]
+fn advance_redraw_deadline(deadline: Instant, now: Instant, interval: Duration) -> Instant {
+    if deadline > now {
+        return deadline;
+    }
+    let step_ns = interval.as_nanos();
+    if step_ns == 0 {
+        return now;
+    }
+    let overdue_ns = now.duration_since(deadline).as_nanos();
+    let steps = overdue_ns / step_ns + 1;
+    if steps <= u128::from(u32::MAX)
+        && let Some(delta) = interval.checked_mul(steps as u32)
+        && let Some(next) = deadline.checked_add(delta)
+    {
+        return next;
+    }
+    now.checked_add(interval).unwrap_or(now)
 }
 
 fn load_window_icon() -> Option<Icon> {
@@ -342,11 +947,14 @@ fn set_macos_app_icon() {
         "assets/graphics/icon/icon-512.png",
     ];
 
-    let app = NSApplication::sharedApplication(unsafe { MainThreadMarker::new_unchecked() });
+    let mtm = MainThreadMarker::new().expect("AppKit icon setup requires the main thread");
+    let app = NSApplication::sharedApplication(mtm);
     for path in MACOS_APP_ICON_PATHS {
         let ns_path = NSString::from_str(path);
         let icon_image = NSImage::initWithContentsOfFile(NSImage::alloc(), &ns_path);
         if let Some(icon_image) = icon_image {
+            // SAFETY: `app` and `icon_image` are valid AppKit objects on the main
+            // thread, which is the required calling context for this setter.
             unsafe {
                 app.setApplicationIconImage(Some(&icon_image));
             }
@@ -417,14 +1025,23 @@ impl ShellState {
             frame_count: 0,
             last_title_update: now,
             last_frame_time: now,
+            last_frame_end_time: now,
             start_time: now,
             vsync_enabled: cfg.vsync,
             frame_interval,
+            present_mode_policy: cfg.present_mode_policy,
             next_redraw_at: now,
+            pending_redraw_request_at: None,
+            pending_redraw_request_reason: "none",
+            last_logged_frame_loop_mode: None,
+            gameplay_pacing_trace: GameplayPacingTrace::new(now),
+            gameplay_event_batch_trace: GameplayEventBatchTrace::new(now),
+            gameplay_event_trace: GameplayEventTrace::new(now),
             display_mode: cfg.display_mode(),
             metrics,
             last_fps: 0.0,
             last_vpf: 0,
+            last_present_stats: renderer::PresentStats::default(),
             current_frame_vpf: 0,
             overlay_mode: OverlayMode::from_code(overlay_mode),
             stutter_samples: [StutterSample::empty(); STUTTER_SAMPLE_COUNT],
@@ -438,6 +1055,9 @@ impl ShellState {
             pending_exit: false,
             shift_held: false,
             ctrl_held: false,
+            window_focused: true,
+            window_occluded: false,
+            surface_active: cfg.display_width > 0 && cfg.display_height > 0,
             screenshot_pending: false,
             screenshot_request_side: None,
             screenshot_flash_started_at: None,
@@ -449,6 +1069,255 @@ impl ShellState {
     fn set_max_fps(&mut self, max_fps: u16) {
         self.frame_interval = frame_interval_for_max_fps(max_fps);
         self.next_redraw_at = Instant::now();
+        self.last_logged_frame_loop_mode = None;
+    }
+
+    #[inline(always)]
+    fn set_present_mode_policy(&mut self, policy: PresentModePolicy) {
+        self.present_mode_policy = policy;
+        self.next_redraw_at = Instant::now();
+        self.last_logged_frame_loop_mode = None;
+    }
+
+    #[inline(always)]
+    fn reset_frame_clock(&mut self, now: Instant) {
+        self.last_frame_time = now;
+        self.last_frame_end_time = now;
+        self.next_redraw_at = now;
+        self.pending_redraw_request_at = None;
+        self.pending_redraw_request_reason = "none";
+        self.last_logged_frame_loop_mode = None;
+        self.gameplay_pacing_trace.reset(now);
+        self.gameplay_event_batch_trace.reset(now);
+        self.gameplay_event_trace.reset(now);
+    }
+
+    #[inline(always)]
+    fn note_redraw_requested(&mut self, now: Instant, reason: &'static str) {
+        if self.pending_redraw_request_at.is_none() {
+            self.pending_redraw_request_at = Some(now);
+            self.pending_redraw_request_reason = reason;
+        }
+    }
+
+    #[inline(always)]
+    fn take_redraw_request_timing(&mut self, now: Instant) -> (u32, &'static str) {
+        let requested_at = self.pending_redraw_request_at.take();
+        let reason = if requested_at.is_some() {
+            self.pending_redraw_request_reason
+        } else {
+            "external"
+        };
+        self.pending_redraw_request_reason = "none";
+        (
+            requested_at
+                .map(|at| elapsed_us_between(now, at))
+                .unwrap_or_default(),
+            reason,
+        )
+    }
+
+    #[inline(always)]
+    fn redraw_pending(&self) -> bool {
+        self.pending_redraw_request_at.is_some()
+    }
+
+    #[inline(always)]
+    fn frame_interval_state(&self, screen: CurrentScreen) -> FrameIntervalState {
+        let base = (!self.vsync_enabled)
+            .then_some(self.frame_interval)
+            .flatten();
+        let background = (self.window_occluded
+            || !self.surface_active
+            || (!self.window_focused && should_background_throttle_unfocused(screen)))
+        .then_some(BACKGROUND_REDRAW_INTERVAL);
+        match (base, background) {
+            (Some(base), Some(background)) => FrameIntervalState {
+                interval: Some(cmp::max(base, background)),
+                reason: FrameIntervalReason::MaxFpsBackground,
+            },
+            (Some(interval), None) => FrameIntervalState {
+                interval: Some(interval),
+                reason: FrameIntervalReason::MaxFps,
+            },
+            (None, Some(interval)) => FrameIntervalState {
+                interval: Some(interval),
+                reason: FrameIntervalReason::Background,
+            },
+            (None, None) => FrameIntervalState {
+                interval: None,
+                reason: FrameIntervalReason::None,
+            },
+        }
+    }
+
+    #[inline(always)]
+    fn note_frame_loop_mode(&mut self, mode: FrameLoopMode) -> bool {
+        if self.last_logged_frame_loop_mode == Some(mode) {
+            return false;
+        }
+        self.last_logged_frame_loop_mode = Some(mode);
+        true
+    }
+
+    #[inline(always)]
+    fn note_new_events(&mut self, now: Instant) {
+        self.gameplay_event_batch_trace.reset(now);
+    }
+
+    #[inline(always)]
+    fn note_gameplay_key_handler(&mut self, gameplay_screen: bool, repeat: bool, handler_us: u32) {
+        if !gameplay_screen {
+            return;
+        }
+        let trace = &mut self.gameplay_event_batch_trace;
+        trace.gameplay_seen = true;
+        trace.key_events = trace.key_events.saturating_add(1);
+        trace.key_repeat_events = trace.key_repeat_events.saturating_add(repeat as u32);
+        trace.app_handler_sum_us = trace
+            .app_handler_sum_us
+            .saturating_add(u64::from(handler_us));
+        trace.app_handler_max_us = trace.app_handler_max_us.max(handler_us);
+    }
+
+    #[inline(always)]
+    fn note_gameplay_pad_handler(&mut self, gameplay_screen: bool, handler_us: u32) {
+        if !gameplay_screen {
+            return;
+        }
+        let trace = &mut self.gameplay_event_batch_trace;
+        trace.gameplay_seen = true;
+        trace.pad_events = trace.pad_events.saturating_add(1);
+        trace.app_handler_sum_us = trace
+            .app_handler_sum_us
+            .saturating_add(u64::from(handler_us));
+        trace.app_handler_max_us = trace.app_handler_max_us.max(handler_us);
+    }
+
+    #[inline(always)]
+    fn note_gameplay_queued_input(&mut self) {
+        let trace = &mut self.gameplay_event_batch_trace;
+        trace.gameplay_seen = true;
+        trace.queued_events = trace.queued_events.saturating_add(1);
+    }
+
+    fn finish_gameplay_event_batch(&mut self, now: Instant, screen: CurrentScreen) {
+        let trace = &mut self.gameplay_event_batch_trace;
+        if !trace.gameplay_seen
+            || (trace.key_events == 0 && trace.pad_events == 0 && trace.queued_events == 0)
+        {
+            if now.duration_since(self.gameplay_event_trace.started_at)
+                >= GAMEPLAY_EVENT_TRACE_INTERVAL
+            {
+                self.gameplay_event_trace.reset(now);
+            }
+            trace.reset(now);
+            return;
+        }
+
+        let batch_us = elapsed_us_between(now, trace.started_at);
+        let app_handler_sum_us = trace.app_handler_sum_us.min(u64::from(u32::MAX)) as u32;
+        let dispatch_overhead_us = batch_us.saturating_sub(app_handler_sum_us);
+        if batch_us >= GAMEPLAY_EVENT_BATCH_SLOW_US
+            || trace.key_events >= GAMEPLAY_EVENT_BATCH_BURST_KEYS
+        {
+            trace!(
+                "Gameplay event batch: screen={:?} keys={} repeats={} pads={} queued={} batch_ms={:.3} app_ms={:.3} dispatch_ms={:.3} app_max_ms={:.3}",
+                screen,
+                trace.key_events,
+                trace.key_repeat_events,
+                trace.pad_events,
+                trace.queued_events,
+                batch_us as f32 / 1000.0,
+                app_handler_sum_us as f32 / 1000.0,
+                dispatch_overhead_us as f32 / 1000.0,
+                trace.app_handler_max_us as f32 / 1000.0
+            );
+        }
+
+        let summary = &mut self.gameplay_event_trace;
+        summary.batches = summary.batches.saturating_add(1);
+        summary.key_events = summary.key_events.saturating_add(trace.key_events);
+        summary.key_repeat_events = summary
+            .key_repeat_events
+            .saturating_add(trace.key_repeat_events);
+        summary.pad_events = summary.pad_events.saturating_add(trace.pad_events);
+        summary.queued_events = summary.queued_events.saturating_add(trace.queued_events);
+        summary.batch_sum_us = summary.batch_sum_us.saturating_add(u64::from(batch_us));
+        summary.batch_max_us = summary.batch_max_us.max(batch_us);
+        summary.app_handler_sum_us = summary
+            .app_handler_sum_us
+            .saturating_add(trace.app_handler_sum_us);
+        summary.app_handler_max_us = summary.app_handler_max_us.max(trace.app_handler_max_us);
+        summary.dispatch_overhead_sum_us = summary
+            .dispatch_overhead_sum_us
+            .saturating_add(u64::from(dispatch_overhead_us));
+        summary.dispatch_overhead_max_us =
+            summary.dispatch_overhead_max_us.max(dispatch_overhead_us);
+        summary.slow_batches = summary
+            .slow_batches
+            .saturating_add((batch_us >= GAMEPLAY_EVENT_BATCH_SLOW_US) as u32);
+
+        if now.duration_since(summary.started_at) >= GAMEPLAY_EVENT_TRACE_INTERVAL {
+            let batches = summary.batches.max(1);
+            trace!(
+                "Gameplay raw input: batches={} keys={} repeats={} pads={} queued={} batch_ms=[avg:{:.3} max:{:.3}] app_ms=[avg:{:.3} max:{:.3}] dispatch_ms=[avg:{:.3} max:{:.3}] slow_batches={}",
+                summary.batches,
+                summary.key_events,
+                summary.key_repeat_events,
+                summary.pad_events,
+                summary.queued_events,
+                summary.batch_sum_us as f32 / batches as f32 / 1000.0,
+                summary.batch_max_us as f32 / 1000.0,
+                summary.app_handler_sum_us as f32 / batches as f32 / 1000.0,
+                summary.app_handler_max_us as f32 / 1000.0,
+                summary.dispatch_overhead_sum_us as f32 / batches as f32 / 1000.0,
+                summary.dispatch_overhead_max_us as f32 / 1000.0,
+                summary.slow_batches
+            );
+            summary.reset(now);
+        }
+        trace.reset(now);
+    }
+
+    #[inline(always)]
+    fn set_window_focus(&mut self, focused: bool, now: Instant) -> bool {
+        if self.window_focused == focused {
+            return false;
+        }
+        self.window_focused = focused;
+        self.reset_frame_clock(now);
+        true
+    }
+
+    #[inline(always)]
+    fn set_window_occluded(&mut self, occluded: bool, now: Instant) -> bool {
+        if self.window_occluded == occluded {
+            return false;
+        }
+        self.window_occluded = occluded;
+        self.reset_frame_clock(now);
+        true
+    }
+
+    #[inline(always)]
+    fn set_surface_active(&mut self, active: bool, now: Instant) -> bool {
+        if self.surface_active == active {
+            return false;
+        }
+        self.surface_active = active;
+        self.reset_frame_clock(now);
+        true
+    }
+
+    #[inline(always)]
+    fn background_frame_interval(&self, screen: CurrentScreen) -> Option<Duration> {
+        self.frame_interval_state(screen).interval
+    }
+
+    #[inline(always)]
+    fn should_skip_compose_and_draw(&self) -> bool {
+        self.window_occluded || !self.surface_active
     }
 
     #[inline(always)]
@@ -686,7 +1555,6 @@ fn build_course_run_from_selection(
     if stages.is_empty() {
         return None;
     }
-    let global_offset_seconds = crate::config::get().global_offset_seconds;
     let mut course_display_totals =
         [crate::game::gameplay::CourseDisplayTotals::default(); crate::game::gameplay::MAX_PLAYERS];
     for stage in &stages {
@@ -698,10 +1566,7 @@ fn build_course_run_from_selection(
             ) else {
                 continue;
             };
-            let add = crate::game::gameplay::course_display_totals_for_chart(
-                chart,
-                global_offset_seconds,
-            );
+            let add = crate::game::gameplay::course_display_totals_for_chart(chart);
             let total = &mut course_display_totals[player_idx];
             total.possible_grade_points = total
                 .possible_grade_points
@@ -774,9 +1639,13 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let mut meter_sum = 0u32;
         let mut meter_count = 0u32;
         let mut any_failed = false;
+        let mut score_valid = true;
+        let mut disqualified = false;
         let mut show_w0 = false;
+        let mut show_fa_plus_pane = false;
         let mut show_ex = false;
         let mut show_hard_ex = false;
+        let mut track_early_judgments = false;
         let mut counts = crate::game::timing::WindowCounts::default();
         let mut counts_10ms = crate::game::timing::WindowCounts::default();
         let mut first_player: Option<&stage_stats::PlayerStageSummary> = None;
@@ -796,9 +1665,13 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             meter_sum = meter_sum.saturating_add(player.chart.meter);
             meter_count = meter_count.saturating_add(1);
             any_failed |= player.grade == scores::Grade::Failed;
+            score_valid &= player.score_valid;
+            disqualified |= player.disqualified;
             show_w0 |= player.show_w0;
+            show_fa_plus_pane |= player.show_fa_plus_pane;
             show_ex |= player.show_ex_score;
             show_hard_ex |= player.show_hard_ex_score;
+            track_early_judgments |= player.track_early_judgments;
             counts = merge_window_counts(counts, player.window_counts);
             counts_10ms = merge_window_counts(counts_10ms, player.window_counts_10ms);
         }
@@ -842,6 +1715,14 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         players[idx] = Some(stage_stats::PlayerStageSummary {
             profile_name: first_player.profile_name.clone(),
             chart: Arc::new(summary_chart),
+            score_valid,
+            disqualified,
+            groovestats: scores::GrooveStatsEvalState {
+                valid: false,
+                reason_lines: vec!["GrooveStats QR is unavailable in course mode.".to_string()],
+                manual_qr_url: None,
+            },
+            itl: scores::ItlEvalState::default(),
             grade,
             score_percent,
             ex_score_percent,
@@ -850,8 +1731,10 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             window_counts: counts,
             window_counts_10ms: counts_10ms,
             show_w0,
+            show_fa_plus_pane,
             show_ex_score: show_ex,
             show_hard_ex_score: show_hard_ex,
+            track_early_judgments,
         });
     }
 
@@ -934,18 +1817,34 @@ fn score_info_from_stage(
         initials.as_str(),
         player.score_percent,
     );
-    let earned_machine_record = machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
-    let earned_top2_personal = personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+    let earned_machine_record =
+        player.score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
+    let earned_top2_personal =
+        player.score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+    let machine_record_highlight_rank = player
+        .score_valid
+        .then_some(machine_record_highlight_rank)
+        .flatten();
+    let personal_record_highlight_rank = player
+        .score_valid
+        .then_some(personal_record_highlight_rank)
+        .flatten();
 
     Some(evaluation::ScoreInfo {
         song: stage.song.clone(),
         chart: player.chart.clone(),
+        side,
         profile_name: player.profile_name.clone(),
+        score_valid: player.score_valid,
+        disqualified: player.disqualified,
+        groovestats: player.groovestats.clone(),
+        itl: player.itl.clone(),
         judgment_counts,
         score_percent: player.score_percent,
         grade: player.grade,
         speed_mod: profile::get_for_side(side).scroll_speed,
         hands_achieved: 0,
+        hands_total: 0,
         holds_held: 0,
         holds_total: 0,
         rolls_held: 0,
@@ -975,7 +1874,8 @@ fn score_info_from_stage(
         show_fa_plus_window: player.show_w0,
         show_ex_score: player.show_ex_score,
         show_hard_ex_score: player.show_hard_ex_score,
-        show_fa_plus_pane: player.show_w0,
+        show_fa_plus_pane: player.show_fa_plus_pane,
+        track_early_judgments: player.track_early_judgments,
         machine_records,
         machine_record_highlight_rank,
         personal_records,
@@ -1002,6 +1902,34 @@ fn build_course_summary_eval_state(
     state.return_to_course = true;
     state.allow_online_panes = false;
     state
+}
+
+fn should_auto_screenshot_eval(eval: &evaluation::State, mask: u8) -> bool {
+    if mask == 0 {
+        return false;
+    }
+    for info in eval.score_info.iter().flatten() {
+        let is_fail = info.fail_time.is_some();
+        let is_pb = info.personal_record_highlight_rank.is_some();
+        let is_quad = matches!(info.grade, scores::Grade::Tier01);
+        let is_quint = matches!(info.grade, scores::Grade::Quint);
+        if (mask & config::AUTO_SS_PBS) != 0 && is_pb {
+            return true;
+        }
+        if (mask & config::AUTO_SS_FAILS) != 0 && is_fail {
+            return true;
+        }
+        if (mask & config::AUTO_SS_CLEARS) != 0 && !is_fail && !is_pb {
+            return true;
+        }
+        if (mask & config::AUTO_SS_QUADS) != 0 && is_quad {
+            return true;
+        }
+        if (mask & config::AUTO_SS_QUINTS) != 0 && is_quint {
+            return true;
+        }
+    }
+    false
 }
 
 fn save_screenshot_image(image: &image::RgbaImage) -> Result<PathBuf, Box<dyn Error>> {
@@ -1045,8 +1973,61 @@ fn prewarm_gameplay_assets(
             }
         });
     }
+    if let Some(path) = state.song.background_path.as_ref() {
+        let key = path.to_string_lossy().into_owned();
+        if seen.insert(key) {
+            assets.ensure_texture_from_path(backend, path);
+        }
+    }
+    for change in &state.song.background_changes {
+        let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
+            continue;
+        };
+        let key = path.to_string_lossy().into_owned();
+        if seen.insert(key) {
+            assets.ensure_texture_from_path(backend, path);
+        }
+    }
     crate::core::audio::preload_sfx("assets/sounds/boom.ogg");
     crate::core::audio::preload_sfx("assets/sounds/assist_tick.ogg");
+}
+
+fn prewarm_gameplay_text_layout_cache(
+    assets: &AssetManager,
+    metrics: &Metrics,
+    cache: &mut crate::ui::compose::TextLayoutCache,
+    state: &gameplay::State,
+) {
+    let started = Instant::now();
+    cache.configure(
+        GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
+        crate::ui::compose::TextLayoutOverflowPolicy::PruneOwnedEntries,
+    );
+    cache.begin_frame_stats();
+
+    let fonts = assets.fonts();
+    let actors = gameplay::get_actors(state, assets);
+    let _ = crate::ui::compose::build_screen_cached(
+        &actors,
+        [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        0.0,
+        cache,
+    );
+    gameplay::prewarm_text_layout(cache, fonts, state);
+    crate::screens::components::gameplay::gameplay_stats::prewarm_text_layout(
+        cache, fonts, assets, state,
+    );
+    crate::screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
+
+    let stats = cache.frame_stats();
+    debug!(
+        "Gameplay text cache prewarm: entries={} aliases={} elapsed_ms={:.3}",
+        stats.owned_entries,
+        stats.shared_aliases,
+        started.elapsed().as_secs_f64() * 1000.0,
+    );
 }
 
 fn total_gameplay_elapsed(stages: &[stage_stats::StageSummary]) -> f32 {
@@ -1088,6 +2069,10 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
     let to_player = |si: &evaluation::ScoreInfo| stage_stats::PlayerStageSummary {
         profile_name: si.profile_name.clone(),
         chart: si.chart.clone(),
+        score_valid: si.score_valid,
+        disqualified: si.disqualified,
+        groovestats: si.groovestats.clone(),
+        itl: si.itl.clone(),
         grade: si.grade,
         score_percent: si.score_percent,
         ex_score_percent: si.ex_score_percent,
@@ -1096,8 +2081,10 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         window_counts: si.window_counts,
         window_counts_10ms: si.window_counts_10ms,
         show_w0: (si.show_fa_plus_window && si.show_fa_plus_pane) || si.show_ex_score,
+        show_fa_plus_pane: si.show_fa_plus_pane,
         show_ex_score: si.show_ex_score,
         show_hard_ex_score: si.show_hard_ex_score,
+        track_early_judgments: si.track_early_judgments,
     };
 
     match play_style {
@@ -1518,7 +2505,11 @@ pub struct App {
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
     asset_manager: AssetManager,
+    ui_text_layout_cache: crate::ui::compose::TextLayoutCache,
+    gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache,
     state: AppState,
+    gameplay_key_ring: Arc<GameplayInputRing>,
+    gameplay_pad_ring: Arc<GameplayInputRing>,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
 }
@@ -1534,6 +2525,567 @@ impl App {
                 | CurrentScreen::Mappings
                 | CurrentScreen::Input
         )
+    }
+
+    #[inline(always)]
+    fn effective_frame_interval(&self) -> Option<Duration> {
+        self.state
+            .shell
+            .background_frame_interval(self.state.screens.current_screen)
+    }
+
+    #[inline(always)]
+    fn redraw_interval_state(&self, _window: &Window) -> FrameIntervalState {
+        self.state
+            .shell
+            .frame_interval_state(self.state.screens.current_screen)
+    }
+
+    #[inline(always)]
+    fn apply_present_back_pressure(&self) -> bool {
+        !self.state.shell.vsync_enabled
+            && self.state.shell.present_mode_policy == PresentModePolicy::Mailbox
+            && self.effective_frame_interval().is_none()
+    }
+
+    #[inline(always)]
+    fn stats_overlay_audio(
+        &self,
+    ) -> Option<crate::screens::components::shared::stats_overlay::AudioHealth> {
+        let audio = crate::core::audio::get_output_timing_snapshot();
+        if !audio.has_measurement() {
+            return None;
+        }
+        Some(
+            crate::screens::components::shared::stats_overlay::AudioHealth {
+                backend: audio.backend,
+                requested_output_mode: audio.requested_output_mode,
+                fallback_from_native: audio.fallback_from_native,
+                timing_clock: audio.timing_clock,
+                timing_quality: audio.timing_quality,
+                sample_rate_hz: audio.sample_rate_hz,
+                device_period_ns: audio.device_period_ns,
+                stream_latency_ns: audio.stream_latency_ns,
+                buffer_frames: audio.buffer_frames,
+                padding_frames: audio.padding_frames,
+                queued_frames: audio.queued_frames,
+                estimated_output_delay_ns: audio.estimated_output_delay_ns,
+                clock_fallback_count: audio.clock_fallback_count,
+                timing_sanity_failure_count: audio.timing_sanity_failure_count,
+                underrun_count: audio.underrun_count,
+            },
+        )
+    }
+
+    #[inline(always)]
+    fn stats_overlay_timing(
+        &self,
+    ) -> Option<crate::screens::components::shared::stats_overlay::TimingHealth> {
+        if !self.state.shell.overlay_mode.shows_timing() {
+            return None;
+        }
+        let display_clock = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(crate::game::gameplay::display_clock_health)
+            .unwrap_or_default();
+        let present = self.state.shell.last_present_stats;
+        let interval_ns = if present.actual_interval_ns != 0 {
+            present.actual_interval_ns
+        } else {
+            present.refresh_ns
+        };
+        Some(
+            crate::screens::components::shared::stats_overlay::TimingHealth {
+                interval_ns,
+                display_error_ms: display_clock.error_seconds * 1000.0,
+                display_catching_up: display_clock.catching_up,
+                present_mode: present.mode,
+                display_clock: present.display_clock,
+                host_clock: present.host_clock,
+                in_flight_images: present.in_flight_images,
+                waited_for_image: present.waited_for_image,
+                applied_back_pressure: present.applied_back_pressure,
+                queue_idle_waited: present.queue_idle_waited,
+                suboptimal: present.suboptimal,
+                submitted_present_id: present.submitted_present_id,
+                completed_present_id: present.completed_present_id,
+                calibration_error_ns: present.calibration_error_ns,
+                host_mapped: present.host_present_ns != 0
+                    && present.display_clock != renderer::ClockDomainTrace::Unknown
+                    && present.host_clock != renderer::ClockDomainTrace::Unknown,
+                audio: self.stats_overlay_audio(),
+            },
+        )
+    }
+
+    #[inline(always)]
+    fn request_redraw(&mut self, window: &Window, reason: &'static str) {
+        self.state
+            .shell
+            .note_redraw_requested(Instant::now(), reason);
+        window.request_redraw();
+    }
+
+    #[inline(always)]
+    fn request_redraw_if_needed(&mut self, window: &Window, reason: &'static str) {
+        if !self.state.shell.redraw_pending() {
+            self.request_redraw(window, reason);
+        }
+    }
+
+    #[inline(always)]
+    fn chain_continuous_redraw(&mut self, window: &Window) {
+        if self.redraw_interval_state(window).interval.is_none()
+            && !self.state.shell.should_skip_compose_and_draw()
+        {
+            self.request_redraw_if_needed(window, "chain");
+        }
+    }
+
+    fn log_frame_loop_mode(&mut self, mode: FrameLoopMode) {
+        if !self.state.shell.note_frame_loop_mode(mode) {
+            return;
+        }
+        let screen = self.state.screens.current_screen;
+        let focused = self.state.shell.window_focused;
+        let occluded = self.state.shell.window_occluded;
+        let surface_active = self.state.shell.surface_active;
+        let max_fps = self
+            .state
+            .shell
+            .frame_interval
+            .map(|interval| (1.0 / interval.as_secs_f64()).round() as u32)
+            .unwrap_or(0);
+        match mode {
+            FrameLoopMode::Poll => debug!(
+                "Frame pacing: poll screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
+                self.state.shell.vsync_enabled, self.state.shell.present_mode_policy,
+            ),
+            FrameLoopMode::WaitPending => debug!(
+                "Frame pacing: wait_pending screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
+                self.state.shell.vsync_enabled, self.state.shell.present_mode_policy,
+            ),
+            FrameLoopMode::Scheduled(reason, interval) => debug!(
+                "Frame pacing: scheduled reason={} interval_ms={:.3} screen={screen:?} focused={focused} occluded={occluded} surface_active={surface_active} vsync={} present={} max_fps={max_fps}",
+                reason.as_str(),
+                interval.as_secs_f64() * 1000.0,
+                self.state.shell.vsync_enabled,
+                self.state.shell.present_mode_policy,
+            ),
+        }
+    }
+
+    fn run_frame(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window: Arc<Window>,
+        redraw_started: Instant,
+        request_to_redraw_us: u32,
+        redraw_request_reason: &'static str,
+    ) {
+        let prev_frame_end = self.state.shell.last_frame_end_time;
+        let pre_redraw_gap_us = elapsed_us_between(redraw_started, prev_frame_end);
+        let delta_time = redraw_started
+            .duration_since(self.state.shell.last_frame_time)
+            .as_secs_f32();
+        self.state.shell.last_frame_time = redraw_started;
+        let total_elapsed = redraw_started
+            .duration_since(self.state.shell.start_time)
+            .as_secs_f32();
+        crate::ui::runtime::tick(delta_time);
+
+        self.sync_gameplay_input_capture();
+        self.state.shell.update_gamepad_overlay(redraw_started);
+        let input_us: u32;
+        let update_us: u32;
+        let compose_us: u32;
+        let compose_breakdown: ComposeBreakdown;
+        let mut upload_us: u32 = 0;
+        let mut draw_us: u32 = 0;
+        let mut draw_stats = renderer::DrawStats::default();
+        let input_started = Instant::now();
+        if let Err(e) = self.drain_gameplay_input_events(event_loop) {
+            error!("Failed to handle gameplay ring input: {e}");
+            event_loop.exit();
+            return;
+        }
+        if let Err(e) = self.flush_due_input_events(event_loop) {
+            error!("Failed to handle debounced input: {e}");
+            event_loop.exit();
+            return;
+        }
+        input_us = elapsed_us_since(input_started);
+
+        let mut finished_fading_out_to: Option<CurrentScreen> = None;
+        let update_started = Instant::now();
+        match &mut self.state.shell.transition {
+            TransitionState::FadingOut {
+                elapsed,
+                duration,
+                target,
+            } => {
+                *elapsed += delta_time;
+                if *elapsed >= *duration {
+                    finished_fading_out_to = Some(*target);
+                }
+            }
+            TransitionState::ActorsFadeOut {
+                elapsed,
+                duration,
+                target,
+            } => {
+                *elapsed += delta_time;
+                if *elapsed >= *duration {
+                    let target_screen = *target;
+                    let prev = self.state.screens.current_screen;
+                    self.state.screens.current_screen = target_screen;
+                    if target_screen == CurrentScreen::SelectColor {
+                        select_color::on_enter(&mut self.state.screens.select_color_state);
+                    }
+
+                    let menu_music_enabled = config::get().menu_music;
+                    let target_menu_music = menu_music_enabled
+                        && matches!(
+                            target_screen,
+                            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+                        );
+                    let prev_menu_music = menu_music_enabled
+                        && matches!(
+                            prev,
+                            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
+                        );
+                    let keep_preview = (prev == CurrentScreen::SelectMusic
+                        && target_screen == CurrentScreen::PlayerOptions)
+                        || (prev == CurrentScreen::PlayerOptions
+                            && target_screen == CurrentScreen::SelectMusic);
+
+                    if target_menu_music {
+                        if !prev_menu_music {
+                            crate::core::audio::play_music(
+                                std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
+                                crate::core::audio::Cut::default(),
+                                true,
+                                1.0,
+                            );
+                        }
+                    } else if prev_menu_music {
+                        crate::core::audio::stop_music();
+                    } else if !keep_preview {
+                        crate::core::audio::stop_music();
+                    }
+
+                    if target_screen == CurrentScreen::Menu {
+                        let current_color_index = self.state.screens.menu_state.active_color_index;
+                        self.state.screens.menu_state = menu::init();
+                        self.state.screens.menu_state.active_color_index = current_color_index;
+                    } else if target_screen == CurrentScreen::Options {
+                        self.reset_options_state_for_entry(prev);
+                    } else if target_screen == CurrentScreen::ManageLocalProfiles {
+                        let color_index = self.state.screens.options_state.active_color_index;
+                        self.state.screens.manage_local_profiles_state =
+                            manage_local_profiles::init();
+                        self.state
+                            .screens
+                            .manage_local_profiles_state
+                            .active_color_index = color_index;
+                    } else if target_screen == CurrentScreen::SelectProfile {
+                        let current_color_index =
+                            self.state.screens.select_profile_state.active_color_index;
+                        self.state.screens.select_profile_state = select_profile::init();
+                        self.state.screens.select_profile_state.active_color_index =
+                            current_color_index;
+                        if prev == CurrentScreen::Menu {
+                            let p2 = self.state.screens.menu_state.started_by_p2;
+                            select_profile::set_joined(
+                                &mut self.state.screens.select_profile_state,
+                                !p2,
+                                p2,
+                            );
+                        }
+                    } else if target_screen == CurrentScreen::SelectStyle {
+                        let current_color_index =
+                            self.state.screens.select_style_state.active_color_index;
+                        self.state.screens.select_style_state = select_style::init();
+                        self.state.screens.select_style_state.active_color_index =
+                            current_color_index;
+                        let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+                        let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+                        self.state.screens.select_style_state.selected_index =
+                            if p1_joined && p2_joined { 1 } else { 0 };
+                    } else if target_screen == CurrentScreen::Mappings {
+                        let color_index = self.state.screens.options_state.active_color_index;
+                        self.state.screens.mappings_state = mappings::init();
+                        self.state.screens.mappings_state.active_color_index = color_index;
+                    }
+
+                    if prev == CurrentScreen::SelectColor {
+                        let idx = self.state.screens.select_color_state.active_color_index;
+                        self.state.screens.menu_state.active_color_index = idx;
+                        self.state.screens.select_profile_state.active_color_index = idx;
+                        self.state.screens.select_style_state.active_color_index = idx;
+                        self.state.screens.select_play_mode_state.active_color_index = idx;
+                        self.state.screens.profile_load_state.active_color_index = idx;
+                        self.state.screens.select_music_state.active_color_index = idx;
+                        self.state.screens.select_course_state.active_color_index = idx;
+                        self.state.screens.credits_state.active_color_index = idx;
+                        if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+                            gs.active_color_index = idx;
+                            gs.player_color = color::simply_love_rgba(idx);
+                        }
+                        self.state.screens.options_state.active_color_index = idx;
+                        self.state
+                            .screens
+                            .manage_local_profiles_state
+                            .active_color_index = idx;
+                    }
+
+                    if target_screen == CurrentScreen::Options {
+                        self.update_options_monitor_specs(event_loop);
+                    }
+
+                    self.state.shell.transition = if Self::is_actor_fade_screen(target_screen) {
+                        TransitionState::ActorsFadeIn { elapsed: 0.0 }
+                    } else {
+                        TransitionState::Idle
+                    };
+                    crate::ui::runtime::clear_all();
+                }
+            }
+            TransitionState::FadingIn { elapsed, duration } => {
+                *elapsed += delta_time;
+                let finished = *elapsed >= *duration;
+
+                if self.state.screens.current_screen == CurrentScreen::Gameplay
+                    && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+                {
+                    let _ = gameplay::update(gs, delta_time);
+                }
+
+                if finished
+                    && matches!(
+                        self.state.shell.transition,
+                        TransitionState::FadingIn { .. }
+                    )
+                {
+                    self.state.shell.transition = TransitionState::Idle;
+                }
+            }
+            TransitionState::ActorsFadeIn { elapsed } => {
+                *elapsed += delta_time;
+                if *elapsed >= MENU_ACTORS_FADE_DURATION {
+                    self.state.shell.transition = TransitionState::Idle;
+                }
+            }
+            TransitionState::Idle => {
+                let gameplay_prompt_active = self.state.screens.current_screen
+                    == CurrentScreen::Gameplay
+                    && self.state.gameplay_offset_save_prompt.is_some();
+                if !gameplay_prompt_active {
+                    if let Some(action) = self.state.screens.step_idle(
+                        delta_time,
+                        redraw_started,
+                        &self.state.session,
+                        &self.asset_manager,
+                    ) && !matches!(action, ScreenAction::None)
+                    {
+                        let _ = self.handle_action(action, event_loop);
+                    }
+                }
+                if self.state.screens.current_screen == CurrentScreen::Evaluation
+                    && !self.state.screens.evaluation_state.auto_screenshot_taken
+                    && evaluation::auto_screenshot_ready(&self.state.screens.evaluation_state)
+                {
+                    self.state.screens.evaluation_state.auto_screenshot_taken = true;
+                    if should_auto_screenshot_eval(
+                        &self.state.screens.evaluation_state,
+                        config::get().auto_screenshot_eval,
+                    ) {
+                        self.state.shell.screenshot_pending = true;
+                        self.state.shell.screenshot_request_side = None;
+                    }
+                }
+            }
+        }
+
+        if let Some(target) = finished_fading_out_to {
+            self.on_fade_complete(target, event_loop);
+        }
+        update_us = elapsed_us_since(update_started);
+
+        if self.window.as_ref().map(|w| w.id()) != Some(window.id()) {
+            self.state.shell.last_frame_end_time = Instant::now();
+            return;
+        }
+        if self.state.shell.should_skip_compose_and_draw() {
+            self.state.shell.current_frame_vpf = 0;
+            self.state.shell.last_frame_end_time = Instant::now();
+            return;
+        }
+
+        self.sync_gameplay_background();
+        let actor_build_started = Instant::now();
+        let (actors, clear_color) = self.get_current_actors();
+        let actor_build_us = elapsed_us_since(actor_build_started);
+        let actor_stats = actor_tree_stats(&actors);
+        self.update_fps_stats(redraw_started);
+        let active_banner_video_paths = self.active_banner_video_paths();
+        if let Some(backend) = &mut self.backend {
+            let upload_started = Instant::now();
+            let gameplay_time = self
+                .state
+                .screens
+                .gameplay_state
+                .as_ref()
+                .map(|state| state.current_music_time);
+            self.asset_manager
+                .sync_active_banner_videos(backend, &active_banner_video_paths);
+            self.asset_manager
+                .update_dynamic_video_frames(backend, gameplay_time);
+            self.asset_manager
+                .upload_pending_generated_textures(backend);
+            upload_us = elapsed_us_since(upload_started);
+        }
+        let fonts = self.asset_manager.fonts();
+        let text_layout_cache = if self.state.screens.current_screen == CurrentScreen::Gameplay {
+            &mut self.gameplay_text_layout_cache
+        } else {
+            &mut self.ui_text_layout_cache
+        };
+        text_layout_cache.begin_frame_stats();
+        let build_screen_started = Instant::now();
+        let mut screen = crate::ui::compose::build_screen_cached(
+            &actors,
+            clear_color,
+            &self.state.shell.metrics,
+            fonts,
+            total_elapsed,
+            text_layout_cache,
+        );
+        let build_screen_us = elapsed_us_since(build_screen_started);
+        let text_layout = text_layout_cache.frame_stats();
+        let resolve_textures_started = Instant::now();
+        self.asset_manager.resolve_render_textures(&mut screen);
+        let resolve_textures_us = elapsed_us_since(resolve_textures_started);
+        compose_us = actor_build_us
+            .saturating_add(build_screen_us)
+            .saturating_add(resolve_textures_us);
+        compose_breakdown = ComposeBreakdown {
+            actor_build_us,
+            build_screen_us,
+            resolve_textures_us,
+            actor_stats,
+            render_objects: saturating_u32(screen.objects.len()),
+            render_cameras: saturating_u32(screen.cameras.len()),
+            text_layout,
+        };
+
+        let apply_present_back_pressure = self.apply_present_back_pressure();
+        if let Some(backend) = &mut self.backend {
+            if self.state.shell.screenshot_pending {
+                backend.request_screenshot();
+            }
+            let draw_started = Instant::now();
+            match backend.draw(
+                &screen,
+                self.asset_manager.textures(),
+                apply_present_back_pressure,
+            ) {
+                Ok(stats) => {
+                    draw_stats = stats;
+                    self.state.shell.current_frame_vpf = stats.vertices;
+                    self.state.shell.last_present_stats = stats.present_stats;
+                    draw_us = elapsed_us_since(draw_started);
+                    self.capture_pending_screenshot(redraw_started);
+                }
+                Err(e) => {
+                    error!("Failed to draw frame: {e}");
+                    event_loop.exit();
+                    return;
+                }
+            }
+        }
+        let frame_finished = Instant::now();
+        let frame_seconds = frame_finished.duration_since(prev_frame_end).as_secs_f32();
+        self.state.shell.last_frame_end_time = frame_finished;
+        self.chain_continuous_redraw(&window);
+        let total_elapsed_end = frame_finished
+            .duration_since(self.state.shell.start_time)
+            .as_secs_f32();
+        self.update_stutter_samples(frame_seconds, total_elapsed_end);
+        self.trace_frame_stutter_if_needed(
+            frame_seconds,
+            total_elapsed_end,
+            self.state.screens.current_screen,
+            pre_redraw_gap_us,
+            request_to_redraw_us,
+            redraw_request_reason,
+            input_us,
+            update_us,
+            compose_us,
+            upload_us,
+            draw_us,
+            draw_stats,
+            compose_breakdown,
+        );
+        self.trace_gameplay_frame_pacing_if_needed(
+            frame_finished,
+            self.state.screens.current_screen,
+            frame_seconds,
+            pre_redraw_gap_us,
+            request_to_redraw_us,
+            redraw_request_reason,
+            draw_us,
+            draw_stats,
+        );
+    }
+
+    fn flush_due_input_events(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<bool, Box<dyn Error>> {
+        if !matches!(self.state.shell.transition, TransitionState::Idle)
+            || self.state.screens.current_screen == CurrentScreen::Init
+        {
+            input::clear_debounce_state();
+            return Ok(false);
+        }
+        let mut flushed = false;
+        let mut err: Option<Box<dyn Error>> = None;
+        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        let start_screen = self.state.screens.current_screen;
+        let mut discard_gameplay_batch = false;
+        input::drain_debounced_input_events_with(|ev| {
+            flushed = true;
+            if gameplay_screen {
+                if discard_gameplay_batch || err.is_some() {
+                    return;
+                }
+                if let Err(e) =
+                    self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(ev))
+                {
+                    err = Some(e);
+                    return;
+                }
+                if !self.gameplay_dispatch_continues(start_screen) {
+                    discard_gameplay_batch = true;
+                }
+            } else if err.is_none()
+                && let Err(e) = self.route_input_event(event_loop, ev)
+            {
+                err = Some(e);
+            }
+        });
+        if discard_gameplay_batch {
+            self.gameplay_key_ring.clear();
+            self.gameplay_pad_ring.clear();
+        }
+        if let Some(e) = err {
+            return Err(e);
+        }
+        Ok(flushed)
     }
 
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
@@ -1566,7 +3118,13 @@ impl App {
             backend: None,
             backend_type,
             asset_manager: AssetManager::new(),
+            ui_text_layout_cache: crate::ui::compose::TextLayoutCache::default(),
+            gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache::saturating(
+                GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
+            ),
             state,
+            gameplay_key_ring: Arc::new(GameplayInputRing::new()),
+            gameplay_pad_ring: Arc::new(GameplayInputRing::new()),
             software_renderer_threads,
             gfx_debug_enabled,
         }
@@ -1702,21 +3260,48 @@ impl App {
                 }
                 Vec::new()
             }
+            ScreenAction::ApplySongOffsetSyncBatch { changes } => {
+                if let Err(e) = self.save_song_offset_changes(&changes) {
+                    warn!("Failed to save pack sync changes: {e}");
+                }
+                Vec::new()
+            }
             ScreenAction::FetchOnlineGrade(hash) => vec![Command::FetchOnlineGrade(hash)],
             ScreenAction::ChangeGraphics {
                 renderer,
                 display_mode,
                 resolution,
                 monitor,
+                vsync,
+                present_mode_policy,
                 max_fps,
             } => {
                 // Ensure options menu reflects current hardware state before processing changes
                 self.update_options_monitor_specs(event_loop);
 
+                let mut present_config_changed = false;
+                if let Some(vsync) = vsync {
+                    self.state.shell.vsync_enabled = vsync;
+                    debug!("Graphics setting changed: vsync={vsync}");
+                    config::update_vsync(vsync);
+                    options::sync_vsync(&mut self.state.screens.options_state, vsync);
+                    present_config_changed = true;
+                }
                 if let Some(max_fps) = max_fps {
                     self.state.shell.set_max_fps(max_fps);
+                    debug!("Graphics setting changed: max_fps={max_fps}");
                     config::update_max_fps(max_fps);
                     options::sync_max_fps(&mut self.state.screens.options_state, max_fps);
+                }
+                if let Some(policy) = present_mode_policy {
+                    self.state.shell.set_present_mode_policy(policy);
+                    debug!("Graphics setting changed: present_mode_policy={policy}");
+                    config::update_present_mode_policy(policy);
+                    options::sync_present_mode_policy(
+                        &mut self.state.screens.options_state,
+                        policy,
+                    );
+                    present_config_changed = true;
                 }
 
                 let mut pending_resolution = None;
@@ -1731,6 +3316,7 @@ impl App {
                     event_loop,
                     monitor.unwrap_or(self.state.shell.display_monitor),
                 );
+                let recreate_renderer = renderer.is_some();
 
                 match (renderer, display_mode) {
                     (Some(new_backend), Some(mode)) => {
@@ -1798,6 +3384,15 @@ impl App {
                         }
                     }
                 }
+                if present_config_changed
+                    && !recreate_renderer
+                    && let Some(backend) = &mut self.backend
+                {
+                    backend.set_present_config(
+                        self.state.shell.vsync_enabled,
+                        self.state.shell.present_mode_policy,
+                    );
+                }
                 Vec::new()
             }
             ScreenAction::UpdateShowOverlay(mode) => {
@@ -1855,19 +3450,53 @@ impl App {
         text
     }
 
-    fn save_gameplay_song_offset(&mut self, simfile_path: &Path, delta: f32) -> Result<(), String> {
-        if delta.abs() < 0.000_001_f32 {
+    fn save_song_offset_changes(&mut self, changes: &[SongOffsetSyncChange]) -> Result<(), String> {
+        let mut saved_files = 0usize;
+        let mut changed_tags_total = 0usize;
+        let mut first_saved_path: Option<&Path> = None;
+
+        for change in changes {
+            if change.delta_seconds.abs() < 0.000_001_f32 {
+                continue;
+            }
+            changed_tags_total += save_song_offset_delta_to_simfile(
+                change.simfile_path.as_path(),
+                change.delta_seconds,
+            )?;
+            let _ = song_loading::reload_song_in_cache(change.simfile_path.as_path())?;
+            saved_files += 1;
+            if first_saved_path.is_none() {
+                first_saved_path = Some(change.simfile_path.as_path());
+            }
+        }
+
+        if saved_files == 0 {
             return Ok(());
         }
-        let changed_tags = save_song_offset_delta_to_simfile(simfile_path, delta)?;
-        let _ = song_loading::reload_song_in_cache(simfile_path)?;
+
         select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
-        info!(
-            "Saved song offset sync changes to '{}' (updated {} #OFFSET tags; refreshed song cache).",
-            simfile_path.display(),
-            changed_tags
-        );
+        if saved_files == 1 {
+            if let Some(path) = first_saved_path {
+                info!(
+                    "Saved song offset sync changes to '{}' (updated {} #OFFSET tags; refreshed song cache).",
+                    path.display(),
+                    changed_tags_total
+                );
+            }
+        } else {
+            info!(
+                "Saved pack sync changes to {} simfiles (updated {} #OFFSET tags; refreshed song cache).",
+                saved_files, changed_tags_total
+            );
+        }
         Ok(())
+    }
+
+    fn save_gameplay_song_offset(&mut self, simfile_path: &Path, delta: f32) -> Result<(), String> {
+        self.save_song_offset_changes(&[SongOffsetSyncChange {
+            simfile_path: simfile_path.to_path_buf(),
+            delta_seconds: delta,
+        }])
     }
 
     fn maybe_begin_gameplay_offset_prompt(
@@ -2246,6 +3875,23 @@ impl App {
         true
     }
 
+    fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
+        if self.prepare_player_options_for_gameplay_restart() {
+            let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
+            if let Err(e) =
+                self.handle_action(ScreenAction::Navigate(CurrentScreen::Gameplay), event_loop)
+            {
+                log::error!("Failed to restart Gameplay with {label}: {e}");
+            } else {
+                self.state.session.gameplay_restart_count = restart_count;
+            }
+            true
+        } else {
+            log::warn!("Ignored {label} restart: no active gameplay state.");
+            false
+        }
+    }
+
     fn should_chain_course_to_next_stage(&self) -> bool {
         self.state.screens.current_screen == CurrentScreen::Gameplay
             && !self.current_gameplay_stage_failed()
@@ -2583,6 +4229,18 @@ impl App {
             };
             return Ok(());
         }
+        if ev.pressed
+            && self.state.screens.current_screen == CurrentScreen::Gameplay
+            && self.state.gameplay_offset_save_prompt.is_none()
+            && self.state.session.course_run.is_none()
+            && matches!(
+                ev.action,
+                input::VirtualAction::p1_restart | input::VirtualAction::p2_restart
+            )
+        {
+            self.try_gameplay_restart(event_loop, "Restart button");
+            return Ok(());
+        }
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 crate::screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
@@ -2678,6 +4336,148 @@ impl App {
             return Ok(());
         }
         self.handle_action(action, event_loop)
+    }
+
+    #[inline(always)]
+    fn gameplay_dispatch_continues(&self, start_screen: CurrentScreen) -> bool {
+        self.state.screens.current_screen == start_screen
+            && matches!(self.state.shell.transition, TransitionState::Idle)
+    }
+
+    #[inline(always)]
+    fn route_gameplay_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        ev: GameplayQueuedEvent,
+    ) -> Result<(), Box<dyn Error>> {
+        self.state.shell.note_gameplay_queued_input();
+        match ev {
+            GameplayQueuedEvent::Input(ev) => self.route_input_event(event_loop, ev),
+            GameplayQueuedEvent::RawKey(ev) => {
+                self.route_gameplay_raw_key_event(event_loop, ev);
+                Ok(())
+            }
+        }
+    }
+
+    fn route_gameplay_raw_key_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        ev: GameplayRawKeyEvent,
+    ) {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay {
+            return;
+        }
+        let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
+            return;
+        };
+        let allow_commands = self.state.gameplay_offset_save_prompt.is_none();
+        let action = crate::game::gameplay::handle_queued_raw_key(
+            gs,
+            ev.code,
+            ev.pressed,
+            ev.timestamp,
+            allow_commands,
+        );
+        if matches!(action, crate::game::gameplay::RawKeyAction::Restart)
+            && config::get().keyboard_features
+            && self.state.session.course_run.is_none()
+        {
+            self.try_gameplay_restart(event_loop, "Ctrl+R");
+        }
+    }
+
+    #[inline(always)]
+    fn sync_gameplay_input_capture(&self) {
+        let capture_enabled = self.state.shell.window_focused && self.state.shell.surface_active;
+        let ring_enabled = capture_enabled
+            && self.state.screens.current_screen == CurrentScreen::Gameplay
+            && matches!(self.state.shell.transition, TransitionState::Idle);
+        let key_was_enabled = self.gameplay_key_ring.swap_enabled(ring_enabled);
+        let pad_was_enabled = self.gameplay_pad_ring.swap_enabled(ring_enabled);
+        input::set_raw_keyboard_capture_enabled(ring_enabled);
+        if key_was_enabled != ring_enabled || !ring_enabled {
+            self.gameplay_key_ring.clear();
+            self.gameplay_key_ring.take_dropped();
+        }
+        if pad_was_enabled != ring_enabled || !ring_enabled {
+            self.gameplay_pad_ring.clear();
+            self.gameplay_pad_ring.take_dropped();
+        }
+    }
+
+    #[inline(always)]
+    fn clear_gameplay_input_events(&self) {
+        self.gameplay_key_ring.set_enabled(false);
+        self.gameplay_pad_ring.set_enabled(false);
+        input::set_raw_keyboard_capture_enabled(false);
+        self.gameplay_key_ring.clear();
+        self.gameplay_key_ring.take_dropped();
+        self.gameplay_pad_ring.clear();
+        self.gameplay_pad_ring.take_dropped();
+    }
+
+    fn drain_gameplay_input_events(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<(), Box<dyn Error>> {
+        let dropped_keys = self.gameplay_key_ring.take_dropped();
+        if dropped_keys > 0 {
+            warn!(
+                "Gameplay key input ring overflowed; dropped {dropped_keys} event(s) on screen {:?}",
+                self.state.screens.current_screen
+            );
+        }
+        let dropped_pads = self.gameplay_pad_ring.take_dropped();
+        if dropped_pads > 0 {
+            warn!(
+                "Gameplay pad input ring overflowed; dropped {dropped_pads} event(s) on screen {:?}",
+                self.state.screens.current_screen
+            );
+        }
+        if self.state.screens.current_screen != CurrentScreen::Gameplay
+            || !matches!(self.state.shell.transition, TransitionState::Idle)
+        {
+            self.gameplay_key_ring.clear();
+            self.gameplay_pad_ring.clear();
+            return Ok(());
+        }
+        let start_screen = self.state.screens.current_screen;
+        let mut next_key = self.gameplay_key_ring.pop();
+        let mut next_pad = self.gameplay_pad_ring.pop();
+        loop {
+            let ev = match (next_key.as_ref(), next_pad.as_ref()) {
+                (Some(key_ev), Some(pad_ev)) => {
+                    if gameplay_event_precedes(key_ev, pad_ev) {
+                        let ev = next_key.take().unwrap();
+                        next_key = self.gameplay_key_ring.pop();
+                        ev
+                    } else {
+                        let ev = next_pad.take().unwrap();
+                        next_pad = self.gameplay_pad_ring.pop();
+                        ev
+                    }
+                }
+                (Some(_), None) => {
+                    let ev = next_key.take().unwrap();
+                    next_key = self.gameplay_key_ring.pop();
+                    ev
+                }
+                (None, Some(_)) => {
+                    let ev = next_pad.take().unwrap();
+                    next_pad = self.gameplay_pad_ring.pop();
+                    ev
+                }
+                (None, None) => break,
+            };
+            self.route_gameplay_event(event_loop, ev)?;
+            if !self.gameplay_dispatch_continues(start_screen) {
+                self.gameplay_key_ring.clear();
+                self.gameplay_pad_ring.clear();
+                break;
+            }
+        }
+        Ok(())
     }
 
     fn run_commands(
@@ -2852,19 +4652,20 @@ impl App {
             (276.0_f32, 64.0_f32)
         };
         let mesh = chart_opt.and_then(|chart| {
-            let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
-                &chart.measure_nps_vec,
-                chart.max_nps,
-                &chart.timing,
-                chart.first_second,
-                chart.last_second,
-                graph_w,
-                graph_h,
-                0.0,
-                graph_w,
-                None,
-                1.0,
-            );
+            let verts =
+                crate::screens::components::shared::density_graph::build_density_histogram_mesh(
+                    &chart.measure_nps_vec,
+                    chart.max_nps,
+                    &chart.measure_seconds_vec,
+                    chart.first_second,
+                    chart.last_second,
+                    graph_w,
+                    graph_h,
+                    0.0,
+                    graph_w,
+                    None,
+                    1.0,
+                );
             if verts.is_empty() {
                 None
             } else {
@@ -2924,10 +4725,98 @@ impl App {
 
     fn apply_dynamic_background(&mut self, path_opt: Option<PathBuf>) {
         if let Some(backend) = self.backend.as_mut() {
-            let key = self.asset_manager.set_dynamic_background(backend, path_opt);
+            let key = self
+                .asset_manager
+                .set_dynamic_background(backend, path_opt.clone());
             if let Some(gs) = &mut self.state.screens.gameplay_state {
+                gs.current_background_path = path_opt;
                 gs.background_texture_key = key;
             }
+        }
+    }
+
+    fn sync_gameplay_background(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::Gameplay {
+            return;
+        }
+        let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
+            return;
+        };
+        let Some(next_change) = gs.song.background_changes.get(gs.next_background_change_ix) else {
+            return;
+        };
+        if gs.current_beat < next_change.start_beat {
+            return;
+        }
+        while let Some(change) = gs.song.background_changes.get(gs.next_background_change_ix) {
+            if gs.current_beat < change.start_beat {
+                break;
+            }
+            gs.next_background_change_ix += 1;
+        }
+        let show_video_backgrounds = config::get().show_video_backgrounds;
+        let path_opt = gs
+            .song
+            .gameplay_background_path(gs.current_beat, show_video_backgrounds)
+            .cloned();
+        if path_opt != gs.current_background_path {
+            self.apply_dynamic_background(path_opt);
+        }
+    }
+
+    fn active_banner_video_paths(&self) -> Vec<PathBuf> {
+        if !config::get().show_select_music_video_banners {
+            return Vec::new();
+        }
+        match self.state.screens.current_screen {
+            CurrentScreen::SelectMusic => {
+                let state = &self.state.screens.select_music_state;
+                if !config::get().show_select_music_banners || !state.banner_high_quality_requested
+                {
+                    return Vec::new();
+                }
+                match state.entries.get(state.selected_index) {
+                    Some(select_music::MusicWheelEntry::Song(song)) => {
+                        song.banner_path.clone().into_iter().collect()
+                    }
+                    Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
+                        banner_path.clone().into_iter().collect()
+                    }
+                    _ => Vec::new(),
+                }
+            }
+            CurrentScreen::SelectCourse => {
+                let state = &self.state.screens.select_course_state;
+                if !config::get().show_select_music_banners || !state.banner_high_quality_requested
+                {
+                    return Vec::new();
+                }
+                match state.entries.get(state.selected_index) {
+                    Some(select_music::MusicWheelEntry::Song(song)) => {
+                        song.banner_path.clone().into_iter().collect()
+                    }
+                    Some(select_music::MusicWheelEntry::PackHeader { banner_path, .. }) => {
+                        banner_path.clone().into_iter().collect()
+                    }
+                    _ => Vec::new(),
+                }
+            }
+            CurrentScreen::Evaluation => self
+                .state
+                .screens
+                .evaluation_state
+                .score_info
+                .iter()
+                .flatten()
+                .find_map(|score| score.song.banner_path.clone())
+                .into_iter()
+                .collect(),
+            CurrentScreen::EvaluationSummary | CurrentScreen::Initials => self
+                .post_select_display_stages()
+                .iter()
+                .filter_map(|stage| stage.song.banner_path.clone())
+                .collect(),
+            _ => Vec::new(),
         }
     }
 
@@ -2997,20 +4886,18 @@ impl App {
             return Ok(());
         };
 
-        if let Some(old) = self
+        if let Some((handle, old)) = self
             .asset_manager
-            .textures
-            .remove(SCREENSHOT_PREVIEW_TEXTURE_KEY)
+            .remove_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY)
         {
             let mut old_map = HashMap::with_capacity(1);
-            old_map.insert(SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(), old);
+            old_map.insert(handle, old);
             backend.dispose_textures(&mut old_map);
         }
 
         let texture = backend.create_texture(image, crate::core::gfx::SamplerDesc::default())?;
         self.asset_manager
-            .textures
-            .insert(SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(), texture);
+            .insert_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(), texture);
         crate::assets::register_texture_dims(
             SCREENSHOT_PREVIEW_TEXTURE_KEY,
             image.width(),
@@ -3339,10 +5226,11 @@ impl App {
         };
 
         if self.state.shell.overlay_mode.shows_fps() {
-            let overlay = crate::screens::components::stats_overlay::build(
+            let overlay = crate::screens::components::shared::stats_overlay::build(
                 self.backend_type,
                 self.state.shell.last_fps,
                 self.state.shell.last_vpf,
+                self.stats_overlay_timing(),
             );
             actors.extend(overlay);
             if self.state.shell.overlay_mode.shows_stutter() {
@@ -3350,16 +5238,19 @@ impl App {
                     .duration_since(self.state.shell.start_time)
                     .as_secs_f32();
                 let stutters = self.collect_visible_stutters(now_seconds);
-                actors.extend(crate::screens::components::stats_overlay::build_stutter(
-                    &stutters,
-                ));
+                actors.extend(
+                    crate::screens::components::shared::stats_overlay::build_stutter(&stutters),
+                );
             }
         }
 
         // Gamepad connection overlay (always on top of screen, but below transitions)
         if let Some((msg, _)) = &self.state.shell.gamepad_overlay_state {
-            let params = crate::screens::components::gamepad_overlay::Params { message: msg };
-            actors.extend(crate::screens::components::gamepad_overlay::build(params));
+            let params =
+                crate::screens::components::shared::gamepad_overlay::Params { message: msg };
+            actors.extend(crate::screens::components::shared::gamepad_overlay::build(
+                params,
+            ));
         }
         self.append_gameplay_offset_prompt_actors(&mut actors);
 
@@ -3377,7 +5268,7 @@ impl App {
                         || *target == CurrentScreen::SelectColor
                         || *target == CurrentScreen::Options)
                 {
-                    let splash = crate::screens::components::menu_splash::build(
+                    let splash = crate::screens::components::menu::menu_splash::build(
                         self.state.screens.menu_state.active_color_index,
                     );
                     actors.extend(splash);
@@ -3455,7 +5346,7 @@ impl App {
     fn collect_visible_stutters(
         &self,
         now_seconds: f32,
-    ) -> Vec<crate::screens::components::stats_overlay::StutterEvent> {
+    ) -> Vec<crate::screens::components::shared::stats_overlay::StutterEvent> {
         let mut out = Vec::with_capacity(STUTTER_SAMPLE_COUNT);
         let start = self.state.shell.stutter_cursor;
         for i in 0..STUTTER_SAMPLE_COUNT {
@@ -3472,13 +5363,15 @@ impl App {
             } else {
                 0.0
             };
-            out.push(crate::screens::components::stats_overlay::StutterEvent {
-                timestamp_seconds: sample.at_seconds,
-                frame_ms: sample.frame_seconds * 1000.0,
-                frame_multiple,
-                severity: sample.severity,
-                age_seconds,
-            });
+            out.push(
+                crate::screens::components::shared::stats_overlay::StutterEvent {
+                    timestamp_seconds: sample.at_seconds,
+                    frame_ms: sample.frame_seconds * 1000.0,
+                    frame_multiple,
+                    severity: sample.severity,
+                    age_seconds,
+                },
+            );
         }
         out
     }
@@ -3489,7 +5382,7 @@ impl App {
         if fps > 0.0 {
             return 1.0 / fps;
         }
-        if let Some(interval) = self.state.shell.frame_interval {
+        if let Some(interval) = self.effective_frame_interval() {
             return interval.as_secs_f32();
         }
         if self.state.shell.vsync_enabled {
@@ -3519,11 +5412,16 @@ impl App {
         frame_seconds: f32,
         total_elapsed: f32,
         screen: CurrentScreen,
+        pre_redraw_gap_us: u32,
+        request_to_redraw_us: u32,
+        redraw_request_reason: &'static str,
         input_us: u32,
         update_us: u32,
         compose_us: u32,
         upload_us: u32,
         draw_us: u32,
+        draw_stats: renderer::DrawStats,
+        compose_breakdown: ComposeBreakdown,
     ) {
         if !log::log_enabled!(log::Level::Trace) {
             return;
@@ -3544,38 +5442,339 @@ impl App {
             .saturating_add(compose_us)
             .saturating_add(upload_us)
             .saturating_add(draw_us);
-        let idle_wait_us = frame_us.saturating_sub(frame_work_us);
+        let accounted_us = pre_redraw_gap_us.saturating_add(frame_work_us);
+        let unaccounted_gap_us = frame_us.saturating_sub(accounted_us);
+        let draw_split_us = draw_stats
+            .acquire_us
+            .saturating_add(draw_stats.submit_us)
+            .saturating_add(draw_stats.present_us)
+            .saturating_add(draw_stats.gpu_wait_us)
+            .saturating_add(draw_stats.backend_setup_us)
+            .saturating_add(draw_stats.backend_prepare_us)
+            .saturating_add(draw_stats.backend_record_us);
+        let draw_other_us = draw_us.saturating_sub(draw_split_us);
+        let present_stats = draw_stats.present_stats;
+        let redraw_late_us = pre_redraw_gap_us.saturating_sub(request_to_redraw_us);
+        let display_clock = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(crate::game::gameplay::display_clock_health)
+            .unwrap_or_default();
+        let display_error_ms = display_clock.error_seconds * 1000.0;
+        let mut dominant = ("redraw_delivery", request_to_redraw_us);
+        let candidates = [
+            ("input", input_us),
+            ("update", update_us),
+            ("compose", compose_us),
+            ("upload", upload_us),
+            ("present", draw_stats.present_us),
+            ("gpu_wait", draw_stats.gpu_wait_us),
+            ("draw_setup", draw_stats.backend_setup_us),
+            ("draw_prepare", draw_stats.backend_prepare_us),
+            ("draw_record", draw_stats.backend_record_us),
+            ("draw_other", draw_other_us),
+            ("unaccounted", unaccounted_gap_us),
+            ("redrive_late", redraw_late_us),
+        ];
+        for (label, value) in candidates {
+            if value > dominant.1 {
+                dominant = (label, value);
+            }
+        }
         let multiple = if expected > 0.0 {
             frame_seconds / expected
         } else {
             0.0
         };
+        let audio_stats = crate::core::audio::get_output_timing_snapshot();
         log::trace!(
-            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} phases_ms=[input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} idle_wait:{:.3}]",
+            "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} resolve:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_prunes:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             total_elapsed,
             severity,
             screen,
             frame_seconds * 1000.0,
             expected * 1000.0,
             multiple,
+            redraw_request_reason,
+            dominant.0,
+            dominant.1 as f32 / 1000.0,
+            pre_redraw_gap_us as f32 / 1000.0,
             input_us as f32 / 1000.0,
             update_us as f32 / 1000.0,
             compose_us as f32 / 1000.0,
             upload_us as f32 / 1000.0,
             draw_us as f32 / 1000.0,
-            idle_wait_us as f32 / 1000.0
+            unaccounted_gap_us as f32 / 1000.0,
+            compose_breakdown.actor_build_us as f32 / 1000.0,
+            compose_breakdown.build_screen_us as f32 / 1000.0,
+            compose_breakdown.resolve_textures_us as f32 / 1000.0,
+            compose_breakdown.actor_stats.total,
+            compose_breakdown.actor_stats.sprites,
+            compose_breakdown.actor_stats.texts,
+            compose_breakdown.actor_stats.text_chars,
+            compose_breakdown.actor_stats.frames,
+            compose_breakdown.actor_stats.meshes,
+            compose_breakdown.actor_stats.textured_meshes,
+            compose_breakdown.actor_stats.cameras,
+            compose_breakdown.actor_stats.shadows,
+            compose_breakdown.render_objects,
+            compose_breakdown.render_cameras,
+            compose_breakdown.text_layout.owned_hits,
+            compose_breakdown.text_layout.shared_hits,
+            compose_breakdown.text_layout.misses,
+            compose_breakdown.text_layout.built_lines,
+            compose_breakdown.text_layout.built_glyphs,
+            compose_breakdown.text_layout.prunes,
+            compose_breakdown.text_layout.owned_entries,
+            compose_breakdown.text_layout.shared_aliases,
+            redraw_late_us as f32 / 1000.0,
+            request_to_redraw_us as f32 / 1000.0,
+            draw_stats.acquire_us as f32 / 1000.0,
+            draw_stats.submit_us as f32 / 1000.0,
+            draw_stats.present_us as f32 / 1000.0,
+            draw_stats.gpu_wait_us as f32 / 1000.0,
+            draw_other_us as f32 / 1000.0,
+            draw_stats.backend_setup_us as f32 / 1000.0,
+            draw_stats.backend_prepare_us as f32 / 1000.0,
+            draw_stats.backend_record_us as f32 / 1000.0,
+            u8::from(screen == CurrentScreen::Gameplay),
+            display_error_ms,
+            u8::from(display_clock.catching_up),
+            present_stats.mode,
+            present_stats.display_clock,
+            present_stats.host_clock,
+            present_stats.host_present_ns != 0,
+            present_stats.in_flight_images,
+            present_stats.waited_for_image,
+            present_stats.applied_back_pressure,
+            present_stats.queue_idle_waited,
+            present_stats.suboptimal,
+            present_stats.submitted_present_id,
+            present_stats.completed_present_id,
+            present_stats.refresh_ns as f32 / 1_000_000.0,
+            present_stats.actual_interval_ns as f32 / 1_000_000.0,
+            present_stats.present_margin_ns as f32 / 1_000_000.0,
+            present_stats.calibration_error_ns as f32 / 1_000_000.0,
+            audio_stats.backend,
+            audio_stats.requested_output_mode.as_str(),
+            audio_stats.fallback_from_native,
+            audio_stats.timing_clock,
+            audio_stats.timing_quality,
+            audio_stats.timing_sanity_failure_count,
+            audio_stats.clock_fallback_count,
+            audio_stats.sample_rate_hz,
+            audio_stats.buffer_frames,
+            audio_stats.padding_frames,
+            audio_stats.queued_frames,
+            audio_stats.device_period_ns as f32 / 1_000_000.0,
+            audio_stats.stream_latency_ns as f32 / 1_000_000.0,
+            audio_stats.estimated_output_delay_ns as f32 / 1_000_000.0,
+            audio_stats.underrun_count
         );
     }
 
+    fn trace_gameplay_frame_pacing_if_needed(
+        &mut self,
+        now: Instant,
+        screen: CurrentScreen,
+        frame_seconds: f32,
+        pre_redraw_gap_us: u32,
+        request_to_redraw_us: u32,
+        redraw_request_reason: &'static str,
+        draw_us: u32,
+        draw_stats: renderer::DrawStats,
+    ) {
+        let trace = &mut self.state.shell.gameplay_pacing_trace;
+        if screen != CurrentScreen::Gameplay {
+            trace.reset(now);
+            return;
+        }
+        if trace.frames == 0 {
+            trace.started_at = now;
+        }
+        let redraw_late_us = pre_redraw_gap_us.saturating_sub(request_to_redraw_us);
+        let dt_us_f = (frame_seconds * 1_000_000.0).max(0.0);
+        let dt_us = if dt_us_f > u32::MAX as f32 {
+            u32::MAX
+        } else {
+            dt_us_f as u32
+        };
+        trace.frames = trace.frames.saturating_add(1);
+        if redraw_request_reason == "chain" {
+            trace.chain_frames = trace.chain_frames.saturating_add(1);
+        } else {
+            trace.other_frames = trace.other_frames.saturating_add(1);
+        }
+        trace.dt_sum_us = trace.dt_sum_us.saturating_add(u64::from(dt_us));
+        trace.dt_max_us = trace.dt_max_us.max(dt_us);
+        trace.redraw_late_sum_us = trace
+            .redraw_late_sum_us
+            .saturating_add(u64::from(redraw_late_us));
+        trace.redraw_late_max_us = trace.redraw_late_max_us.max(redraw_late_us);
+        trace.redraw_delivery_sum_us = trace
+            .redraw_delivery_sum_us
+            .saturating_add(u64::from(request_to_redraw_us));
+        trace.redraw_delivery_max_us = trace.redraw_delivery_max_us.max(request_to_redraw_us);
+        trace.redraw_delivery_over_1ms +=
+            u32::from(request_to_redraw_us >= GAMEPLAY_REDRAW_DELIVERY_SLOW_US);
+        trace.redraw_delivery_over_2ms +=
+            u32::from(request_to_redraw_us >= GAMEPLAY_REDRAW_DELIVERY_BAD_US);
+        trace.draw_sum_us = trace.draw_sum_us.saturating_add(u64::from(draw_us));
+        trace.draw_max_us = trace.draw_max_us.max(draw_us);
+        trace.present_sum_us = trace
+            .present_sum_us
+            .saturating_add(u64::from(draw_stats.present_us));
+        trace.present_max_us = trace.present_max_us.max(draw_stats.present_us);
+        trace.present_over_1ms += u32::from(draw_stats.present_us >= GAMEPLAY_PRESENT_SLOW_US);
+        trace.present_over_3ms += u32::from(draw_stats.present_us >= GAMEPLAY_PRESENT_SPIKE_US);
+        trace.draw_setup_sum_us = trace
+            .draw_setup_sum_us
+            .saturating_add(u64::from(draw_stats.backend_setup_us));
+        trace.draw_prepare_sum_us = trace
+            .draw_prepare_sum_us
+            .saturating_add(u64::from(draw_stats.backend_prepare_us));
+        trace.draw_record_sum_us = trace
+            .draw_record_sum_us
+            .saturating_add(u64::from(draw_stats.backend_record_us));
+        let display_clock = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(crate::game::gameplay::display_clock_health)
+            .unwrap_or_default();
+        let display_error_us_i64 =
+            (f64::from(display_clock.error_seconds) * 1_000_000.0).round() as i64;
+        let display_error_last_us =
+            display_error_us_i64.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let display_error_abs_us =
+            display_error_us_i64.unsigned_abs().min(u64::from(u32::MAX)) as u32;
+        trace.display_error_last_us = display_error_last_us;
+        trace.display_error_abs_sum_us = trace
+            .display_error_abs_sum_us
+            .saturating_add(u64::from(display_error_abs_us));
+        trace.display_error_abs_max_us = trace.display_error_abs_max_us.max(display_error_abs_us);
+        trace.display_catching_up_frames += u32::from(display_clock.catching_up);
+        trace.display_catching_up_last = display_clock.catching_up;
+        let present_stats = draw_stats.present_stats;
+        trace.present_last_mode = present_stats.mode;
+        trace.present_display_clock_last = present_stats.display_clock;
+        trace.present_host_clock_last = present_stats.host_clock;
+        trace.present_inflight_sum = trace
+            .present_inflight_sum
+            .saturating_add(u64::from(present_stats.in_flight_images));
+        trace.present_inflight_max = trace
+            .present_inflight_max
+            .max(present_stats.in_flight_images);
+        trace.present_image_wait_frames += u32::from(present_stats.waited_for_image);
+        trace.present_back_pressure_frames += u32::from(present_stats.applied_back_pressure);
+        trace.present_queue_idle_frames += u32::from(present_stats.queue_idle_waited);
+        trace.present_suboptimal_frames += u32::from(present_stats.suboptimal);
+        trace.present_host_mapped_frames += u32::from(present_stats.host_present_ns != 0);
+        trace.present_calibration_error_sum_ns = trace
+            .present_calibration_error_sum_ns
+            .saturating_add(present_stats.calibration_error_ns);
+        trace.present_calibration_error_max_ns = trace
+            .present_calibration_error_max_ns
+            .max(present_stats.calibration_error_ns);
+        if present_stats.actual_interval_ns > 0 {
+            trace.present_interval_sum_ns = trace
+                .present_interval_sum_ns
+                .saturating_add(present_stats.actual_interval_ns);
+            trace.present_interval_max_ns = trace
+                .present_interval_max_ns
+                .max(present_stats.actual_interval_ns);
+            trace.present_interval_samples = trace.present_interval_samples.saturating_add(1);
+        }
+        if present_stats.completed_present_id != 0 {
+            trace.present_margin_sum_ns = trace
+                .present_margin_sum_ns
+                .saturating_add(present_stats.present_margin_ns);
+            trace.present_margin_max_ns = trace
+                .present_margin_max_ns
+                .max(present_stats.present_margin_ns);
+            trace.present_margin_samples = trace.present_margin_samples.saturating_add(1);
+        }
+        if now.duration_since(trace.started_at) < GAMEPLAY_PACING_LOG_INTERVAL {
+            return;
+        }
+        let frames = trace.frames.max(1);
+        let ms = |sum_us: u64| sum_us as f64 / frames as f64 / 1000.0;
+        let interval_samples = trace.present_interval_samples.max(1);
+        let margin_samples = trace.present_margin_samples.max(1);
+        let audio_stats = crate::core::audio::get_output_timing_snapshot();
+        log::trace!(
+            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            frames,
+            trace.chain_frames,
+            trace.other_frames,
+            ms(trace.dt_sum_us),
+            trace.dt_max_us as f64 / 1000.0,
+            ms(trace.redraw_late_sum_us),
+            trace.redraw_late_max_us as f64 / 1000.0,
+            ms(trace.redraw_delivery_sum_us),
+            trace.redraw_delivery_max_us as f64 / 1000.0,
+            trace.redraw_delivery_over_1ms,
+            trace.redraw_delivery_over_2ms,
+            ms(trace.draw_sum_us),
+            trace.draw_max_us as f64 / 1000.0,
+            ms(trace.present_sum_us),
+            trace.present_max_us as f64 / 1000.0,
+            trace.present_over_1ms,
+            trace.present_over_3ms,
+            ms(trace.draw_setup_sum_us),
+            ms(trace.draw_prepare_sum_us),
+            ms(trace.draw_record_sum_us),
+            trace.display_error_last_us as f64 / 1000.0,
+            trace.display_error_abs_sum_us as f64 / frames as f64 / 1000.0,
+            trace.display_error_abs_max_us as f64 / 1000.0,
+            trace.display_catching_up_frames,
+            u8::from(trace.display_catching_up_last),
+            trace.present_last_mode,
+            trace.present_display_clock_last,
+            trace.present_host_clock_last,
+            trace.present_host_mapped_frames,
+            trace.present_inflight_sum as f64 / frames as f64,
+            trace.present_inflight_max,
+            trace.present_image_wait_frames,
+            trace.present_back_pressure_frames,
+            trace.present_queue_idle_frames,
+            trace.present_suboptimal_frames,
+            trace.present_interval_sum_ns as f64 / interval_samples as f64 / 1_000_000.0,
+            trace.present_interval_max_ns as f64 / 1_000_000.0,
+            trace.present_margin_sum_ns as f64 / margin_samples as f64 / 1_000_000.0,
+            trace.present_margin_max_ns as f64 / 1_000_000.0,
+            trace.present_calibration_error_sum_ns as f64 / frames as f64 / 1_000_000.0,
+            trace.present_calibration_error_max_ns as f64 / 1_000_000.0,
+            audio_stats.backend,
+            audio_stats.requested_output_mode.as_str(),
+            audio_stats.fallback_from_native,
+            audio_stats.timing_clock,
+            audio_stats.timing_quality,
+            audio_stats.timing_sanity_failure_count,
+            audio_stats.clock_fallback_count,
+            audio_stats.sample_rate_hz,
+            audio_stats.buffer_frames,
+            audio_stats.padding_frames,
+            audio_stats.queued_frames,
+            audio_stats.device_period_ns as f64 / 1_000_000.0,
+            audio_stats.stream_latency_ns as f64 / 1_000_000.0,
+            audio_stats.estimated_output_delay_ns as f64 / 1_000_000.0,
+            audio_stats.underrun_count
+        );
+        trace.reset(now);
+    }
+
     #[inline(always)]
-    fn update_fps_title(&mut self, window: &Window, now: Instant) {
+    fn update_fps_stats(&mut self, now: Instant) {
         self.state.shell.frame_count += 1;
         let elapsed = now.duration_since(self.state.shell.last_title_update);
         if elapsed.as_secs_f32() >= 1.0 {
             let fps = self.state.shell.frame_count as f32 / elapsed.as_secs_f32();
             self.state.shell.last_fps = fps;
             self.state.shell.last_vpf = self.state.shell.current_frame_vpf;
-            window.set_title("DeadSync");
             self.state.shell.frame_count = 0;
             self.state.shell.last_title_update = now;
         }
@@ -3648,6 +5847,7 @@ impl App {
             self.backend_type,
             window.clone(),
             self.state.shell.vsync_enabled,
+            self.state.shell.present_mode_policy,
             self.gfx_debug_enabled,
         )?;
 
@@ -3660,17 +5860,20 @@ impl App {
         }
 
         self.asset_manager.load_initial_assets(&mut backend)?;
+        // Text layout cache entries borrow glyph texture keys from font storage.
+        // Renderer reinit reloads fonts, so cached layouts must be dropped before compose.
+        self.ui_text_layout_cache.clear();
+        self.gameplay_text_layout_cache.clear();
 
         let now = Instant::now();
         self.state.shell.start_time = now;
-        self.state.shell.last_frame_time = now;
         self.state.shell.last_title_update = now;
-        self.state.shell.next_redraw_at = now;
+        self.state.shell.reset_frame_clock(now);
         self.state.shell.frame_count = 0;
         self.state.shell.current_frame_vpf = 0;
 
         window.set_visible(true);
-        window.request_redraw();
+        self.request_redraw(&window, "init_graphics");
 
         self.window = Some(window);
         self.backend = Some(backend);
@@ -3713,7 +5916,8 @@ impl App {
 
         if let Some(mut backend) = self.backend.take() {
             self.asset_manager.destroy_dynamic_assets(&mut backend);
-            backend.dispose_textures(&mut self.asset_manager.textures);
+            let mut textures = self.asset_manager.take_textures();
+            backend.dispose_textures(&mut textures);
             backend.cleanup();
         }
         self.backend = None;
@@ -3724,8 +5928,7 @@ impl App {
         self.state.shell.frame_count = 0;
         let now = Instant::now();
         self.state.shell.last_title_update = now;
-        self.state.shell.last_frame_time = now;
-        self.state.shell.next_redraw_at = now;
+        self.state.shell.reset_frame_clock(now);
 
         match self.init_graphics(event_loop) {
             Ok(()) => {
@@ -3733,8 +5936,8 @@ impl App {
                 options::sync_video_renderer(&mut self.state.screens.options_state, target);
                 crate::ui::runtime::clear_all();
                 self.reset_dynamic_assets_after_renderer_switch();
-                if let Some(window) = &self.window {
-                    window.request_redraw();
+                if let Some(window) = self.window.clone() {
+                    self.request_redraw(&window, "switch_renderer");
                 }
                 info!("Switched renderer to {target:?}");
                 Ok(())
@@ -3770,6 +5973,54 @@ impl App {
                 Err(e)
             }
         }
+    }
+
+    fn capture_compose_case_now(&self) {
+        let total_elapsed = Instant::now()
+            .duration_since(self.state.shell.start_time)
+            .as_secs_f32();
+        let screen_name = format!("{:?}", self.state.screens.current_screen);
+        let (actors, clear_color) = self.get_current_actors();
+        let Ok((case, output)) = crate::test_support::compose_case::capture_case(
+            &screen_name,
+            &actors,
+            clear_color,
+            &self.state.shell.metrics,
+            self.asset_manager.fonts(),
+            total_elapsed,
+        ) else {
+            warn!("Failed to capture compose case for {screen_name}");
+            return;
+        };
+
+        let (case_path, output_path) =
+            crate::test_support::compose_case::default_capture_paths(&screen_name);
+        if let Err(e) = crate::test_support::compose_case::write_case(&case_path, &case) {
+            warn!(
+                "Failed to write compose case '{}': {e}",
+                case_path.display()
+            );
+            return;
+        }
+        if let Err(e) =
+            crate::test_support::compose_case::write_render_snapshot(&output_path, &output)
+        {
+            warn!(
+                "Failed to write compose output snapshot '{}': {e}",
+                output_path.display()
+            );
+            return;
+        }
+
+        info!(
+            "Saved compose capture for {}: case='{}' output='{}' hash={} objects={} cameras={}",
+            screen_name,
+            case_path.display(),
+            output_path.display(),
+            case.expected.output_hash,
+            case.expected.objects,
+            case.expected.cameras
+        );
     }
 
     fn apply_display_mode(
@@ -3910,52 +6161,74 @@ impl App {
     /* -------------------- keyboard: map -> route -------------------- */
 
     #[inline(always)]
-    fn handle_key_event(
+    fn handle_key_text(&mut self, event_loop: &ActiveEventLoop, text: &str) {
+        let action = if self.state.screens.current_screen == CurrentScreen::ManageLocalProfiles {
+            crate::screens::manage_local_profiles::handle_raw_key_event(
+                &mut self.state.screens.manage_local_profiles_state,
+                None,
+                Some(text),
+            )
+        } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
+            crate::screens::select_music::handle_raw_key_event(
+                &mut self.state.screens.select_music_state,
+                None,
+                Some(text),
+            )
+        } else {
+            ScreenAction::None
+        };
+        if matches!(action, ScreenAction::None) {
+            return;
+        }
+        if let Err(e) = self.handle_action(action, event_loop) {
+            log::error!("Failed to handle text input action: {e}");
+        }
+    }
+
+    #[inline(always)]
+    fn handle_raw_key_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        key_event: winit::event::KeyEvent,
-    ) {
-        // Track modifier key state for gameplay raw sync combos (F11/F12).
-        if let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key {
-            use winit::event::ElementState;
-            use winit::keyboard::KeyCode;
-            match code {
-                KeyCode::ShiftLeft | KeyCode::ShiftRight => {
-                    self.state.shell.shift_held = key_event.state == ElementState::Pressed;
-                }
-                KeyCode::ControlLeft | KeyCode::ControlRight => {
-                    self.state.shell.ctrl_held = key_event.state == ElementState::Pressed;
-                }
-                _ => {}
+        raw_key: input::RawKeyboardEvent,
+    ) -> bool {
+        use winit::keyboard::KeyCode;
+
+        match raw_key.code {
+            KeyCode::ShiftLeft | KeyCode::ShiftRight => {
+                self.state.shell.shift_held = raw_key.pressed;
             }
+            KeyCode::ControlLeft | KeyCode::ControlRight => {
+                self.state.shell.ctrl_held = raw_key.pressed;
+            }
+            _ => {}
         }
 
         if self.state.screens.current_screen == CurrentScreen::Sandbox {
             let action = crate::screens::sandbox::handle_raw_key_event(
                 &mut self.state.screens.sandbox_state,
-                &key_event,
+                &raw_key,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Sandbox raw key action: {e}");
                 }
-                return;
+                return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Menu {
             let action = crate::screens::menu::handle_raw_key_event(
                 &mut self.state.screens.menu_state,
-                &key_event,
+                &raw_key,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Menu raw key action: {e}");
                 }
-                return;
+                return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Mappings {
             let action = crate::screens::mappings::handle_raw_key_event(
                 &mut self.state.screens.mappings_state,
-                &key_event,
+                &raw_key,
             );
             if !matches!(action, ScreenAction::None)
                 && let Err(e) = self.handle_action(action, event_loop)
@@ -3964,125 +6237,184 @@ impl App {
             }
             // On the Mappings screen, arrows/Enter/Escape are handled entirely
             // via raw keycodes; do not route through the virtual keymap.
-            return;
+            return true;
         } else if self.state.screens.current_screen == CurrentScreen::ManageLocalProfiles {
             let action = crate::screens::manage_local_profiles::handle_raw_key_event(
                 &mut self.state.screens.manage_local_profiles_state,
-                &key_event,
+                Some(&raw_key),
+                None,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle ManageLocalProfiles raw key action: {e}");
                 }
-                return;
+                return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Input {
             let action = crate::screens::input::handle_raw_key_event(
                 &mut self.state.screens.input_state,
-                &key_event,
+                &raw_key,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle Input raw key action: {e}");
                 }
-                return;
+                return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
             let action = crate::screens::select_music::handle_raw_key_event(
                 &mut self.state.screens.select_music_state,
-                &key_event,
+                Some(&raw_key),
+                None,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
                     log::error!("Failed to handle SelectMusic raw key action: {e}");
                 }
-                return;
+                return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
-            if key_event.state == winit::event::ElementState::Pressed
-                && !self.state.session.course_eval_pages.is_empty()
-                && let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key
+            if raw_key.pressed
+                && !raw_key.repeat
+                && raw_key.code == KeyCode::F5
+                && crate::screens::evaluation::retry_timed_out_submissions(
+                    &self.state.screens.evaluation_state,
+                )
             {
-                match code {
-                    winit::keyboard::KeyCode::KeyN => {
+                return true;
+            }
+            if raw_key.pressed && !self.state.session.course_eval_pages.is_empty() {
+                match raw_key.code {
+                    KeyCode::KeyN => {
                         self.step_course_eval_page(1);
-                        return;
+                        return true;
                     }
-                    winit::keyboard::KeyCode::KeyP => {
+                    KeyCode::KeyP => {
                         self.step_course_eval_page(-1);
-                        return;
+                        return true;
                     }
                     _ => {}
                 }
             }
-        } else if self.state.screens.current_screen == CurrentScreen::Gameplay {
-            if self.state.gameplay_offset_save_prompt.is_none() {
-                if key_event.state == winit::event::ElementState::Pressed
-                    && !key_event.repeat
-                    && self.state.shell.ctrl_held
-                    && key_event.physical_key
-                        == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::KeyR)
-                    && config::get().keyboard_features
-                    && self.state.session.course_run.is_none()
-                {
-                    if self.prepare_player_options_for_gameplay_restart() {
-                        let restart_count =
-                            self.state.session.gameplay_restart_count.saturating_add(1);
-                        if let Err(e) = self.handle_action(
-                            ScreenAction::Navigate(CurrentScreen::Gameplay),
-                            event_loop,
-                        ) {
-                            log::error!("Failed to restart Gameplay with Ctrl+R: {e}");
-                        } else {
-                            self.state.session.gameplay_restart_count = restart_count;
-                        }
-                    } else {
-                        log::warn!("Ignored Ctrl+R restart: no active gameplay state.");
-                    }
-                    return;
-                }
-                if let Some(gs) = &mut self.state.screens.gameplay_state {
-                    let action = crate::game::gameplay::handle_raw_key_event(
-                        gs,
-                        &key_event,
-                        self.state.shell.shift_held,
-                    );
-                    if !matches!(action, ScreenAction::None) {
-                        if let Err(e) = self.handle_action(action, event_loop) {
-                            log::error!("Failed to handle Gameplay raw key action: {e}");
-                        }
-                        return;
-                    }
-                }
-            }
         }
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
-        let _event_timestamp = Instant::now();
 
-        if key_event.state == winit::event::ElementState::Pressed
-            && key_event.physical_key
-                == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F3)
-        {
+        if raw_key.pressed && raw_key.code == KeyCode::F3 {
             let mode = self.state.shell.cycle_overlay_mode();
             debug!("Overlay {}", self.state.shell.overlay_mode.label());
             config::update_show_stats_mode(mode);
             options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
         }
+        if raw_key.pressed
+            && !raw_key.repeat
+            && self.state.shell.ctrl_held
+            && self.state.shell.shift_held
+            && raw_key.code == KeyCode::F10
+        {
+            self.capture_compose_case_now();
+            return true;
+        }
         // Screen-specific Escape handling resides in per-screen raw handlers now
 
         if is_transitioning {
             input::clear_debounce_state();
-            return;
+            self.clear_gameplay_input_events();
+            return true;
         }
 
-        for ev in input::map_key_event(&key_event) {
-            if let Err(e) = self.route_input_event(event_loop, ev) {
+        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        if gameplay_screen {
+            return false;
+        }
+
+        let mut input_err: Option<Box<dyn Error>> = None;
+        input::map_raw_key_event_with(&raw_key, |ev| {
+            if input_err.is_none()
+                && let Err(e) = self.route_input_event(event_loop, ev)
+            {
+                input_err = Some(e);
+            }
+        });
+        if let Some(e) = input_err {
+            log::error!("Failed to handle input: {e}");
+            event_loop.exit();
+            return true;
+        }
+        false
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[inline(always)]
+    fn handle_window_key_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        key_event: winit::event::KeyEvent,
+    ) {
+        if let Some(text) = key_event.text.as_deref() {
+            self.handle_key_text(event_loop, text);
+        }
+
+        let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key else {
+            return;
+        };
+        let raw_key = input::RawKeyboardEvent {
+            code,
+            pressed: key_event.state == winit::event::ElementState::Pressed,
+            repeat: key_event.repeat,
+            timestamp: Instant::now(),
+            host_nanos: 0,
+        };
+        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        let handled_started = Instant::now();
+
+        if !self.handle_raw_key_event(event_loop, raw_key) {
+            if gameplay_screen {
+                let start_screen = self.state.screens.current_screen;
+                if let Some(gameplay_ev) = gameplay_raw_key_event(&raw_key)
+                    && let Err(e) = self.route_gameplay_event(event_loop, gameplay_ev)
+                {
+                    log::error!("Failed to handle gameplay raw key: {e}");
+                    event_loop.exit();
+                    return;
+                }
+                if !self.gameplay_dispatch_continues(start_screen) {
+                    return;
+                }
+            }
+
+            let mut input_err: Option<Box<dyn Error>> = None;
+            let start_screen = self.state.screens.current_screen;
+            let mut discard_gameplay_batch = false;
+            input::map_raw_key_event_with(&raw_key, |ev| {
+                if discard_gameplay_batch || input_err.is_some() {
+                    return;
+                }
+                let result = if gameplay_screen {
+                    self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(ev))
+                } else {
+                    self.route_input_event(event_loop, ev)
+                };
+                if let Err(e) = result {
+                    input_err = Some(e);
+                    return;
+                }
+                if gameplay_screen && !self.gameplay_dispatch_continues(start_screen) {
+                    discard_gameplay_batch = true;
+                }
+            });
+            if let Some(e) = input_err {
                 log::error!("Failed to handle input: {e}");
                 event_loop.exit();
                 return;
             }
         }
+
+        self.state.shell.note_gameplay_key_handler(
+            gameplay_screen,
+            raw_key.repeat,
+            elapsed_us_since(handled_started),
+        );
     }
 
     /* -------------------- pad event routing -------------------- */
@@ -4092,14 +6424,24 @@ impl App {
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
         if is_transitioning || self.state.screens.current_screen == CurrentScreen::Init {
             input::clear_debounce_state();
+            self.clear_gameplay_input_events();
             return;
         }
-        for iev in input::map_pad_event(&ev) {
-            if let Err(e) = self.route_input_event(event_loop, iev) {
-                error!("Failed to handle pad input: {e}");
-                event_loop.exit();
-                return;
+        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        if gameplay_screen {
+            return;
+        }
+        let mut input_err: Option<Box<dyn Error>> = None;
+        input::map_pad_event_with(&ev, |iev| {
+            if input_err.is_none()
+                && let Err(e) = self.route_input_event(event_loop, iev)
+            {
+                input_err = Some(e);
             }
+        });
+        if let Some(e) = input_err {
+            error!("Failed to handle pad input: {e}");
+            event_loop.exit();
         }
     }
 
@@ -4564,6 +6906,7 @@ impl App {
     ) -> Vec<Command> {
         let mut commands = Vec::new();
         if target == CurrentScreen::Gameplay {
+            crate::core::audio::stop_music();
             if prev != CurrentScreen::Gameplay {
                 self.state.session.gameplay_restart_count = 0;
             }
@@ -4608,10 +6951,14 @@ impl App {
                 }
             });
             let replay_status_text = replay_pending.as_ref().map(|payload| {
-                format!("Autoplay - {} {:.2}%", payload.name, payload.score / 100.0)
+                Arc::<str>::from(format!(
+                    "Autoplay - {} {:.2}%",
+                    payload.name,
+                    payload.score / 100.0
+                ))
             });
             if let Some(po_state) = self.state.screens.player_options_state.take() {
-                let song_arc = po_state.song;
+                let song_arc = po_state.song.clone();
                 let play_style = profile::get_session_play_style();
                 let player_side = profile::get_session_player_side();
                 let target_chart_type = play_style.chart_type();
@@ -4655,8 +7002,14 @@ impl App {
                     );
                     chart_ref
                 };
-
-                let (charts, last_played_chart_ref, last_played_idx) = match play_style {
+                let chart_ix_for_ref = |chart_ref: &crate::game::chart::ChartData| {
+                    song_arc
+                        .charts
+                        .iter()
+                        .position(|chart| std::ptr::eq(chart, chart_ref))
+                        .expect("selected chart ref must come from selected song")
+                };
+                let (charts, chart_ixs, last_played_chart_ref, last_played_idx) = match play_style {
                     profile::PlayStyle::Versus => {
                         let chart_ref_p1 = resolve_chart(0);
                         let chart_ref_p2 = resolve_chart(1);
@@ -4664,6 +7017,10 @@ impl App {
                             [
                                 Arc::new(chart_ref_p1.clone()),
                                 Arc::new(chart_ref_p2.clone()),
+                            ],
+                            [
+                                chart_ix_for_ref(chart_ref_p1),
+                                chart_ix_for_ref(chart_ref_p2),
                             ],
                             chart_ref_p1,
                             0usize,
@@ -4676,9 +7033,58 @@ impl App {
                         };
                         let chart_ref = resolve_chart(idx);
                         let chart = Arc::new(chart_ref.clone());
-                        ([chart.clone(), chart], chart_ref, idx)
+                        let chart_ix = chart_ix_for_ref(chart_ref);
+                        ([chart.clone(), chart], [chart_ix, chart_ix], chart_ref, idx)
                     }
                 };
+
+                let gameplay_entry_started = Instant::now();
+                let reused_gameplay_charts =
+                    if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_none() {
+                        self.state
+                            .screens
+                            .gameplay_state
+                            .as_ref()
+                            .filter(|current| {
+                                current.song.simfile_path == song_arc.simfile_path
+                                    && current.charts[0].short_hash == charts[0].short_hash
+                                    && current.charts[1].short_hash == charts[1].short_hash
+                            })
+                            .map(|current| current.gameplay_charts.clone())
+                    } else {
+                        None
+                    };
+                let reusing_gameplay_payload = reused_gameplay_charts.is_some();
+                let payload_started = Instant::now();
+                let gameplay_charts = if let Some(gameplay_charts) = reused_gameplay_charts {
+                    debug!(
+                        "Reusing gameplay payload for quick restart '{}'",
+                        song_arc.title
+                    );
+                    gameplay_charts
+                } else {
+                    let gameplay_song = match song_loading::load_gameplay_charts(
+                        song_arc.as_ref(),
+                        &chart_ixs,
+                        config::get().global_offset_seconds,
+                    ) {
+                        Ok(gameplay_song) => gameplay_song,
+                        Err(e) => {
+                            error!(
+                                "Failed to load gameplay payload for '{}': {}",
+                                song_arc.title, e
+                            );
+                            self.state.screens.current_screen = CurrentScreen::PlayerOptions;
+                            self.state.screens.player_options_state = Some(po_state);
+                            return commands;
+                        }
+                    };
+                    [
+                        Arc::new(gameplay_song[0].clone()),
+                        Arc::new(gameplay_song[1].clone()),
+                    ]
+                };
+                let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
 
                 // Keep SelectMusic's current stepchart in sync with what we're about to play.
                 if play_style == profile::PlayStyle::Versus {
@@ -4765,9 +7171,11 @@ impl App {
                         Arc::from("EVENT")
                     };
                 let combo_carry = self.state.session.combo_carry;
+                let init_started = Instant::now();
                 let gs = gameplay::init(
                     song_arc,
                     charts,
+                    gameplay_charts,
                     color_index,
                     po_state.music_rate,
                     scroll_speeds,
@@ -4781,18 +7189,59 @@ impl App {
                     course_display_totals,
                     combo_carry,
                 );
+                let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
 
+                let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
                     if let Some(path) = gs.song.banner_path.as_ref() {
                         self.asset_manager.ensure_texture_from_path(backend, path);
                     }
                 }
+                let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let text_prewarm_started = Instant::now();
+                prewarm_gameplay_text_layout_cache(
+                    &self.asset_manager,
+                    &self.state.shell.metrics,
+                    &mut self.gameplay_text_layout_cache,
+                    &gs,
+                );
+                let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;
+                if total_ms >= 50.0 {
+                    info!(
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        gs.song.title,
+                        prev == CurrentScreen::Gameplay,
+                        if reusing_gameplay_payload {
+                            "reuse"
+                        } else {
+                            "load"
+                        },
+                    );
+                } else {
+                    debug!(
+                        "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
+                        gs.song.title,
+                        prev == CurrentScreen::Gameplay,
+                        if reusing_gameplay_payload {
+                            "reuse"
+                        } else {
+                            "load"
+                        },
+                    );
+                }
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
+                let show_video_backgrounds = config::get().show_video_backgrounds;
                 commands.push(Command::SetDynamicBackground(
-                    gs.song.background_path.clone(),
+                    gs.song
+                        .gameplay_background_path(gs.current_beat, show_video_backgrounds)
+                        .cloned(),
                 ));
                 self.state.screens.gameplay_state = Some(gs);
+                if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
+                    crate::game::gameplay::start_stage_music(gs);
+                }
                 if let Some(course) = self.state.session.course_run.as_mut() {
                     course.next_stage_index = course.next_stage_index.saturating_add(1);
                 }
@@ -5152,8 +7601,8 @@ impl App {
                     .map(|c| DensityGraphSource {
                         max_nps: c.max_nps,
                         measure_nps_vec: c.measure_nps_vec.clone(),
-                        timing: c.timing.clone(),
-                        first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                        measure_seconds_vec: c.measure_seconds_vec.clone(),
+                        first_second: c.first_second,
                         last_second: song.precise_last_second(),
                     })
                 }
@@ -5185,8 +7634,8 @@ impl App {
                         .map(|c| DensityGraphSource {
                             max_nps: c.max_nps,
                             measure_nps_vec: c.measure_nps_vec.clone(),
-                            timing: c.timing.clone(),
-                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                            measure_seconds_vec: c.measure_seconds_vec.clone(),
+                            first_second: c.first_second,
                             last_second: song.precise_last_second(),
                         })
                     }
@@ -5280,6 +7729,10 @@ impl App {
 }
 
 impl ApplicationHandler<UserEvent> for App {
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
+        self.state.shell.note_new_events(Instant::now());
+    }
+
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::GamepadSystem(ev) => {
@@ -5344,6 +7797,8 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             UserEvent::Pad(ev) => {
+                let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+                let handled_started = Instant::now();
                 if self.state.screens.current_screen == CurrentScreen::Sandbox {
                     crate::screens::sandbox::handle_raw_pad_event(
                         &mut self.state.screens.sandbox_state,
@@ -5361,6 +7816,25 @@ impl ApplicationHandler<UserEvent> for App {
                     );
                 }
                 self.handle_pad_event(event_loop, ev);
+                self.state
+                    .shell
+                    .note_gameplay_pad_handler(gameplay_screen, elapsed_us_since(handled_started));
+            }
+            UserEvent::Key(ev) => {
+                let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
+                let handled_started = Instant::now();
+                self.handle_raw_key_event(event_loop, ev);
+                self.state.shell.note_gameplay_key_handler(
+                    gameplay_screen,
+                    ev.repeat,
+                    elapsed_us_since(handled_started),
+                );
+            }
+            UserEvent::GameplayInputReady => {
+                if let Err(e) = self.drain_gameplay_input_events(event_loop) {
+                    error!("Failed to handle gameplay ring input: {e}");
+                    event_loop.exit();
+                }
             }
         }
     }
@@ -5394,6 +7868,21 @@ impl ApplicationHandler<UserEvent> for App {
                 event_loop.exit();
             }
             WindowEvent::Resized(new_size) => {
+                let now = Instant::now();
+                let surface_changed = self
+                    .state
+                    .shell
+                    .set_surface_active(new_size.width > 0 && new_size.height > 0, now);
+                self.sync_gameplay_input_capture();
+                if surface_changed {
+                    debug!(
+                        "Window surface state changed: active={} size={}x{} screen={:?}",
+                        self.state.shell.surface_active,
+                        new_size.width,
+                        new_size.height,
+                        self.state.screens.current_screen
+                    );
+                }
                 if new_size.width > 0 && new_size.height > 0 {
                     self.state.shell.metrics =
                         space::metrics_for_window(new_size.width, new_size.height);
@@ -5402,287 +7891,64 @@ impl ApplicationHandler<UserEvent> for App {
                         backend.resize(new_size.width, new_size.height);
                     }
                 }
+                if surface_changed && self.state.shell.surface_active {
+                    self.request_redraw(&window, "surface_active");
+                }
+            }
+            WindowEvent::Focused(focused) => {
+                input::set_raw_keyboard_window_focused(focused);
+                if self.state.shell.set_window_focus(focused, Instant::now()) {
+                    self.sync_gameplay_input_capture();
+                    debug!(
+                        "Window focus changed: focused={} screen={:?}",
+                        focused, self.state.screens.current_screen
+                    );
+                    if !focused {
+                        input::clear_debounce_state();
+                        self.clear_gameplay_input_events();
+                    }
+                    if focused {
+                        self.request_redraw(&window, "focus");
+                    }
+                }
+            }
+            WindowEvent::Occluded(occluded) => {
+                if self
+                    .state
+                    .shell
+                    .set_window_occluded(occluded, Instant::now())
+                {
+                    self.sync_gameplay_input_capture();
+                    debug!(
+                        "Window occlusion changed: occluded={} screen={:?}",
+                        occluded, self.state.screens.current_screen
+                    );
+                    if !occluded && self.state.shell.surface_active {
+                        self.request_redraw(&window, "occluded");
+                    }
+                }
             }
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } => {
-                self.handle_key_event(event_loop, key_event);
+                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+                self.handle_window_key_event(event_loop, key_event);
+
+                #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+                if let Some(text) = key_event.text.as_deref() {
+                    self.handle_key_text(event_loop, text);
+                }
             }
             WindowEvent::RedrawRequested => {
-                let now = Instant::now();
-                let delta_time = now
-                    .duration_since(self.state.shell.last_frame_time)
-                    .as_secs_f32();
-                self.state.shell.last_frame_time = now;
-                let total_elapsed = now
-                    .duration_since(self.state.shell.start_time)
-                    .as_secs_f32();
-                crate::ui::runtime::tick(delta_time);
-
-                // --- Manage gamepad overlay lifetime ---
-                self.state.shell.update_gamepad_overlay(now);
-                let input_us: u32;
-                let update_us: u32;
-                let compose_us: u32;
-                let mut upload_us: u32 = 0;
-                let mut draw_us: u32 = 0;
-                let input_started = Instant::now();
-                for ev in input::drain_debounced_events() {
-                    if let Err(e) = self.route_input_event(event_loop, ev) {
-                        error!("Failed to handle debounced input: {e}");
-                        event_loop.exit();
-                        return;
-                    }
-                }
-                input_us = elapsed_us_since(input_started);
-
-                let mut finished_fading_out_to: Option<CurrentScreen> = None;
-                let update_started = Instant::now();
-                match &mut self.state.shell.transition {
-                    TransitionState::FadingOut {
-                        elapsed,
-                        duration,
-                        target,
-                    } => {
-                        *elapsed += delta_time;
-                        if *elapsed >= *duration {
-                            finished_fading_out_to = Some(*target);
-                        }
-                    }
-                    TransitionState::ActorsFadeOut {
-                        elapsed,
-                        duration,
-                        target,
-                    } => {
-                        *elapsed += delta_time;
-                        if *elapsed >= *duration {
-                            let target_screen = *target;
-                            let prev = self.state.screens.current_screen;
-                            self.state.screens.current_screen = target_screen;
-                            if target_screen == CurrentScreen::SelectColor {
-                                select_color::on_enter(&mut self.state.screens.select_color_state);
-                            }
-
-                            // SelectProfile/SelectColor/SelectStyle share the looping menu BGM.
-                            // Keep SelectMusic preview playing when moving to/from PlayerOptions.
-                            let menu_music_enabled = config::get().menu_music;
-                            let target_menu_music = menu_music_enabled
-                                && matches!(
-                                    target_screen,
-                                    CurrentScreen::SelectColor | CurrentScreen::SelectStyle
-                                );
-                            let prev_menu_music = menu_music_enabled
-                                && matches!(
-                                    prev,
-                                    CurrentScreen::SelectColor | CurrentScreen::SelectStyle
-                                );
-                            let keep_preview = (prev == CurrentScreen::SelectMusic
-                                && target_screen == CurrentScreen::PlayerOptions)
-                                || (prev == CurrentScreen::PlayerOptions
-                                    && target_screen == CurrentScreen::SelectMusic);
-
-                            if target_menu_music {
-                                if !prev_menu_music {
-                                    crate::core::audio::play_music(
-                                        std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
-                                        crate::core::audio::Cut::default(),
-                                        true,
-                                        1.0,
-                                    );
-                                }
-                            } else if prev_menu_music {
-                                crate::core::audio::stop_music();
-                            } else if !keep_preview {
-                                crate::core::audio::stop_music();
-                            }
-
-                            if target_screen == CurrentScreen::Menu {
-                                let current_color_index =
-                                    self.state.screens.menu_state.active_color_index;
-                                self.state.screens.menu_state = menu::init();
-                                self.state.screens.menu_state.active_color_index =
-                                    current_color_index;
-                            } else if target_screen == CurrentScreen::Options {
-                                self.reset_options_state_for_entry(prev);
-                            } else if target_screen == CurrentScreen::ManageLocalProfiles {
-                                let color_index =
-                                    self.state.screens.options_state.active_color_index;
-                                self.state.screens.manage_local_profiles_state =
-                                    manage_local_profiles::init();
-                                self.state
-                                    .screens
-                                    .manage_local_profiles_state
-                                    .active_color_index = color_index;
-                            } else if target_screen == CurrentScreen::SelectProfile {
-                                let current_color_index =
-                                    self.state.screens.select_profile_state.active_color_index;
-                                self.state.screens.select_profile_state = select_profile::init();
-                                self.state.screens.select_profile_state.active_color_index =
-                                    current_color_index;
-                                if prev == CurrentScreen::Menu {
-                                    let p2 = self.state.screens.menu_state.started_by_p2;
-                                    select_profile::set_joined(
-                                        &mut self.state.screens.select_profile_state,
-                                        !p2,
-                                        p2,
-                                    );
-                                }
-                            } else if target_screen == CurrentScreen::SelectStyle {
-                                let current_color_index =
-                                    self.state.screens.select_style_state.active_color_index;
-                                self.state.screens.select_style_state = select_style::init();
-                                self.state.screens.select_style_state.active_color_index =
-                                    current_color_index;
-                                let p1_joined =
-                                    profile::is_session_side_joined(profile::PlayerSide::P1);
-                                let p2_joined =
-                                    profile::is_session_side_joined(profile::PlayerSide::P2);
-                                self.state.screens.select_style_state.selected_index =
-                                    if p1_joined && p2_joined {
-                                        1 // "2 Players"
-                                    } else {
-                                        0 // "1 Player"
-                                    };
-                            } else if target_screen == CurrentScreen::Mappings {
-                                let color_index =
-                                    self.state.screens.options_state.active_color_index;
-                                self.state.screens.mappings_state = mappings::init();
-                                self.state.screens.mappings_state.active_color_index = color_index;
-                            }
-
-                            if prev == CurrentScreen::SelectColor {
-                                let idx = self.state.screens.select_color_state.active_color_index;
-                                self.state.screens.menu_state.active_color_index = idx;
-                                self.state.screens.select_profile_state.active_color_index = idx;
-                                self.state.screens.select_style_state.active_color_index = idx;
-                                self.state.screens.select_play_mode_state.active_color_index = idx;
-                                self.state.screens.profile_load_state.active_color_index = idx;
-                                self.state.screens.select_music_state.active_color_index = idx;
-                                self.state.screens.select_course_state.active_color_index = idx;
-                                self.state.screens.credits_state.active_color_index = idx;
-                                if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                                    gs.active_color_index = idx;
-                                    gs.player_color = color::simply_love_rgba(idx);
-                                }
-                                self.state.screens.options_state.active_color_index = idx;
-                                self.state
-                                    .screens
-                                    .manage_local_profiles_state
-                                    .active_color_index = idx;
-                            }
-
-                            if target_screen == CurrentScreen::Options {
-                                self.update_options_monitor_specs(event_loop);
-                            }
-
-                            self.state.shell.transition =
-                                if Self::is_actor_fade_screen(target_screen) {
-                                    TransitionState::ActorsFadeIn { elapsed: 0.0 }
-                                } else {
-                                    TransitionState::Idle
-                                };
-                            crate::ui::runtime::clear_all();
-                        }
-                    }
-                    TransitionState::FadingIn { elapsed, duration } => {
-                        *elapsed += delta_time;
-                        let finished = *elapsed >= *duration;
-
-                        if self.state.screens.current_screen == CurrentScreen::Gameplay
-                            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
-                        {
-                            let _ = gameplay::update(gs, delta_time);
-                        }
-
-                        if finished
-                            && matches!(
-                                self.state.shell.transition,
-                                TransitionState::FadingIn { .. }
-                            )
-                        {
-                            self.state.shell.transition = TransitionState::Idle;
-                        }
-                    }
-                    TransitionState::ActorsFadeIn { elapsed } => {
-                        *elapsed += delta_time;
-                        if *elapsed >= MENU_ACTORS_FADE_DURATION {
-                            self.state.shell.transition = TransitionState::Idle;
-                        }
-                    }
-                    TransitionState::Idle => {
-                        let gameplay_prompt_active = self.state.screens.current_screen
-                            == CurrentScreen::Gameplay
-                            && self.state.gameplay_offset_save_prompt.is_some();
-                        if !gameplay_prompt_active {
-                            if let Some(action) = self.state.screens.step_idle(
-                                delta_time,
-                                now,
-                                &self.state.session,
-                                &self.asset_manager,
-                            ) && !matches!(action, ScreenAction::None)
-                            {
-                                let _ = self.handle_action(action, event_loop);
-                            }
-                        }
-                    }
-                }
-
-                if let Some(target) = finished_fading_out_to {
-                    self.on_fade_complete(target, event_loop);
-                }
-                update_us = elapsed_us_since(update_started);
-
-                if self.window.as_ref().map(|w| w.id()) != Some(window_id) {
-                    return;
-                }
-
-                let compose_started = Instant::now();
-                let (actors, clear_color) = self.get_current_actors();
-                self.update_fps_title(&window, now);
-                if let Some(backend) = &mut self.backend {
-                    let upload_started = Instant::now();
-                    self.asset_manager
-                        .upload_pending_generated_textures(backend);
-                    upload_us = elapsed_us_since(upload_started);
-                }
-                let fonts = self.asset_manager.fonts();
-                let screen = crate::ui::compose::build_screen(
-                    &actors,
-                    clear_color,
-                    &self.state.shell.metrics,
-                    fonts,
-                    total_elapsed,
-                );
-                compose_us = elapsed_us_since(compose_started).saturating_sub(upload_us);
-
-                if let Some(backend) = &mut self.backend {
-                    if self.state.shell.screenshot_pending {
-                        backend.request_screenshot();
-                    }
-                    let draw_started = Instant::now();
-                    match backend.draw(&screen, &self.asset_manager.textures) {
-                        Ok(vpf) => {
-                            self.state.shell.current_frame_vpf = vpf;
-                            draw_us = elapsed_us_since(draw_started);
-                            self.capture_pending_screenshot(now);
-                        }
-                        Err(e) => {
-                            error!("Failed to draw frame: {e}");
-                            event_loop.exit();
-                            return;
-                        }
-                    }
-                }
-                self.update_stutter_samples(delta_time, total_elapsed);
-                self.trace_frame_stutter_if_needed(
-                    delta_time,
-                    total_elapsed,
-                    self.state.screens.current_screen,
-                    input_us,
-                    update_us,
-                    compose_us,
-                    upload_us,
-                    draw_us,
+                let redraw_started = Instant::now();
+                let (request_to_redraw_us, redraw_request_reason) =
+                    self.state.shell.take_redraw_request_timing(redraw_started);
+                self.run_frame(
+                    event_loop,
+                    window,
+                    redraw_started,
+                    request_to_redraw_us,
+                    redraw_request_reason,
                 );
             }
             _ => {}
@@ -5690,27 +7956,58 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        let Some(window) = &self.window else {
+        let Some(window) = self.window.clone() else {
             return;
         };
-        if let Some(interval) = self.state.shell.frame_interval {
+        self.state
+            .shell
+            .finish_gameplay_event_batch(Instant::now(), self.state.screens.current_screen);
+        self.sync_gameplay_input_capture();
+        match self.flush_due_input_events(event_loop) {
+            Ok(true) => self.request_redraw(&window, "input_debounce"),
+            Ok(false) => {}
+            Err(e) => {
+                error!("Failed to handle debounced input before wait: {e}");
+                event_loop.exit();
+                return;
+            }
+        }
+        let interval_state = self.redraw_interval_state(&window);
+        if let Some(interval) = interval_state.interval {
+            self.log_frame_loop_mode(FrameLoopMode::Scheduled(interval_state.reason, interval));
             let now = Instant::now();
             if now >= self.state.shell.next_redraw_at {
-                window.request_redraw();
-                self.state.shell.next_redraw_at = now.checked_add(interval).unwrap_or(now);
+                self.request_redraw_if_needed(&window, interval_state.reason.redraw_reason());
+                self.state.shell.next_redraw_at =
+                    advance_redraw_deadline(self.state.shell.next_redraw_at, now, interval);
             }
-            event_loop.set_control_flow(ControlFlow::WaitUntil(self.state.shell.next_redraw_at));
+            let deadline = self.state.shell.next_redraw_at;
+            let time_until_deadline = deadline.saturating_duration_since(now);
+            if time_until_deadline <= SCHEDULED_REDRAW_POLL_GUARD {
+                event_loop.set_control_flow(ControlFlow::Poll);
+                return;
+            }
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                deadline - SCHEDULED_REDRAW_POLL_GUARD,
+            ));
             return;
         }
+        if self.state.shell.redraw_pending() {
+            self.log_frame_loop_mode(FrameLoopMode::WaitPending);
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
+        self.log_frame_loop_mode(FrameLoopMode::Poll);
         event_loop.set_control_flow(ControlFlow::Poll);
-        window.request_redraw();
+        self.request_redraw(&window, "poll");
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         config::flush_pending_saves();
         if let Some(backend) = &mut self.backend {
             self.asset_manager.destroy_dynamic_assets(backend);
-            backend.dispose_textures(&mut self.asset_manager.textures);
+            let mut textures = self.asset_manager.take_textures();
+            backend.dispose_textures(&mut textures);
             backend.cleanup();
         }
     }
@@ -5719,27 +8016,10 @@ impl ApplicationHandler<UserEvent> for App {
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::get();
     let backend_type = config.video_renderer;
-    let win_pad_backend = config.windows_gamepad_backend;
     let show_stats_mode = config.show_stats_mode.min(2);
     let color_index = config.simply_love_color;
     let profile_data = profile::get();
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
-
-    // Spawn background thread to pump pad input and emit user events; decoupled from frame rate.
-    let proxy: EventLoopProxy<UserEvent> = event_loop.create_proxy();
-    std::thread::spawn(move || {
-        let proxy_pad = proxy.clone();
-        input::run_pad_backend(
-            win_pad_backend,
-            move |pe| {
-                let _ = proxy_pad.send_event(UserEvent::Pad(pe));
-            },
-            move |se| {
-                let _ = proxy.send_event(UserEvent::GamepadSystem(se));
-            },
-        );
-    });
-
     let mut app = App::new(
         backend_type,
         show_stats_mode,
@@ -5747,6 +8027,289 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         config,
         profile_data,
     );
+
+    // Spawn background input backend threads; all input stays decoupled from frame rate.
+    let proxy: EventLoopProxy<UserEvent> = event_loop.create_proxy();
+    input::set_raw_keyboard_window_focused(true);
+    app.sync_gameplay_input_capture();
+    #[cfg(windows)]
+    {
+        let win_pad_backend = config.windows_gamepad_backend;
+        let key_ring = app.gameplay_key_ring.clone();
+        let pad_ring = app.gameplay_pad_ring.clone();
+        let proxy_pad = proxy.clone();
+        let proxy_sys = proxy.clone();
+        let proxy_key = proxy.clone();
+        let proxy_ready_pad = proxy.clone();
+        let proxy_ready_key = proxy.clone();
+        std::thread::spawn(move || {
+            input::run_windows_backend(
+                win_pad_backend,
+                move |pe| {
+                    let captured = pad_ring.is_enabled();
+                    if captured {
+                        let mut queued = false;
+                        input::map_pad_event_with(&pe, |iev| {
+                            pad_ring.push(GameplayQueuedEvent::Input(iev));
+                            queued = true;
+                        });
+                        if queued {
+                            let _ = proxy_ready_pad.send_event(UserEvent::GameplayInputReady);
+                        }
+                    }
+                    if !captured {
+                        let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    }
+                },
+                move |se| {
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
+                },
+                move |ev| {
+                    let captured = key_ring.is_enabled();
+                    if captured {
+                        let mut queued = false;
+                        if let Some(gameplay_ev) = gameplay_raw_key_event(&ev) {
+                            key_ring.push(gameplay_ev);
+                            queued = true;
+                        }
+                        input::map_raw_key_event_with(&ev, |iev| {
+                            key_ring.push(GameplayQueuedEvent::Input(iev));
+                            queued = true;
+                        });
+                        if queued {
+                            let _ = proxy_ready_key.send_event(UserEvent::GameplayInputReady);
+                        }
+                    }
+                    if !captured || proxy_gameplay_raw_key(&ev) {
+                        let _ = proxy_key.send_event(UserEvent::Key(ev));
+                    }
+                },
+            );
+        });
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let key_ring = app.gameplay_key_ring.clone();
+        let pad_ring = app.gameplay_pad_ring.clone();
+        let proxy_pad = proxy.clone();
+        let proxy_sys = proxy.clone();
+        let proxy_key = proxy.clone();
+        let proxy_ready_pad = proxy.clone();
+        let proxy_ready_key = proxy.clone();
+        std::thread::spawn(move || {
+            input::run_linux_backend(
+                move |pe| {
+                    let captured = pad_ring.is_enabled();
+                    if captured {
+                        let mut queued = false;
+                        input::map_pad_event_with(&pe, |iev| {
+                            pad_ring.push(GameplayQueuedEvent::Input(iev));
+                            queued = true;
+                        });
+                        if queued {
+                            let _ = proxy_ready_pad.send_event(UserEvent::GameplayInputReady);
+                        }
+                    }
+                    if !captured {
+                        let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    }
+                },
+                move |se| {
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
+                },
+                move |ke| {
+                    let captured = key_ring.is_enabled();
+                    if captured {
+                        let mut queued = false;
+                        if let Some(gameplay_ev) = gameplay_raw_key_event(&ke) {
+                            key_ring.push(gameplay_ev);
+                            queued = true;
+                        }
+                        input::map_raw_key_event_with(&ke, |iev| {
+                            key_ring.push(GameplayQueuedEvent::Input(iev));
+                            queued = true;
+                        });
+                        if queued {
+                            let _ = proxy_ready_key.send_event(UserEvent::GameplayInputReady);
+                        }
+                    }
+                    if !captured || proxy_gameplay_raw_key(&ke) {
+                        let _ = proxy_key.send_event(UserEvent::Key(ke));
+                    }
+                },
+            );
+        });
+    }
+    #[cfg(target_os = "freebsd")]
+    {
+        let key_ring = app.gameplay_key_ring.clone();
+        let pad_ring = app.gameplay_pad_ring.clone();
+        let proxy_pad = proxy.clone();
+        let proxy_sys = proxy.clone();
+        let proxy_key = proxy.clone();
+        let proxy_ready_pad = proxy.clone();
+        let proxy_ready_key = proxy.clone();
+        std::thread::spawn(move || {
+            input::run_freebsd_backend(
+                move |pe| {
+                    let captured = pad_ring.is_enabled();
+                    if captured {
+                        let mut queued = false;
+                        input::map_pad_event_with(&pe, |iev| {
+                            pad_ring.push(GameplayQueuedEvent::Input(iev));
+                            queued = true;
+                        });
+                        if queued {
+                            let _ = proxy_ready_pad.send_event(UserEvent::GameplayInputReady);
+                        }
+                    }
+                    if !captured {
+                        let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    }
+                },
+                move |se| {
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
+                },
+                move |ke| {
+                    let captured = key_ring.is_enabled();
+                    if captured {
+                        let mut queued = false;
+                        if let Some(gameplay_ev) = gameplay_raw_key_event(&ke) {
+                            key_ring.push(gameplay_ev);
+                            queued = true;
+                        }
+                        input::map_raw_key_event_with(&ke, |iev| {
+                            key_ring.push(GameplayQueuedEvent::Input(iev));
+                            queued = true;
+                        });
+                        if queued {
+                            let _ = proxy_ready_key.send_event(UserEvent::GameplayInputReady);
+                        }
+                    }
+                    if !captured || proxy_gameplay_raw_key(&ke) {
+                        let _ = proxy_key.send_event(UserEvent::Key(ke));
+                    }
+                },
+            );
+        });
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let key_ring = app.gameplay_key_ring.clone();
+        let pad_ring = app.gameplay_pad_ring.clone();
+        let proxy_pad = proxy.clone();
+        let proxy_sys = proxy.clone();
+        let proxy_key = proxy.clone();
+        let proxy_ready_pad = proxy.clone();
+        let proxy_ready_key = proxy.clone();
+        std::thread::spawn(move || {
+            input::run_macos_backend(
+                move |pe| {
+                    let captured = pad_ring.is_enabled();
+                    if captured {
+                        let mut queued = false;
+                        input::map_pad_event_with(&pe, |iev| {
+                            pad_ring.push(GameplayQueuedEvent::Input(iev));
+                            queued = true;
+                        });
+                        if queued {
+                            let _ = proxy_ready_pad.send_event(UserEvent::GameplayInputReady);
+                        }
+                    }
+                    if !captured {
+                        let _ = proxy_pad.send_event(UserEvent::Pad(pe));
+                    }
+                },
+                move |se| {
+                    let _ = proxy_sys.send_event(UserEvent::GamepadSystem(se));
+                },
+                move |ke| {
+                    let captured = key_ring.is_enabled();
+                    if captured {
+                        let mut queued = false;
+                        if let Some(gameplay_ev) = gameplay_raw_key_event(&ke) {
+                            key_ring.push(gameplay_ev);
+                            queued = true;
+                        }
+                        input::map_raw_key_event_with(&ke, |iev| {
+                            key_ring.push(GameplayQueuedEvent::Input(iev));
+                            queued = true;
+                        });
+                        if queued {
+                            let _ = proxy_ready_key.send_event(UserEvent::GameplayInputReady);
+                        }
+                    }
+                    if !captured || proxy_gameplay_raw_key(&ke) {
+                        let _ = proxy_key.send_event(UserEvent::Key(ke));
+                    }
+                },
+            );
+        });
+    }
     event_loop.run_app(&mut app)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input_event(
+        source: input::InputSource,
+        timestamp: Instant,
+        host_nanos: u64,
+        stored_at: Instant,
+        emitted_at: Instant,
+    ) -> InputEvent {
+        InputEvent {
+            action: input::VirtualAction::p1_left,
+            pressed: true,
+            source,
+            timestamp,
+            timestamp_host_nanos: host_nanos,
+            stored_at,
+            emitted_at,
+        }
+    }
+
+    fn queued_input_event(
+        source: input::InputSource,
+        timestamp: Instant,
+        host_nanos: u64,
+        stored_at: Instant,
+        emitted_at: Instant,
+    ) -> GameplayQueuedEvent {
+        GameplayQueuedEvent::Input(input_event(
+            source, timestamp, host_nanos, stored_at, emitted_at,
+        ))
+    }
+
+    #[test]
+    fn gameplay_event_precedes_prefers_host_clock_when_available() {
+        let now = Instant::now();
+        let later = now + Duration::from_millis(1);
+        let a = queued_input_event(input::InputSource::Gamepad, later, 100, later, later);
+        let b = queued_input_event(input::InputSource::Keyboard, now, 200, now, now);
+        assert!(gameplay_event_precedes(&a, &b));
+        assert!(!gameplay_event_precedes(&b, &a));
+    }
+
+    #[test]
+    fn gameplay_event_precedes_falls_back_to_instant_without_host_clock() {
+        let now = Instant::now();
+        let later = now + Duration::from_millis(1);
+        let a = queued_input_event(input::InputSource::Keyboard, now, 0, now, now);
+        let b = queued_input_event(input::InputSource::Gamepad, later, 0, later, later);
+        assert!(gameplay_event_precedes(&a, &b));
+        assert!(!gameplay_event_precedes(&b, &a));
+    }
+
+    #[test]
+    fn gameplay_event_precedes_breaks_exact_ties_deterministically() {
+        let now = Instant::now();
+        let key = queued_input_event(input::InputSource::Keyboard, now, 100, now, now);
+        let pad = queued_input_event(input::InputSource::Gamepad, now, 100, now, now);
+        assert!(gameplay_event_precedes(&key, &pad));
+        assert!(!gameplay_event_precedes(&pad, &key));
+    }
 }

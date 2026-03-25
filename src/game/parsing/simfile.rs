@@ -1,15 +1,21 @@
+use crate::core::audio::decode;
 use crate::game::{
-    chart::{ChartData, StaminaCounts},
+    chart::{ChartData, GameplayChartData, StaminaCounts},
     course::set_course_cache,
     note::NoteType,
     parsing::notes::ParsedNote,
-    song::{SongData, SongPack, get_song_cache, set_song_cache},
+    song::{
+        SongBackgroundChange, SongBackgroundChangeTarget, SongData, SongPack, get_song_cache,
+        set_song_cache,
+    },
     timing::{
         DelaySegment, FakeSegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
         TimingSegments, WarpSegment,
     },
 };
 use log::{debug, info, warn};
+use rssp::pack::{PackScan, SongScan};
+use rssp::parse::{decode_bytes, extract_bgchanges_values, unescape_tag};
 use rssp::patterns::{PatternVariant, compute_box_counts, count_pattern};
 use rssp::{AnalysisOptions, analyze};
 use std::collections::HashMap;
@@ -18,16 +24,19 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use bincode::{Decode, Encode};
-use lewton::inside_ogg::OggStreamReader;
-use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 use std::hash::Hasher;
-use std::io::{BufReader, Cursor, Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
+// Keep this at 1 throughout alpha, even if the serialized song payload changes.
+// Old caches already fall back on decode/schema mismatch. Start bumping this only
+// once we have a public beta/release and want explicit cache-version invalidation.
+const SONG_CACHE_VERSION: u8 = 1;
+const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE2";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 
@@ -349,6 +358,7 @@ enum CachedNoteType {
     Hold,
     Roll,
     Mine,
+    Lift,
     Fake,
 }
 
@@ -359,6 +369,7 @@ impl From<NoteType> for CachedNoteType {
             NoteType::Hold => Self::Hold,
             NoteType::Roll => Self::Roll,
             NoteType::Mine => Self::Mine,
+            NoteType::Lift => Self::Lift,
             NoteType::Fake => Self::Fake,
         }
     }
@@ -371,6 +382,7 @@ impl From<CachedNoteType> for NoteType {
             CachedNoteType::Hold => Self::Hold,
             CachedNoteType::Roll => Self::Roll,
             CachedNoteType::Mine => Self::Mine,
+            CachedNoteType::Lift => Self::Lift,
             CachedNoteType::Fake => Self::Fake,
         }
     }
@@ -411,6 +423,7 @@ struct SerializableChartData {
     chart_type: String,
     difficulty: String,
     description: String,
+    chart_name: String,
     meter: u32,
     step_artist: String,
     notes: Vec<u8>,
@@ -423,6 +436,7 @@ struct SerializableChartData {
     mines_nonfake: u32,
     stamina_counts: CachedStaminaCounts,
     total_streams: u32,
+    matrix_rating: f64,
     max_nps: f64,
     sn_detailed_breakdown: String,
     sn_partial_breakdown: String,
@@ -431,100 +445,55 @@ struct SerializableChartData {
     partial_breakdown: String,
     simple_breakdown: String,
     chart_attacks: Option<String>,
-    chart_bpms: Option<String>,
-    chart_stops: Option<String>,
-    chart_delays: Option<String>,
-    chart_warps: Option<String>,
-    chart_speeds: Option<String>,
-    chart_scrolls: Option<String>,
-    chart_fakes: Option<String>,
     total_measures: usize,
     measure_nps_vec: Vec<f64>,
 }
 
-impl From<&ChartData> for SerializableChartData {
-    fn from(chart: &ChartData) -> Self {
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+enum SerializableSongBackgroundChangeTarget {
+    File(String),
+    NoSongBg,
+    Random,
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct SerializableSongBackgroundChange {
+    start_beat: f32,
+    target: SerializableSongBackgroundChangeTarget,
+}
+
+impl From<&SongBackgroundChange> for SerializableSongBackgroundChange {
+    fn from(change: &SongBackgroundChange) -> Self {
+        let target = match &change.target {
+            SongBackgroundChangeTarget::File(path) => {
+                SerializableSongBackgroundChangeTarget::File(path.to_string_lossy().into_owned())
+            }
+            SongBackgroundChangeTarget::NoSongBg => {
+                SerializableSongBackgroundChangeTarget::NoSongBg
+            }
+            SongBackgroundChangeTarget::Random => SerializableSongBackgroundChangeTarget::Random,
+        };
         Self {
-            chart_type: chart.chart_type.clone(),
-            difficulty: chart.difficulty.clone(),
-            description: chart.description.clone(),
-            meter: chart.meter,
-            step_artist: chart.step_artist.clone(),
-            notes: chart.notes.clone(),
-            parsed_notes: chart
-                .parsed_notes
-                .iter()
-                .map(CachedParsedNote::from)
-                .collect(),
-            row_to_beat: chart.row_to_beat.clone(),
-            timing_segments: (&chart.timing_segments).into(),
-            short_hash: chart.short_hash.clone(),
-            stats: (&chart.stats).into(),
-            tech_counts: (&chart.tech_counts).into(),
-            mines_nonfake: chart.mines_nonfake,
-            stamina_counts: (&chart.stamina_counts).into(),
-            total_streams: chart.total_streams,
-            max_nps: chart.max_nps,
-            sn_detailed_breakdown: chart.sn_detailed_breakdown.clone(),
-            sn_partial_breakdown: chart.sn_partial_breakdown.clone(),
-            sn_simple_breakdown: chart.sn_simple_breakdown.clone(),
-            detailed_breakdown: chart.detailed_breakdown.clone(),
-            partial_breakdown: chart.partial_breakdown.clone(),
-            simple_breakdown: chart.simple_breakdown.clone(),
-            chart_attacks: chart.chart_attacks.clone(),
-            chart_bpms: chart.chart_bpms.clone(),
-            chart_stops: chart.chart_stops.clone(),
-            chart_delays: chart.chart_delays.clone(),
-            chart_warps: chart.chart_warps.clone(),
-            chart_speeds: chart.chart_speeds.clone(),
-            chart_scrolls: chart.chart_scrolls.clone(),
-            chart_fakes: chart.chart_fakes.clone(),
-            total_measures: chart.total_measures,
-            measure_nps_vec: chart.measure_nps_vec.clone(),
+            start_beat: change.start_beat,
+            target,
         }
     }
 }
 
-impl From<SerializableChartData> for ChartData {
-    fn from(chart: SerializableChartData) -> Self {
+impl From<SerializableSongBackgroundChange> for SongBackgroundChange {
+    fn from(change: SerializableSongBackgroundChange) -> Self {
+        let target = match change.target {
+            SerializableSongBackgroundChangeTarget::File(path) => {
+                SongBackgroundChangeTarget::File(PathBuf::from(path))
+            }
+            SerializableSongBackgroundChangeTarget::NoSongBg => {
+                SongBackgroundChangeTarget::NoSongBg
+            }
+            SerializableSongBackgroundChangeTarget::Random => SongBackgroundChangeTarget::Random,
+        };
         Self {
-            chart_type: chart.chart_type,
-            difficulty: chart.difficulty,
-            description: chart.description,
-            meter: chart.meter,
-            step_artist: chart.step_artist,
-            notes: chart.notes,
-            parsed_notes: chart
-                .parsed_notes
-                .into_iter()
-                .map(ParsedNote::from)
-                .collect(),
-            row_to_beat: chart.row_to_beat,
-            timing_segments: chart.timing_segments.into(),
-            timing: TimingData::default(),
-            short_hash: chart.short_hash,
-            stats: chart.stats.into(),
-            tech_counts: chart.tech_counts.into(),
-            mines_nonfake: chart.mines_nonfake,
-            stamina_counts: chart.stamina_counts.into(),
-            total_streams: chart.total_streams,
-            max_nps: chart.max_nps,
-            sn_detailed_breakdown: chart.sn_detailed_breakdown,
-            sn_partial_breakdown: chart.sn_partial_breakdown,
-            sn_simple_breakdown: chart.sn_simple_breakdown,
-            detailed_breakdown: chart.detailed_breakdown,
-            partial_breakdown: chart.partial_breakdown,
-            simple_breakdown: chart.simple_breakdown,
-            chart_attacks: chart.chart_attacks,
-            chart_bpms: chart.chart_bpms,
-            chart_stops: chart.chart_stops,
-            chart_delays: chart.chart_delays,
-            chart_warps: chart.chart_warps,
-            chart_speeds: chart.chart_speeds,
-            chart_scrolls: chart.chart_scrolls,
-            chart_fakes: chart.chart_fakes,
-            total_measures: chart.total_measures,
-            measure_nps_vec: chart.measure_nps_vec,
+            start_beat: change.start_beat,
+            target,
         }
     }
 }
@@ -539,6 +508,8 @@ struct SerializableSongData {
     artist: String,
     banner_path: Option<String>,
     background_path: Option<String>,
+    background_changes: Vec<SerializableSongBackgroundChange>,
+    has_lua: bool,
     cdtitle_path: Option<String>,
     music_path: Option<String>,
     display_bpm: String,
@@ -548,105 +519,483 @@ struct SerializableSongData {
     min_bpm: f64,
     max_bpm: f64,
     normalized_bpms: String,
-    normalized_stops: String,
-    normalized_delays: String,
-    normalized_warps: String,
-    normalized_speeds: String,
-    normalized_scrolls: String,
-    normalized_fakes: String,
     music_length_seconds: f32,
     total_length_seconds: i32,
+    precise_last_second_seconds: f32,
     charts: Vec<SerializableChartData>,
 }
 
-impl From<&SongData> for SerializableSongData {
-    fn from(song: &SongData) -> Self {
-        Self {
-            simfile_path: song.simfile_path.to_string_lossy().into_owned(),
-            title: song.title.clone(),
-            subtitle: song.subtitle.clone(),
-            translit_title: song.translit_title.clone(),
-            translit_subtitle: song.translit_subtitle.clone(),
-            artist: song.artist.clone(),
-            banner_path: song
-                .banner_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().into_owned()),
-            background_path: song
-                .background_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().into_owned()),
-            cdtitle_path: song
-                .cdtitle_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().into_owned()),
-            music_path: song
-                .music_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().into_owned()),
-            display_bpm: song.display_bpm.clone(),
-            offset: song.offset,
-            sample_start: song.sample_start,
-            sample_length: song.sample_length,
-            min_bpm: song.min_bpm,
-            max_bpm: song.max_bpm,
-            normalized_bpms: song.normalized_bpms.clone(),
-            normalized_stops: song.normalized_stops.clone(),
-            normalized_delays: song.normalized_delays.clone(),
-            normalized_warps: song.normalized_warps.clone(),
-            normalized_speeds: song.normalized_speeds.clone(),
-            normalized_scrolls: song.normalized_scrolls.clone(),
-            normalized_fakes: song.normalized_fakes.clone(),
-            music_length_seconds: song.music_length_seconds,
-            total_length_seconds: song.total_length_seconds,
-            charts: song
-                .charts
-                .iter()
-                .map(SerializableChartData::from)
-                .collect(),
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct CachedChartMeta {
+    chart_type: String,
+    difficulty: String,
+    description: String,
+    chart_name: String,
+    meter: u32,
+    step_artist: String,
+    short_hash: String,
+    stats: CachedArrowStats,
+    tech_counts: CachedTechCounts,
+    mines_nonfake: u32,
+    stamina_counts: CachedStaminaCounts,
+    total_streams: u32,
+    matrix_rating: f64,
+    max_nps: f64,
+    sn_detailed_breakdown: String,
+    sn_partial_breakdown: String,
+    sn_simple_breakdown: String,
+    detailed_breakdown: String,
+    partial_breakdown: String,
+    simple_breakdown: String,
+    total_measures: usize,
+    measure_nps_vec: Vec<f64>,
+    measure_seconds_vec: Vec<f32>,
+    first_second: f32,
+    has_note_data: bool,
+    has_chart_attacks: bool,
+    has_significant_timing_changes: bool,
+    possible_grade_points: i32,
+    holds_total: u32,
+    rolls_total: u32,
+    mines_total: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct CachedSongMeta {
+    simfile_path: String,
+    title: String,
+    subtitle: String,
+    translit_title: String,
+    translit_subtitle: String,
+    artist: String,
+    banner_path: Option<String>,
+    background_path: Option<String>,
+    background_changes: Vec<SerializableSongBackgroundChange>,
+    has_lua: bool,
+    cdtitle_path: Option<String>,
+    music_path: Option<String>,
+    display_bpm: String,
+    offset: f32,
+    sample_start: Option<f32>,
+    sample_length: Option<f32>,
+    min_bpm: f64,
+    max_bpm: f64,
+    normalized_bpms: String,
+    music_length_seconds: f32,
+    total_length_seconds: i32,
+    precise_last_second_seconds: f32,
+    charts: Vec<CachedChartMeta>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+struct CachedChartPayload {
+    notes: Vec<u8>,
+    parsed_notes: Vec<CachedParsedNote>,
+    row_to_beat: Vec<f32>,
+    timing_segments: CachedTimingSegments,
+    chart_attacks: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Encode, Decode)]
+struct CachedChartPayloadIndex {
+    offset: u64,
+    len: u64,
+}
+
+#[inline(always)]
+fn chart_has_attacks(attacks: Option<&str>) -> bool {
+    attacks.is_some_and(|attacks| !attacks.trim().is_empty())
+}
+
+fn chart_has_significant_timing_changes(timing: &TimingSegments) -> bool {
+    if !timing.stops.is_empty()
+        || !timing.delays.is_empty()
+        || !timing.warps.is_empty()
+        || !timing.speeds.is_empty()
+        || !timing.scrolls.is_empty()
+    {
+        return true;
+    }
+
+    let mut min_bpm = f32::INFINITY;
+    let mut max_bpm = 0.0_f32;
+    for &(_, bpm) in &timing.bpms {
+        if !bpm.is_finite() || bpm <= 0.0 {
+            continue;
         }
+        min_bpm = min_bpm.min(bpm);
+        max_bpm = max_bpm.max(bpm);
+    }
+
+    min_bpm.is_finite() && max_bpm - min_bpm > 3.0
+}
+
+fn build_measure_seconds(timing: &TimingData, measure_count: usize) -> Vec<f32> {
+    let mut seconds = Vec::with_capacity(measure_count);
+    for measure in 0..measure_count {
+        seconds.push(timing.get_time_for_beat((measure as f32) * 4.0));
+    }
+    seconds
+}
+
+fn build_chart_totals(
+    parsed_notes: &[CachedParsedNote],
+    timing: &TimingData,
+) -> (i32, u32, u32, u32) {
+    let mut holds_total = 0u32;
+    let mut rolls_total = 0u32;
+    let mut mines_total = 0u32;
+    let mut rows: Vec<usize> = Vec::with_capacity(parsed_notes.len());
+    for parsed in parsed_notes {
+        let row_index = parsed.row_index as usize;
+        let Some(beat) = timing.get_beat_for_row(row_index) else {
+            continue;
+        };
+        let explicit_fake_tap = matches!(parsed.note_type, CachedNoteType::Fake);
+        let fake_by_segment = timing.is_fake_at_beat(beat);
+        let is_fake = explicit_fake_tap || fake_by_segment;
+        let note_type: NoteType = parsed.note_type.into();
+        let note_type = if explicit_fake_tap {
+            NoteType::Tap
+        } else {
+            note_type
+        };
+        let can_be_judged = !is_fake && timing.is_judgable_at_beat(beat);
+        if !can_be_judged {
+            continue;
+        }
+        match note_type {
+            NoteType::Hold => {
+                holds_total = holds_total.saturating_add(1);
+                rows.push(row_index);
+            }
+            NoteType::Roll => {
+                rolls_total = rolls_total.saturating_add(1);
+                rows.push(row_index);
+            }
+            NoteType::Mine => {
+                mines_total = mines_total.saturating_add(1);
+            }
+            NoteType::Tap | NoteType::Lift | NoteType::Fake => {
+                rows.push(row_index);
+            }
+        }
+    }
+    rows.sort_unstable();
+    rows.dedup();
+    let possible_i64 = i64::try_from(rows.len()).unwrap_or(i64::MAX) * 5
+        + i64::from(holds_total) * i64::from(crate::game::judgment::HOLD_SCORE_HELD)
+        + i64::from(rolls_total) * i64::from(crate::game::judgment::HOLD_SCORE_HELD);
+    (
+        possible_i64.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        holds_total,
+        rolls_total,
+        mines_total,
+    )
+}
+
+fn build_chart_meta(
+    chart: SerializableChartData,
+    song_offset: f32,
+    global_offset_seconds: f32,
+) -> ChartData {
+    let timing_segments: TimingSegments = chart.timing_segments.into();
+    let timing = TimingData::from_segments(
+        -song_offset,
+        global_offset_seconds,
+        &timing_segments,
+        &chart.row_to_beat,
+    );
+    let (possible_grade_points, holds_total, rolls_total, mines_total) =
+        build_chart_totals(&chart.parsed_notes, &timing);
+    let first_second = 0.0_f32.min(timing.get_time_for_beat(0.0));
+    let measure_seconds_vec = build_measure_seconds(&timing, chart.measure_nps_vec.len());
+    let has_chart_attacks = chart_has_attacks(chart.chart_attacks.as_deref());
+    let has_significant_timing_changes = chart_has_significant_timing_changes(&timing_segments);
+    ChartData {
+        chart_type: chart.chart_type,
+        difficulty: chart.difficulty,
+        description: chart.description,
+        chart_name: chart.chart_name,
+        meter: chart.meter,
+        step_artist: chart.step_artist,
+        short_hash: chart.short_hash,
+        stats: chart.stats.into(),
+        tech_counts: chart.tech_counts.into(),
+        mines_nonfake: chart.mines_nonfake,
+        stamina_counts: chart.stamina_counts.into(),
+        total_streams: chart.total_streams,
+        matrix_rating: chart.matrix_rating,
+        max_nps: chart.max_nps,
+        sn_detailed_breakdown: chart.sn_detailed_breakdown,
+        sn_partial_breakdown: chart.sn_partial_breakdown,
+        sn_simple_breakdown: chart.sn_simple_breakdown,
+        detailed_breakdown: chart.detailed_breakdown,
+        partial_breakdown: chart.partial_breakdown,
+        simple_breakdown: chart.simple_breakdown,
+        total_measures: chart.total_measures,
+        measure_nps_vec: chart.measure_nps_vec,
+        measure_seconds_vec,
+        first_second,
+        has_note_data: !chart.notes.is_empty(),
+        has_chart_attacks,
+        has_significant_timing_changes,
+        possible_grade_points,
+        holds_total,
+        rolls_total,
+        mines_total,
     }
 }
 
-impl From<SerializableSongData> for SongData {
-    fn from(song: SerializableSongData) -> Self {
-        Self {
-            simfile_path: PathBuf::from(song.simfile_path),
-            title: song.title,
-            subtitle: song.subtitle,
-            translit_title: song.translit_title,
-            translit_subtitle: song.translit_subtitle,
-            artist: song.artist,
-            banner_path: song.banner_path.map(PathBuf::from),
-            background_path: song.background_path.map(PathBuf::from),
-            cdtitle_path: song.cdtitle_path.map(PathBuf::from),
-            music_path: song.music_path.map(PathBuf::from),
-            display_bpm: song.display_bpm,
-            offset: song.offset,
-            sample_start: song.sample_start,
-            sample_length: song.sample_length,
-            min_bpm: song.min_bpm,
-            max_bpm: song.max_bpm,
-            normalized_bpms: song.normalized_bpms,
-            normalized_stops: song.normalized_stops,
-            normalized_delays: song.normalized_delays,
-            normalized_warps: song.normalized_warps,
-            normalized_speeds: song.normalized_speeds,
-            normalized_scrolls: song.normalized_scrolls,
-            normalized_fakes: song.normalized_fakes,
-            music_length_seconds: song.music_length_seconds,
-            total_length_seconds: song.total_length_seconds,
-            charts: song.charts.into_iter().map(ChartData::from).collect(),
-        }
+fn build_cached_chart_meta(
+    chart: &SerializableChartData,
+    song_offset: f32,
+    global_offset_seconds: f32,
+) -> CachedChartMeta {
+    let timing_segments: TimingSegments = chart.timing_segments.clone().into();
+    let timing = TimingData::from_segments(
+        -song_offset,
+        global_offset_seconds,
+        &timing_segments,
+        &chart.row_to_beat,
+    );
+    let (possible_grade_points, holds_total, rolls_total, mines_total) =
+        build_chart_totals(&chart.parsed_notes, &timing);
+    let first_second = 0.0_f32.min(timing.get_time_for_beat(0.0));
+    let measure_seconds_vec = build_measure_seconds(&timing, chart.measure_nps_vec.len());
+    CachedChartMeta {
+        chart_type: chart.chart_type.clone(),
+        difficulty: chart.difficulty.clone(),
+        description: chart.description.clone(),
+        chart_name: chart.chart_name.clone(),
+        meter: chart.meter,
+        step_artist: chart.step_artist.clone(),
+        short_hash: chart.short_hash.clone(),
+        stats: chart.stats.clone(),
+        tech_counts: chart.tech_counts.clone(),
+        mines_nonfake: chart.mines_nonfake,
+        stamina_counts: chart.stamina_counts.clone(),
+        total_streams: chart.total_streams,
+        matrix_rating: chart.matrix_rating,
+        max_nps: chart.max_nps,
+        sn_detailed_breakdown: chart.sn_detailed_breakdown.clone(),
+        sn_partial_breakdown: chart.sn_partial_breakdown.clone(),
+        sn_simple_breakdown: chart.sn_simple_breakdown.clone(),
+        detailed_breakdown: chart.detailed_breakdown.clone(),
+        partial_breakdown: chart.partial_breakdown.clone(),
+        simple_breakdown: chart.simple_breakdown.clone(),
+        total_measures: chart.total_measures,
+        measure_nps_vec: chart.measure_nps_vec.clone(),
+        measure_seconds_vec,
+        first_second,
+        has_note_data: !chart.notes.is_empty(),
+        has_chart_attacks: chart_has_attacks(chart.chart_attacks.as_deref()),
+        has_significant_timing_changes: chart_has_significant_timing_changes(&timing_segments),
+        possible_grade_points,
+        holds_total,
+        rolls_total,
+        mines_total,
+    }
+}
+
+fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
+    ChartData {
+        chart_type: chart.chart_type,
+        difficulty: chart.difficulty,
+        description: chart.description,
+        chart_name: chart.chart_name,
+        meter: chart.meter,
+        step_artist: chart.step_artist,
+        short_hash: chart.short_hash,
+        stats: chart.stats.into(),
+        tech_counts: chart.tech_counts.into(),
+        mines_nonfake: chart.mines_nonfake,
+        stamina_counts: chart.stamina_counts.into(),
+        total_streams: chart.total_streams,
+        matrix_rating: chart.matrix_rating,
+        max_nps: chart.max_nps,
+        sn_detailed_breakdown: chart.sn_detailed_breakdown,
+        sn_partial_breakdown: chart.sn_partial_breakdown,
+        sn_simple_breakdown: chart.sn_simple_breakdown,
+        detailed_breakdown: chart.detailed_breakdown,
+        partial_breakdown: chart.partial_breakdown,
+        simple_breakdown: chart.simple_breakdown,
+        total_measures: chart.total_measures,
+        measure_nps_vec: chart.measure_nps_vec,
+        measure_seconds_vec: chart.measure_seconds_vec,
+        first_second: chart.first_second,
+        has_note_data: chart.has_note_data,
+        has_chart_attacks: chart.has_chart_attacks,
+        has_significant_timing_changes: chart.has_significant_timing_changes,
+        possible_grade_points: chart.possible_grade_points,
+        holds_total: chart.holds_total,
+        rolls_total: chart.rolls_total,
+        mines_total: chart.mines_total,
+    }
+}
+
+fn build_gameplay_chart(
+    chart: SerializableChartData,
+    song_offset: f32,
+    global_offset_seconds: f32,
+) -> GameplayChartData {
+    build_gameplay_chart_from_payload(
+        CachedChartPayload {
+            notes: chart.notes,
+            parsed_notes: chart.parsed_notes,
+            row_to_beat: chart.row_to_beat,
+            timing_segments: chart.timing_segments,
+            chart_attacks: chart.chart_attacks,
+        },
+        song_offset,
+        global_offset_seconds,
+    )
+}
+
+fn build_gameplay_chart_from_payload(
+    chart: CachedChartPayload,
+    song_offset: f32,
+    global_offset_seconds: f32,
+) -> GameplayChartData {
+    let timing_segments: TimingSegments = chart.timing_segments.into();
+    let row_to_beat = chart.row_to_beat;
+    let timing = TimingData::from_segments(
+        -song_offset,
+        global_offset_seconds,
+        &timing_segments,
+        &row_to_beat,
+    );
+    GameplayChartData {
+        notes: chart.notes,
+        parsed_notes: chart
+            .parsed_notes
+            .into_iter()
+            .map(ParsedNote::from)
+            .collect(),
+        row_to_beat,
+        timing_segments,
+        timing,
+        chart_attacks: chart.chart_attacks,
+    }
+}
+
+fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -> SongData {
+    let song_offset = song.offset;
+    SongData {
+        simfile_path: PathBuf::from(song.simfile_path),
+        title: song.title,
+        subtitle: song.subtitle,
+        translit_title: song.translit_title,
+        translit_subtitle: song.translit_subtitle,
+        artist: song.artist,
+        banner_path: song.banner_path.map(PathBuf::from),
+        background_path: song.background_path.map(PathBuf::from),
+        background_changes: song
+            .background_changes
+            .into_iter()
+            .map(SongBackgroundChange::from)
+            .collect(),
+        has_lua: song.has_lua,
+        cdtitle_path: song.cdtitle_path.map(PathBuf::from),
+        music_path: song.music_path.map(PathBuf::from),
+        display_bpm: song.display_bpm,
+        offset: song.offset,
+        sample_start: song.sample_start,
+        sample_length: song.sample_length,
+        min_bpm: song.min_bpm,
+        max_bpm: song.max_bpm,
+        normalized_bpms: song.normalized_bpms,
+        music_length_seconds: song.music_length_seconds,
+        total_length_seconds: song.total_length_seconds,
+        precise_last_second_seconds: song.precise_last_second_seconds,
+        charts: song
+            .charts
+            .into_iter()
+            .map(|chart| build_chart_meta(chart, song_offset, global_offset_seconds))
+            .collect(),
+    }
+}
+
+fn build_cached_song_meta(
+    song: &SerializableSongData,
+    global_offset_seconds: f32,
+) -> CachedSongMeta {
+    let song_offset = song.offset;
+    CachedSongMeta {
+        simfile_path: song.simfile_path.clone(),
+        title: song.title.clone(),
+        subtitle: song.subtitle.clone(),
+        translit_title: song.translit_title.clone(),
+        translit_subtitle: song.translit_subtitle.clone(),
+        artist: song.artist.clone(),
+        banner_path: song.banner_path.clone(),
+        background_path: song.background_path.clone(),
+        background_changes: song.background_changes.clone(),
+        has_lua: song.has_lua,
+        cdtitle_path: song.cdtitle_path.clone(),
+        music_path: song.music_path.clone(),
+        display_bpm: song.display_bpm.clone(),
+        offset: song.offset,
+        sample_start: song.sample_start,
+        sample_length: song.sample_length,
+        min_bpm: song.min_bpm,
+        max_bpm: song.max_bpm,
+        normalized_bpms: song.normalized_bpms.clone(),
+        music_length_seconds: song.music_length_seconds,
+        total_length_seconds: song.total_length_seconds,
+        precise_last_second_seconds: song.precise_last_second_seconds,
+        charts: song
+            .charts
+            .iter()
+            .map(|chart| build_cached_chart_meta(chart, song_offset, global_offset_seconds))
+            .collect(),
+    }
+}
+
+fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
+    SongData {
+        simfile_path: PathBuf::from(song.simfile_path),
+        title: song.title,
+        subtitle: song.subtitle,
+        translit_title: song.translit_title,
+        translit_subtitle: song.translit_subtitle,
+        artist: song.artist,
+        banner_path: song.banner_path.map(PathBuf::from),
+        background_path: song.background_path.map(PathBuf::from),
+        background_changes: song
+            .background_changes
+            .into_iter()
+            .map(SongBackgroundChange::from)
+            .collect(),
+        has_lua: song.has_lua,
+        cdtitle_path: song.cdtitle_path.map(PathBuf::from),
+        music_path: song.music_path.map(PathBuf::from),
+        display_bpm: song.display_bpm,
+        offset: song.offset,
+        sample_start: song.sample_start,
+        sample_length: song.sample_length,
+        min_bpm: song.min_bpm,
+        max_bpm: song.max_bpm,
+        normalized_bpms: song.normalized_bpms,
+        music_length_seconds: song.music_length_seconds,
+        total_length_seconds: song.total_length_seconds,
+        precise_last_second_seconds: song.precise_last_second_seconds,
+        charts: song
+            .charts
+            .into_iter()
+            .map(build_chart_meta_from_cache)
+            .collect(),
     }
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode)]
 struct CachedSong {
+    cache_version: u8,
     rssp_version: String,
     mono_threshold: usize,
     source_hash: u64,
-    data: SerializableSongData,
+    data: CachedSongMeta,
+    chart_payloads: Vec<CachedChartPayloadIndex>,
 }
 
 // --- CACHING HELPER FUNCTIONS ---
@@ -708,6 +1057,33 @@ fn fmt_scan_time(d: Duration) -> String {
     let m = (total_s / 60.0).floor() as u64;
     let s = (m as f64).mul_add(-60.0, total_s);
     format!("{m}m{s:.1}s")
+}
+
+#[inline(always)]
+fn cached_path_exists(path_opt: Option<&str>) -> bool {
+    match path_opt.map(str::trim) {
+        None => true,
+        Some("") => false,
+        Some(path) => Path::new(path).is_file(),
+    }
+}
+
+#[inline(always)]
+fn cached_song_paths_exist(song: &CachedSong) -> bool {
+    let data = &song.data;
+    let bgchange_paths_ok = data
+        .background_changes
+        .iter()
+        .all(|change| match &change.target {
+            SerializableSongBackgroundChangeTarget::File(path) => cached_path_exists(Some(path)),
+            SerializableSongBackgroundChangeTarget::NoSongBg
+            | SerializableSongBackgroundChangeTarget::Random => true,
+        });
+    cached_path_exists(data.banner_path.as_deref())
+        && cached_path_exists(data.background_path.as_deref())
+        && bgchange_paths_ok
+        && cached_path_exists(data.cdtitle_path.as_deref())
+        && cached_path_exists(data.music_path.as_deref())
 }
 
 // Mirrors ITGmania's `SongUtil::MakeSortString` behavior for song title sorting.
@@ -803,17 +1179,46 @@ fn step_type_lanes(step_type: &str) -> usize {
     if normalized == "dance-double" { 8 } else { 4 }
 }
 
-fn hydrate_chart_timings(song: &mut SongData, global_offset_seconds: f32) {
+fn update_precise_last_second(song: &mut SerializableSongData, global_offset_seconds: f32) {
+    let has_non_edit = song
+        .charts
+        .iter()
+        .any(|c| !c.difficulty.eq_ignore_ascii_case("edit"));
+    let mut last = 0.0_f32;
     let song_offset = song.offset;
 
-    for chart in &mut song.charts {
-        chart.timing = TimingData::from_segments(
+    for chart in &song.charts {
+        if has_non_edit && chart.difficulty.eq_ignore_ascii_case("edit") {
+            continue;
+        }
+
+        let mut last_row: Option<usize> = None;
+        for note in &chart.parsed_notes {
+            let row = note.tail_row_index.unwrap_or(note.row_index) as usize;
+            last_row = Some(last_row.map_or(row, |prev| prev.max(row)));
+        }
+
+        let Some(row) = last_row else {
+            continue;
+        };
+        let Some(beat) = chart.row_to_beat.get(row).copied() else {
+            continue;
+        };
+        let timing_segments: TimingSegments = chart.timing_segments.clone().into();
+        let timing = TimingData::from_segments(
             -song_offset,
             global_offset_seconds,
-            &chart.timing_segments,
+            &timing_segments,
             &chart.row_to_beat,
         );
+        let sec = timing.get_time_for_beat(beat);
+        if sec.is_finite() {
+            last = last.max(sec.max(0.0));
+        }
     }
+
+    let fallback = song.total_length_seconds.max(0) as f32;
+    song.precise_last_second_seconds = last.max(fallback);
 }
 
 /// Helper to load a song from cache OR parse it if needed.
@@ -833,7 +1238,7 @@ fn process_song(
     // 1. Try Loading from Cache
     if fastload
         && let Some(cp) = &cache_keys.cache_path
-        && let Some(song_data) = load_song_from_cache(&simfile_path, cp, global_offset_seconds)
+        && let Some(song_data) = load_song_from_cache(&simfile_path, cp)
     {
         return Ok((song_data, true)); // is_hit = true
     }
@@ -948,6 +1353,184 @@ fn collect_song_scan_roots(root_path_str: &str) -> Vec<PathBuf> {
     roots
 }
 
+fn ci_key(text: &str) -> String {
+    text.trim().to_ascii_lowercase()
+}
+
+fn song_scan_key(song: &SongScan) -> String {
+    song.dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(ci_key)
+        .filter(|key| !key.is_empty())
+        .unwrap_or_else(|| song.dir.to_string_lossy().to_ascii_lowercase())
+}
+
+fn merge_pack_scan(dst: &mut PackScan, mut src: PackScan) {
+    dst.dir = src.dir.clone();
+    if src.has_pack_ini {
+        dst.display_title = src.display_title.clone();
+        dst.sort_title = src.sort_title.clone();
+        dst.translit_title = src.translit_title.clone();
+        dst.series = src.series.clone();
+        dst.year = src.year;
+        dst.version = src.version;
+        dst.has_pack_ini = true;
+        dst.sync_pref = src.sync_pref;
+    }
+    if src.banner_path.is_some() {
+        dst.banner_path = src.banner_path.clone();
+    }
+    if src.background_path.is_some() {
+        dst.background_path = src.background_path.clone();
+    }
+
+    let mut song_slots = HashMap::with_capacity(dst.songs.len() + src.songs.len());
+    for (idx, song) in dst.songs.iter().enumerate() {
+        song_slots.insert(song_scan_key(song), idx);
+    }
+    for song in src.songs.drain(..) {
+        let key = song_scan_key(&song);
+        if let Some(slot) = song_slots.get(&key).copied() {
+            dst.songs[slot] = song;
+        } else {
+            let slot = dst.songs.len();
+            song_slots.insert(key, slot);
+            dst.songs.push(song);
+        }
+    }
+}
+
+fn merge_pack_scans(mut packs: Vec<PackScan>) -> Vec<PackScan> {
+    let mut merged = Vec::with_capacity(packs.len());
+    let mut pack_slots = HashMap::with_capacity(packs.len());
+
+    for pack in packs.drain(..) {
+        let key = ci_key(&pack.group_name);
+        if key.is_empty() {
+            merged.push(pack);
+            continue;
+        }
+        if let Some(slot) = pack_slots.get(&key).copied() {
+            merge_pack_scan(&mut merged[slot], pack);
+        } else {
+            let slot = merged.len();
+            pack_slots.insert(key, slot);
+            merged.push(pack);
+        }
+    }
+
+    merged
+}
+
+#[inline(always)]
+fn report_load_progress<F>(
+    progress: &mut Option<&mut F>,
+    done: usize,
+    total: usize,
+    group: &str,
+    item: &str,
+) where
+    F: FnMut(usize, usize, &str, &str),
+{
+    if let Some(cb) = progress.as_mut() {
+        cb(done, total, group, item);
+    }
+}
+
+#[inline(always)]
+fn song_pack_progress_name(pack: &SongPack) -> &str {
+    pack.directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(pack.group_name.as_str())
+}
+
+#[inline(always)]
+fn song_progress_name(path: &Path) -> &str {
+    path.parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+        })
+}
+
+#[inline(always)]
+fn course_progress_names<'a>(path: &'a Path, root: &'a str) -> (&'a str, &'a str) {
+    let group = path
+        .parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(root);
+    let course = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_default();
+    (group, course)
+}
+
+type SongParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
+
+fn reap_song_parse<F>(
+    rx: Option<&std::sync::mpsc::Receiver<SongParseMsg>>,
+    in_flight: &mut usize,
+    loaded_packs: &mut Vec<SongPack>,
+    songs_failed: &mut usize,
+    songs_cache_hits: &mut usize,
+    songs_parsed: &mut usize,
+    songs_done: &mut usize,
+    total_songs: usize,
+    progress: &mut Option<&mut F>,
+) where
+    F: FnMut(usize, usize, &str, &str),
+{
+    let Some(rx) = rx else {
+        return;
+    };
+    match rx.recv() {
+        Ok((pack_idx, simfile_path, result)) => {
+            *in_flight = in_flight.saturating_sub(1);
+            match result {
+                Ok((song_data, is_hit)) => {
+                    if is_hit {
+                        *songs_cache_hits += 1;
+                    } else {
+                        *songs_parsed += 1;
+                    }
+                    if let Some(pack) = loaded_packs.get_mut(pack_idx) {
+                        pack.songs.push(song_data);
+                    }
+                }
+                Err(e) => {
+                    *songs_failed += 1;
+                    warn!("Failed to load '{simfile_path:?}': {e}")
+                }
+            }
+            *songs_done = songs_done.saturating_add(1);
+            let pack_display = loaded_packs
+                .get(pack_idx)
+                .map_or("", song_pack_progress_name);
+            report_load_progress(
+                progress,
+                *songs_done,
+                total_songs,
+                pack_display,
+                song_progress_name(&simfile_path),
+            );
+        }
+        Err(_) => {
+            *in_flight = 0;
+        }
+    }
+}
+
 fn scan_and_load_songs_impl<F>(root_path_str: &'static str, mut progress: Option<&mut F>)
 where
     F: FnMut(usize, usize, &str, &str),
@@ -1002,53 +1585,15 @@ where
             Err(e) => warn!("Could not scan songs dir '{}': {e:?}", songs_root.display()),
         }
     }
+    packs = merge_pack_scans(packs);
     let total_songs = packs.iter().map(|pack| pack.songs.len()).sum::<usize>();
-    let mut songs_seen = 0usize;
-
-    // (pack_idx, simfile_path, result(song_data, is_cache_hit))
-    type ParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
+    let mut songs_done = 0usize;
+    report_load_progress(&mut progress, 0, total_songs, "", "");
 
     let mut runtime: Option<tokio::runtime::Runtime> = None;
-    let mut tx_opt: Option<std::sync::mpsc::Sender<ParseMsg>> = None;
-    let mut rx_opt: Option<std::sync::mpsc::Receiver<ParseMsg>> = None;
+    let mut tx_opt: Option<std::sync::mpsc::Sender<SongParseMsg>> = None;
+    let mut rx_opt: Option<std::sync::mpsc::Receiver<SongParseMsg>> = None;
     let mut in_flight = 0usize;
-
-    fn reap_one(
-        rx: Option<&std::sync::mpsc::Receiver<ParseMsg>>,
-        in_flight: &mut usize,
-        loaded_packs: &mut Vec<SongPack>,
-        songs_failed: &mut usize,
-        songs_cache_hits: &mut usize,
-        songs_parsed: &mut usize,
-    ) {
-        let Some(rx) = rx else {
-            return;
-        };
-        match rx.recv() {
-            Ok((pack_idx, simfile_path, result)) => {
-                *in_flight = in_flight.saturating_sub(1);
-                match result {
-                    Ok((song_data, is_hit)) => {
-                        if is_hit {
-                            *songs_cache_hits += 1;
-                        } else {
-                            *songs_parsed += 1;
-                        }
-                        if let Some(pack) = loaded_packs.get_mut(pack_idx) {
-                            pack.songs.push(song_data);
-                        }
-                    }
-                    Err(e) => {
-                        *songs_failed += 1;
-                        warn!("Failed to load '{simfile_path:?}': {e}")
-                    }
-                }
-            }
-            Err(_) => {
-                *in_flight = 0;
-            }
-        }
-    }
 
     for pack in packs {
         let pack_display = pack
@@ -1077,21 +1622,7 @@ where
 
         for song in pack.songs {
             let simfile_path = song.simfile;
-            songs_seen = songs_seen.saturating_add(1);
-            if let Some(cb) = progress.as_mut() {
-                let song_display = simfile_path
-                    .parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| {
-                        simfile_path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or_default()
-                    });
-                cb(songs_seen, total_songs, pack_display.as_str(), song_display);
-            }
+            let song_display = song_progress_name(&simfile_path);
 
             if parallel_parsing {
                 let rt = runtime.get_or_insert_with(|| {
@@ -1101,19 +1632,22 @@ where
                         .unwrap()
                 });
                 if tx_opt.is_none() || rx_opt.is_none() {
-                    let (tx, rx) = std::sync::mpsc::channel::<ParseMsg>();
+                    let (tx, rx) = std::sync::mpsc::channel::<SongParseMsg>();
                     tx_opt = Some(tx);
                     rx_opt = Some(rx);
                 }
 
                 while in_flight >= parse_threads {
-                    reap_one(
+                    reap_song_parse(
                         rx_opt.as_ref(),
                         &mut in_flight,
                         &mut loaded_packs,
                         &mut songs_failed,
                         &mut songs_cache_hits,
                         &mut songs_parsed,
+                        &mut songs_done,
+                        total_songs,
+                        &mut progress,
                     );
                 }
 
@@ -1138,6 +1672,14 @@ where
                             warn!("Failed to load '{simfile_path:?}': {e}")
                         }
                     }
+                    songs_done = songs_done.saturating_add(1);
+                    report_load_progress(
+                        &mut progress,
+                        songs_done,
+                        total_songs,
+                        pack_display.as_str(),
+                        song_display,
+                    );
                     continue;
                 };
 
@@ -1177,18 +1719,29 @@ where
                         warn!("Failed to load '{simfile_path:?}': {e}")
                     }
                 }
+                songs_done = songs_done.saturating_add(1);
+                report_load_progress(
+                    &mut progress,
+                    songs_done,
+                    total_songs,
+                    pack_display.as_str(),
+                    song_display,
+                );
             }
         }
     }
 
     while in_flight > 0 {
-        reap_one(
+        reap_song_parse(
             rx_opt.as_ref(),
             &mut in_flight,
             &mut loaded_packs,
             &mut songs_failed,
             &mut songs_cache_hits,
             &mut songs_parsed,
+            &mut songs_done,
+            total_songs,
+            &mut progress,
         );
     }
 
@@ -1226,23 +1779,30 @@ where
 }
 
 fn is_dir_ci(dir: &Path, name: &str) -> Option<PathBuf> {
-    let want = name.trim().to_ascii_lowercase();
+    let want = name.trim();
     if want.is_empty() {
         return None;
     }
+    let want_ci = want.to_ascii_lowercase();
     let Ok(entries) = fs::read_dir(dir) else {
         return None;
     };
+    let mut ci_match = None;
     for entry in entries.flatten() {
-        if !entry.path().is_dir() {
+        let path = entry.path();
+        if !path.is_dir() {
             continue;
         }
-        let got = entry.file_name().to_string_lossy().to_ascii_lowercase();
+        let got = entry.file_name();
+        let got = got.to_string_lossy();
         if got == want {
-            return Some(entry.path());
+            return Some(path);
+        }
+        if ci_match.is_none() && got.to_ascii_lowercase() == want_ci {
+            ci_match = Some(path);
         }
     }
-    None
+    ci_match
 }
 
 fn collect_course_paths(root: &Path) -> Vec<PathBuf> {
@@ -1287,13 +1847,8 @@ fn resolve_song_dir(
         }
         if !group_dirs.contains_key(&key) {
             let mut path = None;
-            for songs_root in song_roots {
-                let direct = songs_root.join(group);
-                path = if direct.is_dir() {
-                    Some(direct)
-                } else {
-                    is_dir_ci(songs_root, group)
-                };
+            for songs_root in song_roots.iter().rev() {
+                path = is_dir_ci(songs_root, group);
                 if path.is_some() {
                     break;
                 }
@@ -1311,15 +1866,10 @@ fn resolve_song_dir(
 
     if let Some(group) = group.map(str::trim).filter(|g| !g.is_empty()) {
         let group_dir = resolve_group_dir(song_roots, group_dirs, group)?;
-        let direct = group_dir.join(song);
-        return if direct.is_dir() {
-            Some(direct)
-        } else {
-            is_dir_ci(&group_dir, song)
-        };
+        return is_dir_ci(&group_dir, song);
     }
 
-    for songs_root in song_roots {
+    for songs_root in song_roots.iter().rev() {
         let Ok(entries) = fs::read_dir(songs_root) else {
             continue;
         };
@@ -1327,10 +1877,6 @@ fn resolve_song_dir(
             let group_dir = entry.path();
             if !group_dir.is_dir() {
                 continue;
-            }
-            let direct = group_dir.join(song);
-            if direct.is_dir() {
-                return Some(direct);
             }
             if let Some(found) = is_dir_ci(&group_dir, song) {
                 return Some(found);
@@ -1353,13 +1899,8 @@ fn resolve_course_group_dir(
         return Some(path.clone());
     }
     let mut path = None;
-    for songs_root in song_roots {
-        let direct = songs_root.join(group);
-        path = if direct.is_dir() {
-            Some(direct)
-        } else {
-            is_dir_ci(songs_root, group)
-        };
+    for songs_root in song_roots.iter().rev() {
+        path = is_dir_ci(songs_root, group);
         if path.is_some() {
             break;
         }
@@ -1497,29 +2038,29 @@ fn scan_and_load_courses_impl<F>(
     };
     let course_paths = collect_course_paths(courses_root);
     let total_courses = course_paths.len();
-    let mut courses_seen = 0usize;
+    let mut courses_done = 0usize;
+    report_load_progress(&mut progress, 0, total_courses, "", "");
 
     for course_path in course_paths {
-        courses_seen = courses_seen.saturating_add(1);
-        if let Some(cb) = progress.as_mut() {
-            let group_display = course_path
-                .parent()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or(courses_root_str);
-            let course_display = course_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .filter(|s| !s.is_empty())
-                .unwrap_or_default();
-            cb(courses_seen, total_courses, group_display, course_display);
-        }
+        let (group_display, course_display) = course_progress_names(&course_path, courses_root_str);
+        let group_display = group_display.to_owned();
+        let course_display = course_display.to_owned();
+        let mut report_done = || {
+            courses_done = courses_done.saturating_add(1);
+            report_load_progress(
+                &mut progress,
+                courses_done,
+                total_courses,
+                &group_display,
+                &course_display,
+            );
+        };
         let data = match fs::read(&course_path) {
             Ok(d) => d,
             Err(e) => {
                 courses_failed += 1;
                 warn!("Failed to read course '{}': {}", course_path.display(), e);
+                report_done();
                 continue;
             }
         };
@@ -1529,6 +2070,7 @@ fn scan_and_load_courses_impl<F>(
             Err(e) => {
                 courses_failed += 1;
                 warn!("Failed to parse course '{}': {}", course_path.display(), e);
+                report_done();
                 continue;
             }
         };
@@ -1643,6 +2185,7 @@ fn scan_and_load_courses_impl<F>(
         } else {
             courses_failed += 1;
         }
+        report_done();
     }
 
     let autogen_courses = autogen_nonstop_group_courses();
@@ -1659,27 +2202,47 @@ fn scan_and_load_courses_impl<F>(
     set_course_cache(loaded_courses);
 }
 
-fn load_song_from_cache(
-    path: &Path,
-    cache_path: &Path,
-    global_offset_seconds: f32,
-) -> Option<SongData> {
+fn load_cached_song_base(path: &Path, cache_path: &Path) -> Option<(CachedSong, u64)> {
     if !cache_path.exists() {
         return None;
     }
     let Ok(mut file) = fs::File::open(cache_path) else {
         return None;
     };
-    let mut buffer = Vec::new();
-    if file.read_to_end(&mut buffer).is_err() {
+    let mut prefix = [0u8; 16];
+    if file.read_exact(&mut prefix).is_err() {
+        return None;
+    }
+    if prefix[..8] != SONG_CACHE_MAGIC {
+        debug!(
+            "Cache stale (file format mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+        return None;
+    }
+    let header_len = u64::from_le_bytes(prefix[8..16].try_into().ok()?);
+    let header_len_usize = usize::try_from(header_len).ok()?;
+    let mut buffer = vec![0u8; header_len_usize];
+    if file.read_exact(&mut buffer).is_err() {
         return None;
     }
     let Ok((cached_song, _)) =
         bincode::decode_from_slice::<CachedSong, _>(&buffer, bincode::config::standard())
     else {
+        debug!(
+            "Cache stale (decode/schema mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
         return None;
     };
 
+    if cached_song.cache_version != SONG_CACHE_VERSION {
+        debug!(
+            "Cache stale (cache version mismatch) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+        return None;
+    }
     if cached_song.rssp_version != rssp::RSSP_VERSION {
         debug!(
             "Cache stale (rssp version mismatch) for: {:?}",
@@ -1694,7 +2257,18 @@ fn load_song_from_cache(
         );
         return None;
     }
+    if !cached_song_paths_exist(&cached_song) {
+        debug!(
+            "Cache stale (resolved asset path missing) for: {:?}",
+            path.file_name().unwrap_or_default()
+        );
+        return None;
+    }
+    Some((cached_song, 16 + header_len))
+}
 
+fn load_cached_song(path: &Path, cache_path: &Path) -> Option<CachedSong> {
+    let (cached_song, _) = load_cached_song_base(path, cache_path)?;
     let content_hash = match get_content_hash(path) {
         Ok(h) => h,
         Err(e) => {
@@ -1716,9 +2290,270 @@ fn load_song_from_cache(
     }
 
     debug!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
-    let mut song_data: SongData = cached_song.data.into();
-    hydrate_chart_timings(&mut song_data, global_offset_seconds);
-    Some(song_data)
+    Some(cached_song)
+}
+
+fn load_cached_song_for_gameplay(path: &Path, cache_path: &Path) -> Option<(CachedSong, u64)> {
+    // Startup already validated the source hash for the current session.
+    // Gameplay payload loads can trust that session-local cache state and
+    // avoid re-reading giant simfiles on every song entry/restart.
+    let (cached_song, payload_start) = load_cached_song_base(path, cache_path)?;
+    debug!(
+        "Gameplay cache hit (no source rehash) for: {:?}",
+        path.file_name().unwrap_or_default()
+    );
+    Some((cached_song, payload_start))
+}
+
+fn load_song_from_cache(path: &Path, cache_path: &Path) -> Option<SongData> {
+    let cached_song = load_cached_song(path, cache_path)?;
+    Some(build_song_meta_from_cache(cached_song.data))
+}
+
+fn write_song_cache(
+    cache_path: &Path,
+    source_hash: u64,
+    data: &SerializableSongData,
+    global_offset_seconds: f32,
+) {
+    let payloads = data
+        .charts
+        .iter()
+        .map(|chart| CachedChartPayload {
+            notes: chart.notes.clone(),
+            parsed_notes: chart.parsed_notes.clone(),
+            row_to_beat: chart.row_to_beat.clone(),
+            timing_segments: chart.timing_segments.clone(),
+            chart_attacks: chart.chart_attacks.clone(),
+        })
+        .collect::<Vec<_>>();
+    let meta = build_cached_song_meta(data, global_offset_seconds);
+    let mut encoded_payloads = Vec::with_capacity(payloads.len());
+    let mut chart_payloads = Vec::with_capacity(payloads.len());
+    let mut payload_offset = 0u64;
+    for payload in payloads {
+        let Ok(encoded) = bincode::encode_to_vec(&payload, bincode::config::standard()) else {
+            return;
+        };
+        let len = encoded.len() as u64;
+        chart_payloads.push(CachedChartPayloadIndex {
+            offset: payload_offset,
+            len,
+        });
+        payload_offset = payload_offset.saturating_add(len);
+        encoded_payloads.push(encoded);
+    }
+    let cached_song = CachedSong {
+        cache_version: SONG_CACHE_VERSION,
+        rssp_version: rssp::RSSP_VERSION.to_string(),
+        mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+        source_hash,
+        data: meta,
+        chart_payloads,
+    };
+
+    let Ok(encoded_header) = bincode::encode_to_vec(&cached_song, bincode::config::standard())
+    else {
+        return;
+    };
+    let mut can_write = true;
+    if let Some(parent) = cache_path.parent()
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        warn!("Failed to create song cache dir {parent:?}: {e}");
+        can_write = false;
+    }
+    if !can_write {
+        return;
+    }
+    if let Ok(mut file) = fs::File::create(cache_path) {
+        if file.write_all(&SONG_CACHE_MAGIC).is_err()
+            || file
+                .write_all(&(encoded_header.len() as u64).to_le_bytes())
+                .is_err()
+            || file.write_all(&encoded_header).is_err()
+        {
+            warn!("Failed to write cache file for {cache_path:?}");
+            return;
+        }
+        for payload in encoded_payloads {
+            if file.write_all(&payload).is_err() {
+                warn!("Failed to write cache file for {cache_path:?}");
+                return;
+            }
+        }
+    } else {
+        warn!("Failed to create cache file for {cache_path:?}");
+    }
+}
+
+fn load_cached_chart_payload(
+    cache_path: &Path,
+    payload_start: u64,
+    entry: CachedChartPayloadIndex,
+) -> Option<CachedChartPayload> {
+    let Ok(mut file) = fs::File::open(cache_path) else {
+        return None;
+    };
+    if file
+        .seek(SeekFrom::Start(payload_start.saturating_add(entry.offset)))
+        .is_err()
+    {
+        return None;
+    }
+    let len = usize::try_from(entry.len).ok()?;
+    let mut buffer = vec![0u8; len];
+    if file.read_exact(&mut buffer).is_err() {
+        return None;
+    }
+    let Ok((payload, _)) =
+        bincode::decode_from_slice::<CachedChartPayload, _>(&buffer, bincode::config::standard())
+    else {
+        return None;
+    };
+    Some(payload)
+}
+
+fn build_requested_gameplay_charts(
+    song_data: &SerializableSongData,
+    requested_chart_ixs: &[usize],
+    global_offset_seconds: f32,
+) -> Result<Vec<GameplayChartData>, String> {
+    let song_offset = song_data.offset;
+    requested_chart_ixs
+        .iter()
+        .map(|&chart_ix| {
+            let chart = song_data
+                .charts
+                .get(chart_ix)
+                .cloned()
+                .ok_or_else(|| format!("Chart index {chart_ix} out of range"))?;
+            Ok(build_gameplay_chart(
+                chart,
+                song_offset,
+                global_offset_seconds,
+            ))
+        })
+        .collect()
+}
+
+fn load_gameplay_charts_from_cache(
+    song: &SongData,
+    requested_chart_ixs: &[usize],
+    global_offset_seconds: f32,
+) -> Option<Vec<GameplayChartData>> {
+    let cache_path = get_cache_path(&song.simfile_path).ok()?;
+    let (cached_song, payload_start) =
+        load_cached_song_for_gameplay(&song.simfile_path, &cache_path)?;
+    let song_offset = cached_song.data.offset;
+    let mut charts = Vec::with_capacity(requested_chart_ixs.len());
+    let mut loaded = HashMap::<usize, GameplayChartData>::with_capacity(requested_chart_ixs.len());
+    for &chart_ix in requested_chart_ixs {
+        if let Some(chart) = loaded.get(&chart_ix) {
+            charts.push(chart.clone());
+            continue;
+        }
+        let entry = *cached_song.chart_payloads.get(chart_ix)?;
+        let payload = load_cached_chart_payload(&cache_path, payload_start, entry)?;
+        let chart = build_gameplay_chart_from_payload(payload, song_offset, global_offset_seconds);
+        loaded.insert(chart_ix, chart.clone());
+        charts.push(chart);
+    }
+    Some(charts)
+}
+
+fn load_gameplay_song_data(
+    simfile_path: &Path,
+    allow_cache_write: bool,
+    global_offset_seconds: f32,
+) -> Result<SerializableSongData, String> {
+    let started = Instant::now();
+    let cache_keys = if allow_cache_write {
+        compute_song_cache_keys(simfile_path)
+    } else {
+        SongCacheKeys { cache_path: None }
+    };
+    let need_hash = allow_cache_write && cache_keys.cache_path.is_some();
+    let parse_started = Instant::now();
+    let (mut song_data, content_hash) = parse_and_process_song_file(simfile_path, need_hash)?;
+    let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
+    update_precise_last_second(&mut song_data, global_offset_seconds);
+    let write_started = Instant::now();
+    if allow_cache_write
+        && let (Some(cp), Some(ch)) = (cache_keys.cache_path.as_ref(), content_hash)
+    {
+        write_song_cache(cp, ch, &song_data, global_offset_seconds);
+    }
+    let write_ms = write_started.elapsed().as_secs_f64() * 1000.0;
+    let total_ms = started.elapsed().as_secs_f64() * 1000.0;
+    if total_ms >= 25.0 {
+        info!(
+            "Gameplay song data load: source=parse file={:?} parse_ms={parse_ms:.3} write_ms={write_ms:.3} elapsed_ms={total_ms:.3}",
+            simfile_path.file_name().unwrap_or_default()
+        );
+    } else {
+        debug!(
+            "Gameplay song data load: source=parse file={:?} parse_ms={parse_ms:.3} write_ms={write_ms:.3} elapsed_ms={total_ms:.3}",
+            simfile_path.file_name().unwrap_or_default()
+        );
+    }
+    Ok(song_data)
+}
+
+pub fn load_gameplay_charts(
+    song: &SongData,
+    requested_chart_ixs: &[usize],
+    global_offset_seconds: f32,
+) -> Result<Vec<GameplayChartData>, String> {
+    let started = Instant::now();
+    let config = crate::config::get();
+    let allow_cache_read = config.fastload || config.cachesongs;
+    let allow_cache_write = config.cachesongs;
+    let load_started = Instant::now();
+    if allow_cache_read
+        && let Some(charts) =
+            load_gameplay_charts_from_cache(song, requested_chart_ixs, global_offset_seconds)
+    {
+        let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
+        let total_ms = started.elapsed().as_secs_f64() * 1000.0;
+        if total_ms >= 25.0 {
+            info!(
+                "Gameplay chart payload load: song='{}' requested={} load_ms={load_ms:.3} materialize_ms=0.000 elapsed_ms={total_ms:.3}",
+                song.title,
+                requested_chart_ixs.len()
+            );
+        } else {
+            debug!(
+                "Gameplay chart payload load: song='{}' requested={} load_ms={load_ms:.3} materialize_ms=0.000 elapsed_ms={total_ms:.3}",
+                song.title,
+                requested_chart_ixs.len()
+            );
+        }
+        return Ok(charts);
+    }
+
+    let song_data =
+        load_gameplay_song_data(&song.simfile_path, allow_cache_write, global_offset_seconds)?;
+    let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
+    let build_started = Instant::now();
+    let charts =
+        build_requested_gameplay_charts(&song_data, requested_chart_ixs, global_offset_seconds)?;
+    let build_ms = build_started.elapsed().as_secs_f64() * 1000.0;
+    let total_ms = started.elapsed().as_secs_f64() * 1000.0;
+    if total_ms >= 25.0 {
+        info!(
+            "Gameplay chart payload load: song='{}' requested={} load_ms={load_ms:.3} materialize_ms={build_ms:.3} elapsed_ms={total_ms:.3}",
+            song.title,
+            requested_chart_ixs.len()
+        );
+    } else {
+        debug!(
+            "Gameplay chart payload load: song='{}' requested={} load_ms={load_ms:.3} materialize_ms={build_ms:.3} elapsed_ms={total_ms:.3}",
+            song.title,
+            requested_chart_ixs.len()
+        );
+    }
+    Ok(charts)
 }
 
 fn parse_song_and_maybe_write_cache(
@@ -1737,40 +2572,12 @@ fn parse_song_and_maybe_write_cache(
         );
     }
     let need_hash = cachesongs && cache_keys.cache_path.is_some();
-    let (song_data, content_hash) = parse_and_process_song_file(path, need_hash)?;
-
-    if cachesongs && let (Some(cp), Some(ch)) = (cache_keys.cache_path, content_hash) {
-        let serializable_data: SerializableSongData = (&song_data).into();
-        let cached_song = CachedSong {
-            rssp_version: rssp::RSSP_VERSION.to_string(),
-            mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
-            source_hash: ch,
-            data: serializable_data,
-        };
-
-        if let Ok(encoded) = bincode::encode_to_vec(&cached_song, bincode::config::standard()) {
-            let mut can_write = true;
-            if let Some(parent) = cp.parent()
-                && let Err(e) = fs::create_dir_all(parent)
-            {
-                warn!("Failed to create song cache dir {parent:?}: {e}");
-                can_write = false;
-            }
-            if can_write {
-                if let Ok(mut file) = fs::File::create(&cp) {
-                    if file.write_all(&encoded).is_err() {
-                        warn!("Failed to write cache file for {cp:?}");
-                    }
-                } else {
-                    warn!("Failed to create cache file for {cp:?}");
-                }
-            }
-        }
+    let (mut song_data, content_hash) = parse_and_process_song_file(path, need_hash)?;
+    update_precise_last_second(&mut song_data, global_offset_seconds);
+    if cachesongs && let (Some(cp), Some(ch)) = (cache_keys.cache_path.as_ref(), content_hash) {
+        write_song_cache(cp, ch, &song_data, global_offset_seconds);
     }
-
-    let mut song_data = song_data;
-    hydrate_chart_timings(&mut song_data, global_offset_seconds);
-    Ok(song_data)
+    Ok(build_song_meta(song_data, global_offset_seconds))
 }
 
 #[inline]
@@ -1860,44 +2667,378 @@ fn collapse_song_asset_path(path: &str) -> String {
 }
 
 #[inline(always)]
-fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
+fn resolve_song_dir_entry_ci(base: &Path, name: &str) -> Option<PathBuf> {
+    let want = name.to_ascii_lowercase();
+    let entries = fs::read_dir(base).ok()?;
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().to_ascii_lowercase() == want {
+            return Some(entry.path());
+        }
+    }
+    None
+}
+
+#[inline(always)]
+fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
     let asset_tag = asset_tag.trim();
     if asset_tag.is_empty() {
         return None;
     }
 
-    let asset_tag_slash = asset_tag.replace('\\', "/");
-    let rel_path = song_dir.join(&asset_tag_slash);
-    if rel_path.is_file() {
-        return Some(rel_path);
-    }
-    if !asset_tag_slash.contains('/') {
+    let collapsed = collapse_song_asset_path(&asset_tag.replace('\\', "/"));
+    if collapsed.is_empty() {
         return None;
     }
-
-    let mut song_dir_slash = song_dir.to_string_lossy().replace('\\', "/");
-    if !song_dir_slash.ends_with('/') {
-        song_dir_slash.push('/');
+    if collapsed.starts_with('/') {
+        let path = PathBuf::from(&collapsed);
+        return path.exists().then_some(path);
     }
 
-    let collapsed = if asset_tag_slash.starts_with("../") {
-        collapse_song_asset_path(&(song_dir_slash + asset_tag_slash.as_str()))
-    } else {
-        collapse_song_asset_path(&asset_tag_slash)
+    let direct = song_dir.join(&collapsed);
+    if direct.exists() {
+        return Some(direct);
+    }
+
+    let mut path = song_dir.to_path_buf();
+    let mut parts = collapsed
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .peekable();
+    while let Some(part) = parts.next() {
+        if part == "." {
+            continue;
+        }
+        if part == ".." {
+            if !path.pop() {
+                return None;
+            }
+            continue;
+        }
+        let next = resolve_song_dir_entry_ci(&path, part).or_else(|| {
+            let next = path.join(part);
+            next.exists().then_some(next)
+        })?;
+        if parts.peek().is_some() && !next.is_dir() {
+            return None;
+        }
+        path = next;
+    }
+    Some(path)
+}
+
+#[inline(always)]
+fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<PathBuf> {
+    resolve_song_path_like_itg(song_dir, asset_tag).filter(|path| path.is_file())
+}
+
+#[inline(always)]
+fn path_uses_lua_like_itg(path: &Path) -> bool {
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
+    {
+        return true;
+    }
+    path.is_dir() && path.join("default.lua").is_file()
+}
+
+#[inline(always)]
+fn starts_with_ci(slice: &[u8], tag: &[u8]) -> bool {
+    slice
+        .get(..tag.len())
+        .is_some_and(|head| head.eq_ignore_ascii_case(tag))
+}
+
+#[inline(always)]
+fn find_byte(slice: &[u8], needle: u8) -> Option<usize> {
+    let mut i = 0usize;
+    while i < slice.len() {
+        if slice[i] == needle {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+#[inline(always)]
+fn find_either_byte(slice: &[u8], a: u8, b: u8) -> Option<usize> {
+    let mut i = 0usize;
+    while i < slice.len() {
+        if slice[i] == a || slice[i] == b {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+#[inline(always)]
+fn find_unescaped_semi_no_hash(slice: &[u8]) -> Option<usize> {
+    let mut off = 0usize;
+    let mut has_hash = false;
+    while off < slice.len() {
+        let rel = find_either_byte(&slice[off..], b';', b'#')?;
+        let idx = off + rel;
+        if slice[idx] == b'#' {
+            has_hash = true;
+            off = idx + 1;
+            continue;
+        }
+        let mut bs = 0usize;
+        let mut i = idx;
+        while i > 0 && slice[i - 1] == b'\\' {
+            bs += 1;
+            i -= 1;
+        }
+        if bs & 1 == 0 {
+            return (!has_hash).then_some(idx);
+        }
+        off = idx + 1;
+    }
+    None
+}
+
+#[inline(always)]
+fn scan_tag_end(slice: &[u8], allow_nl: bool) -> Option<(usize, usize)> {
+    if allow_nl && let Some(end) = find_unescaped_semi_no_hash(slice) {
+        return Some((end, end + 1));
+    }
+
+    let mut i = 0usize;
+    let mut bs_odd = false;
+    while i < slice.len() {
+        let b = slice[i];
+        if b == b'\\' {
+            bs_odd = !bs_odd;
+            i += 1;
+            continue;
+        }
+        let escaped = bs_odd;
+        bs_odd = false;
+        if b == b';' {
+            if !escaped {
+                return Some((i, i + 1));
+            }
+            i += 1;
+            continue;
+        }
+        if b == b':' {
+            if !allow_nl && !escaped {
+                return Some((i, i + 1));
+            }
+            i += 1;
+            continue;
+        }
+        if matches!(b, b'\n' | b'\r') {
+            let mut j = i + 1;
+            if b == b'\r' && slice.get(j) == Some(&b'\n') {
+                j += 1;
+            }
+            while j < slice.len()
+                && slice[j].is_ascii_whitespace()
+                && !matches!(slice[j], b'\n' | b'\r')
+            {
+                j += 1;
+            }
+            if slice.get(j) == Some(&b'#') {
+                return Some((i, j));
+            }
+            if !allow_nl && slice.get(j) != Some(&b';') {
+                return None;
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+#[inline(always)]
+fn parse_tag_val(data: &[u8], tag_len: usize, allow_nl: bool) -> Option<(&[u8], usize)> {
+    let slice = data.get(tag_len..)?;
+    let (end, next) = scan_tag_end(slice, allow_nl)?;
+    Some((&slice[..end], tag_len + next))
+}
+
+fn extract_named_tag_values<'a>(data: &'a [u8], tags: &[&[u8]]) -> Vec<&'a [u8]> {
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < data.len() {
+        let Some(pos) = find_byte(&data[i..], b'#') else {
+            break;
+        };
+        i += pos;
+        let slice = &data[i..];
+        let Some(tag) = tags.iter().copied().find(|tag| starts_with_ci(slice, tag)) else {
+            i += 1;
+            continue;
+        };
+        if let Some((value, adv)) = parse_tag_val(slice, tag.len(), true) {
+            out.push(value);
+            i += adv;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+fn list_song_dir_rel_entries(song_dir: &Path) -> Vec<String> {
+    let mut dirs = vec![song_dir.to_path_buf()];
+    let mut entries = Vec::new();
+    while let Some(dir) = dirs.pop() {
+        let Ok(read_dir) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            let Ok(rel) = path.strip_prefix(song_dir) else {
+                continue;
+            };
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            if path.is_dir() {
+                dirs.push(path);
+                entries.push(rel);
+                continue;
+            }
+            if path.is_file() {
+                entries.push(rel);
+            }
+        }
+    }
+    entries.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+    entries
+}
+
+#[inline(always)]
+fn strip_newlines(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for line in text.lines() {
+        out.push_str(line);
+    }
+    out
+}
+
+fn match_bgchange_entry<'a>(changes: &'a str, start: usize, entries: &[String]) -> Option<&'a str> {
+    for entry in entries {
+        let Some(head) = changes.get(start..start + entry.len()) else {
+            continue;
+        };
+        if !head.eq_ignore_ascii_case(entry) {
+            continue;
+        }
+        let next = start + entry.len();
+        if matches!(changes.as_bytes().get(next), None | Some(b'=') | Some(b',')) {
+            return Some(head);
+        }
+    }
+    None
+}
+
+fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
+    let changes = strip_newlines(changes);
+    if changes.is_empty() {
+        return Vec::new();
+    }
+    let mut out: Vec<Vec<String>> = Vec::new();
+    let mut start = 0usize;
+    let mut pnum = 0u8;
+    while start <= changes.len() {
+        if matches!(pnum, 1 | 7)
+            && let Some(found) = match_bgchange_entry(&changes, start, entries)
+        {
+            out.last_mut().unwrap().push(found.to_string());
+            start += found.len();
+            if let Some(&delim) = changes.as_bytes().get(start) {
+                pnum = if delim == b'=' { pnum + 1 } else { 0 };
+                start += 1;
+            }
+            continue;
+        }
+        if pnum == 0 {
+            out.push(Vec::new());
+        }
+        let rem = &changes[start..];
+        let eq = rem.find('=').map(|i| start + i);
+        let comma = rem.find(',').map(|i| start + i);
+        let Some((end, next_pnum)) = eq
+            .zip(comma)
+            .map(|(e, c)| if e < c { (e, pnum + 1) } else { (c, 0) })
+            .or_else(|| eq.map(|e| (e, pnum + 1)))
+            .or_else(|| comma.map(|c| (c, 0)))
+        else {
+            out.last_mut().unwrap().push(changes[start..].to_string());
+            break;
+        };
+        out.last_mut()
+            .unwrap()
+            .push(changes[start..end].to_string());
+        start = end + 1;
+        pnum = next_pnum;
+    }
+    out
+}
+
+#[inline(always)]
+fn bgchange_target_uses_lua(song_dir: &Path, target: &str) -> bool {
+    let target = target.trim();
+    if target.is_empty()
+        || target.eq_ignore_ascii_case("-nosongbg-")
+        || target.eq_ignore_ascii_case("-random-")
+    {
+        return false;
+    }
+    resolve_song_path_like_itg(song_dir, target).is_some_and(|path| path_uses_lua_like_itg(&path))
+}
+
+fn bgchange_values_use_lua(song_dir: &Path, values: &[&[u8]], entries: &[String]) -> bool {
+    values.iter().copied().any(|raw| {
+        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
+        split_bgchange_sets_like_itg(&text, entries)
+            .into_iter()
+            .any(|fields| {
+                fields
+                    .get(1)
+                    .is_some_and(|target| bgchange_target_uses_lua(song_dir, target))
+            })
+    })
+}
+
+fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &str) -> bool {
+    if resolve_song_path_like_itg(song_dir, background_tag)
+        .is_some_and(|path| path_uses_lua_like_itg(&path))
+    {
+        return true;
+    }
+    let entries = list_song_dir_rel_entries(song_dir);
+    bgchange_values_use_lua(song_dir, &extract_bgchanges_values(simfile_data), &entries)
+        || bgchange_values_use_lua(
+            song_dir,
+            &extract_named_tag_values(simfile_data, &[b"#FGCHANGES:"]),
+            &entries,
+        )
+}
+
+fn convert_background_change(
+    change: rssp::assets::ResolvedBackgroundChange,
+) -> SongBackgroundChange {
+    let target = match change.target {
+        rssp::assets::BackgroundChangeTarget::File(path) => SongBackgroundChangeTarget::File(path),
+        rssp::assets::BackgroundChangeTarget::NoSongBg => SongBackgroundChangeTarget::NoSongBg,
+        rssp::assets::BackgroundChangeTarget::Random => SongBackgroundChangeTarget::Random,
     };
-    if collapsed.starts_with("../") {
-        return None;
+    SongBackgroundChange {
+        start_beat: change.start_beat,
+        target,
     }
-
-    let collapsed_path = PathBuf::from(collapsed);
-    collapsed_path.is_file().then_some(collapsed_path)
 }
 
 /// The original parsing logic, now separated to be called on a cache miss.
 fn parse_and_process_song_file(
     path: &Path,
     need_hash: bool,
-) -> Result<(SongData, Option<u64>), String> {
+) -> Result<(SerializableSongData, Option<u64>), String> {
     let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {e}"))?;
     let content_hash = need_hash.then(|| {
         let mut hasher = XxHash64::with_seed(0);
@@ -1911,13 +3052,14 @@ fn parse_and_process_song_file(
     };
 
     let summary = analyze(&simfile_data, extension, &options)?;
-    let charts: Vec<ChartData> = summary
+    let charts: Vec<SerializableChartData> = summary
         .charts
         .into_iter()
         .map(|c| {
             let lanes = step_type_lanes(&c.step_type_str);
             let parsed_notes =
                 crate::game::parsing::notes::parse_chart_notes(&c.minimized_note_data, lanes);
+            let timing_segments = TimingSegments::from(c.timing_segments.as_ref());
             let stamina_counts = build_stamina_counts(&c);
             debug!(
                 "  Chart '{}' [{}] loaded with {} bytes of note data.",
@@ -1925,24 +3067,25 @@ fn parse_and_process_song_file(
                 c.rating_str,
                 c.minimized_note_data.len()
             );
-            ChartData {
+            SerializableChartData {
                 chart_type: c.step_type_str,
                 difficulty: c.difficulty_str,
                 description: c.description_str,
+                chart_name: c.chart_name_str,
                 meter: c.rating_str.parse().unwrap_or(0),
                 step_artist: c.step_artist_str,
                 notes: c.minimized_note_data,
-                parsed_notes,
+                parsed_notes: parsed_notes.iter().map(CachedParsedNote::from).collect(),
                 row_to_beat: c.row_to_beat,
-                timing_segments: TimingSegments::from(c.timing_segments.as_ref()),
-                timing: TimingData::default(),
+                timing_segments: (&timing_segments).into(),
                 short_hash: c.short_hash,
-                stats: c.stats,
-                tech_counts: c.tech_counts,
+                stats: (&c.stats).into(),
+                tech_counts: (&c.tech_counts).into(),
                 mines_nonfake: c.mines_nonfake,
-                stamina_counts,
+                stamina_counts: (&stamina_counts).into(),
                 total_streams: c.total_streams,
                 total_measures: c.total_measures,
+                matrix_rating: c.matrix_rating,
                 max_nps: c.max_nps,
                 sn_detailed_breakdown: c.sn_detailed_breakdown,
                 sn_partial_breakdown: c.sn_partial_breakdown,
@@ -1952,13 +3095,6 @@ fn parse_and_process_song_file(
                 simple_breakdown: c.simple_breakdown,
                 measure_nps_vec: c.measure_nps_vec,
                 chart_attacks: c.chart_attacks,
-                chart_bpms: c.chart_bpms,
-                chart_stops: c.chart_stops,
-                chart_delays: c.chart_delays,
-                chart_warps: c.chart_warps,
-                chart_speeds: c.chart_speeds,
-                chart_scrolls: c.chart_scrolls,
-                chart_fakes: c.chart_fakes,
             }
         })
         .collect();
@@ -1972,6 +3108,13 @@ fn parse_and_process_song_file(
         &summary.banner_path,
         &summary.background_path,
     );
+    let has_lua = simfile_uses_lua(simfile_dir, &simfile_data, &summary.background_path);
+    let background_changes =
+        rssp::assets::resolve_background_changes_like_itg(simfile_dir, &simfile_data)
+            .into_iter()
+            .map(convert_background_change)
+            .map(|change| SerializableSongBackgroundChange::from(&change))
+            .collect();
     let cdtitle_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.cdtitle_path);
 
     let music_path = resolve_song_asset_path_like_itg(simfile_dir, &summary.music_path)
@@ -1996,16 +3139,18 @@ fn parse_and_process_song_file(
     }
 
     Ok((
-        SongData {
-            simfile_path: path.to_path_buf(),
+        SerializableSongData {
+            simfile_path: path.to_string_lossy().into_owned(),
             title: summary.title_str,
             subtitle: summary.subtitle_str,
             translit_title: summary.titletranslit_str,
             translit_subtitle: summary.subtitletranslit_str,
             artist: summary.artist_str,
-            banner_path, // Keep original logic for banner
-            background_path: background_path_opt,
-            cdtitle_path,
+            banner_path: banner_path.map(|p| p.to_string_lossy().into_owned()),
+            background_path: background_path_opt.map(|p| p.to_string_lossy().into_owned()),
+            background_changes,
+            has_lua,
+            cdtitle_path: cdtitle_path.map(|p| p.to_string_lossy().into_owned()),
             display_bpm: summary.display_bpm_str,
             offset: summary.offset as f32,
             sample_start: if summary.sample_start > 0.0 {
@@ -2021,168 +3166,181 @@ fn parse_and_process_song_file(
             min_bpm: summary.min_bpm,
             max_bpm: summary.max_bpm,
             normalized_bpms: summary.normalized_bpms,
-            normalized_stops: summary.normalized_stops,
-            normalized_delays: summary.normalized_delays,
-            normalized_warps: summary.normalized_warps,
-            normalized_speeds: summary.normalized_speeds,
-            normalized_scrolls: summary.normalized_scrolls,
-            normalized_fakes: summary.normalized_fakes,
-            music_path,
+            music_path: music_path.map(|p| p.to_string_lossy().into_owned()),
             music_length_seconds,
             total_length_seconds: summary.total_length,
+            precise_last_second_seconds: summary.total_length.max(0) as f32,
             charts,
         },
         content_hash,
     ))
 }
 
-/// Computes the length of the music file in seconds, if it is a readable OGG file.
+/// Computes the length of the music file in seconds when the decode layer supports it.
 /// Returns 0.0 on failure or if no music path is provided.
 fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
     let Some(path) = music_path else {
         return 0.0;
     };
-
-    let ext_is_ogg = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .is_some_and(|ext| {
-            let ext_lower = ext.to_ascii_lowercase();
-            ext_lower == "ogg" || ext_lower == "oga"
-        });
-    if !ext_is_ogg {
-        return 0.0;
-    }
-
-    match ogg_length_seconds(path) {
+    match decode::file_length_seconds(path) {
         Ok(sec) => sec,
         Err(e) => {
-            warn!("Failed to compute OGG length for {path:?}: {e}");
+            warn!("Failed to compute audio length for {path:?}: {e}");
             0.0
         }
     }
 }
 
-/// Fast OGG length detection: use lewton only for headers (sample rate) and
-/// scan backwards through the file to find the last valid granule position.
-fn ogg_length_seconds(path: &Path) -> Result<f32, String> {
-    let file = fs::File::open(path).map_err(|e| format!("Cannot open file: {e}"))?;
+#[cfg(test)]
+mod tests {
+    use super::{merge_pack_scans, resolve_course_group_dir, resolve_song_dir, simfile_uses_lua};
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::{Path, PathBuf};
 
-    // Safe wrapper around the unsafe memmap2 API.
-    let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {e}"))?;
-
-    let sample_rate_hz = ogg_sample_rate_hz(&mmap)?;
-
-    let total_samples = find_last_granule_backwards(&mmap)?;
-    Ok((total_samples as f64 / sample_rate_hz) as f32)
-}
-
-fn ogg_sample_rate_hz(data: &[u8]) -> Result<f64, String> {
-    match ogg_sample_rate_hz_lewton(data) {
-        Ok(rate) => Ok(rate),
-        Err(lewton_err) => ogg_sample_rate_hz_ident_packet(data).ok_or_else(|| {
-            format!("lewton header error: {lewton_err}; fallback OGG ident parse failed")
-        }),
-    }
-}
-
-fn ogg_sample_rate_hz_lewton(data: &[u8]) -> Result<f64, String> {
-    let cursor = Cursor::new(data);
-    let reader = OggStreamReader::new(BufReader::new(cursor)).map_err(|e| format!("{e}"))?;
-    let rate = reader.ident_hdr.audio_sample_rate;
-    if rate == 0 {
-        return Err("Invalid sample rate (0)".into());
-    }
-    Ok(f64::from(rate))
-}
-
-fn ogg_sample_rate_hz_ident_packet(data: &[u8]) -> Option<f64> {
-    const PAGE_HEADER: usize = 27;
-    const MIN_RATE_HZ: u32 = 8_000;
-    const MAX_RATE_HZ: u32 = 384_000;
-
-    let mut pos = 0usize;
-    let mut packet = Vec::with_capacity(64);
-
-    while pos + PAGE_HEADER <= data.len() {
-        if &data[pos..pos + 4] != b"OggS" {
-            pos += 1;
-            continue;
+    fn pack_scan(
+        group_name: &str,
+        display_title: &str,
+        has_pack_ini: bool,
+        banner_path: Option<&str>,
+        songs: &[&str],
+        root: &Path,
+    ) -> rssp::pack::PackScan {
+        let dir = root.join(group_name);
+        rssp::pack::PackScan {
+            dir: dir.clone(),
+            group_name: group_name.to_string(),
+            display_title: display_title.to_string(),
+            sort_title: display_title.to_string(),
+            translit_title: display_title.to_string(),
+            series: String::new(),
+            year: 0,
+            version: i32::from(has_pack_ini),
+            has_pack_ini,
+            sync_pref: rssp::pack::SyncPref::Default,
+            banner_path: banner_path.map(PathBuf::from),
+            background_path: None,
+            songs: songs
+                .iter()
+                .map(|song| {
+                    let song_dir = dir.join(song);
+                    rssp::pack::SongScan {
+                        dir: song_dir.clone(),
+                        simfile: song_dir.join("song.sm"),
+                        extension: "sm",
+                    }
+                })
+                .collect(),
         }
-
-        let seg_count = data[pos + 26] as usize;
-        let header_end = pos.checked_add(PAGE_HEADER + seg_count)?;
-        if header_end > data.len() {
-            return None;
-        }
-
-        let seg_table = &data[pos + PAGE_HEADER..header_end];
-        let mut body_pos = header_end;
-
-        for &seg_len_u8 in seg_table {
-            let seg_len = seg_len_u8 as usize;
-            let seg_end = body_pos.checked_add(seg_len)?;
-            if seg_end > data.len() {
-                return None;
-            }
-            packet.extend_from_slice(&data[body_pos..seg_end]);
-            body_pos = seg_end;
-
-            if seg_len < 255 {
-                if packet.len() < 16 || packet[0] != 0x01 || &packet[1..7] != b"vorbis" {
-                    return None;
-                }
-                let rate = u32::from_le_bytes(packet[12..16].try_into().ok()?);
-                if !(MIN_RATE_HZ..=MAX_RATE_HZ).contains(&rate) {
-                    return None;
-                }
-                return Some(f64::from(rate));
-            }
-        }
-
-        pos = body_pos;
     }
 
-    None
-}
-
-fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {
-    const PAGE_HEADER: usize = 27;
-    const CHUNK: usize = 64 * 1024;
-
-    let mut pos = data.len();
-    let mut best_granule: Option<u64> = None;
-
-    while pos > PAGE_HEADER {
-        let start = pos.saturating_sub(CHUNK);
-        let chunk = &data[start..pos];
-
-        let mut i = chunk.len().saturating_sub(PAGE_HEADER);
-        while i > 0 {
-            if &chunk[i..i + 4] == b"OggS" {
-                let granule = u64::from_le_bytes(
-                    chunk[i + 6..i + 14]
-                        .try_into()
-                        .map_err(|_| "Failed to read granule position".to_string())?,
-                );
-
-                if granule != u64::MAX && best_granule.is_none_or(|prev| granule > prev) {
-                    best_granule = Some(granule);
-                }
-
-                // Jump back far enough to definitely get past this page.
-                i = i.saturating_sub(27 + 255 * 255);
-            } else {
-                i -= 1;
-            }
-        }
-
-        if best_granule.is_some() {
-            // In almost all real-world files, the final granule is on the last page.
-            break;
-        }
-        pos = start;
+    fn test_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-simfile-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
-    best_granule.ok_or_else(|| "No valid granule position found".into())
+    #[test]
+    fn simfile_uses_lua_detects_background_lua_file() {
+        let root = test_dir("lua-background-file");
+        let song_dir = root.join("Song");
+        fs::create_dir_all(&song_dir).unwrap();
+        fs::write(song_dir.join("modchart.lua"), "return Def.ActorFrame{}").unwrap();
+
+        assert!(simfile_uses_lua(
+            &song_dir,
+            b"#TITLE:Lua Test;#BACKGROUND:modchart.lua;",
+            "modchart.lua",
+        ));
+    }
+
+    #[test]
+    fn simfile_uses_lua_detects_fgchange_dir_default_lua() {
+        let root = test_dir("lua-fgchange-dir");
+        let song_dir = root.join("Song");
+        let fg_dir = song_dir.join("Visuals");
+        fs::create_dir_all(&fg_dir).unwrap();
+        fs::write(fg_dir.join("default.lua"), "return Def.ActorFrame{}").unwrap();
+
+        assert!(simfile_uses_lua(
+            &song_dir,
+            b"#TITLE:Lua Test;#FGCHANGES:0=Visuals=1=0=0=0=0;",
+            "",
+        ));
+    }
+
+    #[test]
+    fn merge_pack_scans_collapses_case_insensitive_groups() {
+        let root = test_dir("merge-pack-scans");
+        let base = root.join("base");
+        let extra = root.join("extra");
+        let packs = vec![
+            pack_scan(
+                "Pack",
+                "Fancy Pack",
+                true,
+                Some("base-banner.png"),
+                &["Alpha", "Dupe"],
+                &base,
+            ),
+            pack_scan("pack", "pack", false, None, &["Beta", "dupe"], &extra),
+        ];
+
+        let merged = merge_pack_scans(packs);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].display_title, "Fancy Pack");
+        assert_eq!(
+            merged[0].banner_path,
+            Some(PathBuf::from("base-banner.png"))
+        );
+
+        let mut names = merged[0]
+            .songs
+            .iter()
+            .map(|song| {
+                song.dir
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap()
+                    .to_ascii_lowercase()
+            })
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, vec!["alpha", "beta", "dupe"]);
+        assert!(
+            merged[0]
+                .songs
+                .iter()
+                .any(|song| song.dir.starts_with(&extra))
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolve_song_dir_prefers_later_root() {
+        let root = test_dir("resolve-song-dir");
+        let base = root.join("base");
+        let extra = root.join("extra");
+        let base_song = base.join("Pack").join("Song");
+        let extra_song = extra.join("Pack").join("Song");
+        fs::create_dir_all(&base_song).unwrap();
+        fs::create_dir_all(&extra_song).unwrap();
+
+        let found = resolve_song_dir(
+            &[base.clone(), extra.clone()],
+            &mut HashMap::new(),
+            Some("pack"),
+            "song",
+        );
+        assert_eq!(found, Some(extra_song.clone()));
+
+        let group =
+            resolve_course_group_dir(&[base.clone(), extra.clone()], &mut HashMap::new(), "pack");
+        assert_eq!(group, Some(extra.join("Pack")));
+
+        let _ = fs::remove_dir_all(root);
+    }
 }

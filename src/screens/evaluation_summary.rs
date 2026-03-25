@@ -6,10 +6,11 @@ use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::stage_stats;
-use crate::screens::components::screen_bar::{
+use crate::screens::components::evaluation::eval_grades;
+use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::screens::components::{eval_grades, heart_bg, screen_bar};
+use crate::screens::components::shared::{banner as shared_banner, heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{Actor, SizeSpec};
 use crate::ui::color;
@@ -430,12 +431,8 @@ fn build_row(
     ));
 
     // Banner
-    children.push(act!(sprite(banner_key):
-        align(0.5, 0.5):
-        xy(0.0, -6.0):
-        setsize(418.0, 164.0):
-        zoom(0.333):
-        z(1)
+    children.push(shared_banner::sprite(
+        banner_key, 0.0, -6.0, 418.0, 164.0, 0.333, 1,
     ));
 
     // Song title

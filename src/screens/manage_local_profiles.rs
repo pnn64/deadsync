@@ -1,17 +1,18 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::audio;
-use crate::core::input::{InputEvent, VirtualAction};
+use crate::core::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::core::space::{screen_height, screen_width};
 use crate::game::profile;
-use crate::screens::components::heart_bg;
-use crate::screens::components::screen_bar::{self, ScreenBarPosition, ScreenBarTitlePlacement};
+use crate::screens::components::shared::heart_bg;
+use crate::screens::components::shared::screen_bar::{
+    self, ScreenBarPosition, ScreenBarTitlePlacement,
+};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::actors::{self, Actor};
 use crate::ui::color;
 use std::time::{Duration, Instant};
-use winit::event::{ElementState, KeyEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::keyboard::KeyCode;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -613,15 +614,19 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     ScreenAction::None
 }
 
-pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAction {
+pub fn handle_raw_key_event(
+    state: &mut State,
+    key_event: Option<&RawKeyboardEvent>,
+    text: Option<&str>,
+) -> ScreenAction {
     let Some(entry) = state.name_entry.as_mut() else {
         return ScreenAction::None;
     };
-    if key_event.state != ElementState::Pressed {
-        return ScreenAction::None;
-    }
-
-    if let PhysicalKey::Code(code) = key_event.physical_key {
+    if let Some(key_event) = key_event {
+        if !key_event.pressed {
+            return ScreenAction::None;
+        }
+        let code = key_event.code;
         match code {
             KeyCode::Backspace => {
                 let _ = entry.value.pop();
@@ -633,7 +638,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &KeyEvent) -> ScreenAc
         }
     }
 
-    let Some(text) = key_event.text.as_ref() else {
+    let Some(text) = text else {
         return ScreenAction::None;
     };
 

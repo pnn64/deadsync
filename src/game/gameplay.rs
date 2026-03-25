@@ -4,7 +4,7 @@ use crate::core::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
 use crate::core::space::{is_wide, screen_center_y, screen_height, screen_width};
-use crate::game::chart::ChartData;
+use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, Noteskin, Style};
@@ -18,21 +18,25 @@ use crate::game::{
         LIFE_DECENT, LIFE_EXCELLENT, LIFE_FANTASTIC, LIFE_GREAT, LIFE_HELD, LIFE_HIT_MINE,
         LIFE_LET_GO, LIFE_MISS, LIFE_WAY_OFF, REGEN_COMBO_AFTER_MISS,
     },
-    profile,
+    profile::{self, TimingTickMode as TickMode},
     scroll::ScrollSpeedSetting,
 };
-use crate::screens::components::density_graph::DensityHistCache;
+use crate::screens::components::shared::{
+    density_graph::{self, DensityHistCache},
+    noteskin_model::ModelMeshCache,
+};
 use crate::screens::{Screen, ScreenAction};
 use crate::ui::color;
-use log::{debug, trace, warn};
+use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
-use winit::event::KeyEvent;
 use winit::keyboard::KeyCode;
 
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
@@ -43,6 +47,9 @@ pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 pub const MAX_COLS: usize = 8;
 pub const MAX_PLAYERS: usize = 2;
+const OFFSET_ADJUST_STEP_SECONDS: f32 = 0.001;
+const OFFSET_ADJUST_REPEAT_DELAY: Duration = Duration::from_millis(300);
+const OFFSET_ADJUST_REPEAT_INTERVAL: Duration = Duration::from_millis(50);
 const INSERT_MASK_BIT_WIDE: u8 = 1u8 << 0;
 const INSERT_MASK_BIT_BIG: u8 = 1u8 << 1;
 const INSERT_MASK_BIT_QUICK: u8 = 1u8 << 2;
@@ -50,6 +57,7 @@ const INSERT_MASK_BIT_BMRIZE: u8 = 1u8 << 3;
 const INSERT_MASK_BIT_SKIPPY: u8 = 1u8 << 4;
 const INSERT_MASK_BIT_ECHO: u8 = 1u8 << 5;
 const INSERT_MASK_BIT_STOMP: u8 = 1u8 << 6;
+const INSERT_MASK_BIT_MINES: u8 = 1u8 << 7;
 const REMOVE_MASK_BIT_LITTLE: u8 = 1u8 << 0;
 const REMOVE_MASK_BIT_NO_MINES: u8 = 1u8 << 1;
 const REMOVE_MASK_BIT_NO_HOLDS: u8 = 1u8 << 2;
@@ -83,6 +91,315 @@ const APPEARANCE_MASK_BIT_SUDDEN: u8 = 1u8 << 1;
 const APPEARANCE_MASK_BIT_STEALTH: u8 = 1u8 << 2;
 const APPEARANCE_MASK_BIT_BLINK: u8 = 1u8 << 3;
 const APPEARANCE_MASK_BIT_RANDOM_VANISH: u8 = 1u8 << 4;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AccelEffects {
+    pub boost: f32,
+    pub brake: f32,
+    pub wave: f32,
+    pub expand: f32,
+    pub boomerang: f32,
+}
+
+impl AccelEffects {
+    #[inline(always)]
+    fn from_mask(mask: u8) -> Self {
+        Self {
+            boost: f32::from((mask & ACCEL_MASK_BIT_BOOST) != 0),
+            brake: f32::from((mask & ACCEL_MASK_BIT_BRAKE) != 0),
+            wave: f32::from((mask & ACCEL_MASK_BIT_WAVE) != 0),
+            expand: f32::from((mask & ACCEL_MASK_BIT_EXPAND) != 0),
+            boomerang: f32::from((mask & ACCEL_MASK_BIT_BOOMERANG) != 0),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VisualEffects {
+    pub drunk: f32,
+    pub dizzy: f32,
+    pub confusion: f32,
+    pub big: f32,
+    pub flip: f32,
+    pub invert: f32,
+    pub tornado: f32,
+    pub tipsy: f32,
+    pub bumpy: f32,
+    pub beat: f32,
+}
+
+impl VisualEffects {
+    #[inline(always)]
+    fn from_mask(mask: u16) -> Self {
+        Self {
+            drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
+            dizzy: f32::from((mask & VISUAL_MASK_BIT_DIZZY) != 0),
+            confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
+            big: f32::from((mask & VISUAL_MASK_BIT_BIG) != 0),
+            flip: f32::from((mask & VISUAL_MASK_BIT_FLIP) != 0),
+            invert: f32::from((mask & VISUAL_MASK_BIT_INVERT) != 0),
+            tornado: f32::from((mask & VISUAL_MASK_BIT_TORNADO) != 0),
+            tipsy: f32::from((mask & VISUAL_MASK_BIT_TIPSY) != 0),
+            bumpy: f32::from((mask & VISUAL_MASK_BIT_BUMPY) != 0),
+            beat: f32::from((mask & VISUAL_MASK_BIT_BEAT) != 0),
+        }
+    }
+
+    #[inline(always)]
+    fn to_mask(self) -> u16 {
+        let mut mask = 0;
+        if self.drunk > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_DRUNK;
+        }
+        if self.dizzy > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_DIZZY;
+        }
+        if self.confusion > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_CONFUSION;
+        }
+        if self.big > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_BIG;
+        }
+        if self.flip > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_FLIP;
+        }
+        if self.invert > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_INVERT;
+        }
+        if self.tornado > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_TORNADO;
+        }
+        if self.tipsy > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_TIPSY;
+        }
+        if self.bumpy > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_BUMPY;
+        }
+        if self.beat > f32::EPSILON {
+            mask |= VISUAL_MASK_BIT_BEAT;
+        }
+        mask
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AppearanceEffects {
+    pub hidden: f32,
+    pub sudden: f32,
+    pub stealth: f32,
+    pub blink: f32,
+    pub random_vanish: f32,
+}
+
+impl AppearanceEffects {
+    #[inline(always)]
+    fn from_mask(mask: u8) -> Self {
+        Self {
+            hidden: f32::from((mask & APPEARANCE_MASK_BIT_HIDDEN) != 0),
+            sudden: f32::from((mask & APPEARANCE_MASK_BIT_SUDDEN) != 0),
+            stealth: f32::from((mask & APPEARANCE_MASK_BIT_STEALTH) != 0),
+            blink: f32::from((mask & APPEARANCE_MASK_BIT_BLINK) != 0),
+            random_vanish: f32::from((mask & APPEARANCE_MASK_BIT_RANDOM_VANISH) != 0),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VisibilityEffects {
+    pub dark: f32,
+    pub blind: f32,
+    pub cover: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ChartAttackEffects {
+    pub insert_mask: u8,
+    pub remove_mask: u8,
+    pub holds_mask: u8,
+    pub turn_bits: u16,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ScrollEffects {
+    pub reverse: f32,
+    pub split: f32,
+    pub alternate: f32,
+    pub cross: f32,
+    pub centered: f32,
+}
+
+impl ScrollEffects {
+    #[inline(always)]
+    fn from_option(scroll: profile::ScrollOption) -> Self {
+        Self {
+            reverse: f32::from(scroll.contains(profile::ScrollOption::Reverse)),
+            split: f32::from(scroll.contains(profile::ScrollOption::Split)),
+            alternate: f32::from(scroll.contains(profile::ScrollOption::Alternate)),
+            cross: f32::from(scroll.contains(profile::ScrollOption::Cross)),
+            centered: f32::from(scroll.contains(profile::ScrollOption::Centered)),
+        }
+    }
+
+    #[inline(always)]
+    pub fn reverse_percent_for_column(self, local_col: usize, num_cols: usize) -> f32 {
+        if num_cols == 0 {
+            return 0.0;
+        }
+        let mut percent = self.reverse;
+        if local_col >= num_cols / 2 {
+            percent += self.split;
+        }
+        if (local_col & 1) != 0 {
+            percent += self.alternate;
+        }
+        let first_cross_col = num_cols / 4;
+        let last_cross_col = num_cols.saturating_sub(first_cross_col + 1);
+        if local_col >= first_cross_col && local_col <= last_cross_col {
+            percent += self.cross;
+        }
+        if percent > 2.0 {
+            percent = percent.rem_euclid(2.0);
+        }
+        if percent > 1.0 {
+            return lerp(1.0, 0.0, percent - 1.0);
+        }
+        percent.clamp(0.0, 1.0)
+    }
+
+    #[inline(always)]
+    pub fn reverse_scale_for_column(self, local_col: usize, num_cols: usize) -> f32 {
+        1.0 - 2.0 * self.reverse_percent_for_column(local_col, num_cols)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PerspectiveEffects {
+    pub tilt: f32,
+    pub skew: f32,
+}
+
+impl PerspectiveEffects {
+    #[inline(always)]
+    fn from_perspective(perspective: profile::Perspective) -> Self {
+        let (tilt, skew) = perspective.tilt_skew();
+        Self { tilt, skew }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct AccelOverrides {
+    boost: Option<f32>,
+    brake: Option<f32>,
+    wave: Option<f32>,
+    expand: Option<f32>,
+    boomerang: Option<f32>,
+}
+
+impl AccelOverrides {
+    #[inline(always)]
+    fn any(self) -> bool {
+        self.boost.is_some()
+            || self.brake.is_some()
+            || self.wave.is_some()
+            || self.expand.is_some()
+            || self.boomerang.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct VisualOverrides {
+    drunk: Option<f32>,
+    dizzy: Option<f32>,
+    confusion: Option<f32>,
+    flip: Option<f32>,
+    invert: Option<f32>,
+    tornado: Option<f32>,
+    tipsy: Option<f32>,
+    bumpy: Option<f32>,
+    beat: Option<f32>,
+}
+
+impl VisualOverrides {
+    #[inline(always)]
+    fn any(self) -> bool {
+        self.drunk.is_some()
+            || self.dizzy.is_some()
+            || self.confusion.is_some()
+            || self.flip.is_some()
+            || self.invert.is_some()
+            || self.tornado.is_some()
+            || self.tipsy.is_some()
+            || self.bumpy.is_some()
+            || self.beat.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct AppearanceOverrides {
+    hidden: Option<f32>,
+    sudden: Option<f32>,
+    stealth: Option<f32>,
+    blink: Option<f32>,
+    random_vanish: Option<f32>,
+}
+
+impl AppearanceOverrides {
+    #[inline(always)]
+    fn any(self) -> bool {
+        self.hidden.is_some()
+            || self.sudden.is_some()
+            || self.stealth.is_some()
+            || self.blink.is_some()
+            || self.random_vanish.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct VisibilityOverrides {
+    dark: Option<f32>,
+    blind: Option<f32>,
+    cover: Option<f32>,
+}
+
+impl VisibilityOverrides {
+    #[inline(always)]
+    fn any(self) -> bool {
+        self.dark.is_some() || self.blind.is_some() || self.cover.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct ScrollOverrides {
+    reverse: Option<f32>,
+    split: Option<f32>,
+    alternate: Option<f32>,
+    cross: Option<f32>,
+    centered: Option<f32>,
+}
+
+impl ScrollOverrides {
+    #[inline(always)]
+    fn any(self) -> bool {
+        self.reverse.is_some()
+            || self.split.is_some()
+            || self.alternate.is_some()
+            || self.cross.is_some()
+            || self.centered.is_some()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PerspectiveOverrides {
+    tilt: Option<f32>,
+    skew: Option<f32>,
+}
+
+impl PerspectiveOverrides {
+    #[inline(always)]
+    fn any(self) -> bool {
+        self.tilt.is_some() || self.skew.is_some()
+    }
+}
 
 // These mirror ScreenGameplay's MinSecondsToStep/MinSecondsToMusic metrics in ITGmania.
 // Simply Love scales them by MusicRate, so we apply that in init().
@@ -122,6 +439,8 @@ const MAX_HOLD_LIFE: f32 = 1.0;
 const INITIAL_HOLD_LIFE: f32 = 1.0;
 const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
 const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35;
+// ITGmania _fallback defaults this off, and Simply Love relies on that dance parity.
+const COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO: bool = false;
 
 // Simply Love: ScreenGameplay GiveUpSeconds=0.33
 const GIVE_UP_HOLD_SECONDS: f32 = 0.33;
@@ -150,8 +469,53 @@ const GAMEPLAY_TRACE_SUMMARY_INTERVAL_S: f32 = 1.0;
 const GAMEPLAY_TRACE_SLOW_FRAME_US: u32 = 4_000;
 const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
 const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
+const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
+const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
+const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
+
+#[inline(always)]
+const fn input_queue_cap(num_cols: usize) -> usize {
+    // Pre-size one backlog-warning bucket per 4-panel field so live gameplay
+    // does not grow the queue before crossing its first pressure threshold.
+    let fields = if num_cols <= 4 {
+        1
+    } else {
+        num_cols.div_ceil(4)
+    };
+    GAMEPLAY_INPUT_BACKLOG_WARN * fields
+}
+
+#[inline(always)]
+fn replay_edge_cap(
+    num_cols: usize,
+    replay_cells: usize,
+    replay_mode: bool,
+    song_seconds: f32,
+) -> usize {
+    if replay_mode {
+        return 0;
+    }
+    // Live recording stores physical press/release edges, so reserve two edges
+    // per playable note cell, keep a small per-lane floor for early misses, and
+    // add a duration budget so a whole-song run does not grow on dense mashing.
+    let chart_cap = replay_cells.saturating_mul(2);
+    let floor_cap = num_cols.saturating_mul(REPLAY_EDGE_FLOOR_PER_LANE);
+    let seconds_cap = replay_seconds_cap(num_cols, song_seconds);
+    chart_cap.max(floor_cap).max(seconds_cap)
+}
+
+#[inline(always)]
+fn replay_seconds_cap(num_cols: usize, song_seconds: f32) -> usize {
+    if !song_seconds.is_finite() || song_seconds <= 0.0 {
+        return 0;
+    }
+    (song_seconds.ceil() as usize)
+        .saturating_mul(num_cols)
+        .saturating_mul(REPLAY_EDGE_RATE_PER_SEC)
+}
+
 // Mirrors ITGmania Data/RandomAttacks.txt categories for mods deadsync currently supports.
-const RANDOM_ATTACK_MOD_POOL: [&str; 21] = [
+const RANDOM_ATTACK_MOD_POOL: [&str; 29] = [
     "0.5x",
     "1x",
     "1.5x",
@@ -173,42 +537,63 @@ const RANDOM_ATTACK_MOD_POOL: [&str; 21] = [
     "50% hidden",
     "50% sudden",
     "30% blink",
+    "30% reverse",
+    "reverse",
+    "centered",
+    "hallway",
+    "space",
+    "incoming",
+    "overhead",
+    "distant",
 ];
 
 #[inline(always)]
 fn effective_mini_value_with_visual_mask(
     profile: &profile::Profile,
     visual_mask: u16,
-    attack_mini_percent: f32,
+    mini_percent: f32,
 ) -> f32 {
-    let attack_delta = if attack_mini_percent.is_finite() {
-        attack_mini_percent
+    let mut mini = if mini_percent.is_finite() {
+        mini_percent
     } else {
-        0.0
+        profile.mini_percent as f32
     };
-    let mut mini = (profile.mini_percent as f32 + attack_delta).clamp(-100.0, 150.0);
     if (visual_mask & VISUAL_MASK_BIT_BIG) != 0 {
         // ITG _fallback/ArrowCloud map Effect Big to mod,-100% mini.
         mini -= 100.0;
     }
-    mini / 100.0
+    mini.clamp(-100.0, 150.0) / 100.0
 }
 
 #[inline(always)]
 fn effective_mini_value(profile: &profile::Profile) -> f32 {
     let visual_mask = profile::normalize_visual_effects_mask(profile.visual_effects_active_mask);
-    effective_mini_value_with_visual_mask(profile, visual_mask, 0.0)
+    effective_mini_value_with_visual_mask(profile, visual_mask, profile.mini_percent as f32)
+}
+
+#[inline(always)]
+fn player_draw_scale_for_tilt_with_visual_mask(
+    tilt: f32,
+    profile: &profile::Profile,
+    visual_mask: u16,
+    mini_percent: f32,
+) -> f32 {
+    let mini = effective_mini_value_with_visual_mask(profile, visual_mask, mini_percent);
+    (1.0 + 0.5 * tilt.abs()) * (1.0 + mini.abs())
 }
 
 #[inline(always)]
 fn player_draw_scale_with_visual_mask(
     profile: &profile::Profile,
     visual_mask: u16,
-    attack_mini_percent: f32,
+    mini_percent: f32,
 ) -> f32 {
-    let tilt = profile.perspective.tilt_skew().0.abs();
-    let mini = effective_mini_value_with_visual_mask(profile, visual_mask, attack_mini_percent);
-    (1.0 + 0.5 * tilt) * (1.0 + mini.abs())
+    player_draw_scale_for_tilt_with_visual_mask(
+        profile.perspective.tilt_skew().0,
+        profile,
+        visual_mask,
+        mini_percent,
+    )
 }
 
 #[inline(always)]
@@ -280,7 +665,86 @@ fn receptor_glow_behavior_for_col(state: &State, col: usize) -> noteskin::Recept
 
 #[inline(always)]
 fn lane_is_pressed(state: &State, col: usize) -> bool {
-    state.keyboard_lane_state[col] || state.gamepad_lane_state[col]
+    lane_counts_pressed(
+        state.keyboard_lane_counts[col],
+        state.gamepad_lane_counts[col],
+    )
+}
+
+#[inline(always)]
+const fn lane_counts_pressed(keyboard_count: u8, gamepad_count: u8) -> bool {
+    keyboard_count != 0 || gamepad_count != 0
+}
+
+#[inline(always)]
+fn update_lane_count(count: &mut u8, pressed: bool) {
+    *count = if pressed {
+        (*count).saturating_add(1)
+    } else {
+        (*count).saturating_sub(1)
+    };
+}
+
+#[inline(always)]
+const fn lane_press_started(pressed: bool, was_down: bool, is_down: bool) -> bool {
+    pressed && !was_down && is_down
+}
+
+#[inline(always)]
+const fn lane_release_finished(pressed: bool, was_down: bool, is_down: bool) -> bool {
+    !pressed && was_down && !is_down
+}
+
+#[inline(always)]
+const fn lane_edge_judges_tap(pressed: bool) -> bool {
+    pressed
+}
+
+#[inline(always)]
+const fn lane_edge_judges_lift(pressed: bool, was_down: bool) -> bool {
+    !pressed && was_down
+}
+
+#[inline(always)]
+fn counts_for_early_rescore(note_type: NoteType) -> bool {
+    matches!(
+        note_type,
+        NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
+    )
+}
+
+#[inline(always)]
+fn count_rescore_tracks_on_row(
+    notes: &[Note],
+    row_entries: &[RowEntry],
+    row_map_cache: &[u32],
+    row_index: usize,
+    col_start: usize,
+    col_end: usize,
+) -> usize {
+    if let Some(&pos) = row_map_cache.get(row_index).filter(|&&x| x != u32::MAX) {
+        return row_entries[pos as usize]
+            .nonmine_note_indices
+            .iter()
+            .filter(|&&idx| {
+                let note = &notes[idx];
+                note.column >= col_start
+                    && note.column < col_end
+                    && counts_for_early_rescore(note.note_type)
+            })
+            .count();
+    }
+
+    notes
+        .iter()
+        .filter(|note| {
+            note.row_index == row_index
+                && note.column >= col_start
+                && note.column < col_end
+                && note.can_be_judged
+                && counts_for_early_rescore(note.note_type)
+        })
+        .count()
 }
 
 #[inline(always)]
@@ -567,7 +1031,7 @@ fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usi
                 && !note.is_fake
                 && matches!(
                     note.note_type,
-                    NoteType::Tap | NoteType::Hold | NoteType::Roll
+                    NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
                 )
             {
                 has_clap = true;
@@ -819,7 +1283,7 @@ fn apply_turn_options(
 #[inline(always)]
 fn note_counts_for_simultaneous_limit(note: &Note) -> bool {
     match note.note_type {
-        NoteType::Tap => !note.is_fake,
+        NoteType::Tap | NoteType::Lift => !note.is_fake,
         NoteType::Hold | NoteType::Roll => true,
         NoteType::Mine | NoteType::Fake => false,
     }
@@ -978,7 +1442,7 @@ fn count_tap_or_hold_tracks_at_row(
         }
         if !matches!(
             note.note_type,
-            NoteType::Tap | NoteType::Hold | NoteType::Roll
+            NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
         ) {
             continue;
         }
@@ -992,7 +1456,10 @@ fn count_tap_or_hold_tracks_at_row(
 fn count_tap_tracks_at_row(notes: &[Note], row: usize, col_offset: usize, cols: usize) -> usize {
     let mut seen = [false; MAX_COLS];
     for note in notes {
-        if note.row_index != row || note.note_type != NoteType::Tap || note.is_fake {
+        if note.row_index != row
+            || !matches!(note.note_type, NoteType::Tap | NoteType::Lift)
+            || note.is_fake
+        {
             continue;
         }
         if let Some(local) = local_player_col(note.column, col_offset, cols) {
@@ -1032,7 +1499,10 @@ fn first_tap_track_at_row(
 ) -> Option<usize> {
     let mut first: Option<usize> = None;
     for note in notes {
-        if note.row_index != row || note.note_type != NoteType::Tap || note.is_fake {
+        if note.row_index != row
+            || !matches!(note.note_type, NoteType::Tap | NoteType::Lift)
+            || note.is_fake
+        {
             continue;
         }
         let Some(local) = local_player_col(note.column, col_offset, cols) else {
@@ -1114,6 +1584,116 @@ fn set_added_tap_note(
         can_be_judged: timing_player.is_judgable_at_beat(beat),
     });
     true
+}
+
+fn set_added_mine_note(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    row: usize,
+    column: usize,
+) -> bool {
+    let Some(beat) = timing_player.get_beat_for_row(row) else {
+        return false;
+    };
+    remove_cell_notes(notes, row, column);
+    let quantization_idx = quantization_index_from_beat(beat);
+    notes.push(Note {
+        beat,
+        quantization_idx,
+        column,
+        note_type: NoteType::Mine,
+        row_index: row,
+        result: None,
+        early_result: None,
+        hold: None,
+        mine_result: None,
+        is_fake: false,
+        can_be_judged: timing_player.is_judgable_at_beat(beat),
+    });
+    true
+}
+
+fn convert_tap_row_to_mines(notes: &mut [Note], row: usize) {
+    for note in notes.iter_mut() {
+        if note.row_index == row && note.note_type == NoteType::Tap {
+            note.note_type = NoteType::Mine;
+            note.hold = None;
+            note.mine_result = None;
+        }
+    }
+}
+
+fn track_range_has_any_note(
+    notes: &[Note],
+    column: usize,
+    start_row: usize,
+    end_row: usize,
+) -> bool {
+    notes.iter().any(|note| {
+        note.column == column && note.row_index >= start_row && note.row_index <= end_row
+    })
+}
+
+fn apply_mines_insert(
+    notes: &mut Vec<Note>,
+    context_notes: &[Note],
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    start_row: usize,
+    end_row: usize,
+) {
+    if cols == 0 || cols > MAX_COLS || end_row < start_row {
+        return;
+    }
+
+    let mut row_count = 0usize;
+    let mut place_every_rows = 6usize;
+    for row in player_rows(notes, col_offset, cols) {
+        if row < start_row || row > end_row {
+            continue;
+        }
+        row_count = row_count.saturating_add(1);
+        if row_count < place_every_rows {
+            continue;
+        }
+        convert_tap_row_to_mines(notes, row);
+        row_count = 0;
+        place_every_rows = if place_every_rows == 6 { 7 } else { 6 };
+    }
+
+    let half_beat_rows = (ROWS_PER_BEAT.max(1) / 2) as usize;
+    let hold_heads: Vec<(usize, usize)> = notes
+        .iter()
+        .filter_map(|note| {
+            matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+                .then_some((note.column, note.hold.as_ref()?.end_row_index))
+        })
+        .collect();
+    let mut full_context = Vec::with_capacity(context_notes.len() + notes.len() + hold_heads.len());
+    full_context.extend_from_slice(context_notes);
+    full_context.extend(notes.iter().cloned());
+    for (column, end_row_index) in hold_heads {
+        let mine_row = end_row_index.saturating_add(half_beat_rows);
+        if mine_row < start_row || mine_row > end_row {
+            continue;
+        }
+        let range_start = mine_row.saturating_sub(half_beat_rows).saturating_add(1);
+        let range_end = mine_row.saturating_add(half_beat_rows).saturating_sub(1);
+        if track_range_has_any_note(&full_context, column, range_start, range_end) {
+            continue;
+        }
+        if !set_added_mine_note(notes, timing_player, mine_row, column) {
+            continue;
+        }
+        convert_tap_row_to_mines(notes, mine_row);
+        if let Some(note) = notes
+            .iter()
+            .find(|note| note.column == column && note.row_index == mine_row)
+        {
+            full_context.push(note.clone());
+        }
+    }
 }
 
 fn apply_insert_intelligent_taps(
@@ -1301,7 +1881,7 @@ fn apply_stomp_insert(
         let row_end = row.saturating_add(half_beat);
         for note in notes.iter() {
             if local_player_col(note.column, col_offset, cols).is_none()
-                || note.note_type != NoteType::Tap
+                || !matches!(note.note_type, NoteType::Tap | NoteType::Lift)
                 || note.is_fake
                 || note.row_index == row
             {
@@ -1486,7 +2066,9 @@ fn apply_uncommon_masks_with_masks(
     timing_player: &TimingData,
     col_offset: usize,
     cols: usize,
-    player: usize,
+    context_notes: &[Note],
+    row_bounds: Option<(usize, usize)>,
+    _player: usize,
 ) {
     if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
         let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
@@ -1588,6 +2170,19 @@ fn apply_uncommon_masks_with_masks(
             true,
         );
     }
+    if (insert_mask & INSERT_MASK_BIT_MINES) != 0
+        && let Some((start_row, end_row)) = row_bounds
+    {
+        apply_mines_insert(
+            notes,
+            context_notes,
+            timing_player,
+            col_offset,
+            cols,
+            start_row,
+            end_row,
+        );
+    }
     if (insert_mask & INSERT_MASK_BIT_ECHO) != 0 {
         apply_echo_insert(notes, timing_player, col_offset, cols);
     }
@@ -1616,10 +2211,7 @@ fn apply_uncommon_masks_with_masks(
         }
     }
     if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 {
-        debug!(
-            "Player {} selected NoLifts, but deadsync note parsing does not currently produce lift notes.",
-            player + 1,
-        );
+        notes.retain(|note| note.note_type != NoteType::Lift);
     }
 
     sort_player_notes(notes);
@@ -1641,8 +2233,17 @@ fn apply_uncommon_masks_for_player(
         timing_player,
         col_offset,
         cols,
+        &[],
+        None,
         player,
     );
+}
+
+#[inline(always)]
+fn has_uncommon_masks(profile: &profile::Profile) -> bool {
+    profile::normalize_insert_mask(profile.insert_active_mask) != 0
+        || profile::normalize_remove_mask(profile.remove_active_mask) != 0
+        || profile::normalize_holds_mask(profile.holds_active_mask) != 0
 }
 
 fn apply_uncommon_chart_transforms(
@@ -1653,7 +2254,12 @@ fn apply_uncommon_chart_transforms(
     player_profiles: &[profile::Profile; MAX_PLAYERS],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
 ) {
-    if num_players == 0 {
+    if num_players == 0
+        || !player_profiles
+            .iter()
+            .take(num_players)
+            .any(has_uncommon_masks)
+    {
         return;
     }
 
@@ -1664,6 +2270,12 @@ fn apply_uncommon_chart_transforms(
         let (start, end) = note_ranges[player];
         let slice_end = end.min(notes.len());
         let slice_start = start.min(slice_end);
+        let out_start = transformed.len();
+        if !has_uncommon_masks(&player_profiles[player]) {
+            transformed.extend_from_slice(&notes[slice_start..slice_end]);
+            transformed_ranges[player] = (out_start, transformed.len());
+            continue;
+        }
         let mut player_notes = notes[slice_start..slice_end].to_vec();
         apply_uncommon_masks_for_player(
             &mut player_notes,
@@ -1674,7 +2286,6 @@ fn apply_uncommon_chart_transforms(
             player,
         );
 
-        let out_start = transformed.len();
         transformed.extend(player_notes);
         transformed_ranges[player] = (out_start, transformed.len());
     }
@@ -1698,11 +2309,16 @@ struct ChartAttackWindow {
 struct AttackMaskWindow {
     start_second: f32,
     end_second: f32,
-    accel_mask: u8,
-    visual_mask: u16,
-    appearance_mask: u8,
-    speed_multiplier: f32,
-    mini_percent_delta: f32,
+    clear_all: bool,
+    chart: ChartAttackEffects,
+    accel: AccelOverrides,
+    visual: VisualOverrides,
+    appearance: AppearanceOverrides,
+    visibility: VisibilityOverrides,
+    scroll: ScrollOverrides,
+    perspective: PerspectiveOverrides,
+    scroll_speed: Option<ScrollSpeedSetting>,
+    mini_percent: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1711,11 +2327,15 @@ struct ParsedAttackMods {
     remove_mask: u8,
     holds_mask: u8,
     turn_option: profile::TurnOption,
-    accel_mask: u8,
-    visual_mask: u16,
-    appearance_mask: u8,
-    speed_multiplier: f32,
-    mini_percent_delta: f32,
+    clear_all: bool,
+    accel: AccelOverrides,
+    visual: VisualOverrides,
+    appearance: AppearanceOverrides,
+    visibility: VisibilityOverrides,
+    scroll: ScrollOverrides,
+    perspective: PerspectiveOverrides,
+    scroll_speed: Option<ScrollSpeedSetting>,
+    mini_percent: Option<f32>,
 }
 
 impl Default for ParsedAttackMods {
@@ -1725,11 +2345,15 @@ impl Default for ParsedAttackMods {
             remove_mask: 0,
             holds_mask: 0,
             turn_option: profile::TurnOption::None,
-            accel_mask: 0,
-            visual_mask: 0,
-            appearance_mask: 0,
-            speed_multiplier: 1.0,
-            mini_percent_delta: 0.0,
+            clear_all: false,
+            accel: AccelOverrides::default(),
+            visual: VisualOverrides::default(),
+            appearance: AppearanceOverrides::default(),
+            visibility: VisibilityOverrides::default(),
+            scroll: ScrollOverrides::default(),
+            perspective: PerspectiveOverrides::default(),
+            scroll_speed: None,
+            mini_percent: None,
         }
     }
 }
@@ -1745,11 +2369,30 @@ impl ParsedAttackMods {
 
     #[inline(always)]
     fn has_runtime_mask_effect(self) -> bool {
-        self.accel_mask != 0
-            || self.visual_mask != 0
-            || self.appearance_mask != 0
-            || (self.speed_multiplier - 1.0).abs() > f32::EPSILON
-            || self.mini_percent_delta.abs() > f32::EPSILON
+        self.clear_all
+            || self.accel.any()
+            || self.visual.any()
+            || self.appearance.any()
+            || self.visibility.any()
+            || self.scroll.any()
+            || self.perspective.any()
+            || self.scroll_speed.is_some()
+            || self.mini_percent.is_some()
+    }
+}
+
+#[inline(always)]
+const fn turn_option_bits(turn: profile::TurnOption) -> u16 {
+    match turn {
+        profile::TurnOption::None => 0,
+        profile::TurnOption::Mirror => 1 << 0,
+        profile::TurnOption::Left => 1 << 1,
+        profile::TurnOption::Right => 1 << 2,
+        profile::TurnOption::LRMirror => 1 << 3,
+        profile::TurnOption::UDMirror => 1 << 4,
+        profile::TurnOption::Shuffle => 1 << 5,
+        profile::TurnOption::Blender => 1 << 6,
+        profile::TurnOption::Random => 1 << 7,
     }
 }
 
@@ -1841,16 +2484,22 @@ fn attack_token_key(token: &str) -> String {
 }
 
 #[inline(always)]
-fn parse_attack_speed_multiplier(token: &str) -> Option<f32> {
+fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
     let trimmed = token.trim();
     let value = trimmed
         .strip_suffix('x')
-        .or_else(|| trimmed.strip_suffix('X'))?;
-    value
-        .trim()
-        .parse::<f32>()
-        .ok()
-        .filter(|v| v.is_finite() && *v > 0.0)
+        .or_else(|| trimmed.strip_suffix('X'))
+        .and_then(|v| v.trim().parse::<f32>().ok());
+    if let Some(v) = value.filter(|v| v.is_finite() && *v > 0.0) {
+        return Some(ScrollSpeedSetting::XMod(v));
+    }
+    ScrollSpeedSetting::from_str(trimmed).ok()
+}
+
+#[inline(always)]
+fn attack_level(percent_value: Option<f32>) -> Option<f32> {
+    let raw = percent_value.unwrap_or(100.0);
+    raw.is_finite().then_some(raw / 100.0)
 }
 
 #[inline(always)]
@@ -1862,6 +2511,15 @@ fn parse_attack_percent_prefix(token: &str) -> (Option<f32>, &str) {
     (value, token[idx + 1..].trim())
 }
 
+#[inline(always)]
+fn parse_attack_level_token(token: &str) -> (Option<f32>, &str) {
+    let token = token.trim();
+    if token.len() >= 3 && token[..3].eq_ignore_ascii_case("no ") {
+        return (Some(0.0), token[3..].trim());
+    }
+    parse_attack_percent_prefix(token)
+}
+
 fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
     let mut out = ParsedAttackMods::default();
     for token in mods.split(',') {
@@ -1869,16 +2527,22 @@ fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
         if token.is_empty() {
             continue;
         }
-        if let Some(multiplier) = parse_attack_speed_multiplier(token) {
-            out.speed_multiplier *= multiplier;
+        if let Some(scroll_speed) = parse_attack_scroll_override(token) {
+            out.scroll_speed = Some(scroll_speed);
             continue;
         }
-        let (percent_value, token_key) = parse_attack_percent_prefix(token);
+        let (percent_value, token_key) = parse_attack_level_token(token);
         let key = attack_token_key(token_key);
         if key.is_empty() {
             continue;
         }
         match key.as_str() {
+            "clearall" => {
+                out = ParsedAttackMods {
+                    clear_all: true,
+                    ..ParsedAttackMods::default()
+                };
+            }
             "wide" => out.insert_mask |= INSERT_MASK_BIT_WIDE,
             "big" => out.insert_mask |= INSERT_MASK_BIT_BIG,
             "quick" => out.insert_mask |= INSERT_MASK_BIT_QUICK,
@@ -1886,6 +2550,7 @@ fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
             "skippy" => out.insert_mask |= INSERT_MASK_BIT_SKIPPY,
             "echo" => out.insert_mask |= INSERT_MASK_BIT_ECHO,
             "stomp" => out.insert_mask |= INSERT_MASK_BIT_STOMP,
+            "mines" => out.insert_mask |= INSERT_MASK_BIT_MINES,
             "little" => out.remove_mask |= REMOVE_MASK_BIT_LITTLE,
             "nomines" => out.remove_mask |= REMOVE_MASK_BIT_NO_MINES,
             "noholds" => out.remove_mask |= REMOVE_MASK_BIT_NO_HOLDS,
@@ -1907,32 +2572,64 @@ fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
             "shuffle" => out.turn_option = profile::TurnOption::Shuffle,
             "supershuffle" | "blender" => out.turn_option = profile::TurnOption::Blender,
             "hypershuffle" => out.turn_option = profile::TurnOption::Random,
-            "boost" => out.accel_mask |= ACCEL_MASK_BIT_BOOST,
-            "brake" => out.accel_mask |= ACCEL_MASK_BIT_BRAKE,
-            "wave" => out.accel_mask |= ACCEL_MASK_BIT_WAVE,
-            "expand" => out.accel_mask |= ACCEL_MASK_BIT_EXPAND,
-            "boomerang" => out.accel_mask |= ACCEL_MASK_BIT_BOOMERANG,
-            "drunk" => out.visual_mask |= VISUAL_MASK_BIT_DRUNK,
-            "dizzy" => out.visual_mask |= VISUAL_MASK_BIT_DIZZY,
-            "confusion" => out.visual_mask |= VISUAL_MASK_BIT_CONFUSION,
-            "flip" => out.visual_mask |= VISUAL_MASK_BIT_FLIP,
-            "invert" => out.visual_mask |= VISUAL_MASK_BIT_INVERT,
-            "tornado" => out.visual_mask |= VISUAL_MASK_BIT_TORNADO,
-            "tipsy" => out.visual_mask |= VISUAL_MASK_BIT_TIPSY,
-            "bumpy" => out.visual_mask |= VISUAL_MASK_BIT_BUMPY,
-            "beat" => out.visual_mask |= VISUAL_MASK_BIT_BEAT,
+            "reverse" => out.scroll.reverse = attack_level(percent_value),
+            "split" => out.scroll.split = attack_level(percent_value),
+            "alternate" => out.scroll.alternate = attack_level(percent_value),
+            "cross" => out.scroll.cross = attack_level(percent_value),
+            "centered" => out.scroll.centered = attack_level(percent_value),
+            "boost" => out.accel.boost = attack_level(percent_value),
+            "brake" => out.accel.brake = attack_level(percent_value),
+            "wave" => out.accel.wave = attack_level(percent_value),
+            "expand" => out.accel.expand = attack_level(percent_value),
+            "boomerang" => out.accel.boomerang = attack_level(percent_value),
+            "drunk" => out.visual.drunk = attack_level(percent_value),
+            "dizzy" => out.visual.dizzy = attack_level(percent_value),
+            "confusion" => out.visual.confusion = attack_level(percent_value),
+            "flip" => out.visual.flip = attack_level(percent_value),
+            "invert" => out.visual.invert = attack_level(percent_value),
+            "tornado" => out.visual.tornado = attack_level(percent_value),
+            "tipsy" => out.visual.tipsy = attack_level(percent_value),
+            "bumpy" => out.visual.bumpy = attack_level(percent_value),
+            "beat" => out.visual.beat = attack_level(percent_value),
             "mini" => {
-                let delta = percent_value.unwrap_or(100.0);
-                if delta.is_finite() {
-                    out.mini_percent_delta += delta;
+                let mini = percent_value.unwrap_or(100.0);
+                if mini.is_finite() {
+                    out.mini_percent = Some(mini);
                 }
             }
-            "hidden" => out.appearance_mask |= APPEARANCE_MASK_BIT_HIDDEN,
-            "sudden" => out.appearance_mask |= APPEARANCE_MASK_BIT_SUDDEN,
-            "stealth" => out.appearance_mask |= APPEARANCE_MASK_BIT_STEALTH,
-            "blink" => out.appearance_mask |= APPEARANCE_MASK_BIT_BLINK,
+            "hidden" => out.appearance.hidden = attack_level(percent_value),
+            "sudden" => out.appearance.sudden = attack_level(percent_value),
+            "stealth" => out.appearance.stealth = attack_level(percent_value),
+            "blink" => out.appearance.blink = attack_level(percent_value),
             "rvanish" | "randomvanish" | "reversevanish" => {
-                out.appearance_mask |= APPEARANCE_MASK_BIT_RANDOM_VANISH
+                out.appearance.random_vanish = attack_level(percent_value)
+            }
+            "dark" => out.visibility.dark = attack_level(percent_value),
+            "blind" => out.visibility.blind = attack_level(percent_value),
+            "cover" => out.visibility.cover = attack_level(percent_value),
+            "overhead" => {
+                out.perspective.tilt = Some(0.0);
+                out.perspective.skew = Some(0.0);
+            }
+            "incoming" => {
+                let level = attack_level(percent_value).unwrap_or(1.0);
+                out.perspective.tilt = Some(-level);
+                out.perspective.skew = Some(level);
+            }
+            "space" => {
+                let level = attack_level(percent_value).unwrap_or(1.0);
+                out.perspective.tilt = Some(level);
+                out.perspective.skew = Some(level);
+            }
+            "hallway" => {
+                let level = attack_level(percent_value).unwrap_or(1.0);
+                out.perspective.tilt = Some(-level);
+                out.perspective.skew = Some(0.0);
+            }
+            "distant" => {
+                let level = attack_level(percent_value).unwrap_or(1.0);
+                out.perspective.tilt = Some(level);
+                out.perspective.skew = Some(0.0);
             }
             _ => {}
         }
@@ -2040,7 +2737,7 @@ fn build_attack_mask_windows_for_player(
     }
     let mut windows = Vec::with_capacity(attacks.len());
     for (attack, mods) in attacks.iter().zip(selected_mods.iter().copied()) {
-        if !mods.has_runtime_mask_effect() {
+        if !mods.has_runtime_mask_effect() && !mods.has_chart_effect() {
             continue;
         }
         let start_second = attack.start_second;
@@ -2051,11 +2748,21 @@ fn build_attack_mask_windows_for_player(
         windows.push(AttackMaskWindow {
             start_second,
             end_second,
-            accel_mask: mods.accel_mask,
-            visual_mask: mods.visual_mask,
-            appearance_mask: mods.appearance_mask,
-            speed_multiplier: mods.speed_multiplier,
-            mini_percent_delta: mods.mini_percent_delta,
+            clear_all: mods.clear_all,
+            chart: ChartAttackEffects {
+                insert_mask: mods.insert_mask,
+                remove_mask: mods.remove_mask,
+                holds_mask: mods.holds_mask,
+                turn_bits: turn_option_bits(mods.turn_option),
+            },
+            accel: mods.accel,
+            visual: mods.visual,
+            appearance: mods.appearance,
+            visibility: mods.visibility,
+            scroll: mods.scroll,
+            perspective: mods.perspective,
+            scroll_speed: mods.scroll_speed,
+            mini_percent: mods.mini_percent,
         });
     }
     windows
@@ -2149,6 +2856,8 @@ fn apply_chart_attack_window(
         timing_player,
         col_offset,
         cols,
+        &out_range,
+        Some((start_row, end_row)),
         player,
     );
     apply_attack_turn_mod(
@@ -2228,10 +2937,29 @@ fn apply_chart_attacks_for_player(
     }
 }
 
+#[inline(always)]
+fn has_chart_attacks(chart: &GameplayChartData, profile: &profile::Profile) -> bool {
+    match profile.attack_mode {
+        profile::AttackMode::Off => false,
+        profile::AttackMode::On => chart
+            .chart_attacks
+            .as_deref()
+            .is_some_and(|raw| !raw.trim().is_empty()),
+        profile::AttackMode::Random => true,
+    }
+}
+
+#[inline(always)]
+fn player_changes_chart(chart: &GameplayChartData, profile: &profile::Profile) -> bool {
+    has_uncommon_masks(profile)
+        || profile.turn_option != profile::TurnOption::None
+        || has_chart_attacks(chart, profile)
+}
+
 fn apply_chart_attacks_transforms(
     notes: &mut Vec<Note>,
     note_ranges: &mut [(usize, usize); MAX_PLAYERS],
-    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
     cols_per_player: usize,
     num_players: usize,
     player_profiles: &[profile::Profile; MAX_PLAYERS],
@@ -2239,7 +2967,10 @@ fn apply_chart_attacks_transforms(
     base_seed: u64,
     song_length_seconds: f32,
 ) {
-    if num_players == 0 {
+    if num_players == 0
+        || !(0..num_players)
+            .any(|player| has_chart_attacks(&gameplay_charts[player], &player_profiles[player]))
+    {
         return;
     }
     let mut transformed = Vec::with_capacity(notes.len());
@@ -2249,10 +2980,16 @@ fn apply_chart_attacks_transforms(
         let (start, end) = note_ranges[player];
         let slice_end = end.min(notes.len());
         let slice_start = start.min(slice_end);
+        let out_start = transformed.len();
+        if !has_chart_attacks(&gameplay_charts[player], &player_profiles[player]) {
+            transformed.extend_from_slice(&notes[slice_start..slice_end]);
+            transformed_ranges[player] = (out_start, transformed.len());
+            continue;
+        }
         let mut player_notes = notes[slice_start..slice_end].to_vec();
         apply_chart_attacks_for_player(
             &mut player_notes,
-            charts[player].chart_attacks.as_deref(),
+            gameplay_charts[player].chart_attacks.as_deref(),
             player_profiles[player].attack_mode,
             timing_players[player].as_ref(),
             player.saturating_mul(cols_per_player),
@@ -2261,7 +2998,6 @@ fn apply_chart_attacks_transforms(
             base_seed,
             song_length_seconds,
         );
-        let out_start = transformed.len();
         transformed.extend(player_notes);
         transformed_ranges[player] = (out_start, transformed.len());
     }
@@ -2291,32 +3027,212 @@ fn count_total_steps_for_range(notes: &[Note], note_range: (usize, usize)) -> u3
     rows.len() as u32
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct PlayerTotals {
+    steps: u32,
+    holds: u32,
+    rolls: u32,
+    mines: u32,
+    jumps: u32,
+    hands: u32,
+}
+
 #[inline(always)]
-fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> (u32, u32, u32, u32) {
+fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> PlayerTotals {
     let (start, end) = note_range;
     if start >= end {
-        return (0, 0, 0, 0);
+        return PlayerTotals::default();
     }
-    let mut holds = 0u32;
-    let mut rolls = 0u32;
-    let mut mines = 0u32;
+    let mut totals = PlayerTotals {
+        steps: count_total_steps_for_range(notes, note_range),
+        ..PlayerTotals::default()
+    };
+    let mut row_cells: Vec<(usize, usize)> = Vec::with_capacity(end - start);
+    let mut hold_starts: Vec<usize> = Vec::new();
+    let mut hold_ends: Vec<usize> = Vec::new();
     for note in &notes[start..end] {
         if !note.can_be_judged {
             continue;
         }
         match note.note_type {
-            NoteType::Hold => holds = holds.saturating_add(1),
-            NoteType::Roll => rolls = rolls.saturating_add(1),
-            NoteType::Mine => mines = mines.saturating_add(1),
-            NoteType::Tap | NoteType::Fake => {}
+            NoteType::Tap => row_cells.push((note.row_index, note.column)),
+            NoteType::Hold => {
+                totals.holds = totals.holds.saturating_add(1);
+                row_cells.push((note.row_index, note.column));
+                if let Some(hold) = note.hold.as_ref() {
+                    hold_starts.push(note.row_index);
+                    hold_ends.push(hold.end_row_index);
+                }
+            }
+            NoteType::Roll => {
+                totals.rolls = totals.rolls.saturating_add(1);
+                row_cells.push((note.row_index, note.column));
+                if let Some(hold) = note.hold.as_ref() {
+                    hold_starts.push(note.row_index);
+                    hold_ends.push(hold.end_row_index);
+                }
+            }
+            NoteType::Mine => totals.mines = totals.mines.saturating_add(1),
+            NoteType::Lift | NoteType::Fake => {}
         }
     }
-    (
-        count_total_steps_for_range(notes, note_range),
-        holds,
-        rolls,
-        mines,
-    )
+
+    row_cells.sort_unstable();
+    hold_starts.sort_unstable();
+    hold_ends.sort_unstable();
+
+    let mut row_ix = 0usize;
+    let mut hold_start_ix = 0usize;
+    let mut hold_end_ix = 0usize;
+    while row_ix < row_cells.len() {
+        let row = row_cells[row_ix].0;
+        let mut row_mask = 0u16;
+        while row_ix < row_cells.len() && row_cells[row_ix].0 == row {
+            row_mask |= 1u16 << row_cells[row_ix].1.min(15);
+            row_ix += 1;
+        }
+        while hold_start_ix < hold_starts.len() && hold_starts[hold_start_ix] < row {
+            hold_start_ix += 1;
+        }
+        while hold_end_ix < hold_ends.len() && hold_ends[hold_end_ix] < row {
+            hold_end_ix += 1;
+        }
+        let notes_on_row = row_mask.count_ones();
+        let carried_holds = hold_start_ix.saturating_sub(hold_end_ix) as u32;
+        if notes_on_row >= 2 {
+            totals.jumps = totals.jumps.saturating_add(1);
+        }
+        if notes_on_row + carried_holds >= 3 {
+            totals.hands = totals.hands.saturating_add(1);
+        }
+    }
+
+    totals
+}
+
+#[inline(always)]
+fn chart_has_attacks(chart: &ChartData) -> bool {
+    chart.has_chart_attacks
+}
+
+fn chart_has_significant_timing_changes(chart: &ChartData) -> bool {
+    chart.has_significant_timing_changes
+}
+
+#[inline(always)]
+fn mini_indicator_mode(profile: &profile::Profile) -> profile::MiniIndicator {
+    if profile.mini_indicator != profile::MiniIndicator::None {
+        profile.mini_indicator
+    } else if profile.subtractive_scoring {
+        profile::MiniIndicator::SubtractiveScoring
+    } else if profile.pacemaker {
+        profile::MiniIndicator::Pacemaker
+    } else {
+        profile::MiniIndicator::None
+    }
+}
+
+#[inline(always)]
+fn needs_stream_data(profile: &profile::Profile) -> bool {
+    profile.measure_counter != profile::MeasureCounter::None
+        || mini_indicator_mode(profile) != profile::MiniIndicator::None
+}
+
+#[inline(always)]
+fn chart_stream_segments(
+    gameplay_chart: &GameplayChartData,
+    lanes: usize,
+    constant_bpm: bool,
+) -> (Vec<StreamSegment>, f32, f32) {
+    let measure_densities = rssp::stats::measure_densities(&gameplay_chart.notes, lanes);
+    zmod_stream_totals_full_measures(&measure_densities, constant_bpm)
+}
+
+pub fn stream_segments_for_results(state: &State, player: usize) -> Vec<StreamSegment> {
+    if player >= state.num_players {
+        return Vec::new();
+    }
+    if !state.mini_indicator_stream_segments[player].is_empty() {
+        return state.mini_indicator_stream_segments[player].clone();
+    }
+    let constant_bpm = !state.timing_players[player].has_bpm_changes();
+    let (segments, _, _) = chart_stream_segments(
+        &state.gameplay_charts[player],
+        state.cols_per_player,
+        constant_bpm,
+    );
+    segments
+}
+
+fn score_valid_for_chart(
+    chart: &ChartData,
+    profile: &profile::Profile,
+    scroll_speed: ScrollSpeedSetting,
+    music_rate: f32,
+) -> bool {
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    if rate < 1.0 {
+        return false;
+    }
+
+    if matches!(scroll_speed, ScrollSpeedSetting::CMod(_))
+        && chart_has_significant_timing_changes(chart)
+    {
+        return false;
+    }
+
+    let remove_mask = profile::normalize_remove_mask(profile.remove_active_mask);
+    if (remove_mask & REMOVE_MASK_BIT_NO_HOLDS) != 0 && chart.stats.holds > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_MINES) != 0 && chart.mines_nonfake > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_JUMPS) != 0 && chart.stats.jumps > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_HANDS) != 0 && chart.stats.hands > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_QUADS) != 0 && chart.stats.hands > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 && chart.stats.lifts > 0 {
+        return false;
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_FAKES) != 0 && chart.stats.fakes > 0 {
+        return false;
+    }
+
+    let holds_mask = profile::normalize_holds_mask(profile.holds_active_mask);
+    if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 && chart.stats.rolls > 0 {
+        return false;
+    }
+
+    if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
+        return false;
+    }
+
+    let insert_mask = profile::normalize_insert_mask(profile.insert_active_mask);
+    if (insert_mask & INSERT_MASK_BIT_ECHO) != 0 {
+        return false;
+    }
+
+    if (holds_mask & (HOLDS_MASK_BIT_PLANTED | HOLDS_MASK_BIT_FLOORED | HOLDS_MASK_BIT_TWISTER))
+        != 0
+    {
+        return false;
+    }
+
+    match profile.attack_mode {
+        profile::AttackMode::Off => !chart_has_attacks(chart),
+        profile::AttackMode::On => true,
+        profile::AttackMode::Random => false,
+    }
 }
 
 fn compute_end_times(
@@ -2389,60 +3305,13 @@ pub struct CourseDisplayTotals {
     pub mines_total: u32,
 }
 
-pub fn course_display_totals_for_chart(
-    chart: &ChartData,
-    global_offset_seconds: f32,
-) -> CourseDisplayTotals {
-    let mut timing = chart.timing.clone();
-    timing.set_global_offset_seconds(global_offset_seconds);
-    let mut holds_total = 0u32;
-    let mut rolls_total = 0u32;
-    let mut mines_total = 0u32;
-    let mut rows: Vec<usize> = Vec::with_capacity(chart.parsed_notes.len());
-    for parsed in &chart.parsed_notes {
-        let Some(beat) = timing.get_beat_for_row(parsed.row_index) else {
-            continue;
-        };
-        let explicit_fake_tap = matches!(parsed.note_type, NoteType::Fake);
-        let fake_by_segment = timing.is_fake_at_beat(beat);
-        let is_fake = explicit_fake_tap || fake_by_segment;
-        let note_type = if explicit_fake_tap {
-            NoteType::Tap
-        } else {
-            parsed.note_type
-        };
-        let can_be_judged = !is_fake && timing.is_judgable_at_beat(beat);
-        if !can_be_judged {
-            continue;
-        }
-        match note_type {
-            NoteType::Hold => {
-                holds_total = holds_total.saturating_add(1);
-                rows.push(parsed.row_index);
-            }
-            NoteType::Roll => {
-                rolls_total = rolls_total.saturating_add(1);
-                rows.push(parsed.row_index);
-            }
-            NoteType::Mine => {
-                mines_total = mines_total.saturating_add(1);
-            }
-            NoteType::Tap | NoteType::Fake => {
-                rows.push(parsed.row_index);
-            }
-        }
-    }
-    rows.sort_unstable();
-    rows.dedup();
-    let possible_i64 = i64::try_from(rows.len()).unwrap_or(i64::MAX) * 5
-        + i64::from(holds_total) * i64::from(judgment::HOLD_SCORE_HELD)
-        + i64::from(rolls_total) * i64::from(judgment::HOLD_SCORE_HELD);
+pub fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplayTotals {
     CourseDisplayTotals {
-        possible_grade_points: possible_i64.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        possible_grade_points: chart.possible_grade_points,
         total_steps: chart.stats.total_steps,
-        holds_total,
-        rolls_total,
-        mines_total,
+        holds_total: chart.holds_total,
+        rolls_total: chart.rolls_total,
+        mines_total: chart.mines_total,
     }
 }
 
@@ -2529,7 +3398,7 @@ pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
 #[inline(always)]
 const fn column_cue_is_mine(note_type: NoteType) -> Option<bool> {
     match note_type {
-        NoteType::Tap | NoteType::Hold | NoteType::Roll => Some(false),
+        NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll => Some(false),
         NoteType::Mine => Some(true),
         NoteType::Fake => None,
     }
@@ -3095,7 +3964,9 @@ pub struct CourseDisplayCarry {
     // Display split used by gameplay counters (legacy 10ms or custom ms option).
     pub window_counts_display_blue: crate::game::timing::WindowCounts,
     pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
     pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
     pub mines_hit_for_score: u32,
 }
 
@@ -3123,6 +3994,14 @@ const fn judge_life_delta(grade: JudgeGrade) -> f32 {
         JudgeGrade::WayOff => LIFE_WAY_OFF,
         JudgeGrade::Miss => LIFE_MISS,
     }
+}
+
+#[inline(always)]
+fn score_missed_holds_and_rolls(chart_type: &str) -> bool {
+    // ITGmania _fallback metrics:
+    // ScoreMissedHoldsAndRolls = not IsGame("pump") and not IsGame("dance")
+    let chart_type = chart_type.trim().to_ascii_lowercase();
+    !(chart_type.starts_with("dance") || chart_type.starts_with("pump"))
 }
 
 fn init_player_runtime() -> PlayerRuntime {
@@ -3190,6 +4069,46 @@ pub struct ReplayOffsetSnapshot {
     pub beat0_time_seconds: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct SongClockSnapshot {
+    song_time: f32,
+    seconds_per_second: f32,
+    valid_at: Instant,
+    valid_at_host_nanos: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FrameStableDisplayClock {
+    current_time_sec: f32,
+    target_time_sec: f32,
+    catching_up: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DisplayClockHealth {
+    pub error_seconds: f32,
+    pub catching_up: bool,
+}
+
+impl FrameStableDisplayClock {
+    #[inline(always)]
+    const fn new(time_sec: f32) -> Self {
+        Self {
+            current_time_sec: time_sec,
+            target_time_sec: time_sec,
+            catching_up: false,
+        }
+    }
+
+    #[inline(always)]
+    fn reset(&mut self, time_sec: f32) -> f32 {
+        self.current_time_sec = time_sec;
+        self.target_time_sec = time_sec;
+        self.catching_up = false;
+        time_sec
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct GameplayUpdatePhaseTimings {
     pre_notes_us: u32,
@@ -3219,6 +4138,64 @@ struct GameplayUpdatePhaseTimings {
     untracked_us: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct GameplayInputLatencyTrace {
+    samples: u32,
+    capture_to_store_total_us: u64,
+    store_to_emit_total_us: u64,
+    emit_to_queue_total_us: u64,
+    capture_to_process_total_us: u64,
+    queue_to_process_total_us: u64,
+    capture_to_store_max_us: u32,
+    store_to_emit_max_us: u32,
+    emit_to_queue_max_us: u32,
+    capture_to_process_max_us: u32,
+    queue_to_process_max_us: u32,
+}
+
+impl GameplayInputLatencyTrace {
+    #[inline(always)]
+    fn record(
+        &mut self,
+        capture_to_store_us: u32,
+        store_to_emit_us: u32,
+        emit_to_queue_us: u32,
+        capture_to_process_us: u32,
+        queue_to_process_us: u32,
+    ) {
+        self.samples = self.samples.saturating_add(1);
+        self.capture_to_store_total_us = self
+            .capture_to_store_total_us
+            .saturating_add(u64::from(capture_to_store_us));
+        self.store_to_emit_total_us = self
+            .store_to_emit_total_us
+            .saturating_add(u64::from(store_to_emit_us));
+        self.emit_to_queue_total_us = self
+            .emit_to_queue_total_us
+            .saturating_add(u64::from(emit_to_queue_us));
+        self.capture_to_process_total_us = self
+            .capture_to_process_total_us
+            .saturating_add(u64::from(capture_to_process_us));
+        self.queue_to_process_total_us = self
+            .queue_to_process_total_us
+            .saturating_add(u64::from(queue_to_process_us));
+        self.capture_to_store_max_us = self.capture_to_store_max_us.max(capture_to_store_us);
+        self.store_to_emit_max_us = self.store_to_emit_max_us.max(store_to_emit_us);
+        self.emit_to_queue_max_us = self.emit_to_queue_max_us.max(emit_to_queue_us);
+        self.capture_to_process_max_us = self.capture_to_process_max_us.max(capture_to_process_us);
+        self.queue_to_process_max_us = self.queue_to_process_max_us.max(queue_to_process_us);
+    }
+
+    #[inline(always)]
+    fn avg_us(total_us: u64, samples: u32) -> f32 {
+        if samples == 0 {
+            0.0
+        } else {
+            total_us as f32 / samples as f32
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 struct GameplayUpdateTraceState {
     frame_counter: u64,
@@ -3227,6 +4204,7 @@ struct GameplayUpdateTraceState {
     summary_slow_frames: u32,
     summary_max_total_us: u32,
     summary_max_phase: GameplayUpdatePhaseTimings,
+    summary_input_latency: GameplayInputLatencyTrace,
     summary_peak_active_arrows: usize,
     summary_peak_pending_edges: usize,
     arrow_capacity: [usize; MAX_COLS],
@@ -3245,6 +4223,7 @@ impl Default for GameplayUpdateTraceState {
             summary_slow_frames: 0,
             summary_max_total_us: 0,
             summary_max_phase: GameplayUpdatePhaseTimings::default(),
+            summary_input_latency: GameplayInputLatencyTrace::default(),
             summary_peak_active_arrows: 0,
             summary_peak_pending_edges: 0,
             arrow_capacity: [0; MAX_COLS],
@@ -3262,8 +4241,11 @@ pub struct State {
     pub stage_intro_text: Arc<str>,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
+    pub current_background_path: Option<PathBuf>,
+    pub next_background_change_ix: usize,
     pub background_texture_key: String,
     pub charts: [Arc<ChartData>; MAX_PLAYERS],
+    pub gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
     pub num_cols: usize,
     pub cols_per_player: usize,
     pub num_players: usize,
@@ -3276,6 +4258,9 @@ pub struct State {
     pub audio_lead_in_seconds: f32,
     pub current_beat: f32,
     pub current_music_time: f32,
+    pub current_beat_display: f32,
+    pub current_music_time_display: f32,
+    display_clock: FrameStableDisplayClock,
     pub note_spawn_cursor: [usize; MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     pub arrows: [Vec<Arrow>; MAX_COLS],
@@ -3330,7 +4315,9 @@ pub struct State {
     pub song_completed_naturally: bool,
     pub autoplay_enabled: bool,
     pub autoplay_used: bool,
+    pub score_valid: [bool; MAX_PLAYERS],
     replay_mode: bool,
+    replay_capture_enabled: bool,
     pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
     pub course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     pub live_window_counts: [crate::game::timing::WindowCounts; MAX_PLAYERS],
@@ -3340,17 +4327,23 @@ pub struct State {
     pub player_profiles: [profile::Profile; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<scores::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
-    active_attack_accel_mask: [u8; MAX_PLAYERS],
-    active_attack_visual_mask: [u16; MAX_PLAYERS],
-    active_attack_appearance_mask: [u8; MAX_PLAYERS],
-    active_attack_speed_multiplier: [f32; MAX_PLAYERS],
-    active_attack_mini_percent_delta: [f32; MAX_PLAYERS],
-    pub noteskin: [Option<Noteskin>; MAX_PLAYERS],
+    active_attack_clear_all: [bool; MAX_PLAYERS],
+    active_attack_chart: [ChartAttackEffects; MAX_PLAYERS],
+    active_attack_accel: [AccelOverrides; MAX_PLAYERS],
+    active_attack_visual: [VisualOverrides; MAX_PLAYERS],
+    active_attack_appearance: [AppearanceOverrides; MAX_PLAYERS],
+    active_attack_visibility: [VisibilityOverrides; MAX_PLAYERS],
+    active_attack_scroll: [ScrollOverrides; MAX_PLAYERS],
+    active_attack_perspective: [PerspectiveOverrides; MAX_PLAYERS],
+    active_attack_scroll_speed: [Option<ScrollSpeedSetting>; MAX_PLAYERS],
+    active_attack_mini_percent: [Option<f32>; MAX_PLAYERS],
+    pub noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
     pub active_color_index: i32,
     pub player_color: [f32; 4],
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     pub scroll_reference_bpm: f32,
     pub field_zoom: [f32; MAX_PLAYERS],
+    pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     pub scroll_pixels_per_second: [f32; MAX_PLAYERS],
     pub scroll_travel_time: [f32; MAX_PLAYERS],
     pub draw_distance_before_targets: [f32; MAX_PLAYERS],
@@ -3370,11 +4363,15 @@ pub struct State {
     pub rolls_total: [u32; MAX_PLAYERS],
     pub mines_total: [u32; MAX_PLAYERS],
     pub total_steps: [u32; MAX_PLAYERS],
+    #[allow(dead_code)]
+    // Stored for parity with transformed radar values; no live UI reads this yet.
+    pub jumps_total: [u32; MAX_PLAYERS],
+    pub hands_total: [u32; MAX_PLAYERS],
 
     pub total_elapsed_in_screen: f32,
 
-    pub sync_overlay_message: Option<String>,
-    pub replay_status_text: Option<String>,
+    pub sync_overlay_message: Option<Arc<str>>,
+    pub replay_status_text: Option<Arc<str>>,
     danger_fx: [DangerFx; MAX_PLAYERS],
 
     pub density_graph_first_second: f32,
@@ -3403,24 +4400,29 @@ pub struct State {
     pub hold_to_exit_start: Option<Instant>,
     pub hold_to_exit_aborted_at: Option<Instant>,
     pub exit_transition: Option<ExitTransition>,
+    shift_held: bool,
+    ctrl_held: bool,
+    offset_adjust_held_since: [Option<Instant>; 2],
+    offset_adjust_last_at: [Option<Instant>; 2],
     prev_inputs: [bool; MAX_COLS],
-    keyboard_lane_state: [bool; MAX_COLS],
-    gamepad_lane_state: [bool; MAX_COLS],
+    keyboard_lane_counts: [u8; MAX_COLS],
+    gamepad_lane_counts: [u8; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
     autoplay_rng: TurnRng,
     autoplay_cursor: [usize; MAX_PLAYERS],
     autoplay_pending_row: [Option<(usize, f32)>; MAX_PLAYERS],
     autoplay_lane_state: [bool; MAX_COLS],
     autoplay_hold_release_time: [Option<f32>; MAX_COLS],
-    assist_clap_enabled: bool,
+    tick_mode: TickMode,
     assist_clap_rows: Vec<usize>,
     assist_clap_cursor: usize,
     assist_last_crossed_row: i32,
+    toggle_flash_text: Option<&'static str>,
+    toggle_flash_timer: f32,
     replay_input: Vec<RecordedLaneEdge>,
     replay_cursor: usize,
     pub replay_edges: Vec<RecordedLaneEdge>,
 
-    log_timer: f32,
     update_trace: GameplayUpdateTraceState,
 }
 
@@ -3445,6 +4447,19 @@ impl GameplayUpdateTraceState {
 #[inline(always)]
 fn elapsed_us_since(started: Instant) -> u32 {
     let elapsed = started.elapsed().as_micros();
+    if elapsed > u128::from(u32::MAX) {
+        u32::MAX
+    } else {
+        elapsed as u32
+    }
+}
+
+#[inline(always)]
+fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
+    let elapsed = later
+        .checked_duration_since(earlier)
+        .unwrap_or(Duration::ZERO)
+        .as_micros();
     if elapsed > u128::from(u32::MAX) {
         u32::MAX
     } else {
@@ -3699,11 +4714,12 @@ fn trace_gameplay_update(
         let summary_slow_frames = state.update_trace.summary_slow_frames;
         let summary_max_total_us = state.update_trace.summary_max_total_us;
         let summary_max_phase = state.update_trace.summary_max_phase;
+        let summary_input_latency = state.update_trace.summary_input_latency;
         let summary_peak_active_arrows = state.update_trace.summary_peak_active_arrows;
         let summary_peak_pending_edges = state.update_trace.summary_peak_pending_edges;
         let (summary_hot_name, summary_hot_us) = max_phase_name_and_us(&summary_max_phase);
         trace!(
-            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}] other_max={:.3}",
+            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_arrows={} peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] input_latency_us=[samples:{} cap_store_avg:{:.1} cap_store_max:{} store_emit_avg:{:.1} store_emit_max:{} emit_queue_avg:{:.1} emit_queue_max:{} queue_proc_avg:{:.1} queue_proc_max:{} cap_proc_avg:{:.1} cap_proc_max:{}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}] other_max={:.3}",
             summary_frames,
             summary_slow_frames,
             summary_max_total_us as f32 / 1000.0,
@@ -3716,6 +4732,32 @@ fn trace_gameplay_update(
             summary_max_phase.input_glow_us as f32 / 1000.0,
             summary_max_phase.input_judge_us as f32 / 1000.0,
             summary_max_phase.input_roll_us as f32 / 1000.0,
+            summary_input_latency.samples,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.capture_to_store_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.capture_to_store_max_us,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.store_to_emit_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.store_to_emit_max_us,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.emit_to_queue_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.emit_to_queue_max_us,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.queue_to_process_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.queue_to_process_max_us,
+            GameplayInputLatencyTrace::avg_us(
+                summary_input_latency.capture_to_process_total_us,
+                summary_input_latency.samples,
+            ),
+            summary_input_latency.capture_to_process_max_us,
             summary_max_phase.density_sample_us as f32 / 1000.0,
             summary_max_phase.density_hist_mesh_us as f32 / 1000.0,
             summary_max_phase.density_life_mesh_us as f32 / 1000.0,
@@ -3727,6 +4769,7 @@ fn trace_gameplay_update(
         state.update_trace.summary_slow_frames = 0;
         state.update_trace.summary_max_total_us = 0;
         state.update_trace.summary_max_phase = GameplayUpdatePhaseTimings::default();
+        state.update_trace.summary_input_latency = GameplayInputLatencyTrace::default();
         state.update_trace.summary_peak_active_arrows = 0;
         state.update_trace.summary_peak_pending_edges = 0;
     }
@@ -3815,77 +4858,311 @@ fn finalize_update_trace(
 fn refresh_active_attack_masks(state: &mut State) {
     for player in 0..state.num_players {
         let now = state.current_music_time_visible[player];
-        let mut accel_mask: u8 = 0;
-        let mut visual_mask: u16 = 0;
-        let mut appearance_mask: u8 = 0;
-        let mut speed_multiplier = 1.0_f32;
-        let mut mini_percent_delta = 0.0_f32;
+        let mut clear_all = false;
+        let mut chart = ChartAttackEffects::default();
+        let mut accel = AccelOverrides::default();
+        let mut visual = VisualOverrides::default();
+        let mut appearance = AppearanceOverrides::default();
+        let mut visibility = VisibilityOverrides::default();
+        let mut scroll = ScrollOverrides::default();
+        let mut perspective = PerspectiveOverrides::default();
+        let mut scroll_speed = None;
+        let mut mini_percent = None;
         for window in &state.attack_mask_windows[player] {
             if now >= window.start_second && now < window.end_second {
-                accel_mask |= window.accel_mask;
-                visual_mask |= window.visual_mask;
-                appearance_mask |= window.appearance_mask;
-                if window.speed_multiplier.is_finite() && window.speed_multiplier > 0.0 {
-                    speed_multiplier *= window.speed_multiplier;
+                if window.clear_all {
+                    clear_all = true;
+                    accel = AccelOverrides::default();
+                    visual = VisualOverrides::default();
+                    appearance = AppearanceOverrides::default();
+                    visibility = VisibilityOverrides::default();
+                    scroll = ScrollOverrides::default();
+                    perspective = PerspectiveOverrides::default();
+                    scroll_speed = None;
+                    mini_percent = None;
                 }
-                if window.mini_percent_delta.is_finite() {
-                    mini_percent_delta += window.mini_percent_delta;
+                chart.insert_mask |= window.chart.insert_mask;
+                chart.remove_mask |= window.chart.remove_mask;
+                chart.holds_mask |= window.chart.holds_mask;
+                chart.turn_bits |= window.chart.turn_bits;
+                if let Some(v) = window.accel.boost {
+                    accel.boost = Some(v);
+                }
+                if let Some(v) = window.accel.brake {
+                    accel.brake = Some(v);
+                }
+                if let Some(v) = window.accel.wave {
+                    accel.wave = Some(v);
+                }
+                if let Some(v) = window.accel.expand {
+                    accel.expand = Some(v);
+                }
+                if let Some(v) = window.accel.boomerang {
+                    accel.boomerang = Some(v);
+                }
+                if let Some(v) = window.visual.drunk {
+                    visual.drunk = Some(v);
+                }
+                if let Some(v) = window.visual.dizzy {
+                    visual.dizzy = Some(v);
+                }
+                if let Some(v) = window.visual.confusion {
+                    visual.confusion = Some(v);
+                }
+                if let Some(v) = window.visual.flip {
+                    visual.flip = Some(v);
+                }
+                if let Some(v) = window.visual.invert {
+                    visual.invert = Some(v);
+                }
+                if let Some(v) = window.visual.tornado {
+                    visual.tornado = Some(v);
+                }
+                if let Some(v) = window.visual.tipsy {
+                    visual.tipsy = Some(v);
+                }
+                if let Some(v) = window.visual.bumpy {
+                    visual.bumpy = Some(v);
+                }
+                if let Some(v) = window.visual.beat {
+                    visual.beat = Some(v);
+                }
+                if let Some(v) = window.appearance.hidden {
+                    appearance.hidden = Some(v);
+                }
+                if let Some(v) = window.appearance.sudden {
+                    appearance.sudden = Some(v);
+                }
+                if let Some(v) = window.appearance.stealth {
+                    appearance.stealth = Some(v);
+                }
+                if let Some(v) = window.appearance.blink {
+                    appearance.blink = Some(v);
+                }
+                if let Some(v) = window.appearance.random_vanish {
+                    appearance.random_vanish = Some(v);
+                }
+                if let Some(v) = window.visibility.dark {
+                    visibility.dark = Some(v);
+                }
+                if let Some(v) = window.visibility.blind {
+                    visibility.blind = Some(v);
+                }
+                if let Some(v) = window.visibility.cover {
+                    visibility.cover = Some(v);
+                }
+                if let Some(v) = window.scroll.reverse {
+                    scroll.reverse = Some(v);
+                }
+                if let Some(v) = window.scroll.split {
+                    scroll.split = Some(v);
+                }
+                if let Some(v) = window.scroll.alternate {
+                    scroll.alternate = Some(v);
+                }
+                if let Some(v) = window.scroll.cross {
+                    scroll.cross = Some(v);
+                }
+                if let Some(v) = window.scroll.centered {
+                    scroll.centered = Some(v);
+                }
+                if let Some(v) = window.perspective.tilt {
+                    perspective.tilt = Some(v);
+                }
+                if let Some(v) = window.perspective.skew {
+                    perspective.skew = Some(v);
+                }
+                if let Some(speed) = window.scroll_speed {
+                    scroll_speed = Some(speed);
+                }
+                if let Some(mini) = window.mini_percent.filter(|v| v.is_finite()) {
+                    mini_percent = Some(mini.clamp(-100.0, 150.0));
                 }
             }
         }
-        state.active_attack_accel_mask[player] = accel_mask;
-        state.active_attack_visual_mask[player] = visual_mask;
-        state.active_attack_appearance_mask[player] = appearance_mask;
-        state.active_attack_speed_multiplier[player] = speed_multiplier.max(0.01);
-        state.active_attack_mini_percent_delta[player] = mini_percent_delta.clamp(-100.0, 150.0);
+        state.active_attack_clear_all[player] = clear_all;
+        state.active_attack_chart[player] = chart;
+        state.active_attack_accel[player] = accel;
+        state.active_attack_visual[player] = visual;
+        state.active_attack_appearance[player] = appearance;
+        state.active_attack_visibility[player] = visibility;
+        state.active_attack_scroll[player] = scroll;
+        state.active_attack_perspective[player] = perspective;
+        state.active_attack_scroll_speed[player] = scroll_speed;
+        state.active_attack_mini_percent[player] = mini_percent;
+    }
+}
+
+#[inline(always)]
+fn merge_attack_value(base: f32, attack: Option<f32>) -> f32 {
+    attack.filter(|v| v.is_finite()).unwrap_or(base)
+}
+
+#[inline(always)]
+fn player_attack_base_cleared(state: &State, player_idx: usize) -> bool {
+    player_idx < state.num_players && state.active_attack_clear_all[player_idx]
+}
+
+#[inline(always)]
+pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> AccelEffects {
+    if player_idx >= state.num_players {
+        return AccelEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        AccelEffects::default()
+    } else {
+        AccelEffects::from_mask(profile::normalize_accel_effects_mask(
+            state.player_profiles[player_idx].accel_effects_active_mask,
+        ))
+    };
+    let attack = state.active_attack_accel[player_idx];
+    AccelEffects {
+        boost: merge_attack_value(base.boost, attack.boost),
+        brake: merge_attack_value(base.brake, attack.brake),
+        wave: merge_attack_value(base.wave, attack.wave),
+        expand: merge_attack_value(base.expand, attack.expand),
+        boomerang: merge_attack_value(base.boomerang, attack.boomerang),
+    }
+}
+
+#[inline(always)]
+pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> VisualEffects {
+    if player_idx >= state.num_players {
+        return VisualEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        VisualEffects::default()
+    } else {
+        VisualEffects::from_mask(profile::normalize_visual_effects_mask(
+            state.player_profiles[player_idx].visual_effects_active_mask,
+        ))
+    };
+    let attack = state.active_attack_visual[player_idx];
+    VisualEffects {
+        drunk: merge_attack_value(base.drunk, attack.drunk),
+        dizzy: merge_attack_value(base.dizzy, attack.dizzy),
+        confusion: merge_attack_value(base.confusion, attack.confusion),
+        big: base.big,
+        flip: merge_attack_value(base.flip, attack.flip),
+        invert: merge_attack_value(base.invert, attack.invert),
+        tornado: merge_attack_value(base.tornado, attack.tornado),
+        tipsy: merge_attack_value(base.tipsy, attack.tipsy),
+        bumpy: merge_attack_value(base.bumpy, attack.bumpy),
+        beat: merge_attack_value(base.beat, attack.beat),
+    }
+}
+
+#[inline(always)]
+pub fn effective_appearance_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> AppearanceEffects {
+    if player_idx >= state.num_players {
+        return AppearanceEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        AppearanceEffects::default()
+    } else {
+        AppearanceEffects::from_mask(profile::normalize_appearance_effects_mask(
+            state.player_profiles[player_idx].appearance_effects_active_mask,
+        ))
+    };
+    let attack = state.active_attack_appearance[player_idx];
+    AppearanceEffects {
+        hidden: merge_attack_value(base.hidden, attack.hidden),
+        sudden: merge_attack_value(base.sudden, attack.sudden),
+        stealth: merge_attack_value(base.stealth, attack.stealth),
+        blink: merge_attack_value(base.blink, attack.blink),
+        random_vanish: merge_attack_value(base.random_vanish, attack.random_vanish),
+    }
+}
+
+#[inline(always)]
+pub fn effective_visibility_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> VisibilityEffects {
+    if player_idx >= state.num_players {
+        return VisibilityEffects::default();
+    }
+    let attack = state.active_attack_visibility[player_idx];
+    VisibilityEffects {
+        dark: merge_attack_value(0.0, attack.dark),
+        blind: merge_attack_value(0.0, attack.blind),
+        cover: merge_attack_value(0.0, attack.cover),
+    }
+}
+
+#[inline(always)]
+pub fn active_chart_attack_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> ChartAttackEffects {
+    if player_idx >= state.num_players {
+        return ChartAttackEffects::default();
+    }
+    state.active_attack_chart[player_idx]
+}
+
+#[inline(always)]
+pub fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> ScrollEffects {
+    if player_idx >= state.num_players {
+        return ScrollEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        ScrollEffects::default()
+    } else {
+        ScrollEffects::from_option(state.player_profiles[player_idx].scroll_option)
+    };
+    let attack = state.active_attack_scroll[player_idx];
+    ScrollEffects {
+        reverse: merge_attack_value(base.reverse, attack.reverse),
+        split: merge_attack_value(base.split, attack.split),
+        alternate: merge_attack_value(base.alternate, attack.alternate),
+        cross: merge_attack_value(base.cross, attack.cross),
+        centered: merge_attack_value(base.centered, attack.centered),
+    }
+}
+
+#[inline(always)]
+pub fn effective_perspective_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> PerspectiveEffects {
+    if player_idx >= state.num_players {
+        return PerspectiveEffects::default();
+    }
+    let base = if player_attack_base_cleared(state, player_idx) {
+        PerspectiveEffects::default()
+    } else {
+        PerspectiveEffects::from_perspective(state.player_profiles[player_idx].perspective)
+    };
+    let attack = state.active_attack_perspective[player_idx];
+    PerspectiveEffects {
+        tilt: merge_attack_value(base.tilt, attack.tilt),
+        skew: merge_attack_value(base.skew, attack.skew),
     }
 }
 
 #[inline(always)]
 pub fn effective_visual_mask_for_player(state: &State, player_idx: usize) -> u16 {
-    if player_idx >= state.num_players {
-        return 0;
-    }
-    profile::normalize_visual_effects_mask(
-        state.player_profiles[player_idx].visual_effects_active_mask
-            | state.active_attack_visual_mask[player_idx],
-    )
+    effective_visual_effects_for_player(state, player_idx).to_mask()
 }
 
 #[inline(always)]
-pub fn effective_attack_speed_multiplier_for_player(state: &State, player_idx: usize) -> f32 {
-    if player_idx >= state.num_players {
-        return 1.0;
-    }
-    let speed = state.active_attack_speed_multiplier[player_idx];
-    if speed.is_finite() && speed > 0.0 {
-        speed
-    } else {
-        1.0
-    }
-}
-
-#[inline(always)]
-pub fn effective_attack_mini_percent_delta_for_player(state: &State, player_idx: usize) -> f32 {
+pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f32 {
     if player_idx >= state.num_players {
         return 0.0;
     }
-    let mini = state.active_attack_mini_percent_delta[player_idx];
-    if mini.is_finite() { mini } else { 0.0 }
-}
-
-#[inline(always)]
-fn with_attack_speed_multiplier(speed: ScrollSpeedSetting, multiplier: f32) -> ScrollSpeedSetting {
-    let mult = if multiplier.is_finite() && multiplier > 0.0 {
-        multiplier
-    } else {
-        1.0
-    };
-    match speed {
-        ScrollSpeedSetting::CMod(v) => ScrollSpeedSetting::CMod((v * mult).max(1.0)),
-        ScrollSpeedSetting::XMod(v) => ScrollSpeedSetting::XMod((v * mult).max(0.05)),
-        ScrollSpeedSetting::MMod(v) => ScrollSpeedSetting::MMod((v * mult).max(1.0)),
-    }
+    state.active_attack_mini_percent[player_idx]
+        .filter(|v| v.is_finite())
+        .unwrap_or_else(|| {
+            if player_attack_base_cleared(state, player_idx) {
+                0.0
+            } else {
+                state.player_profiles[player_idx].mini_percent as f32
+            }
+        })
 }
 
 #[inline(always)]
@@ -3893,10 +5170,98 @@ pub fn effective_scroll_speed_for_player(state: &State, player_idx: usize) -> Sc
     if player_idx >= state.num_players {
         return ScrollSpeedSetting::default();
     }
-    with_attack_speed_multiplier(
-        state.scroll_speed[player_idx],
-        effective_attack_speed_multiplier_for_player(state, player_idx),
-    )
+    state.active_attack_scroll_speed[player_idx].unwrap_or_else(|| {
+        if player_attack_base_cleared(state, player_idx) {
+            ScrollSpeedSetting::default()
+        } else {
+            state.scroll_speed[player_idx]
+        }
+    })
+}
+
+#[inline(always)]
+pub fn scroll_receptor_y(
+    reverse_percent: f32,
+    centered_percent: f32,
+    normal_y: f32,
+    reverse_y: f32,
+    centered_y: f32,
+) -> f32 {
+    let reverse_y = lerp(normal_y, reverse_y, reverse_percent.clamp(0.0, 1.0));
+    lerp(reverse_y, centered_y, centered_percent.clamp(0.0, 1.0))
+}
+
+fn refresh_live_notefield_options(state: &mut State, current_bpm: f32) {
+    for player in 0..state.num_players {
+        let scroll = effective_scroll_effects_for_player(state, player);
+        state.reverse_scroll[player] =
+            scroll.reverse_percent_for_column(0, state.cols_per_player) > 0.5;
+        let start = player.saturating_mul(state.cols_per_player);
+        let end = (start + state.cols_per_player)
+            .min(state.num_cols)
+            .min(MAX_COLS);
+        for (local_col, col) in (start..end).enumerate() {
+            state.column_scroll_dirs[col] =
+                scroll.reverse_scale_for_column(local_col, state.cols_per_player);
+        }
+    }
+    for player in 0..state.num_players {
+        let scroll_speed = effective_scroll_speed_for_player(state, player);
+        let mut dynamic_speed = scroll_speed.pixels_per_second(
+            current_bpm,
+            state.scroll_reference_bpm,
+            state.music_rate,
+        );
+        if !dynamic_speed.is_finite() || dynamic_speed <= 0.0 {
+            dynamic_speed = ScrollSpeedSetting::default().pixels_per_second(
+                current_bpm,
+                state.scroll_reference_bpm,
+                state.music_rate,
+            );
+        }
+        state.scroll_pixels_per_second[player] = dynamic_speed;
+
+        let scroll = effective_scroll_effects_for_player(state, player);
+        let visual_mask = effective_visual_mask_for_player(state, player);
+        let mini_percent = effective_mini_percent_for_player(state, player);
+        let mini = effective_mini_value_with_visual_mask(
+            &state.player_profiles[player],
+            visual_mask,
+            mini_percent,
+        );
+        let mut field_zoom = 1.0 - mini * 0.5;
+        if field_zoom.abs() < 0.01 {
+            field_zoom = 0.01;
+        }
+        state.field_zoom[player] = field_zoom;
+
+        let perspective = effective_perspective_effects_for_player(state, player);
+        let draw_scale = player_draw_scale_for_tilt_with_visual_mask(
+            perspective.tilt,
+            &state.player_profiles[player],
+            visual_mask,
+            mini_percent,
+        );
+        state.draw_distance_before_targets[player] =
+            screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
+        state.draw_distance_after_targets[player] = lerp(
+            DRAW_DISTANCE_AFTER_TARGETS * draw_scale,
+            screen_height() * 0.6 * draw_scale,
+            scroll.centered.clamp(0.0, 1.0),
+        );
+
+        let mut travel_time = scroll_speed.travel_time_seconds(
+            state.draw_distance_before_targets[player],
+            current_bpm,
+            state.scroll_reference_bpm,
+            state.music_rate,
+        );
+        if !travel_time.is_finite() || travel_time <= 0.0 {
+            travel_time =
+                state.draw_distance_before_targets[player] / dynamic_speed.max(f32::EPSILON);
+        }
+        state.scroll_travel_time[player] = travel_time;
+    }
 }
 
 #[inline(always)]
@@ -3922,9 +5287,35 @@ fn all_joined_players_failed(state: &State) -> bool {
     true
 }
 
+const TOGGLE_FLASH_DURATION: f32 = 1.5;
+const TOGGLE_FLASH_FADE_START: f32 = 0.8;
+
 #[inline(always)]
-pub fn assist_clap_is_enabled(state: &State) -> bool {
-    state.assist_clap_enabled
+pub fn timing_tick_status_line(state: &State) -> Option<&'static str> {
+    tick_mode_status_line(state.tick_mode)
+}
+
+pub fn toggle_flash_text(state: &State) -> Option<(&'static str, f32)> {
+    if state.toggle_flash_timer > 0.0 {
+        let age = TOGGLE_FLASH_DURATION - state.toggle_flash_timer;
+        let alpha = if age < TOGGLE_FLASH_FADE_START {
+            1.0
+        } else {
+            let fade_len = TOGGLE_FLASH_DURATION - TOGGLE_FLASH_FADE_START;
+            1.0 - ((age - TOGGLE_FLASH_FADE_START) / fade_len).clamp(0.0, 1.0)
+        };
+        state.toggle_flash_text.map(|t| (t, alpha))
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+pub fn display_clock_health(state: &State) -> DisplayClockHealth {
+    DisplayClockHealth {
+        error_seconds: state.display_clock.target_time_sec - state.display_clock.current_time_sec,
+        catching_up: state.display_clock.catching_up,
+    }
 }
 
 #[inline(always)]
@@ -4108,61 +5499,6 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
     points.drain(0..(first_visible - 1));
 }
 
-fn build_density_life_mesh(
-    points: &[[f32; 2]],
-    offset: f32,
-    width: f32,
-    thickness: f32,
-    color: [f32; 4],
-) -> Vec<MeshVertex> {
-    if points.len() < 2 || width <= 0.0_f32 || thickness <= 0.0_f32 {
-        return Vec::new();
-    }
-
-    let right = offset + width;
-    let start = points.partition_point(|p| p[0] < offset);
-    let end = points.partition_point(|p| p[0] <= right);
-    let visible = end.saturating_sub(start);
-    if visible < 2 {
-        return Vec::new();
-    }
-
-    let half = thickness * 0.5_f32;
-    let mut out: Vec<MeshVertex> = Vec::with_capacity((visible - 1) * 6);
-    let mut prev: Option<[f32; 2]> = None;
-    for i in start..end {
-        let p = [points[i][0] - offset, points[i][1]];
-        let Some(a) = prev else {
-            prev = Some(p);
-            continue;
-        };
-        let dx = p[0] - a[0];
-        let dy = p[1] - a[1];
-        let len_sq = dx.mul_add(dx, dy * dy);
-        if len_sq <= 0.000_000_01_f32 {
-            continue;
-        }
-        let inv_len = len_sq.sqrt().recip();
-        let nx = -dy * inv_len * half;
-        let ny = dx * inv_len * half;
-        let l0 = [a[0] + nx, a[1] + ny];
-        let r0 = [a[0] - nx, a[1] - ny];
-        let l1 = [p[0] + nx, p[1] + ny];
-        let r1 = [p[0] - nx, p[1] - ny];
-
-        out.push(MeshVertex { pos: l0, color });
-        out.push(MeshVertex { pos: r0, color });
-        out.push(MeshVertex { pos: l1, color });
-
-        out.push(MeshVertex { pos: r0, color });
-        out.push(MeshVertex { pos: r1, color });
-        out.push(MeshVertex { pos: l1, color });
-        prev = Some(p);
-    }
-
-    out
-}
-
 fn update_density_graph(
     state: &mut State,
     current_music_time: f32,
@@ -4295,18 +5631,14 @@ fn update_density_graph(
             }
 
             let mesh_started = Instant::now();
-            let verts = build_density_life_mesh(
+            density_graph::update_density_life_mesh(
+                &mut state.density_graph_life_mesh[player],
                 &state.density_graph_life_points[player],
                 offset_px_f,
                 graph_w,
                 2.0_f32,
                 [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
             );
-            state.density_graph_life_mesh[player] = if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            };
             add_elapsed_us(&mut phase_timings.density_life_mesh_us, mesh_started);
         } else {
             if should_clip {
@@ -4316,18 +5648,14 @@ fn update_density_graph(
                 state.density_graph_life_mesh[player] = None;
                 continue;
             }
-            let verts = build_density_life_mesh(
+            density_graph::update_density_life_mesh(
+                &mut state.density_graph_life_mesh[player],
                 &state.density_graph_life_points[player],
                 offset_px_f,
                 graph_w,
                 2.0_f32,
                 [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
             );
-            state.density_graph_life_mesh[player] = if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            };
         }
     }
 }
@@ -4402,7 +5730,10 @@ pub fn queue_input_edge(
     source: InputSource,
     lane: Lane,
     pressed: bool,
-    _timestamp: Instant,
+    timestamp: Instant,
+    timestamp_host_nanos: u64,
+    stored_at: Instant,
+    emitted_at: Instant,
 ) {
     if state.autoplay_enabled {
         return;
@@ -4432,14 +5763,147 @@ pub fn queue_input_edge(
         return;
     }
 
-    // Map this input edge directly into the gameplay music time using the
-    // audio device clock, so judgments are not tied to frame timing.
-    let event_music_time = current_music_time_from_stream(state);
-    push_input_edge(state, source, lane, pressed, event_music_time, true);
+    let queued_at = Instant::now();
+    push_input_edge_timed(
+        state,
+        source,
+        lane,
+        pressed,
+        timestamp,
+        timestamp_host_nanos,
+        stored_at,
+        emitted_at,
+        queued_at,
+        f32::NAN,
+        state.replay_capture_enabled,
+    );
+}
+
+#[inline(always)]
+pub fn set_replay_capture_enabled(state: &mut State, enabled: bool) {
+    state.replay_capture_enabled = enabled;
+}
+
+#[inline(always)]
+pub fn replay_capture_enabled(state: &State) -> bool {
+    state.replay_capture_enabled
 }
 
 #[inline(always)]
 fn current_music_time_from_stream(state: &State) -> f32 {
+    current_song_clock_snapshot(state).song_time
+}
+
+#[inline(always)]
+fn current_song_clock_snapshot(state: &State) -> SongClockSnapshot {
+    let stream_clock = audio::get_music_stream_clock_snapshot();
+    let fallback_rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    if stream_clock.has_music_mapping {
+        SongClockSnapshot {
+            song_time: stream_clock.music_seconds,
+            seconds_per_second: if stream_clock.music_seconds_per_second.is_finite()
+                && stream_clock.music_seconds_per_second > 0.0
+            {
+                stream_clock.music_seconds_per_second
+            } else {
+                fallback_rate
+            },
+            valid_at: stream_clock.valid_at,
+            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+        }
+    } else {
+        SongClockSnapshot {
+            song_time: stream_pos_to_music_time(state, stream_clock.stream_seconds),
+            seconds_per_second: fallback_rate,
+            valid_at: stream_clock.valid_at,
+            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
+        }
+    }
+}
+
+#[inline(always)]
+fn music_time_from_song_clock(
+    snapshot: SongClockSnapshot,
+    captured_at: Instant,
+    captured_host_nanos: u64,
+) -> f32 {
+    let slope = if snapshot.seconds_per_second.is_finite() && snapshot.seconds_per_second > 0.0 {
+        snapshot.seconds_per_second
+    } else {
+        1.0
+    };
+    if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
+        let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
+        return snapshot.song_time + (dt_nanos as f64 * 1e-9 * slope as f64) as f32;
+    }
+    if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at) {
+        snapshot.song_time - age.as_secs_f32() * slope
+    } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
+        snapshot.song_time + lead.as_secs_f32() * slope
+    } else {
+        snapshot.song_time
+    }
+}
+
+const DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S: f32 = 0.012;
+const DISPLAY_CLOCK_MAX_LAG_S: f32 = 0.020;
+const DISPLAY_CLOCK_MAX_LEAD_S: f32 = 0.006;
+const DISPLAY_CLOCK_RESET_ERROR_S: f32 = 0.100;
+const DISPLAY_CLOCK_MAX_STEP_S: f32 = 1.0 / 60.0;
+
+#[inline(always)]
+fn frame_stable_display_music_time(
+    display_clock: &mut FrameStableDisplayClock,
+    target_display_time_sec: f32,
+    delta_time: f32,
+    seconds_per_second: f32,
+    first_update: bool,
+) -> f32 {
+    display_clock.target_time_sec = target_display_time_sec;
+    if first_update
+        || !display_clock.current_time_sec.is_finite()
+        || !target_display_time_sec.is_finite()
+        || !delta_time.is_finite()
+        || delta_time <= 0.0
+    {
+        return display_clock.reset(target_display_time_sec);
+    }
+
+    let slope = if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
+        seconds_per_second
+    } else {
+        1.0
+    };
+    let previous_display_time_sec = display_clock.current_time_sec;
+    let max_error = DISPLAY_CLOCK_RESET_ERROR_S * slope;
+    if (target_display_time_sec - previous_display_time_sec).abs() > max_error {
+        return display_clock.reset(target_display_time_sec);
+    }
+
+    let advanced = previous_display_time_sec + delta_time * slope;
+    let correction_alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
+    let mut corrected = advanced + (target_display_time_sec - advanced) * correction_alpha;
+    let max_step = DISPLAY_CLOCK_MAX_STEP_S * slope;
+    let step = corrected - previous_display_time_sec;
+    if step.abs() > max_step * 1.2 {
+        corrected = previous_display_time_sec + step.signum() * max_step;
+    }
+    let min_allowed = target_display_time_sec - DISPLAY_CLOCK_MAX_LAG_S * slope;
+    let max_allowed = target_display_time_sec + DISPLAY_CLOCK_MAX_LEAD_S * slope;
+    let corrected = corrected
+        .clamp(min_allowed, max_allowed)
+        .max(previous_display_time_sec);
+    display_clock.current_time_sec = corrected;
+    display_clock.catching_up = (target_display_time_sec - corrected).abs() > max_step * 0.5;
+    corrected
+}
+
+#[inline(always)]
+fn stream_pos_to_music_time(state: &State, stream_pos: f32) -> f32 {
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -4447,8 +5911,30 @@ fn current_music_time_from_stream(state: &State) -> f32 {
     };
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let anchor = -state.global_offset_seconds;
-    let stream_pos = audio::get_music_stream_position_seconds();
     (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate))
+}
+
+#[inline(always)]
+fn stage_music_cut(lead_in_seconds: f32) -> audio::Cut {
+    audio::Cut {
+        start_sec: f64::from(-lead_in_seconds.max(0.0)),
+        length_sec: f64::INFINITY,
+        ..Default::default()
+    }
+}
+
+pub fn start_stage_music(state: &State) {
+    let Some(music_path) = state.song.music_path.as_ref() else {
+        return;
+    };
+    let lead_in = state.audio_lead_in_seconds.max(0.0);
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    debug!("Starting music with a preroll delay of {lead_in:.2}s");
+    audio::play_music(music_path.clone(), stage_music_cut(lead_in), false, rate);
 }
 
 #[inline(always)]
@@ -4460,6 +5946,36 @@ fn push_input_edge(
     event_music_time: f32,
     record_replay: bool,
 ) {
+    let now = Instant::now();
+    push_input_edge_timed(
+        state,
+        source,
+        lane,
+        pressed,
+        now,
+        0,
+        now,
+        now,
+        now,
+        event_music_time,
+        record_replay,
+    );
+}
+
+#[inline(always)]
+fn push_input_edge_timed(
+    state: &mut State,
+    source: InputSource,
+    lane: Lane,
+    pressed: bool,
+    captured_at: Instant,
+    captured_host_nanos: u64,
+    stored_at: Instant,
+    emitted_at: Instant,
+    queued_at: Instant,
+    event_music_time: f32,
+    record_replay: bool,
+) {
     if lane.index() >= state.num_cols {
         return;
     }
@@ -4467,6 +5983,12 @@ fn push_input_edge(
         lane,
         pressed,
         source,
+        record_replay,
+        captured_at,
+        captured_host_nanos,
+        stored_at,
+        emitted_at,
+        queued_at,
         event_music_time,
     });
     if log::log_enabled!(log::Level::Debug) {
@@ -4478,15 +6000,6 @@ fn push_input_edge(
             );
         }
     }
-    if !record_replay {
-        return;
-    }
-    state.replay_edges.push(RecordedLaneEdge {
-        lane_index: lane.index() as u8,
-        pressed,
-        source,
-        event_music_time,
-    });
 }
 
 #[inline(always)]
@@ -4567,13 +6080,14 @@ fn upper_density_graph_width(play_style: profile::PlayStyle) -> f32 {
 pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
+    gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
     mut player_profiles: [profile::Profile; MAX_PLAYERS],
     replay_edges: Option<Vec<ReplayInputEdge>>,
     replay_offsets: Option<ReplayOffsetSnapshot>,
-    replay_status_text: Option<String>,
+    replay_status_text: Option<Arc<str>>,
     stage_intro_text: Arc<str>,
     lead_in_timing: Option<LeadInTiming>,
     course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
@@ -4581,6 +6095,7 @@ pub fn init(
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
     debug!("Initializing Gameplay Screen...");
+    let init_started = Instant::now();
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {
@@ -4596,10 +6111,12 @@ pub fn init(
     };
     let replay_edges = replay_edges.unwrap_or_default();
     let mut charts = charts;
+    let mut gameplay_charts = gameplay_charts;
     if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
         scroll_speed[0] = scroll_speed[1];
         player_profiles[0] = player_profiles[1].clone();
         charts[0] = charts[1].clone();
+        gameplay_charts[0] = gameplay_charts[1].clone();
         combo_carry[0] = combo_carry[1];
     }
     let player_color_index =
@@ -4614,13 +6131,21 @@ pub fn init(
         num_players: 1,
     };
 
-    let noteskin: [Option<Noteskin>; MAX_PLAYERS] = std::array::from_fn(|player| {
+    let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return None;
         }
         let skin = player_profiles[player].noteskin.to_string();
-        noteskin::load_itg_skin(&style, &skin).ok()
+        noteskin::load_itg_skin_cached(&style, &skin).ok()
     });
+    let notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            RefCell::new(if player < num_players {
+                ModelMeshCache::with_capacity(96)
+            } else {
+                ModelMeshCache::default()
+            })
+        });
 
     let field_zoom: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -4653,11 +6178,11 @@ pub fn init(
             .find(|p| p.group_name == pack_group.as_ref())
             .and_then(|p| p.banner_path.clone())
     };
-    let mut timing_base = charts[0].timing.clone();
+    let mut timing_base = gameplay_charts[0].timing.clone();
     timing_base.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing_base);
     let mut timing_players: [Arc<TimingData>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        let mut t = charts[player].timing.clone();
+        let mut t = gameplay_charts[player].timing.clone();
         t.set_global_offset_seconds(config.global_offset_seconds);
         Arc::new(t)
     });
@@ -4715,9 +6240,11 @@ pub fn init(
         );
     }
     let beat_info_cache = BeatInfoCache::new(&timing);
+    let setup_ms = init_started.elapsed().as_secs_f64() * 1000.0;
 
+    let note_build_started = Instant::now();
     let notes_cap: usize = (0..num_players)
-        .map(|player| charts[player].parsed_notes.len())
+        .map(|player| gameplay_charts[player].parsed_notes.len())
         .sum();
     let mut notes: Vec<Note> = Vec::with_capacity(notes_cap);
     let mut note_ranges = [(0usize, 0usize); MAX_PLAYERS];
@@ -4728,7 +6255,7 @@ pub fn init(
 
     for player in 0..num_players {
         let timing_player = &timing_players[player];
-        let parsed_notes = &charts[player].parsed_notes;
+        let parsed_notes = &gameplay_charts[player].parsed_notes;
         let start = notes.len();
         let col_offset = player.saturating_mul(cols_per_player);
         for parsed in parsed_notes {
@@ -4762,7 +6289,7 @@ pub fn init(
                     NoteType::Mine => {
                         mines_total[player] = mines_total[player].saturating_add(1);
                     }
-                    NoteType::Tap => {}
+                    NoteType::Tap | NoteType::Lift => {}
                     NoteType::Fake => {}
                 }
             }
@@ -4801,7 +6328,9 @@ pub fn init(
         let end = notes.len();
         note_ranges[player] = (start, end);
     }
+    let note_build_ms = note_build_started.elapsed().as_secs_f64() * 1000.0;
 
+    let transform_started = Instant::now();
     apply_uncommon_chart_transforms(
         &mut notes,
         &mut note_ranges,
@@ -4827,7 +6356,7 @@ pub fn init(
     apply_chart_attacks_transforms(
         &mut notes,
         &mut note_ranges,
-        &charts,
+        &gameplay_charts,
         cols_per_player,
         num_players,
         &player_profiles,
@@ -4836,17 +6365,64 @@ pub fn init(
         attack_song_length_seconds,
     );
 
-    let mut total_steps = [0u32; MAX_PLAYERS];
-    holds_total = [0; MAX_PLAYERS];
-    rolls_total = [0; MAX_PLAYERS];
-    mines_total = [0; MAX_PLAYERS];
+    let mut score_valid = [true; MAX_PLAYERS];
     for player in 0..num_players {
-        let (steps, holds, rolls, mines) = recompute_player_totals(&notes, note_ranges[player]);
-        total_steps[player] = steps;
-        holds_total[player] = holds;
-        rolls_total[player] = rolls;
-        mines_total[player] = mines;
+        score_valid[player] = score_valid_for_chart(
+            &charts[player],
+            &player_profiles[player],
+            scroll_speed[player],
+            rate,
+        );
     }
+
+    let chart_layout_changed = (0..num_players)
+        .any(|player| player_changes_chart(&gameplay_charts[player], &player_profiles[player]));
+    let mut total_steps = [0u32; MAX_PLAYERS];
+    let mut jumps_total = [0u32; MAX_PLAYERS];
+    let mut hands_total = [0u32; MAX_PLAYERS];
+    let mut possible_grade_points = [0i32; MAX_PLAYERS];
+    if chart_layout_changed {
+        holds_total = [0; MAX_PLAYERS];
+        rolls_total = [0; MAX_PLAYERS];
+        mines_total = [0; MAX_PLAYERS];
+        for player in 0..num_players {
+            let totals = recompute_player_totals(&notes, note_ranges[player]);
+            total_steps[player] = totals.steps;
+            holds_total[player] = totals.holds;
+            rolls_total[player] = totals.rolls;
+            mines_total[player] = totals.mines;
+            jumps_total[player] = totals.jumps;
+            hands_total[player] = totals.hands;
+            possible_grade_points[player] = compute_possible_grade_points(
+                &notes,
+                note_ranges[player],
+                holds_total[player],
+                rolls_total[player],
+            );
+        }
+    } else {
+        for player in 0..num_players {
+            total_steps[player] = charts[player].stats.total_steps;
+            holds_total[player] = charts[player].holds_total;
+            rolls_total[player] = charts[player].rolls_total;
+            mines_total[player] = charts[player].mines_total;
+            jumps_total[player] = charts[player].stats.jumps;
+            hands_total[player] = charts[player].stats.hands;
+            possible_grade_points[player] = charts[player].possible_grade_points;
+        }
+    }
+    if num_players == 1 {
+        possible_grade_points[1] = possible_grade_points[0];
+        holds_total[1] = holds_total[0];
+        rolls_total[1] = rolls_total[0];
+        mines_total[1] = mines_total[0];
+        total_steps[1] = total_steps[0];
+        jumps_total[1] = jumps_total[0];
+        hands_total[1] = hands_total[0];
+        score_valid[1] = score_valid[0];
+        note_ranges[1] = note_ranges[0];
+    }
+    let transform_ms = transform_started.elapsed().as_secs_f64() * 1000.0;
 
     let note_player_for_col = |col: usize| -> usize {
         if num_players <= 1 || cols_per_player == 0 {
@@ -4856,96 +6432,60 @@ pub fn init(
         }
     };
 
-    let note_time_cache: Vec<f32> = notes
-        .iter()
-        .map(|n| timing_players[note_player_for_col(n.column)].get_time_for_beat(n.beat))
-        .collect();
-    let note_display_beat_cache: Vec<f32> = notes
-        .iter()
-        .map(|n| timing_players[note_player_for_col(n.column)].get_displayed_beat(n.beat))
-        .collect();
-    let hold_end_time_cache: Vec<Option<f32>> = notes
-        .iter()
-        .map(|n| {
-            n.hold.as_ref().map(|h| {
-                timing_players[note_player_for_col(n.column)].get_time_for_beat(h.end_beat)
-            })
-        })
-        .collect();
-    let hold_end_display_beat_cache: Vec<Option<f32>> = notes
-        .iter()
-        .map(|n| {
-            n.hold.as_ref().map(|h| {
-                timing_players[note_player_for_col(n.column)].get_displayed_beat(h.end_beat)
-            })
-        })
-        .collect();
-
-    let mut possible_grade_points = [0i32; MAX_PLAYERS];
-    for player in 0..num_players {
-        possible_grade_points[player] = compute_possible_grade_points(
-            &notes,
-            note_ranges[player],
-            holds_total[player],
-            rolls_total[player],
-        );
-    }
-    if num_players == 1 {
-        possible_grade_points[1] = possible_grade_points[0];
-        holds_total[1] = holds_total[0];
-        rolls_total[1] = rolls_total[0];
-        mines_total[1] = mines_total[0];
-        total_steps[1] = total_steps[0];
-        note_ranges[1] = note_ranges[0];
+    let cache_build_started = Instant::now();
+    let mut note_time_cache = Vec::with_capacity(notes.len());
+    let mut note_display_beat_cache = Vec::with_capacity(notes.len());
+    let mut hold_end_time_cache = Vec::with_capacity(notes.len());
+    let mut hold_end_display_beat_cache = Vec::with_capacity(notes.len());
+    for note in &notes {
+        let timing_player = &timing_players[note_player_for_col(note.column)];
+        note_time_cache.push(timing_player.get_time_for_beat(note.beat));
+        note_display_beat_cache.push(timing_player.get_displayed_beat(note.beat));
+        if let Some(hold) = note.hold.as_ref() {
+            hold_end_time_cache.push(Some(timing_player.get_time_for_beat(hold.end_beat)));
+            hold_end_display_beat_cache.push(Some(timing_player.get_displayed_beat(hold.end_beat)));
+        } else {
+            hold_end_time_cache.push(None);
+            hold_end_display_beat_cache.push(None);
+        }
     }
 
     debug!("Parsed {} notes from chart data.", notes.len());
 
-    let mut row_map: HashMap<usize, Vec<usize>> = HashMap::new();
-    for (i, n) in notes.iter().enumerate() {
-        if matches!(n.note_type, NoteType::Mine) {
-            continue;
-        }
-        if !n.can_be_judged {
-            continue;
-        }
-        row_map.entry(n.row_index).or_default().push(i);
-    }
-    let mut row_entries: Vec<RowEntry> = row_map
-        .into_iter()
-        .map(|(row_index, nonmine_note_indices)| RowEntry {
-            row_index,
-            nonmine_note_indices,
-        })
-        .collect();
-    row_entries.sort_by_key(|e| e.row_index);
-
-    // Build optimized O(1) lookup table for row entries
+    let mut row_entries: Vec<RowEntry> = Vec::with_capacity(notes.len() / 2);
     let mut row_map_cache = vec![u32::MAX; max_row_index + 1];
-    for (pos, entry) in row_entries.iter().enumerate() {
-        if entry.row_index < row_map_cache.len() {
-            row_map_cache[entry.row_index] = pos as u32;
-        }
-    }
-    let mut row_hold_roll_flags: HashMap<usize, u8> = HashMap::new();
-    for note in &notes {
-        let flag = match note.note_type {
-            NoteType::Hold => 0b01,
-            NoteType::Roll => 0b10,
-            _ => 0,
-        };
-        if flag != 0 {
-            *row_hold_roll_flags.entry(note.row_index).or_insert(0) |= flag;
-        }
-    }
     let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
-    for (idx, note) in notes.iter().enumerate() {
-        tap_row_hold_roll_flags[idx] = row_hold_roll_flags
-            .get(&note.row_index)
-            .copied()
-            .unwrap_or(0);
+    let mut cursor = 0usize;
+    while cursor < notes.len() {
+        let row_index = notes[cursor].row_index;
+        let row_start = cursor;
+        let mut row_flags = 0u8;
+        let mut nonmine_note_indices = Vec::with_capacity(4);
+        while cursor < notes.len() && notes[cursor].row_index == row_index {
+            let note = &notes[cursor];
+            match note.note_type {
+                NoteType::Hold => row_flags |= 0b01,
+                NoteType::Roll => row_flags |= 0b10,
+                _ => {}
+            }
+            if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+                nonmine_note_indices.push(cursor);
+            }
+            cursor += 1;
+        }
+        if !nonmine_note_indices.is_empty() {
+            let row_entry_index = row_entries.len() as u32;
+            row_map_cache[row_index] = row_entry_index;
+            row_entries.push(RowEntry {
+                row_index,
+                nonmine_note_indices,
+            });
+        }
+        tap_row_hold_roll_flags[row_start..cursor].fill(row_flags);
     }
+    let cache_build_ms = cache_build_started.elapsed().as_secs_f64() * 1000.0;
 
+    let timing_prep_started = Instant::now();
     let first_second = notes
         .iter()
         .zip(&note_time_cache)
@@ -4965,15 +6505,6 @@ pub fn init(
     }
     if start_delay < 0.0 {
         start_delay = 0.0;
-    }
-    if let Some(music_path) = &song.music_path {
-        debug!("Starting music with a preroll delay of {start_delay:.2}s");
-        let cut = audio::Cut {
-            start_sec: f64::from(-start_delay),
-            length_sec: f64::INFINITY,
-            ..Default::default()
-        };
-        audio::play_music(music_path.clone(), cut, false, rate.max(0.01));
     }
 
     let first_note_beat = timing.get_beat_for_time(first_second);
@@ -5067,17 +6598,29 @@ pub fn init(
     }
     let next_mine_ix_cursor: [usize; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let mut arrow_capacity = [0usize; MAX_COLS];
+    let mut replay_cells = 0usize;
     for note in &notes {
         let col = note.column;
         if col < num_cols && col < MAX_COLS {
             arrow_capacity[col] = arrow_capacity[col].saturating_add(1);
         }
+        if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+            replay_cells = replay_cells.saturating_add(1);
+        }
     }
-    let pending_edges_capacity = (num_cols * 16).max(32);
+    let pending_edges_capacity = input_queue_cap(num_cols);
+    let replay_seconds = (music_end_time + start_delay).max(notes_end_time + start_delay);
+    let replay_capture_enabled = !replay_mode && config.machine_enable_replays;
+    let replay_edges_capacity = [
+        0,
+        replay_edge_cap(num_cols, replay_cells, replay_mode, replay_seconds),
+    ][replay_capture_enabled as usize];
     let decaying_hold_capacity = (0..num_players).fold(0usize, |acc, player| {
         acc.saturating_add(holds_total[player] as usize + rolls_total[player] as usize)
     });
+    let timing_prep_ms = timing_prep_started.elapsed().as_secs_f64() * 1000.0;
 
+    let hud_prep_started = Instant::now();
     let global_visual_delay_seconds = config.visual_delay_seconds;
     let player_visual_delay_seconds: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -5087,6 +6630,7 @@ pub fn init(
         ms as f32 / 1000.0
     });
     let init_music_time = -start_delay;
+    let init_beat = timing.get_beat_for_time(init_music_time);
     let current_music_time_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         init_music_time - global_visual_delay_seconds - player_visual_delay_seconds[player]
     });
@@ -5097,8 +6641,11 @@ pub fn init(
         if player >= num_players {
             return Vec::new();
         }
+        if player_profiles[player].attack_mode == profile::AttackMode::Off {
+            return Vec::new();
+        }
         build_attack_mask_windows_for_player(
-            charts[player].chart_attacks.as_deref(),
+            gameplay_charts[player].chart_attacks.as_deref(),
             player_profiles[player].attack_mode,
             player,
             song_seed,
@@ -5113,6 +6660,9 @@ pub fn init(
     });
     let mut column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
     for player in 0..num_players {
+        if !player_profiles[player].column_cues {
+            continue;
+        }
         let col_start = player.saturating_mul(cols_per_player);
         let col_end = (col_start + cols_per_player).min(num_cols);
         column_cues[player] = build_column_cues_for_player(
@@ -5129,10 +6679,10 @@ pub fn init(
     }
 
     let measure_densities: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if p >= num_players {
+        if p >= num_players || !needs_stream_data(&player_profiles[p]) {
             return Vec::new();
         }
-        rssp::stats::measure_densities(&charts[p].notes, cols_per_player)
+        rssp::stats::measure_densities(&gameplay_charts[p].notes, cols_per_player)
     });
 
     let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] = std::array::from_fn(|p| {
@@ -5152,6 +6702,9 @@ pub fn init(
     let mut mini_indicator_rival_score_percent = [0.0_f64; MAX_PLAYERS];
 
     for p in 0..num_players {
+        if mini_indicator_mode(&player_profiles[p]) == profile::MiniIndicator::None {
+            continue;
+        }
         let constant_bpm = !timing_players[p].has_bpm_changes();
         let (stream_segments, total_stream, _total_break) =
             zmod_stream_totals_full_measures(&measure_densities[p], constant_bpm);
@@ -5199,7 +6752,9 @@ pub fn init(
                 SCOREBOX_NUM_ENTRIES,
             );
     }
+    let hud_prep_ms = hud_prep_started.elapsed().as_secs_f64() * 1000.0;
 
+    let graph_prep_started = Instant::now();
     let wants_step_stats = player_profiles
         .iter()
         .take(num_players)
@@ -5220,10 +6775,13 @@ pub fn init(
     let density_graph_graph_w = if density_graph_enabled {
         let mut sidepane_width = sw * 0.5_f32;
         if !is_ultrawide && note_field_is_centered && wide {
-            let nf_width =
-                step_stats_notefield_width(noteskin[0].as_ref(), cols_per_player, field_zoom[0])
-                    .unwrap_or(256.0_f32)
-                    .max(1.0_f32);
+            let nf_width = step_stats_notefield_width(
+                noteskin[0].as_ref().map(Arc::as_ref),
+                cols_per_player,
+                field_zoom[0],
+            )
+            .unwrap_or(256.0_f32)
+            .max(1.0_f32);
             sidepane_width = ((sw - nf_width) * 0.5_f32).max(1.0_f32);
         }
         if is_ultrawide && num_players > 1 {
@@ -5287,19 +6845,20 @@ pub fn init(
                 return None;
             }
             let chart = charts[p].as_ref();
-            let verts = crate::screens::components::density_graph::build_density_histogram_mesh(
-                &chart.measure_nps_vec,
-                chart.max_nps,
-                &timing,
-                density_graph_first_second,
-                density_graph_last_second,
-                graph_w,
-                graph_h,
-                0.0,
-                graph_w,
-                None,
-                1.0,
-            );
+            let verts =
+                crate::screens::components::shared::density_graph::build_density_histogram_mesh(
+                    &chart.measure_nps_vec,
+                    chart.max_nps,
+                    &chart.measure_seconds_vec,
+                    density_graph_first_second,
+                    density_graph_last_second,
+                    graph_w,
+                    graph_h,
+                    0.0,
+                    graph_w,
+                    None,
+                    1.0,
+                );
             if verts.is_empty() {
                 None
             } else {
@@ -5312,10 +6871,10 @@ pub fn init(
             return None;
         }
         let chart = charts[p].as_ref();
-        crate::screens::components::density_graph::build_density_histogram_cache(
+        crate::screens::components::shared::density_graph::build_density_histogram_cache(
             &chart.measure_nps_vec,
             chart.max_nps,
-            &timing,
+            &chart.measure_seconds_vec,
             density_graph_first_second,
             density_graph_last_second,
             density_graph_scaled_width,
@@ -5365,7 +6924,9 @@ pub fn init(
         std::array::from_fn(|_| None);
     let density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let density_graph_life_dirty: [bool; MAX_PLAYERS] = [false; MAX_PLAYERS];
+    let graph_prep_ms = graph_prep_started.elapsed().as_secs_f64() * 1000.0;
 
+    let finalize_started = Instant::now();
     let mut players = std::array::from_fn(|_| init_player_runtime());
     for p in 0..num_players {
         if player_profiles[p].carry_combo_between_songs && !replay_mode {
@@ -5376,6 +6937,11 @@ pub fn init(
     }
     let assist_clap_rows = build_assist_clap_rows(&notes, note_ranges[0]);
     let song_offset_seconds = song.offset;
+    let next_background_change_ix = song
+        .background_changes
+        .iter()
+        .take_while(|change| change.start_beat <= init_beat)
+        .count();
 
     let mut state = State {
         song,
@@ -5383,7 +6949,10 @@ pub fn init(
         stage_intro_text,
         pack_group,
         pack_banner_path,
+        current_background_path: None,
+        next_background_change_ix,
         charts,
+        gameplay_charts,
         background_texture_key: "__black".to_string(),
         num_cols,
         cols_per_player,
@@ -5395,8 +6964,11 @@ pub fn init(
         notes,
         note_ranges,
         audio_lead_in_seconds: start_delay,
-        current_beat: 0.0,
-        current_music_time: -start_delay,
+        current_beat: init_beat,
+        current_music_time: init_music_time,
+        current_beat_display: init_beat,
+        current_music_time_display: init_music_time,
+        display_clock: FrameStableDisplayClock::new(init_music_time),
         note_spawn_cursor: note_range_start,
         judged_row_cursor: [0; MAX_PLAYERS],
         arrows: std::array::from_fn(|col| {
@@ -5451,7 +7023,9 @@ pub fn init(
         song_completed_naturally: false,
         autoplay_enabled: replay_mode,
         autoplay_used: replay_mode,
+        score_valid,
         replay_mode,
+        replay_capture_enabled,
         course_display_carry,
         course_display_totals,
         live_window_counts: [crate::game::timing::WindowCounts::default(); MAX_PLAYERS],
@@ -5461,17 +7035,23 @@ pub fn init(
         player_profiles,
         scorebox_side_snapshot,
         attack_mask_windows,
-        active_attack_accel_mask: [0; MAX_PLAYERS],
-        active_attack_visual_mask: [0; MAX_PLAYERS],
-        active_attack_appearance_mask: [0; MAX_PLAYERS],
-        active_attack_speed_multiplier: [1.0; MAX_PLAYERS],
-        active_attack_mini_percent_delta: [0.0; MAX_PLAYERS],
+        active_attack_clear_all: [false; MAX_PLAYERS],
+        active_attack_chart: [ChartAttackEffects::default(); MAX_PLAYERS],
+        active_attack_accel: [AccelOverrides::default(); MAX_PLAYERS],
+        active_attack_visual: [VisualOverrides::default(); MAX_PLAYERS],
+        active_attack_appearance: [AppearanceOverrides::default(); MAX_PLAYERS],
+        active_attack_visibility: [VisibilityOverrides::default(); MAX_PLAYERS],
+        active_attack_scroll: [ScrollOverrides::default(); MAX_PLAYERS],
+        active_attack_perspective: [PerspectiveOverrides::default(); MAX_PLAYERS],
+        active_attack_scroll_speed: [None; MAX_PLAYERS],
+        active_attack_mini_percent: [None; MAX_PLAYERS],
         noteskin,
         active_color_index,
         player_color: color::decorative_rgba(player_color_index),
         scroll_speed,
         scroll_reference_bpm: reference_bpm,
         field_zoom,
+        notefield_model_cache,
         scroll_pixels_per_second: pixels_per_second,
         scroll_travel_time: travel_time,
         draw_distance_before_targets,
@@ -5490,6 +7070,8 @@ pub fn init(
         rolls_total,
         mines_total,
         total_steps,
+        jumps_total,
+        hands_total,
         total_elapsed_in_screen: 0.0,
         sync_overlay_message: None,
         replay_status_text,
@@ -5519,27 +7101,53 @@ pub fn init(
         hold_to_exit_start: None,
         hold_to_exit_aborted_at: None,
         exit_transition: None,
+        shift_held: false,
+        ctrl_held: false,
+        offset_adjust_held_since: [None; 2],
+        offset_adjust_last_at: [None; 2],
         prev_inputs: [false; MAX_COLS],
-        keyboard_lane_state: [false; MAX_COLS],
-        gamepad_lane_state: [false; MAX_COLS],
+        keyboard_lane_counts: [0; MAX_COLS],
+        gamepad_lane_counts: [0; MAX_COLS],
         pending_edges: VecDeque::with_capacity(pending_edges_capacity),
         autoplay_rng: TurnRng::new(song_seed ^ 0xA0A7_0F8A_1A2B_3C4D),
         autoplay_cursor: note_range_start,
         autoplay_pending_row: [None; MAX_PLAYERS],
         autoplay_lane_state: [false; MAX_COLS],
         autoplay_hold_release_time: [None; MAX_COLS],
-        assist_clap_enabled: false,
+        tick_mode: profile::get_session_timing_tick_mode(),
         assist_clap_rows,
         assist_clap_cursor: 0,
         assist_last_crossed_row: -1,
+        toggle_flash_text: None,
+        toggle_flash_timer: 0.0,
         replay_input,
         replay_cursor: 0,
-        replay_edges: Vec::with_capacity(4096),
-        log_timer: 0.0,
+        replay_edges: Vec::with_capacity(replay_edges_capacity),
         update_trace: GameplayUpdateTraceState::default(),
     };
     state.update_trace = GameplayUpdateTraceState::from_state(&state);
     refresh_active_attack_masks(&mut state);
+    let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
+    refresh_live_notefield_options(&mut state, current_bpm);
+    let finalize_ms = finalize_started.elapsed().as_secs_f64() * 1000.0;
+    let total_ms = init_started.elapsed().as_secs_f64() * 1000.0;
+    if total_ms >= 50.0 {
+        info!(
+            "Gameplay init timing: song='{}' notes={} players={} density_graph={} setup_ms={setup_ms:.3} note_build_ms={note_build_ms:.3} transform_ms={transform_ms:.3} cache_ms={cache_build_ms:.3} timing_ms={timing_prep_ms:.3} hud_ms={hud_prep_ms:.3} graph_ms={graph_prep_ms:.3} finalize_ms={finalize_ms:.3} elapsed_ms={total_ms:.3}",
+            state.song.title,
+            state.notes.len(),
+            state.num_players,
+            density_graph_enabled,
+        );
+    } else {
+        debug!(
+            "Gameplay init timing: song='{}' notes={} players={} density_graph={} setup_ms={setup_ms:.3} note_build_ms={note_build_ms:.3} transform_ms={transform_ms:.3} cache_ms={cache_build_ms:.3} timing_ms={timing_prep_ms:.3} hud_ms={hud_prep_ms:.3} graph_ms={graph_prep_ms:.3} finalize_ms={finalize_ms:.3} elapsed_ms={total_ms:.3}",
+            state.song.title,
+            state.notes.len(),
+            state.num_players,
+            density_graph_enabled,
+        );
+    }
     state
 }
 
@@ -5662,9 +7270,15 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
             holds_held_for_score: previous
                 .holds_held_for_score
                 .saturating_add(p.holds_held_for_score),
+            holds_let_go_for_score: previous
+                .holds_let_go_for_score
+                .saturating_add(p.holds_let_go_for_score),
             rolls_held_for_score: previous
                 .rolls_held_for_score
                 .saturating_add(p.rolls_held_for_score),
+            rolls_let_go_for_score: previous
+                .rolls_let_go_for_score
+                .saturating_add(p.rolls_let_go_for_score),
             mines_hit_for_score: previous
                 .mines_hit_for_score
                 .saturating_add(p.mines_hit_for_score),
@@ -5677,7 +7291,7 @@ pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MA
 }
 
 #[inline(always)]
-fn display_carry_for_player(state: &State, player_idx: usize) -> CourseDisplayCarry {
+pub fn display_carry_for_player(state: &State, player_idx: usize) -> CourseDisplayCarry {
     if player_idx >= MAX_PLAYERS {
         return CourseDisplayCarry::default();
     }
@@ -5807,7 +7421,7 @@ fn float_match(a: f32, b: f32) -> bool {
 }
 
 #[inline(always)]
-fn display_totals_for_player(state: &State, player_idx: usize) -> CourseDisplayTotals {
+pub fn display_totals_for_player(state: &State, player_idx: usize) -> CourseDisplayTotals {
     if player_idx >= MAX_PLAYERS {
         return CourseDisplayTotals::default();
     }
@@ -5914,110 +7528,61 @@ pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
 }
 
 #[inline(always)]
-fn ex_score_from_components(
-    counts: crate::game::timing::WindowCounts,
-    holds_held: u32,
-    mines_hit: u32,
-    total_steps: u32,
-    holds_total: u32,
-    rolls_total: u32,
-    mines_total: u32,
-) -> f64 {
-    if total_steps == 0 {
-        return 0.0;
-    }
-    let total_possible = f64::from(total_steps).mul_add(3.5, f64::from(holds_total + rolls_total));
-    if total_possible <= 0.0 {
-        return 0.0;
-    }
-    let mines_effective = mines_hit.min(mines_total);
-    let total_points = f64::from(counts.w0) * 3.5
-        + f64::from(counts.w1) * 3.0
-        + f64::from(counts.w2) * 2.0
-        + f64::from(counts.w3)
-        + f64::from(holds_held)
-        - f64::from(mines_effective);
-    ((total_points / total_possible).max(0.0) * 10000.0).floor() / 100.0
+fn scored_hold_totals_with_carry(
+    held: u32,
+    let_go: u32,
+    carry_held: u32,
+    carry_let_go: u32,
+) -> (u32, u32) {
+    let held_total = held.saturating_add(carry_held);
+    let resolved_total = held_total
+        .saturating_add(let_go)
+        .saturating_add(carry_let_go);
+    (held_total, resolved_total)
 }
 
-#[inline(always)]
-fn hard_ex_score_from_components(
-    counts: crate::game::timing::WindowCounts,
-    counts_10ms: crate::game::timing::WindowCounts,
-    holds_held: u32,
-    mines_hit: u32,
-    total_steps: u32,
-    holds_total: u32,
-    rolls_total: u32,
-    mines_total: u32,
-) -> f64 {
-    if total_steps == 0 {
-        return 0.0;
+pub(crate) fn display_ex_score_data(state: &State, player_idx: usize) -> judgment::ExScoreData {
+    if player_idx >= state.num_players {
+        return judgment::ExScoreData::default();
     }
-    let total_possible = f64::from(total_steps).mul_add(3.5, f64::from(holds_total + rolls_total));
-    if total_possible <= 0.0 {
-        return 0.0;
+    let player = &state.players[player_idx];
+    let carry = display_carry_for_player(state, player_idx);
+    let totals = display_totals_for_player(state, player_idx);
+    let (holds_held, holds_resolved) = scored_hold_totals_with_carry(
+        player.holds_held_for_score,
+        player.holds_let_go_for_score,
+        carry.holds_held_for_score,
+        carry.holds_let_go_for_score,
+    );
+    let (rolls_held, rolls_resolved) = scored_hold_totals_with_carry(
+        player.rolls_held_for_score,
+        player.rolls_let_go_for_score,
+        carry.rolls_held_for_score,
+        carry.rolls_let_go_for_score,
+    );
+    judgment::ExScoreData {
+        counts: display_window_counts(state, player_idx, None),
+        counts_10ms: display_window_counts_10ms(state, player_idx),
+        holds_held,
+        holds_resolved,
+        rolls_held,
+        rolls_resolved,
+        mines_hit: player
+            .mines_hit_for_score
+            .saturating_add(carry.mines_hit_for_score),
+        total_steps: totals.total_steps,
+        holds_total: totals.holds_total,
+        rolls_total: totals.rolls_total,
+        mines_total: totals.mines_total,
     }
-    let w010 = counts_10ms.w0;
-    let fantastic_total = counts.w0.saturating_add(counts.w1);
-    let w110 = fantastic_total.saturating_sub(w010);
-    let mines_effective = mines_hit.min(mines_total);
-    let total_points = f64::from(w010) * 3.5
-        + f64::from(w110) * 3.0
-        + f64::from(counts.w2)
-        + f64::from(holds_held)
-        - f64::from(mines_effective);
-    ((total_points / total_possible).max(0.0) * 10000.0).floor() / 100.0
 }
 
 pub fn display_ex_score_percent(state: &State, player_idx: usize) -> f64 {
-    if player_idx >= state.num_players {
-        return 0.0;
-    }
-    let carry = display_carry_for_player(state, player_idx);
-    let counts = display_window_counts(state, player_idx, None);
-    let holds_held = state.players[player_idx]
-        .holds_held_for_score
-        .saturating_add(carry.holds_held_for_score);
-    let mines_hit = state.players[player_idx]
-        .mines_hit_for_score
-        .saturating_add(carry.mines_hit_for_score);
-    let totals = display_totals_for_player(state, player_idx);
-    ex_score_from_components(
-        counts,
-        holds_held,
-        mines_hit,
-        totals.total_steps,
-        totals.holds_total,
-        totals.rolls_total,
-        totals.mines_total,
-    )
+    judgment::ex_score_percent(&display_ex_score_data(state, player_idx))
 }
 
 pub fn display_hard_ex_score_percent(state: &State, player_idx: usize) -> f64 {
-    if player_idx >= state.num_players {
-        return 0.0;
-    }
-    let carry = display_carry_for_player(state, player_idx);
-    let counts = display_window_counts(state, player_idx, None);
-    let counts_10ms = display_window_counts_10ms(state, player_idx);
-    let holds_held = state.players[player_idx]
-        .holds_held_for_score
-        .saturating_add(carry.holds_held_for_score);
-    let mines_hit = state.players[player_idx]
-        .mines_hit_for_score
-        .saturating_add(carry.mines_hit_for_score);
-    let totals = display_totals_for_player(state, player_idx);
-    hard_ex_score_from_components(
-        counts,
-        counts_10ms,
-        holds_held,
-        mines_hit,
-        totals.total_steps,
-        totals.holds_total,
-        totals.rolls_total,
-        totals.mines_total,
-    )
+    judgment::hard_ex_score_percent(&display_ex_score_data(state, player_idx))
 }
 
 fn update_itg_grade_totals(p: &mut PlayerRuntime) {
@@ -6410,14 +7975,13 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
             return;
         }
         hold.result = Some(HoldResult::LetGo);
-        if hold.let_go_started_at.is_none() {
-            hold.let_go_started_at = Some(state.current_music_time);
-            hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
-            if note_index < state.hold_decay_active.len() && !state.hold_decay_active[note_index] {
-                state.hold_decay_active[note_index] = true;
-                state.decaying_hold_indices.push(note_index);
-            }
-        }
+        begin_hold_life_decay(
+            hold,
+            &mut state.hold_decay_active,
+            &mut state.decaying_hold_indices,
+            note_index,
+            state.current_music_time,
+        );
     }
     if !scoring_blocked && !is_state_dead(state, player) {
         match state.notes[note_index].note_type {
@@ -6454,15 +8018,35 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
         update_itg_grade_totals(&mut state.players[player]);
     }
     if !scoring_blocked {
-        state.players[player].combo = 0;
-        state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
         if state.players[player].full_combo_grade.is_some() {
             state.players[player].first_fc_attempt_broken = true;
         }
         state.players[player].full_combo_grade = None;
-        state.players[player].current_combo_grade = None;
+        if COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO {
+            state.players[player].combo = 0;
+            state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
+            state.players[player].current_combo_grade = None;
+        }
     }
     state.receptor_glow_timers[column] = 0.0;
+}
+
+#[inline(always)]
+fn begin_hold_life_decay(
+    hold: &mut HoldData,
+    hold_decay_active: &mut [bool],
+    decaying_hold_indices: &mut Vec<usize>,
+    note_index: usize,
+    start_time: f32,
+) {
+    if hold.let_go_started_at.is_none() {
+        hold.let_go_started_at = Some(start_time);
+        hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
+    }
+    if note_index < hold_decay_active.len() && !hold_decay_active[note_index] {
+        hold_decay_active[note_index] = true;
+        decaying_hold_indices.push(note_index);
+    }
 }
 
 fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
@@ -6553,6 +8137,32 @@ fn refresh_roll_life_on_step(state: &mut State, column: usize) {
     hold.let_go_starting_life = 0.0;
 }
 
+#[inline(always)]
+fn advance_hold_last_held(
+    hold: &mut HoldData,
+    timing: &TimingData,
+    current_beat: f32,
+    note_start_row: usize,
+    note_start_beat: f32,
+) {
+    let prev_row = hold.last_held_row_index;
+    let prev_beat = hold.last_held_beat.clamp(note_start_beat, hold.end_beat);
+    let current_beat = current_beat.clamp(note_start_beat, hold.end_beat);
+    let mut current_row = timing
+        .get_row_for_beat(current_beat)
+        .unwrap_or(note_start_row);
+    current_row = current_row.clamp(note_start_row, hold.end_row_index);
+    let final_row = prev_row.max(current_row);
+    if final_row == prev_row {
+        hold.last_held_beat = prev_beat.max(current_beat);
+        return;
+    }
+    hold.last_held_row_index = final_row;
+    // Keep the row bookkeeping snapped like ITG, but preserve the exact beat for
+    // rendering so a let-go head doesn't visibly jump to a neighboring row.
+    hold.last_held_beat = prev_beat.max(current_beat);
+}
+
 fn update_active_holds(
     state: &mut State,
     inputs: &[bool; MAX_COLS],
@@ -6579,29 +8189,13 @@ fn update_active_holds(
                 active.is_pressed = pressed;
 
                 if !active.let_go && active.life > 0.0 {
-                    let prev_row = hold.last_held_row_index;
-                    let prev_beat = hold.last_held_beat;
-                    if pressed {
-                        let mut current_row = timing
-                            .get_row_for_beat(current_beat)
-                            .unwrap_or(note_start_row);
-                        current_row = current_row.clamp(note_start_row, hold.end_row_index);
-                        let final_row = prev_row.max(current_row);
-                        if final_row == prev_row {
-                            hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
-                        } else {
-                            hold.last_held_row_index = final_row;
-                            let mut new_beat =
-                                timing.get_beat_for_row(final_row).unwrap_or(current_beat);
-                            new_beat = new_beat.clamp(note_start_beat, hold.end_beat);
-                            if new_beat < prev_beat {
-                                new_beat = prev_beat;
-                            }
-                            hold.last_held_beat = new_beat;
-                        }
-                    } else {
-                        hold.last_held_beat = prev_beat.clamp(note_start_beat, hold.end_beat);
-                    }
+                    advance_hold_last_held(
+                        hold,
+                        timing,
+                        current_beat,
+                        note_start_row,
+                        note_start_beat,
+                    );
                 }
 
                 if !active.let_go {
@@ -6918,7 +8512,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     for (idx, arrow) in state.arrows[column].iter().enumerate() {
         let note_index = arrow.note_index;
         let n = &state.notes[note_index];
-        if n.result.is_some() || !n.can_be_judged || n.is_fake {
+        if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type == NoteType::Lift {
             continue;
         }
         let note_time = state.note_time_cache[note_index];
@@ -6969,52 +8563,69 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
 
         if abs_time_error <= way_off_window {
-            let mut notes_on_row = [usize::MAX; MAX_COLS];
-            let mut notes_on_row_len = 0usize;
+            let row_rescore_track_count = count_rescore_tracks_on_row(
+                &state.notes,
+                &state.row_entries,
+                &state.row_map_cache,
+                note_row_index,
+                col_start,
+                col_end,
+            );
+            let mut row_note_indices = [usize::MAX; MAX_COLS];
+            let mut row_note_count = 0usize;
+            let mut row_has_hold_or_roll = false;
             if let Some(&pos) = state
                 .row_map_cache
                 .get(note_row_index)
                 .filter(|&&x| x != u32::MAX)
             {
                 for &idx in &state.row_entries[pos as usize].nonmine_note_indices {
-                    let col = state.notes[idx].column;
-                    if col < col_start || col >= col_end || state.notes[idx].result.is_some() {
-                        continue;
-                    }
-                    if notes_on_row_len < MAX_COLS {
-                        notes_on_row[notes_on_row_len] = idx;
-                        notes_on_row_len += 1;
-                    }
-                }
-            } else {
-                for (idx, n) in state.notes.iter().enumerate() {
-                    if n.row_index != note_row_index
-                        || n.column < col_start
-                        || n.column >= col_end
-                        || matches!(n.note_type, NoteType::Mine)
-                        || n.is_fake
-                        || n.result.is_some()
+                    let row_note = &state.notes[idx];
+                    if row_note.column < col_start
+                        || row_note.column >= col_end
+                        || row_note.result.is_some()
+                        || row_note.note_type == NoteType::Lift
                     {
                         continue;
                     }
-                    if notes_on_row_len < MAX_COLS {
-                        notes_on_row[notes_on_row_len] = idx;
-                        notes_on_row_len += 1;
+                    row_has_hold_or_roll |=
+                        matches!(row_note.note_type, NoteType::Hold | NoteType::Roll);
+                    if row_note_count < MAX_COLS {
+                        row_note_indices[row_note_count] = idx;
+                        row_note_count += 1;
+                    }
+                }
+            } else {
+                for (idx, row_note) in state.notes.iter().enumerate() {
+                    if row_note.row_index != note_row_index
+                        || row_note.column < col_start
+                        || row_note.column >= col_end
+                        || matches!(row_note.note_type, NoteType::Mine | NoteType::Lift)
+                        || row_note.is_fake
+                        || row_note.result.is_some()
+                    {
+                        continue;
+                    }
+                    row_has_hold_or_roll |=
+                        matches!(row_note.note_type, NoteType::Hold | NoteType::Roll);
+                    if row_note_count < MAX_COLS {
+                        row_note_indices[row_note_count] = idx;
+                        row_note_count += 1;
                     }
                 }
             }
-
-            if notes_on_row_len == 0 {
+            if row_note_count == 0 {
                 return false;
             }
-            let all_pressed = notes_on_row[..notes_on_row_len].iter().all(|&idx| {
-                let col = state.notes[idx].column;
-                state.keyboard_lane_state[col] || state.gamepad_lane_state[col]
-            });
-            if !all_pressed {
-                return false;
+            if !matches!(note_type, NoteType::Hold | NoteType::Roll) && row_has_hold_or_roll {
+                let all_pressed = row_note_indices[..row_note_count].iter().all(|&idx| {
+                    let row_note_col = state.notes[idx].column;
+                    lane_is_pressed(state, row_note_col)
+                });
+                if !all_pressed {
+                    return false;
+                }
             }
-
             let mut timing_profile = state.timing_profile;
             timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
             let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
@@ -7029,24 +8640,23 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 (0.0, 0.0, 0.0, 0.0)
             };
 
-            if rescore_early_hits && notes_on_row_len == 1 {
-                let idx = notes_on_row[0];
-                let note_col = state.notes[idx].column;
-                let row_note_time = state.note_time_cache[idx];
+            if rescore_early_hits && row_rescore_track_count == 1 {
+                let note_col = state.notes[note_index].column;
+                let row_note_time = state.note_time_cache[note_index];
                 let te_music = current_time - row_note_time;
                 let te_real = te_music / rate;
                 let is_early = te_real < 0.0;
                 let is_bad = matches!(grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
                 if is_early && is_bad {
-                    if state.notes[idx].early_result.is_none() {
+                    if state.notes[note_index].early_result.is_none() {
                         let judgment = Judgment {
                             time_error_ms: te_real * 1000.0,
                             grade,
                             window: Some(window),
                             miss_because_held: false,
                         };
-                        state.notes[idx].early_result = Some(judgment.clone());
+                        state.notes[note_index].early_result = Some(judgment.clone());
                         let life_delta = judge_life_delta(grade);
                         {
                             let p = &mut state.players[player];
@@ -7068,7 +8678,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             grade,
                             note_row_index,
                             note_col,
-                            state.notes[idx].beat,
+                            state.notes[note_index].beat,
                             song_offset_s,
                             global_offset_s,
                             row_note_time,
@@ -7083,16 +8693,19 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             trigger_tap_explosion(state, note_col, grade);
                         }
 
-                        if let Some(end_time) = state.hold_end_time_cache[idx]
-                            && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+                        if let Some(end_time) = state.hold_end_time_cache[note_index]
+                            && matches!(
+                                state.notes[note_index].note_type,
+                                NoteType::Hold | NoteType::Roll
+                            )
                         {
-                            if let Some(hold) = state.notes[idx].hold.as_mut() {
+                            if let Some(hold) = state.notes[note_index].hold.as_mut() {
                                 hold.life = MAX_HOLD_LIFE;
                             }
                             state.active_holds[note_col] = Some(ActiveHold {
-                                note_index: idx,
+                                note_index,
                                 end_time,
-                                note_type: state.notes[idx].note_type,
+                                note_type: state.notes[note_index].note_type,
                                 let_go: false,
                                 is_pressed: true,
                                 life: MAX_HOLD_LIFE,
@@ -7102,7 +8715,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     return true;
                 }
 
-                if state.notes[idx].early_result.is_some()
+                if state.notes[note_index].early_result.is_some()
                     && !matches!(
                         grade,
                         JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
@@ -7118,7 +8731,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     miss_because_held: false,
                 };
                 error_bar_register_tap(state, player, &judgment, current_time);
-                state.notes[idx].result = Some(judgment);
+                state.notes[note_index].result = Some(judgment);
 
                 log_timing_hit_detail(
                     timing_hit_log,
@@ -7126,7 +8739,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     grade,
                     note_row_index,
                     note_col,
-                    state.notes[idx].beat,
+                    state.notes[note_index].beat,
                     song_offset_s,
                     global_offset_s,
                     row_note_time,
@@ -7137,21 +8750,24 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 );
 
                 let col_arrows = &mut state.arrows[note_col];
-                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
+                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
                     col_arrows.remove(pos);
                 }
                 trigger_receptor_glow_pulse(state, note_col);
                 trigger_tap_explosion(state, note_col, grade);
-                if let Some(end_time) = state.hold_end_time_cache[idx]
-                    && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+                if let Some(end_time) = state.hold_end_time_cache[note_index]
+                    && matches!(
+                        state.notes[note_index].note_type,
+                        NoteType::Hold | NoteType::Roll
+                    )
                 {
-                    if let Some(hold) = state.notes[idx].hold.as_mut() {
+                    if let Some(hold) = state.notes[note_index].hold.as_mut() {
                         hold.life = MAX_HOLD_LIFE;
                     }
                     state.active_holds[note_col] = Some(ActiveHold {
-                        note_index: idx,
+                        note_index,
                         end_time,
-                        note_type: state.notes[idx].note_type,
+                        note_type: state.notes[note_index].note_type,
                         let_go: false,
                         is_pressed: true,
                         life: MAX_HOLD_LIFE,
@@ -7160,7 +8776,23 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 return true;
             }
 
-            for &idx in &notes_on_row[..notes_on_row_len] {
+            let mut judge_indices = [usize::MAX; MAX_COLS];
+            let mut judge_count = 1usize;
+            judge_indices[0] = note_index;
+            if matches!(note_type, NoteType::Hold | NoteType::Roll) {
+                for &idx in &row_note_indices[..row_note_count] {
+                    if idx == note_index {
+                        continue;
+                    }
+                    let row_note_col = state.notes[idx].column;
+                    if lane_is_pressed(state, row_note_col) && judge_count < MAX_COLS {
+                        judge_indices[judge_count] = idx;
+                        judge_count += 1;
+                    }
+                }
+            }
+
+            for &idx in &judge_indices[..judge_count] {
                 let note_col = state.notes[idx].column;
                 let row_note_time = state.note_time_cache[idx];
                 let te_music = current_time - row_note_time;
@@ -7219,12 +8851,126 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     try_hit_mine_while_held(state, column, current_time)
 }
 
+/// Judge lift notes on button release. Mirrors tap judging's per-note path but
+/// only matches NoteType::Lift.
+pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool {
+    let windows = state.timing_profile.windows_s;
+    let way_off_window = windows[4];
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    let timing_hit_log = timing_hit_log_enabled();
+    let player = player_for_col(state, column);
+    let scoring_blocked = autoplay_blocks_scoring(state);
+    let way_off_window_music = way_off_window * rate;
+    let search_start_time = current_time - way_off_window_music;
+    let search_end_time = current_time + way_off_window_music;
+
+    let mut best: Option<(usize, usize, f32)> = None;
+    for (idx, arrow) in state.arrows[column].iter().enumerate() {
+        let note_index = arrow.note_index;
+        let n = &state.notes[note_index];
+        if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type != NoteType::Lift {
+            continue;
+        }
+        let note_time = state.note_time_cache[note_index];
+        if note_time < search_start_time {
+            continue;
+        }
+        if note_time > search_end_time {
+            break;
+        }
+        let abs_err_music = (current_time - note_time).abs();
+        if abs_err_music <= way_off_window_music {
+            match best {
+                Some((_, _, best_err)) if abs_err_music >= best_err => {}
+                _ => best = Some((idx, note_index, abs_err_music)),
+            }
+        }
+    }
+
+    let Some((_arrow_list_index, note_index, _)) = best else {
+        return false;
+    };
+
+    let note_time = state.note_time_cache[note_index];
+    let time_error_music = current_time - note_time;
+    let time_error_real = time_error_music / rate;
+    let abs_time_error = time_error_real.abs();
+    if abs_time_error > way_off_window {
+        return false;
+    }
+
+    let mut timing_profile = state.timing_profile;
+    timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
+    let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
+    let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
+        (
+            state.song_offset_seconds,
+            state.global_offset_seconds,
+            state.audio_lead_in_seconds.max(0.0),
+            audio::get_music_stream_position_seconds(),
+        )
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+
+    let note_col = state.notes[note_index].column;
+    let note_row_index = state.notes[note_index].row_index;
+    let note_beat = state.notes[note_index].beat;
+    let judgment = Judgment {
+        time_error_ms: time_error_real * 1000.0,
+        grade,
+        window: Some(window),
+        miss_because_held: false,
+    };
+    if !scoring_blocked {
+        error_bar_register_tap(state, player, &judgment, current_time);
+    }
+    state.notes[note_index].result = Some(judgment);
+
+    log_timing_hit_detail(
+        timing_hit_log,
+        stream_pos_s,
+        grade,
+        note_row_index,
+        note_col,
+        note_beat,
+        song_offset_s,
+        global_offset_s,
+        note_time,
+        current_time,
+        state.current_music_time,
+        rate,
+        lead_in_s,
+    );
+
+    let col_arrows = &mut state.arrows[note_col];
+    if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
+        col_arrows.remove(pos);
+    }
+    trigger_receptor_glow_pulse(state, note_col);
+    trigger_tap_explosion(state, note_col, grade);
+    true
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if state.exit_transition.is_some() {
         return ScreenAction::None;
     }
     if let Some(lane) = lane_from_action(ev.action) {
-        queue_input_edge(state, ev.source, lane, ev.pressed, ev.timestamp);
+        queue_input_edge(
+            state,
+            ev.source,
+            lane,
+            ev.pressed,
+            ev.timestamp,
+            ev.timestamp_host_nanos,
+            ev.stored_at,
+            ev.emitted_at,
+        );
         abort_hold_to_exit(state, ev.timestamp);
         return ScreenAction::None;
     }
@@ -7283,7 +9029,7 @@ fn run_assist_clap(state: &mut State, current_row: i32) {
 
     let crossed_cursor =
         assist_clap_cursor_for_row(&state.assist_clap_rows, state.assist_last_crossed_row);
-    if state.assist_clap_enabled
+    if state.tick_mode == TickMode::Assist
         && crossed_cursor < state.assist_clap_rows.len()
         && state.assist_clap_rows[crossed_cursor] <= song_row as usize
     {
@@ -7294,20 +9040,45 @@ fn run_assist_clap(state: &mut State, current_row: i32) {
     state.assist_last_crossed_row = song_row;
 }
 
-fn set_assist_clap_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
-    if state.assist_clap_enabled == enabled {
+#[inline(always)]
+const fn next_tick_mode(mode: TickMode) -> TickMode {
+    match mode {
+        TickMode::Off => TickMode::Assist,
+        TickMode::Assist => TickMode::Hit,
+        TickMode::Hit => TickMode::Off,
+    }
+}
+
+#[inline(always)]
+const fn tick_mode_status_line(mode: TickMode) -> Option<&'static str> {
+    match mode {
+        TickMode::Off => None,
+        TickMode::Assist => Some("Assist Tick"),
+        TickMode::Hit => Some("Hit Tick"),
+    }
+}
+
+#[inline(always)]
+const fn tick_mode_debug_label(mode: TickMode) -> &'static str {
+    match mode {
+        TickMode::Off => "off",
+        TickMode::Assist => "assist tick",
+        TickMode::Hit => "hit tick",
+    }
+}
+
+fn set_tick_mode(state: &mut State, mode: TickMode, now_music_time: f32) {
+    if state.tick_mode == mode {
         return;
     }
-    state.assist_clap_enabled = enabled;
+    state.tick_mode = mode;
+    profile::set_session_timing_tick_mode(mode);
 
     let song_row = assist_row_no_offset(state, now_music_time);
     state.assist_last_crossed_row = song_row;
     state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
 
-    debug!(
-        "Assist clap {} (F7).",
-        if enabled { "enabled" } else { "disabled" }
-    );
+    debug!("Timing ticks set to {} (F7).", tick_mode_debug_label(mode));
 }
 
 fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
@@ -7317,8 +9088,8 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
     state.autoplay_enabled = enabled;
 
     if enabled {
-        state.keyboard_lane_state = [false; MAX_COLS];
-        state.gamepad_lane_state = [false; MAX_COLS];
+        state.keyboard_lane_counts = [0; MAX_COLS];
+        state.gamepad_lane_counts = [0; MAX_COLS];
         state.prev_inputs = [false; MAX_COLS];
         state.receptor_glow_timers = [0.0; MAX_COLS];
         state.receptor_glow_press_timers = [0.0; MAX_COLS];
@@ -7449,6 +9220,9 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
                             }
                             None => state.autoplay_hold_release_time[col] = Some(release_at),
                         }
+                    }
+                    NoteType::Lift => {
+                        tap_releases[col] = Some(row_event_time);
                     }
                     NoteType::Roll | NoteType::Tap => {
                         tap_releases[col] = Some(row_event_time + AUTOPLAY_TAP_RELEASE_SECONDS);
@@ -7750,7 +9524,82 @@ fn refresh_sync_overlay_message(state: &mut State) {
     if message.is_empty() {
         state.sync_overlay_message = None;
     } else {
-        state.sync_overlay_message = Some(message);
+        state.sync_overlay_message = Some(Arc::<str>::from(message));
+    }
+}
+
+#[inline(always)]
+fn offset_adjust_slot(code: KeyCode) -> Option<usize> {
+    match code {
+        KeyCode::F11 => Some(0),
+        KeyCode::F12 => Some(1),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn offset_adjust_delta(code: KeyCode) -> Option<f32> {
+    match code {
+        KeyCode::F11 => Some(-OFFSET_ADJUST_STEP_SECONDS),
+        KeyCode::F12 => Some(OFFSET_ADJUST_STEP_SECONDS),
+        _ => return None,
+    }
+}
+
+#[inline(always)]
+fn clear_offset_adjust_hold(state: &mut State, code: KeyCode) -> bool {
+    let Some(slot) = offset_adjust_slot(code) else {
+        return false;
+    };
+    state.offset_adjust_held_since[slot] = None;
+    state.offset_adjust_last_at[slot] = None;
+    true
+}
+
+#[inline(always)]
+fn start_offset_adjust_hold(state: &mut State, code: KeyCode, at: Instant) -> Option<f32> {
+    let slot = offset_adjust_slot(code)?;
+    state.offset_adjust_held_since[slot] = Some(at);
+    state.offset_adjust_last_at[slot] = Some(at);
+    offset_adjust_delta(code)
+}
+
+#[inline(always)]
+fn update_offset_adjust_hold(state: &mut State) {
+    let now = Instant::now();
+    for code in [KeyCode::F11, KeyCode::F12] {
+        let Some(slot) = offset_adjust_slot(code) else {
+            continue;
+        };
+        let (Some(held_since), Some(last_at)) = (
+            state.offset_adjust_held_since[slot],
+            state.offset_adjust_last_at[slot],
+        ) else {
+            continue;
+        };
+        if now.duration_since(held_since) < OFFSET_ADJUST_REPEAT_DELAY
+            || now.duration_since(last_at) < OFFSET_ADJUST_REPEAT_INTERVAL
+        {
+            continue;
+        }
+        let Some(delta) = offset_adjust_delta(code) else {
+            continue;
+        };
+        if state.shift_held {
+            let _ = apply_global_offset_delta(state, delta);
+        } else if state.course_display_totals.is_none() {
+            let _ = apply_song_offset_delta(state, delta);
+        }
+        state.offset_adjust_last_at[slot] = Some(now);
+    }
+}
+
+#[inline(always)]
+fn update_raw_modifier_state(state: &mut State, code: KeyCode, pressed: bool) {
+    match code {
+        KeyCode::ShiftLeft | KeyCode::ShiftRight => state.shift_held = pressed,
+        KeyCode::ControlLeft | KeyCode::ControlRight => state.ctrl_held = pressed,
+        _ => {}
     }
 }
 
@@ -7798,52 +9647,57 @@ fn apply_song_offset_delta(state: &mut State, delta: f32) -> bool {
     true
 }
 
-pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent, shift_held: bool) -> ScreenAction {
-    use winit::event::ElementState;
-    use winit::keyboard::PhysicalKey;
+pub enum RawKeyAction {
+    None,
+    Restart,
+}
 
-    if key.state != ElementState::Pressed {
-        return ScreenAction::None;
+pub fn handle_queued_raw_key(
+    state: &mut State,
+    code: KeyCode,
+    pressed: bool,
+    timestamp: Instant,
+    allow_commands: bool,
+) -> RawKeyAction {
+    update_raw_modifier_state(state, code, pressed);
+    if !pressed {
+        let _ = clear_offset_adjust_hold(state, code);
+        return RawKeyAction::None;
     }
-
-    let PhysicalKey::Code(code) = key.physical_key else {
-        return ScreenAction::None;
-    };
-
+    if !allow_commands {
+        return RawKeyAction::None;
+    }
+    if code == KeyCode::KeyR && state.ctrl_held {
+        return RawKeyAction::Restart;
+    }
     if code == KeyCode::F6 {
-        if key.repeat {
-            return ScreenAction::None;
-        }
         cycle_autosync_mode(state);
-        return ScreenAction::None;
+        return RawKeyAction::None;
     }
 
     if code == KeyCode::F7 {
         let now_music_time = current_music_time_from_stream(state);
-        set_assist_clap_enabled(state, !state.assist_clap_enabled, now_music_time);
-        return ScreenAction::None;
+        set_tick_mode(state, next_tick_mode(state.tick_mode), now_music_time);
+        return RawKeyAction::None;
     }
 
     if code == KeyCode::F8 {
         let now_music_time = current_music_time_from_stream(state);
         set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
-        return ScreenAction::None;
+        return RawKeyAction::None;
     }
-
-    let delta = match code {
-        KeyCode::F11 => -0.001_f32,
-        KeyCode::F12 => 0.001_f32,
-        _ => return ScreenAction::None,
+    let Some(delta) = start_offset_adjust_hold(state, code, timestamp) else {
+        return RawKeyAction::None;
     };
 
-    if shift_held {
+    if state.shift_held {
         let _ = apply_global_offset_delta(state, delta);
-        return ScreenAction::None;
+        return RawKeyAction::None;
     }
     if state.course_display_totals.is_none() {
         let _ = apply_song_offset_delta(state, delta);
     }
-    ScreenAction::None
+    RawKeyAction::None
 }
 
 fn finalize_row_judgment(
@@ -7861,8 +9715,7 @@ fn finalize_row_judgment(
     let mut row_has_miss = false;
     let mut row_has_successful_hit = false;
     let mut row_has_wayoff = false;
-    let mut has_miss_winner = false;
-    let mut final_judgment: Option<Judgment> = None;
+    let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(row_len.min(MAX_COLS));
     let mut i = 0;
     while i < row_len {
         let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
@@ -7882,31 +9735,13 @@ fn finalize_row_judgment(
             judgment.grade,
             JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
         );
-
-        if judgment.grade == JudgeGrade::Miss {
-            if !has_miss_winner {
-                final_judgment = Some(judgment.clone());
-                has_miss_winner = true;
-            }
-            i += 1;
-            continue;
-        }
-        if has_miss_winner {
-            i += 1;
-            continue;
-        }
-
-        let should_replace = match final_judgment.as_ref() {
-            None => true,
-            Some(current) => judgment.time_error_ms.abs() > current.time_error_ms.abs(),
-        };
-        if should_replace {
-            final_judgment = Some(judgment.clone());
-        }
+        row_judgments.push(judgment);
         i += 1;
     }
 
-    let Some(final_judgment) = final_judgment else {
+    let Some(final_judgment) =
+        judgment::aggregate_row_final_judgment(row_judgments.iter().copied()).cloned()
+    else {
         return;
     };
     let scoring_blocked = autoplay_blocks_scoring(state);
@@ -8062,6 +9897,7 @@ fn process_input_edges(
     state: &mut State,
     trace_enabled: bool,
     phase_timings: &mut GameplayUpdatePhaseTimings,
+    song_clock: SongClockSnapshot,
 ) {
     if state.pending_edges.is_empty() {
         return;
@@ -8076,10 +9912,55 @@ fn process_input_edges(
         std::mem::swap(&mut pending, &mut state.pending_edges);
     }
 
-    while let Some(edge) = pending.pop_front() {
+    while let Some(mut edge) = pending.pop_front() {
         let lane_idx = edge.lane.index();
         if lane_idx >= state.num_cols {
             continue;
+        }
+        if !edge.event_music_time.is_finite() {
+            edge.event_music_time =
+                music_time_from_song_clock(song_clock, edge.captured_at, edge.captured_host_nanos);
+        }
+        if edge.record_replay && edge.event_music_time.is_finite() {
+            state.replay_edges.push(RecordedLaneEdge {
+                lane_index: lane_idx as u8,
+                pressed: edge.pressed,
+                source: edge.source,
+                event_music_time: edge.event_music_time,
+            });
+        }
+        if trace_enabled {
+            let processed_at = Instant::now();
+            let capture_to_store_us = elapsed_us_between(edge.stored_at, edge.captured_at);
+            let store_to_emit_us = elapsed_us_between(edge.emitted_at, edge.stored_at);
+            let emit_to_queue_us = elapsed_us_between(edge.queued_at, edge.emitted_at);
+            let capture_to_queue_us = elapsed_us_between(edge.queued_at, edge.captured_at);
+            let capture_to_process_us = elapsed_us_between(processed_at, edge.captured_at);
+            let queue_to_process_us = elapsed_us_between(processed_at, edge.queued_at);
+            state.update_trace.summary_input_latency.record(
+                capture_to_store_us,
+                store_to_emit_us,
+                emit_to_queue_us,
+                capture_to_process_us,
+                queue_to_process_us,
+            );
+            if capture_to_process_us >= GAMEPLAY_INPUT_LATENCY_WARN_US {
+                debug!(
+                    "Gameplay input latency spike: lane={} pressed={} source={:?} capture_store_us={} store_emit_us={} emit_queue_us={} queue_process_us={} capture_queue_us={} capture_process_us={} pending={} now_t={:.3} edge_t={:.3}",
+                    lane_idx,
+                    edge.pressed,
+                    edge.source,
+                    capture_to_store_us,
+                    store_to_emit_us,
+                    emit_to_queue_us,
+                    queue_to_process_us,
+                    capture_to_queue_us,
+                    capture_to_process_us,
+                    pending.len() + state.pending_edges.len() + 1,
+                    state.current_music_time,
+                    edge.event_music_time,
+                );
+            }
         }
 
         let state_started = if trace_enabled {
@@ -8087,21 +9968,24 @@ fn process_input_edges(
         } else {
             None
         };
-        let mut keyboard_down = state.keyboard_lane_state[lane_idx];
-        let mut gamepad_down = state.gamepad_lane_state[lane_idx];
-        let was_down = keyboard_down || gamepad_down;
+        let mut keyboard_count = state.keyboard_lane_counts[lane_idx];
+        let mut gamepad_count = state.gamepad_lane_counts[lane_idx];
+        let was_down = keyboard_count != 0 || gamepad_count != 0;
         match edge.source {
-            InputSource::Keyboard => keyboard_down = edge.pressed,
-            InputSource::Gamepad => gamepad_down = edge.pressed,
+            InputSource::Keyboard => update_lane_count(&mut keyboard_count, edge.pressed),
+            InputSource::Gamepad => update_lane_count(&mut gamepad_count, edge.pressed),
         }
-        state.keyboard_lane_state[lane_idx] = keyboard_down;
-        state.gamepad_lane_state[lane_idx] = gamepad_down;
-        let is_down = keyboard_down || gamepad_down;
+        state.keyboard_lane_counts[lane_idx] = keyboard_count;
+        state.gamepad_lane_counts[lane_idx] = gamepad_count;
+        let is_down = keyboard_count != 0 || gamepad_count != 0;
         if let Some(started) = state_started {
             add_elapsed_us(&mut phase_timings.input_state_us, started);
         }
 
-        if edge.pressed && !was_down && is_down {
+        let press_started = lane_press_started(edge.pressed, was_down, is_down);
+        let release_finished = lane_release_finished(edge.pressed, was_down, is_down);
+
+        if press_started {
             if trace_enabled {
                 let started = Instant::now();
                 start_receptor_glow_press(state, lane_idx);
@@ -8109,6 +9993,17 @@ fn process_input_edges(
             } else {
                 start_receptor_glow_press(state, lane_idx);
             }
+        } else if release_finished {
+            if trace_enabled {
+                let started = Instant::now();
+                release_receptor_glow(state, lane_idx);
+                add_elapsed_us(&mut phase_timings.input_glow_us, started);
+            } else {
+                release_receptor_glow(state, lane_idx);
+            }
+        }
+
+        if lane_edge_judges_tap(edge.pressed) {
             let event_music_time = edge.event_music_time;
             let hit_note = if trace_enabled {
                 let started = Instant::now();
@@ -8125,16 +10020,18 @@ fn process_input_edges(
             } else {
                 refresh_roll_life_on_step(state, lane_idx);
             }
-            if !hit_note {
+            if hit_note {
+                if state.tick_mode == TickMode::Hit {
+                    audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
+                }
+            } else {
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
-        } else if !edge.pressed && was_down && !is_down {
-            if trace_enabled {
-                let started = Instant::now();
-                release_receptor_glow(state, lane_idx);
-                add_elapsed_us(&mut phase_timings.input_glow_us, started);
-            } else {
-                release_receptor_glow(state, lane_idx);
+        } else if lane_edge_judges_lift(edge.pressed, was_down) {
+            let event_music_time = edge.event_music_time;
+            let hit_lift = judge_a_lift(state, lane_idx, event_music_time);
+            if hit_lift && state.tick_mode == TickMode::Hit {
+                audio::play_assist_tick(ASSIST_TICK_SFX_PATH);
             }
         }
     }
@@ -8219,6 +10116,9 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
     }
     for timer in &mut state.receptor_bop_timers {
         *timer = (*timer - delta_time).max(0.0);
+    }
+    if state.toggle_flash_timer > 0.0 {
+        state.toggle_flash_timer = (state.toggle_flash_timer - delta_time).max(0.0);
     }
     for player in 0..state.num_players {
         state.players[player]
@@ -8337,6 +10237,11 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
 }
 
 #[inline(always)]
+fn partition_notes_before_time(note_times: &[f32], lookahead_time: f32) -> usize {
+    note_times.partition_point(|note_time| *note_time < lookahead_time)
+}
+
+#[inline(always)]
 fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
     for player in 0..state.num_players {
         let timing = &state.timing_players[player];
@@ -8347,8 +10252,14 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
         match scroll_speed {
             ScrollSpeedSetting::CMod(_) => {
                 let lookahead_time = spawn_time + state.scroll_travel_time[player];
-                let lookahead_beat = timing.get_beat_for_time(lookahead_time);
-                while cursor < note_end && state.notes[cursor].beat < lookahead_beat {
+                // C-mod note travel is time-based. Beat lookahead freezes inside stops,
+                // which stalls spawning until the note is effectively due.
+                let spawn_limit = cursor
+                    + partition_notes_before_time(
+                        &state.note_time_cache[cursor..note_end],
+                        lookahead_time,
+                    );
+                while cursor < spawn_limit {
                     let note = &state.notes[cursor];
                     if note.column < state.num_cols {
                         state.arrows[note.column].push(Arrow {
@@ -8462,10 +10373,17 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
             continue;
         }
         if music_time_sec - note_time > way_off_window * rate {
+            let player = if num_players <= 1 || cols_per_player == 0 {
+                0
+            } else {
+                (col_idx / cols_per_player).min(num_players.saturating_sub(1))
+            };
             let time_err_music = music_time_sec - note_time;
             let time_err_real = time_err_music / rate;
-            let miss_because_held =
-                state.keyboard_lane_state[col_idx] || state.gamepad_lane_state[col_idx];
+            let miss_because_held = lane_counts_pressed(
+                state.keyboard_lane_counts[col_idx],
+                state.gamepad_lane_counts[col_idx],
+            );
             let miss = Judgment {
                 time_error_ms: time_err_real * 1000.0,
                 grade: JudgeGrade::Miss,
@@ -8473,20 +10391,22 @@ fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f3
                 miss_because_held,
             };
             let judgment = state.notes[note_index].early_result.clone().unwrap_or(miss);
-            if judgment.grade == JudgeGrade::Miss
-                && let Some(hold) = state.notes[note_index].hold.as_mut()
-                && hold.result != Some(HoldResult::Held)
-            {
-                hold.result = Some(HoldResult::LetGo);
-                if hold.let_go_started_at.is_none() {
-                    hold.let_go_started_at = Some(music_time_sec);
-                    hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
-                    if note_index < state.hold_decay_active.len()
-                        && !state.hold_decay_active[note_index]
-                    {
-                        state.hold_decay_active[note_index] = true;
-                        state.decaying_hold_indices.push(note_index);
+            if judgment.grade == JudgeGrade::Miss {
+                let should_score_miss =
+                    score_missed_holds_and_rolls(&state.charts[player].chart_type);
+                if let Some(hold) = state.notes[note_index].hold.as_mut()
+                    && hold.result != Some(HoldResult::Held)
+                {
+                    if should_score_miss {
+                        hold.result = Some(HoldResult::LetGo);
                     }
+                    begin_hold_life_decay(
+                        hold,
+                        &mut state.hold_decay_active,
+                        &mut state.decaying_hold_indices,
+                        note_index,
+                        music_time_sec,
+                    );
                 }
             }
             state.notes[note_index].result = Some(judgment);
@@ -8526,8 +10446,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
             {
                 let time_err_music = music_time_sec - note_time;
                 let time_err_real = time_err_music / rate;
-                let miss_because_held = (col < state.num_cols)
-                    && (state.keyboard_lane_state[col] || state.gamepad_lane_state[col]);
+                let miss_because_held = (col < state.num_cols) && lane_is_pressed(state, col);
                 let miss = Judgment {
                     time_error_ms: time_err_real * 1000.0,
                     grade: JudgeGrade::Miss,
@@ -8537,20 +10456,22 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 let judgment = state.notes[cursor].early_result.clone().unwrap_or(miss);
                 let judgment_grade = judgment.grade;
                 let judgment_time_error_ms = judgment.time_error_ms;
-                if judgment_grade == JudgeGrade::Miss
-                    && let Some(hold) = state.notes[cursor].hold.as_mut()
-                    && hold.result != Some(HoldResult::Held)
-                {
-                    hold.result = Some(HoldResult::LetGo);
-                    if hold.let_go_started_at.is_none() {
-                        hold.let_go_started_at = Some(music_time_sec);
-                        hold.let_go_starting_life = hold.life.clamp(0.0, MAX_HOLD_LIFE);
-                        if cursor < state.hold_decay_active.len()
-                            && !state.hold_decay_active[cursor]
-                        {
-                            state.hold_decay_active[cursor] = true;
-                            state.decaying_hold_indices.push(cursor);
+                if judgment_grade == JudgeGrade::Miss {
+                    let should_score_miss =
+                        score_missed_holds_and_rolls(&state.charts[player].chart_type);
+                    if let Some(hold) = state.notes[cursor].hold.as_mut()
+                        && hold.result != Some(HoldResult::Held)
+                    {
+                        if should_score_miss {
+                            hold.result = Some(HoldResult::LetGo);
                         }
+                        begin_hold_life_decay(
+                            hold,
+                            &mut state.hold_decay_active,
+                            &mut state.decaying_hold_indices,
+                            cursor,
+                            music_time_sec,
+                        );
                     }
                 }
                 state.notes[cursor].result = Some(judgment);
@@ -8604,6 +10525,13 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
 fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     let num_players = state.num_players;
     let cols_per_player = state.cols_per_player;
+    let player_scroll: [ScrollEffects; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            ScrollEffects::default()
+        } else {
+            effective_scroll_effects_for_player(state, player)
+        }
+    });
     let player_offset_y: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             0.0
@@ -8612,12 +10540,6 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                 .note_field_offset_y
                 .clamp(-50, 50) as f32
         }
-    });
-    let player_is_centered: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
-        player < num_players
-            && state.player_profiles[player]
-                .scroll_option
-                .contains(profile::ScrollOption::Centered)
     });
     let receptor_y_normal: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         screen_center_y() + RECEPTOR_Y_OFFSET_FROM_CENTER + player_offset_y[player]
@@ -8682,13 +10604,14 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         } else {
             (i / cols_per_player).min(num_players.saturating_sub(1))
         };
-        if player_is_centered[player] {
-            receptor_y_centered[player]
-        } else if column_dirs[i] >= 0.0 {
-            receptor_y_normal[player]
-        } else {
-            receptor_y_reverse[player]
-        }
+        let local_col = i.saturating_sub(player.saturating_mul(cols_per_player));
+        scroll_receptor_y(
+            player_scroll[player].reverse_percent_for_column(local_col, cols_per_player),
+            player_scroll[player].centered,
+            receptor_y_normal[player],
+            receptor_y_reverse[player],
+            receptor_y_centered[player],
+        )
     });
 
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -8746,7 +10669,18 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         false
                     };
 
-                    let note_time_chart = state.note_time_cache[arrow.note_index];
+                    let note_time_chart =
+                        if matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+                            && note
+                                .result
+                                .as_ref()
+                                .is_some_and(|j| j.grade == JudgeGrade::Miss)
+                        {
+                            state.hold_end_time_cache[arrow.note_index]
+                                .unwrap_or(state.note_time_cache[arrow.note_index])
+                        } else {
+                            state.note_time_cache[arrow.note_index]
+                        };
                     let y_pos = if use_raw_pos {
                         note_time_chart.mul_add(cmod_raw_slope, cmod_raw_base)
                     } else {
@@ -8779,7 +10713,18 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         }
                     }
 
-                    let note_disp_beat = state.note_display_beat_cache[arrow.note_index];
+                    let note_disp_beat =
+                        if matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+                            && note
+                                .result
+                                .as_ref()
+                                .is_some_and(|j| j.grade == JudgeGrade::Miss)
+                        {
+                            state.hold_end_display_beat_cache[arrow.note_index]
+                                .unwrap_or(state.note_display_beat_cache[arrow.note_index])
+                        } else {
+                            state.note_display_beat_cache[arrow.note_index]
+                        };
                     let y_pos = note_disp_beat.mul_add(beat_slope, beat_base);
                     (y_pos - miss_cull_threshold) * cmp_sign >= 0.0_f32
                 });
@@ -8849,21 +10794,13 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    let trace_enabled =
-        log::log_enabled!(log::Level::Debug) || log::log_enabled!(log::Level::Trace);
+    let trace_enabled = log::log_enabled!(log::Level::Trace);
     let frame_trace_started = if trace_enabled {
         Some(Instant::now())
     } else {
         None
     };
     let mut phase_timings = GameplayUpdatePhaseTimings::default();
-
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
-    let anchor = -state.global_offset_seconds;
 
     if let Some(at) = state.hold_to_exit_aborted_at
         && at.elapsed().as_secs_f32() >= GIVE_UP_ABORT_TEXT_SECONDS
@@ -8873,22 +10810,32 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
 
     // Music time driven directly by the audio device clock, interpolated
     // between callbacks for smooth, continuous motion.
-    let stream_pos = crate::core::audio::get_music_stream_position_seconds();
+    let mut song_clock = current_song_clock_snapshot(state);
     let lead_in = state.audio_lead_in_seconds.max(0.0);
     let previous_music_time = state.current_music_time;
-    let mut music_time_sec = (stream_pos - lead_in).mul_add(rate, anchor * (1.0 - rate));
+    let mut music_time_sec = song_clock.song_time;
     let is_first_update = state.total_elapsed_in_screen <= f32::EPSILON;
     if is_first_update {
         const STARTUP_MAX_FORWARD_JUMP_S: f32 = 1.0;
         let jump_s = music_time_sec - previous_music_time;
         if jump_s > STARTUP_MAX_FORWARD_JUMP_S {
             warn!(
-                "Discarding anomalous first-frame music time jump ({jump_s:.3}s): prev={previous_music_time:.3}, now={music_time_sec:.3}, stream_pos={stream_pos:.3}, lead_in={lead_in:.3}"
+                "Discarding anomalous first-frame music time jump ({jump_s:.3}s): prev={previous_music_time:.3}, now={music_time_sec:.3}, lead_in={lead_in:.3}"
             );
             music_time_sec = previous_music_time;
         }
     }
+    song_clock.song_time = music_time_sec;
     state.current_music_time = music_time_sec;
+    let target_display_music_time_sec = music_time_sec;
+    let display_music_time_sec = frame_stable_display_music_time(
+        &mut state.display_clock,
+        target_display_music_time_sec,
+        delta_time,
+        song_clock.seconds_per_second,
+        is_first_update,
+    );
+    state.current_music_time_display = display_music_time_sec;
 
     if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
         let hold_s = match key {
@@ -8931,6 +10878,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             .timing
             .get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
         state.current_beat = beat_info.beat;
+        state.current_beat_display = state.timing.get_beat_for_time(display_music_time_sec);
         state.is_in_freeze = beat_info.is_in_freeze;
         state.is_in_delay = beat_info.is_in_delay;
         let song_row = assist_row_no_offset(state, music_time_sec);
@@ -8939,7 +10887,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         for player in 0..state.num_players {
             let delay =
                 state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
-            let visible_time = music_time_sec - delay;
+            let visible_time = display_music_time_sec - delay;
             state.current_music_time_visible[player] = visible_time;
             state.current_beat_visible[player] =
                 state.timing_players[player].get_beat_for_time(visible_time);
@@ -8947,58 +10895,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         refresh_active_attack_masks(state);
 
         let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
-        for player in 0..state.num_players {
-            let effective_speed = effective_scroll_speed_for_player(state, player);
-            let mut dynamic_speed = effective_speed.pixels_per_second(
-                current_bpm,
-                state.scroll_reference_bpm,
-                state.music_rate,
-            );
-            if !dynamic_speed.is_finite() || dynamic_speed <= 0.0 {
-                dynamic_speed = ScrollSpeedSetting::default().pixels_per_second(
-                    current_bpm,
-                    state.scroll_reference_bpm,
-                    state.music_rate,
-                );
-            }
-            state.scroll_pixels_per_second[player] = dynamic_speed;
-        }
-
-        for player in 0..state.num_players {
-            let visual_mask = effective_visual_mask_for_player(state, player);
-            let attack_mini_delta = effective_attack_mini_percent_delta_for_player(state, player);
-            let draw_scale = player_draw_scale_with_visual_mask(
-                &state.player_profiles[player],
-                visual_mask,
-                attack_mini_delta,
-            );
-            state.draw_distance_before_targets[player] =
-                screen_height() * DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER * draw_scale;
-            state.draw_distance_after_targets[player] = if state.player_profiles[player]
-                .scroll_option
-                .contains(profile::ScrollOption::Centered)
-            {
-                screen_height() * 0.6 * draw_scale
-            } else {
-                DRAW_DISTANCE_AFTER_TARGETS * draw_scale
-            };
-        }
-
-        for player in 0..state.num_players {
-            let dynamic_speed = state.scroll_pixels_per_second[player];
-            let effective_speed = effective_scroll_speed_for_player(state, player);
-            let mut travel_time = effective_speed.travel_time_seconds(
-                state.draw_distance_before_targets[player],
-                current_bpm,
-                state.scroll_reference_bpm,
-                state.music_rate,
-            );
-            if !travel_time.is_finite() || travel_time <= 0.0 {
-                travel_time =
-                    state.draw_distance_before_targets[player] / dynamic_speed.max(f32::EPSILON);
-            }
-            state.scroll_travel_time[player] = travel_time;
-        }
+        refresh_live_notefield_options(state, current_bpm);
     }
     if let Some(started) = pre_notes_started {
         phase_timings.pre_notes_us = elapsed_us_since(started);
@@ -9036,7 +10933,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     } else {
         None
     };
-    process_input_edges(state, trace_enabled, &mut phase_timings);
+    update_offset_adjust_hold(state);
+    process_input_edges(state, trace_enabled, &mut phase_timings, song_clock);
     if let Some(started) = input_started {
         phase_timings.input_edges_us = elapsed_us_since(started);
     }
@@ -9051,7 +10949,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         if i >= num_cols {
             return false;
         }
-        state.keyboard_lane_state[i] || state.gamepad_lane_state[i]
+        lane_is_pressed(state, i)
     });
     let prev_inputs = state.prev_inputs;
     for (col, (now_down, was_down)) in current_inputs.iter().copied().zip(prev_inputs).enumerate() {
@@ -9193,19 +11091,6 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::Navigate(Screen::Evaluation);
     }
 
-    state.log_timer += delta_time;
-    if state.log_timer >= 1.0 {
-        let active_arrows: usize = state.arrows.iter().map(std::vec::Vec::len).sum();
-        log::debug!(
-            "Beat: {:.2}, Time: {:.2}, Combo: {}, Misses: {}, Active Arrows: {}",
-            state.current_beat,
-            music_time_sec,
-            state.players[0].combo,
-            state.players[0].miss_combo,
-            active_arrows
-        );
-        state.log_timer -= 1.0;
-    }
     debug_validate_hot_state(state, delta_time, music_time_sec);
     finalize_update_trace(
         state,
@@ -9272,5 +11157,698 @@ fn update_danger_fx(state: &mut State) {
             }
         }
         fx.last_health = health;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
+        INSERT_MASK_BIT_MINES, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
+        ScrollSpeedSetting, SongClockSnapshot, TickMode, advance_hold_last_held,
+        apply_mines_insert, build_assist_clap_rows, build_attack_mask_windows_for_player,
+        count_rescore_tracks_on_row, frame_stable_display_music_time, input_queue_cap,
+        lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
+        music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
+        player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals, replay_edge_cap,
+        score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
+        stage_music_cut, tick_mode_status_line, turn_option_bits, update_lane_count,
+    };
+    use crate::core::input::InputSource;
+    use crate::game::chart::{ChartData, StaminaCounts};
+    use crate::game::judgment::{JudgeGrade, Judgment};
+    use crate::game::note::{HoldData, Note, NoteType};
+    use crate::game::profile;
+    use crate::game::timing::{ROWS_PER_BEAT, StopSegment, TimingData, TimingSegments};
+    use rssp::{TechCounts, stats::ArrowStats};
+    use std::time::{Duration, Instant};
+
+    fn test_row_to_beat(last_row: usize) -> Vec<f32> {
+        (0..=last_row)
+            .map(|row| row as f32 / ROWS_PER_BEAT as f32)
+            .collect()
+    }
+
+    fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
+        Note {
+            beat: row_index as f32 / ROWS_PER_BEAT as f32,
+            quantization_idx: 0,
+            column,
+            note_type,
+            row_index,
+            result: None,
+            early_result: None,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    fn test_hold(column: usize, row_index: usize, end_row_index: usize) -> Note {
+        let mut note = test_note(column, row_index, NoteType::Hold);
+        note.hold = Some(HoldData {
+            end_row_index,
+            end_beat: end_row_index as f32 / ROWS_PER_BEAT as f32,
+            result: None,
+            life: 1.0,
+            let_go_started_at: None,
+            let_go_starting_life: 0.0,
+            last_held_row_index: row_index,
+            last_held_beat: row_index as f32 / ROWS_PER_BEAT as f32,
+        });
+        note
+    }
+
+    fn judged_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
+        let mut note = test_note(column, row_index, note_type);
+        note.result = Some(Judgment {
+            time_error_ms: 0.0,
+            grade: JudgeGrade::Great,
+            window: None,
+            miss_because_held: false,
+        });
+        note
+    }
+
+    #[test]
+    fn advance_hold_last_held_keeps_progressing_after_release_while_life_remains() {
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &test_row_to_beat(96));
+        let mut hold = test_hold(0, 0, 96).hold.expect("test hold has hold data");
+        hold.last_held_row_index = 24;
+        hold.last_held_beat = 24.0 / ROWS_PER_BEAT as f32;
+
+        advance_hold_last_held(&mut hold, &timing, 1.0, 0, 0.0);
+
+        assert_eq!(hold.last_held_row_index, 48);
+        assert!((hold.last_held_beat - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn advance_hold_last_held_keeps_exact_beat_between_rows() {
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &test_row_to_beat(96));
+        let mut hold = test_hold(0, 0, 96).hold.expect("test hold has hold data");
+        hold.last_held_row_index = 24;
+        hold.last_held_beat = 24.0 / ROWS_PER_BEAT as f32;
+
+        advance_hold_last_held(&mut hold, &timing, 0.99, 0, 0.0);
+
+        assert_eq!(hold.last_held_row_index, 48);
+        assert!((hold.last_held_beat - 0.99).abs() <= 1e-6);
+    }
+
+    fn test_chart(
+        stats: ArrowStats,
+        timing_segments: TimingSegments,
+        chart_attacks: Option<&str>,
+    ) -> ChartData {
+        let mines_nonfake = stats.mines;
+        ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: "Challenge".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 10,
+            step_artist: String::new(),
+            short_hash: String::new(),
+            stats,
+            tech_counts: TechCounts::default(),
+            mines_nonfake,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: chart_attacks.is_some_and(|attacks| !attacks.trim().is_empty()),
+            has_significant_timing_changes: {
+                !timing_segments.stops.is_empty()
+                    || !timing_segments.delays.is_empty()
+                    || !timing_segments.warps.is_empty()
+                    || !timing_segments.speeds.is_empty()
+                    || !timing_segments.scrolls.is_empty()
+                    || {
+                        let mut min_bpm = f32::INFINITY;
+                        let mut max_bpm = 0.0_f32;
+                        for &(_, bpm) in &timing_segments.bpms {
+                            if !bpm.is_finite() || bpm <= 0.0 {
+                                continue;
+                            }
+                            min_bpm = min_bpm.min(bpm);
+                            max_bpm = max_bpm.max(bpm);
+                        }
+                        min_bpm.is_finite() && max_bpm - min_bpm > 3.0
+                    }
+            },
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+        }
+    }
+
+    #[test]
+    fn tick_mode_cycles() {
+        let mode = next_tick_mode(TickMode::Off);
+        assert_eq!(mode, TickMode::Assist);
+        assert_eq!(next_tick_mode(mode), TickMode::Hit);
+        assert_eq!(next_tick_mode(TickMode::Hit), TickMode::Off);
+    }
+
+    #[test]
+    fn lane_press_counts_hold_until_last_alias_release() {
+        let mut keyboard = 0u8;
+        let mut gamepad = 0u8;
+
+        let mut transitions = Vec::new();
+        for (source, pressed) in [
+            (InputSource::Keyboard, true),
+            (InputSource::Keyboard, true),
+            (InputSource::Keyboard, false),
+            (InputSource::Keyboard, false),
+            (InputSource::Gamepad, true),
+            (InputSource::Keyboard, true),
+            (InputSource::Gamepad, false),
+            (InputSource::Keyboard, false),
+        ] {
+            let was_down = keyboard != 0 || gamepad != 0;
+            match source {
+                InputSource::Keyboard => update_lane_count(&mut keyboard, pressed),
+                InputSource::Gamepad => update_lane_count(&mut gamepad, pressed),
+            }
+            transitions.push((was_down, keyboard != 0 || gamepad != 0));
+        }
+
+        assert_eq!(
+            transitions,
+            vec![
+                (false, true),
+                (true, true),
+                (true, true),
+                (true, false),
+                (false, true),
+                (true, true),
+                (true, true),
+                (true, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn physical_edges_still_judge_while_lane_is_logically_held() {
+        let mut keyboard = 0u8;
+
+        let mut tap_edges = Vec::new();
+        let mut lift_edges = Vec::new();
+        let mut glow_edges = Vec::new();
+        for pressed in [true, true, false, false] {
+            let was_down = keyboard != 0;
+            update_lane_count(&mut keyboard, pressed);
+            let is_down = keyboard != 0;
+            tap_edges.push(lane_edge_judges_tap(pressed));
+            lift_edges.push(lane_edge_judges_lift(pressed, was_down));
+            glow_edges.push((
+                lane_press_started(pressed, was_down, is_down),
+                lane_release_finished(pressed, was_down, is_down),
+            ));
+        }
+
+        assert_eq!(tap_edges, vec![true, true, false, false]);
+        assert_eq!(lift_edges, vec![false, false, true, true]);
+        assert_eq!(
+            glow_edges,
+            vec![(true, false), (false, false), (false, false), (false, true)]
+        );
+    }
+
+    #[test]
+    fn rescore_track_count_keeps_chord_rows_multi_note_after_partial_judgment() {
+        let row_index = 48usize;
+        let notes = vec![
+            judged_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Tap),
+        ];
+        let row_entries = vec![RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        }];
+        let mut row_map_cache = vec![u32::MAX; row_index + 1];
+        row_map_cache[row_index] = 0;
+
+        assert_eq!(
+            count_rescore_tracks_on_row(&notes, &row_entries, &row_map_cache, row_index, 0, 4),
+            2
+        );
+    }
+
+    #[test]
+    fn rescore_track_count_includes_lifts_on_row() {
+        let row_index = 48usize;
+        let notes = vec![
+            test_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Lift),
+        ];
+        let row_entries = vec![RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        }];
+        let mut row_map_cache = vec![u32::MAX; row_index + 1];
+        row_map_cache[row_index] = 0;
+
+        assert_eq!(
+            count_rescore_tracks_on_row(&notes, &row_entries, &row_map_cache, row_index, 0, 4),
+            2
+        );
+    }
+
+    #[test]
+    fn tick_status_matches_mode() {
+        assert_eq!(tick_mode_status_line(TickMode::Off), None);
+        assert_eq!(tick_mode_status_line(TickMode::Assist), Some("Assist Tick"));
+        assert_eq!(tick_mode_status_line(TickMode::Hit), Some("Hit Tick"));
+    }
+
+    #[test]
+    fn song_clock_reconstructs_past_edge_time() {
+        let base = Instant::now();
+        let snapshot = SongClockSnapshot {
+            song_time: 120.0,
+            seconds_per_second: 1.5,
+            valid_at: base + Duration::from_millis(24),
+            valid_at_host_nanos: 0,
+        };
+        let edge_time = music_time_from_song_clock(snapshot, base, 0);
+        assert!((edge_time - 119.964).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn song_clock_handles_future_edge_time() {
+        let base = Instant::now();
+        let snapshot = SongClockSnapshot {
+            song_time: 64.0,
+            seconds_per_second: 2.0,
+            valid_at: base,
+            valid_at_host_nanos: 0,
+        };
+        let edge_time = music_time_from_song_clock(snapshot, base + Duration::from_millis(5), 0);
+        assert!((edge_time - 64.01).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn song_clock_prefers_host_clock_when_available() {
+        let snapshot = SongClockSnapshot {
+            song_time: 32.0,
+            seconds_per_second: 1.0,
+            valid_at: Instant::now(),
+            valid_at_host_nanos: 2_000_000_000,
+        };
+        let edge_time = music_time_from_song_clock(snapshot, Instant::now(), 1_997_000_000);
+        assert!((edge_time - 31.997).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn display_clock_snaps_on_first_update() {
+        let mut display_clock = FrameStableDisplayClock::new(10.0);
+        let display_time =
+            frame_stable_display_music_time(&mut display_clock, 12.5, 0.001, 1.0, true);
+        assert!((display_time - 12.5).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn display_clock_advances_smoothly_toward_target() {
+        let mut display_clock = FrameStableDisplayClock::new(100.0);
+        let display_time =
+            frame_stable_display_music_time(&mut display_clock, 100.004, 0.001, 1.0, false);
+        assert!(display_time > 100.0);
+        assert!(display_time < 100.004);
+    }
+
+    #[test]
+    fn display_clock_snaps_back_when_far_from_target() {
+        let mut display_clock = FrameStableDisplayClock::new(100.0);
+        let display_time =
+            frame_stable_display_music_time(&mut display_clock, 100.250, 0.001, 1.0, false);
+        assert!((display_time - 100.250).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn assist_clap_rows_include_lifts() {
+        let notes = vec![Note {
+            beat: 1.0,
+            quantization_idx: 0,
+            column: 0,
+            note_type: NoteType::Lift,
+            row_index: 48,
+            result: None,
+            early_result: None,
+            hold: None,
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }];
+        assert_eq!(build_assist_clap_rows(&notes, (0, 1)), vec![48]);
+    }
+
+    #[test]
+    fn scored_hold_totals_with_carry_include_prior_let_go() {
+        assert_eq!(scored_hold_totals_with_carry(3, 2, 4, 5), (7, 14));
+    }
+
+    #[test]
+    fn immediate_hold_let_go_does_not_break_combo_by_default() {
+        assert!(!COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO);
+    }
+
+    #[test]
+    fn missed_holds_and_rolls_are_not_scored_for_dance_or_pump() {
+        assert!(!score_missed_holds_and_rolls("dance-single"));
+        assert!(!score_missed_holds_and_rolls("pump-single"));
+        assert!(score_missed_holds_and_rolls("kb7-single"));
+    }
+
+    #[test]
+    fn recompute_totals_count_three_note_row_as_jump_and_hand() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Tap),
+            test_note(1, 48, NoteType::Tap),
+            test_note(2, 48, NoteType::Tap),
+        ];
+
+        let totals = recompute_player_totals(&notes, (0, notes.len()));
+
+        assert_eq!(totals.steps, 1);
+        assert_eq!(totals.jumps, 1);
+        assert_eq!(totals.hands, 1);
+    }
+
+    #[test]
+    fn recompute_totals_count_hold_assisted_hand_without_losing_jump() {
+        let notes = vec![
+            test_hold(0, 0, 96),
+            test_note(1, 48, NoteType::Tap),
+            test_note(2, 48, NoteType::Tap),
+        ];
+
+        let totals = recompute_player_totals(&notes, (0, notes.len()));
+
+        assert_eq!(totals.holds, 1);
+        assert_eq!(totals.steps, 2);
+        assert_eq!(totals.jumps, 1);
+        assert_eq!(totals.hands, 1);
+    }
+
+    #[test]
+    fn score_valid_rejects_nohands_when_chart_has_hands() {
+        let mut profile = profile::Profile::default();
+        profile.remove_active_mask = super::REMOVE_MASK_BIT_NO_HANDS;
+        let chart = test_chart(
+            ArrowStats {
+                hands: 4,
+                ..ArrowStats::default()
+            },
+            TimingSegments::default(),
+            None,
+        );
+
+        assert!(!score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn score_valid_keeps_turn_options_rankable() {
+        let mut profile = profile::Profile::default();
+        profile.turn_option = profile::TurnOption::Mirror;
+        let chart = test_chart(ArrowStats::default(), TimingSegments::default(), None);
+
+        assert!(score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn score_valid_rejects_cmod_on_significant_timing_changes() {
+        let mut profile = profile::Profile::default();
+        profile.scroll_speed = ScrollSpeedSetting::CMod(600.0);
+        let chart = test_chart(
+            ArrowStats::default(),
+            TimingSegments {
+                bpms: vec![(0.0, 120.0), (32.0, 128.5)],
+                ..TimingSegments::default()
+            },
+            None,
+        );
+
+        assert!(!score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn score_valid_rejects_disabled_chart_attacks() {
+        let mut profile = profile::Profile::default();
+        profile.attack_mode = profile::AttackMode::Off;
+        let chart = test_chart(
+            ArrowStats::default(),
+            TimingSegments::default(),
+            Some("TIME=1.0:LEN=2.0:MODS=mirror"),
+        );
+
+        assert!(!score_valid_for_chart(
+            &chart,
+            &profile,
+            profile.scroll_speed,
+            1.0,
+        ));
+    }
+
+    #[test]
+    fn cmod_stop_lookahead_uses_time_not_frozen_beat() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 185.0)],
+                stops: vec![StopSegment {
+                    beat: 32.0,
+                    duration: 0.973,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let stop_beat = 32.0;
+        let note_time = timing.get_time_for_beat(stop_beat);
+        let lookahead_time = note_time + 0.5;
+        let lookahead_beat = timing.get_beat_for_time(lookahead_time);
+
+        assert!((lookahead_beat - stop_beat).abs() < 0.000_5);
+        assert_eq!(partition_notes_before_time(&[note_time], lookahead_time), 1);
+        assert!(!(stop_beat < lookahead_beat));
+    }
+
+    #[test]
+    fn attack_mod_parser_keeps_scroll_override_and_partial_levels() {
+        let mods = parse_attack_mods("0.5x,20% flip,50% hidden,30% blink,25% mini");
+        assert_eq!(mods.scroll_speed, Some(ScrollSpeedSetting::XMod(0.5)));
+        assert_eq!(mods.visual.flip, Some(0.2));
+        assert_eq!(mods.appearance.hidden, Some(0.5));
+        assert_eq!(mods.appearance.blink, Some(0.3));
+        assert_eq!(mods.mini_percent, Some(25.0));
+    }
+
+    #[test]
+    fn attack_mod_parser_accepts_stepmania_speed_strings() {
+        let mods = parse_attack_mods("C600,150% drunk,200% expand");
+        assert_eq!(mods.scroll_speed, Some(ScrollSpeedSetting::CMod(600.0)));
+        assert_eq!(mods.visual.drunk, Some(1.5));
+        assert_eq!(mods.accel.expand, Some(2.0));
+    }
+
+    #[test]
+    fn attack_mod_parser_clearall_discards_prior_mods_and_no_prefix_zeroes_levels() {
+        let mods = parse_attack_mods("drunk,clearall,30% blink,no hidden");
+        assert!(mods.clear_all);
+        assert_eq!(mods.visual.drunk, None);
+        assert_eq!(mods.appearance.blink, Some(0.3));
+        assert_eq!(mods.appearance.hidden, Some(0.0));
+    }
+
+    #[test]
+    fn attack_mod_parser_accepts_scroll_and_perspective_overrides() {
+        let mods = parse_attack_mods("30% reverse,centered,50% incoming,dark,50% blind,75% cover");
+        assert_eq!(mods.scroll.reverse, Some(0.3));
+        assert_eq!(mods.scroll.centered, Some(1.0));
+        assert_eq!(mods.perspective.tilt, Some(-0.5));
+        assert_eq!(mods.perspective.skew, Some(0.5));
+        assert_eq!(mods.visibility.dark, Some(1.0));
+        assert_eq!(mods.visibility.blind, Some(0.5));
+        assert_eq!(mods.visibility.cover, Some(0.75));
+    }
+
+    #[test]
+    fn attack_windows_keep_chart_only_effects_for_live_state() {
+        let windows = build_attack_mask_windows_for_player(
+            Some("TIME=1.0:LEN=2.0:MODS=mirror,mines"),
+            profile::AttackMode::On,
+            0,
+            123,
+            10.0,
+        );
+        assert_eq!(windows.len(), 1);
+        assert_eq!(windows[0].chart.insert_mask, INSERT_MASK_BIT_MINES);
+        assert_eq!(
+            windows[0].chart.turn_bits,
+            turn_option_bits(profile::TurnOption::Mirror)
+        );
+    }
+
+    #[test]
+    fn scroll_effects_reverse_percent_matches_itg_column_rules() {
+        let scroll = ScrollEffects {
+            reverse: 1.0,
+            split: 1.0,
+            alternate: 1.0,
+            cross: 0.0,
+            centered: 0.0,
+        };
+        assert!((scroll.reverse_percent_for_column(0, 4) - 1.0).abs() <= 1e-6);
+        assert!(scroll.reverse_percent_for_column(1, 4).abs() <= 1e-6);
+        assert!(scroll.reverse_percent_for_column(2, 4).abs() <= 1e-6);
+        assert!((scroll.reverse_percent_for_column(3, 4) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn player_draw_scale_helper_uses_supplied_tilt() {
+        let profile = crate::game::profile::Profile::default();
+        let base = player_draw_scale_for_tilt_with_visual_mask(0.0, &profile, 0, 0.0);
+        let tilted = player_draw_scale_for_tilt_with_visual_mask(-1.0, &profile, 0, 0.0);
+        assert!((base - 1.0).abs() <= 1e-6);
+        assert!((tilted - 1.5).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn mines_insert_converts_every_sixth_nonempty_row() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments::default(),
+            &test_row_to_beat(5 * 48),
+        );
+        let mut notes = (0..6)
+            .map(|i| {
+                let row = i * 48;
+                Note {
+                    beat: row as f32 / 48.0,
+                    quantization_idx: 0,
+                    column: 0,
+                    note_type: NoteType::Tap,
+                    row_index: row,
+                    result: None,
+                    early_result: None,
+                    hold: None,
+                    mine_result: None,
+                    is_fake: false,
+                    can_be_judged: true,
+                }
+            })
+            .collect::<Vec<_>>();
+        apply_mines_insert(&mut notes, &[], &timing, 0, 4, 0, 5 * 48);
+        assert!(
+            notes
+                .iter()
+                .any(|note| note.row_index == 5 * 48 && note.note_type == NoteType::Mine)
+        );
+    }
+
+    #[test]
+    fn mines_insert_adds_mine_half_beat_after_hold_end() {
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &test_row_to_beat(144));
+        let mut notes = vec![Note {
+            beat: 0.0,
+            quantization_idx: 0,
+            column: 1,
+            note_type: NoteType::Hold,
+            row_index: 0,
+            result: None,
+            early_result: None,
+            hold: Some(HoldData {
+                end_row_index: 96,
+                end_beat: 2.0,
+                result: None,
+                life: 1.0,
+                let_go_started_at: None,
+                let_go_starting_life: 0.0,
+                last_held_row_index: 0,
+                last_held_beat: 0.0,
+            }),
+            mine_result: None,
+            is_fake: false,
+            can_be_judged: true,
+        }];
+        apply_mines_insert(&mut notes, &[], &timing, 0, 4, 0, 144);
+        assert!(notes.iter().any(|note| note.row_index == 120
+            && note.column == 1
+            && note.note_type == NoteType::Mine));
+    }
+
+    #[test]
+    fn input_queue_cap_scales_with_fields() {
+        assert_eq!(input_queue_cap(0), GAMEPLAY_INPUT_BACKLOG_WARN);
+        assert_eq!(input_queue_cap(4), GAMEPLAY_INPUT_BACKLOG_WARN);
+        assert_eq!(input_queue_cap(5), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
+        assert_eq!(input_queue_cap(8), GAMEPLAY_INPUT_BACKLOG_WARN * 2);
+    }
+
+    #[test]
+    fn stage_music_cut_uses_negative_lead_in() {
+        let cut = stage_music_cut(2.5);
+        assert!((cut.start_sec + 2.5).abs() <= 1e-9);
+        assert!(cut.length_sec.is_infinite());
+        assert_eq!(cut.fade_in_sec, 0.0);
+        assert_eq!(cut.fade_out_sec, 0.0);
+
+        let clamped = stage_music_cut(-1.0);
+        assert_eq!(clamped.start_sec, 0.0);
+    }
+
+    #[test]
+    fn replay_edge_cap_scales_with_chart_and_skips_replay_mode() {
+        assert_eq!(replay_edge_cap(4, 0, true, 120.0), 0);
+        assert_eq!(replay_edge_cap(4, 0, false, 0.0), 4 * 64);
+        assert_eq!(
+            replay_edge_cap(4, 0, false, 2.0),
+            4 * 2 * REPLAY_EDGE_RATE_PER_SEC
+        );
+        assert_eq!(
+            replay_edge_cap(4, 120, false, 2.0),
+            4 * 2 * REPLAY_EDGE_RATE_PER_SEC
+        );
+        assert_eq!(replay_edge_cap(4, 4000, false, 2.0), 8000);
+        assert_eq!(
+            replay_edge_cap(8, 1000, false, 1.0),
+            8 * REPLAY_EDGE_RATE_PER_SEC
+        );
     }
 }

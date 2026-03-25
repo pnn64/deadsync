@@ -1,6 +1,6 @@
 use crate::core::gfx::{
-    BlendMode, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    Texture as RendererTexture,
+    BlendMode, DrawStats, MeshMode, ObjectType, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, Texture as RendererTexture, TextureHandle,
 };
 use crate::core::space::ortho_for_window;
 use cgmath::{Matrix4, Vector4};
@@ -15,6 +15,7 @@ use std::{
         atomic::{AtomicU32, Ordering},
     },
     thread,
+    time::Instant,
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -63,33 +64,36 @@ pub fn create_texture(image: &RgbaImage, sampler: SamplerDesc) -> Result<Texture
     })
 }
 
+pub fn update_texture(texture: &mut Texture, image: &RgbaImage) -> Result<(), Box<dyn Error>> {
+    texture.image = image.clone();
+    Ok(())
+}
+
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<String, RendererTexture>,
-) -> Result<u32, Box<dyn Error>> {
+    textures: &HashMap<TextureHandle, RendererTexture>,
+    _apply_present_back_pressure: bool,
+) -> Result<DrawStats, Box<dyn Error>> {
     #[inline(always)]
-    fn lookup_texture_case_insensitive<'a>(
-        textures: &'a HashMap<String, RendererTexture>,
-        key: &str,
-    ) -> Option<&'a RendererTexture> {
-        if let Some(tex) = textures.get(key) {
-            return Some(tex);
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
         }
-        textures
-            .iter()
-            .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
     }
 
     let PhysicalSize { width, height } = state.window_size;
     if width == 0 || height == 0 {
-        return Ok(0);
+        return Ok(DrawStats::default());
     }
 
     let w = width as usize;
     let h = height as usize;
     if w == 0 || h == 0 {
-        return Ok(0);
+        return Ok(DrawStats::default());
     }
 
     let resize_w = NonZeroU32::new(width).unwrap();
@@ -155,17 +159,16 @@ pub fn draw(
                             .unwrap_or(default_proj);
                         match &obj.object_type {
                             ObjectType::Sprite {
-                                texture_id,
                                 tint,
                                 uv_scale,
                                 uv_offset,
                                 local_offset,
                                 local_offset_rot_sin_cos,
                                 edge_fade: _,
+                                ..
                             } => {
-                                let tex_key = texture_id.as_ref();
                                 let Some(RendererTexture::Software(tex)) =
-                                    lookup_texture_case_insensitive(textures, tex_key)
+                                    textures.get(&obj.texture_handle)
                                 else {
                                     continue;
                                 };
@@ -203,17 +206,16 @@ pub fn draw(
                                 }
                             },
                             ObjectType::TexturedMesh {
-                                texture_id,
                                 vertices,
                                 mode,
                                 uv_scale,
                                 uv_offset,
                                 uv_tex_shift,
+                                ..
                             } => match mode {
                                 MeshMode::Triangles => {
-                                    let tex_key = texture_id.as_ref();
                                     let Some(RendererTexture::Software(tex)) =
-                                        lookup_texture_case_insensitive(textures, tex_key)
+                                        textures.get(&obj.texture_handle)
                                     else {
                                         continue;
                                     };
@@ -250,17 +252,15 @@ pub fn draw(
                 .unwrap_or(default_proj);
             let v = match &obj.object_type {
                 ObjectType::Sprite {
-                    texture_id,
                     tint,
                     uv_scale,
                     uv_offset,
                     local_offset,
                     local_offset_rot_sin_cos,
                     edge_fade: _,
+                    ..
                 } => {
-                    let tex_key = texture_id.as_ref();
-                    let Some(RendererTexture::Software(tex)) =
-                        lookup_texture_case_insensitive(textures, tex_key)
+                    let Some(RendererTexture::Software(tex)) = textures.get(&obj.texture_handle)
                     else {
                         continue;
                     };
@@ -296,17 +296,16 @@ pub fn draw(
                     ),
                 },
                 ObjectType::TexturedMesh {
-                    texture_id,
                     vertices,
                     mode,
                     uv_scale,
                     uv_offset,
                     uv_tex_shift,
+                    ..
                 } => match mode {
                     MeshMode::Triangles => {
-                        let tex_key = texture_id.as_ref();
                         let Some(RendererTexture::Software(tex)) =
-                            lookup_texture_case_insensitive(textures, tex_key)
+                            textures.get(&obj.texture_handle)
                         else {
                             continue;
                         };
@@ -333,9 +332,14 @@ pub fn draw(
         }
     }
 
+    let present_started = Instant::now();
     buffer.present()?;
 
-    Ok(vertex_counter.load(Ordering::Relaxed))
+    Ok(DrawStats {
+        vertices: vertex_counter.load(Ordering::Relaxed),
+        present_us: elapsed_us_since(present_started),
+        ..DrawStats::default()
+    })
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {

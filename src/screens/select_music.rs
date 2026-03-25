@@ -1,28 +1,37 @@
 use crate::act;
-use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
-use crate::config::{self, BreakdownStyle, SelectMusicPatternInfoMode};
+use crate::assets::{self, AssetManager, DensityGraphSlot, DensityGraphSource};
+use crate::config::{
+    self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SyncGraphMode,
+};
 use crate::core::audio;
-use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
-use crate::core::input::{InputEvent, PadDir, VirtualAction};
+use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
+use crate::core::input::{InputEvent, PadDir, RawKeyboardEvent, VirtualAction};
 use crate::core::space::{
-    is_wide, screen_center_x, screen_center_y, screen_height, screen_width, widescale,
+    current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+    widescale,
 };
 use crate::game::chart::ChartData;
+use crate::game::known_packs;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
-    gs_scorebox, heart_bg, music_wheel, pad_display, profile_boxes, select_pane, select_shared,
-    sort_menu, step_artist_bar, test_input,
+    select_music::{music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar},
+    shared::{
+        banner as shared_banner, gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input,
+        timers,
+    },
 };
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::{Actor, SizeSpec};
+use crate::ui::actors::{Actor, SizeSpec, SpriteSource};
 use crate::ui::color;
 use crate::ui::font;
+use image::{Rgba, RgbaImage};
 use log::debug;
-use nod::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
+use null_or_die::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
 use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
 use std::cmp::Reverse;
@@ -32,18 +41,27 @@ use std::sync::mpsc;
 use std::sync::{Arc, OnceLock};
 use std::thread::LocalKey;
 use std::time::{Duration, Instant};
-use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::KeyCode;
+
+#[path = "select_music/pack_sync.rs"]
+mod pack_sync;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
 const TRANSITION_OUT_DURATION: f32 = 0.3;
 const RELOAD_BAR_H: f32 = 30.0;
 const SYNC_OVERLAY_Z: i16 = 1495;
-const SYNC_HEAT_CELL_PX: f32 = 5.0;
-const SYNC_HEAT_ALPHA: f32 = 0.92;
+const SYNC_HEAT_TEXTURE_KEY: &str = "__generated/sync-overlay-heat";
+const SYNC_HEAT_ALPHA: f32 = 1.0;
 const SYNC_READY_TEXT_ZOOM: f32 = 0.95;
 const SYNC_READY_LINE_STEP: f32 = 24.0 * SYNC_READY_TEXT_ZOOM;
+const SYNC_OVERLAY_MAX_PENDING_MSGS: usize = 32;
+const SYNC_OVERLAY_MAX_MSGS_PER_FRAME: usize = 32;
+const SYNC_OVERLAY_POLL_BUDGET: Duration = Duration::from_millis(2);
+
+// Simply Love BGAnimations/ScreenSelectMusic overlay/PerPlayer/StepArtist.lua
+// Cycles through AuthorCredit, Description, ChartName every 2 seconds.
+const STEP_ARTIST_CYCLE_SECONDS: f32 = 2.0;
 
 // ITGmania metric: ScreenSelectMusic ShowOptionsMessageSeconds (fallback: 1.5).
 const SHOW_OPTIONS_MESSAGE_SECONDS: f32 = 1.5;
@@ -108,12 +126,17 @@ rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 // --- Timing & Logic Constants ---
 // ITGmania WheelBase::Move() uses `m_TimeBeforeMovingBegins = 1/4.0f` before auto-scrolling.
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
+// ScreenSelectMusic inherits Screen's default menu repeat timing via InputFilter:
+// 0.375s before repeating, then 8 repeats/sec.
+const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
+const OVERLAY_NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(125);
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 // ITGmania InputQueue: g_fSimultaneousThreshold = 0.05f.
 const CHORD_SIMULTANEOUS_WINDOW: Duration = Duration::from_millis(50);
 const PREVIEW_DELAY_SECONDS: f32 = 0.25;
 const PREVIEW_FADE_OUT_SECONDS: f64 = 1.5;
 const DEFAULT_PREVIEW_LENGTH: f64 = 12.0;
+const SELECT_MUSIC_LEADERBOARD_NUM_ENTRIES: usize = 5;
 
 const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
@@ -147,7 +170,7 @@ thread_local! {
     static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(4096));
     static MUSIC_RATE_FMT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(256));
     static MUSIC_RATE_BANNER_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
-    static PEAK_NPS_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
+    static CHART_INFO_CACHE: RefCell<TextCache<(u8, u32, u64, u64)>> = RefCell::new(HashMap::with_capacity(512));
     static STAMINA_MONO_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
     static STAMINA_CANDLES_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
     static STREAM_TOTAL_CACHE: RefCell<TextCache<(u32, u32)>> = RefCell::new(HashMap::with_capacity(512));
@@ -227,11 +250,42 @@ fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
 }
 
 #[inline(always)]
-fn cached_peak_nps_text(peak_nps: f64) -> Arc<str> {
-    let peak_nps = if peak_nps.is_finite() { peak_nps } else { 0.0 };
-    cached_text(&PEAK_NPS_CACHE, peak_nps.to_bits(), || {
-        format!("Peak NPS: {:.1}", peak_nps.max(0.0))
-    })
+fn cached_chart_info_text(
+    show_peak_nps: bool,
+    show_matrix_rating: bool,
+    meter: u32,
+    peak_nps: f64,
+    matrix_rating: f64,
+) -> Arc<str> {
+    let peak_nps = if peak_nps.is_finite() {
+        peak_nps.max(0.0)
+    } else {
+        0.0
+    };
+    let matrix_rating = if matrix_rating.is_finite() {
+        matrix_rating.max(0.0)
+    } else {
+        0.0
+    };
+    let mut mask = (show_peak_nps as u8) | ((show_matrix_rating as u8) << 1);
+    if mask == 0 {
+        mask = 1;
+    }
+    let matrix_rating_rounded = (matrix_rating * 100.0).round() / 100.0;
+    let matrix_rating_text = if meter >= 11 && matrix_rating_rounded > 0.0 {
+        format!("MR: {matrix_rating_rounded:.2}")
+    } else {
+        "MR: N/A".to_string()
+    };
+    cached_text(
+        &CHART_INFO_CACHE,
+        (mask, meter, peak_nps.to_bits(), matrix_rating.to_bits()),
+        || match mask {
+            0b10 => matrix_rating_text,
+            0b11 => format!("PNPS: {peak_nps:.1} | {matrix_rating_text}"),
+            _ => format!("Peak NPS: {peak_nps:.1}"),
+        },
+    )
 }
 
 #[inline(always)]
@@ -414,18 +468,12 @@ fn sec_at_beat(song: &SongData, target_beat: f64) -> f64 {
     if !target_beat.is_finite() || target_beat <= 0.0 {
         return 0.0;
     }
-    if let Some(chart) = song.charts.first() {
-        return chart.timing.get_time_for_beat(target_beat as f32).max(0.0) as f64;
-    }
     sec_at_beat_from_bpms(&song.normalized_bpms, target_beat)
 }
 
 fn beat_at_sec(song: &SongData, target_sec: f64) -> f64 {
     if !target_sec.is_finite() || target_sec <= 0.0 {
         return 0.0;
-    }
-    if let Some(chart) = song.charts.first() {
-        return chart.timing.get_beat_for_time(target_sec as f32).max(0.0) as f64;
     }
     beat_at_sec_from_bpms(&song.normalized_bpms, target_sec)
 }
@@ -449,6 +497,72 @@ fn preview_song_sec(state: &State) -> Option<f64> {
         rel_song_sec = rel_song_sec.rem_euclid(length_sec);
     }
     Some((start_sec + rel_song_sec) as f64)
+}
+
+#[inline(always)]
+fn preview_marker(
+    displayed: Option<&DisplayedChart>,
+    preview_sec: Option<f64>,
+    graph_left: f32,
+    graph_w: f32,
+) -> Option<PreviewMarker> {
+    let displayed = displayed?;
+    let preview_sec = preview_sec?;
+    let chart = displayed.song.charts.get(displayed.chart_ix)?;
+    if graph_w <= 0.0 || !preview_sec.is_finite() {
+        return None;
+    }
+    let first_second = chart.first_second;
+    let last_second = displayed
+        .song
+        .precise_last_second()
+        .max(first_second + 0.001);
+    let (window_w_px, _) = current_window_px();
+    let px_per_unit = window_w_px as f32 / screen_width().max(1.0);
+    let unit_per_px = if px_per_unit.is_finite() && px_per_unit > 0.0 {
+        1.0 / px_per_unit
+    } else {
+        1.0
+    };
+    let width_px = 2.0_f32;
+    let width_units = width_px * unit_per_px;
+    let max_x = (graph_w - width_units).max(0.0);
+    let x = (((preview_sec as f32 - first_second) / (last_second - first_second)).clamp(0.0, 1.0)
+        * max_x)
+        .clamp(0.0, max_x);
+    let left_px = (graph_left + x) * px_per_unit;
+    let right_px = left_px + width_px;
+    let start_px = left_px.floor() as i32;
+    let end_px = right_px.ceil() as i32;
+    let mut marker = PreviewMarker::default();
+    for px in start_px..end_px {
+        if marker.len == marker.cols.len() {
+            break;
+        }
+        let overlap = (right_px.min(px as f32 + 1.0) - left_px.max(px as f32)).clamp(0.0, 1.0);
+        if overlap <= 0.0 {
+            continue;
+        }
+        let col_x = (px as f32 * unit_per_px - graph_left).clamp(0.0, graph_w - unit_per_px);
+        marker.cols[marker.len] = PreviewMarkerCol {
+            x: col_x,
+            a: overlap,
+        };
+        marker.len += 1;
+    }
+    (marker.len > 0).then_some(marker)
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PreviewMarkerCol {
+    x: f32,
+    a: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct PreviewMarker {
+    cols: [PreviewMarkerCol; 4],
+    len: usize,
 }
 
 #[inline(always)]
@@ -562,7 +676,7 @@ fn cached_music_rate_banner_text(rate: f32) -> Arc<str> {
     })
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum NavDirection {
     Left,
     Right,
@@ -641,7 +755,7 @@ impl ReloadUiState {
 
 enum SyncWorkerMsg {
     Event(BiasStreamEvent),
-    Finished(Result<nod::api::SyncChartResult, String>),
+    Finished(Result<null_or_die::api::SyncChartResult, String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -658,15 +772,19 @@ struct SyncOverlayStateData {
     song_offset_seconds: f32,
     kernel_target: KernelTarget,
     kernel_type: BiasKernel,
+    graph_mode: SyncGraphMode,
     cols: usize,
+    freq_rows: usize,
     total_beats: usize,
     digest_rows: usize,
     times_ms: Vec<f64>,
+    freq_domain: Vec<f64>,
     beat_digest: Vec<f64>,
     digest_col_sums: Vec<f64>,
     post_rows: usize,
     post_kernel: Vec<f64>,
     convolution: Vec<f64>,
+    curve_mesh: Option<Arc<[MeshVertex]>>,
     edge_discard: usize,
     beats_processed: usize,
     preview_bias_ms: Option<f64>,
@@ -738,6 +856,7 @@ pub struct State {
     pub gameplay_elapsed: f32,
     displayed_chart_p1: Option<DisplayedChart>,
     displayed_chart_p2: Option<DisplayedChart>,
+    step_artist_cycle_base: f32,
 
     // Internal state
     out_prompt: OutPromptState,
@@ -747,12 +866,14 @@ pub struct State {
     song_search_ignore_next_back_select: bool,
     replay_overlay: sort_menu::ReplayOverlayState,
     sync_overlay: SyncOverlayState,
+    pack_sync_overlay: crate::screens::pack_sync::OverlayState,
     pub test_input_overlay_visible: bool,
     test_input_overlay: test_input::State,
     profile_switch_overlay: Option<profile_boxes::State>,
     pending_replay: Option<sort_menu::ReplayStartPayload>,
     sort_menu: sort_menu::State,
     leaderboard: sort_menu::LeaderboardOverlayState,
+    downloads_overlay: sort_menu::DownloadsOverlayState,
     sort_mode: WheelSortMode,
     all_entries: Vec<MusicWheelEntry>,
     group_entries: Vec<MusicWheelEntry>,
@@ -767,11 +888,13 @@ pub struct State {
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
-    banner_high_quality_requested: bool,
+    pub(crate) banner_high_quality_requested: bool,
     cdtitle_spin_elapsed: f32,
     cdtitle_anim_elapsed: f32,
     last_requested_chart_hash: Option<String>,
     last_requested_chart_hash_p2: Option<String>,
+    last_refreshed_leaderboard_hash: Option<String>,
+    last_refreshed_leaderboard_hash_p2: Option<String>,
     chord_mask_p1: u8,
     chord_mask_p2: u8,
     menu_chord_mask: u8,
@@ -789,6 +912,9 @@ pub struct State {
     last_steps_nav_time_p2: Option<Instant>,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_since: Option<Instant>,
+    overlay_nav_held_direction: Option<NavDirection>,
+    overlay_nav_held_since: Option<Instant>,
+    overlay_nav_last_scrolled_at: Option<Instant>,
     sort_menu_prev_selected_index: usize,
     sort_menu_focus_anim_elapsed: f32,
     currently_playing_preview_path: Option<PathBuf>,
@@ -817,6 +943,86 @@ pub struct State {
     meter_pack_song_counts: HashMap<String, usize>,
     popularity_pack_song_counts: HashMap<String, usize>,
     recent_pack_song_counts: HashMap<String, usize>,
+    new_pack_names: HashSet<String>,
+}
+
+#[inline(always)]
+fn cached_score_exists(score: scores::CachedScore) -> bool {
+    score.grade != scores::Grade::Failed || score.score_percent > 0.0
+}
+
+fn song_has_cached_score(song: &SongData) -> bool {
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        for chart in &song.charts {
+            if scores::get_cached_score_for_side(&chart.short_hash, side)
+                .is_some_and(cached_score_exists)
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn joined_local_profile_ids() -> Vec<String> {
+    let mut profile_ids = Vec::with_capacity(2);
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
+            continue;
+        };
+        if !profile_ids.iter().any(|id| id == &profile_id) {
+            profile_ids.push(profile_id);
+        }
+    }
+    profile_ids
+}
+
+fn sync_new_pack_names(
+    profile_ids: &[String],
+    scanned_pack_names: Vec<String>,
+    scored_pack_names: &HashSet<String>,
+    mode: NewPackMode,
+) -> HashSet<String> {
+    match mode {
+        NewPackMode::Disabled => {
+            known_packs::mark_packs_known(
+                profile_ids,
+                scanned_pack_names.iter().map(String::as_str),
+            );
+            HashSet::new()
+        }
+        NewPackMode::OpenPack => known_packs::sync_known_packs(profile_ids, &scanned_pack_names),
+        NewPackMode::HasScore => scanned_pack_names
+            .into_iter()
+            .filter(|name| !scored_pack_names.contains(name.as_str()))
+            .collect(),
+    }
+}
+
+fn maybe_clear_selected_pack_on_score(state: &mut State, mode: NewPackMode) {
+    if mode != NewPackMode::HasScore
+        || state.sort_mode != WheelSortMode::Group
+        || state.new_pack_names.is_empty()
+    {
+        return;
+    }
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return;
+    };
+    let song = song.clone();
+    if !song_has_cached_score(&song) {
+        return;
+    }
+    let Some(pack_name) = group_name_for_song(&state.entries, &song) else {
+        return;
+    };
+    state.new_pack_names.remove(&pack_name);
 }
 
 pub(crate) fn is_difficulty_playable(song: &Arc<SongData>, difficulty_index: usize) -> bool {
@@ -1416,7 +1622,7 @@ fn song_meter_for_sort(song: &SongData, chart_type: &str) -> Option<u32> {
     let mut best_non_edit: Option<u32> = None;
     let mut best_any: Option<u32> = None;
     for chart in &song.charts {
-        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || chart.notes.is_empty() {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
             continue;
         }
         best_any = Some(best_any.map_or(chart.meter, |m| m.max(chart.meter)));
@@ -1488,7 +1694,7 @@ fn build_popularity_grouped_entries(
         HashMap::with_capacity(songs.len().saturating_mul(8));
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
-            if chart.notes.is_empty() {
+            if !chart.has_note_data {
                 continue;
             }
             hash_to_song_ix
@@ -1547,7 +1753,7 @@ fn build_recent_grouped_entries(
         HashMap::with_capacity(songs.len().saturating_mul(8));
     for (song_ix, song) in songs.iter().enumerate() {
         for chart in &song.charts {
-            if chart.notes.is_empty() {
+            if !chart.has_note_data {
                 continue;
             }
             hash_to_song_ix
@@ -1720,11 +1926,15 @@ pub fn init() -> State {
     let target_chart_type = profile::get_session_play_style().chart_type();
     let total_packs = song_cache.len();
     let total_songs: usize = song_cache.iter().map(|p| p.songs.len()).sum();
+    let new_pack_mode = config::get().select_music_new_pack_mode;
+    let clear_new_packs_on_score = new_pack_mode == NewPackMode::HasScore;
+    let joined_profile_ids = joined_local_profile_ids();
 
     let mut all_entries = Vec::with_capacity(total_packs.saturating_add(total_songs));
     let mut pack_song_counts = HashMap::with_capacity(total_packs);
     let mut pack_total_seconds_by_index = vec![0.0_f64; total_packs];
     let mut song_has_edit_ptrs = HashSet::with_capacity(total_songs);
+    let mut scored_pack_names = HashSet::new();
 
     let profile_data = profile::get();
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
@@ -1746,6 +1956,7 @@ pub fn init() -> State {
         let mut pack_name: Option<String> = None;
         let mut pack_song_count = 0usize;
         let mut pack_total_seconds = 0.0_f64;
+        let mut pack_has_cached_score = false;
 
         for song in &pack.songs {
             let mut has_target_chart_type = false;
@@ -1765,6 +1976,9 @@ pub fn init() -> State {
             }
             if has_edit {
                 song_has_edit_ptrs.insert(Arc::as_ptr(song) as usize);
+            }
+            if clear_new_packs_on_score && !pack_has_cached_score && song_has_cached_score(song) {
+                pack_has_cached_score = true;
             }
 
             let pack_name = pack_name.get_or_insert_with(|| {
@@ -1803,6 +2017,9 @@ pub fn init() -> State {
 
         if let Some(name) = pack_name {
             // Compute cache for get_actors (HOT PATH OPTIMIZATION)
+            if pack_has_cached_score {
+                scored_pack_names.insert(name.clone());
+            }
             pack_song_counts.insert(name, pack_song_count);
             pack_total_seconds_by_index[i] = pack_total_seconds;
         }
@@ -1817,6 +2034,12 @@ pub fn init() -> State {
     let (popularity_entries, popularity_pack_song_counts) =
         build_popularity_grouped_entries(&all_entries);
     let (recent_entries, recent_pack_song_counts) = build_recent_grouped_entries(&all_entries);
+    let new_pack_names = sync_new_pack_names(
+        &joined_profile_ids,
+        pack_song_counts.keys().cloned().collect(),
+        &scored_pack_names,
+        new_pack_mode,
+    );
 
     let mut state = State {
         all_entries: all_entries.clone(),
@@ -1844,12 +2067,14 @@ pub fn init() -> State {
         song_search_ignore_next_back_select: false,
         replay_overlay: sort_menu::ReplayOverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
+        pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
         pending_replay: None,
         sort_menu: sort_menu::State::Hidden,
         leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
+        downloads_overlay: sort_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
@@ -1868,6 +2093,8 @@ pub fn init() -> State {
         displayed_chart_p1: None,
         displayed_chart_p2: None,
         last_requested_chart_hash_p2: None,
+        last_refreshed_leaderboard_hash: None,
+        last_refreshed_leaderboard_hash_p2: None,
         chord_mask_p1: 0,
         chord_mask_p2: 0,
         menu_chord_mask: 0,
@@ -1885,6 +2112,9 @@ pub fn init() -> State {
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_since: None,
+        overlay_nav_held_direction: None,
+        overlay_nav_held_since: None,
+        overlay_nav_last_scrolled_at: None,
         sort_menu_prev_selected_index: 0,
         sort_menu_focus_anim_elapsed: sort_menu::FOCUS_TWEEN_SECONDS,
         currently_playing_preview_path: None,
@@ -1894,6 +2124,7 @@ pub fn init() -> State {
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
+        step_artist_cycle_base: 0.0,
         cached_song: None,
         cached_chart_type: "",
         cached_steps_index_p1: usize::MAX,
@@ -1913,6 +2144,7 @@ pub fn init() -> State {
         meter_pack_song_counts,
         popularity_pack_song_counts,
         recent_pack_song_counts,
+        new_pack_names,
     };
 
     let built_entries_len = state.all_entries.len();
@@ -2017,12 +2249,14 @@ pub fn init_placeholder() -> State {
         song_search_ignore_next_back_select: false,
         replay_overlay: sort_menu::ReplayOverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
+        pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
         pending_replay: None,
         sort_menu: sort_menu::State::Hidden,
         leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
+        downloads_overlay: sort_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: None,
         bg: heart_bg::State::new(),
@@ -2041,6 +2275,8 @@ pub fn init_placeholder() -> State {
         displayed_chart_p1: None,
         displayed_chart_p2: None,
         last_requested_chart_hash_p2: None,
+        last_refreshed_leaderboard_hash: None,
+        last_refreshed_leaderboard_hash_p2: None,
         chord_mask_p1: 0,
         chord_mask_p2: 0,
         menu_chord_mask: 0,
@@ -2058,6 +2294,9 @@ pub fn init_placeholder() -> State {
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_since: None,
+        overlay_nav_held_direction: None,
+        overlay_nav_held_since: None,
+        overlay_nav_last_scrolled_at: None,
         sort_menu_prev_selected_index: 0,
         sort_menu_focus_anim_elapsed: sort_menu::FOCUS_TWEEN_SECONDS,
         currently_playing_preview_path: None,
@@ -2067,6 +2306,7 @@ pub fn init_placeholder() -> State {
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
+        step_artist_cycle_base: 0.0,
         cached_song: None,
         cached_chart_type: "",
         cached_steps_index_p1: usize::MAX,
@@ -2086,6 +2326,7 @@ pub fn init_placeholder() -> State {
         meter_pack_song_counts: HashMap::new(),
         popularity_pack_song_counts: HashMap::new(),
         recent_pack_song_counts: HashMap::new(),
+        new_pack_names: HashSet::new(),
     }
 }
 
@@ -2211,6 +2452,59 @@ fn clear_p2_ud_chord(state: &mut State) {
 }
 
 #[inline(always)]
+fn clear_overlay_nav_hold(state: &mut State) {
+    state.overlay_nav_held_direction = None;
+    state.overlay_nav_held_since = None;
+    state.overlay_nav_last_scrolled_at = None;
+}
+
+#[inline(always)]
+fn start_overlay_nav_hold(state: &mut State, dir: NavDirection) {
+    let now = Instant::now();
+    state.overlay_nav_held_direction = Some(dir);
+    state.overlay_nav_held_since = Some(now);
+    state.overlay_nav_last_scrolled_at = Some(now);
+}
+
+#[inline(always)]
+fn release_overlay_nav_hold(state: &mut State, dir: NavDirection) {
+    if state.overlay_nav_held_direction == Some(dir) {
+        clear_overlay_nav_hold(state);
+    }
+}
+
+#[inline(always)]
+const fn overlay_nav_delta(dir: NavDirection) -> isize {
+    match dir {
+        NavDirection::Left => -1,
+        NavDirection::Right => 1,
+    }
+}
+
+#[inline(always)]
+const fn overlay_nav_dir(action: VirtualAction) -> Option<NavDirection> {
+    match action {
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => Some(NavDirection::Left),
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(NavDirection::Right),
+        _ => None,
+    }
+}
+
+#[inline(always)]
 fn show_sort_menu(state: &mut State) {
     state.sort_menu = sort_menu::State::Visible {
         page: sort_menu::Page::Main,
@@ -2218,6 +2512,7 @@ fn show_sort_menu(state: &mut State) {
     };
     state.sort_menu_prev_selected_index = 0;
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
@@ -2229,6 +2524,7 @@ fn show_sort_menu(state: &mut State) {
 fn hide_sort_menu(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
 }
@@ -2306,33 +2602,48 @@ fn show_sorts_submenu(state: &mut State) {
 }
 
 #[inline(always)]
-fn sort_menu_items(state: &State, page: sort_menu::Page) -> &[sort_menu::Item] {
+fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item> {
     if page == sort_menu::Page::Sorts {
-        return &sort_menu::ITEMS_SORTS;
+        return sort_menu::ITEMS_SORTS.to_vec();
     }
+    let replays_enabled = config::get().machine_enable_replays;
+    let downloads_enabled = crate::game::downloads::sort_menu_available();
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
     );
+    let has_pack_selected = matches!(
+        state.entries.get(state.selected_index),
+        Some(MusicWheelEntry::PackHeader { .. })
+    );
     let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
-    match (
-        profile::get_session_play_style(),
-        single_player_joined,
-        has_song_selected,
-    ) {
-        (profile::PlayStyle::Single, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE,
-        (profile::PlayStyle::Single, true, false) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_DOUBLE[..6]
-        }
-        (profile::PlayStyle::Double, true, true) => &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE,
-        (profile::PlayStyle::Double, true, false) => {
-            &sort_menu::ITEMS_MAIN_WITH_SWITCH_TO_SINGLE[..6]
-        }
-        (_, _, true) => &sort_menu::ITEMS_MAIN,
-        (_, _, false) => &sort_menu::ITEMS_MAIN[..5],
+    let mut items = Vec::with_capacity(11);
+    items.push(sort_menu::ITEM_CATEGORY_SORTS);
+    match (profile::get_session_play_style(), single_player_joined) {
+        (profile::PlayStyle::Single, true) => items.push(sort_menu::ITEM_SWITCH_TO_DOUBLE),
+        (profile::PlayStyle::Double, true) => items.push(sort_menu::ITEM_SWITCH_TO_SINGLE),
+        _ => {}
     }
+    items.push(sort_menu::ITEM_TEST_INPUT);
+    items.push(sort_menu::ITEM_SONG_SEARCH);
+    items.push(sort_menu::ITEM_SWITCH_PROFILE);
+    items.push(sort_menu::ITEM_RELOAD_SONGS_COURSES);
+    if downloads_enabled {
+        items.push(sort_menu::ITEM_VIEW_DOWNLOADS);
+    }
+    if has_pack_selected {
+        items.push(sort_menu::ITEM_SYNC_PACK);
+    }
+    if has_song_selected {
+        items.push(sort_menu::ITEM_SYNC_SONG);
+        if replays_enabled {
+            items.push(sort_menu::ITEM_PLAY_REPLAY);
+        }
+        items.push(sort_menu::ITEM_SHOW_LEADERBOARD);
+    }
+    items
 }
 
 #[inline(always)]
@@ -2340,10 +2651,13 @@ fn show_test_input_overlay(state: &mut State) {
     clear_preview(state);
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.test_input_overlay_visible = true;
@@ -2359,11 +2673,14 @@ fn start_song_search_prompt(state: &mut State) {
     clear_preview(state);
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.song_search = sort_menu::begin_song_search_prompt();
@@ -2375,12 +2692,15 @@ fn show_profile_switch_overlay(state: &mut State) {
     state.sort_menu = sort_menu::State::Hidden;
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     hide_test_input_overlay(state);
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -2410,20 +2730,24 @@ fn restore_sort_menu_after_profile_overlay(state: &mut State) {
     };
     state.sort_menu_prev_selected_index = selected_index;
     state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
+    clear_overlay_nav_hold(state);
 }
 
 #[inline(always)]
 fn close_song_search(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
+    clear_overlay_nav_hold(state);
 }
 
 #[inline(always)]
 fn cancel_song_search(state: &mut State) {
     state.song_search = sort_menu::SongSearchState::Hidden;
+    clear_overlay_nav_hold(state);
     state.song_search_ignore_next_back_select = true;
 }
 
 fn start_song_search_results(state: &mut State, search_text: String) {
+    clear_overlay_nav_hold(state);
     state.song_search = sort_menu::begin_song_search_results(&state.group_entries, search_text);
 }
 
@@ -2492,11 +2816,13 @@ fn start_reload_songs_and_courses(state: &mut State) {
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -2615,8 +2941,7 @@ fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_c
     let count_text = if total == 0 {
         String::new()
     } else {
-        let pct = 100.0 * progress;
-        format!("{done}/{total} ({pct:.1}%)")
+        crate::screens::progress_count_text(done, total)
     };
     let show_speed_row = total > 0;
     let speed_text = if elapsed > 0.0 && show_speed_row {
@@ -2743,14 +3068,7 @@ fn sync_bias_to_graph_x(bias_ms: f64, times_ms: &[f64], graph_w: f32) -> f32 {
         return graph_w * 0.5;
     }
     let t = ((bias_ms - start) / span).clamp(0.0, 1.0) as f32;
-    t * graph_w
-}
-
-#[inline(always)]
-fn sync_value_to_graph_y(value: f64, min_value: f64, max_value: f64, graph_h: f32) -> f32 {
-    let span = (max_value - min_value).abs().max(1e-9);
-    let t = ((value - min_value) / span).clamp(0.0, 1.0) as f32;
-    graph_h - (t * graph_h)
+    t * (graph_w - 1.0).max(0.0)
 }
 
 fn push_line_segment(
@@ -2787,6 +3105,7 @@ fn push_line_segment(
 
 fn build_sync_curve_mesh(
     values: &[f64],
+    edge_discard: usize,
     graph_w: f32,
     graph_h: f32,
     color: [f32; 4],
@@ -2794,18 +3113,28 @@ fn build_sync_curve_mesh(
     if values.len() < 2 || graph_w <= 0.0 || graph_h <= 0.0 {
         return None;
     }
+    let edge = edge_discard.min(values.len() / 2);
+    let core = &values[edge..values.len().saturating_sub(edge)];
+    if core.is_empty() {
+        return None;
+    }
     let mut min_value = f64::INFINITY;
     let mut max_value = f64::NEG_INFINITY;
-    for &value in values {
+    for &value in core {
         min_value = min_value.min(value);
         max_value = max_value.max(value);
     }
+    let y_top = graph_h * 0.1;
+    let y_bottom = graph_h * 0.9;
     let mut out: Vec<MeshVertex> = Vec::with_capacity(values.len().saturating_sub(1) * 6);
     for i in 0..values.len().saturating_sub(1) {
-        let x0 = (i as f32 / (values.len().saturating_sub(1) as f32)) * graph_w;
-        let x1 = ((i + 1) as f32 / (values.len().saturating_sub(1) as f32)) * graph_w;
-        let y0 = sync_value_to_graph_y(values[i], min_value, max_value, graph_h);
-        let y1 = sync_value_to_graph_y(values[i + 1], min_value, max_value, graph_h);
+        let denom = values.len().saturating_sub(1) as f32;
+        let x0 = (i as f32 / denom) * (graph_w - 1.0).max(0.0);
+        let x1 = ((i + 1) as f32 / denom) * (graph_w - 1.0).max(0.0);
+        let t0 = sync_heat_norm01(values[i], min_value, max_value) as f32;
+        let t1 = sync_heat_norm01(values[i + 1], min_value, max_value) as f32;
+        let y0 = y_bottom + (y_top - y_bottom) * t0;
+        let y1 = y_bottom + (y_top - y_bottom) * t1;
         push_line_segment(&mut out, x0, y0, x1, y1, 1.5, color);
     }
     if out.is_empty() {
@@ -2816,45 +3145,36 @@ fn build_sync_curve_mesh(
 }
 
 #[inline(always)]
-fn sync_push_quad(out: &mut Vec<MeshVertex>, x0: f32, y0: f32, x1: f32, y1: f32, color: [f32; 4]) {
-    out.push(MeshVertex {
-        pos: [x0, y0],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x0, y1],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x1, y0],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x1, y0],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x0, y1],
-        color,
-    });
-    out.push(MeshVertex {
-        pos: [x1, y1],
-        color,
-    });
-}
-
-#[inline(always)]
-fn sync_heat_grid_len(graph_len: f32) -> usize {
-    ((graph_len / SYNC_HEAT_CELL_PX).floor() as usize).max(1)
-}
-
-#[inline(always)]
 fn sync_heat_norm01(v: f64, lo: f64, hi: f64) -> f64 {
     let span = hi - lo;
     if !span.is_finite() || span.abs() < f64::EPSILON {
         0.5
     } else {
         ((v - lo) / span).clamp(0.0, 1.0)
+    }
+}
+
+#[inline(always)]
+fn sync_lerp(a: f64, b: f64, t: f64) -> f64 {
+    a * (1.0 - t) + b * t
+}
+
+fn sync_percentile(values: &[f64], pct: f64) -> f64 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    if sorted.len() == 1 {
+        return sorted[0];
+    }
+    let rank = (pct / 100.0) * (sorted.len() - 1) as f64;
+    let lo = rank.floor() as usize;
+    let hi = rank.ceil() as usize;
+    if lo == hi {
+        sorted[lo]
+    } else {
+        sync_lerp(sorted[lo], sorted[hi], rank - lo as f64)
     }
 }
 
@@ -2883,108 +3203,352 @@ fn sync_viridis(t: f64) -> [f32; 4] {
     ]
 }
 
-fn sync_heat_sample(
-    matrix: &[f64],
-    cols: usize,
-    row0: usize,
-    row1: usize,
-    col0: usize,
-    col1: usize,
-) -> Option<f64> {
-    let mut sum = 0.0;
-    let mut count = 0usize;
-    for row in row0..row1 {
-        let base = row * cols;
-        for col in col0..col1 {
-            sum += matrix[base + col];
-            count += 1;
+fn sync_heat_value_range(values: &[f64], clim_pct: Option<(f64, f64)>) -> Option<(f64, f64)> {
+    if values.is_empty() {
+        return None;
+    }
+    if let Some((lo_pct, hi_pct)) = clim_pct {
+        let lo = sync_percentile(values, lo_pct);
+        let hi = sync_percentile(values, hi_pct);
+        if hi > lo {
+            return Some((lo, hi));
         }
     }
-    (count > 0).then_some(sum / count as f64)
+    let lo = values.iter().copied().fold(f64::INFINITY, f64::min);
+    let hi = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    if !lo.is_finite() || !hi.is_finite() {
+        None
+    } else if hi > lo {
+        Some((lo, hi))
+    } else {
+        Some((lo - 1.0, hi + 1.0))
+    }
 }
 
-fn build_sync_heat_mesh(
+fn build_sync_heat_image(
     matrix: &[f64],
     total_rows: usize,
     data_rows: usize,
     cols: usize,
     graph_w: f32,
     graph_h: f32,
-) -> Option<Arc<[MeshVertex]>> {
+    clim_pct: Option<(f64, f64)>,
+) -> Option<RgbaImage> {
     if data_rows == 0 || cols == 0 || graph_w <= 0.0 || graph_h <= 0.0 {
         return None;
     }
-    let grid_rows = total_rows.min(sync_heat_grid_len(graph_h)).max(1);
-    let grid_cols = cols.min(sync_heat_grid_len(graph_w)).max(1);
-    let mut samples = vec![None; grid_rows.saturating_mul(grid_cols)];
-    let mut lo = f64::INFINITY;
-    let mut hi = f64::NEG_INFINITY;
-    for gy in 0..grid_rows {
-        let row0 = gy * total_rows / grid_rows;
-        let row1 = ((gy + 1) * total_rows / grid_rows)
-            .max(row0 + 1)
-            .min(total_rows);
-        let row1_data = row1.min(data_rows);
-        if row0 >= row1_data {
-            continue;
-        }
-        for gx in 0..grid_cols {
-            let col0 = gx * cols / grid_cols;
-            let col1 = ((gx + 1) * cols / grid_cols).max(col0 + 1).min(cols);
-            let value = sync_heat_sample(matrix, cols, row0, row1_data, col0, col1)?;
-            lo = lo.min(value);
-            hi = hi.max(value);
-            samples[gy * grid_cols + gx] = Some(value);
-        }
-    }
-    if !lo.is_finite() || !hi.is_finite() {
-        return None;
-    }
-    let hi = if hi > lo { hi } else { lo + 1.0 };
-    let cell_w = graph_w / grid_cols as f32;
-    let cell_h = graph_h / grid_rows as f32;
-    let cells = samples.iter().filter(|v| v.is_some()).count();
-    let mut out = Vec::with_capacity(cells.saturating_mul(6));
-    for gy in 0..grid_rows {
-        let y0 = gy as f32 * cell_h;
-        let y1 = (gy + 1) as f32 * cell_h;
-        for gx in 0..grid_cols {
-            let Some(value) = samples[gy * grid_cols + gx] else {
-                continue;
+    let image_h = (graph_h.round() as u32).max(1);
+    let image_w = (graph_w.round() as u32).max(1);
+    let used = data_rows.saturating_mul(cols).min(matrix.len());
+    let (lo, hi) = sync_heat_value_range(&matrix[..used], clim_pct)?;
+    let mut image = RgbaImage::new(image_w, image_h);
+    for py in 0..image_h as usize {
+        let row = (((image_h as usize - 1 - py) * total_rows) / image_h as usize)
+            .min(total_rows.saturating_sub(1));
+        for px in 0..image_w as usize {
+            let rgba = if row < data_rows {
+                let col = (px * cols / image_w as usize).min(cols.saturating_sub(1));
+                let value = matrix[row * cols + col];
+                let color = sync_viridis(sync_heat_norm01(value, lo, hi));
+                Rgba([
+                    (color[0] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[1] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[2] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[3] * 255.0).round().clamp(0.0, 255.0) as u8,
+                ])
+            } else {
+                Rgba([0, 0, 0, 0])
             };
-            let x0 = gx as f32 * cell_w;
-            let x1 = (gx + 1) as f32 * cell_w;
-            let color = sync_viridis(sync_heat_norm01(value, lo, hi));
-            sync_push_quad(&mut out, x0, y0, x1, y1, color);
+            image.put_pixel(px as u32, py as u32, rgba);
         }
     }
-    if out.is_empty() {
-        None
-    } else {
-        Some(Arc::from(out.into_boxed_slice()))
-    }
+    Some(image)
 }
 
 fn sync_heat_source(overlay: &SyncOverlayStateData) -> Option<(&[f64], usize, usize)> {
-    if overlay.post_rows > 0
-        && overlay.post_kernel.len() == overlay.post_rows.saturating_mul(overlay.cols)
-    {
-        return Some((
-            overlay.post_kernel.as_slice(),
-            overlay.post_rows,
-            overlay.post_rows,
-        ));
+    match overlay.graph_mode {
+        SyncGraphMode::Frequency
+            if overlay.freq_rows > 0
+                && overlay.freq_domain.len() == overlay.freq_rows.saturating_mul(overlay.cols) =>
+        {
+            Some((
+                overlay.freq_domain.as_slice(),
+                overlay.freq_rows,
+                overlay.freq_rows,
+            ))
+        }
+        SyncGraphMode::BeatIndex
+            if overlay.digest_rows > 0
+                && overlay.beat_digest.len()
+                    == overlay.digest_rows.saturating_mul(overlay.cols) =>
+        {
+            Some((
+                overlay.beat_digest.as_slice(),
+                overlay.total_beats.max(overlay.digest_rows),
+                overlay.digest_rows,
+            ))
+        }
+        SyncGraphMode::PostKernelFingerprint
+            if overlay.post_rows > 0
+                && overlay.post_kernel.len() == overlay.post_rows.saturating_mul(overlay.cols) =>
+        {
+            Some((
+                overlay.post_kernel.as_slice(),
+                overlay.post_rows,
+                overlay.post_rows,
+            ))
+        }
+        SyncGraphMode::PostKernelFingerprint
+            if overlay.phase == SyncOverlayPhase::Running
+                && overlay.digest_rows > 0
+                && overlay.beat_digest.len()
+                    == overlay.digest_rows.saturating_mul(overlay.cols) =>
+        {
+            Some((
+                overlay.beat_digest.as_slice(),
+                overlay.total_beats.max(overlay.digest_rows),
+                overlay.digest_rows,
+            ))
+        }
+        _ => None,
     }
-    if overlay.digest_rows > 0
-        && overlay.beat_digest.len() == overlay.digest_rows.saturating_mul(overlay.cols)
-    {
-        return Some((
-            overlay.beat_digest.as_slice(),
-            overlay.total_beats.max(overlay.digest_rows),
-            overlay.digest_rows,
-        ));
+}
+
+#[inline(always)]
+fn sync_heat_clim_pct(overlay: &SyncOverlayStateData) -> Option<(f64, f64)> {
+    match overlay.graph_mode {
+        SyncGraphMode::Frequency => None,
+        SyncGraphMode::BeatIndex if overlay.phase == SyncOverlayPhase::Ready => Some((10.0, 90.0)),
+        SyncGraphMode::PostKernelFingerprint => Some((3.0, 97.0)),
+        _ => None,
     }
-    None
+}
+
+#[inline(always)]
+fn sync_overlay_graph_size() -> (f32, f32) {
+    (widescale(520.0, 640.0) - 80.0, 132.0)
+}
+
+fn refresh_sync_overlay_heat_texture(overlay: &mut SyncOverlayStateData) {
+    let (graph_w, graph_h) = sync_overlay_graph_size();
+    let Some((matrix, total_rows, data_rows)) = sync_heat_source(overlay) else {
+        return;
+    };
+    let clim_pct = sync_heat_clim_pct(overlay);
+    let Some(image) = build_sync_heat_image(
+        matrix,
+        total_rows,
+        data_rows,
+        overlay.cols,
+        graph_w,
+        graph_h,
+        clim_pct,
+    ) else {
+        return;
+    };
+    assets::register_generated_texture(
+        SYNC_HEAT_TEXTURE_KEY,
+        image,
+        SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            ..SamplerDesc::default()
+        },
+    );
+}
+
+fn refresh_sync_overlay_curve_mesh(overlay: &mut SyncOverlayStateData) {
+    let (graph_w, graph_h) = sync_overlay_graph_size();
+    overlay.curve_mesh = build_sync_curve_mesh(
+        &overlay.convolution,
+        overlay.edge_discard,
+        graph_w,
+        graph_h,
+        [1.0, 1.0, 1.0, 1.0],
+    );
+}
+
+#[derive(Default)]
+struct SyncOverlayRefresh {
+    heat: bool,
+    curve: bool,
+}
+
+impl SyncOverlayRefresh {
+    #[inline(always)]
+    fn heat(&mut self) {
+        self.heat = true;
+    }
+
+    #[inline(always)]
+    fn meshes(&mut self) {
+        self.heat = true;
+        self.curve = true;
+    }
+
+    fn flush(self, overlay: &mut SyncOverlayStateData) {
+        if self.heat {
+            refresh_sync_overlay_heat_texture(overlay);
+        }
+        if self.curve {
+            refresh_sync_overlay_curve_mesh(overlay);
+        }
+    }
+}
+
+#[inline(always)]
+fn sync_overlay_poll_exhausted(started: Instant, handled: usize) -> bool {
+    handled >= SYNC_OVERLAY_MAX_MSGS_PER_FRAME || started.elapsed() >= SYNC_OVERLAY_POLL_BUDGET
+}
+
+fn sync_overlay_apply_beat(
+    overlay: &mut SyncOverlayStateData,
+    beat_seq: usize,
+    row: Vec<f64>,
+    freq_delta: Option<Vec<f64>>,
+    refresh: &mut SyncOverlayRefresh,
+) {
+    if let Some(freq_delta) = freq_delta
+        && overlay.phase == SyncOverlayPhase::Running
+        && overlay.cols > 0
+        && overlay.freq_rows > 0
+        && freq_delta.len() == overlay.freq_rows.saturating_mul(overlay.cols)
+    {
+        if overlay.freq_domain.len() != freq_delta.len() {
+            overlay.freq_domain.resize(freq_delta.len(), 0.0);
+        }
+        for (sum, value) in overlay.freq_domain.iter_mut().zip(freq_delta) {
+            *sum += value;
+        }
+        refresh.heat();
+    }
+
+    if overlay.phase != SyncOverlayPhase::Running
+        || overlay.kernel_target != KernelTarget::Digest
+        || overlay.cols == 0
+        || row.len() != overlay.cols
+    {
+        return;
+    }
+
+    overlay.beats_processed = overlay.beats_processed.max(beat_seq + 1);
+    overlay.digest_rows = overlay.beats_processed;
+    overlay.beat_digest.extend_from_slice(row.as_slice());
+    for (sum, value) in overlay.digest_col_sums.iter_mut().zip(row.iter().copied()) {
+        *sum += value;
+    }
+    overlay.convolution =
+        sync_convolution_from_digest_sums(&overlay.digest_col_sums, overlay.kernel_type);
+    overlay.preview_bias_ms = sync_peak_bias_ms(
+        &overlay.convolution,
+        &overlay.times_ms,
+        overlay.edge_discard,
+    );
+    refresh.meshes();
+}
+
+fn sync_overlay_apply_event(
+    overlay: &mut SyncOverlayStateData,
+    event: BiasStreamEvent,
+    refresh: &mut SyncOverlayRefresh,
+) {
+    match event {
+        BiasStreamEvent::Init(init) => {
+            overlay.cols = init.cols;
+            overlay.freq_rows = init.freq_rows;
+            overlay.total_beats = init.planned_beats;
+            overlay.digest_rows = 0;
+            overlay.times_ms = init.times_ms;
+            overlay.freq_domain.clear();
+            overlay.beat_digest.clear();
+            overlay.kernel_target = init.kernel_target;
+            overlay.digest_col_sums = vec![0.0; init.cols];
+            overlay.post_rows = 0;
+            overlay.post_kernel.clear();
+            overlay.convolution.clear();
+            overlay.curve_mesh = None;
+            overlay.beats_processed = 0;
+            overlay.preview_bias_ms = None;
+        }
+        BiasStreamEvent::Beat(beat) => sync_overlay_apply_beat(
+            overlay,
+            beat.beat_seq,
+            beat.digest_row,
+            beat.freq_delta,
+            refresh,
+        ),
+        BiasStreamEvent::Convolution(conv) => {
+            overlay.post_rows = conv.rows;
+            overlay.post_kernel = conv.post_kernel;
+            overlay.convolution = conv.convolution;
+            overlay.edge_discard = conv.edge_discard;
+            overlay.preview_bias_ms = sync_peak_bias_ms(
+                &overlay.convolution,
+                &overlay.times_ms,
+                overlay.edge_discard,
+            );
+            refresh.meshes();
+        }
+        BiasStreamEvent::Done(estimate) => {
+            overlay.final_bias_ms = Some(estimate.bias_ms);
+            overlay.final_confidence = Some(estimate.confidence);
+        }
+    }
+}
+
+fn sync_overlay_apply_result(
+    overlay: &mut SyncOverlayStateData,
+    result: Result<null_or_die::api::SyncChartResult, String>,
+    refresh: &mut SyncOverlayRefresh,
+) {
+    match result {
+        Ok(result) => {
+            if overlay.times_ms.is_empty() {
+                overlay.times_ms = result.plot.times_ms.clone();
+                overlay.cols = result.plot.cols;
+            }
+            overlay.freq_rows = result.plot.freq_rows;
+            overlay.freq_domain = result.plot.freq_domain.clone();
+            overlay.total_beats = overlay.total_beats.max(result.plot.digest_rows);
+            overlay.beats_processed = overlay.beats_processed.max(result.plot.digest_rows);
+            if overlay.beat_digest.len() != result.plot.beat_digest.len() {
+                overlay.beat_digest = result.plot.beat_digest.clone();
+            }
+            overlay.digest_rows = result.plot.digest_rows;
+            overlay.post_rows = result.plot.post_rows;
+            overlay.post_kernel = result.plot.post_kernel.clone();
+            if overlay.convolution.is_empty() {
+                overlay.convolution = result.plot.convolution.clone();
+                overlay.edge_discard = result.plot.edge_discard;
+            }
+            overlay.final_bias_ms = Some(result.estimate.bias_ms);
+            overlay.final_confidence = Some(result.estimate.confidence);
+            if overlay.preview_bias_ms.is_none() {
+                overlay.preview_bias_ms = sync_peak_bias_ms(
+                    &overlay.convolution,
+                    &overlay.times_ms,
+                    overlay.edge_discard,
+                );
+            }
+            overlay.phase = SyncOverlayPhase::Ready;
+            overlay.yes_selected = true;
+            refresh.meshes();
+        }
+        Err(err) => {
+            overlay.phase = SyncOverlayPhase::Failed;
+            overlay.error_text = Some(err);
+        }
+    }
+}
+
+fn sync_graph_label(overlay: &SyncOverlayStateData) -> &'static str {
+    if overlay.graph_mode == SyncGraphMode::PostKernelFingerprint
+        && (overlay.post_rows == 0
+            || overlay.post_kernel.len() != overlay.post_rows.saturating_mul(overlay.cols))
+    {
+        "Post-kernel fingerprint (building)"
+    } else {
+        overlay.graph_mode.label()
+    }
 }
 
 fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Option<Vec<Actor>> {
@@ -3000,8 +3564,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
     let pane_cy = screen_center_y() - 10.0;
     let pane_left = pane_cx - pane_w * 0.5;
     let pane_top = pane_cy - pane_h * 0.5;
-    let graph_w = pane_w - 80.0;
-    let graph_h = 132.0;
+    let (graph_w, graph_h) = sync_overlay_graph_size();
     let graph_x = pane_left + 40.0;
     let graph_y = pane_top + 116.0;
     let graph_center_y = graph_y + graph_h * 0.5;
@@ -3077,35 +3640,48 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(SYNC_OVERLAY_Z + 4)
     ));
-    if let Some((matrix, total_rows, data_rows)) = sync_heat_source(overlay)
-        && let Some(mesh) = build_sync_heat_mesh(
-            matrix,
-            total_rows,
-            data_rows,
-            overlay.cols,
-            graph_w,
-            graph_h,
-        )
-    {
-        actors.push(Actor::Mesh {
+    if sync_heat_source(overlay).is_some() {
+        actors.push(Actor::Sprite {
             align: [0.0, 0.0],
             offset: [graph_x, graph_y],
+            world_z: 0.0,
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],
-            vertices: mesh,
-            mode: MeshMode::Triangles,
-            visible: true,
-            blend: BlendMode::Alpha,
+            source: SpriteSource::Texture(Arc::<str>::from(SYNC_HEAT_TEXTURE_KEY)),
+            tint: [1.0, 1.0, 1.0, 1.0],
+            glow: [0.0, 0.0, 0.0, 0.0],
             z: SYNC_OVERLAY_Z + 4,
+            cell: None,
+            grid: None,
+            uv_rect: None,
+            visible: true,
+            flip_x: false,
+            flip_y: false,
+            cropleft: 0.0,
+            cropright: 0.0,
+            croptop: 0.0,
+            cropbottom: 0.0,
+            fadeleft: 0.0,
+            faderight: 0.0,
+            fadetop: 0.0,
+            fadebottom: 0.0,
+            blend: BlendMode::Alpha,
+            mask_source: false,
+            mask_dest: false,
+            rot_x_deg: 0.0,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            local_offset: [0.0, 0.0],
+            local_offset_rot_sin_cos: [0.0, 1.0],
+            texcoordvelocity: None,
+            animate: false,
+            state_delay: 0.0,
+            scale: [1.0, 1.0],
+            effect: Default::default(),
         });
     }
-    let graph_label = if overlay.post_rows > 0 && !overlay.post_kernel.is_empty() {
-        "Post-kernel convolution"
-    } else {
-        "Streaming beat digest"
-    };
     actors.push(act!(text:
         font("miso"):
-        settext(graph_label):
+        settext(sync_graph_label(overlay)):
         align(0.5, 0.5):
         xy(pane_cx, graph_y - 14.0):
         zoom(0.8):
@@ -3121,8 +3697,7 @@ fn build_sync_overlay(state: &SyncOverlayState, active_color_index: i32) -> Opti
         z(SYNC_OVERLAY_Z + 5)
     ));
 
-    let curve_color = [1.0, 1.0, 1.0, 1.0];
-    if let Some(mesh) = build_sync_curve_mesh(&overlay.convolution, graph_w, graph_h, curve_color) {
+    if let Some(mesh) = overlay.curve_mesh.clone() {
         actors.push(Actor::Mesh {
             align: [0.0, 0.0],
             offset: [graph_x, graph_y],
@@ -3446,22 +4021,22 @@ fn refresh_after_reload(state: &mut State) {
     *state = refreshed;
 }
 
-fn sort_menu_move(state: &mut State, delta: isize) {
+fn sort_menu_move(state: &mut State, delta: isize) -> bool {
     let (page, selected_index) = match state.sort_menu {
         sort_menu::State::Visible {
             page,
             selected_index,
         } => (page, selected_index),
-        sort_menu::State::Hidden => return,
+        sort_menu::State::Hidden => return false,
     };
     let len = sort_menu_items(state, page).len();
     if len == 0 {
-        return;
+        return false;
     }
     let old = selected_index.min(len - 1);
     let next = ((old as isize + delta).rem_euclid(len as isize)) as usize;
     if next == old {
-        return;
+        return false;
     }
     state.sort_menu_prev_selected_index = old;
     if let sort_menu::State::Visible { selected_index, .. } = &mut state.sort_menu {
@@ -3469,6 +4044,48 @@ fn sort_menu_move(state: &mut State, delta: isize) {
     }
     state.sort_menu_focus_anim_elapsed = 0.0;
     audio::play_sfx("assets/sounds/change.ogg");
+    true
+}
+
+fn update_overlay_nav_hold(state: &mut State) {
+    let Some(dir) = state.overlay_nav_held_direction else {
+        return;
+    };
+    let Some(held_since) = state.overlay_nav_held_since else {
+        clear_overlay_nav_hold(state);
+        return;
+    };
+    let Some(last_at) = state.overlay_nav_last_scrolled_at else {
+        clear_overlay_nav_hold(state);
+        return;
+    };
+
+    let overlay_active = state.sort_menu != sort_menu::State::Hidden
+        || matches!(state.song_search, sort_menu::SongSearchState::Results(_));
+    if !overlay_active {
+        clear_overlay_nav_hold(state);
+        return;
+    }
+
+    let now = Instant::now();
+    if now.duration_since(held_since) < OVERLAY_NAV_INITIAL_HOLD_DELAY
+        || now.duration_since(last_at) < OVERLAY_NAV_REPEAT_SCROLL_INTERVAL
+    {
+        return;
+    }
+
+    let moved = if let sort_menu::SongSearchState::Results(results) = &mut state.song_search {
+        if results.input_lock > 0.0 {
+            false
+        } else {
+            sort_menu::song_search_move(results, overlay_nav_delta(dir))
+        }
+    } else {
+        sort_menu_move(state, overlay_nav_delta(dir))
+    };
+    if moved {
+        state.overlay_nav_last_scrolled_at = Some(now);
+    }
 }
 
 #[inline(always)]
@@ -3494,7 +4111,9 @@ fn show_leaderboard_overlay(state: &mut State) {
     let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
     if let Some(overlay) = sort_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
         state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+        state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
         state.sync_overlay = SyncOverlayState::Hidden;
+        pack_sync::hide_overlay(state);
         state.profile_switch_overlay = None;
         hide_test_input_overlay(state);
         state.leaderboard = overlay;
@@ -3502,7 +4121,21 @@ fn show_leaderboard_overlay(state: &mut State) {
     }
 }
 
+fn show_downloads_overlay(state: &mut State) {
+    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
+    state.profile_switch_overlay = None;
+    hide_test_input_overlay(state);
+    state.downloads_overlay = sort_menu::show_downloads_overlay();
+    clear_preview(state);
+}
+
 fn show_replay_overlay(state: &mut State) {
+    if !config::get().machine_enable_replays {
+        return;
+    }
     let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
         return;
     };
@@ -3515,7 +4148,9 @@ fn show_replay_overlay(state: &mut State) {
         return;
     }
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     state.replay_overlay = overlay;
@@ -3538,7 +4173,15 @@ fn selected_steps_index_for_sync(state: &State) -> usize {
     }
 }
 
-fn selected_chart_ix_for_sync(
+fn sync_chart_label(chart: &ChartData) -> String {
+    if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.description.trim().is_empty() {
+        format!("{} ({})", chart.difficulty, chart.description)
+    } else {
+        chart.difficulty.clone()
+    }
+}
+
+pub(crate) fn selected_chart_ix_for_sync(
     song: &SongData,
     chart_type: &str,
     steps_index: usize,
@@ -3631,8 +4274,44 @@ fn sync_prompt_offset_line(old_offset: f32, new_offset: f32) -> Option<String> {
     ))
 }
 
-fn build_sync_save_prompt_text(_overlay: &SyncOverlayStateData) -> String {
-    "Would you like to save these changes?\nChoosing NO will discard your changes.".to_string()
+#[inline(always)]
+fn sync_confidence_threshold_percent() -> u8 {
+    config::get().null_or_die_confidence_percent.min(100)
+}
+
+#[inline(always)]
+fn sync_confidence_threshold() -> f64 {
+    f64::from(sync_confidence_threshold_percent()) / 100.0
+}
+
+#[inline(always)]
+fn sync_confidence_percent(confidence: Option<f64>) -> u32 {
+    (confidence.unwrap_or(0.0).clamp(0.0, 1.0) * 100.0).round() as u32
+}
+
+fn sync_low_confidence_warning(confidence: Option<f64>, threshold: f64) -> Option<String> {
+    let confidence = confidence?;
+    if confidence >= threshold {
+        return None;
+    }
+    let confidence_pct = sync_confidence_percent(Some(confidence));
+    let threshold_pct = (threshold.clamp(0.0, 1.0) * 100.0).round() as u32;
+    Some(format!(
+        "Warning: confidence {confidence_pct}% is below the {threshold_pct}% pack-sync threshold.\nSingle-song sync can still save it."
+    ))
+}
+
+fn build_sync_save_prompt_text(overlay: &SyncOverlayStateData) -> String {
+    let mut prompt = String::new();
+    if let Some(warning) =
+        sync_low_confidence_warning(overlay.final_confidence, sync_confidence_threshold())
+    {
+        prompt.push_str(&warning);
+        prompt.push_str("\n\n");
+    }
+    prompt.push_str("Would you like to save these changes?\n");
+    prompt.push_str("Choosing NO will discard your changes.");
+    prompt
 }
 
 fn show_sync_overlay(state: &mut State) {
@@ -3649,22 +4328,20 @@ fn show_sync_overlay(state: &mut State) {
     let Some(chart) = song.charts.get(chart_ix) else {
         return;
     };
-    let chart_label =
-        if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.description.trim().is_empty() {
-            format!("{} ({})", chart.difficulty, chart.description)
-        } else {
-            chart.difficulty.clone()
-        };
+    let chart_label = sync_chart_label(chart);
 
     clear_preview(state);
     state.song_search = sort_menu::SongSearchState::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     clear_menu_chord(state);
     clear_p1_ud_chord(state);
     clear_p2_ud_chord(state);
+    clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
     state.last_steps_nav_dir_p1 = None;
@@ -3672,20 +4349,21 @@ fn show_sync_overlay(state: &mut State) {
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
 
-    let cfg = nod::api::default_bias_cfg();
+    let cfg = config::null_or_die_bias_cfg();
     let kernel_target = cfg.kernel_target;
     let kernel_type = cfg.kernel_type;
+    let graph_mode = config::get().null_or_die_sync_graph;
     let stream_cfg = BiasStreamCfg {
-        emit_freq_delta: kernel_target == KernelTarget::Accumulator,
+        emit_freq_delta: matches!(graph_mode, SyncGraphMode::Frequency),
         orientation: GraphOrientation::Horizontal,
     };
 
     let simfile_path = song.simfile_path.clone();
     let simfile_path_thread = simfile_path.clone();
-    let (tx, rx) = mpsc::channel::<SyncWorkerMsg>();
+    let (tx, rx) = mpsc::sync_channel::<SyncWorkerMsg>(SYNC_OVERLAY_MAX_PENDING_MSGS);
     std::thread::spawn(move || {
         let tx_done = tx.clone();
-        let result = nod::api::analyze_chart_stream(
+        let result = null_or_die::api::analyze_chart_stream(
             simfile_path_thread.as_path(),
             chart_ix,
             &cfg,
@@ -3704,15 +4382,19 @@ fn show_sync_overlay(state: &mut State) {
         song_offset_seconds: song.offset,
         kernel_target,
         kernel_type,
+        graph_mode,
         cols: 0,
+        freq_rows: 0,
         total_beats: 0,
         digest_rows: 0,
         times_ms: Vec::new(),
+        freq_domain: Vec::new(),
         beat_digest: Vec::new(),
         digest_col_sums: Vec::new(),
         post_rows: 0,
         post_kernel: Vec::new(),
         convolution: Vec::new(),
+        curve_mesh: None,
         edge_discard: 2,
         beats_processed: 0,
         preview_bias_ms: None,
@@ -3726,101 +4408,23 @@ fn show_sync_overlay(state: &mut State) {
 }
 
 fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
+    let started = Instant::now();
+    let mut handled = 0usize;
+    let mut refresh = SyncOverlayRefresh::default();
+
     loop {
+        if sync_overlay_poll_exhausted(started, handled) {
+            break;
+        }
         match overlay.rx.try_recv() {
-            Ok(SyncWorkerMsg::Event(event)) => match event {
-                BiasStreamEvent::Init(init) => {
-                    overlay.cols = init.cols;
-                    overlay.total_beats = init.planned_beats;
-                    overlay.digest_rows = 0;
-                    overlay.times_ms = init.times_ms;
-                    overlay.beat_digest.clear();
-                    overlay.kernel_target = init.kernel_target;
-                    overlay.digest_col_sums = vec![0.0; init.cols];
-                    overlay.post_rows = 0;
-                    overlay.post_kernel.clear();
-                    overlay.convolution.clear();
-                    overlay.beats_processed = 0;
-                    overlay.preview_bias_ms = None;
-                }
-                BiasStreamEvent::Beat(beat) => {
-                    if overlay.phase != SyncOverlayPhase::Running
-                        || overlay.kernel_target != KernelTarget::Digest
-                        || overlay.cols == 0
-                        || beat.digest_row.len() != overlay.cols
-                    {
-                        continue;
-                    }
-                    let beat_seq = beat.beat_seq;
-                    let row = beat.digest_row;
-                    overlay.beats_processed = overlay.beats_processed.max(beat_seq + 1);
-                    overlay.digest_rows = overlay.beats_processed;
-                    overlay.beat_digest.extend_from_slice(row.as_slice());
-                    for (sum, value) in overlay.digest_col_sums.iter_mut().zip(row.iter().copied())
-                    {
-                        *sum += value;
-                    }
-                    overlay.convolution = sync_convolution_from_digest_sums(
-                        &overlay.digest_col_sums,
-                        overlay.kernel_type,
-                    );
-                    overlay.preview_bias_ms = sync_peak_bias_ms(
-                        &overlay.convolution,
-                        &overlay.times_ms,
-                        overlay.edge_discard,
-                    );
-                }
-                BiasStreamEvent::Convolution(conv) => {
-                    overlay.post_rows = conv.rows;
-                    overlay.post_kernel = conv.post_kernel;
-                    overlay.convolution = conv.convolution;
-                    overlay.edge_discard = conv.edge_discard;
-                    overlay.preview_bias_ms = sync_peak_bias_ms(
-                        &overlay.convolution,
-                        &overlay.times_ms,
-                        overlay.edge_discard,
-                    );
-                }
-                BiasStreamEvent::Done(estimate) => {
-                    overlay.final_bias_ms = Some(estimate.bias_ms);
-                    overlay.final_confidence = Some(estimate.confidence);
-                }
-            },
-            Ok(SyncWorkerMsg::Finished(result)) => match result {
-                Ok(result) => {
-                    if overlay.times_ms.is_empty() {
-                        overlay.times_ms = result.plot.times_ms.clone();
-                        overlay.cols = result.plot.cols;
-                    }
-                    overlay.total_beats = overlay.total_beats.max(result.plot.digest_rows);
-                    overlay.beats_processed = overlay.beats_processed.max(result.plot.digest_rows);
-                    if overlay.beat_digest.len() != result.plot.beat_digest.len() {
-                        overlay.beat_digest = result.plot.beat_digest.clone();
-                    }
-                    overlay.digest_rows = result.plot.digest_rows;
-                    overlay.post_rows = result.plot.post_rows;
-                    overlay.post_kernel = result.plot.post_kernel.clone();
-                    if overlay.convolution.is_empty() {
-                        overlay.convolution = result.plot.convolution.clone();
-                        overlay.edge_discard = result.plot.edge_discard;
-                    }
-                    overlay.final_bias_ms = Some(result.estimate.bias_ms);
-                    overlay.final_confidence = Some(result.estimate.confidence);
-                    if overlay.preview_bias_ms.is_none() {
-                        overlay.preview_bias_ms = sync_peak_bias_ms(
-                            &overlay.convolution,
-                            &overlay.times_ms,
-                            overlay.edge_discard,
-                        );
-                    }
-                    overlay.phase = SyncOverlayPhase::Ready;
-                    overlay.yes_selected = true;
-                }
-                Err(err) => {
-                    overlay.phase = SyncOverlayPhase::Failed;
-                    overlay.error_text = Some(err);
-                }
-            },
+            Ok(SyncWorkerMsg::Event(event)) => {
+                sync_overlay_apply_event(overlay, event, &mut refresh);
+                handled += 1;
+            }
+            Ok(SyncWorkerMsg::Finished(result)) => {
+                sync_overlay_apply_result(overlay, result, &mut refresh);
+                handled += 1;
+            }
             Err(mpsc::TryRecvError::Empty) => break,
             Err(mpsc::TryRecvError::Disconnected) => {
                 if overlay.phase == SyncOverlayPhase::Running {
@@ -3831,6 +4435,8 @@ fn poll_sync_overlay(overlay: &mut SyncOverlayStateData) {
             }
         }
     }
+
+    refresh.flush(overlay);
 }
 
 fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
@@ -3962,6 +4568,20 @@ fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
     ScreenAction::None
 }
 
+fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    match sort_menu::handle_downloads_input(&mut state.downloads_overlay, ev) {
+        sort_menu::DownloadsInputOutcome::ChangedSelection => {
+            audio::play_sfx("assets/sounds/change.ogg");
+        }
+        sort_menu::DownloadsInputOutcome::Closed => {
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
+        sort_menu::DownloadsInputOutcome::None => {}
+    }
+
+    ScreenAction::None
+}
+
 fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match sort_menu::handle_replay_input(&mut state.replay_overlay, ev) {
         sort_menu::ReplayInputOutcome::ChangedSelection => {
@@ -4016,6 +4636,7 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
 }
 
 fn sort_menu_activate(state: &mut State) -> ScreenAction {
+    clear_overlay_nav_hold(state);
     let (page, selected_index) = match state.sort_menu {
         sort_menu::State::Visible {
             page,
@@ -4111,9 +4732,19 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
             start_reload_songs_and_courses(state);
             ScreenAction::None
         }
+        sort_menu::Action::ViewDownloads => {
+            hide_sort_menu(state);
+            show_downloads_overlay(state);
+            ScreenAction::None
+        }
         sort_menu::Action::SyncSong => {
             hide_sort_menu(state);
             show_sync_overlay(state);
+            ScreenAction::None
+        }
+        sort_menu::Action::SyncPack => {
+            hide_sort_menu(state);
+            pack_sync::show_from_selected(state);
             ScreenAction::None
         }
         sort_menu::Action::PlayReplay => {
@@ -4130,127 +4761,136 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
 }
 
 fn handle_sort_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-    match ev.action {
-        VirtualAction::p1_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p1_left
-        | VirtualAction::p1_menu_left
-        | VirtualAction::p2_up
-        | VirtualAction::p2_menu_up
-        | VirtualAction::p2_left
-        | VirtualAction::p2_menu_left => sort_menu_move(state, -1),
-        VirtualAction::p1_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p1_right
-        | VirtualAction::p1_menu_right
-        | VirtualAction::p2_down
-        | VirtualAction::p2_menu_down
-        | VirtualAction::p2_right
-        | VirtualAction::p2_menu_right => sort_menu_move(state, 1),
-        VirtualAction::p1_start | VirtualAction::p2_start => return sort_menu_activate(state),
-        VirtualAction::p1_back
-        | VirtualAction::p2_back
-        | VirtualAction::p1_select
-        | VirtualAction::p2_select => {
-            audio::play_sfx("assets/sounds/start.ogg");
-            match state.sort_menu {
-                sort_menu::State::Visible {
-                    page: sort_menu::Page::Sorts,
-                    ..
-                } => {
-                    state.sort_menu = sort_menu::State::Visible {
-                        page: sort_menu::Page::Main,
-                        selected_index: 0,
-                    };
-                    state.sort_menu_prev_selected_index = 0;
-                    state.sort_menu_focus_anim_elapsed = 0.0;
-                }
-                _ => hide_sort_menu(state),
-            }
+    let Some(dir) = overlay_nav_dir(ev.action) else {
+        if !ev.pressed {
+            return ScreenAction::None;
         }
-        _ => {}
-    }
-    ScreenAction::None
-}
-
-fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-
-    let mut prompt_start: Option<String> = None;
-    let mut prompt_close = false;
-    match &mut state.song_search {
-        sort_menu::SongSearchState::TextEntry(entry) => match ev.action {
-            VirtualAction::p1_start | VirtualAction::p2_start => {
-                prompt_start = Some(entry.query.clone());
-            }
+        clear_overlay_nav_hold(state);
+        return match ev.action {
+            VirtualAction::p1_start | VirtualAction::p2_start => sort_menu_activate(state),
             VirtualAction::p1_back
             | VirtualAction::p2_back
             | VirtualAction::p1_select
             | VirtualAction::p2_select => {
-                prompt_close = true;
-            }
-            _ => {}
-        },
-        sort_menu::SongSearchState::Results(results) => {
-            if results.input_lock > 0.0 {
-                return ScreenAction::None;
-            }
-            match ev.action {
-                VirtualAction::p1_up
-                | VirtualAction::p1_menu_up
-                | VirtualAction::p1_left
-                | VirtualAction::p1_menu_left
-                | VirtualAction::p2_up
-                | VirtualAction::p2_menu_up
-                | VirtualAction::p2_left
-                | VirtualAction::p2_menu_left => {
-                    let _ = sort_menu::song_search_move(results, -1);
-                }
-                VirtualAction::p1_down
-                | VirtualAction::p1_menu_down
-                | VirtualAction::p1_right
-                | VirtualAction::p1_menu_right
-                | VirtualAction::p2_down
-                | VirtualAction::p2_menu_down
-                | VirtualAction::p2_right
-                | VirtualAction::p2_menu_right => {
-                    let _ = sort_menu::song_search_move(results, 1);
-                }
-                VirtualAction::p1_start | VirtualAction::p2_start => {
-                    let picked =
-                        sort_menu::song_search_focused_candidate(results).map(|c| c.song.clone());
-                    close_song_search(state);
-                    if let Some(song) = picked {
-                        focus_song_from_search(state, &song);
-                        refresh_after_reload(state);
+                audio::play_sfx("assets/sounds/start.ogg");
+                match state.sort_menu {
+                    sort_menu::State::Visible {
+                        page: sort_menu::Page::Sorts,
+                        ..
+                    } => {
+                        state.sort_menu = sort_menu::State::Visible {
+                            page: sort_menu::Page::Main,
+                            selected_index: 0,
+                        };
+                        state.sort_menu_prev_selected_index = 0;
+                        state.sort_menu_focus_anim_elapsed = 0.0;
                     }
+                    _ => hide_sort_menu(state),
+                }
+                ScreenAction::None
+            }
+            _ => ScreenAction::None,
+        };
+    };
+
+    if !ev.pressed {
+        release_overlay_nav_hold(state, dir);
+        return ScreenAction::None;
+    }
+
+    let _ = sort_menu_move(state, overlay_nav_delta(dir));
+    start_overlay_nav_hold(state, dir);
+    ScreenAction::None
+}
+
+fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if matches!(state.song_search, sort_menu::SongSearchState::Hidden) {
+        return ScreenAction::None;
+    }
+
+    if matches!(state.song_search, sort_menu::SongSearchState::TextEntry(_)) {
+        if !ev.pressed {
+            return ScreenAction::None;
+        }
+
+        let mut prompt_start = None;
+        let mut prompt_close = false;
+        if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
+            match ev.action {
+                VirtualAction::p1_start | VirtualAction::p2_start => {
+                    prompt_start = Some(entry.query.clone());
                 }
                 VirtualAction::p1_back
                 | VirtualAction::p2_back
                 | VirtualAction::p1_select
                 | VirtualAction::p2_select => {
-                    cancel_song_search(state);
+                    prompt_close = true;
                 }
                 _ => {}
             }
         }
-        sort_menu::SongSearchState::Hidden => {}
-    }
 
-    if let Some(search_text) = prompt_start {
-        start_song_search_results(state, search_text);
-        return ScreenAction::None;
-    }
-    if prompt_close {
-        cancel_song_search(state);
+        if let Some(search_text) = prompt_start {
+            start_song_search_results(state, search_text);
+        } else if prompt_close {
+            cancel_song_search(state);
+        }
         return ScreenAction::None;
     }
 
+    if let Some(dir) = overlay_nav_dir(ev.action) {
+        if !ev.pressed {
+            release_overlay_nav_hold(state, dir);
+            return ScreenAction::None;
+        }
+
+        if let sort_menu::SongSearchState::Results(results) = &state.song_search
+            && results.input_lock > 0.0
+        {
+            return ScreenAction::None;
+        }
+
+        start_overlay_nav_hold(state, dir);
+        if let sort_menu::SongSearchState::Results(results) = &mut state.song_search
+            && results.input_lock <= 0.0
+        {
+            let _ = sort_menu::song_search_move(results, overlay_nav_delta(dir));
+        }
+        return ScreenAction::None;
+    }
+
+    if !ev.pressed {
+        return ScreenAction::None;
+    }
+
+    if let sort_menu::SongSearchState::Results(results) = &state.song_search
+        && results.input_lock > 0.0
+    {
+        return ScreenAction::None;
+    }
+
+    clear_overlay_nav_hold(state);
+    match ev.action {
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            let picked = if let sort_menu::SongSearchState::Results(results) = &state.song_search {
+                sort_menu::song_search_focused_candidate(results).map(|c| c.song.clone())
+            } else {
+                None
+            };
+            close_song_search(state);
+            if let Some(song) = picked {
+                focus_song_from_search(state, &song);
+                refresh_after_reload(state);
+            }
+        }
+        VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => {
+            cancel_song_search(state);
+        }
+        _ => {}
+    }
     ScreenAction::None
 }
 
@@ -4338,6 +4978,7 @@ pub fn handle_pad_dir(
 
                         if let Some(new_idx) = new_idx {
                             state.selected_steps_index = new_idx;
+                            state.step_artist_cycle_base = state.session_elapsed;
                             if new_idx < color::FILE_DIFFICULTY_NAMES.len() {
                                 state.preferred_difficulty_index = new_idx;
                             }
@@ -4488,6 +5129,7 @@ fn handle_pad_dir_p2(
 
                 if let Some(new_idx) = new_idx {
                     state.p2_selected_steps_index = new_idx;
+                    state.step_artist_cycle_base = state.session_elapsed;
                     if new_idx < color::FILE_DIFFICULTY_NAMES.len() {
                         state.p2_preferred_difficulty_index = new_idx;
                     }
@@ -4576,6 +5218,12 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
         Some(MusicWheelEntry::PackHeader { name, .. }) => {
             audio::play_sfx("assets/sounds/expand.ogg");
             let target = name.clone();
+            if config::get().select_music_new_pack_mode == NewPackMode::OpenPack
+                && state.new_pack_names.remove(&target)
+            {
+                let profile_ids = joined_local_profile_ids();
+                known_packs::mark_pack_known(&profile_ids, &target);
+            }
             if state.expanded_pack_name.as_ref() == Some(&target) {
                 state.expanded_pack_name = None;
             } else {
@@ -4597,18 +5245,28 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
     }
 }
 
-pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
+pub fn handle_raw_key_event(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+    text: Option<&str>,
+) -> ScreenAction {
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
 
+    if !matches!(
+        state.pack_sync_overlay,
+        crate::screens::pack_sync::OverlayState::Hidden
+    ) {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
+            pack_sync::hide_overlay(state);
+            state.song_search_ignore_next_back_select = true;
+        }
+        return ScreenAction::None;
+    }
+
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
-        if key.state == ElementState::Pressed
-            && matches!(
-                key.physical_key,
-                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
-            )
-        {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             hide_sync_overlay(state);
             state.song_search_ignore_next_back_select = true;
         }
@@ -4616,12 +5274,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
     }
 
     if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
-        if key.state == ElementState::Pressed
-            && matches!(
-                key.physical_key,
-                winit::keyboard::PhysicalKey::Code(KeyCode::Escape)
-            )
-        {
+        if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
             state.song_search_ignore_next_back_select = true;
             return ScreenAction::None;
@@ -4635,9 +5288,9 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    if key.state == ElementState::Pressed {
+    if key.is_some_and(|key| key.pressed) {
         if matches!(state.song_search, sort_menu::SongSearchState::Results(_))
-            && let winit::keyboard::PhysicalKey::Code(KeyCode::Escape) = key.physical_key
+            && key.is_some_and(|key| key.code == KeyCode::Escape)
         {
             cancel_song_search(state);
             return ScreenAction::None;
@@ -4645,7 +5298,8 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
         if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
-            if let winit::keyboard::PhysicalKey::Code(code) = key.physical_key {
+            if let Some(key) = key {
+                let code = key.code;
                 match code {
                     KeyCode::Backspace => {
                         sort_menu::song_search_backspace(entry);
@@ -4663,7 +5317,7 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
 
             if !prompt_close
                 && prompt_start.is_none()
-                && let Some(text) = key.text.as_ref()
+                && let Some(text) = text
             {
                 sort_menu::song_search_add_text(entry, text);
             }
@@ -4678,12 +5332,19 @@ pub fn handle_raw_key_event(state: &mut State, key: &KeyEvent) -> ScreenAction {
             }
             return ScreenAction::None;
         }
+    } else if key.is_none() && text.is_some() {
+        if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
+            if let Some(text) = text {
+                sort_menu::song_search_add_text(entry, text);
+            }
+            return ScreenAction::None;
+        }
     }
 
-    if key.state != ElementState::Pressed {
+    if !key.is_some_and(|key| key.pressed) {
         return ScreenAction::None;
     }
-    if let winit::keyboard::PhysicalKey::Code(KeyCode::F7) = key.physical_key {
+    if key.is_some_and(|key| key.code == KeyCode::F7) {
         let target_chart_type = profile::get_session_play_style().chart_type();
         if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
             if let Some(chart) =
@@ -4740,6 +5401,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return handle_song_search_input(state, ev);
     }
 
+    if !matches!(
+        state.pack_sync_overlay,
+        crate::screens::pack_sync::OverlayState::Hidden
+    ) {
+        return pack_sync::handle_input(state, ev);
+    }
+
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
         return handle_sync_overlay_input(state, ev);
     }
@@ -4763,6 +5431,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         sort_menu::LeaderboardOverlayState::Hidden
     ) {
         return handle_leaderboard_input(state, ev);
+    }
+
+    if !matches!(
+        state.downloads_overlay,
+        sort_menu::DownloadsOverlayState::Hidden
+    ) {
+        return handle_downloads_overlay_input(state, ev);
     }
 
     if state.sort_menu != sort_menu::State::Hidden {
@@ -4894,6 +5569,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     if sort_menu::update_song_search(&mut state.song_search, dt) {
+        update_overlay_nav_hold(state);
+        return ScreenAction::None;
+    }
+    if pack_sync::poll(state) {
         return ScreenAction::None;
     }
     if let SyncOverlayState::Visible(overlay) = &mut state.sync_overlay {
@@ -4949,6 +5628,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     }
 
     sort_menu::update_leaderboard_overlay(&mut state.leaderboard, dt);
+    sort_menu::update_downloads_overlay(&mut state.downloads_overlay, dt);
 
     state.time_since_selection_change += dt;
     if dt > 0.0 {
@@ -4964,6 +5644,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.sort_menu_focus_anim_elapsed =
                 (state.sort_menu_focus_anim_elapsed + dt).min(sort_menu::FOCUS_TWEEN_SECONDS);
         }
+    }
+    if state.sort_menu != sort_menu::State::Hidden {
+        update_overlay_nav_hold(state);
     }
 
     let now = Instant::now();
@@ -4983,6 +5666,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         audio::play_sfx("assets/sounds/change.ogg");
         state.prev_selected_index = state.selected_index;
         state.time_since_selection_change = 0.0;
+        state.step_artist_cycle_base = state.session_elapsed;
         state.cdtitle_spin_elapsed = 0.0;
         state.cdtitle_anim_elapsed = 0.0;
 
@@ -5029,25 +5713,28 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         );
     }
 
-    if state.sort_menu != sort_menu::State::Hidden
+    let overlays_block_delayed_updates = state.sort_menu != sort_menu::State::Hidden
         || !matches!(
             state.leaderboard,
             sort_menu::LeaderboardOverlayState::Hidden
         )
+        || !matches!(
+            state.pack_sync_overlay,
+            crate::screens::pack_sync::OverlayState::Hidden
+        )
         || !matches!(state.sync_overlay, SyncOverlayState::Hidden)
         || !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden)
         || state.profile_switch_overlay.is_some()
-        || state.test_input_overlay_visible
-    {
-        if state.currently_playing_preview_path.is_some() {
-            clear_preview(state);
-        }
-        return ScreenAction::None;
+        || state.test_input_overlay_visible;
+    if overlays_block_delayed_updates && state.currently_playing_preview_path.is_some() {
+        clear_preview(state);
     }
 
     let cfg = config::get();
+    maybe_clear_selected_pack_on_score(state, cfg.select_music_new_pack_mode);
 
-    // --- Immediate Updates ---
+    // Keep banner/CDTitle aligned to the restored wheel selection even while
+    // overlays are visible; only preview/GS fetches are paused under overlays.
     let (selected_song, selected_pack) = match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(s)) => (Some(s.clone()), None),
         Some(MusicWheelEntry::PackHeader {
@@ -5096,6 +5783,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         return ScreenAction::RequestCdTitle(new_cdtitle);
     }
 
+    if overlays_block_delayed_updates {
+        return ScreenAction::None;
+    }
+
     // --- Delayed Updates ---
     if cfg.show_select_music_previews && allow_gs_fetch_for_selection(state) {
         sync_preview_song(state, selected_song.as_ref(), cfg.select_music_preview_loop);
@@ -5106,6 +5797,11 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if allow_gs_fetch_for_selection(state) {
         let play_style = profile::get_session_play_style();
         let target_chart_type = play_style.chart_type();
+        let show_select_music_leaderboards = cfg.show_select_music_scorebox
+            && (cfg.select_music_scorebox_cycle_itg
+                || cfg.select_music_scorebox_cycle_ex
+                || cfg.select_music_scorebox_cycle_hard_ex
+                || cfg.select_music_scorebox_cycle_tournaments);
 
         if let Some(song) = selected_song.as_ref() {
             let is_versus = play_style == crate::game::profile::PlayStyle::Versus;
@@ -5135,8 +5831,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                         DensityGraphSource {
                             max_nps: c.max_nps,
                             measure_nps_vec: c.measure_nps_vec.clone(),
-                            timing: c.timing.clone(),
-                            first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                            measure_seconds_vec: c.measure_seconds_vec.clone(),
+                            first_second: c.first_second,
                             last_second: song.precise_last_second(),
                         }
                     }),
@@ -5168,15 +5864,34 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                             DensityGraphSource {
                                 max_nps: c.max_nps,
                                 measure_nps_vec: c.measure_nps_vec.clone(),
-                                timing: c.timing.clone(),
-                                first_second: 0.0_f32.min(c.timing.get_time_for_beat(0.0)),
+                                measure_seconds_vec: c.measure_seconds_vec.clone(),
+                                first_second: c.first_second,
                                 last_second: song.precise_last_second(),
                             }
                         }),
                     };
                 }
+                if show_select_music_leaderboards {
+                    maybe_refresh_select_music_leaderboard(
+                        &mut state.last_refreshed_leaderboard_hash_p2,
+                        profile::PlayerSide::P2,
+                        desired_hash_p2,
+                    );
+                }
             } else {
                 state.displayed_chart_p2 = None;
+            }
+            if show_select_music_leaderboards {
+                let primary_side = if is_versus {
+                    profile::PlayerSide::P1
+                } else {
+                    profile::get_session_player_side()
+                };
+                maybe_refresh_select_music_leaderboard(
+                    &mut state.last_refreshed_leaderboard_hash,
+                    primary_side,
+                    desired_hash_p1,
+                );
             }
         } else {
             state.displayed_chart_p1 = None;
@@ -5240,6 +5955,10 @@ pub fn reset_preview_after_gameplay(state: &mut State) {
     state.currently_playing_preview_path = None;
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
+    // Treat evaluation -> SelectMusic like a fresh chart visit so the existing
+    // scorebox snapshot stays visible while the current chart is refreshed.
+    state.last_refreshed_leaderboard_hash = None;
+    state.last_refreshed_leaderboard_hash_p2 = None;
     trigger_immediate_refresh(state);
 }
 
@@ -5322,6 +6041,51 @@ fn allow_gs_fetch_for_selection(state: &State) -> bool {
     state.nav_key_held_direction.is_none()
         && state.wheel_offset_from_selection.abs() < 0.0001
         && state.time_since_selection_change >= PREVIEW_DELAY_SECONDS
+}
+
+#[inline(always)]
+fn maybe_refresh_select_music_leaderboard(
+    last_refreshed_hash: &mut Option<String>,
+    side: profile::PlayerSide,
+    chart_hash: Option<&str>,
+) {
+    let Some(chart_hash) = chart_hash else {
+        return;
+    };
+    if last_refreshed_hash.as_deref() == Some(chart_hash) || !scores::is_gs_active_for_side(side) {
+        return;
+    }
+    let _ = scores::refresh_player_leaderboards_for_side(
+        chart_hash,
+        side,
+        SELECT_MUSIC_LEADERBOARD_NUM_ENTRIES,
+    );
+    *last_refreshed_hash = Some(chart_hash.to_string());
+}
+
+/// Selects the step artist display text for a chart, cycling through non-empty
+/// values of [step_artist, description, chart_name] every 2 seconds, matching
+/// Simply Love / ITGMania behavior.
+fn step_artist_cycle_text<'a>(chart: &'a ChartData, cycle_elapsed: f32) -> &'a str {
+    let candidates: [&str; 3] = [
+        chart.step_artist.as_str(),
+        chart.description.as_str(),
+        chart.chart_name.as_str(),
+    ];
+    let mut non_empty: Vec<&str> = Vec::with_capacity(3);
+    for &s in &candidates {
+        if !s.trim().is_empty() && !non_empty.iter().any(|&prev| prev == s) {
+            non_empty.push(s);
+        }
+    }
+    match non_empty.len() {
+        0 => "",
+        1 => non_empty[0],
+        n => {
+            let idx = (cycle_elapsed / STEP_ARTIST_CYCLE_SECONDS).floor().max(0.0) as usize % n;
+            non_empty[idx]
+        }
+    }
 }
 
 fn sl_select_music_bg_flash() -> Actor {
@@ -5413,7 +6177,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         alpha_mul: 1.0,
     }));
     actors.push(sl_select_music_bg_flash());
-    actors.extend(select_shared::build_screen_bars("SELECT MUSIC"));
+    actors.extend(screen_bars::build("SELECT MUSIC"));
 
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
@@ -5463,33 +6227,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     // Timer (zmod parity: optional gameplay timer to the right of session timer).
-    actors.push(select_shared::build_session_timer(format_session_time(
+    actors.push(timers::build_session(format_session_time(
         state.session_elapsed,
     )));
     if cfg.show_select_music_gameplay_timer {
-        actors.push(select_shared::build_gameplay_timer(format_session_time(
+        actors.push(timers::build_gameplay(format_session_time(
             state.gameplay_elapsed,
         )));
     }
 
     // Pads
     {
-        actors.push(select_shared::build_mode_pad_text(score_mode_text.as_str()));
-        let pad_zoom = 0.24 * widescale(0.435, 0.525);
-        actors.push(pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(35.0, 41.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: pad_zoom,
-            z: 121,
-            is_active: true,
-        }));
-        actors.push(pad_display::build(pad_display::PadDisplayParams {
-            center_x: screen_width() - widescale(15.0, 17.0),
-            center_y: widescale(22.0, 23.5),
-            zoom: pad_zoom,
-            z: 121,
-            is_active: false,
-        }));
+        actors.push(mode_pads::build_label(score_mode_text.as_str()));
+        actors.extend(mode_pads::build());
     }
 
     // Banner
@@ -5503,10 +6253,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } else {
         fallback_banner_key(state.active_color_index)
     };
-    actors.push(act!(sprite(banner_key): align(0.5, 0.5): xy(banner_cx, banner_cy): setsize(BANNER_NATIVE_WIDTH, BANNER_NATIVE_HEIGHT): zoom(banner_zoom): z(51)));
+    actors.push(shared_banner::sprite(
+        banner_key,
+        banner_cx,
+        banner_cy,
+        BANNER_NATIVE_WIDTH,
+        BANNER_NATIVE_HEIGHT,
+        banner_zoom,
+        51,
+    ));
     if cfg.show_select_music_cdtitles
         && let Some(cdtitle_key) = state.current_cdtitle_key.as_ref()
-        && asset_manager.textures.contains_key(cdtitle_key)
+        && asset_manager.has_texture_key(cdtitle_key)
         && let Some(tex) = crate::assets::texture_dims(cdtitle_key)
     {
         let (cols, rows) = crate::assets::sprite_sheet_dims(cdtitle_key);
@@ -5599,14 +6357,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         .as_ref()
         .and_then(|d| d.song.charts.get(d.chart_ix));
 
+    let cycle_elapsed = state.session_elapsed - state.step_artist_cycle_base;
+
     let (step_artist, steps, jumps, holds, mines, hands, rolls, meter) =
         if let Some(c) = immediate_chart_p1 {
             (
-                if c.difficulty.eq_ignore_ascii_case("edit") && !c.description.trim().is_empty() {
-                    c.description.as_str()
-                } else {
-                    c.step_artist.as_str()
-                },
+                step_artist_cycle_text(c, cycle_elapsed),
                 c.stats.total_steps.to_string(),
                 c.stats.jumps.to_string(),
                 c.stats.holds.to_string(),
@@ -5633,11 +6389,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         };
 
     let step_artist_p2 = if let Some(c) = immediate_chart_p2 {
-        if c.difficulty.eq_ignore_ascii_case("edit") && !c.description.trim().is_empty() {
-            c.description.as_str()
-        } else {
-            c.step_artist.as_str()
-        }
+        step_artist_cycle_text(c, cycle_elapsed)
     } else {
         ""
     };
@@ -5715,24 +6467,58 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Density Graph
     let panel_w = if is_wide() { 286.0 } else { 276.0 };
+    let graph_h = 64.0_f32;
+    let graph_body_h = 47.0_f32;
     let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
+    let graph_left = chart_info_cx - 0.5 * panel_w;
+    let (window_w_px, _) = current_window_px();
+    let marker_col_w = if window_w_px > 0 {
+        screen_width() / window_w_px as f32
+    } else {
+        1.0
+    };
     let breakdown_style = cfg.select_music_breakdown_style;
     let pattern_info_mode = cfg.select_music_pattern_info_mode;
+    let preview_sec = if cfg.show_select_music_preview_marker {
+        preview_song_sec(state)
+    } else {
+        None
+    };
+    let preview_marker_p1 = preview_marker(
+        state.displayed_chart_p1.as_ref(),
+        preview_sec,
+        graph_left,
+        panel_w,
+    );
+    let preview_marker_p2 = preview_marker(
+        state.displayed_chart_p2.as_ref(),
+        preview_sec,
+        graph_left,
+        panel_w,
+    );
     let build_breakdown_panel = |graph_cy: f32,
                                  is_p2_layout: bool,
                                  graph_key: &String,
                                  graph_mesh: Option<Arc<[MeshVertex]>>,
+                                 preview_marker: Option<PreviewMarker>,
                                  chart: Option<&ChartData>| {
         let mut graph_kids = vec![
-            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
+            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
         ];
 
         if let Some(c) = chart {
-            let peak = cached_peak_nps_text(if music_rate.is_finite() {
+            let scaled_peak_nps = if music_rate.is_finite() {
                 c.max_nps * music_rate as f64
             } else {
                 c.max_nps
-            });
+            };
+            let peak = cached_chart_info_text(
+                cfg.select_music_chart_info_peak_nps,
+                cfg.select_music_chart_info_matrix_rating,
+                c.meter,
+                scaled_peak_nps,
+                c.matrix_rating,
+            );
             // Match Simply Love's minimization loop (0 -> 3) based on rendered width.
             let bd_text = asset_manager
                 .with_fonts(|all_fonts| {
@@ -5781,7 +6567,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 graph_kids.push(Actor::Mesh {
                     align: [0.0, 0.0],
                     offset: [0.0, 0.0],
-                    size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
+                    size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
                     vertices: mesh,
                     mode: MeshMode::Triangles,
                     visible: true,
@@ -5790,18 +6576,29 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 });
             } else if graph_key != "__white" {
                 graph_kids.push(act!(sprite(graph_key.clone()):
-                    align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, 64.0)
+                    align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h)
                 ));
             }
-            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0)));
-            graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, 47.0): setsize(panel_w, 17.0): diffuse(0.0, 0.0, 0.0, 0.5)));
-            graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w)));
+            if let Some(marker) = preview_marker {
+                for col in marker.cols.iter().take(marker.len) {
+                    graph_kids.push(act!(quad:
+                        align(0.0, 0.0):
+                        xy(col.x, 0.0):
+                        setsize(marker_col_w, graph_h):
+                        diffuse(1.0, 1.0, 1.0, col.a):
+                        z(1)
+                    ));
+                }
+            }
+            graph_kids.push(act!(text: font("miso"): settext(peak): align(0.0, 0.5): xy(peak_x, -9.0): zoom(0.8): diffuse(1.0, 1.0, 1.0, 1.0): z(2)));
+            graph_kids.push(act!(quad: align(0.0, 0.0): xy(0.0, graph_body_h): setsize(panel_w, graph_h - graph_body_h): diffuse(0.0, 0.0, 0.0, 0.5): z(2)));
+            graph_kids.push(act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, 55.5): zoom(0.8): maxwidth(panel_w): z(2)));
         }
 
         Actor::Frame {
             align: [0.0, 0.0],
-            offset: [chart_info_cx - 0.5 * panel_w, graph_cy - 32.0],
-            size: [SizeSpec::Px(panel_w), SizeSpec::Px(64.0)],
+            offset: [graph_left, graph_cy - 32.0],
+            size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
             background: None,
             z: 51,
             children: graph_kids,
@@ -5815,6 +6612,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 false,
                 &state.current_graph_key,
                 state.current_graph_mesh.clone(),
+                preview_marker_p1,
                 disp_chart_p1,
             ));
             actors.push(build_breakdown_panel(
@@ -5822,6 +6620,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 true,
                 &state.current_graph_key_p2,
                 state.current_graph_mesh_p2.clone(),
+                preview_marker_p2,
                 disp_chart_p2,
             ));
         } else {
@@ -5831,6 +6630,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 is_p2_single,
                 &state.current_graph_key,
                 state.current_graph_mesh.clone(),
+                preview_marker_p1,
                 disp_chart_p1,
             ));
         }
@@ -6380,12 +7180,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         song_has_edit_ptrs: Some(&state.song_has_edit_ptrs),
         show_music_wheel_grades: cfg.show_music_wheel_grades,
         show_music_wheel_lamps: cfg.show_music_wheel_lamps,
+        itl_wheel_mode: cfg.select_music_itl_wheel_mode,
+        new_pack_names: (state.sort_mode == WheelSortMode::Group).then_some(&state.new_pack_names),
     }));
     actors.extend(sl_select_music_wheel_cascade_mask());
 
     // GrooveStats scorebox placement.
-    // Keep solo→versus transitions symmetric regardless of which side started.
-    // In both-GS versus, render smaller scoreboxes over each pane's far-right side.
+    // Auto keeps the current layout, including pane placement for both-GS versus.
+    // StepPane forces the scorebox into the pane area whenever it is shown.
     if is_wide() {
         let scorebox_zoom = widescale(0.95, 1.0);
         let scorebox_side_inset = 320.0;
@@ -6400,6 +7202,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let p1_gs = scores::is_gs_active_for_side(profile::PlayerSide::P1);
         let p2_gs = scores::is_gs_active_for_side(profile::PlayerSide::P2);
         let both_gs_versus = is_versus && p1_gs && p2_gs;
+        let force_step_pane =
+            cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
         let mut push_scorebox = |side: profile::PlayerSide,
                                  steps_idx: usize,
                                  center_x: f32,
@@ -6440,33 +7244,51 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 });
             }
         };
+        let pane_scorebox_zoom = widescale(0.60, 0.64);
+        let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
+        let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
+        let pane_right_inset = 4.0;
+        let pane_box_center_x = |pane_cx: f32| {
+            pane_cx + pane_layout.pane_width * 0.5 - pane_scorebox_width * 0.5 - pane_right_inset
+        };
 
-        if both_gs_versus {
-            let pane_scorebox_zoom = widescale(0.60, 0.64);
-            let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
-            let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
-            let pane_right_inset = 4.0;
-            let pane_box_center_x = |pane_cx: f32| {
-                pane_cx + pane_layout.pane_width * 0.5
-                    - pane_scorebox_width * 0.5
-                    - pane_right_inset
-            };
-            push_scorebox(
-                profile::PlayerSide::P1,
-                state.selected_steps_index,
-                pane_box_center_x(screen_width() * 0.25 - 5.0),
-                pane_scorebox_center_y,
-                pane_scorebox_zoom,
-                60,
-            );
-            push_scorebox(
-                profile::PlayerSide::P2,
-                state.p2_selected_steps_index,
-                pane_box_center_x(screen_width() * 0.75 + 5.0),
-                pane_scorebox_center_y,
-                pane_scorebox_zoom,
-                60,
-            );
+        if both_gs_versus || force_step_pane {
+            if is_versus {
+                push_scorebox(
+                    profile::PlayerSide::P1,
+                    state.selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.25 - 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+                push_scorebox(
+                    profile::PlayerSide::P2,
+                    state.p2_selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.75 + 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+            } else if is_p2_single {
+                push_scorebox(
+                    profile::PlayerSide::P2,
+                    state.p2_selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.75 + 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+            } else {
+                push_scorebox(
+                    profile::PlayerSide::P1,
+                    state.selected_steps_index,
+                    pane_box_center_x(screen_width() * 0.25 - 5.0),
+                    pane_scorebox_center_y,
+                    pane_scorebox_zoom,
+                    60,
+                );
+            }
         } else if is_versus {
             let incumbent = profile::get_session_player_side();
             if incumbent == profile::PlayerSide::P2 {
@@ -6600,6 +7422,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(replay_overlay);
         return actors;
     }
+    if let Some(pack_sync_overlay) =
+        pack_sync::build_overlay(&state.pack_sync_overlay, state.active_color_index)
+    {
+        actors.extend(pack_sync_overlay);
+        return actors;
+    }
     if let Some(sync_overlay) = build_sync_overlay(&state.sync_overlay, state.active_color_index) {
         actors.extend(sync_overlay);
         return actors;
@@ -6634,8 +7462,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         selected_index,
     } = state.sort_menu
     {
+        let items = sort_menu_items(state, page);
         actors.extend(sort_menu::build_overlay(sort_menu::RenderParams {
-            items: sort_menu_items(state, page),
+            items: items.as_slice(),
             selected_index,
             prev_selected_index: state.sort_menu_prev_selected_index,
             focus_anim_elapsed: state.sort_menu_focus_anim_elapsed,
@@ -6645,6 +7474,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     if let Some(leaderboard_overlay) = sort_menu::build_leaderboard_overlay(&state.leaderboard) {
         actors.extend(leaderboard_overlay);
+    }
+    if let Some(downloads_overlay) =
+        sort_menu::build_downloads_overlay(&state.downloads_overlay, state.active_color_index)
+    {
+        actors.extend(downloads_overlay);
     }
 
     // Simply Love ScreenSelectMusic out transition: "Press &START; for options"
@@ -6901,5 +7735,43 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         }
 
         _ => ScreenAction::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        PREVIEW_DELAY_SECONDS, WheelSortMode, init_placeholder, reset_preview_after_gameplay,
+        sync_low_confidence_warning,
+    };
+
+    #[test]
+    fn reset_preview_after_gameplay_rearms_leaderboard_refresh() {
+        let mut state = init_placeholder();
+        state.last_refreshed_leaderboard_hash = Some("abc123".to_string());
+        state.last_refreshed_leaderboard_hash_p2 = Some("def456".to_string());
+
+        reset_preview_after_gameplay(&mut state);
+
+        assert_eq!(state.last_refreshed_leaderboard_hash, None);
+        assert_eq!(state.last_refreshed_leaderboard_hash_p2, None);
+        assert_eq!(state.time_since_selection_change, PREVIEW_DELAY_SECONDS);
+    }
+
+    #[test]
+    fn reset_preview_after_gameplay_preserves_non_group_sort_modes() {
+        let mut state = init_placeholder();
+        state.sort_mode = WheelSortMode::Group;
+
+        reset_preview_after_gameplay(&mut state);
+
+        assert_eq!(state.sort_mode, WheelSortMode::Group);
+    }
+
+    #[test]
+    fn sync_low_confidence_warning_mentions_confidence_and_threshold() {
+        let warning = sync_low_confidence_warning(Some(0.73), 0.80).unwrap();
+        assert!(warning.contains("73%"));
+        assert!(warning.contains("80%"));
     }
 }

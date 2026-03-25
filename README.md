@@ -147,6 +147,37 @@ We welcome contributions of all sizes. These notes are directional, not law—op
 - Reduce duplication by reusing and composing functions rather than repeating logic or adding one-off helpers.
 - Bias toward efficient, low-overhead code: favor `Vec` and iterators, borrow instead of clone, and keep dependencies lean.
 
+## Collecting Logs
+
+When reporting a bug, attaching a log file helps the team diagnose the problem quickly.
+
+### 1. Enable file logging
+
+Open `deadsync.ini` (created in the project root after the first run) and set the following under `[Options]`:
+
+```ini
+[Options]
+LogToFile=1
+LogLevel=Debug
+```
+
+| Setting      | Values                                     | Default |
+|--------------|--------------------------------------------|---------|
+| `LogToFile`  | `1` (enabled) / `0` (disabled)             | `1`     |
+| `LogLevel`   | `Error`, `Warn`, `Info`, `Debug`, `Trace`  | `Warn`  |
+
+Use **Debug** for most bug reports. Use **Trace** only if asked—it produces significantly more output.
+
+### 2. Reproduce the issue
+
+Launch the game and reproduce the problem. The log is written to **`deadsync.log`** in the project root (the same folder as the executable).
+
+### 3. Share the log
+
+Attach `deadsync.log` to your GitHub issue or discussion. If the file is large, compress it first (`.zip` / `.gz`).
+
+> **Privacy note:** The log does not contain passwords or API keys, but it does include file paths and song/pack names from your system. Review the file before sharing if that is a concern.
+
 <h2>Acknowledgements</h2>
 <p>
     DeadSync would not exist without years of work from the StepMania and ITG communities.

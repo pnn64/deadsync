@@ -1,9 +1,10 @@
-use crate::core::gfx::BackendType;
+use crate::core::gfx::{BackendType, PresentModePolicy};
 use crate::core::input::{
     GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction, WindowsPadBackend,
 };
 use crate::core::logging;
 use log::{debug, info, warn};
+use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
@@ -183,6 +184,210 @@ impl FromStr for SelectMusicPatternInfoMode {
             "tech" => Ok(Self::Tech),
             "stamina" => Ok(Self::Stamina),
             "auto" => Ok(Self::Auto),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicItlWheelMode {
+    Off,
+    Score,
+    PointsAndScore,
+}
+
+impl SelectMusicItlWheelMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Score => "Score",
+            Self::PointsAndScore => "PointsAndScore",
+        }
+    }
+}
+
+impl FromStr for SelectMusicItlWheelMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "off" | "disable" | "disabled" => Ok(Self::Off),
+            "score" | "scores" => Ok(Self::Score),
+            "pointsandscore" | "pointsscore" | "points" => Ok(Self::PointsAndScore),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewPackMode {
+    Disabled,
+    OpenPack,
+    HasScore,
+}
+
+impl NewPackMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "Disabled",
+            Self::OpenPack => "OpenPack",
+            Self::HasScore => "HasScore",
+        }
+    }
+}
+
+impl FromStr for NewPackMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "disabled" | "disable" | "off" => Ok(Self::Disabled),
+            "openpack" | "open" => Ok(Self::OpenPack),
+            "hasscore" | "score" | "scored" => Ok(Self::HasScore),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicScoreboxPlacement {
+    Auto,
+    StepPane,
+}
+
+impl SelectMusicScoreboxPlacement {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::StepPane => "StepPane",
+        }
+    }
+}
+
+impl FromStr for SelectMusicScoreboxPlacement {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "auto" => Ok(Self::Auto),
+            "steppane" | "pane" => Ok(Self::StepPane),
+            _ => Err(()),
+        }
+    }
+}
+
+pub const AUTO_SS_NUM_FLAGS: usize = 5;
+pub const AUTO_SS_FLAG_NAMES: [&str; AUTO_SS_NUM_FLAGS] =
+    ["PBs", "Fails", "Clears", "Quads", "Quints"];
+pub const AUTO_SS_PBS: u8 = 1 << 0;
+pub const AUTO_SS_FAILS: u8 = 1 << 1;
+pub const AUTO_SS_CLEARS: u8 = 1 << 2;
+pub const AUTO_SS_QUADS: u8 = 1 << 3;
+pub const AUTO_SS_QUINTS: u8 = 1 << 4;
+
+#[inline(always)]
+pub const fn auto_screenshot_bit(idx: usize) -> u8 {
+    match idx {
+        0 => AUTO_SS_PBS,
+        1 => AUTO_SS_FAILS,
+        2 => AUTO_SS_CLEARS,
+        3 => AUTO_SS_QUADS,
+        4 => AUTO_SS_QUINTS,
+        _ => 0,
+    }
+}
+
+pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
+    if mask == 0 {
+        return "Off".to_string();
+    }
+    let mut parts = Vec::with_capacity(AUTO_SS_NUM_FLAGS);
+    for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
+        if (mask & auto_screenshot_bit(idx)) != 0 {
+            parts.push(*name);
+        }
+    }
+    parts.join("|")
+}
+
+pub fn auto_screenshot_mask_from_str(s: &str) -> u8 {
+    let trimmed = s.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+        return 0;
+    }
+    let mut mask = 0u8;
+    for part in trimmed.split('|') {
+        match part.trim().to_ascii_lowercase().as_str() {
+            "pbs" => mask |= AUTO_SS_PBS,
+            "fails" => mask |= AUTO_SS_FAILS,
+            "clears" => mask |= AUTO_SS_CLEARS,
+            "quads" => mask |= AUTO_SS_QUADS,
+            "quints" => mask |= AUTO_SS_QUINTS,
+            _ => {}
+        }
+    }
+    mask
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncGraphMode {
+    Frequency,
+    BeatIndex,
+    PostKernelFingerprint,
+}
+
+impl SyncGraphMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Frequency => "Frequency",
+            Self::BeatIndex => "BeatIndex",
+            Self::PostKernelFingerprint => "PostKernelFingerprint",
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Frequency => "Frequency",
+            Self::BeatIndex => "Beat index",
+            Self::PostKernelFingerprint => "Post-kernel fingerprint",
+        }
+    }
+}
+
+impl FromStr for SyncGraphMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "frequency" => Ok(Self::Frequency),
+            "beatindex" | "beatdigest" | "digest" => Ok(Self::BeatIndex),
+            "postkernelfingerprint" | "postkernel" | "fingerprint" => {
+                Ok(Self::PostKernelFingerprint)
+            }
             _ => Err(()),
         }
     }
@@ -383,11 +588,78 @@ pub enum DisplayMode {
     Fullscreen(FullscreenType),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioOutputMode {
+    Auto,
+    Shared,
+    Exclusive,
+}
+
+impl AudioOutputMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Shared => "Shared",
+            Self::Exclusive => "Exclusive",
+        }
+    }
+}
+
+impl FromStr for AudioOutputMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "shared" => Ok(Self::Shared),
+            "exclusive" => Ok(Self::Exclusive),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinuxAudioBackend {
+    Auto,
+    PipeWire,
+    PulseAudio,
+    Jack,
+    Alsa,
+}
+
+impl LinuxAudioBackend {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::PipeWire => "PipeWire",
+            Self::PulseAudio => "PulseAudio",
+            Self::Jack => "JACK",
+            Self::Alsa => "ALSA",
+        }
+    }
+}
+
+impl FromStr for LinuxAudioBackend {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "pipewire" | "pipe-wire" | "pw" => Ok(Self::PipeWire),
+            "pulseaudio" | "pulse" => Ok(Self::PulseAudio),
+            "jack" => Ok(Self::Jack),
+            "alsa" => Ok(Self::Alsa),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub vsync: bool,
-    /// 0 = uncapped. N > 0 = cap redraw scheduling to N FPS.
+    /// Stored MaxFPS cap value. `0` means "off".
     pub max_fps: u16,
+    pub present_mode_policy: PresentModePolicy,
     pub windowed: bool,
     pub fullscreen_type: FullscreenType,
     pub display_monitor: usize,
@@ -409,8 +681,6 @@ pub struct Config {
     pub banner_cache: bool,
     /// Cache Select Music CDTitles as raw RGBA blobs on disk.
     pub cdtitle_cache: bool,
-    /// Cache gameplay/eval backgrounds as raw RGBA blobs on disk.
-    pub background_cache: bool,
     pub display_width: u32,
     pub display_height: u32,
     pub video_renderer: BackendType,
@@ -430,14 +700,20 @@ pub struct Config {
     pub simply_love_color: i32,
     pub show_select_music_gameplay_timer: bool,
     pub show_select_music_banners: bool,
+    pub show_select_music_video_banners: bool,
     pub show_select_music_breakdown: bool,
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
+    pub select_music_new_pack_mode: NewPackMode,
     pub show_select_music_previews: bool,
+    pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart.
     pub keyboard_features: bool,
+    /// Enable or disable animated gameplay background videos.
+    pub show_video_backgrounds: bool,
     /// Startup flow: show Select Profile before continuing.
     pub machine_show_select_profile: bool,
     /// Startup flow: show Select Color before continuing.
@@ -450,6 +726,8 @@ pub struct Config {
     pub machine_preferred_style: MachinePreferredPlayStyle,
     /// Startup flow fallback mode used when Select Play Mode is disabled.
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
+    /// Machine-wide replay recording and replay menu visibility.
+    pub machine_enable_replays: bool,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
@@ -462,13 +740,27 @@ pub struct Config {
     pub show_bpm_decimal: bool,
     /// Machine default fail behavior (ITGmania DefaultFailType).
     pub default_fail_type: DefaultFailType,
+    /// Choose which null-or-die sync graph the Select Music overlay displays.
+    pub null_or_die_sync_graph: SyncGraphMode,
+    /// Minimum confidence percent required for pack sync saves.
+    pub null_or_die_confidence_percent: u8,
+    pub null_or_die_fingerprint_ms: f64,
+    pub null_or_die_window_ms: f64,
+    pub null_or_die_step_ms: f64,
+    pub null_or_die_magic_offset_ms: f64,
+    pub null_or_die_kernel_target: KernelTarget,
+    pub null_or_die_kernel_type: BiasKernel,
+    pub null_or_die_full_spectrogram: bool,
     pub select_music_breakdown_style: BreakdownStyle,
     pub select_music_pattern_info_mode: SelectMusicPatternInfoMode,
     pub show_select_music_scorebox: bool,
+    pub select_music_scorebox_placement: SelectMusicScoreboxPlacement,
     pub select_music_scorebox_cycle_itg: bool,
     pub select_music_scorebox_cycle_ex: bool,
     pub select_music_scorebox_cycle_hard_ex: bool,
     pub select_music_scorebox_cycle_tournaments: bool,
+    pub select_music_chart_info_peak_nps: bool,
+    pub select_music_chart_info_matrix_rating: bool,
     pub show_random_courses: bool,
     pub show_most_played_courses: bool,
     pub show_course_individual_scores: bool,
@@ -482,19 +774,25 @@ pub struct Config {
     pub music_wheel_switch_speed: u8,
     pub assist_tick_volume: u8,
     pub sfx_volume: u8,
-    // None = auto (use host default output device); Some(N) = startup CPAL output-device index.
+    // None = auto (use the backend default output route); Some(N) = startup output-device index.
     pub audio_output_device_index: Option<u16>,
+    pub audio_output_mode: AudioOutputMode,
+    pub linux_audio_backend: LinuxAudioBackend,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
+    pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
     pub rate_mod_preserves_pitch: bool,
     pub enable_arrowcloud: bool,
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
+    pub separate_unlocks_by_player: bool,
     pub fastload: bool,
     pub cachesongs: bool,
     // Whether to apply Gaussian smoothing to the eval histogram (Simply Love style)
     pub smooth_histogram: bool,
+    /// Conditions for auto-screenshotting the Evaluation screen.
+    pub auto_screenshot_eval: u8,
     /// ITGmania InputFilter parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
@@ -507,6 +805,7 @@ impl Default for Config {
         Self {
             vsync: false,
             max_fps: 0,
+            present_mode_policy: PresentModePolicy::Immediate,
             windowed: true,
             fullscreen_type: FullscreenType::Exclusive,
             display_monitor: 0,
@@ -522,43 +821,60 @@ impl Default for Config {
             center_1player_notefield: false,
             banner_cache: true,
             cdtitle_cache: true,
-            background_cache: true,
             display_width: 1600,
             display_height: 900,
             video_renderer: BackendType::OpenGL,
             gfx_debug: false,
-            windows_gamepad_backend: WindowsPadBackend::Wgi,
+            windows_gamepad_backend: WindowsPadBackend::RawInput,
             software_renderer_threads: 1,
             song_parsing_threads: 0,
             simply_love_color: 2, // Corresponds to DEFAULT_COLOR_INDEX
             show_select_music_gameplay_timer: true,
             show_select_music_banners: true,
+            show_select_music_video_banners: true,
             show_select_music_breakdown: true,
             show_select_music_cdtitles: true,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
+            select_music_itl_wheel_mode: SelectMusicItlWheelMode::Score,
+            select_music_new_pack_mode: NewPackMode::Disabled,
             show_select_music_previews: true,
+            show_select_music_preview_marker: false,
             select_music_preview_loop: true,
             keyboard_features: true,
+            show_video_backgrounds: true,
             machine_show_select_profile: true,
             machine_show_select_color: true,
             machine_show_select_style: true,
             machine_show_select_play_mode: true,
             machine_preferred_style: MachinePreferredPlayStyle::Single,
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
+            machine_enable_replays: true,
             machine_show_eval_summary: true,
             machine_show_name_entry: true,
             machine_show_gameover: true,
             zmod_rating_box_text: false,
             show_bpm_decimal: false,
             default_fail_type: DefaultFailType::ImmediateContinue,
+            null_or_die_sync_graph: SyncGraphMode::PostKernelFingerprint,
+            null_or_die_confidence_percent: 80,
+            null_or_die_fingerprint_ms: 50.0,
+            null_or_die_window_ms: 10.0,
+            null_or_die_step_ms: 0.2,
+            null_or_die_magic_offset_ms: 0.0,
+            null_or_die_kernel_target: KernelTarget::Digest,
+            null_or_die_kernel_type: BiasKernel::Rising,
+            null_or_die_full_spectrogram: false,
             select_music_breakdown_style: BreakdownStyle::Sl,
             select_music_pattern_info_mode: SelectMusicPatternInfoMode::Tech,
             show_select_music_scorebox: true,
+            select_music_scorebox_placement: SelectMusicScoreboxPlacement::Auto,
             select_music_scorebox_cycle_itg: true,
             select_music_scorebox_cycle_ex: true,
             select_music_scorebox_cycle_hard_ex: true,
             select_music_scorebox_cycle_tournaments: true,
+            select_music_chart_info_peak_nps: true,
+            select_music_chart_info_matrix_rating: false,
             show_random_courses: true,
             show_most_played_courses: true,
             show_course_individual_scores: true,
@@ -572,15 +888,20 @@ impl Default for Config {
             assist_tick_volume: 100,
             sfx_volume: 100,
             audio_output_device_index: None,
+            audio_output_mode: AudioOutputMode::Auto,
+            linux_audio_backend: LinuxAudioBackend::Auto,
             audio_sample_rate_hz: None,
+            auto_download_unlocks: false,
             auto_populate_gs_scores: false,
             rate_mod_preserves_pitch: true,
             enable_arrowcloud: false,
             enable_boogiestats: false,
             enable_groovestats: false,
+            separate_unlocks_by_player: false,
             fastload: true,
             cachesongs: true,
             smooth_histogram: true,
+            auto_screenshot_eval: 0,
             input_debounce_seconds: 0.02,
             only_dedicated_menu_buttons: false,
         }
@@ -898,6 +1219,97 @@ pub fn bootstrap_log_to_file() -> bool {
         .unwrap_or(default)
 }
 
+#[inline(always)]
+fn clamp_null_or_die_confidence_percent(value: u8) -> u8 {
+    value.min(100)
+}
+
+const NULL_OR_DIE_POSITIVE_MS_MIN: f64 = 0.1;
+const NULL_OR_DIE_POSITIVE_MS_MAX: f64 = 100.0;
+const NULL_OR_DIE_MAGIC_OFFSET_MS_MIN: f64 = -100.0;
+const NULL_OR_DIE_MAGIC_OFFSET_MS_MAX: f64 = 100.0;
+
+#[inline(always)]
+fn quantize_tenths(value: f64) -> f64 {
+    (value * 10.0).round() * 0.1
+}
+
+#[inline(always)]
+fn clamp_null_or_die_positive_ms(value: f64) -> f64 {
+    if !value.is_finite() {
+        return NULL_OR_DIE_POSITIVE_MS_MIN;
+    }
+    quantize_tenths(value.clamp(NULL_OR_DIE_POSITIVE_MS_MIN, NULL_OR_DIE_POSITIVE_MS_MAX))
+}
+
+#[inline(always)]
+fn clamp_null_or_die_magic_offset_ms(value: f64) -> f64 {
+    if !value.is_finite() {
+        return 0.0;
+    }
+    quantize_tenths(value.clamp(
+        NULL_OR_DIE_MAGIC_OFFSET_MS_MIN,
+        NULL_OR_DIE_MAGIC_OFFSET_MS_MAX,
+    ))
+}
+
+#[inline(always)]
+fn null_or_die_kernel_target_str(target: KernelTarget) -> &'static str {
+    match target {
+        KernelTarget::Digest => "Digest",
+        KernelTarget::Accumulator => "Accumulator",
+    }
+}
+
+fn parse_null_or_die_kernel_target(raw: &str) -> Option<KernelTarget> {
+    let key = raw
+        .trim()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .map(|ch| ch.to_ascii_lowercase())
+        .collect::<String>();
+    match key.as_str() {
+        "digest" => Some(KernelTarget::Digest),
+        "accumulator" => Some(KernelTarget::Accumulator),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn null_or_die_kernel_type_str(kind: BiasKernel) -> &'static str {
+    match kind {
+        BiasKernel::Rising => "Rising",
+        BiasKernel::Loudest => "Loudest",
+    }
+}
+
+fn parse_null_or_die_kernel_type(raw: &str) -> Option<BiasKernel> {
+    let key = raw
+        .trim()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .map(|ch| ch.to_ascii_lowercase())
+        .collect::<String>();
+    match key.as_str() {
+        "rising" => Some(BiasKernel::Rising),
+        "loudest" => Some(BiasKernel::Loudest),
+        _ => None,
+    }
+}
+
+pub fn null_or_die_bias_cfg() -> BiasCfg {
+    let cfg = get();
+    BiasCfg {
+        fingerprint_ms: clamp_null_or_die_positive_ms(cfg.null_or_die_fingerprint_ms),
+        window_ms: clamp_null_or_die_positive_ms(cfg.null_or_die_window_ms),
+        step_ms: clamp_null_or_die_positive_ms(cfg.null_or_die_step_ms),
+        magic_offset_ms: clamp_null_or_die_magic_offset_ms(cfg.null_or_die_magic_offset_ms),
+        kernel_target: cfg.null_or_die_kernel_target,
+        kernel_type: cfg.null_or_die_kernel_type,
+        _full_spectrogram: cfg.null_or_die_full_spectrogram,
+    }
+}
+
 fn create_default_config_file() -> Result<(), std::io::Error> {
     info!("'{CONFIG_PATH}' not found, creating with default values.");
     let default = Config::default();
@@ -907,8 +1319,17 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     // [Options] section - keys in alphabetical order
     content.push_str("[Options]\n");
     content.push_str("AudioOutputDevice=Auto\n");
+    content.push_str("AudioOutputMode=Auto\n");
     content.push_str("AudioSampleRateHz=Auto\n");
     content.push_str("AdditionalSongFolders=\n");
+    content.push_str(&format!(
+        "AutoDownloadUnlocks={}\n",
+        if default.auto_download_unlocks {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push_str(&format!(
         "AutoPopulateGrooveStatsScores={}\n",
         if default.auto_populate_gs_scores {
@@ -918,10 +1339,6 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!("BGBrightness={}\n", default.bg_brightness));
-    content.push_str(&format!(
-        "BackgroundCache={}\n",
-        if default.background_cache { "1" } else { "0" }
-    ));
     content.push_str(&format!(
         "BannerCache={}\n",
         if default.banner_cache { "1" } else { "0" }
@@ -1021,7 +1438,15 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         "LogToFile={}\n",
         if default.log_to_file { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "LinuxAudioBackend={}\n",
+        default.linux_audio_backend.as_str()
+    ));
     content.push_str(&format!("MaxFps={}\n", default.max_fps));
+    content.push_str(&format!(
+        "PresentModePolicy={}\n",
+        default.present_mode_policy
+    ));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         default.visual_delay_seconds
@@ -1061,6 +1486,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicShowVideoBanners={}\n",
+        if default.show_select_music_video_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicShowBreakdown={}\n",
         if default.show_select_music_breakdown {
             "1"
@@ -1093,8 +1526,20 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicNewPackMode={}\n",
+        default.select_music_new_pack_mode.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviews={}\n",
         if default.show_select_music_previews {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicPreviewMarker={}\n",
+        if default.show_select_music_preview_marker {
             "1"
         } else {
             "0"
@@ -1119,6 +1564,10 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxPlacement={}\n",
+        default.select_music_scorebox_placement.as_str()
     ));
     content.push_str(&format!(
         "SelectMusicScoreboxCycleItg={}\n",
@@ -1153,6 +1602,34 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicChartInfoPeakNps={}\n",
+        if default.select_music_chart_info_peak_nps {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicChartInfoMatrixRating={}\n",
+        if default.select_music_chart_info_matrix_rating {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SeparateUnlocksByPlayer={}\n",
+        if default.separate_unlocks_by_player {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_mask_to_str(default.auto_screenshot_eval)
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if default.show_stats_mode != 0 {
             "1"
@@ -1162,7 +1639,7 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     ));
     content.push_str(&format!(
         "ShowStatsMode={}\n",
-        default.show_stats_mode.min(2)
+        default.show_stats_mode.min(3)
     ));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
@@ -1247,6 +1724,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         if default.keyboard_features { "1" } else { "0" }
     ));
     content.push_str(&format!(
+        "VideoBackgrounds={}\n",
+        if default.show_video_backgrounds {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "MachineShowEvalSummary={}\n",
         if default.machine_show_eval_summary {
             "1"
@@ -1303,6 +1788,14 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "MachineEnableReplays={}\n",
+        if default.machine_enable_replays {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "MachinePreferredStyle={}\n",
         default.machine_preferred_style.as_str()
     ));
@@ -1330,6 +1823,46 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
     content.push_str(&format!(
         "ShowBpmDecimal={}\n",
         if default.show_bpm_decimal { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
+        "NullOrDieSyncGraph={}\n",
+        default.null_or_die_sync_graph.as_str()
+    ));
+    content.push_str(&format!(
+        "NullOrDieConfidencePercent={}\n",
+        clamp_null_or_die_confidence_percent(default.null_or_die_confidence_percent)
+    ));
+    content.push_str(&format!(
+        "NullOrDieFingerprintMs={:.1}\n",
+        clamp_null_or_die_positive_ms(default.null_or_die_fingerprint_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieWindowMs={:.1}\n",
+        clamp_null_or_die_positive_ms(default.null_or_die_window_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieStepMs={:.1}\n",
+        clamp_null_or_die_positive_ms(default.null_or_die_step_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieMagicOffsetMs={:.1}\n",
+        clamp_null_or_die_magic_offset_ms(default.null_or_die_magic_offset_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieKernelTarget={}\n",
+        null_or_die_kernel_target_str(default.null_or_die_kernel_target)
+    ));
+    content.push_str(&format!(
+        "NullOrDieKernelType={}\n",
+        null_or_die_kernel_type_str(default.null_or_die_kernel_type)
+    ));
+    content.push_str(&format!(
+        "NullOrDieFullSpectrogram={}\n",
+        if default.null_or_die_full_spectrogram {
+            "1"
+        } else {
+            "0"
+        }
     ));
     content.push('\n');
 
@@ -1370,6 +1903,21 @@ pub fn load() {
                     .get("Options", "MaxFps")
                     .and_then(|v| v.parse::<u16>().ok())
                     .unwrap_or(default.max_fps);
+                cfg.present_mode_policy = conf
+                    .get("Options", "PresentModePolicy")
+                    .and_then(|s| PresentModePolicy::from_str(&s).ok())
+                    .or_else(|| {
+                        conf.get("Options", "UncappedMode").and_then(|s| {
+                            match s.trim().to_ascii_lowercase().as_str() {
+                                "balanced" => Some(PresentModePolicy::Mailbox),
+                                "unhinged" | "maxfps" | "max_fps" | "max-fps" => {
+                                    Some(PresentModePolicy::Immediate)
+                                }
+                                _ => None,
+                            }
+                        })
+                    })
+                    .unwrap_or(default.present_mode_policy);
                 cfg.windowed = conf
                     .get("Options", "Windowed")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1386,6 +1934,10 @@ pub fn load() {
                     .get("Options", "DisplayMonitor")
                     .and_then(|v| v.parse::<usize>().ok())
                     .unwrap_or(default.display_monitor);
+                cfg.auto_download_unlocks = conf
+                    .get("Options", "AutoDownloadUnlocks")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.auto_download_unlocks, |v| v != 0);
                 cfg.auto_populate_gs_scores = conf
                     .get("Options", "AutoPopulateGrooveStatsScores")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1402,6 +1954,10 @@ pub fn load() {
                     .get("Options", "EnableBoogieStats")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.enable_boogiestats, |v| v != 0);
+                cfg.separate_unlocks_by_player = conf
+                    .get("Options", "SeparateUnlocksByPlayer")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.separate_unlocks_by_player, |v| v != 0);
                 cfg.mine_hit_sound = conf
                     .get("Options", "MineHitSound")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1409,7 +1965,7 @@ pub fn load() {
                 cfg.show_stats_mode = conf
                     .get("Options", "ShowStatsMode")
                     .and_then(|v| v.parse::<u8>().ok())
-                    .map(|v| v.min(2))
+                    .map(|v| v.min(3))
                     .or_else(|| {
                         conf.get("Options", "ShowStats")
                             .and_then(|v| v.parse::<u8>().ok())
@@ -1472,14 +2028,51 @@ pub fn load() {
                     .get("Options", "DefaultFailType")
                     .and_then(|v| DefaultFailType::from_str(&v).ok())
                     .unwrap_or(default.default_fail_type);
+                cfg.null_or_die_sync_graph = conf
+                    .get("Options", "NullOrDieSyncGraph")
+                    .and_then(|v| SyncGraphMode::from_str(&v).ok())
+                    .unwrap_or(default.null_or_die_sync_graph);
+                cfg.null_or_die_confidence_percent = conf
+                    .get("Options", "NullOrDieConfidencePercent")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map(clamp_null_or_die_confidence_percent)
+                    .unwrap_or(default.null_or_die_confidence_percent);
+                cfg.null_or_die_fingerprint_ms = conf
+                    .get("Options", "NullOrDieFingerprintMs")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(clamp_null_or_die_positive_ms)
+                    .unwrap_or(default.null_or_die_fingerprint_ms);
+                cfg.null_or_die_window_ms = conf
+                    .get("Options", "NullOrDieWindowMs")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(clamp_null_or_die_positive_ms)
+                    .unwrap_or(default.null_or_die_window_ms);
+                cfg.null_or_die_step_ms = conf
+                    .get("Options", "NullOrDieStepMs")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(clamp_null_or_die_positive_ms)
+                    .unwrap_or(default.null_or_die_step_ms);
+                cfg.null_or_die_magic_offset_ms = conf
+                    .get("Options", "NullOrDieMagicOffsetMs")
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .map(clamp_null_or_die_magic_offset_ms)
+                    .unwrap_or(default.null_or_die_magic_offset_ms);
+                cfg.null_or_die_kernel_target = conf
+                    .get("Options", "NullOrDieKernelTarget")
+                    .and_then(|v| parse_null_or_die_kernel_target(&v))
+                    .unwrap_or(default.null_or_die_kernel_target);
+                cfg.null_or_die_kernel_type = conf
+                    .get("Options", "NullOrDieKernelType")
+                    .and_then(|v| parse_null_or_die_kernel_type(&v))
+                    .unwrap_or(default.null_or_die_kernel_type);
+                cfg.null_or_die_full_spectrogram = conf
+                    .get("Options", "NullOrDieFullSpectrogram")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.null_or_die_full_spectrogram, |v| v != 0);
                 cfg.banner_cache = conf
                     .get("Options", "BannerCache")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.banner_cache, |v| v != 0);
-                cfg.background_cache = conf
-                    .get("Options", "BackgroundCache")
-                    .and_then(|v| v.parse::<u8>().ok())
-                    .map_or(default.background_cache, |v| v != 0);
                 cfg.cdtitle_cache = conf
                     .get("Options", "CDTitleCache")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1520,6 +2113,10 @@ pub fn load() {
                     .get("Options", "LogToFile")
                     .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.log_to_file);
+                cfg.linux_audio_backend = conf
+                    .get("Options", "LinuxAudioBackend")
+                    .and_then(|v| LinuxAudioBackend::from_str(&v).ok())
+                    .unwrap_or(default.linux_audio_backend);
                 cfg.visual_delay_seconds = conf
                     .get("Options", "VisualDelaySeconds")
                     .and_then(|v| v.parse().ok())
@@ -1559,6 +2156,10 @@ pub fn load() {
                         }
                     })
                     .or(default.audio_output_device_index);
+                cfg.audio_output_mode = conf
+                    .get("Options", "AudioOutputMode")
+                    .and_then(|s| AudioOutputMode::from_str(&s).ok())
+                    .unwrap_or(default.audio_output_mode);
                 cfg.audio_sample_rate_hz = conf
                     .get("Options", "AudioSampleRateHz")
                     .map(|v| v.trim().to_string())
@@ -1582,6 +2183,10 @@ pub fn load() {
                     .get("Options", "SelectMusicShowBanners")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_banners, |v| v != 0);
+                cfg.show_select_music_video_banners = conf
+                    .get("Options", "SelectMusicShowVideoBanners")
+                    .and_then(|v| parse_bool_str(&v))
+                    .unwrap_or(default.show_select_music_video_banners);
                 cfg.show_select_music_breakdown = conf
                     .get("Options", "SelectMusicShowBreakdown")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1598,10 +2203,22 @@ pub fn load() {
                     .get("Options", "SelectMusicWheelLamps")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_music_wheel_lamps, |v| v != 0);
+                cfg.select_music_itl_wheel_mode = conf
+                    .get("Options", "SelectMusicWheelITL")
+                    .and_then(|v| SelectMusicItlWheelMode::from_str(&v).ok())
+                    .unwrap_or(default.select_music_itl_wheel_mode);
+                cfg.select_music_new_pack_mode = conf
+                    .get("Options", "SelectMusicNewPackMode")
+                    .and_then(|v| NewPackMode::from_str(&v).ok())
+                    .unwrap_or(default.select_music_new_pack_mode);
                 cfg.show_select_music_previews = conf
                     .get("Options", "SelectMusicPreviews")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_previews, |v| v != 0);
+                cfg.show_select_music_preview_marker = conf
+                    .get("Options", "SelectMusicPreviewMarker")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.show_select_music_preview_marker, |v| v != 0);
                 cfg.select_music_preview_loop = conf
                     .get("Options", "SelectMusicPreviewLoop")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1614,6 +2231,10 @@ pub fn load() {
                     .get("Options", "SelectMusicScorebox")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.show_select_music_scorebox, |v| v != 0);
+                cfg.select_music_scorebox_placement = conf
+                    .get("Options", "SelectMusicScoreboxPlacement")
+                    .and_then(|v| SelectMusicScoreboxPlacement::from_str(&v).ok())
+                    .unwrap_or(default.select_music_scorebox_placement);
                 cfg.select_music_scorebox_cycle_itg = conf
                     .get("Options", "SelectMusicScoreboxCycleItg")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1630,6 +2251,18 @@ pub fn load() {
                     .get("Options", "SelectMusicScoreboxCycleTournaments")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.select_music_scorebox_cycle_tournaments, |v| v != 0);
+                cfg.select_music_chart_info_peak_nps = conf
+                    .get("Options", "SelectMusicChartInfoPeakNps")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.select_music_chart_info_peak_nps, |v| v != 0);
+                cfg.select_music_chart_info_matrix_rating = conf
+                    .get("Options", "SelectMusicChartInfoMatrixRating")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.select_music_chart_info_matrix_rating, |v| v != 0);
+                cfg.auto_screenshot_eval = conf
+                    .get("Options", "AutoScreenshotEval")
+                    .map(|v| auto_screenshot_mask_from_str(&v))
+                    .unwrap_or(default.auto_screenshot_eval);
                 cfg.fastload = conf
                     .get("Options", "FastLoad")
                     .and_then(|v| v.parse::<u8>().ok())
@@ -1720,45 +2353,15 @@ pub fn load() {
                     .unwrap_or(default.show_select_music_gameplay_timer);
                 cfg.keyboard_features = conf
                     .get("Theme", "KeyboardFeatures")
-                    .map(|v| v.trim().to_string())
-                    .and_then(|v| {
-                        if v.is_empty() {
-                            None
-                        } else if v.eq_ignore_ascii_case("true")
-                            || v.eq_ignore_ascii_case("yes")
-                            || v.eq_ignore_ascii_case("on")
-                        {
-                            Some(true)
-                        } else if v.eq_ignore_ascii_case("false")
-                            || v.eq_ignore_ascii_case("no")
-                            || v.eq_ignore_ascii_case("off")
-                        {
-                            Some(false)
-                        } else {
-                            v.parse::<u8>().ok().map(|n| n != 0)
-                        }
-                    })
+                    .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.keyboard_features);
+                cfg.show_video_backgrounds = conf
+                    .get("Theme", "VideoBackgrounds")
+                    .and_then(|v| parse_bool_str(&v))
+                    .unwrap_or(default.show_video_backgrounds);
                 cfg.machine_show_eval_summary = conf
                     .get("Theme", "MachineShowEvalSummary")
-                    .map(|v| v.trim().to_string())
-                    .and_then(|v| {
-                        if v.is_empty() {
-                            None
-                        } else if v.eq_ignore_ascii_case("true")
-                            || v.eq_ignore_ascii_case("yes")
-                            || v.eq_ignore_ascii_case("on")
-                        {
-                            Some(true)
-                        } else if v.eq_ignore_ascii_case("false")
-                            || v.eq_ignore_ascii_case("no")
-                            || v.eq_ignore_ascii_case("off")
-                        {
-                            Some(false)
-                        } else {
-                            v.parse::<u8>().ok().map(|n| n != 0)
-                        }
-                    })
+                    .and_then(|v| parse_bool_str(&v))
                     .unwrap_or(default.machine_show_eval_summary);
                 cfg.machine_show_name_entry = conf
                     .get("Theme", "MachineShowNameEntry")
@@ -1886,6 +2489,27 @@ pub fn load() {
                         }
                     })
                     .unwrap_or(default.machine_show_select_play_mode);
+                cfg.machine_enable_replays = conf
+                    .get("Theme", "MachineEnableReplays")
+                    .map(|v| v.trim().to_string())
+                    .and_then(|v| {
+                        if v.is_empty() {
+                            None
+                        } else if v.eq_ignore_ascii_case("true")
+                            || v.eq_ignore_ascii_case("yes")
+                            || v.eq_ignore_ascii_case("on")
+                        {
+                            Some(true)
+                        } else if v.eq_ignore_ascii_case("false")
+                            || v.eq_ignore_ascii_case("no")
+                            || v.eq_ignore_ascii_case("off")
+                        {
+                            Some(false)
+                        } else {
+                            v.parse::<u8>().ok().map(|n| n != 0)
+                        }
+                    })
+                    .unwrap_or(default.machine_enable_replays);
                 cfg.machine_preferred_style = conf
                     .get("Theme", "MachinePreferredStyle")
                     .and_then(|v| MachinePreferredPlayStyle::from_str(&v).ok())
@@ -1952,11 +2576,12 @@ pub fn load() {
                 let mut miss = false;
                 let options_keys = [
                     "AudioOutputDevice",
+                    "AudioOutputMode",
                     "AudioSampleRateHz",
                     "AdditionalSongFolders",
+                    "AutoDownloadUnlocks",
                     "AutoPopulateGrooveStatsScores",
                     "BGBrightness",
-                    "BackgroundCache",
                     "BannerCache",
                     "CacheSongs",
                     "CDTitleCache",
@@ -1981,6 +2606,7 @@ pub fn load() {
                     "Language",
                     "LogLevel",
                     "LogToFile",
+                    "LinuxAudioBackend",
                     "MaxFps",
                     "MasterVolume",
                     "MenuMusic",
@@ -1991,6 +2617,7 @@ pub fn load() {
                     "RateModPreservesPitch",
                     "SelectMusicBreakdown",
                     "SelectMusicShowBanners",
+                    "SelectMusicShowVideoBanners",
                     "SelectMusicShowBreakdown",
                     "SelectMusicShowCDTitles",
                     "SelectMusicWheelGrades",
@@ -2003,6 +2630,7 @@ pub fn load() {
                     "SelectMusicScoreboxCycleEx",
                     "SelectMusicScoreboxCycleHardEx",
                     "SelectMusicScoreboxCycleTournaments",
+                    "SeparateUnlocksByPlayer",
                     "ShowStats",
                     "ShowStatsMode",
                     "SmoothHistogram",
@@ -2033,6 +2661,9 @@ pub fn load() {
                 if !miss && !has("Theme", "KeyboardFeatures") {
                     miss = true;
                 }
+                if !miss && !has("Theme", "VideoBackgrounds") {
+                    miss = true;
+                }
                 if !miss && !has("Theme", "MachineShowEvalSummary") {
                     miss = true;
                 }
@@ -2052,6 +2683,9 @@ pub fn load() {
                     miss = true;
                 }
                 if !miss && !has("Theme", "MachineShowSelectStyle") {
+                    miss = true;
+                }
+                if !miss && !has("Theme", "MachineEnableReplays") {
                     miss = true;
                 }
                 if !miss && !has("Theme", "MachinePreferredStyle") {
@@ -2276,218 +2910,338 @@ fn binding_to_token(binding: InputBinding) -> String {
 }
 
 #[inline(always)]
-fn parse_binding_token(tok: &str) -> Option<InputBinding> {
-    let t = tok.trim();
-    // Keyboard
-    if let Some(rest) = t.strip_prefix("KeyCode::") {
-        let code = match rest {
-            // Special keys
-            "Enter" => KeyCode::Enter,
-            "Escape" => KeyCode::Escape,
-            "ArrowUp" => KeyCode::ArrowUp,
-            "ArrowDown" => KeyCode::ArrowDown,
-            "ArrowLeft" => KeyCode::ArrowLeft,
-            "ArrowRight" => KeyCode::ArrowRight,
-            "Slash" => KeyCode::Slash,
-            // Numpad keys
-            "Numpad0" => KeyCode::Numpad0,
-            "Numpad1" => KeyCode::Numpad1,
-            "Numpad2" => KeyCode::Numpad2,
-            "Numpad3" => KeyCode::Numpad3,
-            "Numpad4" => KeyCode::Numpad4,
-            "Numpad5" => KeyCode::Numpad5,
-            "Numpad6" => KeyCode::Numpad6,
-            "Numpad7" => KeyCode::Numpad7,
-            "Numpad8" => KeyCode::Numpad8,
-            "Numpad9" => KeyCode::Numpad9,
-            "NumpadAdd" => KeyCode::NumpadAdd,
-            "NumpadDivide" => KeyCode::NumpadDivide,
-            "NumpadDecimal" => KeyCode::NumpadDecimal,
-            "NumpadComma" => KeyCode::NumpadComma,
-            "NumpadEnter" => KeyCode::NumpadEnter,
-            "NumpadEqual" => KeyCode::NumpadEqual,
-            "NumpadMultiply" => KeyCode::NumpadMultiply,
-            "NumpadSubtract" => KeyCode::NumpadSubtract,
-            // Letter keys A-Z
-            "KeyA" => KeyCode::KeyA,
-            "KeyB" => KeyCode::KeyB,
-            "KeyC" => KeyCode::KeyC,
-            "KeyD" => KeyCode::KeyD,
-            "KeyE" => KeyCode::KeyE,
-            "KeyF" => KeyCode::KeyF,
-            "KeyG" => KeyCode::KeyG,
-            "KeyH" => KeyCode::KeyH,
-            "KeyI" => KeyCode::KeyI,
-            "KeyJ" => KeyCode::KeyJ,
-            "KeyK" => KeyCode::KeyK,
-            "KeyL" => KeyCode::KeyL,
-            "KeyM" => KeyCode::KeyM,
-            "KeyN" => KeyCode::KeyN,
-            "KeyO" => KeyCode::KeyO,
-            "KeyP" => KeyCode::KeyP,
-            "KeyQ" => KeyCode::KeyQ,
-            "KeyR" => KeyCode::KeyR,
-            "KeyS" => KeyCode::KeyS,
-            "KeyT" => KeyCode::KeyT,
-            "KeyU" => KeyCode::KeyU,
-            "KeyV" => KeyCode::KeyV,
-            "KeyW" => KeyCode::KeyW,
-            "KeyX" => KeyCode::KeyX,
-            "KeyY" => KeyCode::KeyY,
-            "KeyZ" => KeyCode::KeyZ,
-            _ => return None,
+fn parse_keycode(t: &str) -> Option<InputBinding> {
+    let name = t.strip_prefix("KeyCode::")?;
+    macro_rules! keycode_match {
+        ($input:expr, $( $name:ident ),* $(,)?) => {
+            match $input {
+                $( stringify!($name) => Some(KeyCode::$name), )*
+                _ => None,
+            }
         };
-        return Some(InputBinding::Key(code));
     }
+    keycode_match!(
+        name,
+        Backquote,
+        Backslash,
+        BracketLeft,
+        BracketRight,
+        Comma,
+        Digit0,
+        Digit1,
+        Digit2,
+        Digit3,
+        Digit4,
+        Digit5,
+        Digit6,
+        Digit7,
+        Digit8,
+        Digit9,
+        Equal,
+        IntlBackslash,
+        IntlRo,
+        IntlYen,
+        KeyA,
+        KeyB,
+        KeyC,
+        KeyD,
+        KeyE,
+        KeyF,
+        KeyG,
+        KeyH,
+        KeyI,
+        KeyJ,
+        KeyK,
+        KeyL,
+        KeyM,
+        KeyN,
+        KeyO,
+        KeyP,
+        KeyQ,
+        KeyR,
+        KeyS,
+        KeyT,
+        KeyU,
+        KeyV,
+        KeyW,
+        KeyX,
+        KeyY,
+        KeyZ,
+        Minus,
+        Period,
+        Quote,
+        Semicolon,
+        Slash,
+        AltLeft,
+        AltRight,
+        Backspace,
+        CapsLock,
+        ContextMenu,
+        ControlLeft,
+        ControlRight,
+        Enter,
+        SuperLeft,
+        SuperRight,
+        ShiftLeft,
+        ShiftRight,
+        Space,
+        Tab,
+        Convert,
+        KanaMode,
+        Lang1,
+        Lang2,
+        Lang3,
+        Lang4,
+        Lang5,
+        NonConvert,
+        Delete,
+        End,
+        Help,
+        Home,
+        Insert,
+        PageDown,
+        PageUp,
+        ArrowDown,
+        ArrowLeft,
+        ArrowRight,
+        ArrowUp,
+        NumLock,
+        Numpad0,
+        Numpad1,
+        Numpad2,
+        Numpad3,
+        Numpad4,
+        Numpad5,
+        Numpad6,
+        Numpad7,
+        Numpad8,
+        Numpad9,
+        NumpadAdd,
+        NumpadBackspace,
+        NumpadClear,
+        NumpadClearEntry,
+        NumpadComma,
+        NumpadDecimal,
+        NumpadDivide,
+        NumpadEnter,
+        NumpadEqual,
+        NumpadHash,
+        NumpadMemoryAdd,
+        NumpadMemoryClear,
+        NumpadMemoryRecall,
+        NumpadMemoryStore,
+        NumpadMemorySubtract,
+        NumpadMultiply,
+        NumpadParenLeft,
+        NumpadParenRight,
+        NumpadStar,
+        NumpadSubtract,
+        Escape,
+        Fn,
+        FnLock,
+        PrintScreen,
+        ScrollLock,
+        Pause,
+        BrowserBack,
+        BrowserFavorites,
+        BrowserForward,
+        BrowserHome,
+        BrowserRefresh,
+        BrowserSearch,
+        BrowserStop,
+        Eject,
+        LaunchApp1,
+        LaunchApp2,
+        LaunchMail,
+        MediaPlayPause,
+        MediaSelect,
+        MediaStop,
+        MediaTrackNext,
+        MediaTrackPrevious,
+        Power,
+        Sleep,
+        AudioVolumeDown,
+        AudioVolumeMute,
+        AudioVolumeUp,
+        WakeUp,
+        Meta,
+        Hyper,
+        Turbo,
+        Abort,
+        Resume,
+        Suspend,
+        Again,
+        Copy,
+        Cut,
+        Find,
+        Open,
+        Paste,
+        Props,
+        Select,
+        Undo,
+        Hiragana,
+        Katakana,
+        F1,
+        F2,
+        F3,
+        F4,
+        F5,
+        F6,
+        F7,
+        F8,
+        F9,
+        F10,
+        F11,
+        F12,
+        F13,
+        F14,
+        F15,
+        F16,
+        F17,
+        F18,
+        F19,
+        F20,
+        F21,
+        F22,
+        F23,
+        F24,
+        F25,
+        F26,
+        F27,
+        F28,
+        F29,
+        F30,
+        F31,
+        F32,
+        F33,
+        F34,
+        F35,
+    )
+    .map(InputBinding::Key)
+}
 
-    // Gamepad low-level code binding:
-    //   PadCode[0xDEADBEEF]
-    //   PadCode[0xDEADBEEF]@0
-    //   PadCode[0xDEADBEEF]#00112233AABBCCDDEEFF001122334455
-    //   PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455
-    //
-    // where 0x... or decimal is the `PadCode(u32)` shown in the Sandbox/Input screens,
-    // @N restricts to device index N,
-    // and #... restricts to a 16-byte UUID (32 hex chars, no dashes).
-    if let Some(rest) = t.strip_prefix("PadCode[")
-        && let Some(end) = rest.find(']')
+#[inline(always)]
+fn parse_pad_dir(name: &str) -> Option<PadDir> {
+    match name {
+        "Up" => Some(PadDir::Up),
+        "Down" => Some(PadDir::Down),
+        "Left" => Some(PadDir::Left),
+        "Right" => Some(PadDir::Right),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn parse_pad_code(t: &str) -> Option<InputBinding> {
+    let rest = t.strip_prefix("PadCode[")?;
+    let end = rest.find(']')?;
+    let code_str = &rest[..end];
+    let mut tail = &rest[end + 1..];
+
+    let code_u32 = if let Some(hex) = code_str
+        .strip_prefix("0x")
+        .or_else(|| code_str.strip_prefix("0X"))
     {
-        let code_str = &rest[..end];
-        let mut tail = &rest[end + 1..];
+        u32::from_str_radix(hex, 16).ok()?
+    } else {
+        u32::from_str(code_str).ok()?
+    };
 
-        let code_u32 = if let Some(hex) = code_str
-            .strip_prefix("0x")
-            .or_else(|| code_str.strip_prefix("0X"))
-        {
-            u32::from_str_radix(hex, 16).ok()?
-        } else {
-            u32::from_str(code_str).ok()?
-        };
-
-        let mut device: Option<usize> = None;
-        let mut uuid: Option<[u8; 16]> = None;
-
-        // Parse optional @device and #uuid, in any order.
-        loop {
-            if let Some(rest2) = tail.strip_prefix('@') {
-                let mut digits = String::new();
-                for ch in rest2.chars() {
-                    if ch.is_ascii_digit() {
-                        digits.push(ch);
-                    } else {
-                        break;
-                    }
-                }
-                if digits.is_empty() {
+    let mut device = None;
+    let mut uuid = None;
+    loop {
+        if let Some(rest) = tail.strip_prefix('@') {
+            let mut digits = String::new();
+            for ch in rest.chars() {
+                if ch.is_ascii_digit() {
+                    digits.push(ch);
+                } else {
                     break;
                 }
-                if let Ok(dev_idx) = usize::from_str(&digits) {
-                    device = Some(dev_idx);
-                }
-                tail = &rest2[digits.len()..];
-                continue;
             }
-
-            if let Some(rest2) = tail.strip_prefix('#') {
-                let mut hex_digits = String::new();
-                for ch in rest2.chars() {
-                    if ch.is_ascii_hexdigit() {
-                        hex_digits.push(ch);
+            if digits.is_empty() {
+                break;
+            }
+            if let Ok(dev_idx) = usize::from_str(&digits) {
+                device = Some(dev_idx);
+            }
+            tail = &rest[digits.len()..];
+            continue;
+        }
+        if let Some(rest) = tail.strip_prefix('#') {
+            let mut hex_digits = String::new();
+            for ch in rest.chars() {
+                if ch.is_ascii_hexdigit() {
+                    hex_digits.push(ch);
+                } else {
+                    break;
+                }
+            }
+            if hex_digits.len() == 32 {
+                let mut bytes = [0u8; 16];
+                let mut ok = true;
+                for (i, byte) in bytes.iter_mut().enumerate() {
+                    let start = i * 2;
+                    let end = start + 2;
+                    if let Ok(parsed) = u8::from_str_radix(&hex_digits[start..end], 16) {
+                        *byte = parsed;
                     } else {
+                        ok = false;
                         break;
                     }
                 }
-                if hex_digits.len() == 32 {
-                    let mut bytes = [0u8; 16];
-                    let mut ok = true;
-                    for i in 0..16 {
-                        let start = i * 2;
-                        let end = start + 2;
-                        if let Ok(b) = u8::from_str_radix(&hex_digits[start..end], 16) {
-                            bytes[i] = b
-                        } else {
-                            ok = false;
-                            break;
-                        }
-                    }
-                    if ok {
-                        uuid = Some(bytes);
-                    }
+                if ok {
+                    uuid = Some(bytes);
                 }
-                tail = &rest2[hex_digits.len()..];
-                continue;
             }
-
-            break;
+            tail = &rest[hex_digits.len()..];
+            continue;
         }
-
-        return Some(InputBinding::GamepadCode(GamepadCodeBinding {
-            code_u32,
-            device,
-            uuid,
-        }));
+        break;
     }
 
-    // Gamepad (any pad): PadDir::Up
-    if let Some(rest) = t.strip_prefix("PadDir::") {
-        let dir = match rest {
-            "Up" => PadDir::Up,
-            "Down" => PadDir::Down,
-            "Left" => PadDir::Left,
-            "Right" => PadDir::Right,
-            _ => return None,
-        };
+    Some(InputBinding::GamepadCode(GamepadCodeBinding {
+        code_u32,
+        device,
+        uuid,
+    }))
+}
+
+#[inline(always)]
+fn parse_pad_device_binding(t: &str) -> Option<InputBinding> {
+    let mut parts = t.split("::");
+    let pad = parts.next()?;
+    let kind = parts.next()?;
+    let name = parts.next()?;
+    if parts.next().is_some() || kind != "Dir" {
+        return None;
+    }
+
+    let dev = pad.strip_prefix("Pad")?;
+    let dir = parse_pad_dir(name)?;
+    if dev.is_empty() {
         return Some(InputBinding::PadDir(dir));
     }
+    Some(InputBinding::PadDirOn {
+        device: dev.parse::<usize>().ok()?,
+        dir,
+    })
+}
 
-    // Gamepad (device-specific): Pad0::Dir::Up
-    // Split by "::"
-    let parts: Vec<&str> = t.split("::").collect();
-    if parts.len() == 3 {
-        let (pad_part, kind, name) = (parts[0], parts[1], parts[2]);
-        // Parse device index from PadN
-        if let Some(dev_str) = pad_part.strip_prefix("Pad") {
-            if dev_str.is_empty() {
-                // Treat as any-pad; handled at top via PadDir prefix.
-                return match kind {
-                    "Dir" => match name {
-                        "Up" => Some(InputBinding::PadDir(PadDir::Up)),
-                        "Down" => Some(InputBinding::PadDir(PadDir::Down)),
-                        "Left" => Some(InputBinding::PadDir(PadDir::Left)),
-                        "Right" => Some(InputBinding::PadDir(PadDir::Right)),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-            }
-            if let Ok(device) = dev_str.parse::<usize>() {
-                return match kind {
-                    "Dir" => match name {
-                        "Up" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Up,
-                        }),
-                        "Down" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Down,
-                        }),
-                        "Left" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Left,
-                        }),
-                        "Right" => Some(InputBinding::PadDirOn {
-                            device,
-                            dir: PadDir::Right,
-                        }),
-                        _ => None,
-                    },
-                    _ => None,
-                };
-            }
-        }
-    }
+#[inline(always)]
+fn parse_pad_dir_binding(t: &str) -> Option<InputBinding> {
+    t.strip_prefix("PadDir::")
+        .and_then(parse_pad_dir)
+        .map(InputBinding::PadDir)
+        .or_else(|| parse_pad_device_binding(t))
+}
 
-    None
+#[inline(always)]
+fn parse_binding_token(tok: &str) -> Option<InputBinding> {
+    let t = tok.trim();
+    parse_keycode(t)
+        .or_else(|| parse_pad_code(t))
+        .or_else(|| parse_pad_dir_binding(t))
 }
 
 fn load_keymap_from_ini_local(conf: &SimpleIni) -> Keymap {
@@ -2716,6 +3470,10 @@ fn save_without_keymaps() {
         .audio_output_device_index
         .map_or_else(|| "Auto".to_string(), |idx| idx.to_string());
     content.push_str(&format!("AudioOutputDevice={audio_output_device}\n"));
+    content.push_str(&format!(
+        "AudioOutputMode={}\n",
+        cfg.audio_output_mode.as_str()
+    ));
     let audio_rate_str = match cfg.audio_sample_rate_hz {
         None => "Auto".to_string(),
         Some(hz) => hz.to_string(),
@@ -2723,6 +3481,10 @@ fn save_without_keymaps() {
     content.push_str(&format!("AudioSampleRateHz={audio_rate_str}\n"));
     content.push_str(&format!(
         "AdditionalSongFolders={additional_song_folders}\n"
+    ));
+    content.push_str(&format!(
+        "AutoDownloadUnlocks={}\n",
+        if cfg.auto_download_unlocks { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "AutoPopulateGrooveStatsScores={}\n",
@@ -2735,10 +3497,6 @@ fn save_without_keymaps() {
     content.push_str(&format!(
         "BGBrightness={}\n",
         cfg.bg_brightness.clamp(0.0, 1.0)
-    ));
-    content.push_str(&format!(
-        "BackgroundCache={}\n",
-        if cfg.background_cache { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "BannerCache={}\n",
@@ -2792,6 +3550,46 @@ fn save_without_keymaps() {
         "DefaultFailType={}\n",
         cfg.default_fail_type.as_str()
     ));
+    content.push_str(&format!(
+        "NullOrDieSyncGraph={}\n",
+        cfg.null_or_die_sync_graph.as_str()
+    ));
+    content.push_str(&format!(
+        "NullOrDieConfidencePercent={}\n",
+        clamp_null_or_die_confidence_percent(cfg.null_or_die_confidence_percent)
+    ));
+    content.push_str(&format!(
+        "NullOrDieFingerprintMs={:.1}\n",
+        clamp_null_or_die_positive_ms(cfg.null_or_die_fingerprint_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieWindowMs={:.1}\n",
+        clamp_null_or_die_positive_ms(cfg.null_or_die_window_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieStepMs={:.1}\n",
+        clamp_null_or_die_positive_ms(cfg.null_or_die_step_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieMagicOffsetMs={:.1}\n",
+        clamp_null_or_die_magic_offset_ms(cfg.null_or_die_magic_offset_ms)
+    ));
+    content.push_str(&format!(
+        "NullOrDieKernelTarget={}\n",
+        null_or_die_kernel_target_str(cfg.null_or_die_kernel_target)
+    ));
+    content.push_str(&format!(
+        "NullOrDieKernelType={}\n",
+        null_or_die_kernel_type_str(cfg.null_or_die_kernel_type)
+    ));
+    content.push_str(&format!(
+        "NullOrDieFullSpectrogram={}\n",
+        if cfg.null_or_die_full_spectrogram {
+            "1"
+        } else {
+            "0"
+        }
+    ));
     content.push_str(&format!("DefaultNoteSkin={machine_default_noteskin}\n"));
     content.push_str(&format!("DisplayHeight={}\n", cfg.display_height));
     content.push_str(&format!("DisplayWidth={}\n", cfg.display_width));
@@ -2831,7 +3629,12 @@ fn save_without_keymaps() {
         "LogToFile={}\n",
         if cfg.log_to_file { "1" } else { "0" }
     ));
+    content.push_str(&format!(
+        "LinuxAudioBackend={}\n",
+        cfg.linux_audio_backend.as_str()
+    ));
     content.push_str(&format!("MaxFps={}\n", cfg.max_fps));
+    content.push_str(&format!("PresentModePolicy={}\n", cfg.present_mode_policy));
     content.push_str(&format!(
         "VisualDelaySeconds={}\n",
         cfg.visual_delay_seconds
@@ -2871,6 +3674,14 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicShowVideoBanners={}\n",
+        if cfg.show_select_music_video_banners {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SelectMusicShowBreakdown={}\n",
         if cfg.show_select_music_breakdown {
             "1"
@@ -2899,8 +3710,24 @@ fn save_without_keymaps() {
         if cfg.show_music_wheel_lamps { "1" } else { "0" }
     ));
     content.push_str(&format!(
+        "SelectMusicWheelITL={}\n",
+        cfg.select_music_itl_wheel_mode.as_str()
+    ));
+    content.push_str(&format!(
+        "SelectMusicNewPackMode={}\n",
+        cfg.select_music_new_pack_mode.as_str()
+    ));
+    content.push_str(&format!(
         "SelectMusicPreviews={}\n",
         if cfg.show_select_music_previews {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicPreviewMarker={}\n",
+        if cfg.show_select_music_preview_marker {
             "1"
         } else {
             "0"
@@ -2925,6 +3752,10 @@ fn save_without_keymaps() {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "SelectMusicScoreboxPlacement={}\n",
+        cfg.select_music_scorebox_placement.as_str()
     ));
     content.push_str(&format!(
         "SelectMusicScoreboxCycleItg={}\n",
@@ -2959,10 +3790,38 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicChartInfoPeakNps={}\n",
+        if cfg.select_music_chart_info_peak_nps {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicChartInfoMatrixRating={}\n",
+        if cfg.select_music_chart_info_matrix_rating {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SeparateUnlocksByPlayer={}\n",
+        if cfg.separate_unlocks_by_player {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "AutoScreenshotEval={}\n",
+        auto_screenshot_mask_to_str(cfg.auto_screenshot_eval)
+    ));
+    content.push_str(&format!(
         "ShowStats={}\n",
         if cfg.show_stats_mode != 0 { "1" } else { "0" }
     ));
-    content.push_str(&format!("ShowStatsMode={}\n", cfg.show_stats_mode.min(2)));
+    content.push_str(&format!("ShowStatsMode={}\n", cfg.show_stats_mode.min(3)));
     content.push_str(&format!(
         "SmoothHistogram={}\n",
         if cfg.smooth_histogram { "1" } else { "0" }
@@ -3028,6 +3887,10 @@ fn save_without_keymaps() {
         if cfg.keyboard_features { "1" } else { "0" }
     ));
     content.push_str(&format!(
+        "VideoBackgrounds={}\n",
+        if cfg.show_video_backgrounds { "1" } else { "0" }
+    ));
+    content.push_str(&format!(
         "MachineShowEvalSummary={}\n",
         if cfg.machine_show_eval_summary {
             "1"
@@ -3078,6 +3941,10 @@ fn save_without_keymaps() {
         } else {
             "0"
         }
+    ));
+    content.push_str(&format!(
+        "MachineEnableReplays={}\n",
+        if cfg.machine_enable_replays { "1" } else { "0" }
     ));
     content.push_str(&format!(
         "MachinePreferredStyle={}\n",
@@ -3263,8 +4130,19 @@ pub fn update_max_fps(max_fps: u16) {
     save_without_keymaps();
 }
 
+pub fn update_present_mode_policy(mode: PresentModePolicy) {
+    {
+        let mut cfg = lock_config();
+        if cfg.present_mode_policy == mode {
+            return;
+        }
+        cfg.present_mode_policy = mode;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_stats_mode(mode: u8) {
-    let mode = mode.min(2);
+    let mode = mode.min(3);
     {
         let mut cfg = lock_config();
         if cfg.show_stats_mode == mode {
@@ -3352,17 +4230,6 @@ pub fn update_cdtitle_cache(enabled: bool) {
             return;
         }
         cfg.cdtitle_cache = enabled;
-    }
-    save_without_keymaps();
-}
-
-pub fn update_background_cache(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.background_cache == enabled {
-            return;
-        }
-        cfg.background_cache = enabled;
     }
     save_without_keymaps();
 }
@@ -3496,6 +4363,29 @@ pub fn update_audio_output_device(index: Option<u16>) {
     save_without_keymaps();
 }
 
+pub fn update_audio_output_mode(mode: AudioOutputMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.audio_output_mode == mode {
+            return;
+        }
+        cfg.audio_output_mode = mode;
+    }
+    save_without_keymaps();
+}
+
+#[cfg(target_os = "linux")]
+pub fn update_linux_audio_backend(backend: LinuxAudioBackend) {
+    {
+        let mut cfg = lock_config();
+        if cfg.linux_audio_backend == backend {
+            return;
+        }
+        cfg.linux_audio_backend = backend;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_mine_hit_sound(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3574,6 +4464,17 @@ pub fn update_show_select_music_banners(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_show_select_music_video_banners(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_video_banners == enabled {
+            return;
+        }
+        cfg.show_select_music_video_banners = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_cdtitles(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3607,6 +4508,28 @@ pub fn update_show_music_wheel_lamps(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_select_music_itl_wheel_mode(mode: SelectMusicItlWheelMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_itl_wheel_mode == mode {
+            return;
+        }
+        cfg.select_music_itl_wheel_mode = mode;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_new_pack_mode(mode: NewPackMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_new_pack_mode == mode {
+            return;
+        }
+        cfg.select_music_new_pack_mode = mode;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_show_select_music_previews(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3614,6 +4537,17 @@ pub fn update_show_select_music_previews(enabled: bool) {
             return;
         }
         cfg.show_select_music_previews = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_select_music_preview_marker(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_select_music_preview_marker == enabled {
+            return;
+        }
+        cfg.show_select_music_preview_marker = enabled;
     }
     save_without_keymaps();
 }
@@ -3662,6 +4596,17 @@ pub fn update_show_select_music_scorebox(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_select_music_scorebox_placement(mode: SelectMusicScoreboxPlacement) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_scorebox_placement == mode {
+            return;
+        }
+        cfg.select_music_scorebox_placement = mode;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_scorebox_cycle_itg(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3702,6 +4647,39 @@ pub fn update_select_music_scorebox_cycle_tournaments(enabled: bool) {
             return;
         }
         cfg.select_music_scorebox_cycle_tournaments = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_chart_info_peak_nps(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_chart_info_peak_nps == enabled {
+            return;
+        }
+        cfg.select_music_chart_info_peak_nps = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_chart_info_matrix_rating(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_chart_info_matrix_rating == enabled {
+            return;
+        }
+        cfg.select_music_chart_info_matrix_rating = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_auto_screenshot_eval(mask: u8) {
+    {
+        let mut cfg = lock_config();
+        if cfg.auto_screenshot_eval == mask {
+            return;
+        }
+        cfg.auto_screenshot_eval = mask;
     }
     save_without_keymaps();
 }
@@ -3783,6 +4761,110 @@ pub fn update_default_fail_type(fail_type: DefaultFailType) {
     save_without_keymaps();
 }
 
+pub fn update_null_or_die_sync_graph(mode: SyncGraphMode) {
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_sync_graph == mode {
+            return;
+        }
+        cfg.null_or_die_sync_graph = mode;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_confidence_percent(value: u8) {
+    let value = clamp_null_or_die_confidence_percent(value);
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_confidence_percent == value {
+            return;
+        }
+        cfg.null_or_die_confidence_percent = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_fingerprint_ms(value: f64) {
+    let value = clamp_null_or_die_positive_ms(value);
+    {
+        let mut cfg = lock_config();
+        if (cfg.null_or_die_fingerprint_ms - value).abs() <= f64::EPSILON {
+            return;
+        }
+        cfg.null_or_die_fingerprint_ms = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_window_ms(value: f64) {
+    let value = clamp_null_or_die_positive_ms(value);
+    {
+        let mut cfg = lock_config();
+        if (cfg.null_or_die_window_ms - value).abs() <= f64::EPSILON {
+            return;
+        }
+        cfg.null_or_die_window_ms = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_step_ms(value: f64) {
+    let value = clamp_null_or_die_positive_ms(value);
+    {
+        let mut cfg = lock_config();
+        if (cfg.null_or_die_step_ms - value).abs() <= f64::EPSILON {
+            return;
+        }
+        cfg.null_or_die_step_ms = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_magic_offset_ms(value: f64) {
+    let value = clamp_null_or_die_magic_offset_ms(value);
+    {
+        let mut cfg = lock_config();
+        if (cfg.null_or_die_magic_offset_ms - value).abs() <= f64::EPSILON {
+            return;
+        }
+        cfg.null_or_die_magic_offset_ms = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_kernel_target(value: KernelTarget) {
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_kernel_target == value {
+            return;
+        }
+        cfg.null_or_die_kernel_target = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_kernel_type(value: BiasKernel) {
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_kernel_type == value {
+            return;
+        }
+        cfg.null_or_die_kernel_type = value;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_null_or_die_full_spectrogram(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_full_spectrogram == enabled {
+            return;
+        }
+        cfg.null_or_die_full_spectrogram = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_input_debounce_seconds(seconds: f32) {
     let seconds = seconds.clamp(0.0, 0.2);
     {
@@ -3826,6 +4908,17 @@ pub fn update_machine_show_select_profile(enabled: bool) {
             return;
         }
         cfg.machine_show_select_profile = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_show_video_backgrounds(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.show_video_backgrounds == enabled {
+            return;
+        }
+        cfg.show_video_backgrounds = enabled;
     }
     save_without_keymaps();
 }
@@ -3918,6 +5011,17 @@ pub fn update_machine_show_gameover(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_machine_enable_replays(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_enable_replays == enabled {
+            return;
+        }
+        cfg.machine_enable_replays = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_enable_groovestats(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3951,6 +5055,17 @@ pub fn update_enable_arrowcloud(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_auto_download_unlocks(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.auto_download_unlocks == enabled {
+            return;
+        }
+        cfg.auto_download_unlocks = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_auto_populate_gs_scores(enabled: bool) {
     {
         let mut cfg = lock_config();
@@ -3958,6 +5073,17 @@ pub fn update_auto_populate_gs_scores(enabled: bool) {
             return;
         }
         cfg.auto_populate_gs_scores = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_separate_unlocks_by_player(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.separate_unlocks_by_player == enabled {
+            return;
+        }
+        cfg.separate_unlocks_by_player = enabled;
     }
     save_without_keymaps();
 }
@@ -4005,4 +5131,429 @@ pub fn update_machine_default_noteskin(noteskin: &str) {
         *current = normalized;
     }
     save_without_keymaps();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clamp_null_or_die_confidence_caps_at_100() {
+        assert_eq!(clamp_null_or_die_confidence_percent(0), 0);
+        assert_eq!(clamp_null_or_die_confidence_percent(80), 80);
+        assert_eq!(clamp_null_or_die_confidence_percent(120), 100);
+    }
+
+    #[test]
+    fn clamp_null_or_die_positive_ms_uses_tenths() {
+        assert!((clamp_null_or_die_positive_ms(0.0) - 0.1).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_positive_ms(10.04) - 10.0).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_positive_ms(10.05) - 10.1).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_positive_ms(1000.0) - 100.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn clamp_null_or_die_magic_offset_uses_tenths() {
+        assert!((clamp_null_or_die_magic_offset_ms(-200.0) + 100.0).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_magic_offset_ms(0.04) - 0.0).abs() < f64::EPSILON);
+        assert!((clamp_null_or_die_magic_offset_ms(0.05) - 0.1).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn parse_keycode_common_keys() {
+        let cases = [
+            ("KeyCode::Enter", KeyCode::Enter),
+            ("KeyCode::Escape", KeyCode::Escape),
+            ("KeyCode::ArrowUp", KeyCode::ArrowUp),
+            ("KeyCode::ArrowDown", KeyCode::ArrowDown),
+            ("KeyCode::ArrowLeft", KeyCode::ArrowLeft),
+            ("KeyCode::ArrowRight", KeyCode::ArrowRight),
+            ("KeyCode::Slash", KeyCode::Slash),
+            ("KeyCode::KeyA", KeyCode::KeyA),
+            ("KeyCode::KeyZ", KeyCode::KeyZ),
+            ("KeyCode::Numpad0", KeyCode::Numpad0),
+            ("KeyCode::Numpad9", KeyCode::Numpad9),
+            ("KeyCode::NumpadEnter", KeyCode::NumpadEnter),
+            ("KeyCode::NumpadDecimal", KeyCode::NumpadDecimal),
+        ];
+        for (token, expected) in cases {
+            assert_eq!(
+                parse_keycode(token),
+                Some(InputBinding::Key(expected)),
+                "failed for {token}"
+            );
+        }
+    }
+
+    #[test]
+    fn auto_screenshot_mask_roundtrips() {
+        let mask = AUTO_SS_PBS | AUTO_SS_CLEARS | AUTO_SS_QUINTS;
+        let encoded = auto_screenshot_mask_to_str(mask);
+        assert_eq!(encoded, "PBs|Clears|Quints");
+        assert_eq!(auto_screenshot_mask_from_str(&encoded), mask);
+    }
+
+    #[test]
+    fn auto_screenshot_mask_handles_off_and_unknown_tokens() {
+        assert_eq!(auto_screenshot_mask_from_str(""), 0);
+        assert_eq!(auto_screenshot_mask_from_str("Off"), 0);
+        assert_eq!(
+            auto_screenshot_mask_from_str("PBs|unknown|Fails"),
+            AUTO_SS_PBS | AUTO_SS_FAILS
+        );
+    }
+
+    #[test]
+    fn parse_keycode_previously_missing_keys() {
+        let cases = [
+            ("KeyCode::Period", KeyCode::Period),
+            ("KeyCode::AltLeft", KeyCode::AltLeft),
+            ("KeyCode::AltRight", KeyCode::AltRight),
+            ("KeyCode::ControlLeft", KeyCode::ControlLeft),
+            ("KeyCode::ControlRight", KeyCode::ControlRight),
+            ("KeyCode::ShiftLeft", KeyCode::ShiftLeft),
+            ("KeyCode::ShiftRight", KeyCode::ShiftRight),
+            ("KeyCode::Space", KeyCode::Space),
+            ("KeyCode::Tab", KeyCode::Tab),
+            ("KeyCode::Backspace", KeyCode::Backspace),
+            ("KeyCode::CapsLock", KeyCode::CapsLock),
+            ("KeyCode::Delete", KeyCode::Delete),
+            ("KeyCode::Home", KeyCode::Home),
+            ("KeyCode::End", KeyCode::End),
+            ("KeyCode::PageUp", KeyCode::PageUp),
+            ("KeyCode::PageDown", KeyCode::PageDown),
+            ("KeyCode::Insert", KeyCode::Insert),
+            ("KeyCode::F1", KeyCode::F1),
+            ("KeyCode::F12", KeyCode::F12),
+            ("KeyCode::PrintScreen", KeyCode::PrintScreen),
+            ("KeyCode::Comma", KeyCode::Comma),
+            ("KeyCode::Minus", KeyCode::Minus),
+            ("KeyCode::Equal", KeyCode::Equal),
+            ("KeyCode::BracketLeft", KeyCode::BracketLeft),
+            ("KeyCode::Backquote", KeyCode::Backquote),
+            ("KeyCode::Digit0", KeyCode::Digit0),
+            ("KeyCode::Digit9", KeyCode::Digit9),
+            ("KeyCode::NumLock", KeyCode::NumLock),
+            ("KeyCode::ScrollLock", KeyCode::ScrollLock),
+            ("KeyCode::Pause", KeyCode::Pause),
+            ("KeyCode::ContextMenu", KeyCode::ContextMenu),
+            ("KeyCode::SuperLeft", KeyCode::SuperLeft),
+            ("KeyCode::AudioVolumeMute", KeyCode::AudioVolumeMute),
+            ("KeyCode::F35", KeyCode::F35),
+        ];
+        for (token, expected) in cases {
+            assert_eq!(
+                parse_keycode(token),
+                Some(InputBinding::Key(expected)),
+                "failed for {token}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_keycode_rejects_invalid() {
+        assert_eq!(parse_keycode("KeyCode::NotAKey"), None);
+        assert_eq!(parse_keycode("KeyCode::"), None);
+        assert_eq!(parse_keycode("NotKeyCode::Enter"), None);
+        assert_eq!(parse_keycode("Enter"), None);
+        assert_eq!(parse_keycode(""), None);
+    }
+
+    #[test]
+    fn parse_pad_dir_valid() {
+        assert_eq!(parse_pad_dir("Up"), Some(PadDir::Up));
+        assert_eq!(parse_pad_dir("Down"), Some(PadDir::Down));
+        assert_eq!(parse_pad_dir("Left"), Some(PadDir::Left));
+        assert_eq!(parse_pad_dir("Right"), Some(PadDir::Right));
+    }
+
+    #[test]
+    fn parse_pad_dir_invalid() {
+        assert_eq!(parse_pad_dir("up"), None);
+        assert_eq!(parse_pad_dir(""), None);
+        assert_eq!(parse_pad_dir("UpDown"), None);
+    }
+
+    #[test]
+    fn parse_pad_dir_binding_short_form() {
+        assert_eq!(
+            parse_pad_dir_binding("PadDir::Up"),
+            Some(InputBinding::PadDir(PadDir::Up))
+        );
+        assert_eq!(
+            parse_pad_dir_binding("PadDir::Right"),
+            Some(InputBinding::PadDir(PadDir::Right))
+        );
+    }
+
+    #[test]
+    fn parse_pad_device_binding_any_pad_long_form() {
+        assert_eq!(
+            parse_pad_device_binding("Pad::Dir::Down"),
+            Some(InputBinding::PadDir(PadDir::Down))
+        );
+    }
+
+    #[test]
+    fn parse_pad_device_binding_device_specific() {
+        assert_eq!(
+            parse_pad_device_binding("Pad0::Dir::Up"),
+            Some(InputBinding::PadDirOn {
+                device: 0,
+                dir: PadDir::Up,
+            })
+        );
+        assert_eq!(
+            parse_pad_device_binding("Pad3::Dir::Left"),
+            Some(InputBinding::PadDirOn {
+                device: 3,
+                dir: PadDir::Left,
+            })
+        );
+    }
+
+    #[test]
+    fn parse_pad_dir_binding_rejects_invalid() {
+        assert_eq!(parse_pad_dir_binding("PadDir::Diagonal"), None);
+        assert_eq!(parse_pad_dir_binding("Pad0::Btn::A"), None);
+        assert_eq!(parse_pad_dir_binding("Pad0::Dir"), None);
+        assert_eq!(parse_pad_dir_binding("NotPad::Dir::Up"), None);
+    }
+
+    #[test]
+    fn parse_pad_code_hex_only() {
+        assert_eq!(
+            parse_pad_code("PadCode[0xDEADBEEF]"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0xDEADBEEF,
+                device: None,
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_decimal() {
+        assert_eq!(
+            parse_pad_code("PadCode[42]"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 42,
+                device: None,
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_with_device() {
+        assert_eq!(
+            parse_pad_code("PadCode[0x00000001]@2"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 1,
+                device: Some(2),
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_with_uuid() {
+        let uuid_hex = "00112233AABBCCDDEEFF001122334455";
+        let token = format!("PadCode[0xFF]#{uuid_hex}");
+        let expected_uuid = [
+            0x00, 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33,
+            0x44, 0x55,
+        ];
+        assert_eq!(
+            parse_pad_code(&token),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0xFF,
+                device: None,
+                uuid: Some(expected_uuid),
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_pad_code_with_device_and_uuid() {
+        let token = "PadCode[0xDEADBEEF]@0#00112233AABBCCDDEEFF001122334455";
+        let Some(InputBinding::GamepadCode(binding)) = parse_pad_code(token) else {
+            panic!("expected gamepad code binding");
+        };
+        assert_eq!(binding.code_u32, 0xDEADBEEF);
+        assert_eq!(binding.device, Some(0));
+        assert!(binding.uuid.is_some());
+    }
+
+    #[test]
+    fn parse_pad_code_rejects_invalid() {
+        assert_eq!(parse_pad_code("PadCode[]"), None);
+        assert_eq!(parse_pad_code("PadCode[xyz]"), None);
+        assert_eq!(parse_pad_code("NotPadCode[0x01]"), None);
+        assert_eq!(parse_pad_code(""), None);
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_keycode() {
+        assert_eq!(
+            parse_binding_token("KeyCode::Period"),
+            Some(InputBinding::Key(KeyCode::Period))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_pad_dir() {
+        assert_eq!(
+            parse_binding_token("PadDir::Up"),
+            Some(InputBinding::PadDir(PadDir::Up))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_pad_device() {
+        assert_eq!(
+            parse_binding_token("Pad0::Dir::Left"),
+            Some(InputBinding::PadDirOn {
+                device: 0,
+                dir: PadDir::Left,
+            })
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_dispatches_pad_code() {
+        assert_eq!(
+            parse_binding_token("PadCode[0x42]"),
+            Some(InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 0x42,
+                device: None,
+                uuid: None,
+            }))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_trims_whitespace() {
+        assert_eq!(
+            parse_binding_token("  KeyCode::Enter  "),
+            Some(InputBinding::Key(KeyCode::Enter))
+        );
+    }
+
+    #[test]
+    fn parse_binding_token_rejects_garbage() {
+        assert_eq!(parse_binding_token("garbage"), None);
+        assert_eq!(parse_binding_token(""), None);
+    }
+
+    #[test]
+    fn round_trip_keyboard_bindings() {
+        let keys = [
+            KeyCode::Enter,
+            KeyCode::Escape,
+            KeyCode::Period,
+            KeyCode::AltLeft,
+            KeyCode::AltRight,
+            KeyCode::Space,
+            KeyCode::Tab,
+            KeyCode::Backspace,
+            KeyCode::ArrowUp,
+            KeyCode::KeyA,
+            KeyCode::KeyZ,
+            KeyCode::Digit0,
+            KeyCode::Digit9,
+            KeyCode::Numpad0,
+            KeyCode::Numpad2,
+            KeyCode::NumpadEnter,
+            KeyCode::NumpadDecimal,
+            KeyCode::F1,
+            KeyCode::F12,
+            KeyCode::F35,
+            KeyCode::ControlLeft,
+            KeyCode::ShiftRight,
+            KeyCode::SuperLeft,
+            KeyCode::PrintScreen,
+            KeyCode::Comma,
+            KeyCode::Minus,
+            KeyCode::Slash,
+            KeyCode::Backquote,
+            KeyCode::BracketLeft,
+            KeyCode::AudioVolumeMute,
+        ];
+        for key in keys {
+            let binding = InputBinding::Key(key);
+            let token = binding_to_token(binding);
+            assert_eq!(
+                parse_binding_token(&token),
+                Some(binding),
+                "round-trip failed for {key:?}: token was {token:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn round_trip_pad_dir() {
+        for dir in [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right] {
+            let binding = InputBinding::PadDir(dir);
+            let token = binding_to_token(binding);
+            assert_eq!(
+                parse_binding_token(&token),
+                Some(binding),
+                "round-trip failed for {dir:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn round_trip_pad_dir_on() {
+        for device in [0, 1, 5] {
+            for dir in [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right] {
+                let binding = InputBinding::PadDirOn { device, dir };
+                let token = binding_to_token(binding);
+                assert_eq!(
+                    parse_binding_token(&token),
+                    Some(binding),
+                    "round-trip failed for device={device}, dir={dir:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn round_trip_gamepad_code() {
+        let cases = [
+            GamepadCodeBinding {
+                code_u32: 0xDEADBEEF,
+                device: None,
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: 42,
+                device: Some(0),
+                uuid: None,
+            },
+            GamepadCodeBinding {
+                code_u32: 0xFF,
+                device: None,
+                uuid: Some([
+                    0x00, 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22,
+                    0x33, 0x44, 0x55,
+                ]),
+            },
+            GamepadCodeBinding {
+                code_u32: 0x01,
+                device: Some(3),
+                uuid: Some([0xAB; 16]),
+            },
+        ];
+        for binding in cases {
+            let input = InputBinding::GamepadCode(binding);
+            let token = binding_to_token(input);
+            assert_eq!(
+                parse_binding_token(&token),
+                Some(input),
+                "round-trip failed for {binding:?}: token was {token:?}"
+            );
+        }
+    }
 }

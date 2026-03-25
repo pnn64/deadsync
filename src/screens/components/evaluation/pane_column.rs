@@ -4,7 +4,7 @@ use crate::core::gfx::{BlendMode, SamplerDesc};
 use crate::core::space::screen_center_y;
 use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization};
 use crate::game::profile;
-use crate::screens::components::notefield::noteskin_model_actor;
+use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
 use crate::ui::actors::Actor;
 use crate::ui::color;
@@ -90,6 +90,7 @@ pub fn build_column_judgments_pane(
         kind: RowKind,
         label: &'static str,
         color: [f32; 4],
+        show_early: bool,
     }
 
     let show_fa_plus_rows = score_info.show_fa_plus_window && score_info.show_fa_plus_pane;
@@ -99,36 +100,43 @@ pub fn build_column_judgments_pane(
                 kind: RowKind::FanW0,
                 label: "FANTASTIC",
                 color: color::JUDGMENT_RGBA[0],
+                show_early: false,
             },
             RowInfo {
                 kind: RowKind::FanW1,
                 label: "FANTASTIC",
                 color: color::JUDGMENT_FA_PLUS_WHITE_RGBA,
+                show_early: true,
             },
             RowInfo {
                 kind: RowKind::Ex,
                 label: "EXCELLENT",
                 color: color::JUDGMENT_RGBA[1],
+                show_early: true,
             },
             RowInfo {
                 kind: RowKind::Gr,
                 label: "GREAT",
                 color: color::JUDGMENT_RGBA[2],
+                show_early: true,
             },
             RowInfo {
                 kind: RowKind::Dec,
                 label: "DECENT",
                 color: color::JUDGMENT_RGBA[3],
+                show_early: true,
             },
             RowInfo {
                 kind: RowKind::Wo,
                 label: "WAY OFF",
                 color: color::JUDGMENT_RGBA[4],
+                show_early: true,
             },
             RowInfo {
                 kind: RowKind::Miss,
                 label: "MISS",
                 color: color::JUDGMENT_RGBA[5],
+                show_early: false,
             },
         ]
     } else {
@@ -137,31 +145,37 @@ pub fn build_column_judgments_pane(
                 kind: RowKind::FanCombined,
                 label: "FANTASTIC",
                 color: color::JUDGMENT_RGBA[0],
+                show_early: false,
             },
             RowInfo {
                 kind: RowKind::Ex,
                 label: "EXCELLENT",
                 color: color::JUDGMENT_RGBA[1],
+                show_early: true,
             },
             RowInfo {
                 kind: RowKind::Gr,
                 label: "GREAT",
                 color: color::JUDGMENT_RGBA[2],
+                show_early: true,
             },
             RowInfo {
                 kind: RowKind::Dec,
                 label: "DECENT",
                 color: color::JUDGMENT_RGBA[3],
+                show_early: true,
             },
             RowInfo {
                 kind: RowKind::Wo,
                 label: "WAY OFF",
                 color: color::JUDGMENT_RGBA[4],
+                show_early: true,
             },
             RowInfo {
                 kind: RowKind::Miss,
                 label: "MISS",
                 color: color::JUDGMENT_RGBA[5],
+                show_early: false,
             },
         ]
     };
@@ -197,16 +211,45 @@ pub fn build_column_judgments_pane(
     let preview_time = preview_elapsed.max(0.0);
     let preview_beat = preview_time * (PREVIEW_BPM / 60.0);
 
-    let count_for = |cj: ColumnJudgments, kind: RowKind| -> (u32, Option<u32>) {
+    struct RowCounts {
+        count: u32,
+        early: Option<u32>,
+    }
+
+    let count_for = |cj: ColumnJudgments, kind: RowKind| -> RowCounts {
         match kind {
-            RowKind::FanCombined => (cj.w0.saturating_add(cj.w1), None),
-            RowKind::FanW0 => (cj.w0, None),
-            RowKind::FanW1 => (cj.w1, None),
-            RowKind::Ex => (cj.w2, None),
-            RowKind::Gr => (cj.w3, None),
-            RowKind::Dec => (cj.w4, Some(cj.early_w4)),
-            RowKind::Wo => (cj.w5, Some(cj.early_w5)),
-            RowKind::Miss => (cj.miss, None),
+            RowKind::FanCombined => RowCounts {
+                count: cj.w0.saturating_add(cj.w1),
+                early: None,
+            },
+            RowKind::FanW0 => RowCounts {
+                count: cj.w0,
+                early: None,
+            },
+            RowKind::FanW1 => RowCounts {
+                count: cj.w1,
+                early: Some(cj.early_w1),
+            },
+            RowKind::Ex => RowCounts {
+                count: cj.w2,
+                early: Some(cj.early_w2),
+            },
+            RowKind::Gr => RowCounts {
+                count: cj.w3,
+                early: Some(cj.early_w3),
+            },
+            RowKind::Dec => RowCounts {
+                count: cj.w4,
+                early: Some(cj.early_w4),
+            },
+            RowKind::Wo => RowCounts {
+                count: cj.w5,
+                early: Some(cj.early_w5),
+            },
+            RowKind::Miss => RowCounts {
+                count: cj.miss,
+                early: None,
+            },
         }
     };
 
@@ -229,6 +272,21 @@ pub fn build_column_judgments_pane(
                     diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
                     z(101)
                 ));
+
+                if score_info.track_early_judgments && row.show_early {
+                    let label_width =
+                        font::measure_line_width_logical(miso_font, row.label, all_fonts) as f32
+                            * label_zoom;
+                    let info_x = labels_right_x - label_width / 1.15;
+                    actors.push(act!(text: font("miso"): settext("EARLY".to_string()):
+                        align(1.0, 0.5):
+                        xy(info_x, y - (row_height * 0.35)):
+                        zoom(0.6):
+                        horizalign(right):
+                        diffuse(row.color[0], row.color[1], row.color[2], row.color[3]):
+                        z(101)
+                    ));
+                }
             }
 
             // "HELD" label at the bottom, aligned relative to the MISS label width.
@@ -251,12 +309,21 @@ pub fn build_column_judgments_pane(
                 let cj = score_info.column_judgments[col_idx];
                 let col_center_x = (col_idx as f32 + 1.0).mul_add(col_width, base_x);
 
-                // Measure Miss number width for this column for alignment of early/held counts.
-                let miss_str = cj.miss.to_string();
-                let miss_width = font::measure_line_width_logical(miso_font, &miss_str, all_fonts)
-                    as f32
-                    * number_zoom;
-                let right_edge_x = col_center_x - 1.0 - miss_width * 0.5;
+                // Measure the widest main count so side annotations clear every row.
+                let mut max_count_width: f32 = 0.0;
+                for row in &rows {
+                    let counts = count_for(cj, row.kind);
+                    let w = font::measure_line_width_logical(
+                        miso_font,
+                        &counts.count.to_string(),
+                        all_fonts,
+                    ) as f32
+                        * number_zoom;
+                    if w > max_count_width {
+                        max_count_width = w;
+                    }
+                }
+                let right_edge_x = col_center_x - 1.0 - max_count_width * 0.5;
 
                 let arrow_color = if arrow_glow_active {
                     Some(match col_idx {
@@ -478,9 +545,9 @@ pub fn build_column_judgments_pane(
                 }
 
                 for (row_idx, row) in rows.iter().enumerate() {
-                    let (count, early_opt) = count_for(cj, row.kind);
+                    let counts = count_for(cj, row.kind);
                     let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
-                    actors.push(act!(text: font("miso"): settext(count.to_string()):
+                    actors.push(act!(text: font("miso"): settext(counts.count.to_string()):
                         align(0.5, 0.5):
                         xy(col_center_x, y):
                         zoom(number_zoom):
@@ -488,11 +555,12 @@ pub fn build_column_judgments_pane(
                         z(101)
                     ));
 
-                    if let Some(early) = early_opt {
-                        let early_y = y - 10.0;
+                    if score_info.track_early_judgments
+                        && let Some(early) = counts.early
+                    {
                         actors.push(act!(text: font("miso"): settext(early.to_string()):
                             align(1.0, 0.5):
-                            xy(right_edge_x, early_y):
+                            xy(right_edge_x, y - (row_height * 0.35)):
                             zoom(small_zoom):
                             horizalign(right):
                             z(101)

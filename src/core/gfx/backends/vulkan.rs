@@ -1,18 +1,21 @@
 use crate::core::gfx::{
-    BlendMode, MeshMode, MeshVertex, ObjectType, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, Texture as RendererTexture,
+    BlendMode, ClockDomainTrace, DrawStats, MeshMode, MeshVertex, ObjectType, PresentModePolicy,
+    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    Texture as RendererTexture, TextureHandle,
 };
 use crate::core::space::ortho_for_window;
 use ash::{
     Device, Entry, Instance,
-    khr::{surface, swapchain},
+    google::display_timing,
+    khr::{calibrated_timestamps, surface, swapchain},
     vk,
 };
 use cgmath::{Matrix4, Vector4};
 use image::RgbaImage;
 use log::{debug, error, info, warn};
-use std::{collections::HashMap, error::Error, ffi, hash::Hasher, mem, sync::Arc};
-use twox_hash::XxHash64;
+use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc, time::Instant};
+#[cfg(windows)]
+use windows::Win32::System::Performance;
 use winit::{
     dpi::PhysicalSize,
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
@@ -21,27 +24,33 @@ use winit::{
 
 // --- Constants ---
 const MAX_FRAMES_IN_FLIGHT: usize = 3;
+const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
+const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
+const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
+#[cfg(windows)]
+static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
 // --- Structs ---
 
 #[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct ProjPush {
-    proj: Matrix4<f32>,
+    proj: [[f32; 4]; 4],
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct InstanceData {
-    // 88 bytes total
-    center: [f32; 2],                   // offset 0
-    size: [f32; 2],                     // offset 8
-    rot_sin_cos: [f32; 2],              // offset 16  (sin, cos)
-    tint: [f32; 4],                     // offset 24
-    uv_scale: [f32; 2],                 // offset 40
-    uv_offset: [f32; 2],                // offset 48
-    local_offset: [f32; 2],             // offset 56
-    local_offset_rot_sin_cos: [f32; 2], // offset 64
-    edge_fade: [f32; 4],                // offset 72
+    // 96 bytes total
+    center: [f32; 4],                   // offset 0
+    size: [f32; 2],                     // offset 16
+    rot_sin_cos: [f32; 2],              // offset 24  (sin, cos)
+    tint: [f32; 4],                     // offset 32
+    uv_scale: [f32; 2],                 // offset 48
+    uv_offset: [f32; 2],                // offset 56
+    local_offset: [f32; 2],             // offset 64
+    local_offset_rot_sin_cos: [f32; 2], // offset 72
+    edge_fade: [f32; 4],                // offset 80
 }
 
 #[repr(C)]
@@ -71,55 +80,10 @@ struct TMeshGeomKey {
     len: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TMeshCacheKey {
-    hash: u64,
-    len: u32,
-}
-
 #[derive(Clone, Copy)]
-enum FrameTMeshGeom {
-    Dynamic {
-        vertex_start: u32,
-        vertex_count: u32,
-    },
-    Cached {
-        cache_id: u64,
-        vertex_count: u32,
-        buffer: vk::Buffer,
-    },
-}
-
-struct TMeshCacheEntry {
-    id: u64,
+struct FrameTMeshGeom {
+    vertex_start: u32,
     vertex_count: u32,
-    bytes: u64,
-    last_used_frame: u64,
-    buffer: BufferResource,
-}
-
-struct TMeshSeenEntry {
-    hits: u8,
-    last_seen_frame: u64,
-}
-
-#[derive(Clone, Copy, Default)]
-struct TMeshFrameDebug {
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
-}
-
-#[derive(Default)]
-struct TMeshDebugAccum {
-    frames: u32,
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_promotions: u64,
-    cache_evictions: u64,
-    dynamic_upload_vertices: u64,
 }
 
 struct PipelinePair {
@@ -140,6 +104,8 @@ pub struct Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
+        // SAFETY: `Texture` owns these Vulkan objects, the `Device` outlives `self` via `Arc`,
+        // and both descriptor sets were allocated from `self.pool` and are not freed elsewhere.
         unsafe {
             let _ = self.device.free_descriptor_sets(
                 self.pool,
@@ -165,7 +131,61 @@ struct SwapchainResources {
     framebuffers: Vec<vk::Framebuffer>,
     extent: vk::Extent2D,
     format: vk::SurfaceFormatKHR,
+    present_mode: vk::PresentModeKHR,
     supports_transfer_src: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+struct DeviceExts {
+    display_timing: bool,
+    calibrated_timestamps: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+struct CompletedPresentTiming {
+    present_id: u32,
+    actual_present_time_ns: u64,
+    interval_ns: u64,
+    present_margin_ns: u64,
+    host_present_time_ns: u64,
+}
+
+struct PresentTelemetryState {
+    display_timing: Option<display_timing::Device>,
+    calibrated_timestamps: Option<calibrated_timestamps::Device>,
+    display_clock: Option<vk::TimeDomainKHR>,
+    host_clock: Option<vk::TimeDomainKHR>,
+    refresh_ns: u64,
+    host_minus_display_ns: i64,
+    calibration_error_ns: u64,
+    next_present_id: u32,
+    last_seen_present_id: u32,
+    cpu_last_completed_present_id: u32,
+    cpu_last_completed_host_ns: u64,
+    last_completed: Option<CompletedPresentTiming>,
+    cpu_image_present_ids: Vec<u32>,
+    scratch_timings: Vec<vk::PastPresentationTimingGOOGLE>,
+}
+
+impl Default for PresentTelemetryState {
+    fn default() -> Self {
+        Self {
+            display_timing: None,
+            calibrated_timestamps: None,
+            display_clock: None,
+            host_clock: None,
+            refresh_ns: 0,
+            host_minus_display_ns: 0,
+            calibration_error_ns: 0,
+            next_present_id: 1,
+            last_seen_present_id: 0,
+            cpu_last_completed_present_id: 0,
+            cpu_last_completed_host_ns: 0,
+            last_completed: None,
+            cpu_image_present_ids: Vec::new(),
+            scratch_timings: Vec::new(),
+        }
+    }
 }
 
 // The main Vulkan state struct, now simplified.
@@ -191,7 +211,7 @@ pub struct State {
     vertex_buffer: Option<BufferResource>,
     index_buffer: Option<BufferResource>,
     pub descriptor_set_layout: vk::DescriptorSetLayout,
-    pub descriptor_pool: vk::DescriptorPool,
+    descriptor_pools: Vec<vk::DescriptorPool>,
     sampler_cache: HashMap<SamplerDesc, vk::Sampler>,
     command_buffers: Vec<vk::CommandBuffer>,
     image_available_semaphores: Vec<vk::Semaphore>,
@@ -202,6 +222,7 @@ pub struct State {
     swapchain_valid: bool,
     window_size: PhysicalSize<u32>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     projection: Matrix4<f32>,
     instance_ring: Option<BufferResource>, // one big VB for all frames
     instance_ring_ptr: *mut InstanceData,  // persistently mapped pointer
@@ -219,15 +240,10 @@ pub struct State {
     tmesh_instance_ring_ptr: *mut TexturedMeshInstanceGpu, // persistently mapped pointer
     tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
-    tmesh_cache_entries: HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    tmesh_cache_seen: HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    tmesh_cache_frame: u64,
-    tmesh_cache_total_bytes: u64,
-    next_tmesh_cache_id: u64,
-    tmesh_debug_enabled: bool,
-    tmesh_debug_accum: TMeshDebugAccum,
+    scratch_tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom>,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
+    present_telemetry: PresentTelemetryState,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
 }
@@ -236,6 +252,7 @@ pub struct State {
 pub fn init(
     window: &Window,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
 ) -> Result<State, Box<dyn Error>> {
     info!("Initializing Vulkan backend...");
@@ -247,7 +264,7 @@ pub fn init(
     let surface_loader = surface::Instance::new(&entry, &instance);
     let pdevice = select_physical_device(&instance, &surface_loader, surface)?;
     log_selected_device(&instance, pdevice);
-    let (device, queue, queue_family_index) =
+    let (device, queue, queue_family_index, device_exts) =
         create_logical_device(&instance, pdevice, &surface_loader, surface)?;
     let device = Some(Arc::new(device));
     let command_pool = create_command_pool(device.as_ref().unwrap(), queue_family_index)?;
@@ -262,6 +279,7 @@ pub fn init(
         initial_size,
         None,
         vsync_enabled,
+        present_mode_policy,
     )?;
     let render_pass =
         create_render_pass(device.as_ref().unwrap(), swapchain_resources.format.format)?;
@@ -272,7 +290,7 @@ pub fn init(
     )?;
 
     let descriptor_set_layout = create_descriptor_set_layout(device.as_ref().unwrap())?;
-    let descriptor_pool = create_descriptor_pool(device.as_ref().unwrap())?;
+    let descriptor_pools = vec![create_descriptor_pool(device.as_ref().unwrap())?];
 
     let PipelinePair {
         layout: sprite_pipeline_layout,
@@ -305,6 +323,14 @@ pub fn init(
     let images_in_flight = vec![vk::Fence::null(); swapchain_resources._images.len()];
 
     let projection = ortho_for_window(initial_size.width, initial_size.height);
+    let present_telemetry = init_present_telemetry(
+        &entry,
+        &instance,
+        device.as_ref().unwrap(),
+        pdevice,
+        swapchain_resources.swapchain,
+        device_exts,
+    );
 
     let mut state = State {
         _entry: entry,
@@ -328,7 +354,7 @@ pub fn init(
         vertex_buffer: None,
         index_buffer: None,
         descriptor_set_layout,
-        descriptor_pool,
+        descriptor_pools,
         sampler_cache: HashMap::new(),
         command_buffers,
         image_available_semaphores,
@@ -339,6 +365,7 @@ pub fn init(
         swapchain_valid: true,
         window_size: initial_size,
         vsync_enabled,
+        present_mode_policy,
         projection,
         instance_ring: None,
         instance_ring_ptr: std::ptr::null_mut(),
@@ -356,15 +383,10 @@ pub fn init(
         tmesh_instance_ring_ptr: std::ptr::null_mut(),
         tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
-        tmesh_cache_entries: HashMap::new(),
-        tmesh_cache_seen: HashMap::new(),
-        tmesh_cache_frame: 0,
-        tmesh_cache_total_bytes: 0,
-        next_tmesh_cache_id: 1,
-        tmesh_debug_enabled: gfx_debug_enabled,
-        tmesh_debug_accum: TMeshDebugAccum::default(),
+        scratch_tmesh_geom: HashMap::new(),
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
+        present_telemetry,
         screenshot_requested: false,
         captured_frame: None,
     };
@@ -433,6 +455,8 @@ fn create_sampler(device: &Device, desc: SamplerDesc) -> Result<vk::Sampler, vk:
         .unnormalized_coordinates(false)
         .compare_enable(false)
         .compare_op(vk::CompareOp::ALWAYS);
+    // SAFETY: `sampler_info` references only stack data for this call, and `device` is a live
+    // logical device owned by the renderer.
     unsafe { device.create_sampler(&sampler_info, None) }
 }
 
@@ -456,20 +480,34 @@ fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayo
     let layout_info = vk::DescriptorSetLayoutCreateInfo::default()
         .bindings(std::slice::from_ref(&sampler_layout_binding));
 
+    // SAFETY: The create info references stack data valid for the duration of the call, and the
+    // descriptor set layout is created on a live logical device.
     unsafe { device.create_descriptor_set_layout(&layout_info, None) }
 }
 
 fn create_descriptor_pool(device: &Device) -> Result<vk::DescriptorPool, vk::Result> {
     let pool_size = vk::DescriptorPoolSize::default()
         .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count(1024);
+        .descriptor_count(DESCRIPTOR_POOL_SET_CAPACITY);
 
     let pool_info = vk::DescriptorPoolCreateInfo::default()
         .pool_sizes(std::slice::from_ref(&pool_size))
-        .max_sets(1024)
+        .max_sets(DESCRIPTOR_POOL_SET_CAPACITY)
         .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET);
 
+    // SAFETY: The create info contains only plain values and `device` is a valid logical device.
     unsafe { device.create_descriptor_pool(&pool_info, None) }
+}
+
+fn grow_descriptor_pool(state: &mut State) -> Result<vk::DescriptorPool, vk::Result> {
+    let pool = create_descriptor_pool(state.device.as_ref().unwrap())?;
+    state.descriptor_pools.push(pool);
+    debug!(
+        "Allocated Vulkan descriptor pool #{} ({} sets)",
+        state.descriptor_pools.len(),
+        DESCRIPTOR_POOL_SET_CAPACITY
+    );
+    Ok(pool)
 }
 
 fn create_sprite_pipeline(
@@ -527,11 +565,6 @@ fn create_sprite_pipeline(
     let dynamic_state =
         vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-    // Push constant: projection only
-    #[repr(C)]
-    struct ProjPush {
-        proj: Matrix4<f32>,
-    }
     let push_constant_range = vk::PushConstantRange::default()
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .offset(0)
@@ -541,6 +574,8 @@ fn create_sprite_pipeline(
         .set_layouts(std::slice::from_ref(&set_layout))
         .push_constant_ranges(std::slice::from_ref(&push_constant_range));
 
+    // SAFETY: The descriptor set layout and push-constant range are valid for this pipeline, and
+    // the create info borrows only stack data for the duration of the call.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
@@ -556,12 +591,16 @@ fn create_sprite_pipeline(
         .render_pass(render_pass)
         .subpass(0);
 
+    // SAFETY: All referenced shader modules, pipeline layout, and render pass are live and owned
+    // by the caller; Vulkan copies the provided create info before returning.
     let pipe = unsafe {
         device
             .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
             .map_err(|e| e.1)?[0]
     };
 
+    // SAFETY: The pipeline has already been created and no longer borrows the temporary shader
+    // modules, so they can be destroyed immediately on the same device.
     unsafe {
         device.destroy_shader_module(vert_module, None);
         device.destroy_shader_module(frag_module, None);
@@ -630,6 +669,8 @@ fn create_mesh_pipeline(
     let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
         .push_constant_ranges(std::slice::from_ref(&push_constant_range));
 
+    // SAFETY: The create info borrows only stack data and describes a valid push-constant layout
+    // for the mesh shaders.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
@@ -645,12 +686,16 @@ fn create_mesh_pipeline(
         .render_pass(render_pass)
         .subpass(0);
 
+    // SAFETY: All referenced shader modules, pipeline layout, and render pass are live and owned
+    // by the caller; Vulkan copies the provided create info before returning.
     let pipe = unsafe {
         device
             .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
             .map_err(|e| e.1)?[0]
     };
 
+    // SAFETY: The pipeline has already been created and no longer borrows the temporary shader
+    // modules, so they can be destroyed immediately on the same device.
     unsafe {
         device.destroy_shader_module(vert_module, None);
         device.destroy_shader_module(frag_module, None);
@@ -720,6 +765,8 @@ fn create_textured_mesh_pipeline(
         .set_layouts(std::slice::from_ref(&set_layout))
         .push_constant_ranges(std::slice::from_ref(&push_constant_range));
 
+    // SAFETY: The descriptor set layout and push-constant range are valid for this pipeline, and
+    // the create info borrows only stack data for the duration of the call.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
@@ -735,12 +782,16 @@ fn create_textured_mesh_pipeline(
         .render_pass(render_pass)
         .subpass(0);
 
+    // SAFETY: All referenced shader modules, pipeline layout, and render pass are live and owned
+    // by the caller; Vulkan copies the provided create info before returning.
     let pipe = unsafe {
         device
             .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
             .map_err(|e| e.1)?[0]
     };
 
+    // SAFETY: The pipeline has already been created and no longer borrows the temporary shader
+    // modules, so they can be destroyed immediately on the same device.
     unsafe {
         device.destroy_shader_module(vert_module, None);
         device.destroy_shader_module(frag_module, None);
@@ -757,7 +808,8 @@ const fn next_pow2_usize(x: usize) -> usize {
     v |= v >> 4;
     v |= v >> 8;
     v |= v >> 16;
-    if std::mem::size_of::<usize>() == 8 {
+    #[cfg(target_pointer_width = "64")]
+    {
         v |= v >> 32;
     }
     v + 1
@@ -785,8 +837,9 @@ fn ensure_instance_ring_capacity(
 
     // Reallocate only if missing or too small.
     if state.instance_ring.is_none() || state.instance_capacity_instances < need_total_instances {
-        // Safety: the old ring buffer may be referenced by in-flight command buffers.
-        // Wait for the GPU to finish BEFORE destroying it.
+        // SAFETY: The old ring buffer may still be referenced by in-flight command buffers.
+        // Waiting for the device to go idle guarantees those submissions are complete before
+        // unmapping or freeing the old allocation.
         if let Some(old) = state.instance_ring.take() {
             unsafe {
                 // Full idle here is fine — this path runs only when we *grow*.
@@ -809,6 +862,8 @@ fn ensure_instance_ring_capacity(
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
+        // SAFETY: `mem` was allocated from this device with HOST_VISIBLE memory and we keep the
+        // mapping alive until the ring is explicitly unmapped during growth or shutdown.
         let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
 
         state.instance_ring = Some(BufferResource {
@@ -847,6 +902,8 @@ fn ensure_mesh_ring_capacity(
 
     if state.mesh_ring.is_none() || state.mesh_capacity_vertices < need_total_vertices {
         if let Some(old) = state.mesh_ring.take() {
+            // SAFETY: The old mesh ring may still be referenced by in-flight command buffers.
+            // Waiting for idle guarantees those submissions are complete before unmapping/freeing.
             unsafe {
                 dev.device_wait_idle()?;
                 if !state.mesh_ring_ptr.is_null() {
@@ -865,6 +922,8 @@ fn ensure_mesh_ring_capacity(
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
+        // SAFETY: `mem` was allocated from this device with HOST_VISIBLE memory and we keep the
+        // mapping alive until the ring is explicitly unmapped during growth or shutdown.
         let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
 
         state.mesh_ring = Some(BufferResource {
@@ -901,6 +960,8 @@ fn ensure_tmesh_ring_capacity(
 
     if state.tmesh_ring.is_none() || state.tmesh_capacity_vertices < need_total_vertices {
         if let Some(old) = state.tmesh_ring.take() {
+            // SAFETY: The old textured-mesh ring may still be referenced by in-flight command
+            // buffers. Waiting for idle guarantees those submissions are complete first.
             unsafe {
                 dev.device_wait_idle()?;
                 if !state.tmesh_ring_ptr.is_null() {
@@ -919,6 +980,8 @@ fn ensure_tmesh_ring_capacity(
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
+        // SAFETY: `mem` was allocated from this device with HOST_VISIBLE memory and we keep the
+        // mapping alive until the ring is explicitly unmapped during growth or shutdown.
         let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
 
         state.tmesh_ring = Some(BufferResource {
@@ -956,6 +1019,8 @@ fn ensure_tmesh_instance_ring_capacity(
     if state.tmesh_instance_ring.is_none() || state.tmesh_capacity_instances < need_total_instances
     {
         if let Some(old) = state.tmesh_instance_ring.take() {
+            // SAFETY: The old textured-mesh instance ring may still be referenced by in-flight
+            // command buffers. Waiting for idle guarantees those submissions are complete first.
             unsafe {
                 dev.device_wait_idle()?;
                 if !state.tmesh_instance_ring_ptr.is_null() {
@@ -974,6 +1039,8 @@ fn ensure_tmesh_instance_ring_capacity(
             vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
+        // SAFETY: `mem` was allocated from this device with HOST_VISIBLE memory and we keep the
+        // mapping alive until the ring is explicitly unmapped during growth or shutdown.
         let mapped = unsafe { dev.map_memory(mem, 0, need_bytes, vk::MemoryMapFlags::empty())? };
 
         state.tmesh_instance_ring = Some(BufferResource {
@@ -1004,6 +1071,12 @@ fn transition_image_layout_cmd(
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::PipelineStageFlags::TRANSFER,
         ),
+        (vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL, vk::ImageLayout::TRANSFER_DST_OPTIMAL) => (
+            vk::AccessFlags::SHADER_READ,
+            vk::AccessFlags::TRANSFER_WRITE,
+            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            vk::PipelineStageFlags::TRANSFER,
+        ),
         (vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) => (
             vk::AccessFlags::TRANSFER_WRITE,
             vk::AccessFlags::SHADER_READ,
@@ -1030,6 +1103,8 @@ fn transition_image_layout_cmd(
         .src_access_mask(src_access_mask)
         .dst_access_mask(dst_access_mask);
 
+    // SAFETY: `cmd` is currently recording on the same queue family that owns `image`, and the
+    // barrier references only stack data alive for the duration of the call.
     unsafe {
         device.cmd_pipeline_barrier(
             cmd,
@@ -1055,9 +1130,12 @@ fn begin_pending_texture_upload_cmd(
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_pool(state.command_pool)
         .command_buffer_count(1);
+    // SAFETY: `state.command_pool` belongs to this device and remains alive until the command
+    // buffer is ended, submitted, and freed by `flush_pending_texture_uploads`.
     let cmd = unsafe { device.allocate_command_buffers(&alloc_info)?[0] };
     let begin_info =
         vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    // SAFETY: `cmd` was just allocated from `state.command_pool` and has not been begun yet.
     unsafe {
         device.begin_command_buffer(cmd, &begin_info)?;
     }
@@ -1071,6 +1149,8 @@ fn flush_pending_texture_uploads(state: &mut State) -> Result<(), Box<dyn Error>
     };
 
     let device = state.device.as_ref().unwrap();
+    // SAFETY: `cmd` is a primary command buffer allocated from `state.command_pool` and all
+    // queued staging buffers stay alive until after `queue_wait_idle` returns.
     unsafe {
         device.end_command_buffer(cmd)?;
         let submit = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
@@ -1109,6 +1189,8 @@ pub fn create_texture(
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
     )?;
+    // SAFETY: The staging allocation is HOST_VISIBLE | HOST_COHERENT, `image_data` points to
+    // initialized RGBA bytes, and we unmap the range before handing the buffer to Vulkan.
     unsafe {
         let mapped =
             device.map_memory(staging_memory, 0, staging_size, vk::MemoryMapFlags::empty())?;
@@ -1154,6 +1236,8 @@ pub fn create_texture(
             depth: 1,
         });
 
+    // SAFETY: `cmd` is recording, `staging.buffer` and `tex_image` are live transfer-compatible
+    // resources, and the image has already been transitioned to TRANSFER_DST_OPTIMAL above.
     unsafe {
         device.cmd_copy_buffer_to_image(
             cmd,
@@ -1175,7 +1259,6 @@ pub fn create_texture(
     state.pending_tex_staging.push(staging);
     let view = create_image_view(device, tex_image, fmt)?;
     let sampler_default = get_sampler(state, sampler)?;
-    let set = create_texture_descriptor_set(state, view, sampler_default)?;
     let sampler_repeat = get_sampler(
         state,
         SamplerDesc {
@@ -1183,7 +1266,8 @@ pub fn create_texture(
             ..sampler
         },
     )?;
-    let set_repeat = create_texture_descriptor_set(state, view, sampler_repeat)?;
+    let (set, set_repeat, pool) =
+        create_texture_descriptor_sets(state, view, sampler_default, sampler_repeat)?;
 
     Ok(Texture {
         device: device_arc.clone(),
@@ -1192,18 +1276,79 @@ pub fn create_texture(
         view,
         descriptor_set: set,
         descriptor_set_repeat: set_repeat,
-        pool: state.descriptor_pool,
+        pool,
     })
 }
 
-#[inline(always)]
-const unsafe fn bytes_of<T>(v: &T) -> &[u8] {
+pub fn update_texture(
+    state: &mut State,
+    texture: &mut Texture,
+    image: &RgbaImage,
+) -> Result<(), Box<dyn Error>> {
+    let device = texture.device.as_ref();
+    let (width, height) = image.dimensions();
+    let image_data = image.as_raw();
+    let staging_size = image_data.len() as vk::DeviceSize;
+    let (staging_buffer, staging_memory) = create_gpu_buffer(
+        &state.instance,
+        device,
+        state.pdevice,
+        staging_size,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )?;
+    // SAFETY: The staging allocation is HOST_VISIBLE | HOST_COHERENT, `image_data` points to
+    // initialized RGBA bytes, and we unmap the range before handing the buffer to Vulkan.
     unsafe {
-        std::slice::from_raw_parts(
-            std::ptr::from_ref::<T>(v) as *const u8,
-            std::mem::size_of::<T>(),
-        )
+        let mapped =
+            device.map_memory(staging_memory, 0, staging_size, vk::MemoryMapFlags::empty())?;
+        std::ptr::copy_nonoverlapping(image_data.as_ptr(), mapped.cast::<u8>(), image_data.len());
+        device.unmap_memory(staging_memory);
     }
+    state.pending_tex_staging.push(BufferResource {
+        buffer: staging_buffer,
+        memory: staging_memory,
+    });
+
+    let cmd = begin_pending_texture_upload_cmd(state)?;
+    transition_image_layout_cmd(
+        device,
+        cmd,
+        texture.image,
+        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+    );
+    let region = vk::BufferImageCopy::default()
+        .image_subresource(vk::ImageSubresourceLayers {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            mip_level: 0,
+            base_array_layer: 0,
+            layer_count: 1,
+        })
+        .image_extent(vk::Extent3D {
+            width,
+            height,
+            depth: 1,
+        });
+    // SAFETY: `cmd` is recording, `staging_buffer` and `texture.image` are live transfer-
+    // compatible resources, and the image has already been transitioned to TRANSFER_DST_OPTIMAL.
+    unsafe {
+        device.cmd_copy_buffer_to_image(
+            cmd,
+            staging_buffer,
+            texture.image,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            &[region],
+        );
+    }
+    transition_image_layout_cmd(
+        device,
+        cmd,
+        texture.image,
+        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+    );
+    Ok(())
 }
 
 #[inline(always)]
@@ -1221,17 +1366,31 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
 pub fn draw(
     state: &mut State,
     render_list: &RenderList<'_>,
-    textures: &HashMap<String, RendererTexture>,
-) -> Result<u32, Box<dyn Error>> {
+    textures: &HashMap<TextureHandle, RendererTexture>,
+    apply_present_back_pressure: bool,
+) -> Result<DrawStats, Box<dyn Error>> {
+    #[inline(always)]
+    fn elapsed_us_since(started: Instant) -> u32 {
+        let elapsed = started.elapsed().as_micros();
+        if elapsed > u128::from(u32::MAX) {
+            u32::MAX
+        } else {
+            elapsed as u32
+        }
+    }
+
+    let mut stats = DrawStats::default();
     flush_pending_texture_uploads(state)?;
 
     if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
-        return Ok(0);
+        return Ok(stats);
     }
+    stats.present_stats.mode = vk_present_mode_trace(state.swapchain_resources.present_mode);
+    stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
     #[inline(always)]
-    fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-        let center = [m[3][0], m[3][1]];
+    fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 4], [f32; 2], [f32; 2]) {
+        let center = [m[3][0], m[3][1], m[3][2], 0.0];
         let c0 = [m[0][0], m[0][1]];
         let c1 = [m[1][0], m[1][1]];
         let sx = c0[0].hypot(c0[1]).max(1e-12);
@@ -1240,23 +1399,6 @@ pub fn draw(
         let sin_t = c0[1] / sx;
         (center, [sx, sy], [sin_t, cos_t])
     }
-
-    #[inline(always)]
-    fn lookup_texture_case_insensitive<'a>(
-        textures: &'a HashMap<String, RendererTexture>,
-        key: &str,
-    ) -> Option<&'a RendererTexture> {
-        if let Some(tex) = textures.get(key) {
-            return Some(tex);
-        }
-        textures
-            .iter()
-            .find_map(|(candidate, tex)| candidate.eq_ignore_ascii_case(key).then_some(tex))
-    }
-
-    state.tmesh_cache_frame = state.tmesh_cache_frame.wrapping_add(1);
-    prune_tmesh_seen_entries(&mut state.tmesh_cache_seen, state.tmesh_cache_frame);
-    let mut tmesh_debug_frame = TMeshFrameDebug::default();
 
     let (needed_instances, needed_mesh_vertices, needed_tmesh_vertices, needed_tmesh_instances) = {
         let mut inst: usize = 0;
@@ -1323,9 +1465,7 @@ pub fn draw(
         set: vk::DescriptorSet,
         vertex_start: u32,
         vertex_count: u32,
-        dynamic_geom: bool,
         geom_key: u64,
-        cached_vertex_buffer: Option<vk::Buffer>,
         instance_start: u32,
         instance_count: u32,
         camera: u8,
@@ -1343,14 +1483,23 @@ pub fn draw(
     let mut tmesh_written: u32 = 0;
     let mut tmesh_instance_written: u32 = 0;
 
+    // SAFETY: We wait on the current frame fence before reusing its command buffer or writing into
+    // this frame's ring-buffer slice, so the GPU is done reading prior submissions. All Vulkan
+    // handles referenced below are owned by `state` and remain alive through submission/present,
+    // and any screenshot staging buffer is kept alive until we wait for the queue and unmap/free it.
     unsafe {
+        let mut waited_for_image = false;
+        let mut back_pressure_waited = false;
+        let mut queue_idle_waited = false;
         let fence = state.in_flight_fences[state.current_frame];
         let device = Arc::clone(state.device.as_ref().unwrap());
+        let wait_started = Instant::now();
         device.wait_for_fences(&[fence], true, u64::MAX)?;
-        tmesh_debug_frame.cache_evictions = tmesh_debug_frame
-            .cache_evictions
-            .saturating_add(evict_tmesh_cache_entries(state, state.tmesh_cache_frame) as u64);
+        stats.gpu_wait_us = stats
+            .gpu_wait_us
+            .saturating_add(elapsed_us_since(wait_started));
 
+        let acquire_started = Instant::now();
         let (image_index, acquired_suboptimal) = match state
             .swapchain_resources
             .swapchain_loader
@@ -1362,18 +1511,26 @@ pub fn draw(
             ) {
             Ok(pair) => pair,
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                stats.acquire_us = elapsed_us_since(acquire_started);
                 recreate_swapchain_and_dependents(state)?;
-                return Ok(0);
+                return Ok(stats);
             }
             Err(e) => return Err(e.into()),
         };
+        stats.acquire_us = elapsed_us_since(acquire_started);
+        record_cpu_present_completion(state, image_index);
 
         let in_flight = state.images_in_flight[image_index as usize];
         if in_flight != vk::Fence::null() {
+            let wait_started = Instant::now();
             device.wait_for_fences(&[in_flight], true, u64::MAX)?;
+            let wait_us = elapsed_us_since(wait_started);
+            stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+            waited_for_image = wait_us >= VULKAN_IMAGE_WAIT_THRESHOLD_US;
         }
         state.images_in_flight[image_index as usize] = fence;
 
+        let backend_setup_started = Instant::now();
         device.reset_fences(&[fence])?;
         let cmd = state.command_buffers[state.current_frame];
         device.reset_command_buffer(cmd, vk::CommandBufferResetFlags::empty())?;
@@ -1382,7 +1539,9 @@ pub fn draw(
             &vk::CommandBufferBeginInfo::default()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
         )?;
+        stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
+        let backend_prepare_started = Instant::now();
         let inst_base_ptr = base_first_instance.map_or(std::ptr::null_mut(), |b| {
             state.instance_ring_ptr.add(b as usize)
         });
@@ -1395,33 +1554,30 @@ pub fn draw(
         let tmesh_instance_base_ptr = base_first_tmesh_instance.map_or(std::ptr::null_mut(), |b| {
             state.tmesh_instance_ring_ptr.add(b as usize)
         });
-        let cache_frame = state.tmesh_cache_frame;
-        let tmesh_cache_entries = &mut state.tmesh_cache_entries;
-        let tmesh_cache_seen = &mut state.tmesh_cache_seen;
-        let next_tmesh_cache_id = &mut state.next_tmesh_cache_id;
-        let tmesh_cache_total_bytes = &mut state.tmesh_cache_total_bytes;
-        let mut tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom> =
-            HashMap::with_capacity(needed_tmesh_instances);
+        let tmesh_geom = &mut state.scratch_tmesh_geom;
+        tmesh_geom.clear();
+        if tmesh_geom.capacity() < needed_tmesh_instances {
+            tmesh_geom.reserve(needed_tmesh_instances - tmesh_geom.capacity());
+        }
 
         for obj in &render_list.objects {
             match &obj.object_type {
                 ObjectType::Sprite {
-                    texture_id,
                     tint,
                     uv_scale,
                     uv_offset,
                     local_offset,
                     local_offset_rot_sin_cos,
                     edge_fade,
+                    ..
                 } => {
-                    let set_opt = lookup_texture_case_insensitive(textures, texture_id.as_ref())
-                        .and_then(|t| {
-                            if let RendererTexture::Vulkan(tex) = t {
-                                Some(tex.descriptor_set)
-                            } else {
-                                None
-                            }
-                        });
+                    let set_opt = textures.get(&obj.texture_handle).and_then(|t| {
+                        if let RendererTexture::Vulkan(tex) = t {
+                            Some(tex.descriptor_set)
+                        } else {
+                            None
+                        }
+                    });
                     let Some(set) = set_opt else {
                         continue;
                     };
@@ -1487,24 +1643,23 @@ pub fn draw(
                     }));
                 }
                 ObjectType::TexturedMesh {
-                    texture_id,
                     vertices,
                     mode,
                     uv_scale,
                     uv_offset,
                     uv_tex_shift,
+                    ..
                 } => {
                     if *mode != MeshMode::Triangles || vertices.is_empty() {
                         continue;
                     }
-                    let set_opt = lookup_texture_case_insensitive(textures, texture_id.as_ref())
-                        .and_then(|t| {
-                            if let RendererTexture::Vulkan(tex) = t {
-                                Some(tex.descriptor_set_repeat)
-                            } else {
-                                None
-                            }
-                        });
+                    let set_opt = textures.get(&obj.texture_handle).and_then(|t| {
+                        if let RendererTexture::Vulkan(tex) = t {
+                            Some(tex.descriptor_set_repeat)
+                        } else {
+                            None
+                        }
+                    });
                     let Some(set) = set_opt else {
                         continue;
                     };
@@ -1520,70 +1675,30 @@ pub fn draw(
                     let geom = if let Some(&geom) = tmesh_geom.get(&geom_key) {
                         geom
                     } else {
-                        let geom = if let Some(cached) = try_get_or_promote_cached_tmesh_geom(
-                            &state.instance,
-                            device.as_ref(),
-                            state.pdevice,
-                            state.command_pool,
-                            state.queue,
-                            tmesh_cache_entries,
-                            tmesh_cache_seen,
-                            next_tmesh_cache_id,
-                            tmesh_cache_total_bytes,
-                            &mut tmesh_debug_frame,
-                            cache_frame,
-                            vertices,
-                        ) {
-                            cached
-                        } else {
-                            debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
-                            let start = tmesh_written;
-                            for v in vertices.iter() {
-                                std::ptr::write(
-                                    tmesh_base_ptr.add(tmesh_written as usize),
-                                    TexturedMeshVertexGpu {
-                                        pos: v.pos,
-                                        uv: v.uv,
-                                        color: v.color,
-                                        tex_matrix_scale: v.tex_matrix_scale,
-                                    },
-                                );
-                                tmesh_written += 1;
-                            }
-                            tmesh_debug_frame.dynamic_upload_vertices = tmesh_debug_frame
-                                .dynamic_upload_vertices
-                                .saturating_add((tmesh_written - start) as u64);
-                            FrameTMeshGeom::Dynamic {
-                                vertex_start: start,
-                                vertex_count: tmesh_written - start,
-                            }
+                        debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
+                        let start = tmesh_written;
+                        for v in vertices.iter() {
+                            std::ptr::write(
+                                tmesh_base_ptr.add(tmesh_written as usize),
+                                TexturedMeshVertexGpu {
+                                    pos: v.pos,
+                                    uv: v.uv,
+                                    color: v.color,
+                                    tex_matrix_scale: v.tex_matrix_scale,
+                                },
+                            );
+                            tmesh_written += 1;
+                        }
+                        let geom = FrameTMeshGeom {
+                            vertex_start: start,
+                            vertex_count: tmesh_written - start,
                         };
                         tmesh_geom.insert(geom_key, geom);
                         geom
                     };
-                    let (
-                        vertex_start,
-                        vertex_count,
-                        dynamic_geom,
-                        geom_run_key,
-                        cached_vertex_buffer,
-                    ) = match geom {
-                        FrameTMeshGeom::Dynamic {
-                            vertex_start,
-                            vertex_count,
-                        } => (
-                            vertex_start,
-                            vertex_count,
-                            true,
-                            (1u64 << 63) | u64::from(vertex_start),
-                            None,
-                        ),
-                        FrameTMeshGeom::Cached {
-                            cache_id,
-                            vertex_count,
-                            buffer,
-                        } => (0, vertex_count, false, cache_id, Some(buffer)),
-                    };
+                    let vertex_start = geom.vertex_start;
+                    let vertex_count = geom.vertex_count;
+                    let geom_run_key = ((vertex_start as u64) << 32) | u64::from(vertex_count);
                     let instance_start = tmesh_instance_written;
                     let model: [[f32; 4]; 4] = obj.transform.into();
                     std::ptr::write(
@@ -1603,8 +1718,8 @@ pub fn draw(
                     if let Some(Op::TexturedMesh(run)) = ops.last_mut()
                         && run.set == set
                         && run.camera == obj.camera
-                        && run.dynamic_geom == dynamic_geom
                         && run.geom_key == geom_run_key
+                        && run.vertex_count == vertex_count
                         && run.instance_start + run.instance_count == instance_start
                     {
                         run.instance_count += 1;
@@ -1613,9 +1728,7 @@ pub fn draw(
                             set,
                             vertex_start,
                             vertex_count,
-                            dynamic_geom,
                             geom_key: geom_run_key,
-                            cached_vertex_buffer,
                             instance_start,
                             instance_count: 1,
                             camera: obj.camera,
@@ -1624,7 +1737,9 @@ pub fn draw(
                 }
             }
         }
+        stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
+        let backend_record_started = Instant::now();
         let c = render_list.clear_color;
         let clear_value = vk::ClearValue {
             color: vk::ClearColorValue {
@@ -1693,13 +1808,13 @@ pub fn draw(
                             .get(run.camera as usize)
                             .copied()
                             .unwrap_or(state.projection);
-                        let pc = ProjPush { proj: vp };
+                        let pc = ProjPush { proj: vp.into() };
                         device.cmd_push_constants(
                             cmd,
                             state.sprite_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytes_of(&pc),
+                            bytemuck::bytes_of(&pc),
                         );
                         last_camera = Some(run.camera);
                     }
@@ -1740,13 +1855,13 @@ pub fn draw(
                             .get(draw.camera as usize)
                             .copied()
                             .unwrap_or(state.projection);
-                        let pc = ProjPush { proj: vp };
+                        let pc = ProjPush { proj: vp.into() };
                         device.cmd_push_constants(
                             cmd,
                             state.mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytes_of(&pc),
+                            bytemuck::bytes_of(&pc),
                         );
                         last_camera = Some(draw.camera);
                     }
@@ -1771,12 +1886,7 @@ pub fn draw(
                     }
 
                     if last_tmesh_geom_key != Some(draw.geom_key) {
-                        let vertex_buffer = if draw.dynamic_geom {
-                            state.tmesh_ring.as_ref().map(|ring| ring.buffer)
-                        } else {
-                            draw.cached_vertex_buffer
-                        };
-                        let Some(vb) = vertex_buffer else {
+                        let Some(vb) = state.tmesh_ring.as_ref().map(|ring| ring.buffer) else {
                             continue;
                         };
                         device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
@@ -1789,13 +1899,13 @@ pub fn draw(
                             .get(draw.camera as usize)
                             .copied()
                             .unwrap_or(state.projection);
-                        let pc = ProjPush { proj: vp };
+                        let pc = ProjPush { proj: vp.into() };
                         device.cmd_push_constants(
                             cmd,
                             state.textured_mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytes_of(&pc),
+                            bytemuck::bytes_of(&pc),
                         );
                         last_camera = Some(draw.camera);
                     }
@@ -1812,11 +1922,7 @@ pub fn draw(
                         last_set = draw.set;
                     }
 
-                    let first_vertex = if draw.dynamic_geom {
-                        base_first_tmesh_vertex.unwrap_or(0) + draw.vertex_start
-                    } else {
-                        0
-                    };
+                    let first_vertex = base_first_tmesh_vertex.unwrap_or(0) + draw.vertex_start;
                     let first_instance =
                         base_first_tmesh_instance.unwrap_or(0) + draw.instance_start;
                     device.cmd_draw(
@@ -1937,6 +2043,7 @@ pub fn draw(
             None
         };
         device.end_command_buffer(cmd)?;
+        stats.backend_record_us = elapsed_us_since(backend_record_started);
 
         let wait = [state.image_available_semaphores[state.current_frame]];
         let sig = [state.render_finished_semaphores[state.current_frame]];
@@ -1946,28 +2053,71 @@ pub fn draw(
             .wait_dst_stage_mask(&stages)
             .command_buffers(std::slice::from_ref(&cmd))
             .signal_semaphores(&sig);
+        let submit_started = Instant::now();
         device.queue_submit(state.queue, &[submit], fence)?;
+        stats.submit_us = elapsed_us_since(submit_started);
 
-        let present_info = vk::PresentInfoKHR::default()
+        let submitted_present_id = next_present_id(state);
+        let present_times = [vk::PresentTimeGOOGLE::default().present_id(submitted_present_id)];
+        let mut present_times_info = vk::PresentTimesInfoGOOGLE::default().times(&present_times);
+        let mut present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(&sig)
             .swapchains(std::slice::from_ref(&state.swapchain_resources.swapchain))
             .image_indices(std::slice::from_ref(&image_index));
-        match state
+        if state.present_telemetry.display_timing.is_some() {
+            present_info = present_info.push_next(&mut present_times_info);
+        }
+        let present_started = Instant::now();
+        let present_result = state
             .swapchain_resources
             .swapchain_loader
-            .queue_present(state.queue, &present_info)
-        {
-            Ok(suboptimal) if suboptimal || acquired_suboptimal => {
-                recreate_swapchain_and_dependents(state)?;
-            }
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR) => {
-                recreate_swapchain_and_dependents(state)?;
-            }
-            Ok(_) => {}
+            .queue_present(state.queue, &present_info);
+        stats.present_us = elapsed_us_since(present_started);
+        let present_suboptimal = match present_result {
+            Ok(suboptimal) => suboptimal || acquired_suboptimal,
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR) => true,
             Err(e) => return Err(e.into()),
+        };
+        if let Some(slot) = state
+            .present_telemetry
+            .cpu_image_present_ids
+            .get_mut(image_index as usize)
+        {
+            *slot = submitted_present_id;
+        }
+        calibrate_present_clock(state);
+        poll_past_presentation_timing(state);
+        stats.present_stats = snapshot_present_stats(
+            state,
+            waited_for_image,
+            false,
+            false,
+            present_suboptimal,
+            submitted_present_id,
+        );
+        if present_suboptimal {
+            recreate_swapchain_and_dependents(state)?;
+        }
+        if apply_present_back_pressure
+            && screenshot_staging.is_none()
+            && state.swapchain_resources.present_mode != vk::PresentModeKHR::MAILBOX
+        {
+            // MAILBOX already bounds the queue and drops stale frames, so an
+            // extra post-present fence wait mostly adds jitter instead of
+            // helping pacing.
+            let wait_started = Instant::now();
+            device.wait_for_fences(&[fence], true, u64::MAX)?;
+            let wait_us = elapsed_us_since(wait_started);
+            stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
+            back_pressure_waited = wait_us >= VULKAN_BACK_PRESSURE_THRESHOLD_US;
         }
         if let Some((staging, width, height, format)) = screenshot_staging {
+            let wait_started = Instant::now();
             device.queue_wait_idle(state.queue)?;
+            stats.gpu_wait_us = stats
+                .gpu_wait_us
+                .saturating_add(elapsed_us_since(wait_started));
+            queue_idle_waited = true;
             let map_size = (width as usize * height as usize * 4) as vk::DeviceSize;
             let mapped =
                 match device.map_memory(staging.memory, 0, map_size, vk::MemoryMapFlags::empty()) {
@@ -2009,196 +2159,12 @@ pub fn draw(
             state.captured_frame = RgbaImage::from_raw(width, height, rgba);
         }
 
+        stats.present_stats.applied_back_pressure = back_pressure_waited;
+        stats.present_stats.queue_idle_waited = queue_idle_waited;
         state.current_frame = (state.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
-        push_tmesh_debug_sample(state, tmesh_debug_frame);
-        Ok(vertices_drawn)
+        stats.vertices = vertices_drawn;
+        Ok(stats)
     }
-}
-
-#[inline(always)]
-fn tmesh_cache_key(vertices: &[crate::core::gfx::TexturedMeshVertex]) -> TMeshCacheKey {
-    let mut hasher = XxHash64::with_seed(0);
-    let bytes = unsafe {
-        std::slice::from_raw_parts(
-            vertices.as_ptr().cast::<u8>(),
-            std::mem::size_of_val(vertices),
-        )
-    };
-    hasher.write(bytes);
-    TMeshCacheKey {
-        hash: hasher.finish(),
-        len: vertices.len() as u32,
-    }
-}
-
-#[inline(always)]
-fn build_tmesh_vertex_raw(
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Vec<TexturedMeshVertexGpu> {
-    let mut out = Vec::with_capacity(vertices.len());
-    for v in vertices {
-        out.push(TexturedMeshVertexGpu {
-            pos: v.pos,
-            uv: v.uv,
-            color: v.color,
-            tex_matrix_scale: v.tex_matrix_scale,
-        });
-    }
-    out
-}
-
-fn try_get_or_promote_cached_tmesh_geom(
-    instance: &Instance,
-    device: &Device,
-    pdevice: vk::PhysicalDevice,
-    command_pool: vk::CommandPool,
-    queue: vk::Queue,
-    cache_entries: &mut HashMap<TMeshCacheKey, TMeshCacheEntry>,
-    cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>,
-    next_cache_id: &mut u64,
-    cache_total_bytes: &mut u64,
-    debug_frame: &mut TMeshFrameDebug,
-    frame: u64,
-    vertices: &[crate::core::gfx::TexturedMeshVertex],
-) -> Option<FrameTMeshGeom> {
-    if vertices.len() < TMESH_CACHE_MIN_VERTS || vertices.is_empty() {
-        return None;
-    }
-
-    let cache_key = tmesh_cache_key(vertices);
-    if let Some(entry) = cache_entries.get_mut(&cache_key) {
-        entry.last_used_frame = frame;
-        debug_frame.cache_hits = debug_frame.cache_hits.saturating_add(1);
-        return Some(FrameTMeshGeom::Cached {
-            cache_id: entry.id,
-            vertex_count: entry.vertex_count,
-            buffer: entry.buffer.buffer,
-        });
-    }
-    debug_frame.cache_misses = debug_frame.cache_misses.saturating_add(1);
-
-    let promote = {
-        let seen = cache_seen.entry(cache_key).or_insert(TMeshSeenEntry {
-            hits: 0,
-            last_seen_frame: frame,
-        });
-        if frame.saturating_sub(seen.last_seen_frame) > TMESH_CACHE_SEEN_TTL_FRAMES {
-            seen.hits = 0;
-        }
-        seen.last_seen_frame = frame;
-        seen.hits = seen.hits.saturating_add(1);
-        seen.hits >= TMESH_CACHE_PROMOTE_HITS
-    };
-    if !promote {
-        return None;
-    }
-    debug_frame.cache_promotions = debug_frame.cache_promotions.saturating_add(1);
-
-    let raw = build_tmesh_vertex_raw(vertices);
-    let bytes = (raw.len() * mem::size_of::<TexturedMeshVertexGpu>()) as u64;
-    let buffer = match create_buffer(
-        instance,
-        device,
-        pdevice,
-        command_pool,
-        queue,
-        vk::BufferUsageFlags::VERTEX_BUFFER,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        Some(raw.as_slice()),
-    ) {
-        Ok(buffer) => buffer,
-        Err(err) => {
-            warn!("Vulkan textured mesh cache allocation failed: {err}");
-            return None;
-        }
-    };
-
-    let cache_id = *next_cache_id;
-    *next_cache_id = (*next_cache_id).wrapping_add(1).max(1);
-    *cache_total_bytes = cache_total_bytes.saturating_add(bytes);
-    let vertex_count = raw.len() as u32;
-    let handle = buffer.buffer;
-    cache_entries.insert(
-        cache_key,
-        TMeshCacheEntry {
-            id: cache_id,
-            vertex_count,
-            bytes,
-            last_used_frame: frame,
-            buffer,
-        },
-    );
-    Some(FrameTMeshGeom::Cached {
-        cache_id,
-        vertex_count,
-        buffer: handle,
-    })
-}
-
-fn evict_tmesh_cache_entries(state: &mut State, frame: u64) -> u32 {
-    let mut evicted: u32 = 0;
-    while state.tmesh_cache_total_bytes > TMESH_CACHE_MAX_BYTES {
-        let Some(oldest_key) = state
-            .tmesh_cache_entries
-            .iter()
-            .filter_map(|(key, entry)| {
-                let age = frame.saturating_sub(entry.last_used_frame);
-                (entry.last_used_frame != frame && age >= TMESH_CACHE_EVICT_SAFE_FRAMES)
-                    .then_some((*key, entry.last_used_frame))
-            })
-            .min_by_key(|(_, last_used_frame)| *last_used_frame)
-            .map(|(key, _)| key)
-        else {
-            break;
-        };
-        if let Some(entry) = state.tmesh_cache_entries.remove(&oldest_key) {
-            state.tmesh_cache_total_bytes =
-                state.tmesh_cache_total_bytes.saturating_sub(entry.bytes);
-            destroy_buffer(state.device.as_ref().unwrap(), &entry.buffer);
-            evicted = evicted.saturating_add(1);
-        }
-    }
-    evicted
-}
-
-fn prune_tmesh_seen_entries(cache_seen: &mut HashMap<TMeshCacheKey, TMeshSeenEntry>, frame: u64) {
-    cache_seen.retain(|_, seen| {
-        frame.saturating_sub(seen.last_seen_frame) <= TMESH_CACHE_SEEN_TTL_FRAMES
-    });
-}
-
-fn push_tmesh_debug_sample(state: &mut State, frame: TMeshFrameDebug) {
-    if !state.tmesh_debug_enabled {
-        return;
-    }
-    let accum = &mut state.tmesh_debug_accum;
-    accum.frames = accum.frames.saturating_add(1);
-    accum.cache_hits = accum.cache_hits.saturating_add(frame.cache_hits);
-    accum.cache_misses = accum.cache_misses.saturating_add(frame.cache_misses);
-    accum.cache_promotions = accum
-        .cache_promotions
-        .saturating_add(frame.cache_promotions);
-    accum.cache_evictions = accum.cache_evictions.saturating_add(frame.cache_evictions);
-    accum.dynamic_upload_vertices = accum
-        .dynamic_upload_vertices
-        .saturating_add(frame.dynamic_upload_vertices);
-
-    if accum.frames < TMESH_DEBUG_LOG_EVERY_FRAMES {
-        return;
-    }
-    let frames = u64::from(accum.frames).max(1);
-    let dyn_avg = accum.dynamic_upload_vertices / frames;
-    debug!(
-        "Vulkan tmesh-cache: hit={} miss={} promote={} evict={} dyn_upload_vtx/frame={} cache_entries={} cache_mb={:.2}",
-        accum.cache_hits,
-        accum.cache_misses,
-        accum.cache_promotions,
-        accum.cache_evictions,
-        dyn_avg,
-        state.tmesh_cache_entries.len(),
-        (state.tmesh_cache_total_bytes as f64) / (1024.0 * 1024.0)
-    );
-    *accum = TMeshDebugAccum::default();
 }
 
 pub fn cleanup(state: &mut State) {
@@ -2206,12 +2172,16 @@ pub fn cleanup(state: &mut State) {
     if let Err(e) = flush_pending_texture_uploads(state) {
         error!("Failed to flush pending texture uploads during cleanup: {e}");
     }
+    // SAFETY: If a logical device still exists, waiting for idle guarantees no in-flight work
+    // still references resources we are about to destroy below.
     unsafe {
         if let Some(device) = &state.device {
             let _ = device.device_wait_idle();
         }
     }
 
+    // SAFETY: The device is idle, so it is valid to tear down swapchain resources, mapped rings,
+    // pipelines, descriptor pools/layouts, the device, and finally the instance-owned objects.
     unsafe {
         cleanup_swapchain_and_dependents(state);
 
@@ -2272,12 +2242,6 @@ pub fn cleanup(state: &mut State) {
             }
             destroy_buffer(state.device.as_ref().unwrap(), &ring);
         }
-        for (_, entry) in state.tmesh_cache_entries.drain() {
-            destroy_buffer(state.device.as_ref().unwrap(), &entry.buffer);
-        }
-        state.tmesh_cache_seen.clear();
-        state.tmesh_cache_total_bytes = 0;
-
         for sampler in state.sampler_cache.values() {
             state
                 .device
@@ -2286,11 +2250,13 @@ pub fn cleanup(state: &mut State) {
                 .destroy_sampler(*sampler, None);
         }
         state.sampler_cache.clear();
-        state
-            .device
-            .as_ref()
-            .unwrap()
-            .destroy_descriptor_pool(state.descriptor_pool, None);
+        for pool in state.descriptor_pools.drain(..) {
+            state
+                .device
+                .as_ref()
+                .unwrap()
+                .destroy_descriptor_pool(pool, None);
+        }
         state
             .device
             .as_ref()
@@ -2382,6 +2348,8 @@ fn create_image_view(
             base_array_layer: 0,
             layer_count: 1,
         });
+    // SAFETY: `image` is a live image created on `device`, and the create info references only
+    // stack data for the duration of the call.
     unsafe { device.create_image_view(&view_info, None) }
 }
 
@@ -2410,6 +2378,8 @@ fn create_image(
         .samples(vk::SampleCountFlags::TYPE_1)
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
+    // SAFETY: All handles used here belong to the same live device/physical device pair. The
+    // image is bound exactly once to the freshly allocated memory returned by this function.
     unsafe {
         let image = state
             .device
@@ -2485,27 +2455,54 @@ fn color_blend_for(mode: BlendMode) -> vk::PipelineColorBlendAttachmentState {
     }
 }
 
-fn create_texture_descriptor_set(
+fn create_texture_descriptor_set_pair(
     state: &State,
-    texture_image_view: vk::ImageView,
-    sampler: vk::Sampler,
-) -> Result<vk::DescriptorSet, vk::Result> {
-    let layouts = [state.descriptor_set_layout];
+    pool: vk::DescriptorPool,
+) -> Result<[vk::DescriptorSet; 2], vk::Result> {
+    let layouts = [state.descriptor_set_layout, state.descriptor_set_layout];
     let alloc_info = vk::DescriptorSetAllocateInfo::default()
-        .descriptor_pool(state.descriptor_pool)
+        .descriptor_pool(pool)
         .set_layouts(&layouts);
-    let descriptor_set = unsafe {
+    // SAFETY: `pool` and `state.descriptor_set_layout` were created on the same live device and
+    // remain valid for the duration of the allocation call.
+    unsafe {
         state
             .device
             .as_ref()
             .unwrap()
-            .allocate_descriptor_sets(&alloc_info)?[0]
+            .allocate_descriptor_sets(&alloc_info)
+            .map(|sets| [sets[0], sets[1]])
+    }
+}
+
+fn create_texture_descriptor_sets(
+    state: &mut State,
+    texture_image_view: vk::ImageView,
+    sampler_default: vk::Sampler,
+    sampler_repeat: vk::Sampler,
+) -> Result<(vk::DescriptorSet, vk::DescriptorSet, vk::DescriptorPool), Box<dyn Error>> {
+    let (descriptor_set, descriptor_set_repeat, pool) = loop {
+        let pool = *state
+            .descriptor_pools
+            .last()
+            .ok_or("Vulkan descriptor pool list is empty")?;
+        match create_texture_descriptor_set_pair(state, pool) {
+            Ok([set, set_repeat]) => break (set, set_repeat, pool),
+            Err(vk::Result::ERROR_OUT_OF_POOL_MEMORY | vk::Result::ERROR_FRAGMENTED_POOL) => {
+                grow_descriptor_pool(state)?;
+            }
+            Err(err) => return Err(Box::new(err)),
+        }
     };
 
     let image_info = vk::DescriptorImageInfo::default()
         .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
         .image_view(texture_image_view)
-        .sampler(sampler);
+        .sampler(sampler_default);
+    let image_info_repeat = vk::DescriptorImageInfo::default()
+        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+        .image_view(texture_image_view)
+        .sampler(sampler_repeat);
 
     let descriptor_write = vk::WriteDescriptorSet::default()
         .dst_set(descriptor_set)
@@ -2513,15 +2510,23 @@ fn create_texture_descriptor_set(
         .dst_array_element(0)
         .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
         .image_info(std::slice::from_ref(&image_info));
+    let descriptor_write_repeat = vk::WriteDescriptorSet::default()
+        .dst_set(descriptor_set_repeat)
+        .dst_binding(0)
+        .dst_array_element(0)
+        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+        .image_info(std::slice::from_ref(&image_info_repeat));
 
+    // SAFETY: Both descriptor sets were allocated from `pool`, and the image view/samplers remain
+    // live for at least as long as those descriptor sets do.
     unsafe {
         state
             .device
             .as_ref()
             .unwrap()
-            .update_descriptor_sets(&[descriptor_write], &[]);
+            .update_descriptor_sets(&[descriptor_write, descriptor_write_repeat], &[]);
     }
-    Ok(descriptor_set)
+    Ok((descriptor_set, descriptor_set_repeat, pool))
 }
 
 #[inline(always)]
@@ -2557,48 +2562,48 @@ fn vertex_input_descriptions_textured_instanced() -> (
     let i_center = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(2)
-        .format(vk::Format::R32G32_SFLOAT)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(0);
     let i_size = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(3)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(8);
+        .offset(16);
     let i_rot = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(4)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(16);
+        .offset(24);
     let i_tint = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(5)
         .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(24);
+        .offset(32);
     let i_uvs = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(6)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(40);
+        .offset(48);
     let i_uvo = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(7)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(48);
+        .offset(56);
     let i_local_offset = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(8)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(56);
+        .offset(64);
     let i_local_offset_rot = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(9)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(64);
+        .offset(72);
     let i_fade = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(10)
         .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(72);
+        .offset(80);
 
     (
         [b0, b1],
@@ -2738,9 +2743,11 @@ fn begin_single_time_commands(
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_pool(pool)
         .command_buffer_count(1);
+    // SAFETY: `pool` belongs to `device` and outlives the allocated command buffer.
     let cmd = unsafe { device.allocate_command_buffers(&alloc_info)?[0] };
     let begin_info =
         vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    // SAFETY: `cmd` was just allocated from `pool` and has not yet been begun.
     unsafe {
         device.begin_command_buffer(cmd, &begin_info)?;
     }
@@ -2753,6 +2760,8 @@ fn end_single_time_commands(
     queue: vk::Queue,
     command_buffer: vk::CommandBuffer,
 ) -> Result<(), Box<dyn Error>> {
+    // SAFETY: `command_buffer` was allocated from `pool`, recorded for one-time use, submitted to
+    // `queue`, and is freed only after `queue_wait_idle` guarantees completion.
     unsafe {
         device.end_command_buffer(command_buffer)?;
         let submit_info =
@@ -2789,6 +2798,8 @@ fn create_buffer<T: Copy>(
             staging_props,
         )?;
 
+        // SAFETY: The staging allocation is HOST_VISIBLE | HOST_COHERENT, `slice` points to
+        // initialized `T` values, and the mapped range is unmapped before submission.
         unsafe {
             let mapped =
                 device.map_memory(staging_memory, 0, buffer_size, vk::MemoryMapFlags::empty())?;
@@ -2815,6 +2826,8 @@ fn create_buffer<T: Copy>(
             buffer_size,
         )?;
 
+        // SAFETY: The transfer submission above waits for the queue to idle before returning, so
+        // the temporary staging buffer and allocation are no longer in use here.
         unsafe {
             device.destroy_buffer(staging_buffer, None);
             device.free_memory(staging_memory, None);
@@ -2840,6 +2853,8 @@ fn copy_buffer(
     size: vk::DeviceSize,
 ) -> Result<(), Box<dyn Error>> {
     let cmd = begin_single_time_commands(device, pool)?;
+    // SAFETY: `cmd` is a live recording command buffer, and `src`/`dst` are valid buffers with a
+    // copy region bounded by `size`.
     unsafe {
         let region = vk::BufferCopy::default().size(size);
         device.cmd_copy_buffer(cmd, src, dst, &[region]);
@@ -2860,7 +2875,11 @@ fn create_gpu_buffer(
         .size(size)
         .usage(usage)
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    // SAFETY: The create info references only stack data for the duration of the call and
+    // describes a buffer to be created on this live device.
     let buffer = unsafe { device.create_buffer(&buffer_info, None)? };
+    // SAFETY: `buffer` was just created on this device and is valid for querying memory
+    // requirements.
     let mem_requirements = unsafe { device.get_buffer_memory_requirements(buffer) };
     let mem_type_index = find_memory_type(
         instance,
@@ -2871,12 +2890,18 @@ fn create_gpu_buffer(
     let alloc_info = vk::MemoryAllocateInfo::default()
         .allocation_size(mem_requirements.size)
         .memory_type_index(mem_type_index);
+    // SAFETY: The allocation info matches the queried buffer requirements and uses a compatible
+    // memory type index chosen from this physical device.
     let memory = unsafe { device.allocate_memory(&alloc_info, None)? };
+    // SAFETY: `buffer` and `memory` were both created on this device, and offset 0 satisfies the
+    // alignment required by `mem_requirements`.
     unsafe { device.bind_buffer_memory(buffer, memory, 0)? };
     Ok((buffer, memory))
 }
 
 fn destroy_buffer(device: &Device, buffer: &BufferResource) {
+    // SAFETY: `buffer` owns this Vulkan buffer/allocation pair and callers only invoke this after
+    // GPU work that might reference it has completed.
     unsafe {
         device.destroy_buffer(buffer.buffer, None);
         device.free_memory(buffer.memory, None);
@@ -2889,6 +2914,7 @@ fn find_memory_type(
     type_filter: u32,
     properties: vk::MemoryPropertyFlags,
 ) -> u32 {
+    // SAFETY: `pdevice` comes from `instance`, so querying its memory properties is valid.
     let mem_properties = unsafe { instance.get_physical_device_memory_properties(pdevice) };
     (0..mem_properties.memory_type_count)
         .find(|i| {
@@ -2899,15 +2925,10 @@ fn find_memory_type(
         .expect("Failed to find suitable memory type!")
 }
 
-const TMESH_CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
-const TMESH_CACHE_MIN_VERTS: usize = 32;
-const TMESH_CACHE_PROMOTE_HITS: u8 = 2;
-const TMESH_CACHE_SEEN_TTL_FRAMES: u64 = 1800;
-const TMESH_CACHE_EVICT_SAFE_FRAMES: u64 = MAX_FRAMES_IN_FLIGHT as u64;
-const TMESH_DEBUG_LOG_EVERY_FRAMES: u32 = 300;
-
 const VALIDATION_LAYER_NAME: &ffi::CStr = c"VK_LAYER_KHRONOS_validation";
 
+// SAFETY: Vulkan invokes this callback with the required ABI and pointer validity guarantees for
+// the duration of each call; the body treats all incoming pointers as borrowed only transiently.
 unsafe extern "system" fn vulkan_debug_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -2917,10 +2938,14 @@ unsafe extern "system" fn vulkan_debug_callback(
     let msg = if p_callback_data.is_null() {
         std::borrow::Cow::Borrowed("<null callback data>")
     } else {
+        // SAFETY: Vulkan calls this callback with a valid pointer for the duration of the call
+        // whenever `p_callback_data` is non-null.
         let p_message = unsafe { (*p_callback_data).p_message };
         if p_message.is_null() {
             std::borrow::Cow::Borrowed("<null message>")
         } else {
+            // SAFETY: `p_message` is a NUL-terminated C string owned by the validation layer for
+            // the duration of this callback.
             unsafe { ffi::CStr::from_ptr(p_message) }.to_string_lossy()
         }
     };
@@ -2937,16 +2962,22 @@ unsafe extern "system" fn vulkan_debug_callback(
 }
 
 fn supports_instance_extension(entry: &Entry, extension: &ffi::CStr) -> Result<bool, vk::Result> {
+    // SAFETY: Enumerating instance extensions only reads immutable loader state and does not
+    // retain borrowed pointers beyond the call.
     let exts = unsafe { entry.enumerate_instance_extension_properties(None)? };
     Ok(exts
         .iter()
+        // SAFETY: Vulkan writes a NUL-terminated extension name into this fixed array.
         .any(|ext| unsafe { ffi::CStr::from_ptr(ext.extension_name.as_ptr()) == extension }))
 }
 
 fn supports_instance_layer(entry: &Entry, layer: &ffi::CStr) -> Result<bool, vk::Result> {
+    // SAFETY: Enumerating instance layers only reads immutable loader state and does not retain
+    // borrowed pointers beyond the call.
     let layers = unsafe { entry.enumerate_instance_layer_properties()? };
     Ok(layers
         .iter()
+        // SAFETY: Vulkan writes a NUL-terminated layer name into this fixed array.
         .any(|prop| unsafe { ffi::CStr::from_ptr(prop.layer_name.as_ptr()) == layer }))
 }
 
@@ -3002,6 +3033,8 @@ fn create_instance(
         .enabled_layer_names(&layers_names_raw)
         .flags(create_flags);
 
+    // SAFETY: All extension/layer name pointers come from static `CStr`s or winit-provided
+    // extension arrays and stay valid for the duration of the call.
     let instance = unsafe { entry.create_instance(&create_info, None)? };
     if gfx_debug_enabled {
         debug!(
@@ -3040,6 +3073,8 @@ fn setup_debug_messenger(
                 | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
         )
         .pfn_user_callback(Some(vulkan_debug_callback));
+    // SAFETY: `loader` is bound to the live `instance`, and the callback function remains valid
+    // for the lifetime of the created messenger.
     let messenger = unsafe { loader.create_debug_utils_messenger(&create_info, None)? };
     Ok((Some(loader), Some(messenger)))
 }
@@ -3049,6 +3084,8 @@ fn create_surface(
     instance: &Instance,
     window: &Window,
 ) -> Result<vk::SurfaceKHR, Box<dyn Error>> {
+    // SAFETY: The raw display/window handles come directly from `window` and remain valid for the
+    // duration of the call; the returned surface is owned by `instance`.
     unsafe {
         Ok(ash_window::create_surface(
             entry,
@@ -3065,6 +3102,8 @@ fn select_physical_device(
     surface_loader: &surface::Instance,
     surface: vk::SurfaceKHR,
 ) -> Result<vk::PhysicalDevice, Box<dyn Error>> {
+    // SAFETY: Enumerating physical devices only reads instance state and returns handles owned by
+    // the instance.
     let pdevices = unsafe { instance.enumerate_physical_devices()? };
     pdevices
         .into_iter()
@@ -3102,7 +3141,10 @@ fn decode_driver_version(vendor_id: u32, driver_version: u32) -> String {
 }
 
 fn log_selected_device(instance: &Instance, pdevice: vk::PhysicalDevice) {
+    // SAFETY: `pdevice` was enumerated from `instance`, so querying immutable device properties is
+    // valid for the lifetime of the instance.
     let props = unsafe { instance.get_physical_device_properties(pdevice) };
+    // SAFETY: Vulkan stores the device name as a NUL-terminated string in `props.device_name`.
     let name = unsafe { ffi::CStr::from_ptr(props.device_name.as_ptr()) }.to_string_lossy();
     let api_major = vk::api_version_major(props.api_version);
     let api_minor = vk::api_version_minor(props.api_version);
@@ -3122,6 +3164,446 @@ fn log_selected_device(instance: &Instance, pdevice: vk::PhysicalDevice) {
     );
 }
 
+#[cfg(windows)]
+fn qpc_freq_hz() -> Option<u64> {
+    let mut hz = 0i64;
+    // SAFETY: Windows writes the performance-counter frequency into the provided out pointer.
+    unsafe {
+        Performance::QueryPerformanceFrequency(&mut hz).ok()?;
+    }
+    (hz > 0).then_some(hz as u64)
+}
+
+#[cfg(windows)]
+#[inline(always)]
+fn qpc_ticks_to_nanos(ticks: u64) -> Option<u64> {
+    let hz = (*QPC_FREQ_HZ)?;
+    Some(((ticks as u128) * 1_000_000_000u128 / hz as u128).min(u128::from(u64::MAX)) as u64)
+}
+
+#[cfg(target_os = "windows")]
+#[inline(always)]
+fn current_host_nanos() -> u64 {
+    crate::core::windows_rt::current_host_nanos()
+}
+
+#[cfg(not(target_os = "windows"))]
+#[inline(always)]
+fn current_host_nanos() -> u64 {
+    crate::core::host_time::now_nanos()
+}
+
+#[inline(always)]
+fn vk_present_mode_trace(mode: vk::PresentModeKHR) -> PresentModeTrace {
+    match mode {
+        vk::PresentModeKHR::FIFO => PresentModeTrace::Fifo,
+        vk::PresentModeKHR::FIFO_RELAXED => PresentModeTrace::FifoRelaxed,
+        vk::PresentModeKHR::MAILBOX => PresentModeTrace::Mailbox,
+        vk::PresentModeKHR::IMMEDIATE => PresentModeTrace::Immediate,
+        _ => PresentModeTrace::Unknown,
+    }
+}
+
+#[inline(always)]
+fn vk_clock_domain_trace(domain: Option<vk::TimeDomainKHR>) -> ClockDomainTrace {
+    match domain {
+        Some(vk::TimeDomainKHR::DEVICE) => ClockDomainTrace::Device,
+        Some(vk::TimeDomainKHR::CLOCK_MONOTONIC) => ClockDomainTrace::Monotonic,
+        Some(vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW) => ClockDomainTrace::MonotonicRaw,
+        Some(vk::TimeDomainKHR::QUERY_PERFORMANCE_COUNTER) => ClockDomainTrace::Qpc,
+        _ => ClockDomainTrace::Unknown,
+    }
+}
+
+#[inline(always)]
+fn time_domain_to_nanos(domain: vk::TimeDomainKHR, raw: u64) -> Option<u64> {
+    match domain {
+        vk::TimeDomainKHR::CLOCK_MONOTONIC | vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW => Some(raw),
+        vk::TimeDomainKHR::QUERY_PERFORMANCE_COUNTER => {
+            #[cfg(windows)]
+            {
+                qpc_ticks_to_nanos(raw)
+            }
+            #[cfg(not(windows))]
+            {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn has_time_domain(domains: &[vk::TimeDomainKHR], want: vk::TimeDomainKHR) -> bool {
+    domains.contains(&want)
+}
+
+fn pick_host_clock(domains: &[vk::TimeDomainKHR]) -> Option<vk::TimeDomainKHR> {
+    #[cfg(windows)]
+    if has_time_domain(domains, vk::TimeDomainKHR::QUERY_PERFORMANCE_COUNTER) {
+        return Some(vk::TimeDomainKHR::QUERY_PERFORMANCE_COUNTER);
+    }
+    if has_time_domain(domains, vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW) {
+        return Some(vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW);
+    }
+    if has_time_domain(domains, vk::TimeDomainKHR::CLOCK_MONOTONIC) {
+        return Some(vk::TimeDomainKHR::CLOCK_MONOTONIC);
+    }
+    None
+}
+
+fn pick_display_clock(
+    domains: &[vk::TimeDomainKHR],
+    host_clock: Option<vk::TimeDomainKHR>,
+) -> Option<vk::TimeDomainKHR> {
+    if has_time_domain(domains, vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW) {
+        return Some(vk::TimeDomainKHR::CLOCK_MONOTONIC_RAW);
+    }
+    if has_time_domain(domains, vk::TimeDomainKHR::CLOCK_MONOTONIC) {
+        return Some(vk::TimeDomainKHR::CLOCK_MONOTONIC);
+    }
+    host_clock.filter(|domain| *domain != vk::TimeDomainKHR::DEVICE)
+}
+
+#[inline(always)]
+fn calibrate_offset_ns(host_ns: u64, display_ns: u64) -> i64 {
+    let diff = i128::from(host_ns) - i128::from(display_ns);
+    diff.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64
+}
+
+#[inline(always)]
+fn apply_display_to_host_offset(display_ns: u64, offset_ns: i64) -> u64 {
+    let host = i128::from(display_ns) + i128::from(offset_ns);
+    host.clamp(0, i128::from(u64::MAX)) as u64
+}
+
+#[inline(always)]
+fn has_device_extension(props: &[vk::ExtensionProperties], name: &ffi::CStr) -> bool {
+    props
+        .iter()
+        // SAFETY: Vulkan writes a NUL-terminated extension name into this fixed array.
+        .any(|prop| unsafe { ffi::CStr::from_ptr(prop.extension_name.as_ptr()) == name })
+}
+
+fn query_device_exts(
+    instance: &Instance,
+    pdevice: vk::PhysicalDevice,
+) -> Result<DeviceExts, Box<dyn Error>> {
+    // SAFETY: Enumerating device extensions only reads immutable properties for `pdevice`.
+    let props = unsafe { instance.enumerate_device_extension_properties(pdevice)? };
+    Ok(DeviceExts {
+        display_timing: has_device_extension(&props, display_timing::NAME),
+        calibrated_timestamps: has_device_extension(&props, calibrated_timestamps::NAME),
+    })
+}
+
+fn init_present_telemetry(
+    entry: &Entry,
+    instance: &Instance,
+    device: &Device,
+    pdevice: vk::PhysicalDevice,
+    swapchain: vk::SwapchainKHR,
+    exts: DeviceExts,
+) -> PresentTelemetryState {
+    let mut telemetry = PresentTelemetryState::default();
+    if !exts.display_timing {
+        info!("Vulkan present telemetry: CPU-only (VK_GOOGLE_display_timing unavailable)");
+        return telemetry;
+    }
+    let loader = display_timing::Device::new(instance, device);
+    telemetry.display_timing = Some(loader);
+    telemetry.refresh_ns = refresh_cycle_duration(&telemetry, swapchain).unwrap_or(0);
+    if telemetry.refresh_ns > 0 {
+        info!(
+            "Vulkan present telemetry: VK_GOOGLE_display_timing enabled refresh_ms={:.3}",
+            telemetry.refresh_ns as f64 / 1_000_000.0
+        );
+    } else {
+        info!("Vulkan present telemetry: VK_GOOGLE_display_timing enabled");
+    }
+    if exts.calibrated_timestamps {
+        let calib_instance = calibrated_timestamps::Instance::new(entry, instance);
+        // SAFETY: The calibrated-timestamps loader is bound to this live instance and `pdevice`
+        // was enumerated from that same instance.
+        match unsafe { calib_instance.get_physical_device_calibrateable_time_domains(pdevice) } {
+            Ok(domains) => {
+                telemetry.host_clock = pick_host_clock(&domains);
+                telemetry.display_clock = pick_display_clock(&domains, telemetry.host_clock);
+                telemetry.calibrated_timestamps =
+                    Some(calibrated_timestamps::Device::new(instance, device));
+                info!(
+                    "Vulkan present clock calibration: display={} host={}",
+                    vk_clock_domain_trace(telemetry.display_clock),
+                    vk_clock_domain_trace(telemetry.host_clock)
+                );
+            }
+            Err(e) => {
+                debug!("Vulkan present clock calibration unavailable: {e:?}");
+            }
+        }
+    }
+    telemetry
+}
+
+fn refresh_cycle_duration(
+    telemetry: &PresentTelemetryState,
+    swapchain: vk::SwapchainKHR,
+) -> Result<u64, vk::Result> {
+    let Some(loader) = telemetry.display_timing.as_ref() else {
+        return Ok(0);
+    };
+    // SAFETY: `loader` is tied to the live device/swapchain pair stored in telemetry/state.
+    let duration = unsafe { loader.get_refresh_cycle_duration(swapchain)? };
+    Ok(duration.refresh_duration)
+}
+
+fn reset_present_telemetry(state: &mut State) {
+    state.present_telemetry.next_present_id = 1;
+    state.present_telemetry.last_seen_present_id = 0;
+    state.present_telemetry.cpu_last_completed_present_id = 0;
+    state.present_telemetry.cpu_last_completed_host_ns = 0;
+    state.present_telemetry.last_completed = None;
+    state.present_telemetry.host_minus_display_ns = 0;
+    state.present_telemetry.calibration_error_ns = 0;
+    state
+        .present_telemetry
+        .cpu_image_present_ids
+        .resize(state.images_in_flight.len(), 0);
+    state.present_telemetry.cpu_image_present_ids.fill(0);
+    state.present_telemetry.scratch_timings.clear();
+    state.present_telemetry.refresh_ns = refresh_cycle_duration(
+        &state.present_telemetry,
+        state.swapchain_resources.swapchain,
+    )
+    .unwrap_or(0);
+}
+
+#[inline(always)]
+fn next_present_id(state: &mut State) -> u32 {
+    let id = state.present_telemetry.next_present_id.max(1);
+    state.present_telemetry.next_present_id = id.wrapping_add(1).max(1);
+    id
+}
+
+fn record_cpu_present_completion(state: &mut State, image_index: u32) {
+    if state.present_telemetry.display_timing.is_some() {
+        return;
+    }
+    let idx = image_index as usize;
+    if idx >= state.present_telemetry.cpu_image_present_ids.len() {
+        state
+            .present_telemetry
+            .cpu_image_present_ids
+            .resize(state.images_in_flight.len(), 0);
+    }
+    let Some(&present_id) = state.present_telemetry.cpu_image_present_ids.get(idx) else {
+        return;
+    };
+    if present_id == 0 || present_id <= state.present_telemetry.cpu_last_completed_present_id {
+        return;
+    }
+    let host_present_ns = current_host_nanos();
+    if host_present_ns == 0 {
+        return;
+    }
+    let interval_ns = if state.present_telemetry.cpu_last_completed_host_ns == 0 {
+        0
+    } else {
+        host_present_ns.saturating_sub(state.present_telemetry.cpu_last_completed_host_ns)
+    };
+    state.present_telemetry.last_seen_present_id = present_id;
+    state.present_telemetry.cpu_last_completed_present_id = present_id;
+    state.present_telemetry.cpu_last_completed_host_ns = host_present_ns;
+    state.present_telemetry.last_completed = Some(CompletedPresentTiming {
+        present_id,
+        actual_present_time_ns: 0,
+        interval_ns,
+        present_margin_ns: 0,
+        host_present_time_ns: host_present_ns,
+    });
+}
+
+fn calibrate_present_clock(state: &mut State) {
+    let Some(loader) = state.present_telemetry.calibrated_timestamps.as_ref() else {
+        return;
+    };
+    let Some(host_clock) = state.present_telemetry.host_clock else {
+        return;
+    };
+    let display_clock = state.present_telemetry.display_clock.unwrap_or(host_clock);
+    let host_info = vk::CalibratedTimestampInfoKHR::default().time_domain(host_clock);
+    let display_info = vk::CalibratedTimestampInfoKHR::default().time_domain(display_clock);
+    let (timestamps, max_deviation) = if display_clock == host_clock {
+        // SAFETY: The loader is bound to the live device, and the input slice lives for the
+        // duration of the call.
+        match unsafe { loader.get_calibrated_timestamps(&[host_info]) } {
+            Ok(pair) => pair,
+            Err(e) => {
+                debug!("Vulkan present clock calibration failed: {e:?}");
+                return;
+            }
+        }
+    } else {
+        // SAFETY: The loader is bound to the live device, and the input slice lives for the
+        // duration of the call.
+        match unsafe { loader.get_calibrated_timestamps(&[host_info, display_info]) } {
+            Ok(pair) => pair,
+            Err(e) => {
+                debug!("Vulkan present clock calibration failed: {e:?}");
+                return;
+            }
+        }
+    };
+    let Some(host_ns) = time_domain_to_nanos(host_clock, timestamps[0]) else {
+        return;
+    };
+    let display_ns = if display_clock == host_clock {
+        host_ns
+    } else if let Some(display_ns) = time_domain_to_nanos(display_clock, timestamps[1]) {
+        display_ns
+    } else {
+        return;
+    };
+    state.present_telemetry.host_minus_display_ns = calibrate_offset_ns(host_ns, display_ns);
+    state.present_telemetry.calibration_error_ns = max_deviation;
+}
+
+fn poll_past_presentation_timing(state: &mut State) {
+    let Some(loader) = state.present_telemetry.display_timing.as_ref() else {
+        return;
+    };
+    let mut count: u32 = 0;
+    // SAFETY: Passing a null output pointer is the Vulkan-prescribed "count only" query form.
+    let first = unsafe {
+        (loader.fp().get_past_presentation_timing_google)(
+            loader.device(),
+            state.swapchain_resources.swapchain,
+            &mut count,
+            std::ptr::null_mut(),
+        )
+    };
+    match first {
+        vk::Result::SUCCESS | vk::Result::INCOMPLETE => {}
+        vk::Result::ERROR_OUT_OF_DATE_KHR => return,
+        other => {
+            debug!("Vulkan present telemetry: timing query failed: {other:?}");
+            return;
+        }
+    }
+    if count == 0 {
+        return;
+    }
+    let host_map_ready = state.present_telemetry.host_clock.is_some()
+        && state.present_telemetry.display_clock.is_some();
+    let host_minus_display_ns = state.present_telemetry.host_minus_display_ns;
+    let timings = &mut state.present_telemetry.scratch_timings;
+    timings.clear();
+    if timings.capacity() < count as usize {
+        timings.reserve(count as usize - timings.capacity());
+    }
+    // SAFETY: `timings` has capacity for `count` elements and Vulkan writes at most that many
+    // initialized records into the buffer before returning.
+    let second = unsafe {
+        (loader.fp().get_past_presentation_timing_google)(
+            loader.device(),
+            state.swapchain_resources.swapchain,
+            &mut count,
+            timings.as_mut_ptr(),
+        )
+    };
+    match second {
+        // SAFETY: On SUCCESS/INCOMPLETE Vulkan initialized exactly `count` entries in `timings`.
+        vk::Result::SUCCESS | vk::Result::INCOMPLETE => unsafe {
+            timings.set_len(count as usize);
+        },
+        vk::Result::ERROR_OUT_OF_DATE_KHR => return,
+        other => {
+            debug!("Vulkan present telemetry: timing fetch failed: {other:?}");
+            return;
+        }
+    }
+    let mut prev_actual_ns = state
+        .present_telemetry
+        .last_completed
+        .map_or(0, |timing| timing.actual_present_time_ns);
+    for timing in timings.iter() {
+        if timing.present_id <= state.present_telemetry.last_seen_present_id {
+            continue;
+        }
+        let interval_ns = if prev_actual_ns == 0 {
+            0
+        } else {
+            timing.actual_present_time.saturating_sub(prev_actual_ns)
+        };
+        prev_actual_ns = timing.actual_present_time;
+        state.present_telemetry.last_seen_present_id = timing.present_id;
+        state.present_telemetry.last_completed = Some(CompletedPresentTiming {
+            present_id: timing.present_id,
+            actual_present_time_ns: timing.actual_present_time,
+            interval_ns,
+            present_margin_ns: timing.present_margin,
+            host_present_time_ns: if host_map_ready {
+                apply_display_to_host_offset(timing.actual_present_time, host_minus_display_ns)
+            } else {
+                0
+            },
+        });
+    }
+}
+
+fn snapshot_present_stats(
+    state: &State,
+    image_waited: bool,
+    back_pressure_waited: bool,
+    queue_idle_waited: bool,
+    suboptimal: bool,
+    submitted_present_id: u32,
+) -> PresentStats {
+    let mut stats = PresentStats {
+        mode: vk_present_mode_trace(state.swapchain_resources.present_mode),
+        display_clock: vk_clock_domain_trace(state.present_telemetry.display_clock),
+        host_clock: if state.present_telemetry.host_clock.is_some() {
+            vk_clock_domain_trace(state.present_telemetry.host_clock)
+        } else if state
+            .present_telemetry
+            .last_completed
+            .is_some_and(|completed| completed.host_present_time_ns != 0)
+        {
+            #[cfg(target_os = "windows")]
+            {
+                ClockDomainTrace::Qpc
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                ClockDomainTrace::Monotonic
+            }
+        } else {
+            ClockDomainTrace::Unknown
+        },
+        in_flight_images: state
+            .images_in_flight
+            .iter()
+            .filter(|&&fence| fence != vk::Fence::null())
+            .count()
+            .min(usize::from(u8::MAX)) as u8,
+        waited_for_image: image_waited,
+        applied_back_pressure: back_pressure_waited,
+        queue_idle_waited,
+        suboptimal,
+        submitted_present_id,
+        refresh_ns: state.present_telemetry.refresh_ns,
+        calibration_error_ns: state.present_telemetry.calibration_error_ns,
+        ..PresentStats::default()
+    };
+    if let Some(completed) = state.present_telemetry.last_completed {
+        stats.completed_present_id = completed.present_id;
+        stats.actual_interval_ns = completed.interval_ns;
+        stats.present_margin_ns = completed.present_margin_ns;
+        stats.host_present_ns = completed.host_present_time_ns;
+    }
+    stats
+}
+
 fn is_device_suitable(
     instance: &Instance,
     pdevice: vk::PhysicalDevice,
@@ -3137,9 +3619,13 @@ fn find_queue_family(
     surface_loader: &surface::Instance,
     surface: vk::SurfaceKHR,
 ) -> Option<u32> {
+    // SAFETY: `pdevice` was enumerated from `instance`, so querying queue-family properties is
+    // valid for the lifetime of the instance.
     let queue_families = unsafe { instance.get_physical_device_queue_family_properties(pdevice) };
     queue_families.iter().enumerate().find_map(|(i, family)| {
         if family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+            // SAFETY: `surface` belongs to `surface_loader`'s instance, and `i` indexes the queue
+            // family slice we just queried from the same physical device.
             && unsafe {
                 surface_loader
                     .get_physical_device_surface_support(pdevice, i as u32, surface)
@@ -3158,23 +3644,34 @@ fn create_logical_device(
     pdevice: vk::PhysicalDevice,
     surface_loader: &surface::Instance,
     surface: vk::SurfaceKHR,
-) -> Result<(Device, vk::Queue, u32), Box<dyn Error>> {
+) -> Result<(Device, vk::Queue, u32, DeviceExts), Box<dyn Error>> {
     let queue_family_index = find_queue_family(instance, pdevice, surface_loader, surface)
         .ok_or("No suitable queue family found")?;
+    let device_exts = query_device_exts(instance, pdevice)?;
     let queue_priorities = [1.0];
     let queue_create_info = vk::DeviceQueueCreateInfo::default()
         .queue_family_index(queue_family_index)
         .queue_priorities(&queue_priorities);
-    let device_extensions = [swapchain::NAME.as_ptr()];
+    let mut device_extensions = Vec::with_capacity(2);
+    device_extensions.push(swapchain::NAME.as_ptr());
+    if device_exts.display_timing {
+        device_extensions.push(display_timing::NAME.as_ptr());
+    }
+    if device_exts.calibrated_timestamps {
+        device_extensions.push(calibrated_timestamps::NAME.as_ptr());
+    }
     let features = vk::PhysicalDeviceFeatures::default();
     let create_info = vk::DeviceCreateInfo::default()
         .queue_create_infos(std::slice::from_ref(&queue_create_info))
         .enabled_extension_names(&device_extensions)
         .enabled_features(&features);
 
+    // SAFETY: `pdevice` was selected from `instance`, the queue info references stack data only
+    // for this call, and enabled extension names come from static `CStr`s.
     let device = unsafe { instance.create_device(pdevice, &create_info, None)? };
+    // SAFETY: We requested one queue from `queue_family_index`, so queue 0 is valid to fetch.
     let queue = unsafe { device.get_device_queue(queue_family_index, 0) };
-    Ok((device, queue, queue_family_index))
+    Ok((device, queue, queue_family_index, device_exts))
 }
 
 fn create_swapchain(
@@ -3186,11 +3683,18 @@ fn create_swapchain(
     window_size: PhysicalSize<u32>,
     old_swapchain: Option<vk::SwapchainKHR>,
     vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
 ) -> Result<SwapchainResources, Box<dyn Error>> {
+    // SAFETY: These surface queries only read immutable capabilities/formats/present modes for
+    // the selected physical device and surface.
     let capabilities =
         unsafe { surface_loader.get_physical_device_surface_capabilities(pdevice, surface)? };
+    // SAFETY: These surface queries only read immutable capabilities/formats/present modes for
+    // the selected physical device and surface.
     let formats = unsafe { surface_loader.get_physical_device_surface_formats(pdevice, surface)? };
     let present_modes =
+        // SAFETY: These surface queries only read immutable capabilities/formats/present modes for
+        // the selected physical device and surface.
         unsafe { surface_loader.get_physical_device_surface_present_modes(pdevice, surface)? };
 
     let format = formats
@@ -3201,6 +3705,14 @@ fn create_swapchain(
 
     let present_mode = if vsync_enabled {
         vk::PresentModeKHR::FIFO
+    } else if present_mode_policy == PresentModePolicy::Immediate {
+        if present_modes.contains(&vk::PresentModeKHR::IMMEDIATE) {
+            vk::PresentModeKHR::IMMEDIATE
+        } else if present_modes.contains(&vk::PresentModeKHR::MAILBOX) {
+            vk::PresentModeKHR::MAILBOX
+        } else {
+            vk::PresentModeKHR::FIFO
+        }
     } else if present_modes.contains(&vk::PresentModeKHR::MAILBOX) {
         vk::PresentModeKHR::MAILBOX
     } else if present_modes.contains(&vk::PresentModeKHR::IMMEDIATE) {
@@ -3219,6 +3731,16 @@ fn create_swapchain(
         0 => desired_images,
         max => desired_images.min(max),
     };
+    debug!(
+        "Vulkan swapchain config: vsync={} present_mode={:?} images={} surface_min={} surface_max={} extent={}x{}",
+        vsync_enabled,
+        present_mode,
+        image_count,
+        capabilities.min_image_count,
+        capabilities.max_image_count,
+        window_size.width,
+        window_size.height
+    );
 
     // Derive the swapchain extent, making sure we never create a swapchain
     // with a zero-sized surface (which is invalid and triggers validation errors
@@ -3277,7 +3799,10 @@ fn create_swapchain(
         .old_swapchain(old_swapchain.unwrap_or(vk::SwapchainKHR::null()));
 
     let swapchain_loader = swapchain::Device::new(instance, device);
+    // SAFETY: `create_info` references only stack data for the duration of the call and uses the
+    // live surface/device pair associated with `swapchain_loader`.
     let swapchain = unsafe { swapchain_loader.create_swapchain(&create_info, None)? };
+    // SAFETY: `swapchain` was just created by `swapchain_loader` and is valid to query here.
     let images = unsafe { swapchain_loader.get_swapchain_images(swapchain)? };
     let image_views = images
         .iter()
@@ -3292,6 +3817,7 @@ fn create_swapchain(
         framebuffers: vec![],
         extent,
         format,
+        present_mode,
         supports_transfer_src,
     })
 }
@@ -3312,6 +3838,8 @@ fn recreate_framebuffers(
                 .width(swapchain_resources.extent.width)
                 .height(swapchain_resources.extent.height)
                 .layers(1);
+            // SAFETY: The framebuffer create info references the live render pass and image view
+            // for this swapchain image, and all borrowed data lives through the call.
             unsafe { device.create_framebuffer(&create_info, None) }
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -3345,6 +3873,8 @@ fn create_render_pass(device: &Device, format: vk::Format) -> Result<vk::RenderP
         .attachments(std::slice::from_ref(&color_attachment))
         .subpasses(std::slice::from_ref(&subpass))
         .dependencies(std::slice::from_ref(&dependency));
+    // SAFETY: The render-pass create info references only stack data for the duration of the
+    // call and describes a single-color-attachment pass compatible with the swapchain format.
     unsafe { device.create_render_pass(&create_info, None) }
 }
 
@@ -3355,6 +3885,8 @@ fn create_command_pool(
     let create_info = vk::CommandPoolCreateInfo::default()
         .queue_family_index(queue_family_index)
         .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+    // SAFETY: `queue_family_index` was selected from this device and the create info references
+    // only stack data for the duration of the call.
     unsafe { device.create_command_pool(&create_info, None) }
 }
 
@@ -3367,12 +3899,15 @@ fn create_command_buffers(
         .command_pool(pool)
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_buffer_count(count as u32);
+    // SAFETY: `pool` belongs to `device` and remains alive for the returned command buffers.
     unsafe { device.allocate_command_buffers(&alloc_info) }
 }
 
 fn create_shader_module(device: &Device, code: &[u8]) -> Result<vk::ShaderModule, vk::Result> {
     let code_u32 = ash::util::read_spv(&mut std::io::Cursor::new(code)).unwrap();
     let create_info = vk::ShaderModuleCreateInfo::default().code(&code_u32);
+    // SAFETY: `code_u32` contains SPIR-V words parsed from `code`, and the create info borrows
+    // that slice only for the duration of the call.
     unsafe { device.create_shader_module(&create_info, None) }
 }
 
@@ -3385,14 +3920,22 @@ fn create_sync_objects(
     let mut render_finished = vec![];
     let mut in_flight_fences = vec![];
     for _ in 0..MAX_FRAMES_IN_FLIGHT {
+        // SAFETY: These synchronization primitives are created on a live device and are later
+        // destroyed during renderer cleanup after the device is idle.
         image_available.push(unsafe { device.create_semaphore(&semaphore_info, None)? });
+        // SAFETY: These synchronization primitives are created on a live device and are later
+        // destroyed during renderer cleanup after the device is idle.
         render_finished.push(unsafe { device.create_semaphore(&semaphore_info, None)? });
+        // SAFETY: These synchronization primitives are created on a live device and are later
+        // destroyed during renderer cleanup after the device is idle.
         in_flight_fences.push(unsafe { device.create_fence(&fence_info, None)? });
     }
     Ok((image_available, render_finished, in_flight_fences))
 }
 
 fn cleanup_swapchain_and_dependents(state: &mut State) {
+    // SAFETY: Callers ensure the device is idle, or otherwise that no in-flight work still
+    // references these framebuffers, image views, or the swapchain before destruction.
     unsafe {
         for &framebuffer in &state.swapchain_resources.framebuffers {
             state
@@ -3426,6 +3969,8 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
     // Instead of hammering vkCreateSwapchainKHR with illegal extents, mark the
     // swapchain as temporarily invalid and skip recreation; we'll try again
     // once the surface reports usable extents.
+    // SAFETY: This query only reads immutable surface capabilities for the selected
+    // physical-device/surface pair.
     let caps = unsafe {
         state
             .surface_loader
@@ -3447,6 +3992,8 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     state.swapchain_valid = false;
 
+    // SAFETY: Waiting for idle ensures no queue submission still references the old swapchain
+    // resources before we replace and destroy them below.
     unsafe {
         device.device_wait_idle()?;
     }
@@ -3462,12 +4009,15 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
         state.window_size,
         Some(old_swapchain),
         state.vsync_enabled,
+        state.present_mode_policy,
     )?;
 
     let old = std::mem::replace(&mut state.swapchain_resources, new_resources);
 
     recreate_framebuffers(device, &mut state.swapchain_resources, state.render_pass)?;
 
+    // SAFETY: The device is idle, so the old swapchain image views/framebuffers/swapchain are no
+    // longer referenced by in-flight work and can be destroyed here.
     unsafe {
         for fb in old.framebuffers {
             device.destroy_framebuffer(fb, None);
@@ -3479,7 +4029,26 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
     }
 
     state.images_in_flight = vec![vk::Fence::null(); state.swapchain_resources._images.len()];
+    reset_present_telemetry(state);
     state.swapchain_valid = true;
     debug!("Swapchain recreated.");
     Ok(())
+}
+
+pub fn set_present_config(
+    state: &mut State,
+    vsync_enabled: bool,
+    present_mode_policy: PresentModePolicy,
+) {
+    if state.vsync_enabled == vsync_enabled && state.present_mode_policy == present_mode_policy {
+        return;
+    }
+    state.vsync_enabled = vsync_enabled;
+    state.present_mode_policy = present_mode_policy;
+    if state.window_size.width > 0
+        && state.window_size.height > 0
+        && let Err(e) = recreate_swapchain_and_dependents(state)
+    {
+        warn!("Failed to apply Vulkan present config update: {e}");
+    }
 }

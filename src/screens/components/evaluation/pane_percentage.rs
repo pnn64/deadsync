@@ -6,7 +6,7 @@ use crate::ui::color;
 
 use super::utils::pane_origin_x;
 
-pub fn build_pane_percentage_display(
+pub(crate) fn build_pane_percentage_display(
     score_info: &ScoreInfo,
     pane: EvalPane,
     controller: profile::PlayerSide,

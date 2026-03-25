@@ -1,6 +1,19 @@
 use crate::game::chart::ChartData;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+#[derive(Clone, Debug)]
+pub enum SongBackgroundChangeTarget {
+    File(PathBuf),
+    NoSongBg,
+    Random,
+}
+
+#[derive(Clone, Debug)]
+pub struct SongBackgroundChange {
+    pub start_beat: f32,
+    pub target: SongBackgroundChangeTarget,
+}
 
 #[derive(Clone, Debug)]
 pub struct SongData {
@@ -12,6 +25,8 @@ pub struct SongData {
     pub artist: String,
     pub banner_path: Option<PathBuf>,
     pub background_path: Option<PathBuf>,
+    pub background_changes: Vec<SongBackgroundChange>,
+    pub has_lua: bool,
     pub cdtitle_path: Option<PathBuf>,
     pub music_path: Option<PathBuf>,
     pub display_bpm: String,
@@ -21,17 +36,13 @@ pub struct SongData {
     pub min_bpm: f64,
     pub max_bpm: f64,
     pub normalized_bpms: String,
-    pub normalized_stops: String,
-    pub normalized_delays: String,
-    pub normalized_warps: String,
-    pub normalized_speeds: String,
-    pub normalized_scrolls: String,
-    pub normalized_fakes: String,
     /// Length of the music file in seconds (audio duration, including trailing silence).
     /// Mirrors `ITGmania`'s `Song::m_fMusicLengthSeconds` / `MusicLengthSeconds()` Lua.
     pub music_length_seconds: f32,
     /// Length of the chart in seconds based on the last note/hold (`Song::GetLastSecond()` semantics).
     pub total_length_seconds: i32,
+    /// Float-precision song end time used by graph scaling and preview helpers.
+    pub precise_last_second_seconds: f32,
     pub charts: Vec<ChartData>,
 }
 
@@ -69,21 +80,40 @@ pub(super) fn set_song_cache(packs: Vec<SongPack>) {
 
 impl SongData {
     #[inline(always)]
-    fn chart_last_beat(chart: &ChartData) -> Option<f32> {
-        let mut last_row: Option<usize> = None;
-        for note in &chart.parsed_notes {
-            let row = note.tail_row_index.unwrap_or(note.row_index);
-            last_row = Some(last_row.map_or(row, |prev| prev.max(row)));
-        }
-        let row = last_row?;
-        chart.row_to_beat.get(row).copied()
+    fn is_video_path(path: &Path) -> bool {
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| {
+                matches!(
+                    ext.to_ascii_lowercase().as_str(),
+                    "mp4" | "avi" | "m4v" | "mov" | "webm" | "mkv" | "mpg" | "mpeg"
+                )
+            })
     }
 
     #[inline(always)]
-    fn chart_last_second(chart: &ChartData) -> Option<f32> {
-        let beat = Self::chart_last_beat(chart)?;
-        let sec = chart.timing.get_time_for_beat(beat);
-        sec.is_finite().then_some(sec.max(0.0))
+    fn active_background_change(&self, beat: f32) -> Option<&SongBackgroundChange> {
+        let mut active = None;
+        for change in &self.background_changes {
+            if change.start_beat > beat {
+                break;
+            }
+            active = Some(change);
+        }
+        active
+    }
+
+    #[inline(always)]
+    fn fallback_background_path(&self, allow_video: bool) -> Option<&PathBuf> {
+        let path = self.background_path.as_ref()?;
+        if !path.is_file() {
+            return None;
+        }
+        if allow_video || !Self::is_video_path(path) {
+            Some(path)
+        } else {
+            None
+        }
     }
 
     /// Float-precision song end time used by graph scaling.
@@ -91,25 +121,8 @@ impl SongData {
     /// Mirrors ITGmania's `Song::GetLastSecond()` chart-selection behavior:
     /// if any non-Edit chart exists, ignore Edit charts for song length.
     pub fn precise_last_second(&self) -> f32 {
-        let has_non_edit = self
-            .charts
-            .iter()
-            .any(|c| !c.difficulty.eq_ignore_ascii_case("edit"));
-        let mut last = 0.0_f32;
-
-        for chart in &self.charts {
-            if has_non_edit && chart.difficulty.eq_ignore_ascii_case("edit") {
-                continue;
-            }
-            if let Some(sec) = Self::chart_last_second(chart)
-                && sec > last
-            {
-                last = sec;
-            }
-        }
-
         let fallback = self.total_length_seconds.max(0) as f32;
-        last.max(fallback)
+        self.precise_last_second_seconds.max(fallback)
     }
 
     pub fn display_title(&self, translit: bool) -> &str {
@@ -190,6 +203,38 @@ impl SongData {
             lo_i.to_string()
         } else {
             format!("{} - {}", lo_i.min(hi_i), lo_i.max(hi_i))
+        }
+    }
+
+    pub fn active_background_path(&self, beat: f32) -> Option<&PathBuf> {
+        match self
+            .active_background_change(beat)
+            .map(|change| &change.target)
+        {
+            Some(SongBackgroundChangeTarget::File(path)) => Some(path),
+            Some(SongBackgroundChangeTarget::NoSongBg) => None,
+            Some(SongBackgroundChangeTarget::Random) => None,
+            None => self.background_path.as_ref(),
+        }
+    }
+
+    pub fn gameplay_background_path(&self, beat: f32, allow_video: bool) -> Option<&PathBuf> {
+        let fallback = self.fallback_background_path(allow_video);
+        match self
+            .active_background_change(beat)
+            .map(|change| &change.target)
+        {
+            Some(SongBackgroundChangeTarget::File(path)) => {
+                let exists = path.is_file();
+                if exists && (allow_video || !Self::is_video_path(path)) {
+                    Some(path)
+                } else {
+                    fallback.or(exists.then_some(path))
+                }
+            }
+            Some(SongBackgroundChangeTarget::Random) => fallback,
+            Some(SongBackgroundChangeTarget::NoSongBg) => None,
+            None => fallback,
         }
     }
 }

@@ -5,6 +5,9 @@ use crate::core::space::Metrics;
 use crate::ui::actors::{self, Actor, SizeSpec};
 use crate::ui::{anim, font};
 use cgmath::{Matrix4, Rad, Vector2, Vector3};
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::Arc;
 
 /* ======================= RENDERER SCREEN BUILDER ======================= */
 
@@ -13,8 +16,28 @@ pub fn build_screen<'a>(
     actors: &'a [actors::Actor],
     clear_color: [f32; 4],
     m: &Metrics,
-    fonts: &'a std::collections::HashMap<&'static str, font::Font>,
+    fonts: &'a HashMap<&'static str, font::Font>,
     total_elapsed: f32,
+) -> RenderList<'a> {
+    let mut text_cache = TextLayoutCache::default();
+    build_screen_cached(
+        actors,
+        clear_color,
+        m,
+        fonts,
+        total_elapsed,
+        &mut text_cache,
+    )
+}
+
+#[inline(always)]
+pub fn build_screen_cached<'a>(
+    actors: &'a [actors::Actor],
+    clear_color: [f32; 4],
+    m: &Metrics,
+    fonts: &'a HashMap<&'static str, font::Font>,
+    total_elapsed: f32,
+    text_cache: &mut TextLayoutCache,
 ) -> RenderList<'a> {
     let mut objects = Vec::with_capacity(estimate_object_count(actors));
     let mut cameras: Vec<Matrix4<f32>> = Vec::with_capacity(4);
@@ -43,11 +66,13 @@ pub fn build_screen<'a>(
             &mut masks,
             &mut order_counter,
             &mut objects,
+            text_cache,
             total_elapsed,
         );
     }
 
-    objects.sort_by_key(|o| (o.z, o.order));
+    // `order` is already monotonically assigned, so we do not need a stable sort here.
+    objects.sort_unstable_by_key(|o| (o.z, o.order));
 
     RenderList {
         clear_color,
@@ -56,57 +81,659 @@ pub fn build_screen<'a>(
     }
 }
 
+#[derive(Clone, Copy)]
+struct CachedGlyph {
+    texture_key: *const str,
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    size: [f32; 2],
+    offset: [f32; 2],
+    advance_i32: i32,
+    char_index: usize,
+    draw_quad: bool,
+}
+
+#[derive(Clone)]
+struct CachedLine {
+    width_i32: i32,
+    glyphs: Vec<CachedGlyph>,
+}
+
+#[derive(Clone)]
+struct WrappedLine {
+    text: Box<str>,
+    char_indices: Vec<usize>,
+}
+
+#[derive(Clone)]
+struct CachedTextLayout {
+    max_logical_width_i: i32,
+    glyph_count: usize,
+    lines: Vec<CachedLine>,
+}
+
+struct OwnedLayoutEntry {
+    layout: Box<CachedTextLayout>,
+    last_used: u64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct TextLayoutKey {
+    font_key: u64,
+    wrap_width_pixels: i32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TextLayoutFrameStats {
+    pub owned_hits: u32,
+    pub shared_hits: u32,
+    pub misses: u32,
+    pub built_lines: u32,
+    pub built_glyphs: u32,
+    pub prunes: u32,
+    pub owned_entries: u32,
+    pub shared_aliases: u32,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum TextLayoutOverflowPolicy {
+    #[default]
+    PruneOwnedEntries,
+    Saturating,
+}
+
+pub struct TextLayoutCache {
+    owned_entries: HashMap<TextLayoutKey, HashMap<Box<str>, OwnedLayoutEntry>>,
+    shared_aliases: HashMap<TextLayoutKey, HashMap<usize, Arc<str>>>,
+    entry_count: usize,
+    alias_count: usize,
+    max_entries: usize,
+    max_aliases: usize,
+    use_tick: u64,
+    frame_stats: TextLayoutFrameStats,
+    overflow_policy: TextLayoutOverflowPolicy,
+    uncached_layout: Option<Box<CachedTextLayout>>,
+}
+
+impl Default for TextLayoutCache {
+    fn default() -> Self {
+        Self::new(4096)
+    }
+}
+
+impl TextLayoutCache {
+    pub fn new(max_entries: usize) -> Self {
+        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::PruneOwnedEntries)
+    }
+
+    pub fn saturating(max_entries: usize) -> Self {
+        Self::new_with_policy(max_entries, TextLayoutOverflowPolicy::Saturating)
+    }
+
+    pub fn new_with_policy(max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) -> Self {
+        let max_entries = max_entries.max(1);
+        Self {
+            owned_entries: HashMap::new(),
+            shared_aliases: HashMap::new(),
+            entry_count: 0,
+            alias_count: 0,
+            max_entries,
+            max_aliases: max_entries.saturating_mul(8),
+            use_tick: 0,
+            frame_stats: TextLayoutFrameStats::default(),
+            overflow_policy,
+            uncached_layout: None,
+        }
+    }
+
+    pub fn configure(&mut self, max_entries: usize, overflow_policy: TextLayoutOverflowPolicy) {
+        self.max_entries = max_entries.max(1);
+        self.max_aliases = self.max_entries.saturating_mul(8);
+        self.overflow_policy = overflow_policy;
+    }
+
+    pub fn lock_growth(&mut self) {
+        self.max_entries = self.entry_count.max(1);
+        self.max_aliases = self.alias_count;
+        self.overflow_policy = TextLayoutOverflowPolicy::Saturating;
+    }
+
+    pub fn clear(&mut self) {
+        self.owned_entries.clear();
+        self.shared_aliases.clear();
+        self.entry_count = 0;
+        self.alias_count = 0;
+        self.use_tick = 0;
+        self.frame_stats = TextLayoutFrameStats::default();
+        self.uncached_layout = None;
+    }
+
+    #[inline(always)]
+    pub fn begin_frame_stats(&mut self) {
+        self.frame_stats = TextLayoutFrameStats::default();
+    }
+
+    #[inline(always)]
+    pub fn frame_stats(&self) -> TextLayoutFrameStats {
+        TextLayoutFrameStats {
+            owned_entries: saturating_u32(self.entry_count),
+            shared_aliases: saturating_u32(self.alias_count),
+            ..self.frame_stats
+        }
+    }
+
+    #[inline(always)]
+    fn next_use_tick(&mut self) -> u64 {
+        self.use_tick = self.use_tick.saturating_add(1);
+        self.use_tick
+    }
+
+    fn prune_owned_entries(&mut self) {
+        if self.entry_count < self.max_entries {
+            return;
+        }
+        let keep = self
+            .max_entries
+            .saturating_sub((self.max_entries / 4).max(1));
+        let remove = self.entry_count.saturating_sub(keep).max(1);
+        let mut ages = Vec::with_capacity(self.entry_count);
+        for font_entries in self.owned_entries.values() {
+            ages.extend(font_entries.values().map(|entry| entry.last_used));
+        }
+        if ages.is_empty() {
+            self.clear();
+            return;
+        }
+        let cutoff_ix = remove.saturating_sub(1).min(ages.len().saturating_sub(1));
+        ages.select_nth_unstable(cutoff_ix);
+        let cutoff = ages[cutoff_ix];
+        let mut removed = 0usize;
+        self.owned_entries.retain(|_, font_entries| {
+            font_entries.retain(|_, entry| {
+                let drop = removed < remove && entry.last_used <= cutoff;
+                removed += usize::from(drop);
+                !drop
+            });
+            !font_entries.is_empty()
+        });
+        if removed == 0 {
+            self.clear();
+            return;
+        }
+        self.frame_stats.prunes = self.frame_stats.prunes.saturating_add(1);
+        self.entry_count = self.entry_count.saturating_sub(removed);
+        self.shared_aliases.clear();
+        self.alias_count = 0;
+    }
+
+    #[inline(always)]
+    fn touch_owned_layout(&mut self, key: TextLayoutKey, text: &str, tick: u64) -> bool {
+        let Some(entry) = self
+            .owned_entries
+            .get_mut(&key)
+            .and_then(|font_entries| font_entries.get_mut(text))
+        else {
+            return false;
+        };
+        entry.last_used = tick;
+        true
+    }
+
+    #[inline(always)]
+    fn owned_layout(&self, key: TextLayoutKey, text: &str) -> Option<&CachedTextLayout> {
+        Some(self.owned_entries.get(&key)?.get(text)?.layout.as_ref())
+    }
+
+    #[inline(always)]
+    fn uncached_layout_ref(&self) -> &CachedTextLayout {
+        self.uncached_layout
+            .as_deref()
+            .expect("uncached text layout inserted")
+    }
+
+    #[inline(always)]
+    fn record_layout_build(&mut self, layout: &CachedTextLayout) {
+        self.frame_stats.misses = self.frame_stats.misses.saturating_add(1);
+        self.frame_stats.built_lines = self
+            .frame_stats
+            .built_lines
+            .saturating_add(saturating_u32(layout.lines.len()));
+        self.frame_stats.built_glyphs = self
+            .frame_stats
+            .built_glyphs
+            .saturating_add(saturating_u32(layout.glyph_count));
+    }
+
+    fn insert_owned_layout(
+        &mut self,
+        key: TextLayoutKey,
+        text: &str,
+        layout: CachedTextLayout,
+        tick: u64,
+    ) -> bool {
+        if self.entry_count >= self.max_entries {
+            match self.overflow_policy {
+                TextLayoutOverflowPolicy::PruneOwnedEntries => {
+                    // Avoid hard-clearing the entire cache; that was causing visible
+                    // compose spikes once gameplay churn hit the entry cap.
+                    self.prune_owned_entries();
+                }
+                TextLayoutOverflowPolicy::Saturating => {
+                    self.uncached_layout = Some(Box::new(layout));
+                    return false;
+                }
+            }
+        }
+        let replaced = self.owned_entries.entry(key).or_default().insert(
+            text.into(),
+            OwnedLayoutEntry {
+                layout: Box::new(layout),
+                last_used: tick,
+            },
+        );
+        debug_assert!(replaced.is_none());
+        self.entry_count += usize::from(replaced.is_none());
+        true
+    }
+
+    pub fn prewarm_text(
+        &mut self,
+        fonts: &HashMap<&'static str, font::Font>,
+        font_name: &'static str,
+        text: &str,
+        wrap_width_pixels: Option<i32>,
+    ) {
+        let Some(font) = fonts.get(font_name) else {
+            return;
+        };
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, fonts),
+            wrap_width_pixels: wrap_width_pixels.unwrap_or(-1),
+        };
+        let _ = self.get_or_build_owned(key, font, fonts, text);
+    }
+
+    fn get_or_build(
+        &mut self,
+        font: &font::Font,
+        fonts: &HashMap<&'static str, font::Font>,
+        content: &actors::TextContent,
+        wrap_width_pixels: Option<i32>,
+    ) -> &CachedTextLayout {
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, fonts),
+            wrap_width_pixels: wrap_width_pixels.unwrap_or(-1),
+        };
+        match content {
+            actors::TextContent::Owned(text) => self.get_or_build_owned(key, font, fonts, text),
+            actors::TextContent::Shared(text) => self.get_or_build_shared(key, font, fonts, text),
+        }
+    }
+
+    fn get_or_build_owned(
+        &mut self,
+        key: TextLayoutKey,
+        font: &font::Font,
+        fonts: &HashMap<&'static str, font::Font>,
+        text: &str,
+    ) -> &CachedTextLayout {
+        let tick = self.next_use_tick();
+        if self.touch_owned_layout(key, text, tick) {
+            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
+            return self
+                .owned_layout(key, text)
+                .expect("owned text layout cache entry touched");
+        }
+        let layout = build_cached_text_layout(font, fonts, text, key.wrap_width_pixels);
+        self.record_layout_build(&layout);
+        if self.insert_owned_layout(key, text, layout, tick) {
+            self.owned_layout(key, text)
+                .expect("owned text layout cache entry inserted")
+        } else {
+            self.uncached_layout_ref()
+        }
+    }
+
+    fn get_or_build_shared(
+        &mut self,
+        key: TextLayoutKey,
+        font: &font::Font,
+        fonts: &HashMap<&'static str, font::Font>,
+        text: &Arc<str>,
+    ) -> &CachedTextLayout {
+        let tick = self.next_use_tick();
+        let text_key = Arc::as_ptr(text) as *const () as usize;
+        let text_ref = text.as_ref();
+        if self
+            .shared_aliases
+            .get(&key)
+            .and_then(|font_entries| font_entries.get(&text_key))
+            .is_some()
+        {
+            if self.touch_owned_layout(key, text_ref, tick) {
+                self.frame_stats.shared_hits = self.frame_stats.shared_hits.saturating_add(1);
+                return self
+                    .owned_layout(key, text_ref)
+                    .expect("shared text layout alias touched");
+            }
+            self.shared_aliases
+                .entry(key)
+                .or_default()
+                .remove(&text_key);
+            self.alias_count = self.alias_count.saturating_sub(1);
+        }
+        let aliasable = if self.touch_owned_layout(key, text_ref, tick) {
+            self.frame_stats.owned_hits = self.frame_stats.owned_hits.saturating_add(1);
+            true
+        } else {
+            let layout = build_cached_text_layout(font, fonts, text_ref, key.wrap_width_pixels);
+            self.record_layout_build(&layout);
+            self.insert_owned_layout(key, text_ref, layout, tick)
+        };
+        if !aliasable {
+            return self.uncached_layout_ref();
+        }
+        if self.alias_count >= self.max_aliases {
+            match self.overflow_policy {
+                TextLayoutOverflowPolicy::PruneOwnedEntries => {
+                    self.shared_aliases.clear();
+                    self.alias_count = 0;
+                }
+                TextLayoutOverflowPolicy::Saturating => {
+                    return self
+                        .owned_layout(key, text_ref)
+                        .expect("shared text layout cache entry available");
+                }
+            }
+        }
+        if self
+            .shared_aliases
+            .entry(key)
+            .or_default()
+            .insert(text_key, text.clone())
+            .is_none()
+        {
+            self.alias_count += 1;
+        }
+        self.owned_layout(key, text_ref)
+            .expect("shared text layout cache entry aliased")
+    }
+}
+
+#[inline(always)]
+const fn saturating_u32(value: usize) -> u32 {
+    if value > u32::MAX as usize {
+        u32::MAX
+    } else {
+        value as u32
+    }
+}
+
+fn font_chain_key(font: &font::Font, fonts: &HashMap<&'static str, font::Font>) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    let mut current = Some(font);
+    while let Some(font) = current {
+        (font as *const font::Font as usize).hash(&mut hasher);
+        current = font.fallback_font_name.and_then(|name| fonts.get(name));
+    }
+    hasher.finish()
+}
+
+fn build_cached_text_layout(
+    font: &font::Font,
+    fonts: &HashMap<&'static str, font::Font>,
+    text: &str,
+    wrap_width_pixels: i32,
+) -> CachedTextLayout {
+    let draws_space = font.glyph_map.contains_key(&' ');
+    let mut max_logical_width_i = 0i32;
+    let mut glyph_count = 0usize;
+    let mut lines = Vec::new();
+
+    let mut push_line = |line: WrappedLine| {
+        let mut width_i32 = 0i32;
+        let mut glyphs = Vec::with_capacity(line.char_indices.len());
+        debug_assert_eq!(line.text.chars().count(), line.char_indices.len());
+        for (ch, char_index) in line.text.chars().zip(line.char_indices.into_iter()) {
+            let Some(glyph) = font::find_glyph(font, ch, fonts) else {
+                continue;
+            };
+            width_i32 += glyph.advance_i32;
+            glyphs.push(CachedGlyph {
+                texture_key: std::ptr::from_ref(glyph.texture_key.as_str()),
+                uv_scale: glyph.uv_scale,
+                uv_offset: glyph.uv_offset,
+                size: glyph.size,
+                offset: glyph.offset,
+                advance_i32: glyph.advance_i32,
+                char_index,
+                draw_quad: ch != ' ' || draws_space,
+            });
+        }
+        max_logical_width_i = max_logical_width_i.max(width_i32);
+        glyph_count += glyphs.len();
+        lines.push(CachedLine { width_i32, glyphs });
+    };
+
+    for line in wrapped_text_lines_with_indices(text, wrap_width_pixels, font, fonts) {
+        push_line(line);
+    }
+
+    CachedTextLayout {
+        max_logical_width_i,
+        glyph_count,
+        lines,
+    }
+}
+
+#[derive(Clone, Copy)]
+struct WrappedWord<'a> {
+    text: &'a str,
+    start_char: usize,
+    space_before_char: Option<usize>,
+}
+
+fn split_words_with_positions(src: &str, start_char: usize) -> Vec<WrappedWord<'_>> {
+    let mut out = Vec::new();
+    let mut word_start_byte = None;
+    let mut word_start_char = 0usize;
+    let mut word_space_before = None;
+    let mut pending_space = None;
+    let mut char_index = start_char;
+
+    for (byte_index, ch) in src.char_indices() {
+        if ch == ' ' {
+            if let Some(start_byte) = word_start_byte.take() {
+                out.push(WrappedWord {
+                    text: &src[start_byte..byte_index],
+                    start_char: word_start_char,
+                    space_before_char: word_space_before,
+                });
+            }
+            pending_space.get_or_insert(char_index);
+        } else if word_start_byte.is_none() {
+            word_start_byte = Some(byte_index);
+            word_start_char = char_index;
+            word_space_before = pending_space.take();
+        }
+        char_index += 1;
+    }
+
+    if let Some(start_byte) = word_start_byte {
+        out.push(WrappedWord {
+            text: &src[start_byte..],
+            start_char: word_start_char,
+            space_before_char: word_space_before,
+        });
+    }
+
+    out
+}
+
+#[inline(always)]
+fn raw_wrapped_line(text: &str, start_char: usize) -> WrappedLine {
+    let mut char_indices = Vec::with_capacity(text.chars().count());
+    let mut char_index = start_char;
+    for _ in text.chars() {
+        char_indices.push(char_index);
+        char_index += 1;
+    }
+    WrappedLine {
+        text: text.into(),
+        char_indices,
+    }
+}
+
+fn wrapped_text_lines_with_indices(
+    text: &str,
+    wrap_width_pixels: i32,
+    font: &font::Font,
+    fonts: &HashMap<&'static str, font::Font>,
+) -> Vec<WrappedLine> {
+    let space_width = font::measure_line_width_logical(font, " ", fonts);
+    let mut out = Vec::new();
+    let mut start_char = 0usize;
+
+    for src in text.split('\n') {
+        if wrap_width_pixels < 0 {
+            out.push(raw_wrapped_line(src, start_char));
+            start_char += src.chars().count() + 1;
+            continue;
+        }
+
+        let words = split_words_with_positions(src, start_char);
+        if words.is_empty() {
+            out.push(WrappedLine {
+                text: "".into(),
+                char_indices: Vec::new(),
+            });
+            start_char += src.chars().count() + 1;
+            continue;
+        }
+
+        let mut line = String::from(words[0].text);
+        let mut line_char_indices = (0..words[0].text.chars().count())
+            .map(|i| words[0].start_char + i)
+            .collect::<Vec<_>>();
+        let mut line_width = font::measure_line_width_logical(font, words[0].text, fonts);
+
+        for word in words.iter().skip(1) {
+            let width_to_add =
+                space_width + font::measure_line_width_logical(font, word.text, fonts);
+            if line_width + width_to_add <= wrap_width_pixels {
+                line.push(' ');
+                line_char_indices.push(
+                    word.space_before_char
+                        .unwrap_or(word.start_char.saturating_sub(1)),
+                );
+                line_char_indices
+                    .extend((0..word.text.chars().count()).map(|i| word.start_char + i));
+                line.push_str(word.text);
+                line_width += width_to_add;
+            } else {
+                out.push(WrappedLine {
+                    text: line.into_boxed_str(),
+                    char_indices: line_char_indices,
+                });
+                line = word.text.to_owned();
+                line_char_indices = (0..word.text.chars().count())
+                    .map(|i| word.start_char + i)
+                    .collect();
+                line_width = font::measure_line_width_logical(font, word.text, fonts);
+            }
+        }
+
+        out.push(WrappedLine {
+            text: line.into_boxed_str(),
+            char_indices: line_char_indices,
+        });
+        start_char += src.chars().count() + 1;
+    }
+
+    out
+}
+
+#[cfg(test)]
+fn wrap_text_lines_by_words<F>(
+    text: &str,
+    wrap_width_pixels: i32,
+    space_width: i32,
+    mut word_width: F,
+) -> Vec<Box<str>>
+where
+    F: FnMut(&str) -> i32,
+{
+    let mut out = Vec::new();
+    for src in text.split('\n') {
+        if wrap_width_pixels < 0 {
+            out.push(src.into());
+            continue;
+        }
+        let mut words = src.split(' ').filter(|word| !word.is_empty());
+        let Some(first) = words.next() else {
+            out.push("".into());
+            continue;
+        };
+        let mut line = String::from(first);
+        let mut line_width = word_width(first);
+        for word in words {
+            let width_to_add = space_width + word_width(word);
+            if line_width + width_to_add <= wrap_width_pixels {
+                line.push(' ');
+                line.push_str(word);
+                line_width += width_to_add;
+            } else {
+                out.push(line.into_boxed_str());
+                line = word.to_owned();
+                line_width = word_width(word);
+            }
+        }
+        out.push(line.into_boxed_str());
+    }
+    out
+}
+
+#[inline(always)]
+// SAFETY: Callers must only pass pointers captured from cached string storage that remains valid
+// and immutable for at least the lifetime of the returned borrow.
+unsafe fn str_from_cached_ptr<'a>(ptr: *const str) -> &'a str {
+    // SAFETY: callers only pass pointers captured from cached font glyph storage
+    // that outlives the returned borrow for the duration of render-list assembly.
+    unsafe { &*ptr }
+}
+
 #[inline(always)]
 fn estimate_object_count(actors: &[Actor]) -> usize {
-    let mut stack: Vec<&Actor> = Vec::with_capacity(actors.len());
-    stack.extend(actors.iter());
-    let mut total = 0usize;
-
-    while let Some(a) = stack.pop() {
-        match a {
-            Actor::Sprite { visible, .. } => {
-                if *visible {
-                    total += 1;
-                }
-            }
-            Actor::Text { content, .. } => {
-                // Heuristic: each char is a glyph + potentially stroke.
-                // 2 objects per char is a safe upper bound.
-                total += content.len() * 2;
-            }
+    #[inline(always)]
+    fn count_actor(actor: &Actor) -> usize {
+        match actor {
+            Actor::Sprite { visible, .. } => usize::from(*visible),
+            Actor::Text { content, .. } => content.len() * 2,
             Actor::Mesh {
                 visible, vertices, ..
-            } => {
-                if *visible && !vertices.is_empty() {
-                    total += 1;
-                }
-            }
+            } => usize::from(*visible && !vertices.is_empty()),
             Actor::TexturedMesh {
                 visible, vertices, ..
-            } => {
-                if *visible && !vertices.is_empty() {
-                    total += 1;
-                }
-            }
+            } => usize::from(*visible && !vertices.is_empty()),
             Actor::Frame {
                 children,
                 background,
                 ..
-            } => {
-                if background.is_some() {
-                    total += 1;
-                }
-                stack.extend(children.iter());
-            }
-            Actor::Camera { children, .. } => {
-                stack.extend(children.iter());
-            }
-            Actor::Shadow { child, .. } => {
-                stack.push(child);
-            }
+            } => children
+                .iter()
+                .fold(usize::from(background.is_some()), |sum, child| {
+                    sum.saturating_add(count_actor(child))
+                }),
+            Actor::Camera { children, .. } => children
+                .iter()
+                .fold(0usize, |sum, child| sum.saturating_add(count_actor(child))),
+            Actor::Shadow { child, .. } => count_actor(child),
         }
     }
-    total
+
+    actors
+        .iter()
+        .fold(0usize, |sum, actor| sum.saturating_add(count_actor(actor)))
 }
 
 /* ======================= ACTOR -> OBJECT CONVERSION ======================= */
@@ -228,19 +855,21 @@ fn build_actor_recursive<'a>(
     actor: &'a actors::Actor,
     parent: SmRect,
     m: &Metrics,
-    fonts: &'a std::collections::HashMap<&'static str, font::Font>,
+    fonts: &'a HashMap<&'static str, font::Font>,
     base_z: i16,
     camera: u8,
     cameras: &mut Vec<Matrix4<f32>>,
     masks: &mut Vec<WorldRect>,
     order_counter: &mut u32,
     out: &mut Vec<RenderObject<'a>>,
+    text_cache: &mut TextLayoutCache,
     total_elapsed: f32,
 ) {
     match actor {
         actors::Actor::Sprite {
             align,
             offset,
+            world_z,
             size,
             source,
             tint,
@@ -370,6 +999,7 @@ fn build_actor_recursive<'a>(
                 effect_rot[0],
                 effect_rot[1],
                 effect_rot[2],
+                *world_z,
                 *local_offset,
                 *local_offset_rot_sin_cos,
                 *texcoordvelocity,
@@ -416,6 +1046,7 @@ fn build_actor_recursive<'a>(
                     vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
                     mode: *mode,
                 },
+                texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                 transform,
                 blend: *blend,
                 z: 0,
@@ -437,6 +1068,7 @@ fn build_actor_recursive<'a>(
         actors::Actor::TexturedMesh {
             align,
             offset,
+            world_z,
             size,
             texture,
             vertices,
@@ -455,7 +1087,7 @@ fn build_actor_recursive<'a>(
             let rect = place_rect(parent, *align, *offset, *size);
             let base_x = m.left + rect.x;
             let base_y = m.top - rect.y;
-            let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, 0.0))
+            let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, *world_z))
                 * Matrix4::from_nonuniform_scale(1.0, -1.0, 1.0);
 
             let before = out.len();
@@ -468,6 +1100,7 @@ fn build_actor_recursive<'a>(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                 },
+                texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                 transform,
                 blend: *blend,
                 z: 0,
@@ -501,6 +1134,7 @@ fn build_actor_recursive<'a>(
                 masks,
                 order_counter,
                 out,
+                text_cache,
                 total_elapsed,
             );
 
@@ -558,6 +1192,7 @@ fn build_actor_recursive<'a>(
 
                 out.push(renderer::RenderObject {
                     object_type: obj_type,
+                    texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                     transform: t_world * obj.transform,
                     blend: obj.blend,
                     // Draw behind the original to ensure correct order without
@@ -587,6 +1222,7 @@ fn build_actor_recursive<'a>(
                     masks,
                     order_counter,
                     out,
+                    text_cache,
                     total_elapsed,
                 );
             }
@@ -599,11 +1235,13 @@ fn build_actor_recursive<'a>(
             stroke_color,
             font,
             content,
+            attributes,
             align_text,
             z,
             scale,
             fit_width,
             fit_height,
+            wrap_width_pixels,
             max_width,
             max_height,
             // NEW:
@@ -618,24 +1256,29 @@ fn build_actor_recursive<'a>(
                 let mut effect_color = *color;
                 let mut effect_scale = *scale;
                 apply_effect_to_text(*effect, total_elapsed, &mut effect_color, &mut effect_scale);
-                let mut objects = layout_text(
+                let before = out.len();
+                layout_text(
+                    out,
                     fm,
                     fonts,
-                    content.as_str(),
+                    content,
                     0.0, // _px_size unused
                     effect_scale,
                     *fit_width,
                     *fit_height,
+                    *wrap_width_pixels,
                     *max_width,
                     *max_height,
                     // NEW flags:
                     *max_w_pre_zoom,
                     *max_h_pre_zoom,
+                    attributes,
                     parent,
                     *align,
                     *offset,
                     *align_text,
                     m,
+                    text_cache,
                 );
                 if let Some([x, y, w, h]) = *clip {
                     let clip_sm = SmRect {
@@ -645,46 +1288,115 @@ fn build_actor_recursive<'a>(
                         h,
                     };
                     let clip_world = sm_rect_to_world_edges(clip_sm, m);
-                    clip_objects_to_world_rect(&mut objects, clip_world);
+                    clip_objects_range_to_world_rect(out, before, clip_world);
                 }
+                let end = out.len();
                 let layer = base_z.saturating_add(*z);
                 let mut stroke_rgba = stroke_color.unwrap_or(fm.default_stroke_color);
                 stroke_rgba[3] *= effect_color[3];
                 if stroke_rgba[3] > 0.0 && !fm.stroke_texture_map.is_empty() {
-                    let mut stroke_objects = Vec::with_capacity(objects.len());
-                    for obj in &objects {
-                        let renderer::ObjectType::Sprite { texture_id, .. } = &obj.object_type
-                        else {
-                            continue;
+                    out.reserve(end - before);
+                    let mut cached_texture_ptr: *const u8 = std::ptr::null();
+                    let mut cached_texture_len = 0usize;
+                    let mut cached_stroke: Option<&str> = None;
+                    let mut idx = before;
+                    while idx < end {
+                        let (
+                            stroke_key,
+                            transform,
+                            uv_scale,
+                            uv_offset,
+                            local_offset,
+                            local_offset_rot_sin_cos,
+                            edge_fade,
+                        ) = match &out[idx] {
+                            RenderObject {
+                                object_type:
+                                    renderer::ObjectType::Sprite {
+                                        texture_id,
+                                        uv_scale,
+                                        uv_offset,
+                                        local_offset,
+                                        local_offset_rot_sin_cos,
+                                        edge_fade,
+                                        ..
+                                    },
+                                transform,
+                                ..
+                            } => {
+                                let texture_key = texture_id.as_ref();
+                                let texture_bytes = texture_key.as_bytes();
+                                let stroke_key = if texture_bytes.len() == cached_texture_len
+                                    && !cached_texture_ptr.is_null()
+                                    && {
+                                        // Glyph texture keys are borrowed from font storage, so this
+                                        // cached byte slice stays valid across pushes after reserve().
+                                        // SAFETY: `cached_texture_ptr` and `cached_texture_len` are
+                                        // only refreshed from `texture_key.as_bytes()` values that
+                                        // live for the duration of the cached layout. The pointer is
+                                        // never used after either cached value changes.
+                                        let cached_bytes = unsafe {
+                                            std::slice::from_raw_parts(
+                                                cached_texture_ptr,
+                                                cached_texture_len,
+                                            )
+                                        };
+                                        cached_bytes == texture_bytes
+                                    } {
+                                    cached_stroke
+                                } else {
+                                    cached_texture_ptr = texture_bytes.as_ptr();
+                                    cached_texture_len = texture_bytes.len();
+                                    cached_stroke = fm
+                                        .stroke_texture_map
+                                        .get(texture_key)
+                                        .map(std::string::String::as_str);
+                                    cached_stroke
+                                };
+                                let Some(stroke_key) = stroke_key else {
+                                    idx += 1;
+                                    continue;
+                                };
+                                (
+                                    stroke_key,
+                                    *transform,
+                                    *uv_scale,
+                                    *uv_offset,
+                                    *local_offset,
+                                    *local_offset_rot_sin_cos,
+                                    *edge_fade,
+                                )
+                            }
+                            _ => {
+                                idx += 1;
+                                continue;
+                            }
                         };
-                        let Some(stroke_key) = fm.stroke_texture_map.get(texture_id.as_ref())
-                        else {
-                            continue;
-                        };
-                        let mut stroke_obj = obj.clone();
-                        let renderer::ObjectType::Sprite {
-                            texture_id, tint, ..
-                        } = &mut stroke_obj.object_type
-                        else {
-                            continue;
-                        };
-                        *texture_id = std::borrow::Cow::Owned(stroke_key.clone());
-                        *tint = stroke_rgba;
-                        stroke_objects.push(stroke_obj);
+                        out.push(RenderObject {
+                            object_type: renderer::ObjectType::Sprite {
+                                texture_id: std::borrow::Cow::Borrowed(stroke_key),
+                                tint: stroke_rgba,
+                                uv_scale,
+                                uv_offset,
+                                local_offset,
+                                local_offset_rot_sin_cos,
+                                edge_fade,
+                            },
+                            texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                            transform,
+                            blend: *blend,
+                            z: layer,
+                            order: {
+                                let o = *order_counter;
+                                *order_counter += 1;
+                                o
+                            },
+                            camera,
+                        });
+                        idx += 1;
                     }
-                    for obj in &mut stroke_objects {
-                        obj.z = layer;
-                        obj.order = {
-                            let o = *order_counter;
-                            *order_counter += 1;
-                            o
-                        };
-                        obj.blend = *blend;
-                        obj.camera = camera;
-                    }
-                    out.extend(stroke_objects);
                 }
-                for obj in &mut objects {
+                for obj in out.iter_mut().take(end).skip(before) {
                     obj.z = layer;
                     obj.order = {
                         let o = *order_counter;
@@ -694,10 +1406,12 @@ fn build_actor_recursive<'a>(
                     obj.blend = *blend;
                     obj.camera = camera;
                     if let renderer::ObjectType::Sprite { tint, .. } = &mut obj.object_type {
-                        *tint = effect_color;
+                        tint[0] *= effect_color[0];
+                        tint[1] *= effect_color[1];
+                        tint[2] *= effect_color[2];
+                        tint[3] *= effect_color[3];
                     }
                 }
-                out.extend(objects);
             }
         }
 
@@ -738,6 +1452,7 @@ fn build_actor_recursive<'a>(
                             0.0,
                             0.0,
                             BlendMode::Alpha,
+                            0.0,
                             0.0,
                             0.0,
                             0.0,
@@ -782,6 +1497,7 @@ fn build_actor_recursive<'a>(
                             0.0,
                             0.0,
                             0.0,
+                            0.0,
                             [0.0, 0.0],
                             [0.0, 1.0],
                             None,
@@ -811,6 +1527,7 @@ fn build_actor_recursive<'a>(
                     masks,
                     order_counter,
                     out,
+                    text_cache,
                     total_elapsed,
                 );
             }
@@ -958,6 +1675,33 @@ fn calculate_uvs(
 }
 
 #[inline(always)]
+fn fold_sprite_xy_rot(
+    mut flip_x: bool,
+    mut flip_y: bool,
+    mut size_x: f32,
+    mut size_y: f32,
+    rot_x_deg: f32,
+    rot_y_deg: f32,
+) -> (bool, bool, f32, f32) {
+    // Sprite instances only preserve 2D rotation in the fast path. Fold SM's
+    // X/Y rotations into foreshortening plus texture flips so Y=180 mirrors
+    // horizontally instead of becoming an accidental in-plane 180-degree turn.
+    let cos_y = rot_y_deg.to_radians().cos();
+    size_x *= cos_y.abs();
+    if cos_y.is_sign_negative() {
+        flip_x = !flip_x;
+    }
+
+    let cos_x = rot_x_deg.to_radians().cos();
+    size_y *= cos_x.abs();
+    if cos_x.is_sign_negative() {
+        flip_y = !flip_y;
+    }
+
+    (flip_x, flip_y, size_x, size_y)
+}
+
+#[inline(always)]
 fn push_sprite<'a>(
     out: &mut Vec<renderer::RenderObject<'a>>,
     camera: u8,
@@ -983,6 +1727,7 @@ fn push_sprite<'a>(
     rot_x_deg: f32,
     rot_y_deg: f32,
     rot_z_deg: f32,
+    world_z: f32,
     local_offset: [f32; 2],
     local_offset_rot_sin_cos: [f32; 2],
     texcoordvelocity: Option<[f32; 2]>,
@@ -1011,6 +1756,8 @@ fn push_sprite<'a>(
     let center_y = ((cb - ct) * base_size.y).mul_add(0.5, base_center.y);
     let size_x = base_size.x * sx_crop;
     let size_y = base_size.y * sy_crop;
+    let (flip_x, flip_y, size_x, size_y) =
+        fold_sprite_xy_rot(flip_x, flip_y, size_x, size_y, rot_x_deg, rot_y_deg);
 
     let (uv_scale, uv_offset) = if is_solid {
         ([1.0, 1.0], [0.0, 0.0])
@@ -1072,14 +1819,12 @@ fn push_sprite<'a>(
     }
 
     // Matrix = T * R * S
-    // SM->world flips Y, so rotationx sign flips; rotationy/z keep sign.
+    // Sprite fast-path rendering only preserves in-plane rotation; X/Y folding
+    // above already handled their SM parity.
     let transform = {
-        let rx = Matrix4::from_angle_x(Rad((-rot_x_deg).to_radians()));
-        let ry = Matrix4::from_angle_y(Rad(rot_y_deg.to_radians()));
-        let rz = Matrix4::from_angle_z(Rad(rot_z_deg.to_radians()));
-        let r = rx * ry * rz;
+        let r = Matrix4::from_angle_z(Rad(rot_z_deg.to_radians()));
         let s = Matrix4::from_nonuniform_scale(size_x, size_y, 1.0);
-        let t = Matrix4::from_translation(Vector3::new(center_x, center_y, 0.0));
+        let t = Matrix4::from_translation(Vector3::new(center_x, center_y, world_z));
         t * r * s
     };
 
@@ -1099,6 +1844,7 @@ fn push_sprite<'a>(
             local_offset_rot_sin_cos,
             edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
         },
+        texture_handle: renderer::INVALID_TEXTURE_HANDLE,
         transform,
         blend,
         z: 0,
@@ -1157,49 +1903,37 @@ const fn quantize_up_even_i32(v: i32) -> i32 {
 }
 
 fn layout_text<'a>(
+    out: &mut Vec<RenderObject<'a>>,
     font: &'a font::Font,
-    fonts: &'a std::collections::HashMap<&'static str, font::Font>,
-    text: &str,
+    fonts: &'a HashMap<&'static str, font::Font>,
+    content: &actors::TextContent,
     _px_size: f32,
     scale: [f32; 2],
     fit_width: Option<f32>,
     fit_height: Option<f32>,
+    wrap_width_pixels: Option<i32>,
     max_width: Option<f32>,
     max_height: Option<f32>,
     // NEW: StepMania order semantics (per axis)
     max_w_pre_zoom: bool,
     max_h_pre_zoom: bool,
+    attributes: &[actors::TextAttribute],
     parent: SmRect,
     align: [f32; 2],
     offset: [f32; 2],
     text_align: actors::TextAlign,
     m: &Metrics,
-) -> Vec<RenderObject<'a>> {
-    if text.is_empty() {
-        return vec![];
+    text_cache: &mut TextLayoutCache,
+) {
+    if content.as_str().is_empty() {
+        return;
     }
-    // Optimization: Avoid allocating Vec for lines; iterate twice.
-    let mut line_iter_check = text.lines();
-    if line_iter_check.next().is_none() {
-        return vec![];
+    let layout = text_cache.get_or_build(font, fonts, content, wrap_width_pixels);
+    let num_lines = layout.lines.len();
+    if num_lines == 0 {
+        return;
     }
-
-    #[inline(always)]
-    fn advance_logical(glyph: &font::Glyph) -> i32 {
-        lrint_ties_even(glyph.advance) as i32
-    }
-
-    // 1) Logical (integer) widths like SM: sum integer advances (default glyph if unmapped).
-    let logical_line_widths: Vec<i32> = text
-        .lines()
-        .map(|line| {
-            line.chars()
-                .map(|c| font::find_glyph(font, c, fonts).map_or(0, advance_logical))
-                .sum()
-        })
-        .collect();
-
-    let max_logical_width_i = logical_line_widths.iter().copied().max().unwrap_or(0);
+    let max_logical_width_i = layout.max_logical_width_i;
     let block_w_logical_even = quantize_up_even_i32(max_logical_width_i) as f32;
 
     // 2) Unscaled block cap height + line spacing in logical units
@@ -1209,7 +1943,6 @@ fn layout_text<'a>(
         font.line_spacing as f32
     };
 
-    let num_lines = text.lines().count();
     let block_h_logical_i = if num_lines > 1 {
         font.height + ((num_lines - 1) as i32 * font.line_spacing)
     } else {
@@ -1281,7 +2014,7 @@ fn layout_text<'a>(
     let sx = scale[0] * fit_s * max_s_w;
     let sy = scale[1] * fit_s * max_s_h;
     if sx.abs() < 1e-6 || sy.abs() < 1e-6 {
-        return vec![];
+        return;
     }
 
     // 8) Pixel rounding/snapping
@@ -1316,29 +2049,31 @@ fn layout_text<'a>(
         logical.mul_add(scale, center)
     }
 
-    // Optimization: Use linear scan on simple vec instead of HashMap for texture dims cache
-    let mut dims_cache: Vec<(&str, (f32, f32))> = Vec::with_capacity(4);
+    #[inline(always)]
+    fn glyph_tint(attributes: &[actors::TextAttribute], char_index: usize) -> [f32; 4] {
+        let mut tint = [1.0; 4];
+        for attr in attributes {
+            let end = attr.start.saturating_add(attr.length);
+            if (attr.start..end).contains(&char_index) {
+                tint = attr.color;
+            }
+        }
+        tint
+    }
 
-    let mut objects = Vec::new();
+    out.reserve(layout.glyph_count);
 
-    for (i, line) in text.lines().enumerate() {
+    for line in &layout.lines {
         pen_y_logical += font.height;
         let baseline_local_logical = pen_y_logical as f32;
+        let mut pen_x_logical =
+            start_x_logical(text_align, block_w_logical_even, line.width_i32 as f32);
 
-        let line_w_logical = logical_line_widths[i] as f32;
-        let mut pen_x_logical = start_x_logical(text_align, block_w_logical_even, line_w_logical);
-
-        for ch in line.chars() {
-            let glyph = match font::find_glyph(font, ch, fonts) {
-                Some(g) => g,
-                None => continue,
-            };
-
+        for glyph in &line.glyphs {
             let quad_w = glyph.size[0] * sx;
             let quad_h = glyph.size[1] * sy;
 
-            let draw_quad = !(ch == ' ' && !font.glyph_map.contains_key(&ch));
-            if draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
+            if glyph.draw_quad && quad_w.abs() >= 1e-6 && quad_h.abs() >= 1e-6 {
                 let quad_x_logical = pen_x_logical as f32 + glyph.offset[0];
                 let quad_y_logical = baseline_local_logical + glyph.offset[1];
 
@@ -1358,37 +2093,22 @@ fn layout_text<'a>(
                     center_y, 0.0, 1.0,
                 );
 
-                // Inline atlas_dims with linear scan
-                let (tex_w, tex_h) = {
-                    let key = &glyph.texture_key;
-                    if let Some(&(_, d)) = dims_cache.iter().find(|(k, _)| k == key) {
-                        d
-                    } else {
-                        let d = assets::texture_dims(key)
-                            .map_or((1.0_f32, 1.0_f32), |meta| (meta.w as f32, meta.h as f32));
-                        if dims_cache.len() < 8 {
-                            dims_cache.push((key, d));
-                        }
-                        d
-                    }
-                };
-
-                let uv_scale = [
-                    (glyph.tex_rect[2] - glyph.tex_rect[0]) / tex_w,
-                    (glyph.tex_rect[3] - glyph.tex_rect[1]) / tex_h,
-                ];
-                let uv_offset = [glyph.tex_rect[0] / tex_w, glyph.tex_rect[1] / tex_h];
-
-                objects.push(RenderObject {
+                out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
-                        texture_id: std::borrow::Cow::Borrowed(glyph.texture_key.as_str()),
-                        tint: [1.0; 4],
-                        uv_scale,
-                        uv_offset,
+                        // SAFETY: `glyph.texture_key` was captured from cached font
+                        // storage when the layout was built and remains valid for
+                        // the lifetime of this render-list assembly pass.
+                        texture_id: std::borrow::Cow::Borrowed(unsafe {
+                            str_from_cached_ptr(glyph.texture_key)
+                        }),
+                        tint: glyph_tint(attributes, glyph.char_index),
+                        uv_scale: glyph.uv_scale,
+                        uv_offset: glyph.uv_offset,
                         local_offset: [0.0, 0.0],
                         local_offset_rot_sin_cos: [0.0, 1.0],
                         edge_fade: [0.0; 4],
                     },
+                    texture_handle: renderer::INVALID_TEXTURE_HANDLE,
                     transform,
                     blend: BlendMode::Alpha,
                     z: 0,
@@ -1397,12 +2117,10 @@ fn layout_text<'a>(
                 });
             }
 
-            pen_x_logical += advance_logical(glyph);
+            pen_x_logical += glyph.advance_i32;
         }
         pen_y_logical += line_padding;
     }
-
-    objects
 }
 
 #[inline(always)]
@@ -1452,13 +2170,25 @@ fn clip_objects_range_to_world_masks(
         objects.truncate(start);
         return;
     }
-    let mut kept = Vec::with_capacity(objects.len() - start);
-    for mut obj in objects.drain(start..) {
-        if clip_object_to_world_masks(&mut obj, masks) {
-            kept.push(obj);
+    if let [mask] = masks {
+        clip_objects_range_to_world_rect(objects, start, *mask);
+        return;
+    }
+    let len = objects.len();
+    let mut write = start;
+    for read in start..len {
+        let keep = {
+            let obj = &mut objects[read];
+            clip_object_to_world_masks(obj, masks)
+        };
+        if keep {
+            if write != read {
+                objects.swap(write, read);
+            }
+            write += 1;
         }
     }
-    objects.extend(kept);
+    objects.truncate(write);
 }
 
 #[inline(always)]
@@ -1511,19 +2241,34 @@ fn clip_object_to_world_masks(obj: &mut RenderObject<'_>, masks: &[WorldRect]) -
     }
 }
 
-fn clip_objects_to_world_rect(objects: &mut Vec<RenderObject<'_>>, clip: WorldRect) {
+fn clip_objects_range_to_world_rect(
+    objects: &mut Vec<RenderObject<'_>>,
+    start: usize,
+    clip: WorldRect,
+) {
+    if start >= objects.len() {
+        return;
+    }
     if clip.left >= clip.right || clip.bottom >= clip.top {
-        objects.clear();
+        objects.truncate(start);
         return;
     }
 
-    let mut out = Vec::with_capacity(objects.len());
-    for mut obj in objects.drain(..) {
-        if clip_sprite_object_to_world_rect(&mut obj, clip) {
-            out.push(obj);
+    let len = objects.len();
+    let mut write = start;
+    for read in start..len {
+        let keep = {
+            let obj = &mut objects[read];
+            clip_sprite_object_to_world_rect(obj, clip)
+        };
+        if keep {
+            if write != read {
+                objects.swap(write, read);
+            }
+            write += 1;
         }
     }
-    *objects = out;
+    objects.truncate(write);
 }
 
 fn clip_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: WorldRect) -> bool {
@@ -1746,4 +2491,51 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
     };
     obj.transform = Matrix4::from_scale(1.0);
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fold_sprite_xy_rot, wrap_text_lines_by_words};
+
+    fn boxed_lines(lines: &[&str]) -> Vec<Box<str>> {
+        lines.iter().map(|line| Box::<str>::from(*line)).collect()
+    }
+
+    #[test]
+    fn wrapwidthpixels_wraps_on_spaces() {
+        let lines = wrap_text_lines_by_words("A BB CCC", 3, 1, |word| word.len() as i32);
+        assert_eq!(lines, boxed_lines(&["A", "BB", "CCC"]));
+    }
+
+    #[test]
+    fn wrapwidthpixels_keeps_empty_lines() {
+        let lines = wrap_text_lines_by_words("AA\n\nBB CC", 5, 1, |word| word.len() as i32);
+        assert_eq!(lines, boxed_lines(&["AA", "", "BB CC"]));
+    }
+
+    #[test]
+    fn wrapwidthpixels_keeps_long_word_on_own_line() {
+        let lines = wrap_text_lines_by_words("AAAA BB", 3, 1, |word| word.len() as i32);
+        assert_eq!(lines, boxed_lines(&["AAAA", "BB"]));
+    }
+
+    #[test]
+    fn sprite_rotationy_180_folds_to_horizontal_flip() {
+        let (flip_x, flip_y, size_x, size_y) =
+            fold_sprite_xy_rot(false, false, 22.0, 10.0, 0.0, 180.0);
+        assert!(flip_x);
+        assert!(!flip_y);
+        assert!((size_x - 22.0).abs() < 0.0001);
+        assert!((size_y - 10.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn sprite_rotationx_180_folds_to_vertical_flip() {
+        let (flip_x, flip_y, size_x, size_y) =
+            fold_sprite_xy_rot(false, false, 22.0, 10.0, 180.0, 0.0);
+        assert!(!flip_x);
+        assert!(flip_y);
+        assert!((size_x - 22.0).abs() < 0.0001);
+        assert!((size_y - 10.0).abs() < 0.0001);
+    }
 }
