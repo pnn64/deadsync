@@ -37,6 +37,7 @@ pub struct ChartData {
     pub mines_nonfake: u32,
     pub stamina_counts: StaminaCounts,
     pub total_streams: u32,
+    pub matrix_rating: f64,
     pub max_nps: f64,
     pub sn_detailed_breakdown: String,
     pub sn_partial_breakdown: String,

@@ -170,7 +170,7 @@ thread_local! {
     static UINT_TEXT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(4096));
     static MUSIC_RATE_FMT_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(256));
     static MUSIC_RATE_BANNER_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(128));
-    static PEAK_NPS_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
+    static CHART_INFO_CACHE: RefCell<TextCache<(u8, u32, u64, u64)>> = RefCell::new(HashMap::with_capacity(512));
     static STAMINA_MONO_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
     static STAMINA_CANDLES_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(512));
     static STREAM_TOTAL_CACHE: RefCell<TextCache<(u32, u32)>> = RefCell::new(HashMap::with_capacity(512));
@@ -250,11 +250,42 @@ fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
 }
 
 #[inline(always)]
-fn cached_peak_nps_text(peak_nps: f64) -> Arc<str> {
-    let peak_nps = if peak_nps.is_finite() { peak_nps } else { 0.0 };
-    cached_text(&PEAK_NPS_CACHE, peak_nps.to_bits(), || {
-        format!("Peak NPS: {:.1}", peak_nps.max(0.0))
-    })
+fn cached_chart_info_text(
+    show_peak_nps: bool,
+    show_matrix_rating: bool,
+    meter: u32,
+    peak_nps: f64,
+    matrix_rating: f64,
+) -> Arc<str> {
+    let peak_nps = if peak_nps.is_finite() {
+        peak_nps.max(0.0)
+    } else {
+        0.0
+    };
+    let matrix_rating = if matrix_rating.is_finite() {
+        matrix_rating.max(0.0)
+    } else {
+        0.0
+    };
+    let mut mask = (show_peak_nps as u8) | ((show_matrix_rating as u8) << 1);
+    if mask == 0 {
+        mask = 1;
+    }
+    let matrix_rating_rounded = (matrix_rating * 100.0).round() / 100.0;
+    let matrix_rating_text = if meter >= 11 && matrix_rating_rounded > 0.0 {
+        format!("MR: {matrix_rating_rounded:.2}")
+    } else {
+        "MR: N/A".to_string()
+    };
+    cached_text(
+        &CHART_INFO_CACHE,
+        (mask, meter, peak_nps.to_bits(), matrix_rating.to_bits()),
+        || match mask {
+            0b10 => matrix_rating_text,
+            0b11 => format!("PNPS: {peak_nps:.1} | {matrix_rating_text}"),
+            _ => format!("Peak NPS: {peak_nps:.1}"),
+        },
+    )
 }
 
 #[inline(always)]
@@ -6476,11 +6507,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ];
 
         if let Some(c) = chart {
-            let peak = cached_peak_nps_text(if music_rate.is_finite() {
+            let scaled_peak_nps = if music_rate.is_finite() {
                 c.max_nps * music_rate as f64
             } else {
                 c.max_nps
-            });
+            };
+            let peak = cached_chart_info_text(
+                cfg.select_music_chart_info_peak_nps,
+                cfg.select_music_chart_info_matrix_rating,
+                c.meter,
+                scaled_peak_nps,
+                c.matrix_rating,
+            );
             // Match Simply Love's minimization loop (0 -> 3) based on rendered width.
             let bd_text = asset_manager
                 .with_fonts(|all_fonts| {

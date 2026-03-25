@@ -759,6 +759,8 @@ pub struct Config {
     pub select_music_scorebox_cycle_ex: bool,
     pub select_music_scorebox_cycle_hard_ex: bool,
     pub select_music_scorebox_cycle_tournaments: bool,
+    pub select_music_chart_info_peak_nps: bool,
+    pub select_music_chart_info_matrix_rating: bool,
     pub show_random_courses: bool,
     pub show_most_played_courses: bool,
     pub show_course_individual_scores: bool,
@@ -871,6 +873,8 @@ impl Default for Config {
             select_music_scorebox_cycle_ex: true,
             select_music_scorebox_cycle_hard_ex: true,
             select_music_scorebox_cycle_tournaments: true,
+            select_music_chart_info_peak_nps: true,
+            select_music_chart_info_matrix_rating: false,
             show_random_courses: true,
             show_most_played_courses: true,
             show_course_individual_scores: true,
@@ -1598,6 +1602,22 @@ fn create_default_config_file() -> Result<(), std::io::Error> {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicChartInfoPeakNps={}\n",
+        if default.select_music_chart_info_peak_nps {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicChartInfoMatrixRating={}\n",
+        if default.select_music_chart_info_matrix_rating {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SeparateUnlocksByPlayer={}\n",
         if default.separate_unlocks_by_player {
             "1"
@@ -2231,6 +2251,14 @@ pub fn load() {
                     .get("Options", "SelectMusicScoreboxCycleTournaments")
                     .and_then(|v| v.parse::<u8>().ok())
                     .map_or(default.select_music_scorebox_cycle_tournaments, |v| v != 0);
+                cfg.select_music_chart_info_peak_nps = conf
+                    .get("Options", "SelectMusicChartInfoPeakNps")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.select_music_chart_info_peak_nps, |v| v != 0);
+                cfg.select_music_chart_info_matrix_rating = conf
+                    .get("Options", "SelectMusicChartInfoMatrixRating")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .map_or(default.select_music_chart_info_matrix_rating, |v| v != 0);
                 cfg.auto_screenshot_eval = conf
                     .get("Options", "AutoScreenshotEval")
                     .map(|v| auto_screenshot_mask_from_str(&v))
@@ -3762,6 +3790,22 @@ fn save_without_keymaps() {
         }
     ));
     content.push_str(&format!(
+        "SelectMusicChartInfoPeakNps={}\n",
+        if cfg.select_music_chart_info_peak_nps {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
+        "SelectMusicChartInfoMatrixRating={}\n",
+        if cfg.select_music_chart_info_matrix_rating {
+            "1"
+        } else {
+            "0"
+        }
+    ));
+    content.push_str(&format!(
         "SeparateUnlocksByPlayer={}\n",
         if cfg.separate_unlocks_by_player {
             "1"
@@ -4603,6 +4647,28 @@ pub fn update_select_music_scorebox_cycle_tournaments(enabled: bool) {
             return;
         }
         cfg.select_music_scorebox_cycle_tournaments = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_chart_info_peak_nps(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_chart_info_peak_nps == enabled {
+            return;
+        }
+        cfg.select_music_chart_info_peak_nps = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_select_music_chart_info_matrix_rating(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_chart_info_matrix_rating == enabled {
+            return;
+        }
+        cfg.select_music_chart_info_matrix_rating = enabled;
     }
     save_without_keymaps();
 }

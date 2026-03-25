@@ -290,6 +290,7 @@ fn bench_chart() -> ChartData {
         mines_nonfake: mines,
         stamina_counts: StaminaCounts::default(),
         total_streams: 0,
+        matrix_rating: 0.0,
         max_nps: 12.5,
         sn_detailed_breakdown: String::new(),
         sn_partial_breakdown: String::new(),

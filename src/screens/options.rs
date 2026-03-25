@@ -337,6 +337,7 @@ pub const ITEMS: &[Item] = &[
             "Show Music Wheel Lamps",
             "New Pack Badge",
             "Show Pattern Info",
+            "Chart Info",
             "Music Previews",
             "Show Gameplay Timer",
             "Show Rivals",
@@ -663,6 +664,7 @@ const SELECT_MUSIC_ROW_WHEEL_LAMPS: &str = "Show Music Wheel Lamps";
 const SELECT_MUSIC_ROW_WHEEL_ITL: &str = "ITL Wheel Data";
 const SELECT_MUSIC_ROW_NEW_PACKS: &str = "New Pack Badge";
 const SELECT_MUSIC_ROW_PATTERN_INFO: &str = "Show Pattern Info";
+const SELECT_MUSIC_ROW_CHART_INFO: &str = "Chart Info";
 const SELECT_MUSIC_ROW_PREVIEWS: &str = "Music Previews";
 const SELECT_MUSIC_ROW_PREVIEW_MARKER: &str = "Preview Marker";
 const SELECT_MUSIC_ROW_PREVIEW_LOOP: &str = "Loop Music";
@@ -671,6 +673,7 @@ const SELECT_MUSIC_ROW_SHOW_RIVALS: &str = "Show GS Box";
 const SELECT_MUSIC_ROW_SCOREBOX_PLACEMENT: &str = "GS Box Placement";
 const SELECT_MUSIC_ROW_SCOREBOX_CYCLE: &str = "GS Box Leaderboards";
 const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
+const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 2;
 const MACHINE_ROW_SELECT_PROFILE: &str = "Select Profile";
 const MACHINE_ROW_SELECT_COLOR: &str = "Select Color";
 const MACHINE_ROW_SELECT_STYLE: &str = "Select Style";
@@ -968,11 +971,12 @@ const SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX: usize = 0;
 const SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX: usize = 1;
 const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 2;
 const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 3;
-const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 10;
-const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 12;
-const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 14;
-const SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX: usize = 15;
-const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 16;
+const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 13;
+const SELECT_MUSIC_CHART_INFO_ROW_INDEX: usize = 12;
+const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 15;
+const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 17;
+const SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX: usize = 18;
+const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 19;
 const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
 const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
 const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
@@ -1001,6 +1005,8 @@ const MUSIC_WHEEL_SCROLL_SPEED_CHOICES: [&str; 7] = [
 const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
 const SELECT_MUSIC_SCOREBOX_CYCLE_CHOICES: [&str; SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES] =
     ["ITG", "EX", "H.EX", "Tournaments"];
+const SELECT_MUSIC_CHART_INFO_CHOICES: [&str; SELECT_MUSIC_CHART_INFO_NUM_CHOICES] =
+    ["Peak NPS", "Matrix Rating"];
 
 const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
     (1920, 1080),
@@ -1719,6 +1725,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: SELECT_MUSIC_ROW_CHART_INFO,
+        choices: &SELECT_MUSIC_CHART_INFO_CHOICES,
+        inline: true,
+    },
+    SubRow {
         label: SELECT_MUSIC_ROW_PREVIEWS,
         choices: &["No", "Yes"],
         inline: true,
@@ -1827,6 +1838,14 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Choose whether the lower chart info panel favors Tech, Stamina, or Auto detection.",
             "Recommended: Tech.",
+        ],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_CHART_INFO,
+        help: &[
+            "Choose which chart info metric appears above the breakdown string.",
+            "Use Left/Right to select Peak NPS or Matrix Rating, then Start to toggle each option.",
+            "At least one metric always stays enabled.",
         ],
     },
     Item {
@@ -4281,6 +4300,83 @@ const fn select_music_pattern_info_from_choice(idx: usize) -> SelectMusicPattern
     }
 }
 
+#[inline(always)]
+const fn select_music_chart_info_mask(peak_nps: bool, matrix_rating: bool) -> u8 {
+    (peak_nps as u8) | ((matrix_rating as u8) << 1)
+}
+
+#[inline(always)]
+const fn select_music_chart_info_cursor_index(peak_nps: bool, matrix_rating: bool) -> usize {
+    if peak_nps {
+        0
+    } else if matrix_rating {
+        1
+    } else {
+        0
+    }
+}
+
+#[inline(always)]
+const fn select_music_chart_info_bit_from_choice(idx: usize) -> u8 {
+    if idx < SELECT_MUSIC_CHART_INFO_NUM_CHOICES {
+        1u8 << (idx as u8)
+    } else {
+        0
+    }
+}
+
+#[inline(always)]
+const fn select_music_chart_info_mask_from_config(cfg: &config::Config) -> u8 {
+    select_music_chart_info_mask(
+        cfg.select_music_chart_info_peak_nps,
+        cfg.select_music_chart_info_matrix_rating,
+    )
+}
+
+#[inline(always)]
+fn apply_select_music_chart_info_mask(mask: u8) {
+    config::update_select_music_chart_info_peak_nps((mask & (1u8 << 0)) != 0);
+    config::update_select_music_chart_info_matrix_rating((mask & (1u8 << 1)) != 0);
+}
+
+fn toggle_select_music_chart_info_option(state: &mut State, choice_idx: usize) {
+    let bit = select_music_chart_info_bit_from_choice(choice_idx);
+    if bit == 0 {
+        return;
+    }
+    let mut mask = select_music_chart_info_mask_from_config(&config::get());
+    if (mask & bit) != 0 {
+        if (mask & !bit) == 0 {
+            return;
+        }
+        mask &= !bit;
+    } else {
+        mask |= bit;
+    }
+    apply_select_music_chart_info_mask(mask);
+
+    let clamped = choice_idx.min(SELECT_MUSIC_CHART_INFO_NUM_CHOICES.saturating_sub(1));
+    if let Some(slot) = state
+        .sub_choice_indices_select_music
+        .get_mut(SELECT_MUSIC_CHART_INFO_ROW_INDEX)
+    {
+        *slot = clamped;
+    }
+    if let Some(slot) = state
+        .sub_cursor_indices_select_music
+        .get_mut(SELECT_MUSIC_CHART_INFO_ROW_INDEX)
+    {
+        *slot = clamped;
+    }
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
+#[inline(always)]
+fn select_music_chart_info_enabled_mask() -> u8 {
+    let mask = select_music_chart_info_mask_from_config(&config::get());
+    if mask == 0 { 1 } else { mask }
+}
+
 const fn select_music_itl_wheel_choice_index(mode: SelectMusicItlWheelMode) -> usize {
     match mode {
         SelectMusicItlWheelMode::Off => 0,
@@ -5078,6 +5174,15 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_PATTERN_INFO,
         select_music_pattern_info_choice_index(cfg.select_music_pattern_info_mode),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_CHART_INFO,
+        select_music_chart_info_cursor_index(
+            cfg.select_music_chart_info_peak_nps,
+            cfg.select_music_chart_info_matrix_rating,
+        ),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -7108,15 +7213,22 @@ pub fn handle_input(
                             submenu_visible_row_to_actual(state, kind, selected_row)
                     {
                         let rows = submenu_rows(kind);
-                        if rows.get(row_idx).map(|row| row.label)
-                            == Some(SELECT_MUSIC_ROW_SCOREBOX_CYCLE)
-                        {
+                        let row_label = rows.get(row_idx).map(|row| row.label);
+                        if row_label == Some(SELECT_MUSIC_ROW_SCOREBOX_CYCLE) {
                             let choice_idx = submenu_cursor_indices(state, kind)
                                 .get(row_idx)
                                 .copied()
                                 .unwrap_or(0)
                                 .min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
                             toggle_select_music_scorebox_cycle_option(state, choice_idx);
+                            return ScreenAction::None;
+                        } else if row_label == Some(SELECT_MUSIC_ROW_CHART_INFO) {
+                            let choice_idx = submenu_cursor_indices(state, kind)
+                                .get(row_idx)
+                                .copied()
+                                .unwrap_or(0)
+                                .min(SELECT_MUSIC_CHART_INFO_NUM_CHOICES.saturating_sub(1));
+                            toggle_select_music_chart_info_option(state, choice_idx);
                             return ScreenAction::None;
                         }
                     }
@@ -8621,12 +8733,20 @@ pub fn get_actors(
                                 .copied()
                                 .unwrap_or(0)
                                 .min(layout.texts.len().saturating_sub(1));
+                            let is_chart_info_row = matches!(kind, SubmenuKind::SelectMusic)
+                                && row.label == SELECT_MUSIC_ROW_CHART_INFO;
                             let is_scorebox_cycle_row = matches!(kind, SubmenuKind::SelectMusic)
                                 && row.label == SELECT_MUSIC_ROW_SCOREBOX_CYCLE;
                             let is_auto_screenshot_row = matches!(kind, SubmenuKind::Gameplay)
                                 && row.label == GAMEPLAY_ROW_AUTO_SCREENSHOT;
-                            let is_multi_toggle_row =
-                                is_scorebox_cycle_row || is_auto_screenshot_row;
+                            let is_multi_toggle_row = is_chart_info_row
+                                || is_scorebox_cycle_row
+                                || is_auto_screenshot_row;
+                            let chart_info_enabled_mask = if is_chart_info_row {
+                                select_music_chart_info_enabled_mask()
+                            } else {
+                                0
+                            };
                             let scorebox_enabled_mask = if is_scorebox_cycle_row {
                                 select_music_scorebox_cycle_enabled_mask()
                             } else {
@@ -8649,7 +8769,11 @@ pub fn get_actors(
                                     if is_choice_selected {
                                         selected_left_x = Some(x);
                                     }
-                                    let is_choice_enabled = if is_scorebox_cycle_row {
+                                    let is_choice_enabled = if is_chart_info_row {
+                                        (chart_info_enabled_mask
+                                            & select_music_chart_info_bit_from_choice(idx))
+                                            != 0
+                                    } else if is_scorebox_cycle_row {
                                         (scorebox_enabled_mask
                                             & scorebox_cycle_bit_from_choice(idx))
                                             != 0
@@ -8717,7 +8841,10 @@ pub fn get_actors(
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
                                 for idx in 0..layout.texts.len() {
-                                    let enabled = if is_scorebox_cycle_row {
+                                    let enabled = if is_chart_info_row {
+                                        let bit = select_music_chart_info_bit_from_choice(idx);
+                                        bit != 0 && (chart_info_enabled_mask & bit) != 0
+                                    } else if is_scorebox_cycle_row {
                                         let bit = scorebox_cycle_bit_from_choice(idx);
                                         bit != 0 && (scorebox_enabled_mask & bit) != 0
                                     } else {

@@ -6864,6 +6864,7 @@ mod tests {
             mines_nonfake: 12,
             stamina_counts: StaminaCounts::default(),
             total_streams: 0,
+            matrix_rating: 0.0,
             max_nps: 0.0,
             sn_detailed_breakdown: String::new(),
             sn_partial_breakdown: String::new(),
