@@ -144,6 +144,22 @@ fn itl_score_y(side: profile::PlayerSide, joined_sides: usize) -> f32 {
     }
 }
 
+#[inline(always)]
+fn choose_itl_wheel_score(
+    local_itl: Option<scores::CachedItlScore>,
+    online_ex_hundredths: Option<u32>,
+    online_points: Option<u32>,
+) -> Option<(u32, Option<u32>)> {
+    let ex_hundredths =
+        online_ex_hundredths.or_else(|| local_itl.as_ref().map(|score| score.ex_hundredths))?;
+    let points = if online_ex_hundredths.is_some() {
+        online_points
+    } else {
+        local_itl.map(|score| score.points)
+    };
+    Some((ex_hundredths, points))
+}
+
 // Helper from select_music.rs
 fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [
@@ -579,21 +595,20 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             continue;
                         }
                         let local_itl = scores::get_cached_itl_score_for_song(info, side);
-                        let ex_hundredths = local_itl
-                            .as_ref()
-                            .map(|score| score.ex_hundredths)
-                            .or_else(|| {
-                                itl_chart_hash.and_then(|chart_hash| {
-                                    if is_selected_slot {
-                                        scores::get_or_fetch_itl_self_score_for_side(
-                                            chart_hash, side,
-                                        )
-                                    } else {
-                                        scores::get_cached_itl_self_score_for_side(chart_hash, side)
-                                    }
-                                })
-                            });
-                        let Some(ex_hundredths) = ex_hundredths else {
+                        let online_ex_hundredths = itl_chart_hash.and_then(|chart_hash| {
+                            if is_selected_slot {
+                                scores::get_or_fetch_itl_self_score_for_side(chart_hash, side)
+                            } else {
+                                scores::get_cached_itl_self_score_for_side(chart_hash, side)
+                            }
+                        });
+                        let online_points = online_ex_hundredths.and_then(|online_ex| {
+                            wheel_chart
+                                .and_then(|chart| scores::itl_points_for_chart(chart, online_ex))
+                        });
+                        let Some((ex_hundredths, points)) =
+                            choose_itl_wheel_score(local_itl, online_ex_hundredths, online_points)
+                        else {
                             continue;
                         };
                         match p.itl_wheel_mode {
@@ -611,13 +626,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 ));
                             }
                             SelectMusicItlWheelMode::PointsAndScore => {
-                                let Some(points) =
-                                    local_itl.map(|score| score.points).or_else(|| {
-                                        wheel_chart.and_then(|chart| {
-                                            scores::itl_points_for_chart(chart, ex_hundredths)
-                                        })
-                                    })
-                                else {
+                                let Some(points) = points else {
                                     slot_children.push(act!(text:
                                         font("wendy_monospace_numbers"):
                                         settext(cached_itl_ex_text(ex_hundredths)):
@@ -745,4 +754,52 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     ));
 
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::choose_itl_wheel_score;
+    use crate::game::scores::CachedItlScore;
+
+    #[test]
+    fn choose_itl_wheel_score_prefers_online_tournament_score() {
+        let local = Some(CachedItlScore {
+            ex_hundredths: 9732,
+            clear_type: 4,
+            points: 12_345,
+        });
+
+        assert_eq!(
+            choose_itl_wheel_score(local, Some(9912), Some(19_912)),
+            Some((9912, Some(19_912)))
+        );
+    }
+
+    #[test]
+    fn choose_itl_wheel_score_falls_back_to_local_when_no_online_score() {
+        let local = Some(CachedItlScore {
+            ex_hundredths: 9732,
+            clear_type: 4,
+            points: 12_345,
+        });
+
+        assert_eq!(
+            choose_itl_wheel_score(local, None, None),
+            Some((9732, Some(12_345)))
+        );
+    }
+
+    #[test]
+    fn choose_itl_wheel_score_keeps_online_score_without_points() {
+        let local = Some(CachedItlScore {
+            ex_hundredths: 9732,
+            clear_type: 4,
+            points: 12_345,
+        });
+
+        assert_eq!(
+            choose_itl_wheel_score(local, Some(9912), None),
+            Some((9912, None))
+        );
+    }
 }
