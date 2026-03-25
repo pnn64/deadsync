@@ -5344,17 +5344,26 @@ fn push_leaderboard_pane(
 struct FetchedPlayerLeaderboards {
     data: PlayerLeaderboardData,
     gs_entries: Vec<LeaderboardApiEntry>,
+    itl_self_found: bool,
 }
 
 #[inline(always)]
-fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
-    let entry = entries.iter().find(|entry| entry.is_self).or_else(|| {
+fn leaderboard_self_entry<'a>(
+    entries: &'a [LeaderboardApiEntry],
+    username: &str,
+) -> Option<&'a LeaderboardApiEntry> {
+    entries.iter().find(|entry| entry.is_self).or_else(|| {
         (!username.trim().is_empty()).then(|| {
             entries
                 .iter()
                 .find(|entry| entry.name.eq_ignore_ascii_case(username))
         })?
-    })?;
+    })
+}
+
+#[inline(always)]
+fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
+    let entry = leaderboard_self_entry(entries, username)?;
     if entry.is_fail || !entry.score.is_finite() {
         return None;
     }
@@ -5363,17 +5372,7 @@ fn leaderboard_self_score_10000(entries: &[LeaderboardApiEntry], username: &str)
 
 #[inline(always)]
 fn leaderboard_self_rank(entries: &[LeaderboardApiEntry], username: &str) -> Option<u32> {
-    entries
-        .iter()
-        .find(|entry| entry.is_self)
-        .or_else(|| {
-            (!username.trim().is_empty()).then(|| {
-                entries
-                    .iter()
-                    .find(|entry| entry.name.eq_ignore_ascii_case(username))
-            })?
-        })
-        .map(|entry| entry.rank)
+    leaderboard_self_entry(entries, username).map(|entry| entry.rank)
 }
 
 #[inline(always)]
@@ -5453,17 +5452,10 @@ fn cache_gs_score_from_leaderboard(
     chart_hash: &str,
     gs_entries: &[LeaderboardApiEntry],
 ) {
-    let self_entry = gs_entries.iter().find(|entry| entry.is_self).or_else(|| {
-        gs_entries
-            .iter()
-            .find(|entry| entry.name.eq_ignore_ascii_case(username))
-    });
-    let Some(entry) = self_entry else {
-        set_cached_gs_score_for_profile(
-            profile_id,
-            chart_hash.to_string(),
-            cached_failed_gs_score(),
-        );
+    let Some(entry) = leaderboard_self_entry(gs_entries, username) else {
+        // Select Music and gameplay scoreboxes fetch shallow leaderboard pages.
+        // If the page does not include the player's row, do not clobber an
+        // existing cached GS score and make the wheel fall back to local data.
         return;
     };
     let score = cached_score_from_gs(
@@ -5600,6 +5592,7 @@ fn fetch_player_leaderboards_internal(
     let mut panes = Vec::with_capacity(5);
     let mut gs_entries = Vec::new();
     let mut itl_self_score = None;
+    let mut itl_self_found = false;
     if let Some(player) = decoded.player1 {
         let LeaderboardApiPlayer {
             is_ranked: _is_ranked,
@@ -5631,6 +5624,7 @@ fn fetch_player_leaderboards_internal(
         if let Some(itl) = itl
             && !itl.itl_leaderboard.is_empty()
         {
+            itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
             itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
             let name = if itl.name.trim().is_empty() {
                 "ITL"
@@ -5658,6 +5652,7 @@ fn fetch_player_leaderboards_internal(
             itl_self_score,
         },
         gs_entries,
+        itl_self_found,
     })
 }
 
@@ -5831,12 +5826,14 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
 
             match fetched {
                 Ok(fetched) => {
-                    set_cached_online_itl_self_score(
-                        persistent_profile_id.as_deref(),
-                        key.api_key.as_str(),
-                        key.chart_hash.as_str(),
-                        fetched.data.itl_self_score,
-                    );
+                    if fetched.itl_self_found {
+                        set_cached_online_itl_self_score(
+                            persistent_profile_id.as_deref(),
+                            key.api_key.as_str(),
+                            key.chart_hash.as_str(),
+                            fetched.data.itl_self_score,
+                        );
+                    }
                     if should_auto_populate && let Some(profile_id) = auto_profile_id.as_deref() {
                         cache_gs_score_from_leaderboard(
                             profile_id,
@@ -7488,6 +7485,57 @@ mod tests {
             leaderboard_self_score_10000(&entries, "perfecttaste"),
             Some(9712)
         );
+    }
+
+    #[test]
+    fn cache_gs_score_from_leaderboard_keeps_existing_score_when_self_missing() {
+        let profile_id = "test-profile-missing-self";
+        let chart_hash = "deadbeef";
+        let existing = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 0.9934,
+            lamp_index: Some(1),
+            lamp_judge_count: Some(2),
+        };
+        {
+            let mut state = GS_SCORE_CACHE.lock().unwrap();
+            state.loaded_profiles.insert(
+                profile_id.to_string(),
+                HashMap::from([(chart_hash.to_string(), existing)]),
+            );
+        }
+
+        cache_gs_score_from_leaderboard(
+            profile_id,
+            "PerfectTaste",
+            chart_hash,
+            &[LeaderboardApiEntry {
+                rank: 1,
+                name: "Other".to_string(),
+                machine_tag: None,
+                score: 9999.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+                comments: None,
+            }],
+        );
+
+        let cached = GS_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|scores| scores.get(chart_hash))
+            .copied();
+        assert_eq!(cached, Some(existing));
+
+        GS_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .remove(profile_id);
     }
 
     fn sample_submit_job(show_ex_score: bool) -> GrooveStatsSubmitPlayerJob {
