@@ -4937,51 +4937,6 @@ fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
     audio::play_sfx("assets/sounds/change_value.ogg");
 }
 
-fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
-    let idx = player_idx.min(PLAYER_SLOTS - 1);
-    let row_index = state.selected_row[idx];
-    if let Some(row) = state.rows.get(row_index) {
-        if row.name != ROW_RESULTS_EXTRAS {
-            return;
-        }
-    } else {
-        return;
-    }
-
-    let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 1 {
-        1u8 << (choice_index as u8)
-    } else {
-        0
-    };
-    if bit == 0 {
-        return;
-    }
-
-    if (state.results_extras_active_mask[idx] & bit) != 0 {
-        state.results_extras_active_mask[idx] &= !bit;
-    } else {
-        state.results_extras_active_mask[idx] |= bit;
-    }
-
-    let track_early_judgments = (state.results_extras_active_mask[idx] & (1u8 << 0)) != 0;
-    state.player_profiles[idx].track_early_judgments = track_early_judgments;
-
-    let play_style = crate::game::profile::get_session_play_style();
-    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
-        || idx == session_persisted_player_idx();
-    if should_persist {
-        let side = if idx == P1 {
-            crate::game::profile::PlayerSide::P1
-        } else {
-            crate::game::profile::PlayerSide::P2
-        };
-        crate::game::profile::update_track_early_judgments_for_side(side, track_early_judgments);
-    }
-
-    audio::play_sfx("assets/sounds/change_value.ogg");
-}
-
 fn toggle_error_bar_row(state: &mut State, player_idx: usize) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row_index = state.selected_row[idx];
