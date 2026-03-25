@@ -10,9 +10,9 @@ use crate::game::parsing::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization,
 };
 use crate::game::song::SongData;
-use crate::screens::components::heart_bg;
-use crate::screens::components::notefield::noteskin_model_actor;
-use crate::screens::components::screen_bar::{
+use crate::screens::components::shared::heart_bg;
+use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
+use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::{Screen, ScreenAction};
@@ -346,7 +346,7 @@ pub struct State {
     pub hide_active_mask: [u8; PLAYER_SLOTS],
     // For FA+ Options row: bitmask of which options are enabled.
     // bit0 = Display FA+ Window, bit1 = Display EX Score, bit2 = Display H.EX Score,
-    // bit3 = Display FA+ Pane, bit4 = 10ms Blue Window.
+    // bit3 = Display FA+ Pane, bit4 = 10ms Blue Window, bit5 = 15/10ms Split.
     pub fa_plus_active_mask: [u8; PLAYER_SLOTS],
     // For Early Decent/Way Off Options row: bitmask of which options are enabled.
     // bit0 = Hide Judgments, bit1 = Hide NoteField Flash.
@@ -358,6 +358,9 @@ pub struct State {
     // For Gameplay Extras (More) row: bitmask of which options are enabled.
     // bit0 = Column Cues, bit1 = Display Scorebox.
     pub gameplay_extras_more_active_mask: [u8; PLAYER_SLOTS],
+    // For Results Extras row: bitmask of which options are enabled.
+    // bit0 = Track Early Judgments.
+    pub results_extras_active_mask: [u8; PLAYER_SLOTS],
     // For Life Bar Options row: bitmask of which options are enabled.
     // bit0 = Rainbow Max, bit1 = Responsive Colors, bit2 = Show Life Percentage.
     pub life_bar_options_active_mask: [u8; PLAYER_SLOTS],
@@ -1152,6 +1155,16 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             choice_difficulty_indices: None,
         },
         Row {
+            name: ROW_INDICATOR_SCORE_TYPE.to_string(),
+            choices: vec!["ITG".to_string(), "EX".to_string(), "H.EX".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Choose which score formula the mini indicator tracks:".to_string(),
+                "ITG, EX (FA+), or H.EX (Hard EX).".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Gameplay Extras".to_string(),
             choices: gameplay_extras_choices,
             selected_choice_index: [0; PLAYER_SLOTS],
@@ -1337,6 +1350,15 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec![
                 "Set how early Decent and Way Off judgments are visually represented.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: ROW_RESULTS_EXTRAS.to_string(),
+            choices: vec!["Track Early Judgments".to_string()],
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Show early-hit subtotals and rescored early-hit totals on evaluation.".to_string(),
             ],
             choice_difficulty_indices: None,
         },
@@ -1588,6 +1610,7 @@ fn apply_profile_defaults(
     u8,
     u8,
     u8,
+    u8,
 ) {
     let mut scroll_active_mask: u8 = 0;
     let mut hide_active_mask: u8 = 0;
@@ -1601,6 +1624,7 @@ fn apply_profile_defaults(
     let mut early_dw_active_mask: u8 = 0;
     let mut gameplay_extras_active_mask: u8 = 0;
     let mut gameplay_extras_more_active_mask: u8 = 0;
+    let mut results_extras_active_mask: u8 = 0;
     let mut life_bar_options_active_mask: u8 = 0;
     let mut error_bar_active_mask: u8 =
         crate::game::profile::normalize_error_bar_mask(profile.error_bar_active_mask);
@@ -1946,6 +1970,22 @@ fn apply_profile_defaults(
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Rescore Early Hits") {
         row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 1 } else { 0 };
     }
+    if profile.track_early_judgments {
+        results_extras_active_mask |= 1u8 << 0;
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_RESULTS_EXTRAS) {
+        if results_extras_active_mask != 0 {
+            let first_idx = (0..row.choices.len())
+                .find(|i| {
+                    let bit = 1u8 << (*i as u8);
+                    (results_extras_active_mask & bit) != 0
+                })
+                .unwrap_or(0);
+            row.selected_choice_index[player_idx] = first_idx;
+        } else {
+            row.selected_choice_index[player_idx] = 0;
+        }
+    }
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Mini Indicator") {
         row.selected_choice_index[player_idx] = match profile.mini_indicator {
             crate::game::profile::MiniIndicator::None => 0,
@@ -1955,6 +1995,14 @@ fn apply_profile_defaults(
             crate::game::profile::MiniIndicator::RivalScoring => 4,
             crate::game::profile::MiniIndicator::Pacemaker => 5,
             crate::game::profile::MiniIndicator::StreamProg => 6,
+        }
+        .min(row.choices.len().saturating_sub(1));
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_INDICATOR_SCORE_TYPE) {
+        row.selected_choice_index[player_idx] = match profile.mini_indicator_score_type {
+            crate::game::profile::MiniIndicatorScoreType::Itg => 0,
+            crate::game::profile::MiniIndicatorScoreType::Ex => 1,
+            crate::game::profile::MiniIndicatorScoreType::HardEx => 2,
         }
         .min(row.choices.len().saturating_sub(1));
     }
@@ -2283,6 +2331,7 @@ fn apply_profile_defaults(
         early_dw_active_mask,
         gameplay_extras_active_mask,
         gameplay_extras_more_active_mask,
+        results_extras_active_mask,
         life_bar_options_active_mask,
         error_bar_active_mask,
         error_bar_options_active_mask,
@@ -2369,6 +2418,7 @@ pub fn init(
         early_dw_active_mask_p1,
         gameplay_extras_active_mask_p1,
         gameplay_extras_more_active_mask_p1,
+        results_extras_active_mask_p1,
         life_bar_options_active_mask_p1,
         error_bar_active_mask_p1,
         error_bar_options_active_mask_p1,
@@ -2387,6 +2437,7 @@ pub fn init(
         early_dw_active_mask_p2,
         gameplay_extras_active_mask_p2,
         gameplay_extras_more_active_mask_p2,
+        results_extras_active_mask_p2,
         life_bar_options_active_mask_p2,
         error_bar_active_mask_p2,
         error_bar_options_active_mask_p2,
@@ -2447,6 +2498,7 @@ pub fn init(
             gameplay_extras_more_active_mask_p1,
             gameplay_extras_more_active_mask_p2,
         ],
+        results_extras_active_mask: [results_extras_active_mask_p1, results_extras_active_mask_p2],
         life_bar_options_active_mask: [
             life_bar_options_active_mask_p1,
             life_bar_options_active_mask_p2,
@@ -2521,12 +2573,27 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 fn session_active_players() -> [bool; PLAYER_SLOTS] {
     let play_style = crate::game::profile::get_session_play_style();
     let side = crate::game::profile::get_session_player_side();
+    let joined = [
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P1),
+        crate::game::profile::is_session_side_joined(crate::game::profile::PlayerSide::P2),
+    ];
+    let joined_count = usize::from(joined[P1]) + usize::from(joined[P2]);
     match play_style {
-        crate::game::profile::PlayStyle::Versus => [true, true],
+        crate::game::profile::PlayStyle::Versus => {
+            if joined_count > 0 {
+                joined
+            } else {
+                [true, true]
+            }
+        }
         crate::game::profile::PlayStyle::Single | crate::game::profile::PlayStyle::Double => {
-            match side {
-                crate::game::profile::PlayerSide::P1 => [true, false],
-                crate::game::profile::PlayerSide::P2 => [false, true],
+            if joined_count == 1 {
+                joined
+            } else {
+                match side {
+                    crate::game::profile::PlayerSide::P1 => [true, false],
+                    crate::game::profile::PlayerSide::P2 => [false, true],
+                }
             }
         }
     }
@@ -2560,10 +2627,12 @@ const ROW_CUSTOM_FANTASTIC_WINDOW: &str = "Custom Blue Fantastic Window";
 const ROW_CUSTOM_FANTASTIC_WINDOW_MS: &str = "Custom Blue Fantastic Window (ms)";
 const ROW_CARRY_COMBO: &str = "Carry Combo";
 const ROW_HIDE: &str = "Hide";
+const ROW_RESULTS_EXTRAS: &str = "Results Extras";
 const ROW_COMBO_COLORS: &str = "Combo Colors";
 const ROW_COMBO_COLOR_MODE: &str = "Combo Color Mode";
 const ROW_LIFEMETER_TYPE: &str = "LifeMeter Type";
 const ROW_LIFE_BAR_OPTIONS: &str = "Life Bar Options";
+const ROW_INDICATOR_SCORE_TYPE: &str = "Indicator Score Type";
 
 #[derive(Clone, Copy, Debug)]
 struct RowVisibility {
@@ -2574,6 +2643,7 @@ struct RowVisibility {
     show_density_graph_background: bool,
     show_combo_rows: bool,
     show_lifebar_rows: bool,
+    show_indicator_score_type: bool,
 }
 
 #[inline(always)]
@@ -2602,6 +2672,9 @@ fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
     if row_name == ROW_LIFEMETER_TYPE || row_name == ROW_LIFE_BAR_OPTIONS {
         return visibility.show_lifebar_rows;
     }
+    if row_name == ROW_INDICATOR_SCORE_TYPE {
+        return visibility.show_indicator_score_type;
+    }
     true
 }
 
@@ -2629,6 +2702,9 @@ fn conditional_row_parent(row_name: &str) -> Option<&'static str> {
         || row_name == ROW_LIFE_BAR_OPTIONS
     {
         return Some(ROW_HIDE);
+    }
+    if row_name == ROW_INDICATOR_SCORE_TYPE {
+        return Some("Mini Indicator");
     }
     None
 }
@@ -2760,6 +2836,26 @@ fn lifebar_rows_visible(
     !any_active
 }
 
+fn indicator_score_type_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = rows.iter().find(|r| r.name == "Mini Indicator") else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in 0..PLAYER_SLOTS {
+        if !active[player_idx] {
+            continue;
+        }
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        // Visible for Subtractive(1), Predictive(2), Pace(3)
+        if choice_idx >= 1 && choice_idx <= 3 {
+            return true;
+        }
+    }
+    !any_active
+}
+
 #[inline(always)]
 fn row_visibility(
     rows: &[Row],
@@ -2775,6 +2871,7 @@ fn row_visibility(
         show_density_graph_background: density_graph_background_visible(rows, active),
         show_combo_rows: combo_rows_visible(active, hide_active_mask),
         show_lifebar_rows: lifebar_rows_visible(active, hide_active_mask),
+        show_indicator_score_type: indicator_score_type_visible(rows, active),
     }
 }
 
@@ -2938,6 +3035,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Timing Windows"
         || row_name == ROW_JUDGMENT_TILT
         || row_name == "Mini Indicator"
+        || row_name == ROW_INDICATOR_SCORE_TYPE
         || row_name == "Turn"
         || row_name == "Scroll"
         || row_name == "Hide"
@@ -2949,6 +3047,7 @@ fn row_shows_all_choices_inline(row_name: &str) -> bool {
         || row_name == "Combo Color Mode"
         || row_name == ROW_CARRY_COMBO
         || row_name.starts_with("Gameplay Extras")
+        || row_name == ROW_RESULTS_EXTRAS
         || row_name == "Rescore Early Hits"
         || row_name == ROW_CUSTOM_FANTASTIC_WINDOW
         || row_name == "Early Decent/Way Off Options"
@@ -2981,6 +3080,7 @@ fn row_toggles_with_start(row_name: &str) -> bool {
         || row_name == "Life Bar Options"
         || row_name == "Gameplay Extras"
         || row_name == "Gameplay Extras (More)"
+        || row_name == ROW_RESULTS_EXTRAS
         || row_name == "Error Bar"
         || row_name == "Error Bar Options"
         || row_name == "Measure Counter Options"
@@ -3583,6 +3683,25 @@ fn change_choice_for_player(
                 subtractive_scoring,
                 pacemaker,
                 profile_ref.nps_graph_at_top,
+            );
+        }
+        visibility_changed = true;
+    } else if row_name == ROW_INDICATOR_SCORE_TYPE {
+        let choice = row
+            .choices
+            .get(row.selected_choice_index[player_idx])
+            .map(|s| s.as_str())
+            .unwrap_or("ITG");
+        let score_type = match choice {
+            "EX" => crate::game::profile::MiniIndicatorScoreType::Ex,
+            "H.EX" => crate::game::profile::MiniIndicatorScoreType::HardEx,
+            _ => crate::game::profile::MiniIndicatorScoreType::Itg,
+        };
+        state.player_profiles[player_idx].mini_indicator_score_type = score_type;
+        if should_persist {
+            crate::game::profile::update_mini_indicator_score_type_for_side(
+                persist_side,
+                score_type,
             );
         }
     } else if row_name == "Density Graph Background" {
@@ -4488,7 +4607,7 @@ fn toggle_holds_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 5 {
+    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4534,7 +4653,7 @@ fn toggle_accel_effects_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 5 {
+    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4626,7 +4745,7 @@ fn toggle_appearance_effects_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 5 {
+    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4725,7 +4844,7 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
     }
 
     let choice_index = state.rows[row_index].selected_choice_index[idx];
-    let bit = if choice_index < 6 {
+    let bit = if choice_index < state.rows[row_index].choices.len().min(u8::BITS as usize) {
         1u8 << (choice_index as u8)
     } else {
         0
@@ -4768,6 +4887,51 @@ fn toggle_fa_plus_row(state: &mut State, player_idx: usize) {
         crate::game::profile::update_show_fa_plus_pane_for_side(side, pane_enabled);
         crate::game::profile::update_fa_plus_10ms_blue_window_for_side(side, ten_ms_enabled);
         crate::game::profile::update_split_15_10ms_for_side(side, split_15_10ms_enabled);
+    }
+
+    audio::play_sfx("assets/sounds/change_value.ogg");
+}
+
+fn toggle_results_extras_row(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx];
+    if let Some(row) = state.rows.get(row_index) {
+        if row.name != ROW_RESULTS_EXTRAS {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    let choice_index = state.rows[row_index].selected_choice_index[idx];
+    let bit = if choice_index < 1 {
+        1u8 << (choice_index as u8)
+    } else {
+        0
+    };
+    if bit == 0 {
+        return;
+    }
+
+    if (state.results_extras_active_mask[idx] & bit) != 0 {
+        state.results_extras_active_mask[idx] &= !bit;
+    } else {
+        state.results_extras_active_mask[idx] |= bit;
+    }
+
+    let track_early_judgments = (state.results_extras_active_mask[idx] & (1u8 << 0)) != 0;
+    state.player_profiles[idx].track_early_judgments = track_early_judgments;
+
+    let play_style = crate::game::profile::get_session_play_style();
+    let should_persist = play_style == crate::game::profile::PlayStyle::Versus
+        || idx == session_persisted_player_idx();
+    if should_persist {
+        let side = if idx == P1 {
+            crate::game::profile::PlayerSide::P1
+        } else {
+            crate::game::profile::PlayerSide::P2
+        };
+        crate::game::profile::update_track_early_judgments_for_side(side, track_early_judgments);
     }
 
     audio::play_sfx("assets/sounds/change_value.ogg");
@@ -5115,6 +5279,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         early_dw_active_mask_p1,
         gameplay_extras_active_mask_p1,
         gameplay_extras_more_active_mask_p1,
+        results_extras_active_mask_p1,
         life_bar_options_active_mask_p1,
         error_bar_active_mask_p1,
         error_bar_options_active_mask_p1,
@@ -5133,6 +5298,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         early_dw_active_mask_p2,
         gameplay_extras_active_mask_p2,
         gameplay_extras_more_active_mask_p2,
+        results_extras_active_mask_p2,
         life_bar_options_active_mask_p2,
         error_bar_active_mask_p2,
         error_bar_options_active_mask_p2,
@@ -5161,6 +5327,8 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         gameplay_extras_more_active_mask_p1,
         gameplay_extras_more_active_mask_p2,
     ];
+    state.results_extras_active_mask =
+        [results_extras_active_mask_p1, results_extras_active_mask_p2];
     state.life_bar_options_active_mask = [
         life_bar_options_active_mask_p1,
         life_bar_options_active_mask_p2,
@@ -5319,6 +5487,10 @@ fn handle_start_event(
     }
     if row_name == "Gameplay Extras (More)" {
         toggle_gameplay_extras_more_row(state, player_idx);
+        return None;
+    }
+    if row_name == ROW_RESULTS_EXTRAS {
+        toggle_results_extras_row(state, player_idx);
         return None;
     }
     if row_name == "Error Bar" {
@@ -5483,9 +5655,8 @@ pub fn handle_input(
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let mut actors: Vec<Actor> = Vec::with_capacity(64);
-    let play_style = crate::game::profile::get_session_play_style();
-    let show_p2 = play_style == crate::game::profile::PlayStyle::Versus;
     let active = session_active_players();
+    let show_p2 = active[P1] && active[P2];
     let pane_alpha = state.pane_transition.alpha();
     actors.extend(state.bg.build(heart_bg::Params {
         active_color_index: state.active_color_index,
@@ -5727,14 +5898,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         if row.name.contains('\n') {
             let lines: Vec<&str> = row.name.split('\n').collect();
             if lines.len() == 2 {
-                // First line (e.g., "Music Rate")
                 actors.push(act!(text: font("miso"): settext(lines[0].to_string()):
                     align(0.0, 0.5): xy(title_x, current_row_y - 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                     horizalign(left): maxwidth(title_max_w):
                     z(101)
                 ));
-                // Second line (e.g., "bpm: 120") - smaller and slightly below
                 actors.push(act!(text: font("miso"): settext(lines[1].to_string()):
                     align(0.0, 0.5): xy(title_x, current_row_y + 7.0): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
@@ -5742,7 +5911,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     z(101)
                 ));
             } else {
-                // Fallback for unexpected multi-line format
                 actors.push(act!(text: font("miso"): settext(row.name.clone()):
                     align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                     diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
@@ -5751,7 +5919,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 ));
             }
         } else {
-            // Single-line title (normal case)
             actors.push(act!(text: font("miso"): settext(row.name.clone()):
                 align(0.0, 0.5): xy(title_x, current_row_y): zoom(title_zoom):
                 diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
@@ -5837,7 +6004,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // The active option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
             let spacing = 15.75;
-            // First pass: measure widths to lay out options inline
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
             let mut text_h: f32 = 16.0;
             asset_manager.with_fonts(|all_fonts| {
@@ -5856,7 +6022,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                 });
             });
-            // Build x positions for each option
             let mut x_positions: Vec<f32> = Vec::with_capacity(widths.len());
             {
                 let mut x = choice_inner_left;
@@ -6325,6 +6490,46 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         continue;
                     }
                     let mask = state.gameplay_extras_more_active_mask[player_idx];
+                    if mask == 0 {
+                        continue;
+                    }
+                    let underline_y = underline_y_for(player_idx);
+                    let mut line_color = color::decorative_rgba(player_color_index(player_idx));
+                    line_color[3] *= a;
+                    for idx in 0..row.choices.len() {
+                        let bit = 1u8 << (idx as u8);
+                        if (mask & bit) == 0 {
+                            continue;
+                        }
+                        if let Some(sel_x) = x_positions.get(idx).copied() {
+                            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+                            let underline_w = draw_w.ceil();
+                            actors.push(act!(quad:
+                                align(0.0, 0.5):
+                                xy(sel_x, underline_y):
+                                zoomto(underline_w, line_thickness):
+                                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                                z(101)
+                            ));
+                        }
+                    }
+                }
+            } else if row.name == ROW_RESULTS_EXTRAS {
+                let line_thickness = widescale(2.0, 2.5).round().max(1.0);
+                let offset = widescale(3.0, 4.0);
+                let underline_base_y = current_row_y + text_h * 0.5 + offset;
+                let underline_y_for = |player_idx: usize| {
+                    if active[P1] && active[P2] {
+                        (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
+                    } else {
+                        underline_base_y
+                    }
+                };
+                for player_idx in 0..PLAYER_SLOTS {
+                    if !active[player_idx] {
+                        continue;
+                    }
+                    let mask = state.results_extras_active_mask[player_idx];
                     if mask == 0 {
                         continue;
                     }

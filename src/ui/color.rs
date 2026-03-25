@@ -221,11 +221,6 @@ pub const JUDGMENT_FA_PLUS_WHITE_RGBA: [f32; 4] = rgba_hex("#FFFFFF");
 pub const JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA: [f32; 4] = rgba_hex("#444444");
 pub const JUDGMENT_FA_PLUS_WHITE_GAMEPLAY_DIM_RGBA: [f32; 4] = rgba_hex("#595959");
 
-// 15/10ms split: fainter blue approaching white, used for the visual at 10ms.
-pub const JUDGMENT_SPLIT_10MS_RGBA: [f32; 4] = rgba_hex("#90E5F3");
-pub const JUDGMENT_SPLIT_10MS_DIM_RGBA: [f32; 4] = rgba_hex("#3A5F66");
-pub const JUDGMENT_SPLIT_10MS_EVAL_DIM_RGBA: [f32; 4] = rgba_hex("#284147");
-
 // Arrow Cloud "H.EX" score color.
 pub const HARD_EX_SCORE_RGBA: [f32; 4] = rgba_hex("#FF00CC");
 
