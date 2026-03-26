@@ -7,7 +7,7 @@ use crate::core::gfx::{
     Backend, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, SamplerDesc, Texture as GfxTexture,
     TextureHandle,
 };
-use crate::ui::font::Font;
+use crate::core::ui::font::Font;
 use image::RgbaImage;
 use std::collections::HashMap;
 
