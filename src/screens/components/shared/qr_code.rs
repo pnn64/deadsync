@@ -7,6 +7,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 
 const QR_BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const QR_WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const QR_CACHE_LIMIT: usize = 64;
 
 #[derive(Clone, Debug)]
 struct QrMeshData {
@@ -25,7 +26,13 @@ pub struct QrCodeParams<'a> {
 }
 
 static QR_CACHE: LazyLock<Mutex<HashMap<String, QrMeshData>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+    // Owner: shared UI actor builders behind a mutex.
+    // Lifetime: process/session.
+    // Capacity: 64 entries, saturating once full.
+    // Warmup: first use.
+    // Miss: rebuild QR geometry in memory; no I/O or GPU work here.
+    // Eviction: none. Once full, misses bypass insertion.
+    LazyLock::new(|| Mutex::new(HashMap::with_capacity(QR_CACHE_LIMIT)));
 
 #[inline(always)]
 fn push_quad(out: &mut Vec<MeshVertex>, x: f32, y: f32, w: f32, h: f32, color: [f32; 4]) {
@@ -93,7 +100,9 @@ fn mesh_for(content: &str, size: f32) -> Option<QrMeshData> {
     }
 
     let data = build_qr_mesh(content, size)?;
-    if let Ok(mut cache) = QR_CACHE.lock() {
+    if let Ok(mut cache) = QR_CACHE.lock()
+        && cache.len() < QR_CACHE_LIMIT
+    {
         cache.insert(key, data.clone());
     }
     Some(data)
@@ -133,4 +142,47 @@ pub fn build(params: QrCodeParams<'_>) -> Vec<Actor> {
             },
         ],
     }]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn clear_qr_cache() {
+        QR_CACHE.lock().unwrap().clear();
+    }
+
+    #[test]
+    fn mesh_for_reuses_cached_vertices() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        clear_qr_cache();
+
+        let first = mesh_for("https://example.com/score/1", 96.0).expect("qr should build");
+        let second = mesh_for("https://example.com/score/1", 96.0).expect("qr should reuse");
+
+        assert!(Arc::ptr_eq(&first.vertices, &second.vertices));
+        assert_eq!(QR_CACHE.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn mesh_for_saturates_after_cache_limit() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        clear_qr_cache();
+
+        for i in 0..QR_CACHE_LIMIT {
+            let content = format!("https://example.com/score/{i}");
+            let _ = mesh_for(&content, 96.0).expect("qr should build");
+        }
+
+        let overflow = "https://example.com/score/overflow";
+        let overflow_key = cache_key(overflow, 96.0);
+        let first = mesh_for(overflow, 96.0).expect("overflow qr should build");
+        let second = mesh_for(overflow, 96.0).expect("overflow qr should rebuild");
+
+        assert_eq!(QR_CACHE.lock().unwrap().len(), QR_CACHE_LIMIT);
+        assert!(!QR_CACHE.lock().unwrap().contains_key(&overflow_key));
+        assert!(!Arc::ptr_eq(&first.vertices, &second.vertices));
+    }
 }

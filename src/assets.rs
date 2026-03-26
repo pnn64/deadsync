@@ -607,6 +607,7 @@ fn load_or_build_cached_dynamic_image(
     };
 
     if let Some(rgba) = load_cached_banner_image(&cache_path, path) {
+        // Keep steady-state hits read-only; stale variant cleanup happens on writes.
         return Ok(rgba);
     }
 
@@ -662,6 +663,7 @@ fn ensure_cached_dynamic_image_on_disk(
         return Ok(false);
     };
     if load_cached_banner_image(&cache_path, path).is_some() {
+        // Prewarm reuses should stay read-only for the same reason as runtime hits.
         return Ok(false);
     }
     let rgba = build_cached_banner_rgba(path, opts)?;
