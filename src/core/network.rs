@@ -1,195 +1,117 @@
-use log::{debug, info, warn};
-use serde::Deserialize;
-use std::sync::{Arc, Mutex};
-use std::thread;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use std::error::Error;
+use std::fmt::{self, Display, Formatter};
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
-const BOOGIESTATS_API_BASE_URL: &str = "https://boogiestats.andr.host";
-const GROOVESTATS_QR_BASE_URL: &str = "https://www.groovestats.com";
-const GROOVESTATS_NEW_SESSION_PATH: &str = "new-session.php?chartHashVersion=3";
-const ARROWCLOUD_API_URL: &str = "https://api.arrowcloud.dance/";
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-struct ServicesAllowed {
-    player_scores: bool,
-    player_leaderboards: bool,
-    score_submit: bool,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AgentConfig {
+    pub timeout: Duration,
 }
 
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-struct ApiResponse {
-    services_allowed: ServicesAllowed,
-    services_result: String, // "OK" when healthy
+impl Default for AgentConfig {
+    fn default() -> Self {
+        Self {
+            timeout: DEFAULT_REQUEST_TIMEOUT,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Services {
-    pub get_scores: bool,
-    pub leaderboard: bool,
-    pub auto_submit: bool,
+pub enum NetworkError {
+    Timeout,
+    HttpStatus(u16),
+    Request(String),
+    Decode(String),
 }
 
-#[derive(Debug, Clone)]
-pub enum ConnectionStatus {
-    Pending,
-    Connected(Services),
-    Error(String),
-}
-
-#[derive(Debug, Clone)]
-pub enum ArrowCloudConnectionStatus {
-    Pending,
-    Connected,
-    Error(String),
-}
-
-static CONNECTION_STATUS: std::sync::LazyLock<Arc<Mutex<ConnectionStatus>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(ConnectionStatus::Pending)));
-static ARROWCLOUD_CONNECTION_STATUS: std::sync::LazyLock<Arc<Mutex<ArrowCloudConnectionStatus>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(ArrowCloudConnectionStatus::Pending)));
-
-pub fn get_status() -> ConnectionStatus {
-    CONNECTION_STATUS.lock().unwrap().clone()
-}
-
-pub fn get_arrowcloud_status() -> ArrowCloudConnectionStatus {
-    ARROWCLOUD_CONNECTION_STATUS.lock().unwrap().clone()
-}
-
-pub fn is_boogiestats_active() -> bool {
-    let cfg = crate::config::get();
-    cfg.enable_groovestats && cfg.enable_boogiestats
-}
-
-pub fn groovestats_service_name() -> &'static str {
-    if is_boogiestats_active() {
-        "BoogieStats"
-    } else {
-        "GrooveStats"
+impl Display for NetworkError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Timeout => f.write_str("request timed out"),
+            Self::HttpStatus(status) => write!(f, "http status {status}"),
+            Self::Request(message) => f.write_str(message),
+            Self::Decode(message) => write!(f, "decode error: {message}"),
+        }
     }
 }
 
-pub fn groovestats_api_base_url() -> &'static str {
-    if is_boogiestats_active() {
-        BOOGIESTATS_API_BASE_URL
+impl Error for NetworkError {}
+
+#[inline(always)]
+fn is_timeout_text(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    lower.contains("timeout") || lower.contains("timed out")
+}
+
+#[inline(always)]
+fn request_error(message: String) -> NetworkError {
+    if is_timeout_text(message.as_str()) {
+        NetworkError::Timeout
     } else {
-        GROOVESTATS_API_BASE_URL
+        NetworkError::Request(message)
     }
 }
 
-pub fn groovestats_qr_base_url() -> &'static str {
-    GROOVESTATS_QR_BASE_URL
+#[inline(always)]
+fn ensure_success(status: u16) -> Result<(), NetworkError> {
+    if (200..300).contains(&status) {
+        Ok(())
+    } else {
+        Err(NetworkError::HttpStatus(status))
+    }
 }
 
-pub fn groovestats_player_leaderboards_url() -> String {
-    format!("{}/player-leaderboards.php", groovestats_api_base_url())
-}
-
-fn groovestats_new_session_url() -> String {
-    format!(
-        "{}/{}",
-        groovestats_api_base_url(),
-        GROOVESTATS_NEW_SESSION_PATH
-    )
-}
-
-fn set_status(new_status: ConnectionStatus) {
-    *CONNECTION_STATUS.lock().unwrap() = new_status;
-}
-
-fn set_arrowcloud_status(new_status: ArrowCloudConnectionStatus) {
-    *ARROWCLOUD_CONNECTION_STATUS.lock().unwrap() = new_status;
-}
-
-/// Exposes the globally configured ureq Agent for other network requests.
-pub fn get_agent() -> ureq::Agent {
+pub fn build_agent(config: AgentConfig) -> ureq::Agent {
     ureq::Agent::config_builder()
-        .timeout_global(Some(REQUEST_TIMEOUT))
+        .timeout_global(Some(config.timeout))
         .build()
         .into()
 }
 
-pub fn init() {
-    let cfg = crate::config::get();
-
-    if cfg.enable_groovestats {
-        set_status(ConnectionStatus::Pending);
-        debug!(
-            "Initializing {} network check...",
-            groovestats_service_name()
-        );
-        thread::spawn(perform_check);
-    } else {
-        set_status(ConnectionStatus::Error("Disabled".into()));
-    }
-
-    if cfg.enable_arrowcloud {
-        set_arrowcloud_status(ArrowCloudConnectionStatus::Pending);
-        debug!("Initializing ArrowCloud network check...");
-        thread::spawn(perform_arrowcloud_check);
-    } else {
-        set_arrowcloud_status(ArrowCloudConnectionStatus::Error("Disabled".into()));
-    }
+pub fn get_agent() -> ureq::Agent {
+    build_agent(AgentConfig::default())
 }
 
-fn perform_check() {
-    let service_name = groovestats_service_name();
-    debug!("Performing {service_name} connectivity check...");
-
-    let agent = get_agent();
-    let api_url = groovestats_new_session_url();
-    match agent.get(&api_url).call() {
-        Ok(resp) => {
-            let mut body = resp.into_body();
-            match body.read_json::<ApiResponse>() {
-                Ok(data) => {
-                    if data.services_result == "OK" {
-                        let services = Services {
-                            get_scores: data.services_allowed.player_scores,
-                            leaderboard: data.services_allowed.player_leaderboards,
-                            auto_submit: data.services_allowed.score_submit,
-                        };
-                        info!(
-                            "Connected to {service_name} (scores={}, leaderboards={}, autosubmit={}).",
-                            services.get_scores, services.leaderboard, services.auto_submit
-                        );
-                        set_status(ConnectionStatus::Connected(services));
-                    } else {
-                        warn!("servicesResult != OK");
-                        set_status(ConnectionStatus::Error("Service not OK".into()));
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to parse {service_name} response: {e}");
-                    set_status(ConnectionStatus::Error("Failed to Parse".into()));
-                }
-            }
-        }
-        Err(e) => {
-            warn!("HTTP error to {service_name}: {e}");
-            set_status(ConnectionStatus::Error(format!("HTTP error: {e}")));
-        }
-    }
+pub fn get_json<T>(url: &str) -> Result<T, NetworkError>
+where
+    T: DeserializeOwned,
+{
+    let response = get_agent()
+        .get(url)
+        .call()
+        .map_err(|error| request_error(error.to_string()))?;
+    ensure_success(response.status().as_u16())?;
+    response
+        .into_body()
+        .read_json()
+        .map_err(|error| NetworkError::Decode(error.to_string()))
 }
 
-fn perform_arrowcloud_check() {
-    debug!("Performing ArrowCloud connectivity check...");
+pub fn post_json<B, T>(url: &str, body: &B) -> Result<T, NetworkError>
+where
+    B: Serialize,
+    T: DeserializeOwned,
+{
+    let response = get_agent()
+        .post(url)
+        .header("Content-Type", "application/json")
+        .send_json(body)
+        .map_err(|error| request_error(error.to_string()))?;
+    ensure_success(response.status().as_u16())?;
+    response
+        .into_body()
+        .read_json()
+        .map_err(|error| NetworkError::Decode(error.to_string()))
+}
 
-    let agent = get_agent();
-    match agent.get(ARROWCLOUD_API_URL).call() {
-        Ok(_) => {
-            info!("Connected to ArrowCloud.");
-            set_arrowcloud_status(ArrowCloudConnectionStatus::Connected);
-        }
-        Err(e) => {
-            warn!("HTTP error to ArrowCloud: {e}");
-            set_arrowcloud_status(ArrowCloudConnectionStatus::Error(format!(
-                "HTTP error: {e}"
-            )));
-        }
-    }
+pub fn spawn_request<F, T>(task: F) -> JoinHandle<T>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    thread::spawn(task)
 }

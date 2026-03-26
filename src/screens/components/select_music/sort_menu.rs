@@ -1,8 +1,8 @@
 use crate::act;
 use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::network::{self, ConnectionStatus};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::downloads;
+use crate::game::online::{self as network, ConnectionStatus};
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::SongData;

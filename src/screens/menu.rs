@@ -1,8 +1,8 @@
 use crate::act;
 // Screen navigation is handled in app.rs
 use crate::core::input::{InputEvent, RawKeyboardEvent, VirtualAction};
-use crate::core::network::{self, ArrowCloudConnectionStatus, ConnectionStatus};
 use crate::game::course::get_course_cache;
+use crate::game::online::{self as network, ArrowCloudConnectionStatus, ConnectionStatus};
 use crate::game::song::get_song_cache;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};

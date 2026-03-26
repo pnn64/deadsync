@@ -4,6 +4,7 @@ use crate::core::network;
 use crate::game::downloads;
 use crate::game::gameplay;
 use crate::game::judgment;
+use crate::game::online;
 use crate::game::profile::{self, Profile};
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
@@ -854,8 +855,8 @@ pub fn is_gs_get_scores_service_allowed() -> bool {
         return false;
     }
     matches!(
-        network::get_status(),
-        network::ConnectionStatus::Connected(services) if services.get_scores
+        online::get_status(),
+        online::ConnectionStatus::Connected(services) if services.get_scores
     )
 }
 
@@ -2501,14 +2502,6 @@ fn current_itl_score_hundredths(gs: &gameplay::State, player_idx: usize) -> u32 
     itl_ex_hundredths(ex_percent)
 }
 
-#[inline(always)]
-fn groovestats_submit_url() -> String {
-    format!(
-        "{}/score-submit.php",
-        network::groovestats_api_base_url().trim_end_matches('/')
-    )
-}
-
 fn groovestats_reason_lines(
     checks: &[bool; GROOVESTATS_REASON_COUNT],
     bad: &[String],
@@ -2667,7 +2660,7 @@ fn groovestats_manual_qr_url_from_gameplay(
         return None;
     };
     groovestats_manual_qr_url(
-        network::groovestats_qr_base_url(),
+        online::groovestats_qr_base_url(),
         gs.charts[player_idx].short_hash.as_str(),
         GROOVESTATS_CHART_HASH_VERSION,
         &payload.judgment_counts,
@@ -3678,9 +3671,9 @@ fn log_body_snippet(text: &str) -> String {
 fn submit_groovestats_request(
     job: &GrooveStatsSubmitRequest,
 ) -> Result<GrooveStatsSubmitApiResponse, GrooveStatsSubmitError> {
-    let service_name = network::groovestats_service_name();
+    let service_name = online::groovestats_service_name();
     let mut request = network::get_agent()
-        .post(&groovestats_submit_url())
+        .post(&online::groovestats_score_submit_url())
         .header("Content-Type", "application/json");
     for (name, value) in &job.headers {
         request = request.header(name, value);
@@ -3759,7 +3752,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     );
                     warn!(
                         "{} submit response omitted player{} for {:?} ({}).",
-                        network::groovestats_service_name(),
+                        online::groovestats_service_name(),
                         player.slot,
                         player.side,
                         player.chart_hash
@@ -3779,7 +3772,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     );
                     warn!(
                         "{} submit response hash mismatch for {:?}: expected {}, got {}.",
-                        network::groovestats_service_name(),
+                        online::groovestats_service_name(),
                         player.side,
                         player.chart_hash,
                         player_response.chart_hash
@@ -3814,7 +3807,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                 handle_submit_player_unlocks(player, player_response);
                 debug!(
                     "{} submit succeeded for {:?} ({}) result='{}'",
-                    network::groovestats_service_name(),
+                    online::groovestats_service_name(),
                     player.side,
                     player.chart_hash,
                     player_response.result
@@ -3890,36 +3883,36 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
     if gs.autoplay_used {
         debug!(
             "Skipping {} submit: autoplay/replay was used.",
-            network::groovestats_service_name()
+            online::groovestats_service_name()
         );
         return;
     }
     if gs.course_display_totals.is_some() {
         debug!(
             "Skipping {} submit: course mode is unsupported by the old submit API.",
-            network::groovestats_service_name()
+            online::groovestats_service_name()
         );
         return;
     }
     if gs.song.has_lua {
         debug!(
             "Skipping {} submit: simfile relies on lua.",
-            network::groovestats_service_name()
+            online::groovestats_service_name()
         );
         return;
     }
 
-    let network::ConnectionStatus::Connected(services) = network::get_status() else {
+    let online::ConnectionStatus::Connected(services) = online::get_status() else {
         debug!(
             "Skipping {} submit: service connection is not ready.",
-            network::groovestats_service_name()
+            online::groovestats_service_name()
         );
         return;
     };
     if !services.auto_submit {
         debug!(
             "Skipping {} submit: auto-submit is not enabled by the service.",
-            network::groovestats_service_name()
+            online::groovestats_service_name()
         );
         return;
     }
@@ -3948,7 +3941,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         {
             debug!(
                 "Skipping {} submit for {:?} ({}): {}.",
-                network::groovestats_service_name(),
+                online::groovestats_service_name(),
                 side,
                 chart.short_hash,
                 reason
@@ -3958,7 +3951,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         if !profile.groovestats_is_pad_player {
             debug!(
                 "Skipping {} submit for {:?} ({}): profile is not marked as a pad player.",
-                network::groovestats_service_name(),
+                online::groovestats_service_name(),
                 side,
                 chart.short_hash
             );
@@ -3971,7 +3964,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         if !passed {
             debug!(
                 "Skipping {} submit for {:?} ({}): song was not passed.",
-                network::groovestats_service_name(),
+                online::groovestats_service_name(),
                 side,
                 chart.short_hash
             );
@@ -4045,7 +4038,7 @@ pub fn retry_timed_out_groovestats_submit(chart_hash: &str, side: profile::Playe
     if !cfg.enable_groovestats {
         return false;
     }
-    let network::ConnectionStatus::Connected(services) = network::get_status() else {
+    let online::ConnectionStatus::Connected(services) = online::get_status() else {
         return false;
     };
     if !services.auto_submit {
@@ -4070,7 +4063,7 @@ pub fn retry_timed_out_groovestats_submit(chart_hash: &str, side: profile::Playe
     groovestats_arm_submit_event_ui(side, hash, token);
     debug!(
         "Retrying {} submit for {:?} ({}).",
-        network::groovestats_service_name(),
+        online::groovestats_service_name(),
         side,
         hash
     );
@@ -4081,7 +4074,6 @@ pub fn retry_timed_out_groovestats_submit(chart_hash: &str, side: profile::Playe
 const ARROWCLOUD_BODY_VERSION: &str = "1.4";
 const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
 const ARROWCLOUD_ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
-const ARROWCLOUD_SUBMIT_BASE_URL: &str = "https://api.arrowcloud.dance";
 const ARROWCLOUD_LIFEBAR_POINTS: usize = 100;
 const ARROWCLOUD_ACCEL_NAMES: [&str; 5] = ["Boost", "Brake", "Wave", "Expand", "Boomerang"];
 const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
@@ -4726,18 +4718,6 @@ fn arrowcloud_payload_for_player(
 }
 
 #[inline(always)]
-fn arrowcloud_submit_url(chart_hash: &str) -> Option<String> {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "{}/v1/chart/{hash}/play",
-        ARROWCLOUD_SUBMIT_BASE_URL.trim_end_matches('/')
-    ))
-}
-
-#[inline(always)]
 fn submit_arrowcloud_payload(
     side: profile::PlayerSide,
     api_key: &str,
@@ -4750,7 +4730,7 @@ fn submit_arrowcloud_payload(
             message: "missing ArrowCloud API key".to_string(),
         });
     }
-    let Some(url) = arrowcloud_submit_url(payload.hash.as_str()) else {
+    let Some(url) = online::arrowcloud_submit_url(payload.hash.as_str()) else {
         return Err(ArrowCloudSubmitError {
             status: ArrowCloudSubmitUiStatus::SubmitFailed,
             message: "missing chart hash".to_string(),
@@ -4868,7 +4848,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         debug!("Skipping ArrowCloud submit: simfile relies on lua.");
         return;
     }
-    if let network::ArrowCloudConnectionStatus::Error(msg) = network::get_arrowcloud_status() {
+    if let online::ArrowCloudConnectionStatus::Error(msg) = online::get_arrowcloud_status() {
         warn!("Skipping ArrowCloud submit due to connection status error: {msg}");
         return;
     }
@@ -4933,7 +4913,7 @@ pub fn retry_timed_out_arrowcloud_submit(chart_hash: &str, side: profile::Player
     if !cfg.enable_arrowcloud {
         return false;
     }
-    if let network::ArrowCloudConnectionStatus::Error(_) = network::get_arrowcloud_status() {
+    if let online::ArrowCloudConnectionStatus::Error(_) = online::get_arrowcloud_status() {
         return false;
     }
     let Some(status) = get_arrowcloud_submit_ui_status_for_side(hash, side) else {
@@ -5134,7 +5114,6 @@ static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCach
     std::sync::LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
 
 const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
-const ARROWCLOUD_LEADERBOARDS_BASE_URL: &str = "https://api.arrowcloud.dance";
 const ARROWCLOUD_HARD_EX_MIN_PER_PAGE: usize = 16;
 
 #[derive(Deserialize, Debug)]
@@ -5518,10 +5497,9 @@ fn fetch_arrowcloud_hard_ex_pane(
     // Pull a wider page so scorebox views can always include those rows.
     let max_entries = max_entries.max(1).max(ARROWCLOUD_HARD_EX_MIN_PER_PAGE);
     let max_entries = max_entries.to_string();
-    let api_url = format!(
-        "{}/v1/chart/{chart_hash}/leaderboards",
-        ARROWCLOUD_LEADERBOARDS_BASE_URL.trim_end_matches('/')
-    );
+    let Some(api_url) = online::arrowcloud_leaderboards_url(chart_hash) else {
+        return Ok(None);
+    };
     let bearer = format!("Bearer {api_key}");
     let response = network::get_agent()
         .get(&api_url)
@@ -5576,7 +5554,7 @@ fn fetch_player_leaderboards_internal(
     let max_entries = max_entries.max(1);
     let max_entries_str = max_entries.to_string();
     let agent = network::get_agent();
-    let api_url = network::groovestats_player_leaderboards_url();
+    let api_url = online::groovestats_player_leaderboards_url();
     let response = agent
         .get(&api_url)
         .header("x-api-key-player-1", api_key)
@@ -5736,8 +5714,8 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
     let include_arrowcloud = cfg.enable_arrowcloud
         && !arrowcloud_api_key.is_empty()
         && matches!(
-            network::get_arrowcloud_status(),
-            network::ArrowCloudConnectionStatus::Connected
+            online::get_arrowcloud_status(),
+            online::ArrowCloudConnectionStatus::Connected
         );
     let persistent_profile_id = profile::active_local_profile_id_for_side(side);
     let auto_populate = cfg.auto_populate_gs_scores;
@@ -5762,18 +5740,18 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
         cache.by_key.get(&key).map(cache_snapshot_from_entry)
     };
 
-    match network::get_status() {
-        network::ConnectionStatus::Pending => {
+    match online::get_status() {
+        online::ConnectionStatus::Pending => {
             return Some(cached_snapshot.unwrap_or_else(loading_player_leaderboard_snapshot));
         }
-        network::ConnectionStatus::Connected(services) if !services.get_scores => {
+        online::ConnectionStatus::Connected(services) if !services.get_scores => {
             return Some(cached_snapshot.unwrap_or(CachedPlayerLeaderboardData {
                 loading: false,
                 data: None,
                 error: Some("Disabled".to_string()),
             }));
         }
-        network::ConnectionStatus::Error(error) => {
+        online::ConnectionStatus::Error(error) => {
             return Some(cached_snapshot.unwrap_or(CachedPlayerLeaderboardData {
                 loading: false,
                 data: None,
@@ -6528,9 +6506,6 @@ pub fn score_to_grade(score: f64) -> Grade {
 const SCORE_IMPORT_RATE_LIMIT_PER_SECOND: u32 = 3;
 const SCORE_IMPORT_REQUEST_INTERVAL: Duration = Duration::from_millis(334);
 const SCORE_IMPORT_PROGRESS_LOG_EVERY: usize = 100;
-const SCORE_IMPORT_GS_BASE_URL: &str = "https://api.groovestats.com";
-const SCORE_IMPORT_BS_BASE_URL: &str = "https://boogiestats.andr.host";
-const SCORE_IMPORT_AC_BASE_URL: &str = "https://api.arrowcloud.dance";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScoreImportEndpoint {
@@ -6556,9 +6531,9 @@ impl ScoreImportEndpoint {
 
     fn player_leaderboards_url(self) -> String {
         let base = match self {
-            Self::GrooveStats => SCORE_IMPORT_GS_BASE_URL,
-            Self::BoogieStats => SCORE_IMPORT_BS_BASE_URL,
-            Self::ArrowCloud => SCORE_IMPORT_AC_BASE_URL,
+            Self::GrooveStats => online::groovestats_primary_api_base_url(),
+            Self::BoogieStats => online::boogiestats_api_base_url(),
+            Self::ArrowCloud => online::arrowcloud_api_base_url(),
         };
         format!("{}/player-leaderboards.php", base.trim_end_matches('/'))
     }
@@ -6672,7 +6647,7 @@ fn fetch_player_score_from_api(
     profile: &Profile,
     chart_hash: &str,
 ) -> Result<Option<CachedScore>, Box<dyn Error + Send + Sync>> {
-    let endpoint = if crate::core::network::is_boogiestats_active() {
+    let endpoint = if crate::game::online::is_boogiestats_active() {
         ScoreImportEndpoint::BoogieStats
     } else {
         ScoreImportEndpoint::GrooveStats

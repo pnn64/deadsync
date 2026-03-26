@@ -7886,7 +7886,7 @@ impl ApplicationHandler<UserEvent> for App {
                 event_loop.exit();
             }
             // After all initial loading is complete, start network checks.
-            crate::core::network::init();
+            crate::game::online::init();
         }
     }
 

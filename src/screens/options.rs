@@ -6888,10 +6888,10 @@ fn apply_submenu_choice_delta(
             let enabled = yes_no_from_choice(new_index);
             config::update_enable_groovestats(enabled);
             // Re-run connectivity logic so toggling this option applies immediately.
-            crate::core::network::init();
+            crate::game::online::init();
         } else if row.label == GS_ROW_ENABLE_BOOGIE {
             config::update_enable_boogiestats(yes_no_from_choice(new_index));
-            crate::core::network::init();
+            crate::game::online::init();
         } else if row.label == GS_ROW_AUTO_POPULATE {
             config::update_auto_populate_gs_scores(yes_no_from_choice(new_index));
         } else if row.label == GS_ROW_AUTO_DOWNLOAD_UNLOCKS {
@@ -6903,7 +6903,7 @@ fn apply_submenu_choice_delta(
         let row = &rows[row_index];
         if row.label == ARROWCLOUD_ROW_ENABLE {
             config::update_enable_arrowcloud(yes_no_from_choice(new_index));
-            crate::core::network::init();
+            crate::game::online::init();
         }
     } else if matches!(kind, SubmenuKind::ScoreImport) {
         let row = &rows[row_index];

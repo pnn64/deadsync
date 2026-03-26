@@ -6,6 +6,7 @@ pub mod judgment;
 pub mod known_packs;
 pub mod life;
 pub mod note;
+pub mod online;
 pub mod parsing;
 pub mod profile;
 pub mod scores;

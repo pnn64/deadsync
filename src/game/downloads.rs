@@ -1,5 +1,6 @@
 use crate::config;
-use crate::core::network::{self, ConnectionStatus};
+use crate::core::network;
+use crate::game::online::{self, ConnectionStatus};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -56,7 +57,7 @@ struct UnlockCacheFile(HashMap<String, HashMap<String, bool>>);
 
 pub fn sort_menu_available() -> bool {
     config::get().auto_download_unlocks
-        && matches!(network::get_status(), ConnectionStatus::Connected(_))
+        && matches!(online::get_status(), ConnectionStatus::Connected(_))
 }
 
 pub fn snapshots() -> Vec<DownloadSnapshot> {
