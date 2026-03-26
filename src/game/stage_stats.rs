@@ -28,6 +28,7 @@ pub struct PlayerStageSummary {
     pub hard_ex_score_percent: f64,
     /// Total hit tapnotes this stage (counts jumps/hands as >1).
     pub notes_hit: u32,
+    pub calories_burned: f32,
     pub window_counts: WindowCounts,
     pub window_counts_10ms: WindowCounts,
     pub show_w0: bool,

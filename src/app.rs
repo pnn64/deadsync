@@ -1641,6 +1641,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         let mut weighted_hard_ex = 0.0_f64;
         let mut weight_sum = 0.0_f64;
         let mut notes_hit: u32 = 0;
+        let mut calories_burned = 0.0_f32;
         let mut meter_sum = 0u32;
         let mut meter_count = 0u32;
         let mut any_failed = false;
@@ -1667,6 +1668,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             weighted_hard_ex += player.hard_ex_score_percent * weight;
             weight_sum += weight;
             notes_hit = notes_hit.saturating_add(player.notes_hit);
+            calories_burned += player.calories_burned.max(0.0);
             meter_sum = meter_sum.saturating_add(player.chart.meter);
             meter_count = meter_count.saturating_add(1);
             any_failed |= player.grade == scores::Grade::Failed;
@@ -1733,6 +1735,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             ex_score_percent,
             hard_ex_score_percent,
             notes_hit,
+            calories_burned,
             window_counts: counts,
             window_counts_10ms: counts_10ms,
             show_w0,
@@ -1857,6 +1860,7 @@ fn score_info_from_stage(
         window_counts_10ms: player.window_counts_10ms,
         ex_score_percent: player.ex_score_percent,
         hard_ex_score_percent: player.hard_ex_score_percent,
+        calories_burned: player.calories_burned,
         column_judgments: Vec::new(),
         noteskin: None,
         show_fa_plus_window: player.show_w0,
@@ -2066,6 +2070,7 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         ex_score_percent: si.ex_score_percent,
         hard_ex_score_percent: si.hard_ex_score_percent,
         notes_hit: notes_hit(si),
+        calories_burned: si.calories_burned,
         window_counts: si.window_counts,
         window_counts_10ms: si.window_counts_10ms,
         show_w0: (si.show_fa_plus_window && si.show_fa_plus_pane) || si.show_ex_score,
@@ -3918,7 +3923,7 @@ impl App {
         if let Some(stage) = stage_summary.as_ref() {
             for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
                 if let Some(p) = stage.players.get(side_ix(side)).and_then(|p| p.as_ref()) {
-                    profile::add_stage_calories_for_side(side, p.notes_hit);
+                    profile::add_stage_calories_for_side(side, p.calories_burned);
                 }
             }
             self.state.session.played_stages.push(stage.clone());

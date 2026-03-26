@@ -116,6 +116,7 @@ fn bench_score_info() -> ScoreInfo {
         },
         ex_score_percent: 99.14,
         hard_ex_score_percent: 98.43,
+        calories_burned: 412.7,
         column_judgments: Vec::new(),
         noteskin: None,
         show_fa_plus_window: true,

@@ -256,6 +256,7 @@ pub struct ScoreInfo {
     pub ex_score_percent: f64,
     // Arrow Cloud style "H.EX" score percentage (0.00–100.00).
     pub hard_ex_score_percent: f64,
+    pub calories_burned: f32,
     // Per-column tap note judgment breakdown (Pane3 in Simply Love).
     pub column_judgments: Vec<ColumnJudgments>,
     // Noteskin used during gameplay, for Pane3 column previews.
@@ -943,6 +944,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 window_counts_10ms,
                 ex_score_percent,
                 hard_ex_score_percent,
+                calories_burned: p.calories_burned,
                 column_judgments,
                 noteskin,
                 show_fa_plus_window: prof.show_fa_plus_window,

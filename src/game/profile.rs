@@ -1,7 +1,7 @@
 pub use super::scroll::ScrollSpeedSetting;
 use crate::config::{self, SimpleIni};
 use bincode::{Decode, Encode};
-use chrono::Local;
+use chrono::{Datelike, Local};
 use log::{debug, info, warn};
 use std::collections::HashSet;
 use std::fs;
@@ -10,6 +10,22 @@ use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+
+pub const DEFAULT_WEIGHT_POUNDS: i32 = 120;
+pub const DEFAULT_BIRTH_YEAR: i32 = 1995;
+
+#[inline(always)]
+const fn clamp_weight_pounds(weight_pounds: i32) -> i32 {
+    if weight_pounds == 0 {
+        0
+    } else if weight_pounds < 20 {
+        20
+    } else if weight_pounds > 1000 {
+        1000
+    } else {
+        weight_pounds
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Perspective {
@@ -1221,6 +1237,8 @@ pub struct Profile {
     pub display_name: String,
     pub player_initials: String,
     // Profile stats (Simply Love / StepMania semantics).
+    pub weight_pounds: i32,
+    pub birth_year: i32,
     pub calories_burned_today: f32,
     pub calories_burned_day: String,
     pub ignore_step_count_calories: bool,
@@ -1352,6 +1370,8 @@ impl Default for Profile {
         Self {
             display_name: "Player 1".to_string(),
             player_initials: "P1".to_string(),
+            weight_pounds: 0,
+            birth_year: 0,
             calories_burned_today: 0.0,
             calories_burned_day: String::new(),
             ignore_step_count_calories: false,
@@ -1445,6 +1465,31 @@ impl Default for Profile {
             // Mirror FILE_DIFFICULTY_NAMES[2] ("Medium") as the default.
             last_difficulty_index: 2,
         }
+    }
+}
+
+impl Profile {
+    #[inline(always)]
+    pub const fn calculated_weight_pounds(&self) -> i32 {
+        if self.weight_pounds == 0 {
+            DEFAULT_WEIGHT_POUNDS
+        } else {
+            self.weight_pounds
+        }
+    }
+
+    #[inline(always)]
+    pub const fn age_years_for(&self, current_year: i32) -> i32 {
+        if self.birth_year == 0 {
+            current_year - DEFAULT_BIRTH_YEAR
+        } else {
+            current_year - self.birth_year
+        }
+    }
+
+    #[inline(always)]
+    pub fn age_years(&self) -> i32 {
+        self.age_years_for(Local::now().year())
     }
 }
 
@@ -2022,6 +2067,18 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         ));
         content.push('\n');
 
+        content.push_str("[Editable]\n");
+        content.push_str(&format!(
+            "WeightPounds = {}\n",
+            default_profile.weight_pounds
+        ));
+        content.push_str(&format!("BirthYear = {}\n", default_profile.birth_year));
+        content.push_str(&format!(
+            "IgnoreStepCountCalories = {}\n",
+            i32::from(default_profile.ignore_step_count_calories)
+        ));
+        content.push('\n');
+
         // Stats (for ScreenGameOver parity)
         let today = Local::now().date_naive().to_string();
         content.push_str("[Stats]\n");
@@ -2029,10 +2086,6 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         content.push_str(&format!(
             "CaloriesBurnedToday = {}\n",
             default_profile.calories_burned_today
-        ));
-        content.push_str(&format!(
-            "IgnoreStepCountCalories = {}\n",
-            i32::from(default_profile.ignore_step_count_calories)
         ));
         content.push('\n');
 
@@ -2309,6 +2362,15 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!("PlayerInitials={}\n", profile.player_initials));
     content.push('\n');
 
+    content.push_str("[Editable]\n");
+    content.push_str(&format!("WeightPounds={}\n", profile.weight_pounds));
+    content.push_str(&format!("BirthYear={}\n", profile.birth_year));
+    content.push_str(&format!(
+        "IgnoreStepCountCalories={}\n",
+        i32::from(profile.ignore_step_count_calories)
+    ));
+    content.push('\n');
+
     // Persist "last played" song + difficulty so that future sessions
     // can reopen SelectMusic on the most recently played chart.
     content.push_str("[LastPlayed]\n");
@@ -2336,10 +2398,6 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     content.push_str(&format!(
         "CaloriesBurnedToday={}\n",
         profile.calories_burned_today
-    ));
-    content.push_str(&format!(
-        "IgnoreStepCountCalories={}\n",
-        i32::from(profile.ignore_step_count_calories)
     ));
     content.push('\n');
 
@@ -2992,9 +3050,23 @@ fn load_for_side(side: PlayerSide) {
             // Do not assume any particular max here; clamp later at call sites.
             profile.last_difficulty_index = raw_last_diff;
 
-            // Profile stats (ScreenGameOver parity)
+            profile.weight_pounds = profile_conf
+                .get("Editable", "WeightPounds")
+                .and_then(|s| s.parse::<i32>().ok())
+                .map(clamp_weight_pounds)
+                .unwrap_or(default_profile.weight_pounds);
+
+            profile.birth_year = profile_conf
+                .get("Editable", "BirthYear")
+                .and_then(|s| s.parse::<i32>().ok())
+                .map(|year| year.max(0))
+                .unwrap_or(default_profile.birth_year);
+
+            // Profile stats (ScreenGameOver parity). Keep the legacy [Stats]
+            // fallback so older profile.ini files still load cleanly.
             profile.ignore_step_count_calories = profile_conf
-                .get("Stats", "IgnoreStepCountCalories")
+                .get("Editable", "IgnoreStepCountCalories")
+                .or_else(|| profile_conf.get("Stats", "IgnoreStepCountCalories"))
                 .and_then(|s| s.parse::<u8>().ok())
                 .map_or(default_profile.ignore_step_count_calories, |v| v != 0);
 
@@ -3438,11 +3510,16 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     content.push_str(&format!("PlayerInitials={initials}\n"));
     content.push('\n');
 
+    content.push_str("[Editable]\n");
+    content.push_str("WeightPounds=0\n");
+    content.push_str("BirthYear=0\n");
+    content.push_str("IgnoreStepCountCalories=0\n");
+    content.push('\n');
+
     let today = Local::now().date_naive().to_string();
     content.push_str("[Stats]\n");
     content.push_str(&format!("CaloriesBurnedDate={today}\n"));
     content.push_str("CaloriesBurnedToday=0\n");
-    content.push_str("IgnoreStepCountCalories=0\n");
     content.push('\n');
     fs::write(profile_ini_path(&id), content)?;
 
@@ -3705,7 +3782,7 @@ pub fn update_last_played_for_side(
     save_profile_ini_for_side(side);
 }
 
-pub fn add_stage_calories_for_side(side: PlayerSide, notes_hit: u32) {
+pub fn add_stage_calories_for_side(side: PlayerSide, calories_burned: f32) {
     if session_side_is_guest(side) {
         return;
     }
@@ -3720,13 +3797,12 @@ pub fn add_stage_calories_for_side(side: PlayerSide, notes_hit: u32) {
             profile.calories_burned_today = 0.0;
         }
 
-        if !profile.ignore_step_count_calories {
-            // TODO: Implement StepMania's actual calorie model.
-            const KCAL_PER_NOTE_HIT: f32 = 0.032;
-            let add = notes_hit as f32 * KCAL_PER_NOTE_HIT;
-            if add.is_finite() && add >= 0.0 {
-                profile.calories_burned_today = (profile.calories_burned_today + add).max(0.0);
-            }
+        if !profile.ignore_step_count_calories
+            && calories_burned.is_finite()
+            && calories_burned >= 0.0
+        {
+            profile.calories_burned_today =
+                (profile.calories_burned_today + calories_burned).max(0.0);
         }
     }
     save_profile_ini_for_side(side);
@@ -4563,7 +4639,9 @@ pub fn update_measure_lines_for_side(side: PlayerSide, setting: MeasureLines) {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_groovestats_is_pad_player;
+    use super::{
+        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, Profile, parse_groovestats_is_pad_player,
+    };
 
     #[test]
     fn groovestats_is_pad_player_requires_explicit_one() {
@@ -4597,5 +4675,37 @@ mod tests {
             Some("abc".to_string()),
             false
         ));
+    }
+
+    #[test]
+    fn calculated_weight_pounds_uses_itg_default_when_unset() {
+        assert_eq!(
+            Profile::default().calculated_weight_pounds(),
+            DEFAULT_WEIGHT_POUNDS
+        );
+        assert_eq!(
+            Profile {
+                weight_pounds: 165,
+                ..Profile::default()
+            }
+            .calculated_weight_pounds(),
+            165
+        );
+    }
+
+    #[test]
+    fn age_years_for_uses_birth_year_or_default() {
+        assert_eq!(
+            Profile::default().age_years_for(2026),
+            2026 - DEFAULT_BIRTH_YEAR
+        );
+        assert_eq!(
+            Profile {
+                birth_year: 2000,
+                ..Profile::default()
+            }
+            .age_years_for(2026),
+            26
+        );
     }
 }

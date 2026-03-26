@@ -3939,6 +3939,7 @@ pub struct PlayerRuntime {
     pub combo_after_miss: u32,
     pub is_failing: bool,
     pub fail_time: Option<f32>,
+    pub calories_burned: f32,
 
     pub earned_grade_points: i32,
 
@@ -4037,6 +4038,7 @@ fn init_player_runtime() -> PlayerRuntime {
         combo_after_miss: 0,
         is_failing: false,
         fail_time: None,
+        calories_burned: 0.0,
         earned_grade_points: 0,
         combo_milestones: Vec::new(),
         hands_achieved: 0,
@@ -4426,6 +4428,7 @@ pub struct State {
     prev_inputs: [bool; MAX_COLS],
     keyboard_lane_counts: [u8; MAX_COLS],
     gamepad_lane_counts: [u8; MAX_COLS],
+    lane_pressed_since: [Option<f32>; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
     autoplay_rng: TurnRng,
     autoplay_cursor: [usize; MAX_PLAYERS],
@@ -5450,6 +5453,60 @@ fn player_for_col(state: &State, col: usize) -> usize {
 const fn player_col_range(state: &State, player: usize) -> (usize, usize) {
     let start = player * state.cols_per_player;
     (start, start + state.cols_per_player)
+}
+
+const STEP_CAL_JUMP_WINDOW_S: f32 = 0.25;
+
+#[inline(always)]
+fn scale_range(v: f32, in_lo: f32, in_hi: f32, out_lo: f32, out_hi: f32) -> f32 {
+    if (in_hi - in_lo).abs() <= f32::EPSILON {
+        return out_lo;
+    }
+    out_lo + (v - in_lo) * (out_hi - out_lo) / (in_hi - in_lo)
+}
+
+#[inline(always)]
+fn step_calories(weight_pounds: i32, tracks_held: usize) -> f32 {
+    let tracks = tracks_held.max(1) as f32;
+    let cals_100 = scale_range(tracks, 1.0, 2.0, 0.023, 0.077);
+    let cals_200 = scale_range(tracks, 1.0, 2.0, 0.041, 0.133);
+    scale_range(
+        weight_pounds.max(0) as f32,
+        100.0,
+        200.0,
+        cals_100,
+        cals_200,
+    )
+}
+
+#[inline(always)]
+fn recent_step_tracks(
+    pressed_since: &[Option<f32>; MAX_COLS],
+    start: usize,
+    end: usize,
+    event_music_time: f32,
+) -> usize {
+    pressed_since[start..end]
+        .iter()
+        .filter(|pressed_at| {
+            pressed_at.is_some_and(|pressed_at| {
+                let age = event_music_time - pressed_at;
+                age >= 0.0 && age < STEP_CAL_JUMP_WINDOW_S
+            })
+        })
+        .count()
+}
+
+#[inline(always)]
+fn record_step_calories(state: &mut State, lane_idx: usize, event_music_time: f32) {
+    if !event_music_time.is_finite() {
+        return;
+    }
+    let player = player_for_col(state, lane_idx);
+    let (start, end) = player_col_range(state, player);
+    let tracks = recent_step_tracks(&state.lane_pressed_since, start, end, event_music_time);
+    let weight_pounds = state.player_profiles[player].calculated_weight_pounds();
+    state.players[player].calories_burned += step_calories(weight_pounds, tracks);
 }
 
 #[inline(always)]
@@ -7127,6 +7184,7 @@ pub fn init(
         prev_inputs: [false; MAX_COLS],
         keyboard_lane_counts: [0; MAX_COLS],
         gamepad_lane_counts: [0; MAX_COLS],
+        lane_pressed_since: [None; MAX_COLS],
         pending_edges: VecDeque::with_capacity(pending_edges_capacity),
         autoplay_rng: TurnRng::new(song_seed ^ 0xA0A7_0F8A_1A2B_3C4D),
         autoplay_cursor: note_range_start,
@@ -10005,6 +10063,8 @@ fn process_input_edges(
         let release_finished = lane_release_finished(edge.pressed, was_down, is_down);
 
         if press_started {
+            state.lane_pressed_since[lane_idx] = Some(edge.event_music_time);
+            record_step_calories(state, lane_idx, edge.event_music_time);
             if trace_enabled {
                 let started = Instant::now();
                 start_receptor_glow_press(state, lane_idx);
@@ -10013,6 +10073,7 @@ fn process_input_edges(
                 start_receptor_glow_press(state, lane_idx);
             }
         } else if release_finished {
+            state.lane_pressed_since[lane_idx] = None;
             if trace_enabled {
                 let started = Instant::now();
                 release_receptor_glow(state, lane_idx);
@@ -11183,16 +11244,17 @@ fn update_danger_fx(state: &mut State) {
 mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
-        INSERT_MASK_BIT_MINES, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
+        INSERT_MASK_BIT_MINES, MAX_COLS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
         ScrollSpeedSetting, SongClockSnapshot, TickMode, advance_hold_last_held,
         apply_mines_insert, build_assist_clap_rows, build_attack_mask_windows_for_player,
         build_row_grids, count_rescore_tracks_on_row, enforce_max_simultaneous_notes,
         frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
-        player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals, replay_edge_cap,
-        score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
-        stage_music_cut, tick_mode_status_line, turn_option_bits, update_lane_count,
+        player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
+        replay_edge_cap, score_missed_holds_and_rolls, score_valid_for_chart,
+        scored_hold_totals_with_carry, stage_music_cut, step_calories, tick_mode_status_line,
+        turn_option_bits, update_lane_count,
     };
     use crate::core::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
@@ -11907,5 +11969,24 @@ mod tests {
             replay_edge_cap(8, 1000, false, 1.0),
             8 * REPLAY_EDGE_RATE_PER_SEC
         );
+    }
+
+    #[test]
+    fn step_calories_matches_itg_formula() {
+        assert!((step_calories(120, 1) - 0.0266).abs() <= 1e-6);
+        assert!((step_calories(120, 2) - 0.0882).abs() <= 1e-6);
+        assert!((step_calories(120, 3) - 0.1498).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn recent_step_tracks_counts_current_press_inside_jump_window() {
+        let mut pressed_since = [None; MAX_COLS];
+        pressed_since[0] = Some(10.0);
+        pressed_since[1] = Some(9.9);
+        pressed_since[2] = Some(9.74);
+        pressed_since[4] = Some(10.0);
+
+        assert_eq!(recent_step_tracks(&pressed_since, 0, 4, 10.0), 2);
+        assert_eq!(recent_step_tracks(&pressed_since, 4, 8, 10.0), 1);
     }
 }
