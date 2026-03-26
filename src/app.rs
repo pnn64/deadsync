@@ -1,3 +1,6 @@
+mod dynamic_media;
+
+use self::dynamic_media::DynamicMedia;
 use crate::act;
 use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
 use crate::config::{self, DisplayMode};
@@ -2509,6 +2512,7 @@ pub struct App {
     backend: Option<renderer::Backend>,
     backend_type: BackendType,
     asset_manager: AssetManager,
+    dynamic_media: DynamicMedia,
     ui_text_layout_cache: crate::ui::compose::TextLayoutCache,
     gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache,
     state: AppState,
@@ -2952,10 +2956,13 @@ impl App {
                 .gameplay_state
                 .as_ref()
                 .map(|state| state.current_music_time);
-            self.asset_manager
-                .sync_active_banner_videos(backend, &active_banner_video_paths);
-            self.asset_manager
-                .update_dynamic_video_frames(backend, gameplay_time);
+            self.dynamic_media.sync_active_banner_videos(
+                &mut self.asset_manager,
+                backend,
+                &active_banner_video_paths,
+            );
+            self.dynamic_media
+                .update_video_frames(&mut self.asset_manager, backend, gameplay_time);
             self.asset_manager
                 .upload_pending_generated_textures(backend);
             upload_us = elapsed_us_since(upload_started);
@@ -3130,6 +3137,7 @@ impl App {
             backend: None,
             backend_type,
             asset_manager: AssetManager::new(),
+            dynamic_media: DynamicMedia::new(),
             ui_text_layout_cache: crate::ui::compose::TextLayoutCache::default(),
             gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache::saturating(
                 GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
@@ -3194,12 +3202,14 @@ impl App {
                 self.state.session.combo_carry =
                     [profile_data[0].current_combo, profile_data[1].current_combo];
                 if let Some(backend) = self.backend.as_mut() {
-                    self.asset_manager.set_profile_avatar_for_side(
+                    self.dynamic_media.set_profile_avatar_for_side(
+                        &mut self.asset_manager,
                         backend,
                         profile::PlayerSide::P1,
                         profile_data[0].avatar_path.clone(),
                     );
-                    self.asset_manager.set_profile_avatar_for_side(
+                    self.dynamic_media.set_profile_avatar_for_side(
+                        &mut self.asset_manager,
                         backend,
                         profile::PlayerSide::P2,
                         profile_data[1].avatar_path.clone(),
@@ -4623,7 +4633,9 @@ impl App {
     fn apply_banner(&mut self, path_opt: Option<PathBuf>) {
         if let Some(backend) = self.backend.as_mut() {
             if let Some(path) = path_opt {
-                let key = self.asset_manager.set_dynamic_banner(backend, Some(path));
+                let key =
+                    self.dynamic_media
+                        .set_banner(&mut self.asset_manager, backend, Some(path));
                 match self.state.screens.current_screen {
                     CurrentScreen::SelectCourse => {
                         self.state.screens.select_course_state.current_banner_key = key;
@@ -4633,7 +4645,8 @@ impl App {
                     }
                 }
             } else {
-                self.asset_manager.destroy_dynamic_banner(backend);
+                self.dynamic_media
+                    .destroy_banner(&mut self.asset_manager, backend);
                 let color_index = match self.state.screens.current_screen {
                     CurrentScreen::SelectCourse => {
                         self.state.screens.select_course_state.active_color_index
@@ -4656,15 +4669,16 @@ impl App {
 
     fn apply_cdtitle(&mut self, path_opt: Option<PathBuf>) {
         if let Some(backend) = self.backend.as_mut() {
-            self.state.screens.select_music_state.current_cdtitle_key =
-                self.asset_manager.set_dynamic_cdtitle(backend, path_opt);
+            self.state.screens.select_music_state.current_cdtitle_key = self
+                .dynamic_media
+                .set_cdtitle(&mut self.asset_manager, backend, path_opt);
         }
     }
 
     fn apply_pack_banner(&mut self, path_opt: Option<PathBuf>) {
         if let Some(backend) = self.backend.as_mut() {
-            self.asset_manager
-                .set_dynamic_pack_banner(backend, path_opt);
+            self.dynamic_media
+                .set_pack_banner(&mut self.asset_manager, backend, path_opt);
         }
     }
 
@@ -4752,9 +4766,11 @@ impl App {
 
     fn apply_dynamic_background(&mut self, path_opt: Option<PathBuf>) {
         if let Some(backend) = self.backend.as_mut() {
-            let key = self
-                .asset_manager
-                .set_dynamic_background(backend, path_opt.clone());
+            let key = self.dynamic_media.set_background(
+                &mut self.asset_manager,
+                backend,
+                path_opt.clone(),
+            );
             if let Some(gs) = &mut self.state.screens.gameplay_state {
                 gs.current_background_path = path_opt;
                 gs.background_texture_key = key;
@@ -5887,6 +5903,8 @@ impl App {
         }
 
         self.asset_manager.load_initial_assets(&mut backend)?;
+        self.dynamic_media
+            .preload_profile_avatars(&mut self.asset_manager, &mut backend);
         // Text layout cache entries borrow glyph texture keys from font storage.
         // Renderer reinit reloads fonts, so cached layouts must be dropped before compose.
         self.ui_text_layout_cache.clear();
@@ -5942,7 +5960,8 @@ impl App {
         }
 
         if let Some(mut backend) = self.backend.take() {
-            self.asset_manager.destroy_dynamic_assets(&mut backend);
+            self.dynamic_media
+                .destroy_assets(&mut self.asset_manager, &mut backend);
             let mut textures = self.asset_manager.take_textures();
             backend.dispose_textures(&mut textures);
             backend.cleanup();
@@ -6591,7 +6610,8 @@ impl App {
                 commands.push(Command::StopMusic);
             }
             if let Some(backend) = self.backend.as_mut() {
-                self.asset_manager.set_dynamic_background(backend, None);
+                self.dynamic_media
+                    .set_background(&mut self.asset_manager, backend, None);
             }
         }
 
@@ -8041,7 +8061,8 @@ impl ApplicationHandler<UserEvent> for App {
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         config::flush_pending_saves();
         if let Some(backend) = &mut self.backend {
-            self.asset_manager.destroy_dynamic_assets(backend);
+            self.dynamic_media
+                .destroy_assets(&mut self.asset_manager, backend);
             let mut textures = self.asset_manager.take_textures();
             backend.dispose_textures(&mut textures);
             backend.cleanup();

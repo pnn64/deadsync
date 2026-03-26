@@ -1,9 +1,5 @@
 use crate::assets::AssetManager;
-use crate::core::{
-    gfx::{Backend, SamplerDesc},
-    video,
-};
-use crate::game::profile;
+use crate::core::{gfx::Backend, video};
 use image::RgbaImage;
 use log::{debug, warn};
 use std::{
@@ -20,7 +16,7 @@ use std::{
 };
 use twox_hash::XxHash64;
 
-use super::textures::{open_image_fallback, open_image_fallback_quiet, register_texture_dims};
+use super::textures::{open_image_fallback, open_image_fallback_quiet};
 
 const BANNER_CACHE_DIR: &str = "cache/banner";
 const CDTITLE_CACHE_DIR: &str = "cache/cdtitle";
@@ -33,14 +29,14 @@ pub(crate) struct BannerCacheOptions {
 
 impl BannerCacheOptions {
     #[inline(always)]
-    fn from_banner_config(cfg: &crate::config::Config) -> Self {
+    pub(crate) fn from_banner_config(cfg: &crate::config::Config) -> Self {
         Self {
             enabled: cfg.banner_cache,
         }
     }
 
     #[inline(always)]
-    fn from_cdtitle_config(cfg: &crate::config::Config) -> Self {
+    pub(crate) fn from_cdtitle_config(cfg: &crate::config::Config) -> Self {
         Self {
             enabled: cfg.cdtitle_cache,
         }
@@ -272,7 +268,7 @@ fn is_cacheable_dynamic_image_path(path: &Path) -> bool {
 }
 
 #[inline(always)]
-fn is_dynamic_video_path(path: &Path) -> bool {
+pub(crate) fn is_dynamic_video_path(path: &Path) -> bool {
     let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
         return false;
     };
@@ -623,6 +619,18 @@ pub(crate) fn load_banner_source_rgba(
         .map_err(|e| e.to_string())
 }
 
+pub(crate) fn load_cdtitle_source_rgba(
+    path: &Path,
+    opts: BannerCacheOptions,
+) -> Result<RgbaImage, String> {
+    if opts.enabled {
+        return load_or_build_cached_cdtitle(path, opts).map_err(|e| e.to_string());
+    }
+    open_image_fallback(path)
+        .map(|img| img.to_rgba8())
+        .map_err(|e| e.to_string())
+}
+
 pub(crate) fn collect_stale_dynamic_keys<'a>(
     current: impl Iterator<Item = &'a String>,
     desired: &HashSet<String>,
@@ -644,508 +652,10 @@ pub(crate) fn dedupe_dynamic_keys(keys: Vec<String>) -> Vec<String> {
     out
 }
 
-pub(crate) struct DynamicVideoState {
-    pub(crate) player: video::Player,
-    pub(crate) started_at: Instant,
-}
-
-pub(crate) struct DynamicBannerState {
-    pub(crate) key: String,
-    pub(crate) path: PathBuf,
-    pub(crate) high_res_loaded: bool,
-}
-
-pub(crate) struct DynamicBackgroundState {
-    pub(crate) key: String,
-    pub(crate) path: PathBuf,
-    pub(crate) video: Option<video::Player>,
-}
-
 impl AssetManager {
-    pub fn destroy_dynamic_assets(&mut self, backend: &mut Backend) {
-        let mut keys = Vec::with_capacity(
-            self.active_banner_videos
-                .len()
-                .saturating_add(self.dynamic_pack_banner_keys.len())
-                .saturating_add(4),
-        );
-        if let Some(state) = self.current_dynamic_banner.take() {
-            keys.push(state.key);
-        }
-        keys.extend(self.active_banner_videos.drain().map(|(key, _)| key));
-        if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
-            keys.push(key);
-        }
-        if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
-            self.dynamic_pack_banner_keys.remove(&key);
-            keys.push(key);
-        }
-        keys.extend(self.dynamic_pack_banner_keys.drain());
-        if let Some(state) = self.current_dynamic_background.take() {
-            keys.push(state.key);
-        }
-        for key in dedupe_dynamic_keys(keys) {
-            self.remove_texture_and_dispose(backend, &key);
-        }
-    }
-
-    pub fn destroy_dynamic_banner(&mut self, backend: &mut Backend) {
-        self.destroy_current_dynamic_banner(backend);
-    }
-
-    pub fn set_dynamic_cdtitle(
-        &mut self,
-        backend: &mut Backend,
-        path_opt: Option<PathBuf>,
-    ) -> Option<String> {
-        let cache_opts = BannerCacheOptions::from_cdtitle_config(&crate::config::get());
-        if let Some(path) = path_opt {
-            if let Some((key, current_path)) = self.current_dynamic_cdtitle.as_ref()
-                && current_path == &path
-                && self.has_texture_key(key)
-            {
-                return Some(key.clone());
-            }
-
-            self.destroy_current_dynamic_cdtitle(backend);
-            let rgba = if cache_opts.enabled {
-                match load_or_build_cached_cdtitle(&path, cache_opts) {
-                    Ok(cached) => cached,
-                    Err(e) => {
-                        warn!(
-                            "Failed to load cached CDTitle '{}': {e}. Skipping.",
-                            path.display()
-                        );
-                        return None;
-                    }
-                }
-            } else {
-                match open_image_fallback(&path) {
-                    Ok(img) => img.to_rgba8(),
-                    Err(e) => {
-                        warn!("Failed to open CDTitle image {path:?}: {e}. Skipping.");
-                        return None;
-                    }
-                }
-            };
-
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    let path_key = path.to_string_lossy();
-                    let key = format!("__cdtitle::{path_key}");
-                    self.insert_texture(key.clone(), texture);
-                    register_texture_dims(&key, rgba.width(), rgba.height());
-                    self.current_dynamic_cdtitle = Some((key.clone(), path));
-                    Some(key)
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to create GPU texture for CDTitle image {path:?}: {e}. Skipping."
-                    );
-                    None
-                }
-            }
-        } else {
-            self.destroy_current_dynamic_cdtitle(backend);
-            None
-        }
-    }
-
-    pub fn set_dynamic_pack_banner(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) {
-        let banner_cache_opts = BannerCacheOptions::from_banner_config(&crate::config::get());
-        if let Some(path) = path_opt {
-            if self
-                .current_dynamic_pack_banner
-                .as_ref()
-                .is_some_and(|(key, p)| p == &path && self.has_texture_key(key))
-            {
-                return;
-            }
-
-            let key = path.to_string_lossy().into_owned();
-            if banner_cache_opts.enabled
-                && self.dynamic_pack_banner_keys.contains(&key)
-                && self.has_texture_key(&key)
-            {
-                self.current_dynamic_pack_banner = Some((key, path));
-                return;
-            }
-
-            if banner_cache_opts.enabled {
-                self.current_dynamic_pack_banner = None;
-            } else if let Some((old_key, _)) = self.current_dynamic_pack_banner.take() {
-                self.dynamic_pack_banner_keys.remove(&old_key);
-                self.release_dynamic_texture_key(backend, old_key);
-            }
-
-            let rgba = match load_banner_source_rgba(&path, banner_cache_opts) {
-                Ok(rgba) => rgba,
-                Err(e) => {
-                    warn!(
-                        "Failed to load pack banner '{}': {e}. Skipping.",
-                        path.display()
-                    );
-                    return;
-                }
-            };
-
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    self.insert_texture(key.clone(), texture);
-                    register_texture_dims(&key, rgba.width(), rgba.height());
-                    if banner_cache_opts.enabled {
-                        self.dynamic_pack_banner_keys.insert(key.clone());
-                    }
-                    self.current_dynamic_pack_banner = Some((key, path));
-                }
-                Err(e) => {
-                    warn!("Failed to create GPU texture for pack banner {path:?}: {e}. Skipping.");
-                }
-            }
-        } else if banner_cache_opts.enabled {
-            self.current_dynamic_pack_banner = None;
-        } else if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
-            self.dynamic_pack_banner_keys.remove(&key);
-            self.release_dynamic_texture_key(backend, key);
-        }
-    }
-
-    pub fn set_dynamic_banner(
-        &mut self,
-        backend: &mut Backend,
-        path_opt: Option<PathBuf>,
-    ) -> String {
-        const FALLBACK_KEY: &str = "banner1.png";
-        let banner_cache_opts = BannerCacheOptions::from_banner_config(&crate::config::get());
-
-        if let Some(path) = path_opt {
-            let key = path.to_string_lossy().into_owned();
-            if let Some(current) = self.current_dynamic_banner.as_ref()
-                && current.path == path
-                && self.has_texture_key(&current.key)
-            {
-                return current.key.clone();
-            }
-            self.destroy_current_dynamic_banner(backend);
-            let rgba = match load_banner_source_rgba(&path, banner_cache_opts) {
-                Ok(rgba) => rgba,
-                Err(e) => {
-                    warn!(
-                        "Failed to load banner '{}': {e}. Using fallback.",
-                        path.display()
-                    );
-                    return FALLBACK_KEY.to_string();
-                }
-            };
-
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    self.set_texture_for_key(backend, key.clone(), texture);
-                    register_texture_dims(&key, rgba.width(), rgba.height());
-                    self.current_dynamic_banner = Some(DynamicBannerState {
-                        key: key.clone(),
-                        path,
-                        high_res_loaded: true,
-                    });
-                    key
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to create GPU texture for banner '{}': {e}. Using fallback.",
-                        key
-                    );
-                    FALLBACK_KEY.to_string()
-                }
-            }
-        } else {
-            self.destroy_current_dynamic_banner(backend);
-            FALLBACK_KEY.to_string()
-        }
-    }
-
-    pub fn sync_active_banner_videos(&mut self, backend: &mut Backend, desired_paths: &[PathBuf]) {
-        let mut desired = HashSet::<String>::with_capacity(desired_paths.len());
-        for path in desired_paths {
-            if !is_dynamic_video_path(path) {
-                continue;
-            }
-            desired.insert(path.to_string_lossy().into_owned());
-        }
-        let stale_keys = collect_stale_dynamic_keys(self.active_banner_videos.keys(), &desired);
-        for key in stale_keys {
-            self.active_banner_videos.remove(&key);
-            self.release_dynamic_texture_key(backend, key);
-        }
-        for path in desired_paths {
-            if !is_dynamic_video_path(path) {
-                continue;
-            }
-            let key = path.to_string_lossy().into_owned();
-            if self.active_banner_videos.contains_key(&key) {
-                continue;
-            }
-            self.ensure_texture_from_path(backend, path);
-            if !self.has_texture_key(&key) {
-                continue;
-            }
-            match video::open_player(path, true) {
-                Ok(player) => {
-                    self.active_banner_videos.insert(
-                        key,
-                        DynamicVideoState {
-                            player,
-                            started_at: Instant::now(),
-                        },
-                    );
-                }
-                Err(e) => {
-                    warn!("Failed to start banner video '{}': {e}", path.display());
-                }
-            }
-        }
-    }
-
-    pub fn set_dynamic_background(
-        &mut self,
-        backend: &mut Backend,
-        path_opt: Option<PathBuf>,
-    ) -> String {
-        const FALLBACK_KEY: &str = "__black";
-
-        if let Some(path) = path_opt {
-            let animate_video = crate::config::get().show_video_backgrounds;
-            if self
-                .current_dynamic_background
-                .as_ref()
-                .is_some_and(|state| {
-                    state.path == path
-                        && self.has_texture_key(&state.key)
-                        && (state.video.is_some()
-                            == (animate_video && is_dynamic_video_path(&path)))
-                })
-            {
-                return self
-                    .current_dynamic_background
-                    .as_ref()
-                    .unwrap()
-                    .key
-                    .clone();
-            }
-
-            self.destroy_current_dynamic_background(backend);
-
-            if is_dynamic_video_path(&path) {
-                let key = path.to_string_lossy().into_owned();
-                if animate_video {
-                    match video::open(&path, true) {
-                        Ok(video) => match backend
-                            .create_texture(&video.poster, SamplerDesc::default())
-                        {
-                            Ok(texture) => {
-                                self.set_texture_for_key(backend, key.clone(), texture);
-                                register_texture_dims(&key, video.info.width, video.info.height);
-                                self.current_dynamic_background = Some(DynamicBackgroundState {
-                                    key: key.clone(),
-                                    path,
-                                    video: Some(video.player),
-                                });
-                                return key;
-                            }
-                            Err(e) => {
-                                warn!(
-                                    "Failed to create GPU texture for video background {path:?}: {e}. Using fallback."
-                                );
-                                return FALLBACK_KEY.to_string();
-                            }
-                        },
-                        Err(e) => {
-                            warn!(
-                                "Failed to open video background '{}': {e}. Using fallback.",
-                                path.display()
-                            );
-                            return FALLBACK_KEY.to_string();
-                        }
-                    }
-                }
-                match video::load_poster(&path) {
-                    Ok(rgba) => match backend.create_texture(&rgba, SamplerDesc::default()) {
-                        Ok(texture) => {
-                            self.set_texture_for_key(backend, key.clone(), texture);
-                            register_texture_dims(&key, rgba.width(), rgba.height());
-                            self.current_dynamic_background = Some(DynamicBackgroundState {
-                                key: key.clone(),
-                                path,
-                                video: None,
-                            });
-                            return key;
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Failed to create GPU texture for video background poster {path:?}: {e}. Using fallback."
-                            );
-                            return FALLBACK_KEY.to_string();
-                        }
-                    },
-                    Err(e) => {
-                        warn!(
-                            "Failed to load video background poster '{}': {e}. Using fallback.",
-                            path.display()
-                        );
-                        return FALLBACK_KEY.to_string();
-                    }
-                }
-            }
-
-            let rgba = match open_image_fallback(&path) {
-                Ok(img) => img.to_rgba8(),
-                Err(e) => {
-                    warn!("Failed to open background image {path:?}: {e}. Using fallback.");
-                    return FALLBACK_KEY.to_string();
-                }
-            };
-
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    let key = path.to_string_lossy().into_owned();
-                    self.set_texture_for_key(backend, key.clone(), texture);
-                    register_texture_dims(&key, rgba.width(), rgba.height());
-                    self.current_dynamic_background = Some(DynamicBackgroundState {
-                        key: key.clone(),
-                        path,
-                        video: None,
-                    });
-                    key
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to create GPU texture for background {path:?}: {e}. Using fallback."
-                    );
-                    FALLBACK_KEY.to_string()
-                }
-            }
-        } else {
-            self.destroy_current_dynamic_background(backend);
-            FALLBACK_KEY.to_string()
-        }
-    }
-
-    pub fn set_profile_avatar(&mut self, backend: &mut Backend, path_opt: Option<PathBuf>) {
-        let side = profile::get_session_player_side();
-        self.set_profile_avatar_for_side(backend, side, path_opt);
-    }
-
-    pub fn set_profile_avatar_for_side(
-        &mut self,
-        backend: &mut Backend,
-        side: profile::PlayerSide,
-        path_opt: Option<PathBuf>,
-    ) {
-        let ix = match side {
-            profile::PlayerSide::P1 => 0,
-            profile::PlayerSide::P2 => 1,
-        };
-
-        if let Some(path) = path_opt {
-            if let Some((key, current_path)) = self.current_profile_avatars[ix].as_ref()
-                && current_path == &path
-                && self.has_texture_key(key)
-            {
-                profile::set_avatar_texture_key_for_side(side, Some(key.clone()));
-                return;
-            }
-            self.destroy_current_profile_avatar_for_side(backend, side);
-            let key = path.to_string_lossy().into_owned();
-            self.ensure_texture_from_path(backend, &path);
-            self.current_profile_avatars[ix] = Some((key.clone(), path));
-            if self.has_texture_key(&key) {
-                profile::set_avatar_texture_key_for_side(side, Some(key));
-            } else {
-                profile::set_avatar_texture_key_for_side(side, None);
-            }
-        } else {
-            self.destroy_current_profile_avatar_for_side(backend, side);
-        }
-    }
-
-    pub fn update_dynamic_video_frames(
-        &mut self,
-        backend: &mut Backend,
-        gameplay_time_sec: Option<f32>,
-    ) {
-        let banner_frames: Vec<_> = self
-            .active_banner_videos
-            .iter_mut()
-            .filter_map(|(key, video)| {
-                let play_time = video.started_at.elapsed().as_secs_f32();
-                video
-                    .player
-                    .take_due_frame(play_time)
-                    .map(|frame| (key.clone(), frame))
-            })
-            .collect();
-        for (key, frame) in banner_frames {
-            if let Err(e) = self.update_texture_for_key(backend, &key, &frame) {
-                warn!("Failed to update dynamic video banner '{}': {e}", key);
-            }
-        }
-
-        let background_frame = self.current_dynamic_background.as_mut().and_then(|state| {
-            let video = state.video.as_mut()?;
-            let play_time = gameplay_time_sec.unwrap_or(0.0).max(0.0);
-            video
-                .take_due_frame(play_time)
-                .map(|frame| (state.key.clone(), frame))
-        });
-        if let Some((key, frame)) = background_frame
-            && let Err(e) = self.update_texture_for_key(backend, &key, &frame)
-        {
-            warn!("Failed to update dynamic video background '{}': {e}", key);
-        }
-    }
-
-    fn destroy_current_dynamic_banner(&mut self, backend: &mut Backend) {
-        if let Some(state) = self.current_dynamic_banner.take() {
-            self.release_dynamic_texture_key(backend, state.key);
-        }
-    }
-
-    fn destroy_current_dynamic_cdtitle(&mut self, backend: &mut Backend) {
-        if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
-            self.release_dynamic_texture_key(backend, key);
-        }
-    }
-
-    fn destroy_current_dynamic_background(&mut self, backend: &mut Backend) {
-        if let Some(state) = self.current_dynamic_background.take() {
-            self.release_dynamic_texture_key(backend, state.key);
-        }
-    }
-
-    fn destroy_current_profile_avatar_for_side(
-        &mut self,
-        backend: &mut Backend,
-        side: profile::PlayerSide,
-    ) {
-        let ix = match side {
-            profile::PlayerSide::P1 => 0,
-            profile::PlayerSide::P2 => 1,
-        };
-        let key = self.current_profile_avatars[ix].take().map(|(key, _)| key);
-        profile::set_avatar_texture_key_for_side(side, None);
-        if let Some(key) = key {
-            self.release_dynamic_texture_key(backend, key);
-        }
-    }
-
     pub(crate) fn ensure_texture_from_path(&mut self, backend: &mut Backend, path: &Path) {
         let key = path.to_string_lossy().into_owned();
-        let has_existing = self.has_texture_key(&key);
-        let needs_high_res_upgrade = self
-            .current_dynamic_banner
-            .as_ref()
-            .is_some_and(|state| state.key == key && state.path == path && !state.high_res_loaded);
-
-        if has_existing && !needs_high_res_upgrade {
+        if self.has_texture_key(&key) {
             return;
         }
 
@@ -1160,14 +670,6 @@ impl AssetManager {
 
         if let Err(e) = self.update_texture_for_key(backend, &key, &rgba) {
             warn!("Failed to create GPU texture for image {path:?}: {e}. Skipping.");
-            return;
-        }
-        if needs_high_res_upgrade
-            && let Some(state) = self.current_dynamic_banner.as_mut()
-            && state.key == key
-            && state.path == path
-        {
-            state.high_res_loaded = true;
         }
     }
 }

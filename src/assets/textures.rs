@@ -1,6 +1,5 @@
 use crate::assets::AssetManager;
 use crate::core::gfx::{Backend, SamplerDesc, SamplerFilter, SamplerWrap};
-use crate::game::profile;
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
 use std::{
@@ -869,14 +868,6 @@ impl AssetManager {
         for w in workers {
             w.join().expect("texture decode worker panicked");
         }
-
-        let profile = profile::get();
-        for p in profile::scan_local_profiles() {
-            if let Some(path) = p.avatar_path {
-                self.ensure_texture_from_path(backend, &path);
-            }
-        }
-        self.set_profile_avatar(backend, profile.avatar_path);
 
         Ok(())
     }

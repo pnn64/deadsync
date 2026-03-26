@@ -1,4 +1,4 @@
-mod dynamic;
+pub(crate) mod dynamic;
 mod fonts;
 mod textures;
 
@@ -8,11 +8,7 @@ use crate::core::gfx::{
 };
 use crate::ui::font::Font;
 use image::RgbaImage;
-use std::{
-    collections::{HashMap, HashSet},
-    error::Error,
-    path::PathBuf,
-};
+use std::{collections::HashMap, error::Error};
 
 #[cfg(test)]
 pub(crate) use self::dynamic::{
@@ -20,7 +16,6 @@ pub(crate) use self::dynamic::{
     dynamic_image_cache_path_for, load_or_build_cached_dynamic_image, save_cached_banner_image,
     save_raw_cached_banner_image,
 };
-pub(crate) use self::dynamic::{DynamicBackgroundState, DynamicBannerState, DynamicVideoState};
 pub use self::dynamic::{artwork_cache_jobs, prewarm_artwork_cache_with_progress};
 use self::textures::ascii_ci_hash;
 #[cfg(test)]
@@ -37,13 +32,6 @@ pub struct AssetManager {
     texture_handles_ascii_ci: HashMap<u64, TextureHandle>,
     next_texture_handle: TextureHandle,
     fonts: HashMap<&'static str, Font>,
-    current_dynamic_banner: Option<DynamicBannerState>,
-    active_banner_videos: HashMap<String, DynamicVideoState>,
-    current_dynamic_cdtitle: Option<(String, PathBuf)>,
-    current_dynamic_pack_banner: Option<(String, PathBuf)>,
-    dynamic_pack_banner_keys: HashSet<String>,
-    current_dynamic_background: Option<DynamicBackgroundState>,
-    current_profile_avatars: [Option<(String, PathBuf)>; 2],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,13 +57,6 @@ impl AssetManager {
             texture_handles_ascii_ci: HashMap::new(),
             next_texture_handle: 1,
             fonts: HashMap::new(),
-            current_dynamic_banner: None,
-            active_banner_videos: HashMap::new(),
-            current_dynamic_cdtitle: None,
-            current_dynamic_pack_banner: None,
-            dynamic_pack_banner_keys: HashSet::new(),
-            current_dynamic_background: None,
-            current_profile_avatars: std::array::from_fn(|_| None),
         }
     }
 
@@ -192,7 +173,7 @@ impl AssetManager {
             .map(|texture| (handle, texture))
     }
 
-    fn dispose_texture(
+    pub(crate) fn dispose_texture(
         &mut self,
         backend: &mut Backend,
         handle: TextureHandle,
@@ -203,7 +184,7 @@ impl AssetManager {
         backend.dispose_textures(&mut textures);
     }
 
-    fn set_texture_for_key(
+    pub(crate) fn set_texture_for_key(
         &mut self,
         backend: &mut Backend,
         key: String,
@@ -216,7 +197,7 @@ impl AssetManager {
         handle
     }
 
-    fn update_texture_for_key(
+    pub(crate) fn update_texture_for_key(
         &mut self,
         backend: &mut Backend,
         key: &str,
@@ -237,56 +218,6 @@ impl AssetManager {
         self.set_texture_for_key(backend, key.to_string(), texture);
         register_texture_dims(key, rgba.width(), rgba.height());
         Ok(())
-    }
-
-    fn remove_texture_and_dispose(&mut self, backend: &mut Backend, key: &str) {
-        if let Some((handle, texture)) = self.remove_texture(key) {
-            self.dispose_texture(backend, handle, texture);
-        }
-    }
-
-    #[inline(always)]
-    fn dynamic_texture_key_in_use(&self, key: &str) -> bool {
-        self.current_dynamic_banner
-            .as_ref()
-            .is_some_and(|state| state.key == key)
-            || self.active_banner_videos.contains_key(key)
-            || self
-                .current_dynamic_cdtitle
-                .as_ref()
-                .is_some_and(|(owned, _)| owned == key)
-            || self
-                .current_dynamic_pack_banner
-                .as_ref()
-                .is_some_and(|(owned, _)| owned == key)
-            || self.dynamic_pack_banner_keys.contains(key)
-            || self
-                .current_dynamic_background
-                .as_ref()
-                .is_some_and(|state| state.key == key)
-            || self
-                .current_profile_avatars
-                .iter()
-                .flatten()
-                .any(|(owned, _)| owned == key)
-    }
-
-    #[inline(always)]
-    fn take_releasable_dynamic_texture(
-        &mut self,
-        key: &str,
-    ) -> Option<(TextureHandle, GfxTexture)> {
-        if self.dynamic_texture_key_in_use(key) {
-            None
-        } else {
-            self.remove_texture(key)
-        }
-    }
-
-    fn release_dynamic_texture_key(&mut self, backend: &mut Backend, key: String) {
-        if let Some((handle, texture)) = self.take_releasable_dynamic_texture(&key) {
-            self.dispose_texture(backend, handle, texture);
-        }
     }
 
     fn note_texture_handle_alias(&mut self, key: &str, handle: TextureHandle) {
@@ -333,6 +264,7 @@ impl Default for AssetManager {
 mod tests {
     use super::*;
     use std::{
+        collections::HashSet,
         fs,
         path::{Path, PathBuf},
         sync::atomic::{AtomicUsize, Ordering},
@@ -442,59 +374,6 @@ mod tests {
                 "bg.mp4".to_string(),
             ]
         );
-    }
-
-    #[test]
-    fn shared_dynamic_key_stays_until_last_owner_releases_it() {
-        let mut assets = AssetManager::new();
-        let key = "shared.mp4".to_string();
-        let path = PathBuf::from(&key);
-
-        assets.reserve_texture_handle(key.clone());
-        assets.current_dynamic_banner = Some(DynamicBannerState {
-            key: key.clone(),
-            path: path.clone(),
-            high_res_loaded: true,
-        });
-        assets.current_dynamic_background = Some(DynamicBackgroundState {
-            key: key.clone(),
-            path,
-            video: None,
-        });
-
-        assets.current_dynamic_banner = None;
-        let removed = assets.take_releasable_dynamic_texture(&key);
-
-        assert!(removed.is_none());
-        assert!(assets.has_texture_key(&key));
-    }
-
-    #[test]
-    fn last_dynamic_owner_releases_texture_mapping() {
-        let mut assets = AssetManager::new();
-        let key = "banner.mp4".to_string();
-        let path = PathBuf::from(&key);
-
-        assets.reserve_texture_handle(key.clone());
-        assets.current_dynamic_banner = Some(DynamicBannerState {
-            key: key.clone(),
-            path,
-            high_res_loaded: true,
-        });
-
-        assets.current_dynamic_banner = None;
-        let removed = assets.take_releasable_dynamic_texture(&key);
-
-        assert!(removed.is_none());
-        assert!(!assets.has_texture_key(&key));
-    }
-
-    #[test]
-    fn profile_avatar_counts_as_dynamic_texture_owner() {
-        let mut assets = AssetManager::new();
-        let key = "avatar.png".to_string();
-        assets.current_profile_avatars[0] = Some((key.clone(), PathBuf::from(&key)));
-        assert!(assets.dynamic_texture_key_in_use(&key));
     }
 
     #[test]
