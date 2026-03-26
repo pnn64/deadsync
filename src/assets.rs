@@ -607,7 +607,6 @@ fn load_or_build_cached_dynamic_image(
     };
 
     if let Some(rgba) = load_cached_banner_image(&cache_path, path) {
-        prune_stale_banner_cache_variants(&cache_path, &path_hex);
         return Ok(rgba);
     }
 
@@ -663,7 +662,6 @@ fn ensure_cached_dynamic_image_on_disk(
         return Ok(false);
     };
     if load_cached_banner_image(&cache_path, path).is_some() {
-        prune_stale_banner_cache_variants(&cache_path, &path_hex);
         return Ok(false);
     }
     let rgba = build_cached_banner_rgba(path, opts)?;
@@ -2525,7 +2523,48 @@ impl AssetManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    static NEXT_TMP_ID: AtomicUsize = AtomicUsize::new(1);
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(name: &str) -> Self {
+            let id = NEXT_TMP_ID.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "deadsync-assets-{name}-{}-{id}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn test_rgba(color: [u8; 4]) -> RgbaImage {
+        RgbaImage::from_raw(1, 1, color.to_vec()).expect("test pixel should match image size")
+    }
+
+    fn write_test_png(path: &Path, color: [u8; 4]) {
+        test_rgba(color).save(path).unwrap();
+    }
 
     #[test]
     fn parses_texture_resolution_hint_from_parenthetical_res_tag() {
@@ -2647,5 +2686,59 @@ mod tests {
         let key = "avatar.png".to_string();
         assets.current_profile_avatars[0] = Some((key.clone(), PathBuf::from(&key)));
         assert!(assets.dynamic_texture_key_in_use(&key));
+    }
+
+    #[test]
+    fn cache_hit_skips_stale_variant_prune() {
+        let dir = TempDir::new("cache-hit-no-prune");
+        let src = dir.path().join("banner.png");
+        let cache_dir = dir.path().join("cache");
+        let opts = BannerCacheOptions { enabled: true };
+        let expected = test_rgba([1, 2, 3, 4]);
+
+        write_test_png(&src, [1, 2, 3, 4]);
+        let (cache_path, path_hex) =
+            dynamic_image_cache_path_for(&src, opts, cache_dir.to_str().unwrap()).unwrap();
+        let stale_path = cache_path
+            .parent()
+            .unwrap()
+            .join(format!("{path_hex}-ffffffffffffffff.rgba"));
+        assert!(save_raw_cached_banner_image(&cache_path, &expected));
+        assert!(save_raw_cached_banner_image(
+            &stale_path,
+            &test_rgba([9, 8, 7, 6])
+        ));
+
+        let rgba = load_or_build_cached_dynamic_image(&src, opts, cache_dir.to_str().unwrap())
+            .expect("cache hit should load cached image");
+
+        assert_eq!(rgba, expected);
+        assert!(stale_path.is_file());
+    }
+
+    #[test]
+    fn cache_write_prunes_stale_variants() {
+        let dir = TempDir::new("cache-write-prune");
+        let src = dir.path().join("banner.png");
+        let cache_dir = dir.path().join("cache");
+        let opts = BannerCacheOptions { enabled: true };
+        let current = test_rgba([4, 3, 2, 1]);
+
+        write_test_png(&src, [4, 3, 2, 1]);
+        let (cache_path, path_hex) =
+            dynamic_image_cache_path_for(&src, opts, cache_dir.to_str().unwrap()).unwrap();
+        let stale_path = cache_path
+            .parent()
+            .unwrap()
+            .join(format!("{path_hex}-eeeeeeeeeeeeeeee.rgba"));
+        assert!(save_raw_cached_banner_image(
+            &stale_path,
+            &test_rgba([7, 7, 7, 7])
+        ));
+
+        save_cached_banner_image(&cache_path, &path_hex, &current);
+
+        assert!(cache_path.is_file());
+        assert!(!stale_path.exists());
     }
 }
