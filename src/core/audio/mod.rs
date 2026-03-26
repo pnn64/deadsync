@@ -1500,7 +1500,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
         .find(|device| device.is_default)
         .or_else(|| devices.first());
     let requested_device = cfg
-        .audio_output_device_index
+        .output_device_index
         .and_then(|idx| devices.get(idx as usize));
     if let Some(requested_idx) = cfg.output_device_index {
         if let Some(device) = requested_device {
@@ -1579,7 +1579,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
         .find(|device| device.is_default)
         .or_else(|| devices.first());
     let requested_device = cfg
-        .audio_output_device_index
+        .output_device_index
         .and_then(|idx| devices.get(idx as usize));
     if let Some(requested_idx) = cfg.output_device_index {
         if let Some(device) = requested_device {
