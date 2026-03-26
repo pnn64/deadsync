@@ -262,6 +262,7 @@ fn build_choices() -> Vec<Choice> {
     let default_speed_mod = format!("{}", default_profile.scroll_speed);
     let guest_speed_mod = format!("{}", crate::game::profile::GUEST_SCROLL_SPEED);
     let default_scroll_option = default_profile.scroll_option;
+    let player_options_section = profile::player_options_section(profile::get_session_play_style());
     out.push(Choice {
         kind: ActiveProfile::Guest,
         display_name: "[ GUEST ]".to_string(),
@@ -285,7 +286,9 @@ fn build_choices() -> Vec<Choice> {
             .join("profile.ini");
         let mut ini = crate::config::SimpleIni::new();
         if ini.load(&ini_path).is_ok() {
-            if let Some(raw) = ini.get("PlayerOptions", "ScrollSpeed") {
+            let get_player_option = |key: &str| ini.get(player_options_section, key);
+
+            if let Some(raw) = get_player_option("ScrollSpeed") {
                 let trimmed = raw.trim();
                 speed_mod = if let Ok(setting) = ScrollSpeedSetting::from_str(trimmed) {
                     format!("{setting}")
@@ -294,12 +297,10 @@ fn build_choices() -> Vec<Choice> {
                 };
             }
 
-            scroll_option = ini
-                .get("PlayerOptions", "Scroll")
+            scroll_option = get_player_option("Scroll")
                 .and_then(|s| profile::ScrollOption::from_str(&s).ok())
                 .unwrap_or_else(|| {
-                    let reverse_enabled = ini
-                        .get("PlayerOptions", "ReverseScroll")
+                    let reverse_enabled = get_player_option("ReverseScroll")
                         .and_then(|v| v.parse::<u8>().ok())
                         .is_some_and(|v| v != 0);
                     if reverse_enabled {
@@ -308,16 +309,13 @@ fn build_choices() -> Vec<Choice> {
                         default_scroll_option
                     }
                 });
-            mini_indicator = ini
-                .get("PlayerOptions", "MiniIndicator")
+            mini_indicator = get_player_option("MiniIndicator")
                 .and_then(|v| profile::MiniIndicator::from_str(&v).ok())
                 .unwrap_or_else(|| {
-                    let subtractive = ini
-                        .get("PlayerOptions", "SubtractiveScoring")
+                    let subtractive = get_player_option("SubtractiveScoring")
                         .and_then(|v| parse_ini_bool(&v))
                         .unwrap_or(false);
-                    let pacemaker = ini
-                        .get("PlayerOptions", "Pacemaker")
+                    let pacemaker = get_player_option("Pacemaker")
                         .and_then(|v| parse_ini_bool(&v))
                         .unwrap_or(false);
                     if subtractive {
@@ -330,14 +328,14 @@ fn build_choices() -> Vec<Choice> {
                 });
         }
         if let Ok(value) = ini
-            .get("PlayerOptions", "NoteSkin")
+            .get(player_options_section, "NoteSkin")
             .unwrap_or_default()
             .parse::<profile::NoteSkin>()
         {
             noteskin = value;
         }
         if let Ok(value) = ini
-            .get("PlayerOptions", "JudgmentGraphic")
+            .get(player_options_section, "JudgmentGraphic")
             .unwrap_or_default()
             .parse::<profile::JudgmentGraphic>()
         {

@@ -427,6 +427,643 @@ fn parse_last_played_value(value: Option<String>) -> Option<String> {
 }
 
 #[inline(always)]
+fn write_player_options(content: &mut String, section: &str, options: &PlayerOptionsData) {
+    content.push_str(&format!("[{section}]\n"));
+    content.push_str(&format!("BackgroundFilter={}\n", options.background_filter));
+    content.push_str(&format!("ScrollSpeed={}\n", options.scroll_speed));
+    content.push_str(&format!("Scroll={}\n", options.scroll_option));
+    content.push_str(&format!("Turn={}\n", options.turn_option));
+    content.push_str(&format!("InsertMask={}\n", options.insert_active_mask));
+    content.push_str(&format!("RemoveMask={}\n", options.remove_active_mask));
+    content.push_str(&format!("HoldsMask={}\n", options.holds_active_mask));
+    content.push_str(&format!(
+        "AccelEffectsMask={}\n",
+        options.accel_effects_active_mask
+    ));
+    content.push_str(&format!(
+        "VisualEffectsMask={}\n",
+        options.visual_effects_active_mask
+    ));
+    content.push_str(&format!(
+        "AppearanceEffectsMask={}\n",
+        options.appearance_effects_active_mask
+    ));
+    content.push_str(&format!("AttackMode={}\n", options.attack_mode));
+    content.push_str(&format!("HideLightType={}\n", options.hide_light_type));
+    content.push_str(&format!(
+        "RescoreEarlyHits={}\n",
+        i32::from(options.rescore_early_hits)
+    ));
+    content.push_str(&format!(
+        "HideEarlyDecentWayOffJudgments={}\n",
+        i32::from(options.hide_early_dw_judgments)
+    ));
+    content.push_str(&format!(
+        "HideEarlyDecentWayOffFlash={}\n",
+        i32::from(options.hide_early_dw_flash)
+    ));
+    content.push_str(&format!(
+        "HideTargets={}\n",
+        i32::from(options.hide_targets)
+    ));
+    content.push_str(&format!("HideSongBG={}\n", i32::from(options.hide_song_bg)));
+    content.push_str(&format!("HideCombo={}\n", i32::from(options.hide_combo)));
+    content.push_str(&format!(
+        "HideLifebar={}\n",
+        i32::from(options.hide_lifebar)
+    ));
+    content.push_str(&format!("HideScore={}\n", i32::from(options.hide_score)));
+    content.push_str(&format!("HideDanger={}\n", i32::from(options.hide_danger)));
+    content.push_str(&format!(
+        "HideComboExplosions={}\n",
+        i32::from(options.hide_combo_explosions)
+    ));
+    content.push_str(&format!(
+        "ColumnFlashOnMiss={}\n",
+        i32::from(options.column_flash_on_miss)
+    ));
+    content.push_str(&format!(
+        "SubtractiveScoring={}\n",
+        i32::from(options.subtractive_scoring)
+    ));
+    content.push_str(&format!("Pacemaker={}\n", i32::from(options.pacemaker)));
+    content.push_str(&format!(
+        "NPSGraphAtTop={}\n",
+        i32::from(options.nps_graph_at_top)
+    ));
+    content.push_str(&format!(
+        "TransparentDensityGraphBackground={}\n",
+        i32::from(options.transparent_density_graph_bg)
+    ));
+    content.push_str(&format!("MiniIndicator={}\n", options.mini_indicator));
+    content.push_str(&format!(
+        "MiniIndicatorScoreType={}\n",
+        options.mini_indicator_score_type
+    ));
+    content.push_str(&format!(
+        "ReverseScroll={}\n",
+        i32::from(options.reverse_scroll)
+    ));
+    content.push_str(&format!(
+        "ShowFaPlusWindow={}\n",
+        i32::from(options.show_fa_plus_window)
+    ));
+    content.push_str(&format!(
+        "ShowExScore={}\n",
+        i32::from(options.show_ex_score)
+    ));
+    content.push_str(&format!(
+        "ShowHardEXScore={}\n",
+        i32::from(options.show_hard_ex_score)
+    ));
+    content.push_str(&format!(
+        "ShowFaPlusPane={}\n",
+        i32::from(options.show_fa_plus_pane)
+    ));
+    content.push_str(&format!(
+        "SmallerWhite={}\n",
+        i32::from(options.fa_plus_10ms_blue_window)
+    ));
+    content.push_str(&format!(
+        "SplitWhites={}\n",
+        i32::from(options.split_15_10ms)
+    ));
+    content.push_str(&format!(
+        "TrackEarlyJudgments={}\n",
+        i32::from(options.track_early_judgments)
+    ));
+    content.push_str(&format!(
+        "CustomFantasticWindow={}\n",
+        i32::from(options.custom_fantastic_window)
+    ));
+    content.push_str(&format!(
+        "CustomFantasticWindowMs={}\n",
+        options.custom_fantastic_window_ms
+    ));
+    content.push_str(&format!(
+        "JudgmentTilt={}\n",
+        i32::from(options.judgment_tilt)
+    ));
+    content.push_str(&format!("ColumnCues={}\n", i32::from(options.column_cues)));
+    content.push_str(&format!(
+        "JudgmentBack={}\n",
+        i32::from(options.judgment_back)
+    ));
+    content.push_str(&format!(
+        "ErrorMSDisplay={}\n",
+        i32::from(options.error_ms_display)
+    ));
+    content.push_str(&format!(
+        "DisplayScorebox={}\n",
+        i32::from(options.display_scorebox)
+    ));
+    content.push_str(&format!("RainbowMax={}\n", i32::from(options.rainbow_max)));
+    content.push_str(&format!(
+        "ResponsiveColors={}\n",
+        i32::from(options.responsive_colors)
+    ));
+    content.push_str(&format!(
+        "ShowLifePercent={}\n",
+        i32::from(options.show_life_percent)
+    ));
+    content.push_str(&format!("TiltMultiplier={}\n", options.tilt_multiplier));
+    content.push_str(&format!("ErrorBar={}\n", options.error_bar));
+    content.push_str(&format!(
+        "ErrorBarText={}\n",
+        i32::from(options.error_bar_text)
+    ));
+    content.push_str(&format!("ErrorBarMask={}\n", options.error_bar_active_mask));
+    content.push_str(&format!(
+        "Colorful={}\n",
+        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_COLORFUL) != 0)
+    ));
+    content.push_str(&format!(
+        "Monochrome={}\n",
+        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_MONOCHROME) != 0)
+    ));
+    content.push_str(&format!(
+        "Text={}\n",
+        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_TEXT) != 0)
+    ));
+    content.push_str(&format!(
+        "Highlight={}\n",
+        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_HIGHLIGHT) != 0)
+    ));
+    content.push_str(&format!(
+        "Average={}\n",
+        i32::from((options.error_bar_active_mask & ERROR_BAR_BIT_AVERAGE) != 0)
+    ));
+    content.push_str(&format!("ErrorBarUp={}\n", i32::from(options.error_bar_up)));
+    content.push_str(&format!(
+        "ErrorBarMultiTick={}\n",
+        i32::from(options.error_bar_multi_tick)
+    ));
+    content.push_str(&format!("ErrorBarTrim={}\n", options.error_bar_trim));
+    content.push_str(&format!(
+        "DataVisualizations={}\n",
+        options.data_visualizations
+    ));
+    content.push_str(&format!("TargetScore={}\n", options.target_score));
+    content.push_str(&format!("LifeMeterType={}\n", options.lifemeter_type));
+    content.push_str(&format!("MeasureCounter={}\n", options.measure_counter));
+    content.push_str(&format!(
+        "MeasureCounterLookahead={}\n",
+        options.measure_counter_lookahead
+    ));
+    content.push_str(&format!(
+        "MeasureCounterLeft={}\n",
+        i32::from(options.measure_counter_left)
+    ));
+    content.push_str(&format!(
+        "MeasureCounterUp={}\n",
+        i32::from(options.measure_counter_up)
+    ));
+    content.push_str(&format!(
+        "MeasureCounterVert={}\n",
+        i32::from(options.measure_counter_vert)
+    ));
+    content.push_str(&format!("BrokenRun={}\n", i32::from(options.broken_run)));
+    content.push_str(&format!("RunTimer={}\n", i32::from(options.run_timer)));
+    content.push_str(&format!("MeasureLines={}\n", options.measure_lines));
+    content.push_str(&format!(
+        "HoldJudgmentGraphic={}\n",
+        options.hold_judgment_graphic
+    ));
+    content.push_str(&format!("JudgmentGraphic={}\n", options.judgment_graphic));
+    content.push_str(&format!("ComboFont={}\n", options.combo_font));
+    content.push_str(&format!("ComboColors={}\n", options.combo_colors));
+    content.push_str(&format!("ComboMode={}\n", options.combo_mode));
+    content.push_str(&format!(
+        "CarryComboBetweenSongs={}\n",
+        i32::from(options.carry_combo_between_songs)
+    ));
+    content.push_str(&format!("NoteSkin={}\n", options.noteskin));
+    content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
+    content.push_str(&format!("Perspective={}\n", options.perspective));
+    content.push_str(&format!(
+        "NoteFieldOffsetX={}\n",
+        options.note_field_offset_x
+    ));
+    content.push_str(&format!(
+        "NoteFieldOffsetY={}\n",
+        options.note_field_offset_y
+    ));
+    content.push_str(&format!("VisualDelayMs={}\n", options.visual_delay_ms));
+    content.push('\n');
+}
+
+#[inline(always)]
+fn load_player_options(
+    profile_conf: &SimpleIni,
+    section: &str,
+    default: &PlayerOptionsData,
+) -> Option<PlayerOptionsData> {
+    let has_any = profile_conf
+        .get_section(section)
+        .is_some_and(|s| !s.is_empty());
+    if !has_any {
+        return None;
+    }
+
+    let mut options = default.clone();
+    options.background_filter = profile_conf
+        .get(section, "BackgroundFilter")
+        .and_then(|s| BackgroundFilter::from_str(&s).ok())
+        .unwrap_or(options.background_filter);
+    options.hold_judgment_graphic = profile_conf
+        .get(section, "HoldJudgmentGraphic")
+        .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
+        .unwrap_or(options.hold_judgment_graphic);
+    options.judgment_graphic = profile_conf
+        .get(section, "JudgmentGraphic")
+        .and_then(|s| JudgmentGraphic::from_str(&s).ok())
+        .unwrap_or(options.judgment_graphic);
+    options.combo_font = profile_conf
+        .get(section, "ComboFont")
+        .and_then(|s| ComboFont::from_str(&s).ok())
+        .unwrap_or(options.combo_font);
+    options.combo_colors = profile_conf
+        .get(section, "ComboColors")
+        .and_then(|s| ComboColors::from_str(&s).ok())
+        .unwrap_or(options.combo_colors);
+    options.combo_mode = profile_conf
+        .get(section, "ComboMode")
+        .and_then(|s| ComboMode::from_str(&s).ok())
+        .unwrap_or(options.combo_mode);
+    options.carry_combo_between_songs = profile_conf
+        .get(section, "CarryComboBetweenSongs")
+        .or_else(|| profile_conf.get(section, "ComboContinuesBetweenSongs"))
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.carry_combo_between_songs, |v| v != 0);
+    options.noteskin = profile_conf
+        .get(section, "NoteSkin")
+        .and_then(|s| NoteSkin::from_str(&s).ok())
+        .unwrap_or_else(|| options.noteskin.clone());
+    options.mini_percent = profile_conf
+        .get(section, "MiniPercent")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.mini_percent);
+    options.perspective = profile_conf
+        .get(section, "Perspective")
+        .and_then(|s| Perspective::from_str(&s).ok())
+        .unwrap_or(options.perspective);
+    options.note_field_offset_x = profile_conf
+        .get(section, "NoteFieldOffsetX")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.note_field_offset_x);
+    options.note_field_offset_y = profile_conf
+        .get(section, "NoteFieldOffsetY")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.note_field_offset_y);
+    options.visual_delay_ms = profile_conf
+        .get(section, "VisualDelayMs")
+        .or_else(|| profile_conf.get(section, "VisualDelay"))
+        .and_then(|s| s.trim_end_matches("ms").parse::<i32>().ok())
+        .unwrap_or(options.visual_delay_ms);
+    options.show_fa_plus_window = profile_conf
+        .get(section, "ShowFaPlusWindow")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.show_fa_plus_window, |v| v != 0);
+    options.show_ex_score = profile_conf
+        .get(section, "ShowExScore")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.show_ex_score, |v| v != 0);
+    options.show_hard_ex_score = profile_conf
+        .get(section, "ShowHardEXScore")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.show_hard_ex_score, |v| v != 0);
+    options.show_fa_plus_pane = profile_conf
+        .get(section, "ShowFaPlusPane")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.show_fa_plus_pane, |v| v != 0);
+    options.fa_plus_10ms_blue_window = profile_conf
+        .get(section, "SmallerWhite")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.fa_plus_10ms_blue_window, |v| v != 0);
+    options.split_15_10ms = profile_conf
+        .get(section, "SplitWhites")
+        .or_else(|| profile_conf.get(section, "Split1510ms"))
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.split_15_10ms, |v| v != 0);
+    options.track_early_judgments = profile_conf
+        .get(section, "TrackEarlyJudgments")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.track_early_judgments, |v| v != 0);
+    options.custom_fantastic_window = profile_conf
+        .get(section, "CustomFantasticWindow")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.custom_fantastic_window, |v| v != 0);
+    options.custom_fantastic_window_ms = profile_conf
+        .get(section, "CustomFantasticWindowMs")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(clamp_custom_fantastic_window_ms)
+        .unwrap_or(options.custom_fantastic_window_ms);
+    options.judgment_tilt = profile_conf
+        .get(section, "JudgmentTilt")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.judgment_tilt, |v| v != 0);
+    options.column_cues = profile_conf
+        .get(section, "ColumnCues")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.column_cues, |v| v != 0);
+    options.judgment_back = profile_conf
+        .get(section, "JudgmentBack")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.judgment_back, |v| v != 0);
+    options.error_ms_display = profile_conf
+        .get(section, "ErrorMSDisplay")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.error_ms_display, |v| v != 0);
+    options.display_scorebox = profile_conf
+        .get(section, "DisplayScorebox")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.display_scorebox, |v| v != 0);
+    options.rainbow_max = profile_conf
+        .get(section, "RainbowMax")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.rainbow_max, |v| v != 0);
+    options.responsive_colors = profile_conf
+        .get(section, "ResponsiveColors")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.responsive_colors, |v| v != 0);
+    options.show_life_percent = profile_conf
+        .get(section, "ShowLifePercent")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.show_life_percent, |v| v != 0);
+    options.tilt_multiplier = profile_conf
+        .get(section, "TiltMultiplier")
+        .and_then(|s| s.parse::<f32>().ok())
+        .filter(|v| v.is_finite())
+        .unwrap_or(options.tilt_multiplier);
+    options.error_bar = profile_conf
+        .get(section, "ErrorBar")
+        .and_then(|s| ErrorBarStyle::from_str(&s).ok())
+        .unwrap_or(options.error_bar);
+    options.error_bar_text = profile_conf
+        .get(section, "ErrorBarText")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.error_bar_text, |v| v != 0);
+    let mask_from_key = profile_conf
+        .get(section, "ErrorBarMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(normalize_error_bar_mask);
+    let colorful = profile_conf
+        .get(section, "Colorful")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let monochrome = profile_conf
+        .get(section, "Monochrome")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let text = profile_conf
+        .get(section, "Text")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let highlight = profile_conf
+        .get(section, "Highlight")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let average = profile_conf
+        .get(section, "Average")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v != 0);
+    let mask_from_flags = if colorful.is_some()
+        || monochrome.is_some()
+        || text.is_some()
+        || highlight.is_some()
+        || average.is_some()
+    {
+        let mut mask: u8 = 0;
+        if colorful.unwrap_or(false) {
+            mask |= ERROR_BAR_BIT_COLORFUL;
+        }
+        if monochrome.unwrap_or(false) {
+            mask |= ERROR_BAR_BIT_MONOCHROME;
+        }
+        if text.unwrap_or(false) {
+            mask |= ERROR_BAR_BIT_TEXT;
+        }
+        if highlight.unwrap_or(false) {
+            mask |= ERROR_BAR_BIT_HIGHLIGHT;
+        }
+        if average.unwrap_or(false) {
+            mask |= ERROR_BAR_BIT_AVERAGE;
+        }
+        Some(normalize_error_bar_mask(mask))
+    } else {
+        None
+    };
+    options.error_bar_active_mask = mask_from_key
+        .or(mask_from_flags)
+        .unwrap_or_else(|| error_bar_mask_from_style(options.error_bar, options.error_bar_text));
+    options.error_bar = error_bar_style_from_mask(options.error_bar_active_mask);
+    options.error_bar_text = error_bar_text_from_mask(options.error_bar_active_mask);
+    options.error_bar_up = profile_conf
+        .get(section, "ErrorBarUp")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.error_bar_up, |v| v != 0);
+    options.error_bar_multi_tick = profile_conf
+        .get(section, "ErrorBarMultiTick")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.error_bar_multi_tick, |v| v != 0);
+    options.error_bar_trim = profile_conf
+        .get(section, "ErrorBarTrim")
+        .and_then(|s| ErrorBarTrim::from_str(&s).ok())
+        .unwrap_or(options.error_bar_trim);
+    options.data_visualizations = profile_conf
+        .get(section, "DataVisualizations")
+        .and_then(|s| DataVisualizations::from_str(&s).ok())
+        .unwrap_or(options.data_visualizations);
+    options.target_score = profile_conf
+        .get(section, "TargetScore")
+        .and_then(|s| TargetScoreSetting::from_str(&s).ok())
+        .unwrap_or(options.target_score);
+    options.lifemeter_type = profile_conf
+        .get(section, "LifeMeterType")
+        .and_then(|s| LifeMeterType::from_str(&s).ok())
+        .unwrap_or(options.lifemeter_type);
+    options.measure_counter = profile_conf
+        .get(section, "MeasureCounter")
+        .and_then(|s| MeasureCounter::from_str(&s).ok())
+        .unwrap_or(options.measure_counter);
+    options.measure_counter_lookahead = profile_conf
+        .get(section, "MeasureCounterLookahead")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v.min(4))
+        .unwrap_or(options.measure_counter_lookahead);
+    options.measure_counter_left = profile_conf
+        .get(section, "MeasureCounterLeft")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.measure_counter_left, |v| v != 0);
+    options.measure_counter_up = profile_conf
+        .get(section, "MeasureCounterUp")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.measure_counter_up, |v| v != 0);
+    options.measure_counter_vert = profile_conf
+        .get(section, "MeasureCounterVert")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.measure_counter_vert, |v| v != 0);
+    options.broken_run = profile_conf
+        .get(section, "BrokenRun")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.broken_run, |v| v != 0);
+    options.run_timer = profile_conf
+        .get(section, "RunTimer")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.run_timer, |v| v != 0);
+    options.measure_lines = profile_conf
+        .get(section, "MeasureLines")
+        .and_then(|s| MeasureLines::from_str(&s).ok())
+        .unwrap_or(options.measure_lines);
+    options.scroll_speed = profile_conf
+        .get(section, "ScrollSpeed")
+        .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
+        .unwrap_or_else(|| options.scroll_speed.clone());
+    options.turn_option = profile_conf
+        .get(section, "Turn")
+        .and_then(|s| TurnOption::from_str(&s).ok())
+        .unwrap_or(options.turn_option);
+    options.insert_active_mask = profile_conf
+        .get(section, "InsertMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(normalize_insert_mask)
+        .unwrap_or(options.insert_active_mask);
+    options.remove_active_mask = profile_conf
+        .get(section, "RemoveMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(normalize_remove_mask)
+        .unwrap_or(options.remove_active_mask);
+    options.holds_active_mask = profile_conf
+        .get(section, "HoldsMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(normalize_holds_mask)
+        .unwrap_or(options.holds_active_mask);
+    options.accel_effects_active_mask = profile_conf
+        .get(section, "AccelEffectsMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(normalize_accel_effects_mask)
+        .unwrap_or(options.accel_effects_active_mask);
+    options.visual_effects_active_mask = profile_conf
+        .get(section, "VisualEffectsMask")
+        .and_then(|s| s.parse::<u16>().ok())
+        .map(normalize_visual_effects_mask)
+        .unwrap_or(options.visual_effects_active_mask);
+    options.appearance_effects_active_mask = profile_conf
+        .get(section, "AppearanceEffectsMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(normalize_appearance_effects_mask)
+        .unwrap_or(options.appearance_effects_active_mask);
+    options.attack_mode = profile_conf
+        .get(section, "AttackMode")
+        .or_else(|| profile_conf.get(section, "Attacks"))
+        .and_then(|s| AttackMode::from_str(&s).ok())
+        .unwrap_or(options.attack_mode);
+    options.hide_light_type = profile_conf
+        .get(section, "HideLightType")
+        .and_then(|s| HideLightType::from_str(&s).ok())
+        .unwrap_or(options.hide_light_type);
+    options.rescore_early_hits = profile_conf
+        .get(section, "RescoreEarlyHits")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.rescore_early_hits, |v| v != 0);
+    options.hide_early_dw_judgments = profile_conf
+        .get(section, "HideEarlyDecentWayOffJudgments")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_early_dw_judgments, |v| v != 0);
+    options.hide_early_dw_flash = profile_conf
+        .get(section, "HideEarlyDecentWayOffFlash")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_early_dw_flash, |v| v != 0);
+    options.hide_targets = profile_conf
+        .get(section, "HideTargets")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_targets, |v| v != 0);
+    options.hide_song_bg = profile_conf
+        .get(section, "HideSongBG")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_song_bg, |v| v != 0);
+    options.hide_combo = profile_conf
+        .get(section, "HideCombo")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_combo, |v| v != 0);
+    options.hide_lifebar = profile_conf
+        .get(section, "HideLifebar")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_lifebar, |v| v != 0);
+    options.hide_score = profile_conf
+        .get(section, "HideScore")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_score, |v| v != 0);
+    options.hide_danger = profile_conf
+        .get(section, "HideDanger")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_danger, |v| v != 0);
+    options.hide_combo_explosions = profile_conf
+        .get(section, "HideComboExplosions")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_combo_explosions, |v| v != 0);
+    options.column_flash_on_miss = profile_conf
+        .get(section, "ColumnFlashOnMiss")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.column_flash_on_miss, |v| v != 0);
+    options.subtractive_scoring = profile_conf
+        .get(section, "SubtractiveScoring")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.subtractive_scoring, |v| v != 0);
+    options.pacemaker = profile_conf
+        .get(section, "Pacemaker")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.pacemaker, |v| v != 0);
+    options.nps_graph_at_top = profile_conf
+        .get(section, "NPSGraphAtTop")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.nps_graph_at_top, |v| v != 0);
+    options.transparent_density_graph_bg = profile_conf
+        .get(section, "TransparentDensityGraphBackground")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.transparent_density_graph_bg, |v| v != 0);
+    options.mini_indicator = profile_conf
+        .get(section, "MiniIndicator")
+        .and_then(|s| MiniIndicator::from_str(&s).ok())
+        .unwrap_or_else(|| {
+            if options.subtractive_scoring {
+                MiniIndicator::SubtractiveScoring
+            } else if options.pacemaker {
+                MiniIndicator::Pacemaker
+            } else {
+                options.mini_indicator
+            }
+        });
+    if options.mini_indicator == MiniIndicator::SubtractiveScoring {
+        options.subtractive_scoring = true;
+    }
+    if options.mini_indicator == MiniIndicator::Pacemaker {
+        options.pacemaker = true;
+    }
+    options.mini_indicator_score_type = profile_conf
+        .get(section, "MiniIndicatorScoreType")
+        .and_then(|s| MiniIndicatorScoreType::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_score_type);
+    options.scroll_option = profile_conf
+        .get(section, "Scroll")
+        .and_then(|s| ScrollOption::from_str(&s).ok())
+        .unwrap_or_else(|| {
+            let reverse_enabled = profile_conf
+                .get(section, "ReverseScroll")
+                .and_then(|v| v.parse::<u8>().ok())
+                .map_or(options.reverse_scroll, |v| v != 0);
+            if reverse_enabled {
+                ScrollOption::Reverse
+            } else {
+                options.scroll_option
+            }
+        });
+    options.reverse_scroll = options.scroll_option.contains(ScrollOption::Reverse);
+
+    Some(options)
+}
+
+#[inline(always)]
 fn load_last_played(
     profile_conf: &SimpleIni,
     section: &str,
@@ -1287,6 +1924,175 @@ impl core::fmt::Display for TargetScoreSetting {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlayerOptionsData {
+    pub background_filter: BackgroundFilter,
+    pub hold_judgment_graphic: HoldJudgmentGraphic,
+    pub judgment_graphic: JudgmentGraphic,
+    pub combo_font: ComboFont,
+    pub combo_colors: ComboColors,
+    pub combo_mode: ComboMode,
+    pub carry_combo_between_songs: bool,
+    pub noteskin: NoteSkin,
+    pub scroll_speed: ScrollSpeedSetting,
+    pub scroll_option: ScrollOption,
+    pub reverse_scroll: bool,
+    pub turn_option: TurnOption,
+    pub insert_active_mask: u8,
+    pub remove_active_mask: u8,
+    pub holds_active_mask: u8,
+    pub accel_effects_active_mask: u8,
+    pub visual_effects_active_mask: u16,
+    pub appearance_effects_active_mask: u8,
+    pub attack_mode: AttackMode,
+    pub hide_light_type: HideLightType,
+    pub rescore_early_hits: bool,
+    pub hide_early_dw_judgments: bool,
+    pub hide_early_dw_flash: bool,
+    pub show_fa_plus_window: bool,
+    pub show_ex_score: bool,
+    pub show_hard_ex_score: bool,
+    pub show_fa_plus_pane: bool,
+    pub fa_plus_10ms_blue_window: bool,
+    pub split_15_10ms: bool,
+    pub track_early_judgments: bool,
+    pub custom_fantastic_window: bool,
+    pub custom_fantastic_window_ms: u8,
+    pub judgment_tilt: bool,
+    pub column_cues: bool,
+    pub judgment_back: bool,
+    pub error_ms_display: bool,
+    pub display_scorebox: bool,
+    pub rainbow_max: bool,
+    pub responsive_colors: bool,
+    pub show_life_percent: bool,
+    pub tilt_multiplier: f32,
+    pub error_bar_active_mask: u8,
+    pub error_bar: ErrorBarStyle,
+    pub error_bar_text: bool,
+    pub error_bar_up: bool,
+    pub error_bar_multi_tick: bool,
+    pub error_bar_trim: ErrorBarTrim,
+    pub data_visualizations: DataVisualizations,
+    pub target_score: TargetScoreSetting,
+    pub lifemeter_type: LifeMeterType,
+    pub measure_counter: MeasureCounter,
+    pub measure_counter_lookahead: u8,
+    pub measure_counter_left: bool,
+    pub measure_counter_up: bool,
+    pub measure_counter_vert: bool,
+    pub broken_run: bool,
+    pub run_timer: bool,
+    pub measure_lines: MeasureLines,
+    pub hide_targets: bool,
+    pub hide_song_bg: bool,
+    pub hide_combo: bool,
+    pub hide_lifebar: bool,
+    pub hide_score: bool,
+    pub hide_danger: bool,
+    pub hide_combo_explosions: bool,
+    pub column_flash_on_miss: bool,
+    pub subtractive_scoring: bool,
+    pub pacemaker: bool,
+    pub nps_graph_at_top: bool,
+    pub transparent_density_graph_bg: bool,
+    pub mini_indicator: MiniIndicator,
+    pub mini_indicator_score_type: MiniIndicatorScoreType,
+    pub mini_percent: i32,
+    pub perspective: Perspective,
+    pub note_field_offset_x: i32,
+    pub note_field_offset_y: i32,
+    pub visual_delay_ms: i32,
+}
+
+fn default_player_options() -> PlayerOptionsData {
+    PlayerOptionsData {
+        background_filter: BackgroundFilter::default(),
+        hold_judgment_graphic: HoldJudgmentGraphic::default(),
+        judgment_graphic: JudgmentGraphic::default(),
+        combo_font: ComboFont::default(),
+        combo_colors: ComboColors::default(),
+        combo_mode: ComboMode::default(),
+        carry_combo_between_songs: true,
+        noteskin: NoteSkin::default(),
+        scroll_speed: ScrollSpeedSetting::default(),
+        scroll_option: ScrollOption::default(),
+        reverse_scroll: false,
+        turn_option: TurnOption::default(),
+        insert_active_mask: 0,
+        remove_active_mask: 0,
+        holds_active_mask: 0,
+        accel_effects_active_mask: 0,
+        visual_effects_active_mask: 0,
+        appearance_effects_active_mask: 0,
+        attack_mode: AttackMode::default(),
+        hide_light_type: HideLightType::default(),
+        rescore_early_hits: true,
+        hide_early_dw_judgments: false,
+        hide_early_dw_flash: false,
+        show_fa_plus_window: false,
+        show_ex_score: false,
+        show_hard_ex_score: false,
+        show_fa_plus_pane: false,
+        fa_plus_10ms_blue_window: false,
+        split_15_10ms: false,
+        track_early_judgments: false,
+        custom_fantastic_window: false,
+        custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
+        judgment_tilt: false,
+        column_cues: false,
+        judgment_back: false,
+        error_ms_display: false,
+        display_scorebox: true,
+        rainbow_max: false,
+        responsive_colors: false,
+        show_life_percent: false,
+        tilt_multiplier: 1.0,
+        error_bar_active_mask: error_bar_mask_from_style(ErrorBarStyle::default(), false),
+        error_bar: ErrorBarStyle::default(),
+        error_bar_text: false,
+        error_bar_up: false,
+        error_bar_multi_tick: false,
+        error_bar_trim: ErrorBarTrim::default(),
+        data_visualizations: DataVisualizations::default(),
+        target_score: TargetScoreSetting::default(),
+        lifemeter_type: LifeMeterType::default(),
+        measure_counter: MeasureCounter::default(),
+        measure_counter_lookahead: 2,
+        measure_counter_left: true,
+        measure_counter_up: false,
+        measure_counter_vert: false,
+        broken_run: false,
+        run_timer: false,
+        measure_lines: MeasureLines::default(),
+        hide_targets: false,
+        hide_song_bg: false,
+        hide_combo: false,
+        hide_lifebar: false,
+        hide_score: false,
+        hide_danger: false,
+        hide_combo_explosions: false,
+        column_flash_on_miss: false,
+        subtractive_scoring: false,
+        pacemaker: false,
+        nps_graph_at_top: false,
+        transparent_density_graph_bg: false,
+        mini_indicator: MiniIndicator::None,
+        mini_indicator_score_type: MiniIndicatorScoreType::Itg,
+        mini_percent: 0,
+        perspective: Perspective::default(),
+        note_field_offset_x: 0,
+        note_field_offset_y: 0,
+        visual_delay_ms: 0,
+    }
+}
+
+impl Default for PlayerOptionsData {
+    fn default() -> Self {
+        default_player_options()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub display_name: String,
@@ -1301,6 +2107,9 @@ pub struct Profile {
     pub groovestats_is_pad_player: bool,
     pub groovestats_username: String,
     pub arrowcloud_api_key: String,
+    // Style-scoped player options are stored per chart family below.
+    // These top-level fields hold the snapshot currently applied for the
+    // active session play style so existing read paths can stay simple.
     pub background_filter: BackgroundFilter,
     pub hold_judgment_graphic: HoldJudgmentGraphic,
     pub judgment_graphic: JudgmentGraphic,
@@ -1412,6 +2221,8 @@ pub struct Profile {
     // Per-player visual delay (Simply Love semantics). Stored in milliseconds.
     // Negative values shift arrows upwards; positive values shift them down.
     pub visual_delay_ms: i32,
+    pub player_options_singles: PlayerOptionsData,
+    pub player_options_doubles: PlayerOptionsData,
     // Persisted "last played" selections so future sessions can reopen
     // SelectMusic on the most recently played chart for each chart family.
     // Singles is shared by Single and Versus. Double uses its own entry.
@@ -1439,6 +2250,7 @@ impl Default for LastPlayed {
 
 impl Default for Profile {
     fn default() -> Self {
+        let player_options = default_player_options();
         Self {
             display_name: "Player 1".to_string(),
             player_initials: "P1".to_string(),
@@ -1451,87 +2263,89 @@ impl Default for Profile {
             groovestats_is_pad_player: false,
             groovestats_username: String::new(),
             arrowcloud_api_key: String::new(),
-            background_filter: BackgroundFilter::default(),
-            hold_judgment_graphic: HoldJudgmentGraphic::default(),
-            judgment_graphic: JudgmentGraphic::default(),
-            combo_font: ComboFont::default(),
-            combo_colors: ComboColors::default(),
-            combo_mode: ComboMode::default(),
-            carry_combo_between_songs: true,
+            background_filter: player_options.background_filter.clone(),
+            hold_judgment_graphic: player_options.hold_judgment_graphic.clone(),
+            judgment_graphic: player_options.judgment_graphic.clone(),
+            combo_font: player_options.combo_font.clone(),
+            combo_colors: player_options.combo_colors.clone(),
+            combo_mode: player_options.combo_mode.clone(),
+            carry_combo_between_songs: player_options.carry_combo_between_songs,
             current_combo: 0,
             known_pack_names: HashSet::new(),
-            noteskin: NoteSkin::default(),
+            noteskin: player_options.noteskin.clone(),
             avatar_path: None,
             avatar_texture_key: None,
-            scroll_speed: ScrollSpeedSetting::default(),
-            scroll_option: ScrollOption::default(),
-            reverse_scroll: false,
-            turn_option: TurnOption::default(),
-            insert_active_mask: 0,
-            remove_active_mask: 0,
-            holds_active_mask: 0,
-            accel_effects_active_mask: 0,
-            visual_effects_active_mask: 0,
-            appearance_effects_active_mask: 0,
-            attack_mode: AttackMode::default(),
-            hide_light_type: HideLightType::default(),
-            rescore_early_hits: true,
-            hide_early_dw_judgments: false,
-            hide_early_dw_flash: false,
-            show_fa_plus_window: false,
-            show_ex_score: false,
-            show_hard_ex_score: false,
-            show_fa_plus_pane: false,
-            fa_plus_10ms_blue_window: false,
-            split_15_10ms: false,
-            track_early_judgments: false,
-            custom_fantastic_window: false,
-            custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
-            judgment_tilt: false,
-            column_cues: false,
-            judgment_back: false,
-            error_ms_display: false,
-            display_scorebox: true,
-            rainbow_max: false,
-            responsive_colors: false,
-            show_life_percent: false,
-            tilt_multiplier: 1.0,
-            error_bar: ErrorBarStyle::default(),
-            error_bar_active_mask: error_bar_mask_from_style(ErrorBarStyle::default(), false),
-            error_bar_text: false,
-            error_bar_up: false,
-            error_bar_multi_tick: false,
-            error_bar_trim: ErrorBarTrim::default(),
-            data_visualizations: DataVisualizations::default(),
-            target_score: TargetScoreSetting::default(),
-            lifemeter_type: LifeMeterType::default(),
-            measure_counter: MeasureCounter::default(),
-            measure_counter_lookahead: 2,
-            measure_counter_left: true,
-            measure_counter_up: false,
-            measure_counter_vert: false,
-            broken_run: false,
-            run_timer: false,
-            measure_lines: MeasureLines::default(),
-            hide_targets: false,
-            hide_song_bg: false,
-            hide_combo: false,
-            hide_lifebar: false,
-            hide_score: false,
-            hide_danger: false,
-            hide_combo_explosions: false,
-            column_flash_on_miss: false,
-            subtractive_scoring: false,
-            pacemaker: false,
-            nps_graph_at_top: false,
-            transparent_density_graph_bg: false,
-            mini_indicator: MiniIndicator::None,
-            mini_indicator_score_type: MiniIndicatorScoreType::Itg,
-            mini_percent: 0,
-            perspective: Perspective::default(),
-            note_field_offset_x: 0,
-            note_field_offset_y: 0,
-            visual_delay_ms: 0,
+            scroll_speed: player_options.scroll_speed.clone(),
+            scroll_option: player_options.scroll_option,
+            reverse_scroll: player_options.reverse_scroll,
+            turn_option: player_options.turn_option,
+            insert_active_mask: player_options.insert_active_mask,
+            remove_active_mask: player_options.remove_active_mask,
+            holds_active_mask: player_options.holds_active_mask,
+            accel_effects_active_mask: player_options.accel_effects_active_mask,
+            visual_effects_active_mask: player_options.visual_effects_active_mask,
+            appearance_effects_active_mask: player_options.appearance_effects_active_mask,
+            attack_mode: player_options.attack_mode,
+            hide_light_type: player_options.hide_light_type,
+            rescore_early_hits: player_options.rescore_early_hits,
+            hide_early_dw_judgments: player_options.hide_early_dw_judgments,
+            hide_early_dw_flash: player_options.hide_early_dw_flash,
+            show_fa_plus_window: player_options.show_fa_plus_window,
+            show_ex_score: player_options.show_ex_score,
+            show_hard_ex_score: player_options.show_hard_ex_score,
+            show_fa_plus_pane: player_options.show_fa_plus_pane,
+            fa_plus_10ms_blue_window: player_options.fa_plus_10ms_blue_window,
+            split_15_10ms: player_options.split_15_10ms,
+            track_early_judgments: player_options.track_early_judgments,
+            custom_fantastic_window: player_options.custom_fantastic_window,
+            custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
+            judgment_tilt: player_options.judgment_tilt,
+            column_cues: player_options.column_cues,
+            judgment_back: player_options.judgment_back,
+            error_ms_display: player_options.error_ms_display,
+            display_scorebox: player_options.display_scorebox,
+            rainbow_max: player_options.rainbow_max,
+            responsive_colors: player_options.responsive_colors,
+            show_life_percent: player_options.show_life_percent,
+            tilt_multiplier: player_options.tilt_multiplier,
+            error_bar: player_options.error_bar,
+            error_bar_active_mask: player_options.error_bar_active_mask,
+            error_bar_text: player_options.error_bar_text,
+            error_bar_up: player_options.error_bar_up,
+            error_bar_multi_tick: player_options.error_bar_multi_tick,
+            error_bar_trim: player_options.error_bar_trim,
+            data_visualizations: player_options.data_visualizations,
+            target_score: player_options.target_score,
+            lifemeter_type: player_options.lifemeter_type,
+            measure_counter: player_options.measure_counter,
+            measure_counter_lookahead: player_options.measure_counter_lookahead,
+            measure_counter_left: player_options.measure_counter_left,
+            measure_counter_up: player_options.measure_counter_up,
+            measure_counter_vert: player_options.measure_counter_vert,
+            broken_run: player_options.broken_run,
+            run_timer: player_options.run_timer,
+            measure_lines: player_options.measure_lines,
+            hide_targets: player_options.hide_targets,
+            hide_song_bg: player_options.hide_song_bg,
+            hide_combo: player_options.hide_combo,
+            hide_lifebar: player_options.hide_lifebar,
+            hide_score: player_options.hide_score,
+            hide_danger: player_options.hide_danger,
+            hide_combo_explosions: player_options.hide_combo_explosions,
+            column_flash_on_miss: player_options.column_flash_on_miss,
+            subtractive_scoring: player_options.subtractive_scoring,
+            pacemaker: player_options.pacemaker,
+            nps_graph_at_top: player_options.nps_graph_at_top,
+            transparent_density_graph_bg: player_options.transparent_density_graph_bg,
+            mini_indicator: player_options.mini_indicator,
+            mini_indicator_score_type: player_options.mini_indicator_score_type,
+            mini_percent: player_options.mini_percent,
+            perspective: player_options.perspective,
+            note_field_offset_x: player_options.note_field_offset_x,
+            note_field_offset_y: player_options.note_field_offset_y,
+            visual_delay_ms: player_options.visual_delay_ms,
+            player_options_singles: player_options.clone(),
+            player_options_doubles: player_options,
             last_played_singles: LastPlayed::default(),
             last_played_doubles: LastPlayed::default(),
         }
@@ -1560,6 +2374,201 @@ impl Profile {
     #[inline(always)]
     pub fn age_years(&self) -> i32 {
         self.age_years_for(Local::now().year())
+    }
+
+    #[inline(always)]
+    pub fn current_player_options(&self) -> PlayerOptionsData {
+        PlayerOptionsData {
+            background_filter: self.background_filter.clone(),
+            hold_judgment_graphic: self.hold_judgment_graphic.clone(),
+            judgment_graphic: self.judgment_graphic.clone(),
+            combo_font: self.combo_font.clone(),
+            combo_colors: self.combo_colors.clone(),
+            combo_mode: self.combo_mode.clone(),
+            carry_combo_between_songs: self.carry_combo_between_songs,
+            noteskin: self.noteskin.clone(),
+            scroll_speed: self.scroll_speed.clone(),
+            scroll_option: self.scroll_option,
+            reverse_scroll: self.reverse_scroll,
+            turn_option: self.turn_option,
+            insert_active_mask: self.insert_active_mask,
+            remove_active_mask: self.remove_active_mask,
+            holds_active_mask: self.holds_active_mask,
+            accel_effects_active_mask: self.accel_effects_active_mask,
+            visual_effects_active_mask: self.visual_effects_active_mask,
+            appearance_effects_active_mask: self.appearance_effects_active_mask,
+            attack_mode: self.attack_mode,
+            hide_light_type: self.hide_light_type,
+            rescore_early_hits: self.rescore_early_hits,
+            hide_early_dw_judgments: self.hide_early_dw_judgments,
+            hide_early_dw_flash: self.hide_early_dw_flash,
+            show_fa_plus_window: self.show_fa_plus_window,
+            show_ex_score: self.show_ex_score,
+            show_hard_ex_score: self.show_hard_ex_score,
+            show_fa_plus_pane: self.show_fa_plus_pane,
+            fa_plus_10ms_blue_window: self.fa_plus_10ms_blue_window,
+            split_15_10ms: self.split_15_10ms,
+            track_early_judgments: self.track_early_judgments,
+            custom_fantastic_window: self.custom_fantastic_window,
+            custom_fantastic_window_ms: self.custom_fantastic_window_ms,
+            judgment_tilt: self.judgment_tilt,
+            column_cues: self.column_cues,
+            judgment_back: self.judgment_back,
+            error_ms_display: self.error_ms_display,
+            display_scorebox: self.display_scorebox,
+            rainbow_max: self.rainbow_max,
+            responsive_colors: self.responsive_colors,
+            show_life_percent: self.show_life_percent,
+            tilt_multiplier: self.tilt_multiplier,
+            error_bar_active_mask: self.error_bar_active_mask,
+            error_bar: self.error_bar,
+            error_bar_text: self.error_bar_text,
+            error_bar_up: self.error_bar_up,
+            error_bar_multi_tick: self.error_bar_multi_tick,
+            error_bar_trim: self.error_bar_trim,
+            data_visualizations: self.data_visualizations,
+            target_score: self.target_score,
+            lifemeter_type: self.lifemeter_type,
+            measure_counter: self.measure_counter,
+            measure_counter_lookahead: self.measure_counter_lookahead,
+            measure_counter_left: self.measure_counter_left,
+            measure_counter_up: self.measure_counter_up,
+            measure_counter_vert: self.measure_counter_vert,
+            broken_run: self.broken_run,
+            run_timer: self.run_timer,
+            measure_lines: self.measure_lines,
+            hide_targets: self.hide_targets,
+            hide_song_bg: self.hide_song_bg,
+            hide_combo: self.hide_combo,
+            hide_lifebar: self.hide_lifebar,
+            hide_score: self.hide_score,
+            hide_danger: self.hide_danger,
+            hide_combo_explosions: self.hide_combo_explosions,
+            column_flash_on_miss: self.column_flash_on_miss,
+            subtractive_scoring: self.subtractive_scoring,
+            pacemaker: self.pacemaker,
+            nps_graph_at_top: self.nps_graph_at_top,
+            transparent_density_graph_bg: self.transparent_density_graph_bg,
+            mini_indicator: self.mini_indicator,
+            mini_indicator_score_type: self.mini_indicator_score_type,
+            mini_percent: self.mini_percent,
+            perspective: self.perspective,
+            note_field_offset_x: self.note_field_offset_x,
+            note_field_offset_y: self.note_field_offset_y,
+            visual_delay_ms: self.visual_delay_ms,
+        }
+    }
+
+    fn apply_player_options(&mut self, options: &PlayerOptionsData) {
+        self.background_filter = options.background_filter.clone();
+        self.hold_judgment_graphic = options.hold_judgment_graphic.clone();
+        self.judgment_graphic = options.judgment_graphic.clone();
+        self.combo_font = options.combo_font.clone();
+        self.combo_colors = options.combo_colors.clone();
+        self.combo_mode = options.combo_mode.clone();
+        self.carry_combo_between_songs = options.carry_combo_between_songs;
+        self.noteskin = options.noteskin.clone();
+        self.scroll_speed = options.scroll_speed.clone();
+        self.scroll_option = options.scroll_option;
+        self.reverse_scroll = options.reverse_scroll;
+        self.turn_option = options.turn_option;
+        self.insert_active_mask = options.insert_active_mask;
+        self.remove_active_mask = options.remove_active_mask;
+        self.holds_active_mask = options.holds_active_mask;
+        self.accel_effects_active_mask = options.accel_effects_active_mask;
+        self.visual_effects_active_mask = options.visual_effects_active_mask;
+        self.appearance_effects_active_mask = options.appearance_effects_active_mask;
+        self.attack_mode = options.attack_mode;
+        self.hide_light_type = options.hide_light_type;
+        self.rescore_early_hits = options.rescore_early_hits;
+        self.hide_early_dw_judgments = options.hide_early_dw_judgments;
+        self.hide_early_dw_flash = options.hide_early_dw_flash;
+        self.show_fa_plus_window = options.show_fa_plus_window;
+        self.show_ex_score = options.show_ex_score;
+        self.show_hard_ex_score = options.show_hard_ex_score;
+        self.show_fa_plus_pane = options.show_fa_plus_pane;
+        self.fa_plus_10ms_blue_window = options.fa_plus_10ms_blue_window;
+        self.split_15_10ms = options.split_15_10ms;
+        self.track_early_judgments = options.track_early_judgments;
+        self.custom_fantastic_window = options.custom_fantastic_window;
+        self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
+        self.judgment_tilt = options.judgment_tilt;
+        self.column_cues = options.column_cues;
+        self.judgment_back = options.judgment_back;
+        self.error_ms_display = options.error_ms_display;
+        self.display_scorebox = options.display_scorebox;
+        self.rainbow_max = options.rainbow_max;
+        self.responsive_colors = options.responsive_colors;
+        self.show_life_percent = options.show_life_percent;
+        self.tilt_multiplier = options.tilt_multiplier;
+        self.error_bar_active_mask = options.error_bar_active_mask;
+        self.error_bar = options.error_bar;
+        self.error_bar_text = options.error_bar_text;
+        self.error_bar_up = options.error_bar_up;
+        self.error_bar_multi_tick = options.error_bar_multi_tick;
+        self.error_bar_trim = options.error_bar_trim;
+        self.data_visualizations = options.data_visualizations;
+        self.target_score = options.target_score;
+        self.lifemeter_type = options.lifemeter_type;
+        self.measure_counter = options.measure_counter;
+        self.measure_counter_lookahead = options.measure_counter_lookahead;
+        self.measure_counter_left = options.measure_counter_left;
+        self.measure_counter_up = options.measure_counter_up;
+        self.measure_counter_vert = options.measure_counter_vert;
+        self.broken_run = options.broken_run;
+        self.run_timer = options.run_timer;
+        self.measure_lines = options.measure_lines;
+        self.hide_targets = options.hide_targets;
+        self.hide_song_bg = options.hide_song_bg;
+        self.hide_combo = options.hide_combo;
+        self.hide_lifebar = options.hide_lifebar;
+        self.hide_score = options.hide_score;
+        self.hide_danger = options.hide_danger;
+        self.hide_combo_explosions = options.hide_combo_explosions;
+        self.column_flash_on_miss = options.column_flash_on_miss;
+        self.subtractive_scoring = options.subtractive_scoring;
+        self.pacemaker = options.pacemaker;
+        self.nps_graph_at_top = options.nps_graph_at_top;
+        self.transparent_density_graph_bg = options.transparent_density_graph_bg;
+        self.mini_indicator = options.mini_indicator;
+        self.mini_indicator_score_type = options.mini_indicator_score_type;
+        self.mini_percent = options.mini_percent;
+        self.perspective = options.perspective;
+        self.note_field_offset_x = options.note_field_offset_x;
+        self.note_field_offset_y = options.note_field_offset_y;
+        self.visual_delay_ms = options.visual_delay_ms;
+    }
+
+    #[inline(always)]
+    pub const fn player_options(&self, style: PlayStyle) -> &PlayerOptionsData {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &self.player_options_singles,
+            PlayStyle::Double => &self.player_options_doubles,
+        }
+    }
+
+    #[inline(always)]
+    pub fn player_options_mut(&mut self, style: PlayStyle) -> &mut PlayerOptionsData {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &mut self.player_options_singles,
+            PlayStyle::Double => &mut self.player_options_doubles,
+        }
+    }
+
+    pub fn store_current_player_options(&mut self, style: PlayStyle) {
+        let options = self.current_player_options();
+        *self.player_options_mut(style) = options;
+    }
+
+    pub fn store_current_player_options_for_all_styles(&mut self) {
+        let options = self.current_player_options();
+        self.player_options_singles = options.clone();
+        self.player_options_doubles = options;
+    }
+
+    pub fn apply_player_options_for_style(&mut self, style: PlayStyle) {
+        let options = self.player_options(style).clone();
+        self.apply_player_options(&options);
     }
 
     #[inline(always)]
@@ -1614,6 +2623,14 @@ impl PlayStyle {
             Self::Single | Self::Versus => "dance-single",
             Self::Double => "dance-double",
         }
+    }
+}
+
+#[inline(always)]
+pub(crate) const fn player_options_section(style: PlayStyle) -> &'static str {
+    match style {
+        PlayStyle::Single | PlayStyle::Versus => "PlayerOptionsSingles",
+        PlayStyle::Double => "PlayerOptionsDoubles",
     }
 }
 
@@ -1816,7 +2833,10 @@ pub fn update_machine_default_noteskin(setting: NoteSkin) {
                 &session.active_profiles[side_ix(side)],
                 ActiveProfile::Guest
             ) {
-                profiles[side_ix(side)].noteskin = setting.clone();
+                let profile = &mut profiles[side_ix(side)];
+                profile.noteskin = setting.clone();
+                profile.player_options_singles.noteskin = setting.clone();
+                profile.player_options_doubles.noteskin = setting.clone();
             }
         }
     }
@@ -1829,6 +2849,7 @@ fn make_guest_profile() -> Profile {
     guest.noteskin = machine_default_noteskin_value();
     guest.avatar_path = None;
     guest.avatar_texture_key = None;
+    guest.store_current_player_options_for_all_styles();
     guest
 }
 
@@ -1848,302 +2869,18 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
     if !profile_ini.exists() {
         let mut default_profile = Profile::default();
         default_profile.noteskin = machine_default_noteskin_value();
+        default_profile.store_current_player_options_for_all_styles();
         let mut content = String::new();
-
-        content.push_str("[PlayerOptions]\n");
-        content.push_str(&format!(
-            "BackgroundFilter = {}\n",
-            default_profile.background_filter
-        ));
-        content.push_str(&format!("ScrollSpeed = {}\n", default_profile.scroll_speed));
-        content.push_str(&format!("Scroll = {}\n", default_profile.scroll_option));
-        content.push_str(&format!("Turn = {}\n", default_profile.turn_option));
-        content.push_str(&format!(
-            "InsertMask = {}\n",
-            default_profile.insert_active_mask
-        ));
-        content.push_str(&format!(
-            "RemoveMask = {}\n",
-            default_profile.remove_active_mask
-        ));
-        content.push_str(&format!(
-            "HoldsMask = {}\n",
-            default_profile.holds_active_mask
-        ));
-        content.push_str(&format!(
-            "AccelEffectsMask = {}\n",
-            default_profile.accel_effects_active_mask
-        ));
-        content.push_str(&format!(
-            "VisualEffectsMask = {}\n",
-            default_profile.visual_effects_active_mask
-        ));
-        content.push_str(&format!(
-            "AppearanceEffectsMask = {}\n",
-            default_profile.appearance_effects_active_mask
-        ));
-        content.push_str(&format!("AttackMode = {}\n", default_profile.attack_mode));
-        content.push_str(&format!(
-            "HideLightType = {}\n",
-            default_profile.hide_light_type
-        ));
-        content.push_str(&format!(
-            "RescoreEarlyHits = {}\n",
-            i32::from(default_profile.rescore_early_hits)
-        ));
-        content.push_str(&format!(
-            "HideEarlyDecentWayOffJudgments = {}\n",
-            i32::from(default_profile.hide_early_dw_judgments)
-        ));
-        content.push_str(&format!(
-            "HideEarlyDecentWayOffFlash = {}\n",
-            i32::from(default_profile.hide_early_dw_flash)
-        ));
-        content.push_str(&format!(
-            "HideTargets = {}\n",
-            i32::from(default_profile.hide_targets)
-        ));
-        content.push_str(&format!(
-            "HideSongBG = {}\n",
-            i32::from(default_profile.hide_song_bg)
-        ));
-        content.push_str(&format!(
-            "HideCombo = {}\n",
-            i32::from(default_profile.hide_combo)
-        ));
-        content.push_str(&format!(
-            "HideLifebar = {}\n",
-            i32::from(default_profile.hide_lifebar)
-        ));
-        content.push_str(&format!(
-            "HideScore = {}\n",
-            i32::from(default_profile.hide_score)
-        ));
-        content.push_str(&format!(
-            "HideDanger = {}\n",
-            i32::from(default_profile.hide_danger)
-        ));
-        content.push_str(&format!(
-            "HideComboExplosions = {}\n",
-            i32::from(default_profile.hide_combo_explosions)
-        ));
-        content.push_str(&format!(
-            "ColumnFlashOnMiss = {}\n",
-            i32::from(default_profile.column_flash_on_miss)
-        ));
-        content.push_str(&format!(
-            "SubtractiveScoring = {}\n",
-            i32::from(default_profile.subtractive_scoring)
-        ));
-        content.push_str(&format!(
-            "Pacemaker = {}\n",
-            i32::from(default_profile.pacemaker)
-        ));
-        content.push_str(&format!(
-            "NPSGraphAtTop = {}\n",
-            i32::from(default_profile.nps_graph_at_top)
-        ));
-        content.push_str(&format!(
-            "TransparentDensityGraphBackground = {}\n",
-            i32::from(default_profile.transparent_density_graph_bg)
-        ));
-        content.push_str(&format!(
-            "MiniIndicator = {}\n",
-            default_profile.mini_indicator
-        ));
-        content.push_str(&format!(
-            "MiniIndicatorScoreType = {}\n",
-            default_profile.mini_indicator_score_type
-        ));
-        content.push_str(&format!(
-            "ReverseScroll = {}\n",
-            i32::from(default_profile.reverse_scroll)
-        ));
-        content.push_str(&format!(
-            "ShowFaPlusWindow = {}\n",
-            i32::from(default_profile.show_fa_plus_window)
-        ));
-        content.push_str(&format!(
-            "ShowExScore = {}\n",
-            i32::from(default_profile.show_ex_score)
-        ));
-        content.push_str(&format!(
-            "ShowHardEXScore = {}\n",
-            i32::from(default_profile.show_hard_ex_score)
-        ));
-        content.push_str(&format!(
-            "ShowFaPlusPane = {}\n",
-            i32::from(default_profile.show_fa_plus_pane)
-        ));
-        content.push_str(&format!(
-            "SmallerWhite = {}\n",
-            i32::from(default_profile.fa_plus_10ms_blue_window)
-        ));
-        content.push_str(&format!(
-            "SplitWhites = {}\n",
-            i32::from(default_profile.split_15_10ms)
-        ));
-        content.push_str(&format!(
-            "TrackEarlyJudgments = {}\n",
-            i32::from(default_profile.track_early_judgments)
-        ));
-        content.push_str(&format!(
-            "CustomFantasticWindow = {}\n",
-            i32::from(default_profile.custom_fantastic_window)
-        ));
-        content.push_str(&format!(
-            "CustomFantasticWindowMs = {}\n",
-            default_profile.custom_fantastic_window_ms
-        ));
-        content.push_str(&format!(
-            "JudgmentTilt = {}\n",
-            i32::from(default_profile.judgment_tilt)
-        ));
-        content.push_str(&format!(
-            "ColumnCues = {}\n",
-            i32::from(default_profile.column_cues)
-        ));
-        content.push_str(&format!(
-            "JudgmentBack = {}\n",
-            i32::from(default_profile.judgment_back)
-        ));
-        content.push_str(&format!(
-            "ErrorMSDisplay = {}\n",
-            i32::from(default_profile.error_ms_display)
-        ));
-        content.push_str(&format!(
-            "DisplayScorebox = {}\n",
-            i32::from(default_profile.display_scorebox)
-        ));
-        content.push_str(&format!(
-            "RainbowMax = {}\n",
-            i32::from(default_profile.rainbow_max)
-        ));
-        content.push_str(&format!(
-            "ResponsiveColors = {}\n",
-            i32::from(default_profile.responsive_colors)
-        ));
-        content.push_str(&format!(
-            "ShowLifePercent = {}\n",
-            i32::from(default_profile.show_life_percent)
-        ));
-        content.push_str(&format!(
-            "TiltMultiplier = {}\n",
-            default_profile.tilt_multiplier
-        ));
-        content.push_str(&format!("ErrorBar = {}\n", default_profile.error_bar));
-        content.push_str(&format!(
-            "ErrorBarText = {}\n",
-            i32::from(default_profile.error_bar_text)
-        ));
-        content.push_str(&format!(
-            "ErrorBarMask = {}\n",
-            default_profile.error_bar_active_mask
-        ));
-        content.push_str(&format!(
-            "Colorful = {}\n",
-            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_COLORFUL) != 0)
-        ));
-        content.push_str(&format!(
-            "Monochrome = {}\n",
-            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_MONOCHROME) != 0)
-        ));
-        content.push_str(&format!(
-            "Text = {}\n",
-            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_TEXT) != 0)
-        ));
-        content.push_str(&format!(
-            "Highlight = {}\n",
-            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_HIGHLIGHT) != 0)
-        ));
-        content.push_str(&format!(
-            "Average = {}\n",
-            i32::from((default_profile.error_bar_active_mask & ERROR_BAR_BIT_AVERAGE) != 0)
-        ));
-        content.push_str(&format!(
-            "ErrorBarUp = {}\n",
-            i32::from(default_profile.error_bar_up)
-        ));
-        content.push_str(&format!(
-            "ErrorBarMultiTick = {}\n",
-            i32::from(default_profile.error_bar_multi_tick)
-        ));
-        content.push_str(&format!(
-            "ErrorBarTrim = {}\n",
-            default_profile.error_bar_trim
-        ));
-        content.push_str(&format!(
-            "DataVisualizations = {}\n",
-            default_profile.data_visualizations
-        ));
-        content.push_str(&format!("TargetScore = {}\n", default_profile.target_score));
-        content.push_str(&format!(
-            "LifeMeterType = {}\n",
-            default_profile.lifemeter_type
-        ));
-        content.push_str(&format!(
-            "MeasureCounter = {}\n",
-            default_profile.measure_counter
-        ));
-        content.push_str(&format!(
-            "MeasureCounterLookahead = {}\n",
-            default_profile.measure_counter_lookahead
-        ));
-        content.push_str(&format!(
-            "MeasureCounterLeft = {}\n",
-            i32::from(default_profile.measure_counter_left)
-        ));
-        content.push_str(&format!(
-            "MeasureCounterUp = {}\n",
-            i32::from(default_profile.measure_counter_up)
-        ));
-        content.push_str(&format!(
-            "MeasureCounterVert = {}\n",
-            i32::from(default_profile.measure_counter_vert)
-        ));
-        content.push_str(&format!(
-            "BrokenRun = {}\n",
-            i32::from(default_profile.broken_run)
-        ));
-        content.push_str(&format!(
-            "RunTimer = {}\n",
-            i32::from(default_profile.run_timer)
-        ));
-        content.push_str(&format!(
-            "MeasureLines = {}\n",
-            default_profile.measure_lines
-        ));
-        content.push_str(&format!(
-            "HoldJudgmentGraphic = {}\n",
-            default_profile.hold_judgment_graphic
-        ));
-        content.push_str(&format!(
-            "JudgmentGraphic = {}\n",
-            default_profile.judgment_graphic
-        ));
-        content.push_str(&format!("ComboFont = {}\n", default_profile.combo_font));
-        content.push_str(&format!("ComboColors = {}\n", default_profile.combo_colors));
-        content.push_str(&format!("ComboMode = {}\n", default_profile.combo_mode));
-        content.push_str(&format!(
-            "CarryComboBetweenSongs = {}\n",
-            i32::from(default_profile.carry_combo_between_songs)
-        ));
-        content.push_str(&format!("NoteSkin = {}\n", default_profile.noteskin));
-        content.push_str(&format!("MiniPercent = {}\n", default_profile.mini_percent));
-        content.push_str(&format!("Perspective = {}\n", default_profile.perspective));
-        content.push_str(&format!(
-            "NoteFieldOffsetX = {}\n",
-            default_profile.note_field_offset_x
-        ));
-        content.push_str(&format!(
-            "NoteFieldOffsetY = {}\n",
-            default_profile.note_field_offset_y
-        ));
-        content.push_str(&format!(
-            "VisualDelayMs = {}\n",
-            default_profile.visual_delay_ms
-        ));
-        content.push('\n');
+        write_player_options(
+            &mut content,
+            "PlayerOptionsSingles",
+            &default_profile.player_options_singles,
+        );
+        write_player_options(
+            &mut content,
+            "PlayerOptionsDoubles",
+            &default_profile.player_options_doubles,
+        );
 
         content.push_str("[userprofile]\n");
         content.push_str(&format!("DisplayName = {}\n", default_profile.display_name));
@@ -2217,231 +2954,25 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         return;
     };
 
-    let profile = lock_profiles()[side_ix(side)].clone();
+    let play_style = get_session_play_style();
+    let profile = {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        profile.store_current_player_options(play_style);
+        profile.clone()
+    };
     let mut content = String::new();
 
-    content.push_str("[PlayerOptions]\n");
-    content.push_str(&format!("BackgroundFilter={}\n", profile.background_filter));
-    content.push_str(&format!("ScrollSpeed={}\n", profile.scroll_speed));
-    content.push_str(&format!("Scroll={}\n", profile.scroll_option));
-    content.push_str(&format!("Turn={}\n", profile.turn_option));
-    content.push_str(&format!("InsertMask={}\n", profile.insert_active_mask));
-    content.push_str(&format!("RemoveMask={}\n", profile.remove_active_mask));
-    content.push_str(&format!("HoldsMask={}\n", profile.holds_active_mask));
-    content.push_str(&format!(
-        "AccelEffectsMask={}\n",
-        profile.accel_effects_active_mask
-    ));
-    content.push_str(&format!(
-        "VisualEffectsMask={}\n",
-        profile.visual_effects_active_mask
-    ));
-    content.push_str(&format!(
-        "AppearanceEffectsMask={}\n",
-        profile.appearance_effects_active_mask
-    ));
-    content.push_str(&format!("AttackMode={}\n", profile.attack_mode));
-    content.push_str(&format!("HideLightType={}\n", profile.hide_light_type));
-    content.push_str(&format!(
-        "RescoreEarlyHits={}\n",
-        i32::from(profile.rescore_early_hits)
-    ));
-    content.push_str(&format!(
-        "HideEarlyDecentWayOffJudgments={}\n",
-        i32::from(profile.hide_early_dw_judgments)
-    ));
-    content.push_str(&format!(
-        "HideEarlyDecentWayOffFlash={}\n",
-        i32::from(profile.hide_early_dw_flash)
-    ));
-    content.push_str(&format!(
-        "HideTargets={}\n",
-        i32::from(profile.hide_targets)
-    ));
-    content.push_str(&format!("HideSongBG={}\n", i32::from(profile.hide_song_bg)));
-    content.push_str(&format!("HideCombo={}\n", i32::from(profile.hide_combo)));
-    content.push_str(&format!(
-        "HideLifebar={}\n",
-        i32::from(profile.hide_lifebar)
-    ));
-    content.push_str(&format!("HideScore={}\n", i32::from(profile.hide_score)));
-    content.push_str(&format!("HideDanger={}\n", i32::from(profile.hide_danger)));
-    content.push_str(&format!(
-        "HideComboExplosions={}\n",
-        i32::from(profile.hide_combo_explosions)
-    ));
-    content.push_str(&format!(
-        "ColumnFlashOnMiss={}\n",
-        i32::from(profile.column_flash_on_miss)
-    ));
-    content.push_str(&format!(
-        "SubtractiveScoring={}\n",
-        i32::from(profile.subtractive_scoring)
-    ));
-    content.push_str(&format!("Pacemaker={}\n", i32::from(profile.pacemaker)));
-    content.push_str(&format!(
-        "NPSGraphAtTop={}\n",
-        i32::from(profile.nps_graph_at_top)
-    ));
-    content.push_str(&format!(
-        "TransparentDensityGraphBackground={}\n",
-        i32::from(profile.transparent_density_graph_bg)
-    ));
-    content.push_str(&format!("MiniIndicator={}\n", profile.mini_indicator));
-    content.push_str(&format!(
-        "MiniIndicatorScoreType={}\n",
-        profile.mini_indicator_score_type
-    ));
-    content.push_str(&format!(
-        "ReverseScroll={}\n",
-        i32::from(profile.reverse_scroll)
-    ));
-    content.push_str(&format!(
-        "ShowFaPlusWindow={}\n",
-        i32::from(profile.show_fa_plus_window)
-    ));
-    content.push_str(&format!(
-        "ShowExScore={}\n",
-        i32::from(profile.show_ex_score)
-    ));
-    content.push_str(&format!(
-        "ShowHardEXScore={}\n",
-        i32::from(profile.show_hard_ex_score)
-    ));
-    content.push_str(&format!(
-        "ShowFaPlusPane={}\n",
-        i32::from(profile.show_fa_plus_pane)
-    ));
-    content.push_str(&format!(
-        "SmallerWhite={}\n",
-        i32::from(profile.fa_plus_10ms_blue_window)
-    ));
-    content.push_str(&format!(
-        "SplitWhites={}\n",
-        i32::from(profile.split_15_10ms)
-    ));
-    content.push_str(&format!(
-        "TrackEarlyJudgments={}\n",
-        i32::from(profile.track_early_judgments)
-    ));
-    content.push_str(&format!(
-        "CustomFantasticWindow={}\n",
-        i32::from(profile.custom_fantastic_window)
-    ));
-    content.push_str(&format!(
-        "CustomFantasticWindowMs={}\n",
-        profile.custom_fantastic_window_ms
-    ));
-    content.push_str(&format!(
-        "JudgmentTilt={}\n",
-        i32::from(profile.judgment_tilt)
-    ));
-    content.push_str(&format!("ColumnCues={}\n", i32::from(profile.column_cues)));
-    content.push_str(&format!(
-        "JudgmentBack={}\n",
-        i32::from(profile.judgment_back)
-    ));
-    content.push_str(&format!(
-        "ErrorMSDisplay={}\n",
-        i32::from(profile.error_ms_display)
-    ));
-    content.push_str(&format!(
-        "DisplayScorebox={}\n",
-        i32::from(profile.display_scorebox)
-    ));
-    content.push_str(&format!("RainbowMax={}\n", i32::from(profile.rainbow_max)));
-    content.push_str(&format!(
-        "ResponsiveColors={}\n",
-        i32::from(profile.responsive_colors)
-    ));
-    content.push_str(&format!(
-        "ShowLifePercent={}\n",
-        i32::from(profile.show_life_percent)
-    ));
-    content.push_str(&format!("TiltMultiplier={}\n", profile.tilt_multiplier));
-    content.push_str(&format!("ErrorBar={}\n", profile.error_bar));
-    content.push_str(&format!(
-        "ErrorBarText={}\n",
-        i32::from(profile.error_bar_text)
-    ));
-    content.push_str(&format!("ErrorBarMask={}\n", profile.error_bar_active_mask));
-    content.push_str(&format!(
-        "Colorful={}\n",
-        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_COLORFUL) != 0)
-    ));
-    content.push_str(&format!(
-        "Monochrome={}\n",
-        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_MONOCHROME) != 0)
-    ));
-    content.push_str(&format!(
-        "Text={}\n",
-        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_TEXT) != 0)
-    ));
-    content.push_str(&format!(
-        "Highlight={}\n",
-        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_HIGHLIGHT) != 0)
-    ));
-    content.push_str(&format!(
-        "Average={}\n",
-        i32::from((profile.error_bar_active_mask & ERROR_BAR_BIT_AVERAGE) != 0)
-    ));
-    content.push_str(&format!("ErrorBarUp={}\n", i32::from(profile.error_bar_up)));
-    content.push_str(&format!(
-        "ErrorBarMultiTick={}\n",
-        i32::from(profile.error_bar_multi_tick)
-    ));
-    content.push_str(&format!("ErrorBarTrim={}\n", profile.error_bar_trim));
-    content.push_str(&format!(
-        "DataVisualizations={}\n",
-        profile.data_visualizations
-    ));
-    content.push_str(&format!("TargetScore={}\n", profile.target_score));
-    content.push_str(&format!("LifeMeterType={}\n", profile.lifemeter_type));
-    content.push_str(&format!("MeasureCounter={}\n", profile.measure_counter));
-    content.push_str(&format!(
-        "MeasureCounterLookahead={}\n",
-        profile.measure_counter_lookahead
-    ));
-    content.push_str(&format!(
-        "MeasureCounterLeft={}\n",
-        i32::from(profile.measure_counter_left)
-    ));
-    content.push_str(&format!(
-        "MeasureCounterUp={}\n",
-        i32::from(profile.measure_counter_up)
-    ));
-    content.push_str(&format!(
-        "MeasureCounterVert={}\n",
-        i32::from(profile.measure_counter_vert)
-    ));
-    content.push_str(&format!("BrokenRun={}\n", i32::from(profile.broken_run)));
-    content.push_str(&format!("RunTimer={}\n", i32::from(profile.run_timer)));
-    content.push_str(&format!("MeasureLines={}\n", profile.measure_lines));
-    content.push_str(&format!(
-        "HoldJudgmentGraphic={}\n",
-        profile.hold_judgment_graphic
-    ));
-    content.push_str(&format!("JudgmentGraphic={}\n", profile.judgment_graphic));
-    content.push_str(&format!("ComboFont={}\n", profile.combo_font));
-    content.push_str(&format!("ComboColors={}\n", profile.combo_colors));
-    content.push_str(&format!("ComboMode={}\n", profile.combo_mode));
-    content.push_str(&format!(
-        "CarryComboBetweenSongs={}\n",
-        i32::from(profile.carry_combo_between_songs)
-    ));
-    content.push_str(&format!("NoteSkin={}\n", profile.noteskin));
-    content.push_str(&format!("MiniPercent={}\n", profile.mini_percent));
-    content.push_str(&format!("Perspective={}\n", profile.perspective));
-    content.push_str(&format!(
-        "NoteFieldOffsetX={}\n",
-        profile.note_field_offset_x
-    ));
-    content.push_str(&format!(
-        "NoteFieldOffsetY={}\n",
-        profile.note_field_offset_y
-    ));
-    content.push_str(&format!("VisualDelayMs={}\n", profile.visual_delay_ms));
-    content.push('\n');
+    write_player_options(
+        &mut content,
+        "PlayerOptionsSingles",
+        &profile.player_options_singles,
+    );
+    write_player_options(
+        &mut content,
+        "PlayerOptionsDoubles",
+        &profile.player_options_doubles,
+    );
 
     content.push_str("[userprofile]\n");
     content.push_str(&format!("DisplayName={}\n", profile.display_name));
@@ -2696,6 +3227,7 @@ fn load_for_side(side: PlayerSide) {
         let profile = &mut profiles[side_ix(side)];
         let mut default_profile = Profile::default();
         default_profile.noteskin = machine_default_noteskin_value();
+        default_profile.store_current_player_options_for_all_styles();
 
         // Load profile.ini
         let mut profile_conf = SimpleIni::new();
@@ -2706,400 +3238,21 @@ fn load_for_side(side: PlayerSide) {
             profile.player_initials = profile_conf
                 .get("userprofile", "PlayerInitials")
                 .unwrap_or(default_profile.player_initials.clone());
-            profile.background_filter = profile_conf
-                .get("PlayerOptions", "BackgroundFilter")
-                .and_then(|s| BackgroundFilter::from_str(&s).ok())
-                .unwrap_or(default_profile.background_filter);
-            profile.hold_judgment_graphic = profile_conf
-                .get("PlayerOptions", "HoldJudgmentGraphic")
-                .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
-                .unwrap_or(default_profile.hold_judgment_graphic);
-            profile.judgment_graphic = profile_conf
-                .get("PlayerOptions", "JudgmentGraphic")
-                .and_then(|s| JudgmentGraphic::from_str(&s).ok())
-                .unwrap_or(default_profile.judgment_graphic);
-            profile.combo_font = profile_conf
-                .get("PlayerOptions", "ComboFont")
-                .and_then(|s| ComboFont::from_str(&s).ok())
-                .unwrap_or(default_profile.combo_font);
-            profile.combo_colors = profile_conf
-                .get("PlayerOptions", "ComboColors")
-                .and_then(|s| ComboColors::from_str(&s).ok())
-                .unwrap_or(default_profile.combo_colors);
-            profile.combo_mode = profile_conf
-                .get("PlayerOptions", "ComboMode")
-                .and_then(|s| ComboMode::from_str(&s).ok())
-                .unwrap_or(default_profile.combo_mode);
-            profile.carry_combo_between_songs = profile_conf
-                .get("PlayerOptions", "CarryComboBetweenSongs")
-                .or_else(|| profile_conf.get("PlayerOptions", "ComboContinuesBetweenSongs"))
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.carry_combo_between_songs, |v| v != 0);
-            profile.noteskin = profile_conf
-                .get("PlayerOptions", "NoteSkin")
-                .and_then(|s| NoteSkin::from_str(&s).ok())
-                .unwrap_or_else(|| default_profile.noteskin.clone());
-            profile.mini_percent = profile_conf
-                .get("PlayerOptions", "MiniPercent")
-                .and_then(|s| s.parse::<i32>().ok())
-                .unwrap_or(default_profile.mini_percent);
-            profile.perspective = profile_conf
-                .get("PlayerOptions", "Perspective")
-                .and_then(|s| Perspective::from_str(&s).ok())
-                .unwrap_or(default_profile.perspective);
-            profile.note_field_offset_x = profile_conf
-                .get("PlayerOptions", "NoteFieldOffsetX")
-                .and_then(|s| s.parse::<i32>().ok())
-                .unwrap_or(default_profile.note_field_offset_x);
-            profile.note_field_offset_y = profile_conf
-                .get("PlayerOptions", "NoteFieldOffsetY")
-                .and_then(|s| s.parse::<i32>().ok())
-                .unwrap_or(default_profile.note_field_offset_y);
-            profile.visual_delay_ms = profile_conf
-                .get("PlayerOptions", "VisualDelayMs")
-                .or_else(|| profile_conf.get("PlayerOptions", "VisualDelay"))
-                .and_then(|s| s.trim_end_matches("ms").parse::<i32>().ok())
-                .unwrap_or(default_profile.visual_delay_ms);
-            profile.show_fa_plus_window = profile_conf
-                .get("PlayerOptions", "ShowFaPlusWindow")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.show_fa_plus_window, |v| v != 0);
-            profile.show_ex_score = profile_conf
-                .get("PlayerOptions", "ShowExScore")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.show_ex_score, |v| v != 0);
-            profile.show_hard_ex_score = profile_conf
-                .get("PlayerOptions", "ShowHardEXScore")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.show_hard_ex_score, |v| v != 0);
-            profile.show_fa_plus_pane = profile_conf
-                .get("PlayerOptions", "ShowFaPlusPane")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.show_fa_plus_pane, |v| v != 0);
-            profile.fa_plus_10ms_blue_window = profile_conf
-                .get("PlayerOptions", "SmallerWhite")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.fa_plus_10ms_blue_window, |v| v != 0);
-            profile.split_15_10ms = profile_conf
-                .get("PlayerOptions", "SplitWhites")
-                .or_else(|| profile_conf.get("PlayerOptions", "Split1510ms"))
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.split_15_10ms, |v| v != 0);
-            profile.track_early_judgments = profile_conf
-                .get("PlayerOptions", "TrackEarlyJudgments")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.track_early_judgments, |v| v != 0);
-            profile.custom_fantastic_window = profile_conf
-                .get("PlayerOptions", "CustomFantasticWindow")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.custom_fantastic_window, |v| v != 0);
-            profile.custom_fantastic_window_ms = profile_conf
-                .get("PlayerOptions", "CustomFantasticWindowMs")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(clamp_custom_fantastic_window_ms)
-                .unwrap_or(default_profile.custom_fantastic_window_ms);
-            profile.judgment_tilt = profile_conf
-                .get("PlayerOptions", "JudgmentTilt")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.judgment_tilt, |v| v != 0);
-            profile.column_cues = profile_conf
-                .get("PlayerOptions", "ColumnCues")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.column_cues, |v| v != 0);
-            profile.judgment_back = profile_conf
-                .get("PlayerOptions", "JudgmentBack")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.judgment_back, |v| v != 0);
-            profile.error_ms_display = profile_conf
-                .get("PlayerOptions", "ErrorMSDisplay")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.error_ms_display, |v| v != 0);
-            profile.display_scorebox = profile_conf
-                .get("PlayerOptions", "DisplayScorebox")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.display_scorebox, |v| v != 0);
-            profile.rainbow_max = profile_conf
-                .get("PlayerOptions", "RainbowMax")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.rainbow_max, |v| v != 0);
-            profile.responsive_colors = profile_conf
-                .get("PlayerOptions", "ResponsiveColors")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.responsive_colors, |v| v != 0);
-            profile.show_life_percent = profile_conf
-                .get("PlayerOptions", "ShowLifePercent")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.show_life_percent, |v| v != 0);
-            profile.tilt_multiplier = profile_conf
-                .get("PlayerOptions", "TiltMultiplier")
-                .and_then(|s| s.parse::<f32>().ok())
-                .filter(|v| v.is_finite())
-                .unwrap_or(default_profile.tilt_multiplier);
-            profile.error_bar = profile_conf
-                .get("PlayerOptions", "ErrorBar")
-                .and_then(|s| ErrorBarStyle::from_str(&s).ok())
-                .unwrap_or(default_profile.error_bar);
-            profile.error_bar_text = profile_conf
-                .get("PlayerOptions", "ErrorBarText")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.error_bar_text, |v| v != 0);
-            let mask_from_key = profile_conf
-                .get("PlayerOptions", "ErrorBarMask")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(normalize_error_bar_mask);
-            let colorful = profile_conf
-                .get("PlayerOptions", "Colorful")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(|v| v != 0);
-            let monochrome = profile_conf
-                .get("PlayerOptions", "Monochrome")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(|v| v != 0);
-            let text = profile_conf
-                .get("PlayerOptions", "Text")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(|v| v != 0);
-            let highlight = profile_conf
-                .get("PlayerOptions", "Highlight")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(|v| v != 0);
-            let average = profile_conf
-                .get("PlayerOptions", "Average")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(|v| v != 0);
-            let mask_from_flags = if colorful.is_some()
-                || monochrome.is_some()
-                || text.is_some()
-                || highlight.is_some()
-                || average.is_some()
-            {
-                let mut mask: u8 = 0;
-                if colorful.unwrap_or(false) {
-                    mask |= ERROR_BAR_BIT_COLORFUL;
-                }
-                if monochrome.unwrap_or(false) {
-                    mask |= ERROR_BAR_BIT_MONOCHROME;
-                }
-                if text.unwrap_or(false) {
-                    mask |= ERROR_BAR_BIT_TEXT;
-                }
-                if highlight.unwrap_or(false) {
-                    mask |= ERROR_BAR_BIT_HIGHLIGHT;
-                }
-                if average.unwrap_or(false) {
-                    mask |= ERROR_BAR_BIT_AVERAGE;
-                }
-                Some(normalize_error_bar_mask(mask))
-            } else {
-                None
-            };
-            profile.error_bar_active_mask =
-                mask_from_key.or(mask_from_flags).unwrap_or_else(|| {
-                    error_bar_mask_from_style(profile.error_bar, profile.error_bar_text)
-                });
-            profile.error_bar = error_bar_style_from_mask(profile.error_bar_active_mask);
-            profile.error_bar_text = error_bar_text_from_mask(profile.error_bar_active_mask);
-            profile.error_bar_up = profile_conf
-                .get("PlayerOptions", "ErrorBarUp")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.error_bar_up, |v| v != 0);
-            profile.error_bar_multi_tick = profile_conf
-                .get("PlayerOptions", "ErrorBarMultiTick")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.error_bar_multi_tick, |v| v != 0);
-            profile.error_bar_trim = profile_conf
-                .get("PlayerOptions", "ErrorBarTrim")
-                .and_then(|s| ErrorBarTrim::from_str(&s).ok())
-                .unwrap_or(default_profile.error_bar_trim);
-            profile.data_visualizations = profile_conf
-                .get("PlayerOptions", "DataVisualizations")
-                .and_then(|s| DataVisualizations::from_str(&s).ok())
-                .unwrap_or(default_profile.data_visualizations);
-            profile.target_score = profile_conf
-                .get("PlayerOptions", "TargetScore")
-                .and_then(|s| TargetScoreSetting::from_str(&s).ok())
-                .unwrap_or(default_profile.target_score);
-            profile.lifemeter_type = profile_conf
-                .get("PlayerOptions", "LifeMeterType")
-                .and_then(|s| LifeMeterType::from_str(&s).ok())
-                .unwrap_or(default_profile.lifemeter_type);
-            profile.measure_counter = profile_conf
-                .get("PlayerOptions", "MeasureCounter")
-                .and_then(|s| MeasureCounter::from_str(&s).ok())
-                .unwrap_or(default_profile.measure_counter);
-            profile.measure_counter_lookahead = profile_conf
-                .get("PlayerOptions", "MeasureCounterLookahead")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(|v| v.min(4))
-                .unwrap_or(default_profile.measure_counter_lookahead);
-            profile.measure_counter_left = profile_conf
-                .get("PlayerOptions", "MeasureCounterLeft")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.measure_counter_left, |v| v != 0);
-            profile.measure_counter_up = profile_conf
-                .get("PlayerOptions", "MeasureCounterUp")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.measure_counter_up, |v| v != 0);
-            profile.measure_counter_vert = profile_conf
-                .get("PlayerOptions", "MeasureCounterVert")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.measure_counter_vert, |v| v != 0);
-            profile.broken_run = profile_conf
-                .get("PlayerOptions", "BrokenRun")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.broken_run, |v| v != 0);
-            profile.run_timer = profile_conf
-                .get("PlayerOptions", "RunTimer")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.run_timer, |v| v != 0);
-            profile.measure_lines = profile_conf
-                .get("PlayerOptions", "MeasureLines")
-                .and_then(|s| MeasureLines::from_str(&s).ok())
-                .unwrap_or(default_profile.measure_lines);
-            profile.scroll_speed = profile_conf
-                .get("PlayerOptions", "ScrollSpeed")
-                .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
-                .unwrap_or(default_profile.scroll_speed);
-            profile.turn_option = profile_conf
-                .get("PlayerOptions", "Turn")
-                .and_then(|s| TurnOption::from_str(&s).ok())
-                .unwrap_or(default_profile.turn_option);
-            profile.insert_active_mask = profile_conf
-                .get("PlayerOptions", "InsertMask")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(normalize_insert_mask)
-                .unwrap_or(default_profile.insert_active_mask);
-            profile.remove_active_mask = profile_conf
-                .get("PlayerOptions", "RemoveMask")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(normalize_remove_mask)
-                .unwrap_or(default_profile.remove_active_mask);
-            profile.holds_active_mask = profile_conf
-                .get("PlayerOptions", "HoldsMask")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(normalize_holds_mask)
-                .unwrap_or(default_profile.holds_active_mask);
-            profile.accel_effects_active_mask = profile_conf
-                .get("PlayerOptions", "AccelEffectsMask")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(normalize_accel_effects_mask)
-                .unwrap_or(default_profile.accel_effects_active_mask);
-            profile.visual_effects_active_mask = profile_conf
-                .get("PlayerOptions", "VisualEffectsMask")
-                .and_then(|s| s.parse::<u16>().ok())
-                .map(normalize_visual_effects_mask)
-                .unwrap_or(default_profile.visual_effects_active_mask);
-            profile.appearance_effects_active_mask = profile_conf
-                .get("PlayerOptions", "AppearanceEffectsMask")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map(normalize_appearance_effects_mask)
-                .unwrap_or(default_profile.appearance_effects_active_mask);
-            profile.attack_mode = profile_conf
-                .get("PlayerOptions", "AttackMode")
-                .or_else(|| profile_conf.get("PlayerOptions", "Attacks"))
-                .and_then(|s| AttackMode::from_str(&s).ok())
-                .unwrap_or(default_profile.attack_mode);
-            profile.hide_light_type = profile_conf
-                .get("PlayerOptions", "HideLightType")
-                .and_then(|s| HideLightType::from_str(&s).ok())
-                .unwrap_or(default_profile.hide_light_type);
-            profile.rescore_early_hits = profile_conf
-                .get("PlayerOptions", "RescoreEarlyHits")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.rescore_early_hits, |v| v != 0);
-            profile.hide_early_dw_judgments = profile_conf
-                .get("PlayerOptions", "HideEarlyDecentWayOffJudgments")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.hide_early_dw_judgments, |v| v != 0);
-            profile.hide_early_dw_flash = profile_conf
-                .get("PlayerOptions", "HideEarlyDecentWayOffFlash")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.hide_early_dw_flash, |v| v != 0);
-            profile.hide_targets = profile_conf
-                .get("PlayerOptions", "HideTargets")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.hide_targets, |v| v != 0);
-            profile.hide_song_bg = profile_conf
-                .get("PlayerOptions", "HideSongBG")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.hide_song_bg, |v| v != 0);
-            profile.hide_combo = profile_conf
-                .get("PlayerOptions", "HideCombo")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.hide_combo, |v| v != 0);
-            profile.hide_lifebar = profile_conf
-                .get("PlayerOptions", "HideLifebar")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.hide_lifebar, |v| v != 0);
-            profile.hide_score = profile_conf
-                .get("PlayerOptions", "HideScore")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.hide_score, |v| v != 0);
-            profile.hide_danger = profile_conf
-                .get("PlayerOptions", "HideDanger")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.hide_danger, |v| v != 0);
-            profile.hide_combo_explosions = profile_conf
-                .get("PlayerOptions", "HideComboExplosions")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.hide_combo_explosions, |v| v != 0);
-            profile.column_flash_on_miss = profile_conf
-                .get("PlayerOptions", "ColumnFlashOnMiss")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.column_flash_on_miss, |v| v != 0);
-            profile.subtractive_scoring = profile_conf
-                .get("PlayerOptions", "SubtractiveScoring")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.subtractive_scoring, |v| v != 0);
-            profile.pacemaker = profile_conf
-                .get("PlayerOptions", "Pacemaker")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.pacemaker, |v| v != 0);
-            profile.nps_graph_at_top = profile_conf
-                .get("PlayerOptions", "NPSGraphAtTop")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.nps_graph_at_top, |v| v != 0);
-            profile.transparent_density_graph_bg = profile_conf
-                .get("PlayerOptions", "TransparentDensityGraphBackground")
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.transparent_density_graph_bg, |v| v != 0);
-            profile.mini_indicator = profile_conf
-                .get("PlayerOptions", "MiniIndicator")
-                .and_then(|s| MiniIndicator::from_str(&s).ok())
-                .unwrap_or_else(|| {
-                    if profile.subtractive_scoring {
-                        MiniIndicator::SubtractiveScoring
-                    } else if profile.pacemaker {
-                        MiniIndicator::Pacemaker
-                    } else {
-                        default_profile.mini_indicator
-                    }
-                });
-            if profile.mini_indicator == MiniIndicator::SubtractiveScoring {
-                profile.subtractive_scoring = true;
-            }
-            if profile.mini_indicator == MiniIndicator::Pacemaker {
-                profile.pacemaker = true;
-            }
-            profile.mini_indicator_score_type = profile_conf
-                .get("PlayerOptions", "MiniIndicatorScoreType")
-                .and_then(|s| MiniIndicatorScoreType::from_str(&s).ok())
-                .unwrap_or(default_profile.mini_indicator_score_type);
-            profile.scroll_option = profile_conf
-                .get("PlayerOptions", "Scroll")
-                .and_then(|s| ScrollOption::from_str(&s).ok())
-                .unwrap_or_else(|| {
-                    let reverse_enabled = profile_conf
-                        .get("PlayerOptions", "ReverseScroll")
-                        .and_then(|v| v.parse::<u8>().ok())
-                        .map_or(default_profile.reverse_scroll, |v| v != 0);
-                    if reverse_enabled {
-                        ScrollOption::Reverse
-                    } else {
-                        default_profile.scroll_option
-                    }
-                });
-            profile.reverse_scroll = profile.scroll_option.contains(ScrollOption::Reverse);
+            profile.player_options_singles =
+                load_player_options(
+                    &profile_conf,
+                    "PlayerOptionsSingles",
+                    &default_profile.player_options_singles,
+                )
+                .unwrap_or_else(|| default_profile.player_options_singles.clone());
+            profile.player_options_doubles =
+                load_player_options(
+                    &profile_conf,
+                    "PlayerOptionsDoubles",
+                    &default_profile.player_options_doubles,
+                )
+                .unwrap_or_else(|| default_profile.player_options_doubles.clone());
+            profile.apply_player_options_for_style(get_session_play_style());
 
             // Optional last-played sections: keep the legacy [LastPlayed]
             // fallback so older profile.ini files still load cleanly.
@@ -3549,42 +3702,19 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
 
     let mut default_profile = Profile::default();
     default_profile.noteskin = machine_default_noteskin_value();
+    default_profile.store_current_player_options_for_all_styles();
     let initials = initials_from_name(name);
     let mut content = String::new();
-    content.push_str("[PlayerOptions]\n");
-    content.push_str(&format!("ScrollSpeed={}\n", default_profile.scroll_speed));
-    content.push_str(&format!("Scroll={}\n", default_profile.scroll_option));
-    content.push_str(&format!(
-        "InsertMask={}\n",
-        default_profile.insert_active_mask
-    ));
-    content.push_str(&format!(
-        "RemoveMask={}\n",
-        default_profile.remove_active_mask
-    ));
-    content.push_str(&format!(
-        "HoldsMask={}\n",
-        default_profile.holds_active_mask
-    ));
-    content.push_str(&format!(
-        "AccelEffectsMask={}\n",
-        default_profile.accel_effects_active_mask
-    ));
-    content.push_str(&format!(
-        "VisualEffectsMask={}\n",
-        default_profile.visual_effects_active_mask
-    ));
-    content.push_str(&format!(
-        "AppearanceEffectsMask={}\n",
-        default_profile.appearance_effects_active_mask
-    ));
-    content.push_str(&format!("AttackMode={}\n", default_profile.attack_mode));
-    content.push_str(&format!(
-        "HideLightType={}\n",
-        default_profile.hide_light_type
-    ));
-    content.push_str(&format!("NoteSkin={}\n", default_profile.noteskin));
-    content.push('\n');
+    write_player_options(
+        &mut content,
+        "PlayerOptionsSingles",
+        &default_profile.player_options_singles,
+    );
+    write_player_options(
+        &mut content,
+        "PlayerOptionsDoubles",
+        &default_profile.player_options_doubles,
+    );
     content.push_str("[userprofile]\n");
     content.push_str(&format!("DisplayName={name}\n"));
     content.push_str(&format!("PlayerInitials={initials}\n"));
@@ -3780,7 +3910,21 @@ pub fn get_session_play_style() -> PlayStyle {
 }
 
 pub fn set_session_play_style(style: PlayStyle) {
-    lock_session().play_style = style;
+    let prev_style = {
+        let mut session = lock_session();
+        let prev_style = session.play_style;
+        if prev_style == style {
+            return;
+        }
+        session.play_style = style;
+        prev_style
+    };
+
+    let mut profiles = lock_profiles();
+    for profile in profiles.iter_mut() {
+        profile.store_current_player_options(prev_style);
+        profile.apply_player_options_for_style(style);
+    }
 }
 
 pub fn get_session_play_mode() -> PlayMode {
@@ -4813,5 +4957,38 @@ mod tests {
         assert_eq!(profile.last_played(PlayStyle::Single), &singles);
         assert_eq!(profile.last_played(PlayStyle::Versus), &singles);
         assert_eq!(profile.last_played(PlayStyle::Double), &doubles);
+    }
+
+    #[test]
+    fn player_options_use_singles_for_single_and_versus() {
+        let mut profile = Profile::default();
+        profile.mini_percent = 12;
+        profile.store_current_player_options(PlayStyle::Single);
+        profile.mini_percent = 48;
+        profile.store_current_player_options(PlayStyle::Double);
+
+        assert_eq!(profile.player_options(PlayStyle::Single).mini_percent, 12);
+        assert_eq!(profile.player_options(PlayStyle::Versus).mini_percent, 12);
+        assert_eq!(profile.player_options(PlayStyle::Double).mini_percent, 48);
+    }
+
+    #[test]
+    fn apply_player_options_for_style_restores_separate_snapshots() {
+        let mut profile = Profile::default();
+        profile.mini_percent = 18;
+        profile.show_ex_score = true;
+        profile.store_current_player_options(PlayStyle::Single);
+
+        profile.mini_percent = 62;
+        profile.show_ex_score = false;
+        profile.store_current_player_options(PlayStyle::Double);
+
+        profile.apply_player_options_for_style(PlayStyle::Single);
+        assert_eq!(profile.mini_percent, 18);
+        assert!(profile.show_ex_score);
+
+        profile.apply_player_options_for_style(PlayStyle::Double);
+        assert_eq!(profile.mini_percent, 62);
+        assert!(!profile.show_ex_score);
     }
 }
