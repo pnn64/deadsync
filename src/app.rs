@@ -146,6 +146,7 @@ enum Command {
     UpdatePreferredDifficulty(usize),
     UpdateLastPlayed {
         side: profile::PlayerSide,
+        play_style: profile::PlayStyle,
         music_path: Option<PathBuf>,
         chart_hash: Option<String>,
         difficulty_index: usize,
@@ -2392,9 +2393,12 @@ impl ScreensState {
                     self.select_music_state.selected_steps_index = preferred;
                     self.select_music_state.preferred_difficulty_index = preferred;
 
+                    let play_style = profile::get_session_play_style();
                     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
-                    let p2_pref = profile::get_for_side(profile::PlayerSide::P2)
-                        .last_difficulty_index
+                    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+                    let p2_pref = p2_profile
+                        .last_played(play_style)
+                        .difficulty_index
                         .min(max_diff_index);
                     self.select_music_state.p2_selected_steps_index = p2_pref;
                     self.select_music_state.p2_preferred_difficulty_index = p2_pref;
@@ -2471,13 +2475,17 @@ impl AppState {
         overlay_mode: u8,
         color_index: i32,
     ) -> Self {
+        let play_style = profile::get_session_play_style();
         let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
             .len()
             .saturating_sub(1);
         let preferred = if max_diff_index == 0 {
             0
         } else {
-            cmp::min(profile_data.last_difficulty_index, max_diff_index)
+            cmp::min(
+                profile_data.last_played(play_style).difficulty_index,
+                max_diff_index,
+            )
         };
 
         let shell = ShellState::new(&cfg, overlay_mode);
@@ -3198,15 +3206,22 @@ impl App {
                 let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
                     .len()
                     .saturating_sub(1);
+                let play_style = profile::get_session_play_style();
                 let preferred_p1 = if max_diff_index == 0 {
                     0
                 } else {
-                    cmp::min(profile_data[0].last_difficulty_index, max_diff_index)
+                    cmp::min(
+                        profile_data[0].last_played(play_style).difficulty_index,
+                        max_diff_index,
+                    )
                 };
                 let preferred_p2 = if max_diff_index == 0 {
                     0
                 } else {
-                    cmp::min(profile_data[1].last_difficulty_index, max_diff_index)
+                    cmp::min(
+                        profile_data[1].last_played(play_style).difficulty_index,
+                        max_diff_index,
+                    )
                 };
                 let side = profile::get_session_player_side();
                 let preferred_active = match side {
@@ -3681,9 +3696,10 @@ impl App {
                     CurrentScreen::SelectPlayMode | CurrentScreen::ProfileLoad
                 )
             {
-                profile::set_session_play_style(machine_preferred_style(
-                    cfg.machine_preferred_style,
-                ));
+                let play_style = machine_preferred_style(cfg.machine_preferred_style);
+                profile::set_session_play_style(play_style);
+                self.state.session.preferred_difficulty_index =
+                    profile::get().last_played(play_style).difficulty_index;
             }
             if !cfg.machine_show_select_play_mode && target == CurrentScreen::ProfileLoad {
                 profile::set_session_play_mode(machine_preferred_mode(
@@ -4064,12 +4080,17 @@ impl App {
     }
 
     fn apply_select_music_join(&mut self, join_side: profile::PlayerSide) {
+        let play_style = profile::get_session_play_style();
         let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
-        let p1_pref = profile::get_for_side(profile::PlayerSide::P1)
-            .last_difficulty_index
+        let p1_profile = profile::get_for_side(profile::PlayerSide::P1);
+        let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+        let p1_pref = p1_profile
+            .last_played(play_style)
+            .difficulty_index
             .min(max_diff_index);
-        let p2_pref = profile::get_for_side(profile::PlayerSide::P2)
-            .last_difficulty_index
+        let p2_pref = p2_profile
+            .last_played(play_style)
+            .difficulty_index
             .min(max_diff_index);
 
         let side = profile::get_session_player_side();
@@ -4561,12 +4582,14 @@ impl App {
             }
             Command::UpdateLastPlayed {
                 side,
+                play_style,
                 music_path,
                 chart_hash,
                 difficulty_index,
             } => {
                 profile::update_last_played_for_side(
                     side,
+                    play_style,
                     music_path.as_deref(),
                     chart_hash.as_deref(),
                     difficulty_index,
@@ -7117,12 +7140,14 @@ impl App {
                     profile::PlayStyle::Versus => {
                         commands.push(Command::UpdateLastPlayed {
                             side: profile::PlayerSide::P1,
+                            play_style,
                             music_path: song_arc.music_path.clone(),
                             chart_hash: Some(charts[0].short_hash.clone()),
                             difficulty_index: po_state.chart_difficulty_index[0],
                         });
                         commands.push(Command::UpdateLastPlayed {
                             side: profile::PlayerSide::P2,
+                            play_style,
                             music_path: song_arc.music_path.clone(),
                             chart_hash: Some(charts[1].short_hash.clone()),
                             difficulty_index: po_state.chart_difficulty_index[1],
@@ -7131,6 +7156,7 @@ impl App {
                     profile::PlayStyle::Single | profile::PlayStyle::Double => {
                         commands.push(Command::UpdateLastPlayed {
                             side: player_side,
+                            play_style,
                             music_path: song_arc.music_path.clone(),
                             chart_hash: Some(last_played_chart_ref.short_hash.clone()),
                             difficulty_index: po_state.chart_difficulty_index[last_played_idx],
@@ -7530,9 +7556,12 @@ impl App {
                         .select_music_state
                         .preferred_difficulty_index = preferred;
 
+                    let play_style = profile::get_session_play_style();
                     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
-                    let p2_pref = profile::get_for_side(profile::PlayerSide::P2)
-                        .last_difficulty_index
+                    let p2_profile = profile::get_for_side(profile::PlayerSide::P2);
+                    let p2_pref = p2_profile
+                        .last_played(play_style)
+                        .difficulty_index
                         .min(max_diff_index);
                     self.state
                         .screens

@@ -415,6 +415,61 @@ fn profile_stats_path(id: &str) -> PathBuf {
 }
 
 #[inline(always)]
+fn parse_last_played_value(value: Option<String>) -> Option<String> {
+    value.and_then(|s| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+#[inline(always)]
+fn load_last_played(
+    profile_conf: &SimpleIni,
+    section: &str,
+    default: &LastPlayed,
+) -> Option<LastPlayed> {
+    let has_any = profile_conf
+        .get_section(section)
+        .is_some_and(|s| !s.is_empty());
+    if !has_any {
+        return None;
+    }
+
+    Some(LastPlayed {
+        song_music_path: parse_last_played_value(profile_conf.get(section, "MusicPath")),
+        chart_hash: parse_last_played_value(profile_conf.get(section, "ChartHash")),
+        difficulty_index: profile_conf
+            .get(section, "DifficultyIndex")
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(default.difficulty_index),
+    })
+}
+
+#[inline(always)]
+fn write_last_played(content: &mut String, section: &str, last_played: &LastPlayed) {
+    content.push_str(&format!("[{section}]\n"));
+    if let Some(path) = &last_played.song_music_path {
+        content.push_str(&format!("MusicPath={path}\n"));
+    } else {
+        content.push_str("MusicPath=\n");
+    }
+    if let Some(hash) = &last_played.chart_hash {
+        content.push_str(&format!("ChartHash={hash}\n"));
+    } else {
+        content.push_str("ChartHash=\n");
+    }
+    content.push_str(&format!(
+        "DifficultyIndex={}\n",
+        last_played.difficulty_index
+    ));
+    content.push('\n');
+}
+
+#[inline(always)]
 fn profile_stats_tmp_path(id: &str) -> PathBuf {
     local_profile_dir(id).join("stats.bin.tmp")
 }
@@ -1357,12 +1412,29 @@ pub struct Profile {
     // Per-player visual delay (Simply Love semantics). Stored in milliseconds.
     // Negative values shift arrows upwards; positive values shift them down.
     pub visual_delay_ms: i32,
-    // Persisted "last played" selection so that SelectMusic can
-    // reopen on the last song+difficulty the player actually played.
-    // Stored as a serialized music file path and a raw difficulty index.
-    pub last_song_music_path: Option<String>,
-    pub last_chart_hash: Option<String>,
-    pub last_difficulty_index: usize,
+    // Persisted "last played" selections so future sessions can reopen
+    // SelectMusic on the most recently played chart for each chart family.
+    // Singles is shared by Single and Versus. Double uses its own entry.
+    pub last_played_singles: LastPlayed,
+    pub last_played_doubles: LastPlayed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LastPlayed {
+    pub song_music_path: Option<String>,
+    pub chart_hash: Option<String>,
+    pub difficulty_index: usize,
+}
+
+impl Default for LastPlayed {
+    fn default() -> Self {
+        Self {
+            song_music_path: None,
+            chart_hash: None,
+            // Mirror FILE_DIFFICULTY_NAMES[2] ("Medium") as the default.
+            difficulty_index: 2,
+        }
+    }
 }
 
 impl Default for Profile {
@@ -1460,10 +1532,8 @@ impl Default for Profile {
             note_field_offset_x: 0,
             note_field_offset_y: 0,
             visual_delay_ms: 0,
-            last_song_music_path: None,
-            last_chart_hash: None,
-            // Mirror FILE_DIFFICULTY_NAMES[2] ("Medium") as the default.
-            last_difficulty_index: 2,
+            last_played_singles: LastPlayed::default(),
+            last_played_doubles: LastPlayed::default(),
         }
     }
 }
@@ -1490,6 +1560,22 @@ impl Profile {
     #[inline(always)]
     pub fn age_years(&self) -> i32 {
         self.age_years_for(Local::now().year())
+    }
+
+    #[inline(always)]
+    pub const fn last_played(&self, style: PlayStyle) -> &LastPlayed {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &self.last_played_singles,
+            PlayStyle::Double => &self.last_played_doubles,
+        }
+    }
+
+    #[inline(always)]
+    pub fn last_played_mut(&mut self, style: PlayStyle) -> &mut LastPlayed {
+        match style {
+            PlayStyle::Single | PlayStyle::Versus => &mut self.last_played_singles,
+            PlayStyle::Double => &mut self.last_played_doubles,
+        }
     }
 }
 
@@ -2371,24 +2457,16 @@ fn save_profile_ini_for_side(side: PlayerSide) {
     ));
     content.push('\n');
 
-    // Persist "last played" song + difficulty so that future sessions
-    // can reopen SelectMusic on the most recently played chart.
-    content.push_str("[LastPlayed]\n");
-    if let Some(path) = &profile.last_song_music_path {
-        content.push_str(&format!("MusicPath={path}\n"));
-    } else {
-        content.push_str("MusicPath=\n");
-    }
-    if let Some(hash) = &profile.last_chart_hash {
-        content.push_str(&format!("ChartHash={hash}\n"));
-    } else {
-        content.push_str("ChartHash=\n");
-    }
-    content.push_str(&format!(
-        "DifficultyIndex={}\n",
-        profile.last_difficulty_index
-    ));
-    content.push('\n');
+    write_last_played(
+        &mut content,
+        "LastPlayedSingles",
+        &profile.last_played_singles,
+    );
+    write_last_played(
+        &mut content,
+        "LastPlayedDoubles",
+        &profile.last_played_doubles,
+    );
 
     content.push_str("[Stats]\n");
     content.push_str(&format!(
@@ -3023,32 +3101,34 @@ fn load_for_side(side: PlayerSide) {
                 });
             profile.reverse_scroll = profile.scroll_option.contains(ScrollOption::Reverse);
 
-            // Optional last-played section: if missing, fall back to defaults.
-            profile.last_song_music_path =
-                profile_conf.get("LastPlayed", "MusicPath").and_then(|s| {
-                    let trimmed = s.trim();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed.to_string())
-                    }
-                });
-
-            profile.last_chart_hash = profile_conf.get("LastPlayed", "ChartHash").and_then(|s| {
-                let trimmed = s.trim();
-                if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(trimmed.to_string())
-                }
-            });
-
-            let raw_last_diff = profile_conf
-                .get("LastPlayed", "DifficultyIndex")
-                .and_then(|s| s.parse::<usize>().ok())
-                .unwrap_or(default_profile.last_difficulty_index);
-            // Do not assume any particular max here; clamp later at call sites.
-            profile.last_difficulty_index = raw_last_diff;
+            // Optional last-played sections: keep the legacy [LastPlayed]
+            // fallback so older profile.ini files still load cleanly.
+            profile.last_played_singles = load_last_played(
+                &profile_conf,
+                "LastPlayedSingles",
+                &default_profile.last_played_singles,
+            )
+            .or_else(|| {
+                load_last_played(
+                    &profile_conf,
+                    "LastPlayed",
+                    &default_profile.last_played_singles,
+                )
+            })
+            .unwrap_or_else(|| default_profile.last_played_singles.clone());
+            profile.last_played_doubles = load_last_played(
+                &profile_conf,
+                "LastPlayedDoubles",
+                &default_profile.last_played_doubles,
+            )
+            .or_else(|| {
+                load_last_played(
+                    &profile_conf,
+                    "LastPlayed",
+                    &default_profile.last_played_doubles,
+                )
+            })
+            .unwrap_or_else(|| default_profile.last_played_doubles.clone());
 
             profile.weight_pounds = profile_conf
                 .get("Editable", "WeightPounds")
@@ -3750,6 +3830,7 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 
 pub fn update_last_played_for_side(
     side: PlayerSide,
+    style: PlayStyle,
     music_path: Option<&Path>,
     chart_hash: Option<&str>,
     difficulty_index: usize,
@@ -3762,17 +3843,18 @@ pub fn update_last_played_for_side(
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
+        let last_played = profile.last_played_mut(style);
         let mut changed = false;
-        if profile.last_song_music_path != new_path {
-            profile.last_song_music_path = new_path;
+        if last_played.song_music_path != new_path {
+            last_played.song_music_path = new_path;
             changed = true;
         }
-        if profile.last_chart_hash != new_hash {
-            profile.last_chart_hash = new_hash;
+        if last_played.chart_hash != new_hash {
+            last_played.chart_hash = new_hash;
             changed = true;
         }
-        if profile.last_difficulty_index != difficulty_index {
-            profile.last_difficulty_index = difficulty_index;
+        if last_played.difficulty_index != difficulty_index {
+            last_played.difficulty_index = difficulty_index;
             changed = true;
         }
         if !changed {
@@ -4640,7 +4722,8 @@ pub fn update_measure_lines_for_side(side: PlayerSide, setting: MeasureLines) {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, Profile, parse_groovestats_is_pad_player,
+        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LastPlayed, PlayStyle, Profile,
+        parse_groovestats_is_pad_player,
     };
 
     #[test]
@@ -4707,5 +4790,28 @@ mod tests {
             .age_years_for(2026),
             26
         );
+    }
+
+    #[test]
+    fn last_played_uses_singles_for_single_and_versus() {
+        let singles = LastPlayed {
+            song_music_path: Some("single.ogg".to_string()),
+            chart_hash: Some("singlehash".to_string()),
+            difficulty_index: 3,
+        };
+        let doubles = LastPlayed {
+            song_music_path: Some("double.ogg".to_string()),
+            chart_hash: Some("doublehash".to_string()),
+            difficulty_index: 7,
+        };
+        let profile = Profile {
+            last_played_singles: singles.clone(),
+            last_played_doubles: doubles.clone(),
+            ..Profile::default()
+        };
+
+        assert_eq!(profile.last_played(PlayStyle::Single), &singles);
+        assert_eq!(profile.last_played(PlayStyle::Versus), &singles);
+        assert_eq!(profile.last_played(PlayStyle::Double), &doubles);
     }
 }

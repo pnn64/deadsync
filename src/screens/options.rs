@@ -5647,11 +5647,16 @@ fn begin_score_import_from_confirm(state: &mut State) {
 
 #[inline(always)]
 fn sync_pack_preferred_difficulty_index() -> usize {
+    let profile_data = profile::get();
+    let play_style = profile::get_session_play_style();
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
     if max_diff_index == 0 {
         0
     } else {
-        profile::get().last_difficulty_index.min(max_diff_index)
+        profile_data
+            .last_played(play_style)
+            .difficulty_index
+            .min(max_diff_index)
     }
 }
 

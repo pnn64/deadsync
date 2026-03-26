@@ -1937,16 +1937,17 @@ pub fn init() -> State {
     let mut scored_pack_names = HashSet::new();
 
     let profile_data = profile::get();
+    let last_played = profile_data.last_played(profile::get_session_play_style());
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
     let initial_diff_index = if max_diff_index == 0 {
         0
     } else {
-        profile_data.last_difficulty_index.min(max_diff_index)
+        last_played.difficulty_index.min(max_diff_index)
     };
 
     let mut last_song_arc: Option<Arc<SongData>> = None;
     let mut last_pack_name: Option<String> = None;
-    let last_path = profile_data.last_song_music_path.as_deref();
+    let last_path = last_played.song_music_path.as_deref();
 
     let mut matched_packs = 0usize;
     let mut matched_songs = 0usize;
@@ -2161,7 +2162,7 @@ pub fn init() -> State {
         }) {
             state.selected_index = idx;
             if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-                if let Some(hash) = profile_data.last_chart_hash.as_deref()
+                if let Some(hash) = last_played.chart_hash.as_deref()
                     && let Some(idx2) = steps_index_for_chart_hash(song, target_chart_type, hash)
                 {
                     state.selected_steps_index = idx2;
@@ -2216,11 +2217,12 @@ pub fn init() -> State {
 
 pub fn init_placeholder() -> State {
     let profile_data = profile::get();
+    let last_played = profile_data.last_played(profile::get_session_play_style());
     let max_diff_index = color::FILE_DIFFICULTY_NAMES.len().saturating_sub(1);
     let initial_diff_index = if max_diff_index == 0 {
         0
     } else {
-        profile_data.last_difficulty_index.min(max_diff_index)
+        last_played.difficulty_index.min(max_diff_index)
     };
 
     State {
