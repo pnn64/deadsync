@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use crate::act;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::core::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::color;
 use crate::game::profile;
 use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 
 use super::utils::pane_origin_x;
 

@@ -1,7 +1,7 @@
 use crate::act;
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
 use crate::screens::evaluation::ScoreInfo;
-use crate::ui::actors::Actor;
-use crate::ui::color;
 
 pub fn build_modifiers_pane(
     score_info: &ScoreInfo,

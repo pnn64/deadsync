@@ -1,5 +1,5 @@
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
-use crate::ui::anim;
+use crate::core::ui::anim;
 use cgmath::Matrix4;
 use std::sync::Arc;
 

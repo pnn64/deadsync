@@ -1,6 +1,11 @@
 use crate::act;
 use crate::core::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::core::space::*;
+use crate::core::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::cache::{TextCache, cached_text};
+use crate::core::ui::color;
+use crate::core::ui::compose::TextLayoutCache;
+use crate::core::ui::font;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS,
@@ -26,11 +31,6 @@ use crate::game::{
     scroll::ScrollSpeedSetting,
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::cache::{TextCache, cached_text};
-use crate::ui::color;
-use crate::ui::compose::TextLayoutCache;
-use crate::ui::font;
 use cgmath::{Deg, Matrix4, Point3, Vector3};
 use rssp::streams::StreamSegment;
 use std::array::from_fn;

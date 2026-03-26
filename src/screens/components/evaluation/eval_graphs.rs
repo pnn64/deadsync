@@ -1,6 +1,6 @@
 use crate::core::gfx::MeshVertex;
+use crate::core::ui::color;
 use crate::game::timing::{HistogramMs, ScatterPoint};
-use crate::ui::color;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TimingHistogramScale {

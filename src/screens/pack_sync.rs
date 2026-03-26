@@ -5,11 +5,11 @@ use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
 use crate::game::chart::ChartData;
 use crate::screens::SongOffsetSyncChange;
 use crate::screens::components::shared::loading_bar;
-use crate::ui::actors::Actor;
-use crate::ui::color;
 use null_or_die::{BiasStreamCfg, BiasStreamEvent, GraphOrientation};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};

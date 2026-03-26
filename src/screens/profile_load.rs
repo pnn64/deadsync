@@ -1,8 +1,8 @@
 use crate::act;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::core::ui::actors::Actor;
 use crate::game::profile;
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::Actor;
 use std::sync::mpsc;
 
 // Simply Love: BGAnimations/ScreenProfileLoad overlay.lua
@@ -28,7 +28,7 @@ enum PreparedState {
 
 pub fn init() -> State {
     State {
-        active_color_index: crate::ui::color::DEFAULT_COLOR_INDEX,
+        active_color_index: crate::core::ui::color::DEFAULT_COLOR_INDEX,
         elapsed: 0.0,
         rx: None,
         prepared_select_music: None,

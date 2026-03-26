@@ -1,8 +1,8 @@
+use crate::core::ui::actors::Actor;
 use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
-use crate::ui::actors::Actor;
 
 pub fn build(top_title: &'static str) -> [Actor; 2] {
     let p1_profile = profile::get_for_side(profile::PlayerSide::P1);

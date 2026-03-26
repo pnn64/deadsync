@@ -1,5 +1,6 @@
 use crate::assets::AssetManager;
 use crate::core::space::screen_center_x;
+use crate::core::ui::actors::Actor;
 use crate::game::profile;
 use crate::game::scores::{
     CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
@@ -7,7 +8,6 @@ use crate::game::scores::{
 use crate::game::timing::WindowCounts;
 use crate::screens::components::gameplay::gameplay_stats;
 use crate::test_support::{compose_scenarios, notefield_bench};
-use crate::ui::actors::Actor;
 use std::path::PathBuf;
 use std::sync::Arc;
 

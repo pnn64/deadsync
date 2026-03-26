@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::ui::anim::{Step, TweenSeq, TweenState};
+use crate::core::ui::anim::{Step, TweenSeq, TweenState};
 
 const FNV_OFFSET: u64 = 0xcbf29ce484222325;
 const FNV_PRIME: u64 = 0x100000001b3;
@@ -95,7 +95,7 @@ pub fn clear_all() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::anim;
+    use crate::core::ui::anim;
 
     fn reset_registry(frame: u64) {
         REG.with(|r| {
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn split_site_hash_matches_legacy_id() {
-        const FILE: &str = "deadsync/src/ui/dsl.rs";
+        const FILE: &str = "deadsync/src/core/ui/dsl.rs";
         const LINE: u32 = 614;
         const COL: u32 = 9;
         const EXTRA: u64 = 0x53434F4C464F524D;

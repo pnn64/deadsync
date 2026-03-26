@@ -11,6 +11,9 @@ use crate::core::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
 };
+use crate::core::ui::actors::{Actor, SizeSpec, SpriteSource};
+use crate::core::ui::color;
+use crate::core::ui::font;
 use crate::game::chart::ChartData;
 use crate::game::known_packs;
 use crate::game::parsing::simfile as song_loading;
@@ -27,9 +30,6 @@ use crate::screens::components::{
     },
 };
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::{Actor, SizeSpec, SpriteSource};
-use crate::ui::color;
-use crate::ui::font;
 use image::{Rgba, RgbaImage};
 use log::debug;
 use null_or_die::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
@@ -4554,7 +4554,7 @@ fn switch_single_player_style(state: &mut State, new_style: profile::PlayStyle) 
     profile::set_session_play_style(new_style);
     refresh_after_reload(state);
     state.selection_animation_timer = 0.0;
-    crate::ui::runtime::clear_all();
+    crate::core::ui::runtime::clear_all();
 }
 
 fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {

@@ -1,8 +1,8 @@
 use crate::act;
 use crate::core::space;
 use crate::core::space::{screen_center_x, screen_height, screen_width};
-use crate::ui::actors::{self, Actor, Background, SizeSpec};
-use crate::ui::color;
+use crate::core::ui::actors::{self, Actor, Background, SizeSpec};
+use crate::core::ui::color;
 
 // --- Constants ---
 const BAR_H: f32 = 32.0;

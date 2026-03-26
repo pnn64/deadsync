@@ -2,6 +2,8 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_height, screen_width, widescale};
+use crate::core::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::color;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::SongData;
@@ -12,8 +14,6 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::components::shared::{banner as shared_banner, heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 use chrono::Local;
 use std::collections::HashSet;
 
@@ -180,8 +180,8 @@ fn build_player_stats(
             -widescale(194.0, 250.0),
             1.0,
             0.0,
-            crate::ui::actors::TextAlign::Right,
-            crate::ui::actors::TextAlign::Left,
+            crate::core::ui::actors::TextAlign::Right,
+            crate::core::ui::actors::TextAlign::Left,
             -1.0,
         ),
         profile::PlayerSide::P2 => (
@@ -190,8 +190,8 @@ fn build_player_stats(
             widescale(194.0, 250.0),
             0.0,
             1.0,
-            crate::ui::actors::TextAlign::Left,
-            crate::ui::actors::TextAlign::Right,
+            crate::core::ui::actors::TextAlign::Left,
+            crate::core::ui::actors::TextAlign::Right,
             1.0,
         ),
     };

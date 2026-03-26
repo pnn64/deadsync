@@ -1,6 +1,8 @@
 use crate::act;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
 use crate::game::downloads;
 use crate::game::online::{self as network, ConnectionStatus};
 use crate::game::profile;
@@ -8,8 +10,6 @@ use crate::game::scores;
 use crate::game::song::SongData;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::select_music::MusicWheelEntry;
-use crate::ui::actors::Actor;
-use crate::ui::color;
 use std::sync::Arc;
 
 const WIDTH: f32 = 210.0;

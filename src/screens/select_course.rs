@@ -3,6 +3,8 @@ use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{InputEvent, PadDir, VirtualAction};
 use crate::core::space::{is_wide, screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::core::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::color;
 use crate::game::chart::ChartData;
 use crate::game::course::get_course_cache;
 use crate::game::profile;
@@ -14,8 +16,6 @@ use crate::screens::components::{
     shared::{banner as shared_banner, gs_scorebox, heart_bg, mode_pads, timers},
 };
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;

@@ -1,12 +1,12 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::core::space::screen_center_y;
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
+use crate::core::ui::font;
 use crate::game::judgment::JudgeGrade;
 use crate::game::profile;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
-use crate::ui::actors::Actor;
-use crate::ui::color;
-use crate::ui::font;
 use std::sync::{Arc, LazyLock};
 
 use super::utils::pane_origin_x;

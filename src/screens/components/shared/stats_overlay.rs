@@ -2,7 +2,7 @@ use crate::act;
 use crate::core::audio::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality};
 use crate::core::gfx::{BackendType, ClockDomainTrace, PresentModeTrace};
 use crate::core::space::{screen_height, screen_width};
-use crate::ui::actors::Actor;
+use crate::core::ui::actors::Actor;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -3,10 +3,10 @@ use crate::core::gfx::{
     BlendMode, MeshMode, MeshVertex, ObjectType, RenderList, RenderObject, TexturedMeshVertex,
 };
 use crate::core::space::Metrics;
-use crate::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
-use crate::ui::anim::{EffectClock, EffectMode, EffectState};
-use crate::ui::compose;
-use crate::ui::font::{Font, Glyph};
+use crate::core::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
+use crate::core::ui::anim::{EffectClock, EffectMode, EffectState};
+use crate::core::ui::compose;
+use crate::core::ui::font::{Font, Glyph};
 use cgmath::Matrix4;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

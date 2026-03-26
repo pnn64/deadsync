@@ -61,17 +61,17 @@ pub const fn rgba_hex(s: &str) -> [f32; 4] {
 #[macro_export]
 macro_rules! rgba {
     ($hex:literal $(,)?) => {
-        $crate::ui::color::rgba_hex($hex)
+        $crate::core::ui::color::rgba_hex($hex)
     };
 }
 
 #[macro_export]
 macro_rules! rgba_const {
     ($name:ident, $hex:literal $(,)?) => {
-        const $name: [f32; 4] = $crate::ui::color::rgba_hex($hex);
+        const $name: [f32; 4] = $crate::core::ui::color::rgba_hex($hex);
     };
     ($vis:vis $name:ident, $hex:literal $(,)?) => {
-        $vis const $name: [f32; 4] = $crate::ui::color::rgba_hex($hex);
+        $vis const $name: [f32; 4] = $crate::core::ui::color::rgba_hex($hex);
     };
 }
 

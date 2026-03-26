@@ -1,5 +1,5 @@
+use crate::core::ui::actors::Actor;
 use crate::screens::menu;
-use crate::ui::actors::Actor;
 
 pub const SCENARIO_NAME: &str = "menu";
 

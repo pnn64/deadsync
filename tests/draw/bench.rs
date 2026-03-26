@@ -3,8 +3,8 @@ use deadsync::core::gfx::draw_prep::{
     TexturedMeshVertexRaw,
 };
 use deadsync::core::gfx::{BlendMode, MeshMode, RenderList, TextureHandle};
+use deadsync::core::ui::compose;
 use deadsync::test_support::{compose_case, compose_scenarios};
-use deadsync::ui::compose;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::error::Error;

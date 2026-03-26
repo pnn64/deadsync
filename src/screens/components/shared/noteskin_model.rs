@@ -1,6 +1,6 @@
 use crate::core::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
+use crate::core::ui::actors::{Actor, SizeSpec};
 use crate::game::parsing::noteskin::{ModelDrawState, ModelMesh, SpriteSlot};
-use crate::ui::actors::{Actor, SizeSpec};
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::sync::Arc;

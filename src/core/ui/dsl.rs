@@ -1,7 +1,7 @@
 use crate::assets;
 use crate::core::gfx::BlendMode;
-use crate::ui::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
-use crate::ui::{anim, font, runtime};
+use crate::core::ui::actors::{Actor, SizeSpec, SpriteSource, TextAlign, TextContent};
+use crate::core::ui::{anim, font, runtime};
 use std::sync::Arc;
 
 // PARITY COMMENT STANDARD:
@@ -1016,13 +1016,13 @@ pub fn text<'a>(mods: &[Mod<'a>], site_base: u64) -> Actor {
 #[macro_export]
 macro_rules! __ui_textalign_from_ident {
     (left) => {
-        $crate::ui::actors::TextAlign::Left
+        $crate::core::ui::actors::TextAlign::Left
     };
     (center) => {
-        $crate::ui::actors::TextAlign::Center
+        $crate::core::ui::actors::TextAlign::Center
     };
     (right) => {
-        $crate::ui::actors::TextAlign::Right
+        $crate::core::ui::actors::TextAlign::Right
     };
     ($other:ident) => {
         compile_error!(concat!(
@@ -1078,32 +1078,32 @@ macro_rules! act {
     (sprite($tex:expr): $($tail:tt)+) => {{
         let mut __mods = ::std::vec::Vec::new();
         let mut __tw = ::std::vec::Vec::new();
-        let mut __cur: ::core::option::Option<$crate::ui::anim::SegmentBuilder> = None;
+        let mut __cur: ::core::option::Option<$crate::core::ui::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
-        if !__tw.is_empty(){ __mods.push($crate::ui::dsl::Mod::Tween(&__tw)); }
-        const __SITE_BASE: u64 = $crate::ui::runtime::site_base(file!(), line!(), column!());
-        $crate::ui::dsl::sprite($tex, &__mods, __SITE_BASE)
+        if !__tw.is_empty(){ __mods.push($crate::core::ui::dsl::Mod::Tween(&__tw)); }
+        const __SITE_BASE: u64 = $crate::core::ui::runtime::site_base(file!(), line!(), column!());
+        $crate::core::ui::dsl::sprite($tex, &__mods, __SITE_BASE)
     }};
     (quad: $($tail:tt)+) => {{
         let mut __mods = ::std::vec::Vec::new();
         let mut __tw = ::std::vec::Vec::new();
-        let mut __cur: ::core::option::Option<$crate::ui::anim::SegmentBuilder> = None;
+        let mut __cur: ::core::option::Option<$crate::core::ui::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
-        if !__tw.is_empty(){ __mods.push($crate::ui::dsl::Mod::Tween(&__tw)); }
-        const __SITE_BASE: u64 = $crate::ui::runtime::site_base(file!(), line!(), column!());
-        $crate::ui::dsl::quad(&__mods, __SITE_BASE)
+        if !__tw.is_empty(){ __mods.push($crate::core::ui::dsl::Mod::Tween(&__tw)); }
+        const __SITE_BASE: u64 = $crate::core::ui::runtime::site_base(file!(), line!(), column!());
+        $crate::core::ui::dsl::quad(&__mods, __SITE_BASE)
     }};
     (text: $($tail:tt)+) => {{
         let mut __mods = ::std::vec::Vec::new();
         let mut __tw = ::std::vec::Vec::new();
-        let mut __cur: ::core::option::Option<$crate::ui::anim::SegmentBuilder> = None;
+        let mut __cur: ::core::option::Option<$crate::core::ui::anim::SegmentBuilder> = None;
         $crate::__dsl_apply!( ($($tail)+) __mods __tw __cur _dummy_site );
         if let ::core::option::Option::Some(seg)=__cur.take(){__tw.push(seg.build());}
-        if !__tw.is_empty(){ __mods.push($crate::ui::dsl::Mod::Tween(&__tw)); }
-        const __SITE_BASE: u64 = $crate::ui::runtime::site_base(file!(), line!(), column!());
-        $crate::ui::dsl::text(&__mods, __SITE_BASE)
+        if !__tw.is_empty(){ __mods.push($crate::core::ui::dsl::Mod::Tween(&__tw)); }
+        const __SITE_BASE: u64 = $crate::core::ui::runtime::site_base(file!(), line!(), column!());
+        $crate::core::ui::dsl::text(&__mods, __SITE_BASE)
     }};
 }
 
@@ -1127,49 +1127,49 @@ macro_rules! __dsl_apply_one {
     // --- segment controls ---
     (linear ($d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(seg)=$cur.take(){$tw.push(seg.build());}
-        $cur = ::core::option::Option::Some($crate::ui::anim::linear(($d) as f32));
+        $cur = ::core::option::Option::Some($crate::core::ui::anim::linear(($d) as f32));
     }};
     (accelerate ($d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(seg)=$cur.take(){$tw.push(seg.build());}
-        $cur = ::core::option::Option::Some($crate::ui::anim::accelerate(($d) as f32));
+        $cur = ::core::option::Option::Some($crate::core::ui::anim::accelerate(($d) as f32));
     }};
     (decelerate ($d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(seg)=$cur.take(){$tw.push(seg.build());}
-        $cur = ::core::option::Option::Some($crate::ui::anim::decelerate(($d) as f32));
+        $cur = ::core::option::Option::Some($crate::core::ui::anim::decelerate(($d) as f32));
     }};
     (ease ($d:expr, $f:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(seg) = $cur.take() { $tw.push(seg.build()); }
-        $cur = ::core::option::Option::Some($crate::ui::anim::ease(($d) as f32, ($f) as f32));
+        $cur = ::core::option::Option::Some($crate::core::ui::anim::ease(($d) as f32, ($f) as f32));
     }};
     (smooth ($d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(seg) = $cur.take() { $tw.push(seg.build()); }
-        $cur = ::core::option::Option::Some($crate::ui::anim::smooth(($d) as f32));
+        $cur = ::core::option::Option::Some($crate::core::ui::anim::smooth(($d) as f32));
     }};
     (sleep ($d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(seg)=$cur.take(){$tw.push(seg.build());}
-        $tw.push($crate::ui::anim::sleep(($d) as f32));
+        $tw.push($crate::core::ui::anim::sleep(($d) as f32));
     }};
 
     // --- tweenable props ---
     (xy ($x:expr, $y:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.x(($x) as f32).y(($y) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::Xy(($x) as f32, ($y) as f32)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::Xy(($x) as f32, ($y) as f32)); }
     }};
     (x ($x:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.x(($x) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::SetX(($x) as f32)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::SetX(($x) as f32)); }
     }};
     (y ($y:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.y(($y) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::SetY(($y) as f32)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::SetY(($y) as f32)); }
     }};
     (addx ($dx:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addx(($dx) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::AddX(($dx) as f32)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::AddX(($dx) as f32)); }
     }};
     (addy ($dy:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addy(($dy) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::AddY(($dy) as f32)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::AddY(($dy) as f32)); }
     }};
 
     // PARITY[StepMania Actor]: Center/CenterX/CenterY map to screen center globals.
@@ -1180,7 +1180,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.xy(cx, cy);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::ui::dsl::Mod::Xy(cx, cy));
+            $mods.push($crate::core::ui::dsl::Mod::Xy(cx, cy));
         }
     }};
     (CenterX () $mods:ident $tw:ident $cur:ident $site:ident) => {{
@@ -1189,7 +1189,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.x(cx);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::ui::dsl::Mod::SetX(cx));
+            $mods.push($crate::core::ui::dsl::Mod::SetX(cx));
         }
     }};
     (CenterY () $mods:ident $tw:ident $cur:ident $site:ident) => {{
@@ -1198,7 +1198,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.y(cy);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::ui::dsl::Mod::SetY(cy));
+            $mods.push($crate::core::ui::dsl::Mod::SetY(cy));
         }
     }};
 
@@ -1219,7 +1219,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.diffuse(($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::ui::dsl::Mod::Tint([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
+            $mods.push($crate::core::ui::dsl::Mod::Tint([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
         }
     }};
     (alpha ($a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
@@ -1227,7 +1227,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.alpha(($a) as f32);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::ui::dsl::Mod::Alpha(($a) as f32));
+            $mods.push($crate::core::ui::dsl::Mod::Alpha(($a) as f32));
         }
     }};
     (diffusealpha ($a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
@@ -1235,7 +1235,7 @@ macro_rules! __dsl_apply_one {
             seg = seg.alpha(($a) as f32);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::ui::dsl::Mod::Alpha(($a) as f32));
+            $mods.push($crate::core::ui::dsl::Mod::Alpha(($a) as f32));
         }
     }};
 
@@ -1245,126 +1245,126 @@ macro_rules! __dsl_apply_one {
             seg = seg.glow(($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32);
             $cur = ::core::option::Option::Some(seg);
         } else {
-            $mods.push($crate::ui::dsl::Mod::Glow([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
+            $mods.push($crate::core::ui::dsl::Mod::Glow([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
         }
     }};
     (strokecolor ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::StrokeColor([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
+        $mods.push($crate::core::ui::dsl::Mod::StrokeColor([($r) as f32,($g) as f32,($b) as f32,($a) as f32]));
     }};
 
     // PARITY[StepMania Actor]: shadowlength/shadowcolor command behavior.
     (shadowlength ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::ShadowLenBoth(($v) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::ShadowLenBoth(($v) as f32));
     }};
     (shadowlengthx ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::ShadowLenX(($v) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::ShadowLenX(($v) as f32));
     }};
     (shadowlengthy ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::ShadowLenY(($v) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::ShadowLenY(($v) as f32));
     }};
     (shadowcolor ($r:expr, $g:expr, $b:expr, $a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::ShadowColor([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
+        $mods.push($crate::core::ui::dsl::Mod::ShadowColor([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
     }};
 
     // PARITY[StepMania/ITGmania Actor]: effect command behavior.
     (effectclock (beat) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectClock($crate::ui::anim::EffectClock::Beat));
+        $mods.push($crate::core::ui::dsl::Mod::EffectClock($crate::core::ui::anim::EffectClock::Beat));
     }};
     (effectclock (time) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectClock($crate::ui::anim::EffectClock::Time));
+        $mods.push($crate::core::ui::dsl::Mod::EffectClock($crate::core::ui::anim::EffectClock::Time));
     }};
     (effectclock (music) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectClock($crate::ui::anim::EffectClock::Time));
+        $mods.push($crate::core::ui::dsl::Mod::EffectClock($crate::core::ui::anim::EffectClock::Time));
     }};
     (effectclock (seconds) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectClock($crate::ui::anim::EffectClock::Time));
+        $mods.push($crate::core::ui::dsl::Mod::EffectClock($crate::core::ui::anim::EffectClock::Time));
     }};
     (effectclock ($raw:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let __clock_raw = ::std::format!("{}", $raw);
-        let __clock = $crate::ui::dsl::__dsl_parse_effect_clock(__clock_raw.as_str());
-        $mods.push($crate::ui::dsl::Mod::EffectClock(__clock));
+        let __clock = $crate::core::ui::dsl::__dsl_parse_effect_clock(__clock_raw.as_str());
+        $mods.push($crate::core::ui::dsl::Mod::EffectClock(__clock));
     }};
 
     (diffuseramp () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::DiffuseRamp));
-        $mods.push($crate::ui::dsl::Mod::EffectPeriod(1.0));
-        $mods.push($crate::ui::dsl::Mod::EffectColor1([0.0, 0.0, 0.0, 1.0]));
-        $mods.push($crate::ui::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 1.0]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectMode($crate::core::ui::anim::EffectMode::DiffuseRamp));
+        $mods.push($crate::core::ui::dsl::Mod::EffectPeriod(1.0));
+        $mods.push($crate::core::ui::dsl::Mod::EffectColor1([0.0, 0.0, 0.0, 1.0]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 1.0]));
     }};
     (diffuseshift () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::DiffuseShift));
-        $mods.push($crate::ui::dsl::Mod::EffectPeriod(1.0));
-        $mods.push($crate::ui::dsl::Mod::EffectColor1([0.0, 0.0, 0.0, 1.0]));
-        $mods.push($crate::ui::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 1.0]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectMode($crate::core::ui::anim::EffectMode::DiffuseShift));
+        $mods.push($crate::core::ui::dsl::Mod::EffectPeriod(1.0));
+        $mods.push($crate::core::ui::dsl::Mod::EffectColor1([0.0, 0.0, 0.0, 1.0]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 1.0]));
     }};
     (glowshift () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::GlowShift));
-        $mods.push($crate::ui::dsl::Mod::EffectPeriod(1.0));
-        $mods.push($crate::ui::dsl::Mod::EffectColor1([1.0, 1.0, 1.0, 0.2]));
-        $mods.push($crate::ui::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 0.8]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectMode($crate::core::ui::anim::EffectMode::GlowShift));
+        $mods.push($crate::core::ui::dsl::Mod::EffectPeriod(1.0));
+        $mods.push($crate::core::ui::dsl::Mod::EffectColor1([1.0, 1.0, 1.0, 0.2]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectColor2([1.0, 1.0, 1.0, 0.8]));
     }};
     (pulse () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::Pulse));
-        $mods.push($crate::ui::dsl::Mod::EffectPeriod(2.0));
-        $mods.push($crate::ui::dsl::Mod::EffectMagnitude([0.5, 1.0, 0.0]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectMode($crate::core::ui::anim::EffectMode::Pulse));
+        $mods.push($crate::core::ui::dsl::Mod::EffectPeriod(2.0));
+        $mods.push($crate::core::ui::dsl::Mod::EffectMagnitude([0.5, 1.0, 0.0]));
     }};
     (spin () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::Spin));
-        $mods.push($crate::ui::dsl::Mod::EffectMagnitude([0.0, 0.0, 180.0]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectMode($crate::core::ui::anim::EffectMode::Spin));
+        $mods.push($crate::core::ui::dsl::Mod::EffectMagnitude([0.0, 0.0, 180.0]));
     }};
     (stopeffect () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectMode($crate::ui::anim::EffectMode::None));
+        $mods.push($crate::core::ui::dsl::Mod::EffectMode($crate::core::ui::anim::EffectMode::None));
     }};
 
     (effectcolor1 ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectColor1([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectColor1([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
     }};
     (effectcolor2 ($r:expr,$g:expr,$b:expr,$a:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectColor2([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectColor2([($r) as f32, ($g) as f32, ($b) as f32, ($a) as f32]));
     }};
     (effectperiod ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectPeriod(($v) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::EffectPeriod(($v) as f32));
     }};
     (effectoffset ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectOffset(($v) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::EffectOffset(($v) as f32));
     }};
     (effecttiming ($a:expr,$b:expr,$c:expr,$d:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         // ITGmania compatibility: 4-arg call is (ramp_to_half, hold_at_half, ramp_to_full, hold_at_zero).
-        $mods.push($crate::ui::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, 0.0, ($d) as f32]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, 0.0, ($d) as f32]));
     }};
     (effecttiming ($a:expr,$b:expr,$c:expr,$d:expr,$e:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         // ITGmania compatibility: 5-arg call is (ramp_to_half, hold_at_half, ramp_to_full, hold_at_zero, hold_at_full).
-        $mods.push($crate::ui::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, ($e) as f32, ($d) as f32]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectTiming([($a) as f32, ($b) as f32, ($c) as f32, ($e) as f32, ($d) as f32]));
     }};
     (effectmagnitude ($x:expr,$y:expr,$z:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::EffectMagnitude([($x) as f32, ($y) as f32, ($z) as f32]));
+        $mods.push($crate::core::ui::dsl::Mod::EffectMagnitude([($x) as f32, ($y) as f32, ($z) as f32]));
     }};
 
     // PARITY[StepMania Actor]: zoom* commands mutate scale factors.
     (zoom ($f:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let f=($f) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoom(f,f); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::Zoom(f)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::Zoom(f)); }
     }};
     (zoomx ($f:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let f=($f) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoomx(f); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::ZoomX(f)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::ZoomX(f)); }
     }};
     (zoomy ($f:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let f=($f) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoomy(f); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::ZoomY(f)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::ZoomY(f)); }
     }};
     (addzoomx ($df:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let df=($df) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addzoomx(df); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::AddZoomX(df)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::AddZoomX(df)); }
     }};
     (addzoomy ($df:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let df=($df) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addzoomy(df); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::AddZoomY(df)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::AddZoomY(df)); }
     }};
 
     // PARITY[StepMania Actor]: `zoomto` works from unzoomed size; `setsize` sets unzoomed size.
@@ -1372,183 +1372,183 @@ macro_rules! __dsl_apply_one {
         let ww = ($w) as f32;
         let hh = ($h) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.zoomto(ww, hh); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::ZoomToPx(ww, hh)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::ZoomToPx(ww, hh)); }
     }};
     (setsize ($w:expr, $h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let ww = ($w) as f32;
         let hh = ($h) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.size(ww, hh); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::SizePx(ww, hh)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::SizePx(ww, hh)); }
     }};
 
     // --- absolute size helpers preserving aspect ---------------------
     (zoomtowidth ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::ZoomToWidth(($w) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::ZoomToWidth(($w) as f32));
     }};
     (zoomtoheight ($h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::ZoomToHeight(($h) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::ZoomToHeight(($h) as f32));
     }};
     (wrapwidthpixels ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::WrapWidthPixels(($w) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::WrapWidthPixels(($w) as f32));
     }};
     // --- NEW: max constraints for text -------------------------------
     (maxwidth ($w:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::MaxWidth(($w) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::MaxWidth(($w) as f32));
     }};
     (maxheight ($h:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::MaxHeight(($h) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::MaxHeight(($h) as f32));
     }};
 
     // static sprite bits / cropping / uv / blend ---------------------
     (align ($h:expr,$v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::Align(($h) as f32, ($v) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::Align(($h) as f32, ($v) as f32));
     }};
     (halign ($dir:ident) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::HAlign($crate::__ui_halign_from_ident!($dir)));
+        $mods.push($crate::core::ui::dsl::Mod::HAlign($crate::__ui_halign_from_ident!($dir)));
     }};
     (halign ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::HAlign(($v) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::HAlign(($v) as f32));
     }};
     (valign ($dir:ident) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::VAlign($crate::__ui_valign_from_ident!($dir)));
+        $mods.push($crate::core::ui::dsl::Mod::VAlign($crate::__ui_valign_from_ident!($dir)));
     }};
     (valign ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::VAlign(($v) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::VAlign(($v) as f32));
     }};
 
-    (z ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.push($crate::ui::dsl::Mod::Z(($v) as i16)); }};
+    (z ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.push($crate::core::ui::dsl::Mod::Z(($v) as i16)); }};
     (texcoordvelocity ($vx:expr,$vy:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::TexVel([($vx) as f32, ($vy) as f32]));
+        $mods.push($crate::core::ui::dsl::Mod::TexVel([($vx) as f32, ($vy) as f32]));
     }};
     (cropleft ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.cropleft(($v) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::CropLeft(($v) as f32)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::CropLeft(($v) as f32)); }
     }};
     (cropright ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.cropright(($v) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::CropRight(($v) as f32)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::CropRight(($v) as f32)); }
     }};
     (croptop ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.croptop(($v) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::CropTop(($v) as f32)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::CropTop(($v) as f32)); }
     }};
     (cropbottom ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.cropbottom(($v) as f32); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::CropBottom(($v) as f32)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::CropBottom(($v) as f32)); }
     }};
     // edge fades (0..1 of visible width/height)
     (fadeleft ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let vv = ($v) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.fadeleft(vv); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::FadeLeft(vv)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::FadeLeft(vv)); }
     }};
     (faderight ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let vv = ($v) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.faderight(vv); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::FadeRight(vv)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::FadeRight(vv)); }
     }};
     (fadetop ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let vv = ($v) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.fadetop(vv); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::FadeTop(vv)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::FadeTop(vv)); }
     }};
     (fadebottom ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let vv = ($v) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.fadebottom(vv); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::FadeBottom(vv)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::FadeBottom(vv)); }
     }};
     // PARITY[StepMania/ITGmania Sprite]: `setstate(i)` chooses row-major frame index.
     (setstate ($i:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::State(($i) as u32));
+        $mods.push($crate::core::ui::dsl::Mod::State(($i) as u32));
     }};
     // animation control
     (animate ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::Animate(($v) as bool));
+        $mods.push($crate::core::ui::dsl::Mod::Animate(($v) as bool));
     }};
     (setallstatedelays ($s:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::StateDelay(($s) as f32));
+        $mods.push($crate::core::ui::dsl::Mod::StateDelay(($s) as f32));
     }};
     // PARITY[StepMania/ITGmania Sprite]: `customtexturerect` uses normalized top-left UVs.
     (customtexturerect ($u0:expr, $v0:expr, $u1:expr, $v1:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::UvRect([($u0) as f32, ($v0) as f32, ($u1) as f32, ($v1) as f32]));
+        $mods.push($crate::core::ui::dsl::Mod::UvRect([($u0) as f32, ($v0) as f32, ($u1) as f32, ($v1) as f32]));
     }};
 
     // --- visibility (immediate or inside a tween) ---
     (visible ($v:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.set_visible(($v) as bool); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::Visible(($v) as bool)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::Visible(($v) as bool)); }
     }};
 
     // --- rotation (degrees) ---
     (rotationx ($deg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let d=($deg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.rotationx(d); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::RotX(d)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::RotX(d)); }
     }};
 
     (rotationy ($deg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let d=($deg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.rotationy(d); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::RotY(d)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::RotY(d)); }
     }};
 
     (rotationz ($deg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let d=($deg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.rotationz(d); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::RotZ(d)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::RotZ(d)); }
     }};
 
     (addrotationx ($ddeg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let dd=($ddeg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addrotationx(dd); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::AddRotX(dd)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::AddRotX(dd)); }
     }};
 
     (addrotationy ($ddeg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let dd=($ddeg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addrotationy(dd); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::AddRotY(dd)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::AddRotY(dd)); }
     }};
 
     (addrotationz ($ddeg:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
         let dd=($ddeg) as f32;
         if let ::core::option::Option::Some(mut seg)=$cur.take(){ seg=seg.addrotationz(dd); $cur=::core::option::Option::Some(seg); }
-        else { $mods.push($crate::ui::dsl::Mod::AddRotZ(dd)); }
+        else { $mods.push($crate::core::ui::dsl::Mod::AddRotZ(dd)); }
     }};
 
     // blends: normal, add, multiply, subtract
     (blend (normal) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::Blend($crate::core::gfx::BlendMode::Alpha));
+        $mods.push($crate::core::ui::dsl::Mod::Blend($crate::core::gfx::BlendMode::Alpha));
     }};
     (blend (add) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::Blend($crate::core::gfx::BlendMode::Add));
+        $mods.push($crate::core::ui::dsl::Mod::Blend($crate::core::gfx::BlendMode::Add));
     }};
     (blend (multiply) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::Blend($crate::core::gfx::BlendMode::Multiply));
+        $mods.push($crate::core::ui::dsl::Mod::Blend($crate::core::gfx::BlendMode::Multiply));
     }};
     (blend (subtract) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::Blend($crate::core::gfx::BlendMode::Subtract));
+        $mods.push($crate::core::ui::dsl::Mod::Blend($crate::core::gfx::BlendMode::Subtract));
     }};
     (MaskSource () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::MaskSource);
+        $mods.push($crate::core::ui::dsl::Mod::MaskSource);
     }};
     (masksource () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::MaskSource);
+        $mods.push($crate::core::ui::dsl::Mod::MaskSource);
     }};
     (MaskDest () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::MaskDest);
+        $mods.push($crate::core::ui::dsl::Mod::MaskDest);
     }};
     (maskdest () $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::MaskDest);
+        $mods.push($crate::core::ui::dsl::Mod::MaskDest);
     }};
 
     // Text properties (SM-compatible)
-    (font ($n:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.push($crate::ui::dsl::Mod::Font($n)); }};
+    (font ($n:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{ $mods.push($crate::core::ui::dsl::Mod::Font($n)); }};
     (settext ($s:expr) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::Content($crate::ui::actors::TextContent::from($s)));
+        $mods.push($crate::core::ui::dsl::Mod::Content($crate::core::ui::actors::TextContent::from($s)));
     }};
     (horizalign ($dir:ident) $mods:ident $tw:ident $cur:ident $site:ident) => {{
-        $mods.push($crate::ui::dsl::Mod::TAlign($crate::__ui_textalign_from_ident!($dir)));
+        $mods.push($crate::core::ui::dsl::Mod::TAlign($crate::__ui_textalign_from_ident!($dir)));
     }};
 
     // unknown

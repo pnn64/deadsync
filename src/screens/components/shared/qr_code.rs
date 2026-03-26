@@ -1,6 +1,6 @@
 use crate::act;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
-use crate::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::actors::{Actor, SizeSpec};
 use qrcodegen::{QrCode, QrCodeEcc};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};

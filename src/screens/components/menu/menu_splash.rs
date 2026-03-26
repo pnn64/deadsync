@@ -1,7 +1,7 @@
 use crate::act;
 use crate::core::space::{screen_center_x, screen_center_y};
-use crate::ui::actors::Actor;
-use crate::ui::color;
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
 
 // Splash hearts used when leaving the main menu for gameplay.
 // This mirrors Simply Love's ScreenTitleMenu out.lua behavior for the Hearts style.

@@ -1,8 +1,8 @@
 use crate::act;
 use crate::assets;
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
 use crate::game::{profile, scores};
-use crate::ui::actors::Actor;
-use crate::ui::color;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};

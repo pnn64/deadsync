@@ -1,6 +1,8 @@
 use crate::act;
 // Screen navigation is handled in app.rs
 use crate::core::input::{InputEvent, RawKeyboardEvent, VirtualAction};
+use crate::core::ui::actors::{Actor, TextAlign};
+use crate::core::ui::color;
 use crate::game::course::get_course_cache;
 use crate::game::online::{self as network, ArrowCloudConnectionStatus, ConnectionStatus};
 use crate::game::song::get_song_cache;
@@ -9,8 +11,6 @@ use crate::screens::components::menu::menu_list::{self};
 use crate::screens::components::menu::menu_splash;
 use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::{Actor, TextAlign};
-use crate::ui::color;
 use std::cell::RefCell;
 use std::sync::{Arc, LazyLock};
 use winit::keyboard::KeyCode;

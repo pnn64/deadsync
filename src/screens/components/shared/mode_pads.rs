@@ -1,8 +1,8 @@
 use crate::act;
 use crate::core::space::{screen_width, widescale};
+use crate::core::ui::actors::Actor;
 use crate::game::profile;
 use crate::screens::components::shared::pad_display;
-use crate::ui::actors::Actor;
 
 pub fn build_label(text: &str) -> Actor {
     act!(text:

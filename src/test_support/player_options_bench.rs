@@ -1,8 +1,8 @@
 use crate::assets::AssetManager;
+use crate::core::ui::actors::Actor;
 use crate::game::profile;
 use crate::screens::{Screen, player_options};
 use crate::test_support::{compose_scenarios, notefield_bench};
-use crate::ui::actors::Actor;
 
 pub const SCENARIO_NAME: &str = "player-options";
 

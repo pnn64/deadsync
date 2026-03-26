@@ -3,11 +3,11 @@ use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
 use crate::game::parsing::{noteskin, simfile as song_loading};
 use crate::screens::components::shared::{heart_bg, loading_bar};
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::Actor;
-use crate::ui::color;
 use log::info;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};

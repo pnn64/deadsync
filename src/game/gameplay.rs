@@ -4,6 +4,7 @@ use crate::core::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
 use crate::core::space::{is_wide, screen_center_y, screen_height, screen_width};
+use crate::core::ui::color;
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
@@ -26,7 +27,6 @@ use crate::screens::components::shared::{
     noteskin_model::ModelMeshCache,
 };
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::color;
 use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;
 use std::cell::RefCell;

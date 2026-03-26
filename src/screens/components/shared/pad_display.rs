@@ -1,5 +1,5 @@
 use crate::act;
-use crate::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::actors::{Actor, SizeSpec};
 
 // This should match the native resolution of "rounded-square.png" from the theme (64x64).
 const PANEL_NATIVE_SIZE: f32 = 64.0;

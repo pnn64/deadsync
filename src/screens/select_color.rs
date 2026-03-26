@@ -2,16 +2,16 @@ use crate::act;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 // Screen navigation handled in app.rs
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{heart_bg, screen_bar};
-use crate::ui::actors::Actor;
-use crate::ui::color;
 // Keyboard handling is centralized in app.rs via virtual actions
 use crate::core::input::{InputEvent, VirtualAction};
+use crate::core::ui::actors;
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -292,7 +292,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     #[inline(always)]
     fn wheel_form_p() -> f32 {
-        use crate::ui::{anim, runtime};
+        use crate::core::ui::{anim, runtime};
         static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
         let steps = STEPS.get_or_init(|| vec![anim::linear(WHEEL_FORM_DURATION).x(1.0).build()]);
 
@@ -305,7 +305,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     #[inline(always)]
     fn wheel_exit_t(wide: bool) -> f32 {
-        use crate::ui::{anim, runtime};
+        use crate::core::ui::{anim, runtime};
         static STEPS_WIDE: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
         static STEPS_NARROW: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
 

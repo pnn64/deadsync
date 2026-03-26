@@ -1,9 +1,9 @@
 use crate::act;
+use crate::core::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::color;
 use crate::game::profile;
 use crate::game::scores;
 use crate::screens::evaluation::ScoreInfo;
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 
 use super::utils::{format_machine_record_date, pane_origin_x};
 

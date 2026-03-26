@@ -1,4 +1,4 @@
-use crate::ui::font::FontParseError;
+use crate::core::ui::font::FontParseError;
 use std::{error::Error as StdError, fmt};
 
 #[derive(Debug)]

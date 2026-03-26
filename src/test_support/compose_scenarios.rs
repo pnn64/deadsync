@@ -1,6 +1,9 @@
 use crate::assets;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
 use crate::core::space::{Metrics, metrics_for_window};
+use crate::core::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
+use crate::core::ui::anim::{EffectMode, EffectState};
+use crate::core::ui::font::{Font, Glyph};
 use crate::test_support::density_graph_bench;
 use crate::test_support::density_graph_life_bench;
 use crate::test_support::gameplay_bench;
@@ -16,9 +19,6 @@ use crate::test_support::notefield_bench;
 use crate::test_support::options_bench;
 use crate::test_support::pane_stats_bench;
 use crate::test_support::player_options_bench;
-use crate::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
-use crate::ui::anim::{EffectMode, EffectState};
-use crate::ui::font::{Font, Glyph};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 

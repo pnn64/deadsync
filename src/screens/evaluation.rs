@@ -2,6 +2,8 @@ use crate::act;
 use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::core::space::widescale;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::core::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::color;
 use crate::screens::Screen;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -10,10 +12,9 @@ use crate::screens::components::{
     evaluation::{self as eval_panes, eval_grades},
     shared::{banner as shared_banner, heart_bg, mode_pads, screen_bar, timers},
 };
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 
 use crate::assets::AssetManager;
+use crate::core::ui::font;
 use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
 use crate::game::judgment::{self, JudgeGrade};
@@ -24,7 +25,6 @@ use crate::game::scroll::ScrollSpeedSetting;
 use crate::game::song::SongData;
 use crate::game::timing as timing_stats;
 use crate::screens::gameplay;
-use crate::ui::font;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;

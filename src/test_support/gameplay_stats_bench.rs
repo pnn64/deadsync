@@ -1,4 +1,5 @@
 use crate::assets::AssetManager;
+use crate::core::ui::actors::Actor;
 use crate::game::profile;
 use crate::game::scores::{
     CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
@@ -9,7 +10,6 @@ use crate::screens::components::gameplay::{
     notefield::{self, FieldPlacement},
 };
 use crate::test_support::{compose_scenarios, notefield_bench};
-use crate::ui::actors::Actor;
 use std::path::PathBuf;
 use std::sync::Arc;
 

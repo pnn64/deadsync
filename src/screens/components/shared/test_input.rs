@@ -3,7 +3,7 @@ use crate::core::input::{
     InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
 };
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::ui::actors::Actor;
+use crate::core::ui::actors::Actor;
 use std::collections::HashMap;
 use winit::keyboard::KeyCode;
 

@@ -1,7 +1,7 @@
 use crate::assets::AssetManager;
 use crate::core::input::{InputEvent, InputSource, VirtualAction};
+use crate::core::ui::actors::Actor;
 use crate::screens::options;
-use crate::ui::actors::Actor;
 use std::time::Instant;
 
 use crate::test_support::compose_scenarios;

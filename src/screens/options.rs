@@ -26,12 +26,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::core::ui::actors;
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
+use crate::core::ui::font;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
-use crate::ui::actors;
-use crate::ui::actors::Actor;
-use crate::ui::color;
-use crate::ui::font;
 use null_or_die::{BiasKernel, KernelTarget};
 
 /* ---------------------------- transitions ---------------------------- */

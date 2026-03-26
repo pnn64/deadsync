@@ -1,7 +1,7 @@
 use crate::core::gfx::{BlendMode, MeshMode};
 use crate::core::space::screen_center_x;
+use crate::core::ui::actors::{Actor, SizeSpec};
 use crate::screens::components::shared::density_graph;
-use crate::ui::actors::{Actor, SizeSpec};
 use std::cell::RefCell;
 use std::sync::Arc;
 

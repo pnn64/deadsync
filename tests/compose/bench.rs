@@ -1,12 +1,12 @@
 use deadsync::assets::AssetManager;
 use deadsync::core::gfx::RenderList;
+use deadsync::core::ui::{actors::Actor, compose};
 use deadsync::test_support::{
     compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench, gameplay_bench,
     gameplay_stats_bench, gameplay_stats_double_bench, gameplay_stats_versus_bench,
     gs_scorebox_bench, heart_bg_bench, init_bench, menu_bench, music_wheel_bench, notefield_bench,
     options_bench, pane_stats_bench, player_options_bench,
 };
-use deadsync::ui::{actors::Actor, compose};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::error::Error;
@@ -705,7 +705,7 @@ fn build_screen_for_mode<'a>(
     actors: &'a [Actor],
     clear_color: [f32; 4],
     metrics: &deadsync::core::space::Metrics,
-    fonts: &'a HashMap<&'static str, deadsync::ui::font::Font>,
+    fonts: &'a HashMap<&'static str, deadsync::core::ui::font::Font>,
     total_elapsed: f32,
 ) -> RenderList<'a> {
     match cache_mode {
@@ -727,7 +727,7 @@ fn benchmark_actor_builder<F>(
     name: &str,
     clear_color: [f32; 4],
     metrics: &deadsync::core::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync::ui::font::Font>,
+    fonts: &HashMap<&'static str, deadsync::core::ui::font::Font>,
     total_elapsed: f32,
     iters: u64,
     warmup: u64,
@@ -837,7 +837,7 @@ fn benchmark_compose<F>(
     actors: &[Actor],
     clear_color: [f32; 4],
     metrics: &deadsync::core::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync::ui::font::Font>,
+    fonts: &HashMap<&'static str, deadsync::core::ui::font::Font>,
     iters: u64,
     warmup: u64,
     cache_mode: CacheMode,
@@ -978,7 +978,7 @@ fn benchmark_compose_resolve<F>(
     actors: &[Actor],
     clear_color: [f32; 4],
     metrics: &deadsync::core::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync::ui::font::Font>,
+    fonts: &HashMap<&'static str, deadsync::core::ui::font::Font>,
     iters: u64,
     warmup: u64,
     cache_mode: CacheMode,

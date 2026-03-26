@@ -3,10 +3,10 @@ use crate::core::input::{
     InputEvent, InputSource, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
 };
 use crate::core::space::{screen_height, screen_width};
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
 use crate::screens::components::shared::{heart_bg, test_input};
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::Actor;
-use crate::ui::color;
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;

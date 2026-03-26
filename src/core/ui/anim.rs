@@ -2,7 +2,7 @@
 //!
 //! Usage sketch:
 //! ```ignore
-//! use crate::ui::anim::*;
+//! use crate::core::ui::anim::*;
 //!
 //! // initialize per-actor animation state
 //! let mut tw = TweenSeq::new(TweenState::default());

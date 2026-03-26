@@ -1,7 +1,7 @@
 use super::{noteskin_actor, noteskin_compile, noteskin_compiled, noteskin_itg};
 use crate::assets;
 use crate::core::gfx::SamplerDesc;
-use crate::ui::anim as ui_anim;
+use crate::core::ui::anim as ui_anim;
 use image::{Rgba, RgbaImage, image_dimensions};
 use log::warn;
 use std::collections::{HashMap, HashSet};

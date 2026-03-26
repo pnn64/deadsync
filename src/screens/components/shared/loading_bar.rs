@@ -1,5 +1,5 @@
 use crate::act;
-use crate::ui::actors::{Actor, SizeSpec, TextContent};
+use crate::core::ui::actors::{Actor, SizeSpec, TextContent};
 
 const BORDER_PX: f32 = 2.0;
 

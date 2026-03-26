@@ -6,6 +6,8 @@ use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
 use crate::game::parsing::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization,
 };
@@ -16,8 +18,6 @@ use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::Actor;
-use crate::ui::color;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -585,8 +585,8 @@ fn measure_wendy_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("wendy", |metrics_font| {
-            let w =
-                crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
+            let w = crate::core::ui::font::measure_line_width_logical(metrics_font, text, all_fonts)
+                as f32;
             if w.is_finite() && w > 0.0 {
                 out_w = w;
             }
@@ -748,12 +748,15 @@ fn build_main_rows(
             let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
             let mut stepchart_choices: Vec<String> = Vec::with_capacity(5);
             let mut stepchart_choice_indices: Vec<usize> = Vec::with_capacity(5);
-            for (i, file_name) in crate::ui::color::FILE_DIFFICULTY_NAMES.iter().enumerate() {
+            for (i, file_name) in crate::core::ui::color::FILE_DIFFICULTY_NAMES
+                .iter()
+                .enumerate()
+            {
                 if let Some(chart) = song.charts.iter().find(|c| {
                     c.chart_type.eq_ignore_ascii_case(target_chart_type)
                         && c.difficulty.eq_ignore_ascii_case(file_name)
                 }) {
-                    let display_name = crate::ui::color::DISPLAY_DIFFICULTY_NAMES[i];
+                    let display_name = crate::core::ui::color::DISPLAY_DIFFICULTY_NAMES[i];
                     stepchart_choices.push(format!("{} {}", display_name, chart.meter));
                     stepchart_choice_indices.push(i);
                 }
@@ -769,13 +772,14 @@ fn build_main_rows(
                 } else {
                     stepchart_choices.push(format!("Edit {} {}", desc, chart.meter));
                 }
-                stepchart_choice_indices.push(crate::ui::color::FILE_DIFFICULTY_NAMES.len() + i);
+                stepchart_choice_indices
+                    .push(crate::core::ui::color::FILE_DIFFICULTY_NAMES.len() + i);
             }
             // Fallback if none found (defensive; SelectMusic filters songs by play style).
             if stepchart_choices.is_empty() {
                 stepchart_choices.push("(Current)".to_string());
                 let base_pref = preferred_difficulty_index[session_persisted_player_idx()].min(
-                    crate::ui::color::FILE_DIFFICULTY_NAMES
+                    crate::core::ui::color::FILE_DIFFICULTY_NAMES
                         .len()
                         .saturating_sub(1),
                 );
@@ -785,7 +789,7 @@ fn build_main_rows(
                 std::array::from_fn(|player_idx| {
                     let steps_idx = chart_steps_index[player_idx];
                     let pref_idx = preferred_difficulty_index[player_idx].min(
-                        crate::ui::color::FILE_DIFFICULTY_NAMES
+                        crate::core::ui::color::FILE_DIFFICULTY_NAMES
                             .len()
                             .saturating_sub(1),
                     );
@@ -2382,11 +2386,11 @@ pub fn init(
     let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
         let steps_idx = chart_steps_index[player_idx];
         let mut diff_idx = preferred_difficulty_index[player_idx].min(
-            crate::ui::color::FILE_DIFFICULTY_NAMES
+            crate::core::ui::color::FILE_DIFFICULTY_NAMES
                 .len()
                 .saturating_sub(1),
         );
-        if steps_idx < crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
+        if steps_idx < crate::core::ui::color::FILE_DIFFICULTY_NAMES.len() {
             diff_idx = steps_idx;
         }
         diff_idx
@@ -3286,7 +3290,8 @@ fn measure_option_text(asset_manager: &AssetManager, text: &str, zoom: f32) -> (
         asset_manager.with_font("miso", |metrics_font| {
             out_h = (metrics_font.height as f32).max(1.0) * zoom;
             let mut w =
-                crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts) as f32;
+                crate::core::ui::font::measure_line_width_logical(metrics_font, text, all_fonts)
+                    as f32;
             if !w.is_finite() || w <= 0.0 {
                 w = 1.0;
             }
@@ -3379,9 +3384,11 @@ fn cursor_dest_for_player(
             asset_manager.with_font("miso", |metrics_font| {
                 text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
                 for text in &row.choices {
-                    let mut w =
-                        crate::ui::font::measure_line_width_logical(metrics_font, text, all_fonts)
-                            as f32;
+                    let mut w = crate::core::ui::font::measure_line_width_logical(
+                        metrics_font,
+                        text,
+                        all_fonts,
+                    ) as f32;
                     if !w.is_finite() || w <= 0.0 {
                         w = 1.0;
                     }
@@ -4008,7 +4015,7 @@ fn change_choice_for_player(
             && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[player_idx])
         {
             state.chart_steps_index[player_idx] = difficulty_idx;
-            if difficulty_idx < crate::ui::color::FILE_DIFFICULTY_NAMES.len() {
+            if difficulty_idx < crate::core::ui::color::FILE_DIFFICULTY_NAMES.len() {
                 state.chart_difficulty_index[player_idx] = difficulty_idx;
             }
         }
@@ -6010,7 +6017,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 asset_manager.with_font("miso", |metrics_font| {
                     text_h = (metrics_font.height as f32).max(1.0) * value_zoom;
                     for text in &row.choices {
-                        let mut w = crate::ui::font::measure_line_width_logical(
+                        let mut w = crate::core::ui::font::measure_line_width_logical(
                             metrics_font,
                             text,
                             all_fonts,
@@ -6840,7 +6847,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     } else {
                         choice_text.clone()
                     };
-                    let mut text_w = crate::ui::font::measure_line_width_logical(
+                    let mut text_w = crate::core::ui::font::measure_line_width_logical(
                         metrics_font,
                         &choice_display_text,
                         all_fonts,
@@ -6938,7 +6945,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     };
                     if show_p2 && !row.name.starts_with("Music Rate") {
                         let p2_choice_center_x = screen_center_x().mul_add(2.0, -choice_center_x);
-                        let mut p2_w = crate::ui::font::measure_line_width_logical(
+                        let mut p2_w = crate::core::ui::font::measure_line_width_logical(
                             metrics_font,
                             &p2_text,
                             all_fonts,

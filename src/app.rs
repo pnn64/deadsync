@@ -9,6 +9,7 @@ use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, PresentModePolicy, create_backend};
 use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
+use crate::core::ui::color;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::components::shared::density_graph::{DensityGraphSlot, DensityGraphSource};
@@ -18,7 +19,6 @@ use crate::screens::{
     manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
     select_color, select_course, select_mode, select_music, select_profile, select_style,
 };
-use crate::ui::color;
 use chrono::Local;
 use winit::{
     application::ApplicationHandler,
@@ -54,7 +54,7 @@ compile_error!(
     "deadsync control input requires a raw keyboard backend; only Windows, Linux, FreeBSD, and macOS are wired for full app input"
 );
 
-use crate::ui::actors::Actor;
+use crate::core::ui::actors::Actor;
 /* -------------------- gamepad -------------------- */
 use crate::core::input::{GpSystemEvent, PadEvent};
 
@@ -641,7 +641,7 @@ struct ComposeBreakdown {
     actor_stats: ActorTreeStats,
     render_objects: u32,
     render_cameras: u32,
-    text_layout: crate::ui::compose::TextLayoutFrameStats,
+    text_layout: crate::core::ui::compose::TextLayoutFrameStats,
 }
 
 #[inline(always)]
@@ -653,38 +653,38 @@ const fn saturating_u32(value: usize) -> u32 {
     }
 }
 
-fn actor_tree_stats(actors: &[crate::ui::actors::Actor]) -> ActorTreeStats {
-    fn visit(stats: &mut ActorTreeStats, actor: &crate::ui::actors::Actor) {
+fn actor_tree_stats(actors: &[crate::core::ui::actors::Actor]) -> ActorTreeStats {
+    fn visit(stats: &mut ActorTreeStats, actor: &crate::core::ui::actors::Actor) {
         stats.total = stats.total.saturating_add(1);
         match actor {
-            crate::ui::actors::Actor::Sprite { .. } => {
+            crate::core::ui::actors::Actor::Sprite { .. } => {
                 stats.sprites = stats.sprites.saturating_add(1);
             }
-            crate::ui::actors::Actor::Text { content, .. } => {
+            crate::core::ui::actors::Actor::Text { content, .. } => {
                 stats.texts = stats.texts.saturating_add(1);
                 stats.text_chars = stats
                     .text_chars
                     .saturating_add(saturating_u32(content.len()));
             }
-            crate::ui::actors::Actor::Mesh { .. } => {
+            crate::core::ui::actors::Actor::Mesh { .. } => {
                 stats.meshes = stats.meshes.saturating_add(1);
             }
-            crate::ui::actors::Actor::TexturedMesh { .. } => {
+            crate::core::ui::actors::Actor::TexturedMesh { .. } => {
                 stats.textured_meshes = stats.textured_meshes.saturating_add(1);
             }
-            crate::ui::actors::Actor::Frame { children, .. } => {
+            crate::core::ui::actors::Actor::Frame { children, .. } => {
                 stats.frames = stats.frames.saturating_add(1);
                 for child in children {
                     visit(stats, child);
                 }
             }
-            crate::ui::actors::Actor::Camera { children, .. } => {
+            crate::core::ui::actors::Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
                     visit(stats, child);
                 }
             }
-            crate::ui::actors::Actor::Shadow { child, .. } => {
+            crate::core::ui::actors::Actor::Shadow { child, .. } => {
                 stats.shadows = stats.shadows.saturating_add(1);
                 visit(stats, child);
             }
@@ -1993,19 +1993,19 @@ fn prewarm_gameplay_assets(
 fn prewarm_gameplay_text_layout_cache(
     assets: &AssetManager,
     metrics: &Metrics,
-    cache: &mut crate::ui::compose::TextLayoutCache,
+    cache: &mut crate::core::ui::compose::TextLayoutCache,
     state: &gameplay::State,
 ) {
     let started = Instant::now();
     cache.configure(
         GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
-        crate::ui::compose::TextLayoutOverflowPolicy::PruneOwnedEntries,
+        crate::core::ui::compose::TextLayoutOverflowPolicy::PruneOwnedEntries,
     );
     cache.begin_frame_stats();
 
     let fonts = assets.fonts();
     let actors = gameplay::get_actors(state, assets);
-    let _ = crate::ui::compose::build_screen_cached(
+    let _ = crate::core::ui::compose::build_screen_cached(
         &actors,
         [0.0, 0.0, 0.0, 1.0],
         metrics,
@@ -2484,7 +2484,7 @@ impl AppState {
         color_index: i32,
     ) -> Self {
         let play_style = profile::get_session_play_style();
-        let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
+        let max_diff_index = crate::core::ui::color::FILE_DIFFICULTY_NAMES
             .len()
             .saturating_sub(1);
         let preferred = if max_diff_index == 0 {
@@ -2515,8 +2515,8 @@ pub struct App {
     backend_type: BackendType,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
-    ui_text_layout_cache: crate::ui::compose::TextLayoutCache,
-    gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache,
+    ui_text_layout_cache: crate::core::ui::compose::TextLayoutCache,
+    gameplay_text_layout_cache: crate::core::ui::compose::TextLayoutCache,
     state: AppState,
     gameplay_key_ring: Arc<GameplayInputRing>,
     gameplay_pad_ring: Arc<GameplayInputRing>,
@@ -2713,7 +2713,7 @@ impl App {
         let total_elapsed = redraw_started
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
-        crate::ui::runtime::tick(delta_time);
+        crate::core::ui::runtime::tick(delta_time);
 
         self.sync_gameplay_input_capture();
         self.state.shell.update_gamepad_overlay(redraw_started);
@@ -2869,7 +2869,7 @@ impl App {
                     } else {
                         TransitionState::Idle
                     };
-                    crate::ui::runtime::clear_all();
+                    crate::core::ui::runtime::clear_all();
                 }
             }
             TransitionState::FadingIn { elapsed, duration } => {
@@ -2977,7 +2977,7 @@ impl App {
         };
         text_layout_cache.begin_frame_stats();
         let build_screen_started = Instant::now();
-        let mut screen = crate::ui::compose::build_screen_cached(
+        let mut screen = crate::core::ui::compose::build_screen_cached(
             &actors,
             clear_color,
             &self.state.shell.metrics,
@@ -3140,8 +3140,8 @@ impl App {
             backend_type,
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
-            ui_text_layout_cache: crate::ui::compose::TextLayoutCache::default(),
-            gameplay_text_layout_cache: crate::ui::compose::TextLayoutCache::saturating(
+            ui_text_layout_cache: crate::core::ui::compose::TextLayoutCache::default(),
+            gameplay_text_layout_cache: crate::core::ui::compose::TextLayoutCache::saturating(
                 GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
             ),
             state,
@@ -3218,7 +3218,7 @@ impl App {
                     );
                 }
 
-                let max_diff_index = crate::ui::color::FILE_DIFFICULTY_NAMES
+                let max_diff_index = crate::core::ui::color::FILE_DIFFICULTY_NAMES
                     .len()
                     .saturating_sub(1);
                 let play_style = profile::get_session_play_style();
@@ -3755,7 +3755,7 @@ impl App {
             debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
             self.state.screens.current_screen = target;
             self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
-            crate::ui::runtime::clear_all();
+            crate::core::ui::runtime::clear_all();
             return;
         }
 
@@ -5982,7 +5982,7 @@ impl App {
             Ok(()) => {
                 config::update_video_renderer(target);
                 options::sync_video_renderer(&mut self.state.screens.options_state, target);
-                crate::ui::runtime::clear_all();
+                crate::core::ui::runtime::clear_all();
                 self.reset_dynamic_assets_after_renderer_switch();
                 if let Some(window) = self.window.clone() {
                     self.request_redraw(&window, "switch_renderer");
@@ -6542,7 +6542,7 @@ impl App {
                 duration: in_duration,
             };
         }
-        crate::ui::runtime::clear_all();
+        crate::core::ui::runtime::clear_all();
         let _ = self.run_commands(commands, event_loop);
     }
 

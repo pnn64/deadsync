@@ -3,13 +3,13 @@ use crate::assets::AssetManager;
 use crate::core::audio;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::core::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::color;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::stage_stats;
 use crate::screens::components::shared::heart_bg;
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 use std::time::{Duration, Instant};
 
 /* ---------------------------- transitions ---------------------------- */

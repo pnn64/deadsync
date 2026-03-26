@@ -1,8 +1,8 @@
 use crate::act;
 use crate::core::input::{GpSystemEvent, InputEvent, PadEvent, RawKeyboardEvent, VirtualAction};
 use crate::core::space::{screen_center_x, screen_height, screen_width};
+use crate::core::ui::actors::Actor;
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::Actor;
 // Keyboard input is handled centrally via the virtual dispatcher in app.rs
 use std::collections::VecDeque;
 use std::time::Instant;

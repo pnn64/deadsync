@@ -6,12 +6,12 @@ use crate::core::input::{
     VirtualAction, with_keymap,
 };
 use crate::core::space::{screen_height, screen_width, widescale};
+use crate::core::ui::actors::Actor;
+use crate::core::ui::color;
+use crate::core::ui::font;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
-use crate::ui::actors::Actor;
-use crate::ui::color;
-use crate::ui::font;
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
 
@@ -734,7 +734,7 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             children,
             ..
         } => {
-            if let Some(crate::ui::actors::Background::Color(c)) = background {
+            if let Some(crate::core::ui::actors::Background::Color(c)) = background {
                 c[3] *= alpha;
             }
             for child in children {

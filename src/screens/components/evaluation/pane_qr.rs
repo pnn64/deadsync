@@ -1,9 +1,9 @@
 use crate::act;
+use crate::core::ui::actors::{Actor, SizeSpec};
+use crate::core::ui::color;
 use crate::game::{profile, scores};
 use crate::screens::components::shared::qr_code;
 use crate::screens::evaluation::ScoreInfo;
-use crate::ui::actors::{Actor, SizeSpec};
-use crate::ui::color;
 
 use super::utils::pane_origin_x;
 
