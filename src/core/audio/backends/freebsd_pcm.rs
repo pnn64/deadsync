@@ -21,13 +21,10 @@ const IOC_VOID: u64 = 0x2000_0000;
 const IOC_OUT: u64 = 0x4000_0000;
 const IOC_IN: u64 = 0x8000_0000;
 
-const AFMT_S16_LE: c_int = 0x0000_0010;
-const AFMT_S16_BE: c_int = 0x0000_0020;
-
 #[cfg(target_endian = "little")]
-const AFMT_S16_NE: c_int = AFMT_S16_LE;
+const AFMT_S16_NE: c_int = 0x0000_0010;
 #[cfg(target_endian = "big")]
-const AFMT_S16_NE: c_int = AFMT_S16_BE;
+const AFMT_S16_NE: c_int = 0x0000_0020;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
