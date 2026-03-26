@@ -2302,7 +2302,7 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 [[package]]
 name = "null-or-die"
 version = "0.0.22"
-source = "git+https://github.com/pnn64/null-or-die?rev=fd8371d#fd8371d41cf3c876cc2c3de7d2b0ea02f5892571"
+source = "git+https://github.com/pnn64/null-or-die?rev=a25c2ca#a25c2ca995f6d7ce2e151cf7273f19392a575f79"
 dependencies = [
  "clap",
  "lewton",
@@ -3455,8 +3455,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.3.60"
-source = "git+https://github.com/pnn64/rssp?rev=fa18b15#fa18b15f6013a45f52da8844362077948bb69829"
+version = "0.3.61"
+source = "git+https://github.com/pnn64/rssp?rev=f6e7be3#f6e7be33f554a3d376ff6ce71481cc3f9f47bcfa"
 dependencies = [
  "png",
  "serde_json",
