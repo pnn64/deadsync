@@ -993,6 +993,27 @@ fn load_banner_source_rgba(path: &Path, opts: BannerCacheOptions) -> Result<Rgba
         .map_err(|e| e.to_string())
 }
 
+fn collect_stale_dynamic_keys<'a>(
+    current: impl Iterator<Item = &'a String>,
+    desired: &HashSet<String>,
+) -> Vec<String> {
+    current
+        .filter(|key| !desired.contains(*key))
+        .cloned()
+        .collect()
+}
+
+fn dedupe_dynamic_keys(keys: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::with_capacity(keys.len());
+    let mut out = Vec::with_capacity(keys.len());
+    for key in keys {
+        if seen.insert(key.clone()) {
+            out.push(key);
+        }
+    }
+    out
+}
+
 fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, folder: &str) {
     let mut dirs = vec![Path::new("assets").join(folder)];
     while let Some(dir) = dirs.pop() {
@@ -1312,6 +1333,50 @@ impl AssetManager {
 
     fn remove_texture_and_dispose(&mut self, backend: &mut Backend, key: &str) {
         if let Some((handle, texture)) = self.remove_texture(key) {
+            self.dispose_texture(backend, handle, texture);
+        }
+    }
+
+    #[inline(always)]
+    fn dynamic_texture_key_in_use(&self, key: &str) -> bool {
+        self.current_dynamic_banner
+            .as_ref()
+            .is_some_and(|state| state.key == key)
+            || self.active_banner_videos.contains_key(key)
+            || self
+                .current_dynamic_cdtitle
+                .as_ref()
+                .is_some_and(|(owned, _)| owned == key)
+            || self
+                .current_dynamic_pack_banner
+                .as_ref()
+                .is_some_and(|(owned, _)| owned == key)
+            || self.dynamic_pack_banner_keys.contains(key)
+            || self
+                .current_dynamic_background
+                .as_ref()
+                .is_some_and(|state| state.key == key)
+            || self
+                .current_profile_avatars
+                .iter()
+                .flatten()
+                .any(|(owned, _)| owned == key)
+    }
+
+    #[inline(always)]
+    fn take_releasable_dynamic_texture(
+        &mut self,
+        key: &str,
+    ) -> Option<(TextureHandle, GfxTexture)> {
+        if self.dynamic_texture_key_in_use(key) {
+            None
+        } else {
+            self.remove_texture(key)
+        }
+    }
+
+    fn release_dynamic_texture_key(&mut self, backend: &mut Backend, key: String) {
+        if let Some((handle, texture)) = self.take_releasable_dynamic_texture(&key) {
             self.dispose_texture(backend, handle, texture);
         }
     }
@@ -1860,31 +1925,29 @@ impl AssetManager {
     // --- Dynamic Asset Management ---
 
     pub fn destroy_dynamic_assets(&mut self, backend: &mut Backend) {
-        if self.current_dynamic_banner.is_some()
-            || !self.active_banner_videos.is_empty()
-            || self.current_dynamic_cdtitle.is_some()
-            || self.current_dynamic_pack_banner.is_some()
-            || !self.dynamic_pack_banner_keys.is_empty()
-            || self.current_dynamic_background.is_some()
-        {
-            if let Some(state) = self.current_dynamic_banner.take() {
-                self.remove_texture_and_dispose(backend, &state.key);
-            }
-            self.active_banner_videos.clear();
-            if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
-                self.remove_texture_and_dispose(backend, &key);
-            }
-            if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
-                self.dynamic_pack_banner_keys.remove(&key);
-                self.remove_texture_and_dispose(backend, &key);
-            }
-            let drained_pack_keys: Vec<_> = self.dynamic_pack_banner_keys.drain().collect();
-            for key in drained_pack_keys {
-                self.remove_texture_and_dispose(backend, &key);
-            }
-            if let Some(state) = self.current_dynamic_background.take() {
-                self.remove_texture_and_dispose(backend, &state.key);
-            }
+        let mut keys = Vec::with_capacity(
+            self.active_banner_videos
+                .len()
+                .saturating_add(self.dynamic_pack_banner_keys.len())
+                .saturating_add(4),
+        );
+        if let Some(state) = self.current_dynamic_banner.take() {
+            keys.push(state.key);
+        }
+        keys.extend(self.active_banner_videos.drain().map(|(key, _)| key));
+        if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
+            keys.push(key);
+        }
+        if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
+            self.dynamic_pack_banner_keys.remove(&key);
+            keys.push(key);
+        }
+        keys.extend(self.dynamic_pack_banner_keys.drain());
+        if let Some(state) = self.current_dynamic_background.take() {
+            keys.push(state.key);
+        }
+        for key in dedupe_dynamic_keys(keys) {
+            self.remove_texture_and_dispose(backend, &key);
         }
     }
 
@@ -1975,7 +2038,7 @@ impl AssetManager {
             } else {
                 if let Some((old_key, _)) = self.current_dynamic_pack_banner.take() {
                     self.dynamic_pack_banner_keys.remove(&old_key);
-                    self.remove_texture_and_dispose(backend, &old_key);
+                    self.release_dynamic_texture_key(backend, old_key);
                 }
             }
 
@@ -2009,7 +2072,7 @@ impl AssetManager {
             } else {
                 if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
                     self.dynamic_pack_banner_keys.remove(&key);
-                    self.remove_texture_and_dispose(backend, &key);
+                    self.release_dynamic_texture_key(backend, key);
                 }
             }
         }
@@ -2076,8 +2139,11 @@ impl AssetManager {
             }
             desired.insert(path.to_string_lossy().into_owned());
         }
-        self.active_banner_videos
-            .retain(|key, _| desired.contains(key));
+        let stale_keys = collect_stale_dynamic_keys(self.active_banner_videos.keys(), &desired);
+        for key in stale_keys {
+            self.active_banner_videos.remove(&key);
+            self.release_dynamic_texture_key(backend, key);
+        }
         for path in desired_paths {
             if !is_dynamic_video_path(path) {
                 continue;
@@ -2253,6 +2319,14 @@ impl AssetManager {
         };
 
         if let Some(path) = path_opt {
+            if let Some((key, current_path)) = self.current_profile_avatars[ix].as_ref()
+                && current_path == &path
+                && self.has_texture_key(key)
+            {
+                profile::set_avatar_texture_key_for_side(side, Some(key.clone()));
+                return;
+            }
+            self.destroy_current_profile_avatar_for_side(backend, side);
             let key = path.to_string_lossy().into_owned();
             self.ensure_texture_from_path(backend, &path);
             self.current_profile_avatars[ix] = Some((key.clone(), path));
@@ -2304,20 +2378,19 @@ impl AssetManager {
 
     fn destroy_current_dynamic_banner(&mut self, backend: &mut Backend) {
         if let Some(state) = self.current_dynamic_banner.take() {
-            self.active_banner_videos.remove(&state.key);
-            self.remove_texture_and_dispose(backend, &state.key);
+            self.release_dynamic_texture_key(backend, state.key);
         }
     }
 
     fn destroy_current_dynamic_cdtitle(&mut self, backend: &mut Backend) {
         if let Some((key, _)) = self.current_dynamic_cdtitle.take() {
-            self.remove_texture_and_dispose(backend, &key);
+            self.release_dynamic_texture_key(backend, key);
         }
     }
 
     fn destroy_current_dynamic_background(&mut self, backend: &mut Backend) {
         if let Some(state) = self.current_dynamic_background.take() {
-            self.remove_texture_and_dispose(backend, &state.key);
+            self.release_dynamic_texture_key(backend, state.key);
         }
     }
 
@@ -2331,8 +2404,11 @@ impl AssetManager {
             profile::PlayerSide::P1 => 0,
             profile::PlayerSide::P2 => 1,
         };
-        self.current_profile_avatars[ix] = None;
+        let key = self.current_profile_avatars[ix].take().map(|(key, _)| key);
         profile::set_avatar_texture_key_for_side(side, None);
+        if let Some(key) = key {
+            self.release_dynamic_texture_key(backend, key);
+        }
     }
 
     pub(crate) fn ensure_texture_for_key(&mut self, backend: &mut Backend, texture_key: &str) {
@@ -2448,7 +2524,8 @@ impl AssetManager {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_texture_resolution_hint;
+    use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn parses_texture_resolution_hint_from_parenthetical_res_tag() {
@@ -2485,5 +2562,90 @@ mod tests {
             parse_texture_resolution_hint("_miso light 16x7 doubleres.png"),
             None
         );
+    }
+
+    #[test]
+    fn collect_stale_dynamic_keys_skips_desired_entries() {
+        let current = vec![
+            "keep.mp4".to_string(),
+            "drop-a.mp4".to_string(),
+            "drop-b.mp4".to_string(),
+        ];
+        let desired = HashSet::from(["keep.mp4".to_string()]);
+        assert_eq!(
+            collect_stale_dynamic_keys(current.iter(), &desired),
+            vec!["drop-a.mp4".to_string(), "drop-b.mp4".to_string()]
+        );
+    }
+
+    #[test]
+    fn dedupe_dynamic_keys_preserves_first_owner_order() {
+        assert_eq!(
+            dedupe_dynamic_keys(vec![
+                "banner.mp4".to_string(),
+                "shared.mp4".to_string(),
+                "banner.mp4".to_string(),
+                "shared.mp4".to_string(),
+                "bg.mp4".to_string(),
+            ]),
+            vec![
+                "banner.mp4".to_string(),
+                "shared.mp4".to_string(),
+                "bg.mp4".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn shared_dynamic_key_stays_until_last_owner_releases_it() {
+        let mut assets = AssetManager::new();
+        let key = "shared.mp4".to_string();
+        let path = PathBuf::from(&key);
+
+        assets.reserve_texture_handle(key.clone());
+        assets.current_dynamic_banner = Some(DynamicBannerState {
+            key: key.clone(),
+            path: path.clone(),
+            high_res_loaded: true,
+        });
+        assets.current_dynamic_background = Some(DynamicBackgroundState {
+            key: key.clone(),
+            path,
+            video: None,
+        });
+
+        assets.current_dynamic_banner = None;
+        let removed = assets.take_releasable_dynamic_texture(&key);
+
+        assert!(removed.is_none());
+        assert!(assets.has_texture_key(&key));
+    }
+
+    #[test]
+    fn last_dynamic_owner_releases_texture_mapping() {
+        let mut assets = AssetManager::new();
+        let key = "banner.mp4".to_string();
+        let path = PathBuf::from(&key);
+
+        assets.reserve_texture_handle(key.clone());
+        assets.current_dynamic_banner = Some(DynamicBannerState {
+            key: key.clone(),
+            path,
+            high_res_loaded: true,
+        });
+
+        assets.current_dynamic_banner = None;
+        let removed = assets.take_releasable_dynamic_texture(&key);
+
+        assert!(removed.is_none());
+        assert!(!assets.has_texture_key(&key));
+    }
+
+    #[test]
+    fn profile_avatar_counts_as_dynamic_texture_owner() {
+        let mut assets = AssetManager::new();
+        let key = "avatar.png".to_string();
+        assets.current_profile_avatars[0] = Some((key.clone(), PathBuf::from(&key)));
+        assert!(assets.dynamic_texture_key_in_use(&key));
     }
 }
