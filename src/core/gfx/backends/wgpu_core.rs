@@ -1590,11 +1590,10 @@ fn set_camera(
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
+    state.window_size = (width, height);
     if width == 0 || height == 0 {
-        warn!("Ignoring resize to zero dimensions for wgpu backend.");
         return;
     }
-    state.window_size = (width, height);
     state.projection = ortho_for_window(width, height);
     reconfigure_surface(state);
 }

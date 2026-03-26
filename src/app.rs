@@ -6050,6 +6050,16 @@ impl App {
         );
     }
 
+    fn sync_window_size(&mut self, size: PhysicalSize<u32>) {
+        if size.width > 0 && size.height > 0 {
+            self.state.shell.metrics = space::metrics_for_window(size.width, size.height);
+            space::set_current_metrics(self.state.shell.metrics);
+        }
+        if let Some(backend) = &mut self.backend {
+            backend.resize(size.width, size.height);
+        }
+    }
+
     fn apply_display_mode(
         &mut self,
         mode: DisplayMode,
@@ -6104,11 +6114,7 @@ impl App {
             }
 
             let sz = window.inner_size();
-            self.state.shell.metrics = space::metrics_for_window(sz.width, sz.height);
-            space::set_current_metrics(self.state.shell.metrics);
-            if let Some(backend) = &mut self.backend {
-                backend.resize(sz.width, sz.height);
-            }
+            self.sync_window_size(sz);
         }
 
         self.state.shell.display_mode = mode;
@@ -6163,11 +6169,7 @@ impl App {
             }
 
             let sz = window.inner_size();
-            self.state.shell.metrics = space::metrics_for_window(sz.width, sz.height);
-            space::set_current_metrics(self.state.shell.metrics);
-            if let Some(backend) = &mut self.backend {
-                backend.resize(sz.width, sz.height);
-            }
+            self.sync_window_size(sz);
         }
 
         Ok(())
@@ -7922,14 +7924,7 @@ impl ApplicationHandler<UserEvent> for App {
                         self.state.screens.current_screen
                     );
                 }
-                if new_size.width > 0 && new_size.height > 0 {
-                    self.state.shell.metrics =
-                        space::metrics_for_window(new_size.width, new_size.height);
-                    space::set_current_metrics(self.state.shell.metrics);
-                    if let Some(backend) = &mut self.backend {
-                        backend.resize(new_size.width, new_size.height);
-                    }
-                }
+                self.sync_window_size(new_size);
                 if surface_changed && self.state.shell.surface_active {
                     self.request_redraw(&window, "surface_active");
                 }

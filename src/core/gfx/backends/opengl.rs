@@ -1076,12 +1076,11 @@ fn flip_rows_rgba_in_place(width: usize, height: usize, pixels: &mut [u8]) {
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
+    state.window_size = (width, height);
     if width == 0 || height == 0 {
-        warn!("Ignoring resize to zero dimensions.");
         return;
     }
-    let w = NonZeroU32::new(width).unwrap();
-    let h = NonZeroU32::new(height).unwrap();
+    let (w, h) = surface_extent(width, height);
 
     state.gl_surface.resize(&state.gl_context, w, h);
     // SAFETY: the OpenGL context remains current for this surface, so updating the
@@ -1090,7 +1089,6 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
         state.gl.viewport(0, 0, width as i32, height as i32);
     }
     state.projection = ortho_for_window(width, height);
-    state.window_size = (width, height);
 }
 
 pub fn cleanup(state: &mut State) {
@@ -1508,11 +1506,9 @@ fn create_window_surface_context(
     height: u32,
     context_attributes: ContextAttributes,
 ) -> Result<(Surface<WindowSurface>, PossiblyCurrentContext), Box<dyn Error>> {
-    let surface_attributes = SurfaceAttributesBuilder::<WindowSurface>::new().build(
-        raw_window_handle,
-        NonZeroU32::new(width).unwrap(),
-        NonZeroU32::new(height).unwrap(),
-    );
+    let (width, height) = surface_extent(width, height);
+    let surface_attributes =
+        SurfaceAttributesBuilder::<WindowSurface>::new().build(raw_window_handle, width, height);
     // SAFETY: `display`, `config`, and `surface_attributes` all refer to the live
     // window and chosen GL config for this thread, so creating the window surface
     // is valid here.
@@ -1523,4 +1519,25 @@ fn create_window_surface_context(
     let context =
         unsafe { display.create_context(config, &context_attributes)? }.make_current(&surface)?;
     Ok((surface, context))
+}
+
+#[inline(always)]
+fn surface_extent(width: u32, height: u32) -> (NonZeroU32, NonZeroU32) {
+    (
+        NonZeroU32::new(width.max(1)).expect("surface width is clamped to at least 1"),
+        NonZeroU32::new(height.max(1)).expect("surface height is clamped to at least 1"),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::surface_extent;
+
+    #[test]
+    fn surface_extent_clamps_zero_dims() {
+        assert_eq!(surface_extent(0, 0).0.get(), 1);
+        assert_eq!(surface_extent(0, 0).1.get(), 1);
+        assert_eq!(surface_extent(1920, 1080).0.get(), 1920);
+        assert_eq!(surface_extent(1920, 1080).1.get(), 1080);
+    }
 }

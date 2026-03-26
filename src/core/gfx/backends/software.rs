@@ -343,10 +343,10 @@ pub fn draw(
 }
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
+    state.window_size = PhysicalSize::new(width, height);
     if width == 0 || height == 0 {
         return;
     }
-    state.window_size = PhysicalSize::new(width, height);
     state.projection = ortho_for_window(width, height);
 }
 
