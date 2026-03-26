@@ -16,7 +16,6 @@ pub(crate) use self::dynamic::{
     dynamic_image_cache_path_for, load_or_build_cached_dynamic_image, save_cached_banner_image,
     save_raw_cached_banner_image,
 };
-pub use self::dynamic::{artwork_cache_jobs, prewarm_artwork_cache_with_progress};
 use self::textures::ascii_ci_hash;
 #[cfg(test)]
 pub(crate) use self::textures::parse_texture_resolution_hint;
@@ -32,21 +31,6 @@ pub struct AssetManager {
     texture_handles_ascii_ci: HashMap<u64, TextureHandle>,
     next_texture_handle: TextureHandle,
     fonts: HashMap<&'static str, Font>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DensityGraphSlot {
-    SelectMusicP1,
-    SelectMusicP2,
-}
-
-#[derive(Debug, Clone)]
-pub struct DensityGraphSource {
-    pub max_nps: f64,
-    pub measure_nps_vec: Vec<f64>,
-    pub measure_seconds_vec: Vec<f32>,
-    pub first_second: f32,
-    pub last_second: f32,
 }
 
 impl AssetManager {

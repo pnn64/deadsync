@@ -1,8 +1,9 @@
 mod dynamic_media;
+pub(crate) mod media_cache;
 
 use self::dynamic_media::DynamicMedia;
 use crate::act;
-use crate::assets::{AssetManager, DensityGraphSlot, DensityGraphSource};
+use crate::assets::AssetManager;
 use crate::config::{self, DisplayMode};
 use crate::core::display;
 use crate::core::gfx::{self as renderer, BackendType, PresentModePolicy, create_backend};
@@ -10,6 +11,7 @@ use crate::core::input::{self, InputEvent};
 use crate::core::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
+use crate::screens::components::shared::density_graph::{DensityGraphSlot, DensityGraphSource};
 use crate::screens::{
     Screen as CurrentScreen, ScreenAction, SongOffsetSyncChange, credits, evaluation,
     evaluation_summary, gameover, gameplay, init, initials, input as input_screen,
@@ -1972,7 +1974,7 @@ fn prewarm_gameplay_assets(
     if let Some(path) = state.song.background_path.as_ref() {
         let key = path.to_string_lossy().into_owned();
         if seen.insert(key) {
-            assets.ensure_texture_from_path(backend, path);
+            media_cache::ensure_banner_texture(assets, backend, path);
         }
     }
     for change in &state.song.background_changes {
@@ -1981,7 +1983,7 @@ fn prewarm_gameplay_assets(
         };
         let key = path.to_string_lossy().into_owned();
         if seen.insert(key) {
-            assets.ensure_texture_from_path(backend, path);
+            media_cache::ensure_banner_texture(assets, backend, path);
         }
     }
     crate::core::audio::preload_sfx("assets/sounds/boom.ogg");
@@ -7247,7 +7249,7 @@ impl App {
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
                     if let Some(path) = gs.song.banner_path.as_ref() {
-                        self.asset_manager.ensure_texture_from_path(backend, path);
+                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
                     }
                 }
                 let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
@@ -7310,7 +7312,7 @@ impl App {
             if let (Some(backend), Some(gs)) = (self.backend.as_mut(), gameplay_results.as_ref())
                 && let Some(path) = gs.song.banner_path.as_ref()
             {
-                self.asset_manager.ensure_texture_from_path(backend, path);
+                media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
             }
             let color_idx = gameplay_results.as_ref().map_or(
                 self.state.screens.evaluation_state.active_color_index,
@@ -7408,7 +7410,7 @@ impl App {
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
-                        self.asset_manager.ensure_texture_from_path(backend, path);
+                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
                     }
                 }
             }
@@ -7439,7 +7441,7 @@ impl App {
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
-                        self.asset_manager.ensure_texture_from_path(backend, path);
+                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
                     }
                 }
             }

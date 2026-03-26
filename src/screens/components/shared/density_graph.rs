@@ -1,6 +1,21 @@
 use crate::core::gfx::MeshVertex;
 use std::sync::Arc;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DensityGraphSlot {
+    SelectMusicP1,
+    SelectMusicP2,
+}
+
+#[derive(Debug, Clone)]
+pub struct DensityGraphSource {
+    pub max_nps: f64,
+    pub measure_nps_vec: Vec<f64>,
+    pub measure_seconds_vec: Vec<f32>,
+    pub first_second: f32,
+    pub last_second: f32,
+}
+
 #[inline(always)]
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     (b - a).mul_add(t, a)

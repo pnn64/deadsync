@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{self, AssetManager, DensityGraphSlot, DensityGraphSource};
+use crate::assets::{self, AssetManager};
 use crate::config::{
     self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
     SyncGraphMode,
@@ -21,8 +21,9 @@ use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar},
     shared::{
-        banner as shared_banner, gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input,
-        timers,
+        banner as shared_banner,
+        density_graph::{DensityGraphSlot, DensityGraphSource},
+        gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input, timers,
     },
 };
 use crate::screens::{Screen, ScreenAction};

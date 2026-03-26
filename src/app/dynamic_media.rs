@@ -1,3 +1,4 @@
+use super::media_cache;
 use crate::assets::{AssetManager, dynamic, open_image_fallback, register_texture_dims};
 use crate::core::{
     gfx::{Backend, SamplerDesc, Texture as GfxTexture, TextureHandle},
@@ -54,7 +55,7 @@ impl DynamicMedia {
         let profile = profile::get();
         for p in profile::scan_local_profiles() {
             if let Some(path) = p.avatar_path {
-                assets.ensure_texture_from_path(backend, &path);
+                media_cache::ensure_banner_texture(assets, backend, &path);
             }
         }
         self.set_profile_avatar(assets, backend, profile.avatar_path);
@@ -105,7 +106,6 @@ impl DynamicMedia {
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) -> Option<String> {
-        let cache_opts = dynamic::BannerCacheOptions::from_cdtitle_config(&crate::config::get());
         if let Some(path) = path_opt {
             if let Some((key, current_path)) = self.current_dynamic_cdtitle.as_ref()
                 && current_path == &path
@@ -115,7 +115,7 @@ impl DynamicMedia {
             }
 
             self.destroy_current_dynamic_cdtitle(assets, backend);
-            let rgba = match dynamic::load_cdtitle_source_rgba(&path, cache_opts) {
+            let rgba = match media_cache::load_cdtitle_source_rgba(&path) {
                 Ok(rgba) => rgba,
                 Err(e) => {
                     warn!(
@@ -154,8 +154,7 @@ impl DynamicMedia {
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) {
-        let banner_cache_opts =
-            dynamic::BannerCacheOptions::from_banner_config(&crate::config::get());
+        let banner_cache_opts = media_cache::banner_cache_options();
         if let Some(path) = path_opt {
             if self
                 .current_dynamic_pack_banner
@@ -181,7 +180,7 @@ impl DynamicMedia {
                 self.release_texture_key(assets, backend, old_key);
             }
 
-            let rgba = match dynamic::load_banner_source_rgba(&path, banner_cache_opts) {
+            let rgba = match media_cache::load_banner_source_rgba(&path) {
                 Ok(rgba) => rgba,
                 Err(e) => {
                     warn!(
@@ -220,8 +219,6 @@ impl DynamicMedia {
         path_opt: Option<PathBuf>,
     ) -> String {
         const FALLBACK_KEY: &str = "banner1.png";
-        let banner_cache_opts =
-            dynamic::BannerCacheOptions::from_banner_config(&crate::config::get());
 
         if let Some(path) = path_opt {
             let key = path.to_string_lossy().into_owned();
@@ -232,7 +229,7 @@ impl DynamicMedia {
                 return current.key.clone();
             }
             self.destroy_current_dynamic_banner(assets, backend);
-            let rgba = match dynamic::load_banner_source_rgba(&path, banner_cache_opts) {
+            let rgba = match media_cache::load_banner_source_rgba(&path) {
                 Ok(rgba) => rgba,
                 Err(e) => {
                     warn!(
@@ -294,7 +291,7 @@ impl DynamicMedia {
             if self.active_banner_videos.contains_key(&key) {
                 continue;
             }
-            assets.ensure_texture_from_path(backend, path);
+            media_cache::ensure_banner_texture(assets, backend, path);
             if !assets.has_texture_key(&key) {
                 continue;
             }
@@ -469,7 +466,7 @@ impl DynamicMedia {
             }
             self.destroy_current_profile_avatar_for_side(assets, backend, side);
             let key = path.to_string_lossy().into_owned();
-            assets.ensure_texture_from_path(backend, &path);
+            media_cache::ensure_banner_texture(assets, backend, &path);
             self.current_profile_avatars[ix] = Some((key.clone(), path));
             if assets.has_texture_key(&key) {
                 profile::set_avatar_texture_key_for_side(side, Some(key));
