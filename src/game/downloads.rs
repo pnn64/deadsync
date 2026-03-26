@@ -339,7 +339,11 @@ fn cache_has_destination(cache: &UnlockCache, url: &str, destination: &str) -> b
 }
 
 fn unlock_cache_path() -> PathBuf {
-    songs_dir().join("unlocks-cache.json")
+    cache_dir().join("unlocks-cache.json")
+}
+
+fn cache_dir() -> PathBuf {
+    PathBuf::from("cache")
 }
 
 fn songs_dir() -> PathBuf {
