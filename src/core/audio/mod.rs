@@ -10,7 +10,7 @@ use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Instant;
 
@@ -39,6 +39,15 @@ pub struct OutputDeviceInfo {
     pub name: String,
     pub is_default: bool,
     pub sample_rates_hz: Vec<u32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InitConfig {
+    pub output_device_index: Option<u16>,
+    pub output_mode: crate::config::AudioOutputMode,
+    #[cfg(target_os = "linux")]
+    pub linux_backend: crate::config::LinuxAudioBackend,
+    pub sample_rate_hz: Option<u32>,
 }
 
 struct OutputDeviceProbe {
@@ -70,7 +79,9 @@ enum AudioCommand {
 }
 
 // Global engine (initialized once)
-static ENGINE: std::sync::LazyLock<AudioEngine> = std::sync::LazyLock::new(init_engine_and_thread);
+static ENGINE_INIT_CFG: OnceLock<InitConfig> = OnceLock::new();
+static ENGINE: std::sync::LazyLock<AudioEngine> =
+    std::sync::LazyLock::new(|| init_engine_and_thread(engine_init_cfg()));
 
 struct AudioEngine {
     command_sender: Sender<AudioCommand>,
@@ -628,8 +639,22 @@ static PLAYBACK_POS_MAP: std::sync::LazyLock<Mutex<PlaybackPosMap>> =
 
 /* ============================ Public functions ============================ */
 
+#[inline(always)]
+fn engine_init_cfg() -> InitConfig {
+    *ENGINE_INIT_CFG
+        .get()
+        .expect("core::audio::init must be called before audio use")
+}
+
 /// Initializes the audio engine. Must be called once at startup.
-pub fn init() -> Result<(), String> {
+pub fn init(cfg: InitConfig) -> Result<(), String> {
+    if let Some(existing) = ENGINE_INIT_CFG.get() {
+        if *existing != cfg {
+            return Err("audio engine already initialized with different config".to_string());
+        }
+    } else {
+        let _ = ENGINE_INIT_CFG.set(cfg);
+    }
     std::sync::LazyLock::force(&ENGINE);
     std::sync::LazyLock::force(&QUEUED_MUSIC_MAP_SEGS);
     std::sync::LazyLock::force(&PLAYED_MUSIC_MAP_SEGS);
@@ -1343,7 +1368,7 @@ fn linux_default_output_device(
 }
 
 #[cfg(target_os = "linux")]
-fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
     let alsa_devices = backends::linux_alsa::enumerate_output_devices();
     if alsa_devices.is_empty() {
         warn!(
@@ -1360,14 +1385,14 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             },
         })
         .collect();
-    let output_mode = cfg.audio_output_mode;
-    let linux_backend = cfg.linux_audio_backend;
+    let output_mode = cfg.output_mode;
+    let linux_backend = cfg.linux_backend;
     let default_device = linux_default_output_device(&alsa_devices);
     let requested_device = cfg
-        .audio_output_device_index
+        .output_device_index
         .and_then(|idx| alsa_devices.get(idx as usize));
     let explicit_device_requested = requested_device.is_some();
-    if let Some(requested_idx) = cfg.audio_output_device_index {
+    if let Some(requested_idx) = cfg.output_device_index {
         if let Some(device) = requested_device {
             info!(
                 "Audio output device override selected: index {} '{}'.",
@@ -1402,7 +1427,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
     };
     let fallback_device = selected_device.or(default_device);
     let native_sample_rate_hz = cfg
-        .audio_sample_rate_hz
+        .sample_rate_hz
         .unwrap_or_else(|| fallback_device.map_or(48_000, |device| device.default_rate_hz));
     let native_channels = fallback_device.map_or(2, |device| device.channels);
     debug!(
@@ -1430,7 +1455,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             #[cfg(has_jack_audio)]
             jack: Some(JackBackendHint {
                 requested_device_name: explicit_device_requested.then_some(device_name.clone()),
-                requested_rate_hz: cfg.audio_sample_rate_hz,
+                requested_rate_hz: cfg.sample_rate_hz,
                 output_mode,
             }),
             #[cfg(has_pipewire_audio)]
@@ -1452,7 +1477,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
 }
 
 #[cfg(target_os = "macos")]
-fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
     let devices = backends::macos_coreaudio::enumerate_output_devices();
     if devices.is_empty() {
         warn!(
@@ -1469,7 +1494,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             },
         })
         .collect();
-    let output_mode = cfg.audio_output_mode;
+    let output_mode = cfg.output_mode;
     let default_device = devices
         .iter()
         .find(|device| device.is_default)
@@ -1477,7 +1502,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
     let requested_device = cfg
         .audio_output_device_index
         .and_then(|idx| devices.get(idx as usize));
-    if let Some(requested_idx) = cfg.audio_output_device_index {
+    if let Some(requested_idx) = cfg.output_device_index {
         if let Some(device) = requested_device {
             info!(
                 "Audio output device override selected: index {} '{}'.",
@@ -1524,7 +1549,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
 }
 
 #[cfg(windows)]
-fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
     let devices = match backends::windows_wasapi::enumerate_output_devices() {
         Ok(devices) => devices,
         Err(err) => {
@@ -1547,8 +1572,8 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             },
         })
         .collect();
-    let output_mode = cfg.audio_output_mode;
-    let requested_rate_hz = cfg.audio_sample_rate_hz;
+    let output_mode = cfg.output_mode;
+    let requested_rate_hz = cfg.sample_rate_hz;
     let default_device = devices
         .iter()
         .find(|device| device.is_default)
@@ -1556,7 +1581,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
     let requested_device = cfg
         .audio_output_device_index
         .and_then(|idx| devices.get(idx as usize));
-    if let Some(requested_idx) = cfg.audio_output_device_index {
+    if let Some(requested_idx) = cfg.output_device_index {
         if let Some(device) = requested_device {
             info!(
                 "Audio output device override selected: index {} '{}'.",
@@ -1599,7 +1624,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
 }
 
 #[cfg(target_os = "freebsd")]
-fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
+fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadLaunch) {
     let mut device_probes: Vec<_> = backends::freebsd_pcm::enumerate_output_devices()
         .into_iter()
         .map(|dev| OutputDeviceProbe {
@@ -1611,7 +1636,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             freebsd_dsp_path: Some(dev.path),
         })
         .collect();
-    let output_mode = cfg.audio_output_mode;
+    let output_mode = cfg.output_mode;
     let mut device_name = device_probes
         .iter()
         .find(|probe| probe.info.is_default)
@@ -1621,7 +1646,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
         .iter()
         .find(|probe| probe.info.is_default)
         .and_then(|probe| probe.freebsd_dsp_path.clone());
-    if let Some(requested_idx) = cfg.audio_output_device_index {
+    if let Some(requested_idx) = cfg.output_device_index {
         if let Some(probe) = device_probes.get(requested_idx as usize) {
             device_name = probe.info.name.clone();
             dsp_path = probe.freebsd_dsp_path.clone();
@@ -1653,7 +1678,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             device_name = "FreeBSD PCM (/dev/dsp)".to_string();
         }
     }
-    let sample_rate_hz = cfg.audio_sample_rate_hz.unwrap_or(48_000).max(1);
+    let sample_rate_hz = cfg.sample_rate_hz.unwrap_or(48_000).max(1);
     debug!(
         "FreeBSD PCM device '{}' selected at {} Hz, 2 ch, mode={}.",
         device_name,
@@ -1666,7 +1691,7 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
             #[cfg(target_os = "linux")]
             explicit_device_requested: false,
             #[cfg(target_os = "linux")]
-            linux_backend: cfg.linux_audio_backend,
+            linux_backend: cfg.linux_backend,
             #[cfg(target_os = "linux")]
             alsa: None,
             #[cfg(target_os = "linux")]
@@ -1693,10 +1718,9 @@ fn build_audio_launch(cfg: &crate::config::Config) -> (Vec<OutputDeviceProbe>, A
     )
 }
 
-fn init_engine_and_thread() -> AudioEngine {
+fn init_engine_and_thread(cfg: InitConfig) -> AudioEngine {
     let (command_sender, command_receiver) = channel();
     let (ready_sender, ready_receiver) = channel();
-    let cfg = crate::config::get();
     let (device_probes, launch) = build_audio_launch(&cfg);
 
     thread::spawn(move || {

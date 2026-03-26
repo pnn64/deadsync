@@ -189,7 +189,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(windows)]
     let _windows_timing = boost_windows_runtime_timing();
     game::profile::load();
-    if let Err(e) = core::audio::init() {
+    if let Err(e) = core::audio::init(core::audio::InitConfig {
+        output_device_index: cfg.audio_output_device_index,
+        output_mode: cfg.audio_output_mode,
+        #[cfg(target_os = "linux")]
+        linux_backend: cfg.linux_audio_backend,
+        sample_rate_hz: cfg.audio_sample_rate_hz,
+    }) {
         // The game can run without audio; log the error and continue.
         log::error!("Failed to initialize audio engine: {e}");
     } else {
