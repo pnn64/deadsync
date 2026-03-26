@@ -1,4 +1,10 @@
-use super::{noteskin_actor, noteskin_compile, noteskin_compiled, noteskin_itg};
+mod compile;
+mod itg;
+
+use self::{
+    compile as noteskin_actor, compile as noteskin_compile, compile as noteskin_compiled,
+    itg as noteskin_itg,
+};
 use crate::assets;
 use crate::core::gfx::SamplerDesc;
 use crate::core::ui::anim as ui_anim;
