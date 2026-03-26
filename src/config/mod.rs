@@ -1,7 +1,8 @@
 mod audio;
 mod ini;
 mod keybinds;
-#[path = "config/null_or_die.rs"]
+mod load;
+#[path = "null_or_die.rs"]
 mod null_or_die_cfg;
 mod runtime;
 mod store;
@@ -16,11 +17,11 @@ pub use self::ini::SimpleIni;
 pub use self::keybinds::{
     update_keymap_binding_unique_gamepad, update_keymap_binding_unique_keyboard,
 };
+pub use self::load::{bootstrap_log_to_file, load};
 pub use self::null_or_die_cfg::null_or_die_bias_cfg;
 pub use self::runtime::{
     additional_song_folders, audio_mix_levels, flush_pending_saves, get, machine_default_noteskin,
 };
-pub use self::store::{bootstrap_log_to_file, load};
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, GameFlag, LanguageFlag,
