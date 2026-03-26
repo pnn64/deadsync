@@ -43,6 +43,7 @@ impl MusicWheelBenchFixture {
             show_music_wheel_grades: false,
             show_music_wheel_lamps: false,
             itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
+            allow_online_fetch: false,
             new_pack_names: None,
         })
     }

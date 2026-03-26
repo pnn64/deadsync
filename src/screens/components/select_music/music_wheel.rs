@@ -160,6 +160,11 @@ fn choose_itl_wheel_score(
     Some((ex_hundredths, points))
 }
 
+#[inline(always)]
+const fn should_fetch_online_itl_score(is_selected_slot: bool, allow_online_fetch: bool) -> bool {
+    is_selected_slot && allow_online_fetch
+}
+
 // Helper from select_music.rs
 fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [
@@ -225,6 +230,7 @@ pub struct MusicWheelParams<'a> {
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
     pub itl_wheel_mode: SelectMusicItlWheelMode,
+    pub allow_online_fetch: bool,
     pub new_pack_names: Option<&'a HashSet<String>>,
 }
 
@@ -596,7 +602,8 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         }
                         let local_itl = scores::get_cached_itl_score_for_song(info, side);
                         let online_ex_hundredths = itl_chart_hash.and_then(|chart_hash| {
-                            if is_selected_slot {
+                            if should_fetch_online_itl_score(is_selected_slot, p.allow_online_fetch)
+                            {
                                 scores::get_or_fetch_itl_self_score_for_side(chart_hash, side)
                             } else {
                                 scores::get_cached_itl_self_score_for_side(chart_hash, side)
@@ -758,7 +765,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 
 #[cfg(test)]
 mod tests {
-    use super::choose_itl_wheel_score;
+    use super::{choose_itl_wheel_score, should_fetch_online_itl_score};
     use crate::game::scores::CachedItlScore;
 
     #[test]
@@ -801,5 +808,16 @@ mod tests {
             choose_itl_wheel_score(local, Some(9912), None),
             Some((9912, None))
         );
+    }
+
+    #[test]
+    fn online_itl_fetch_requires_selected_slot() {
+        assert!(!should_fetch_online_itl_score(false, true));
+    }
+
+    #[test]
+    fn online_itl_fetch_requires_settled_selection() {
+        assert!(!should_fetch_online_itl_score(true, false));
+        assert!(should_fetch_online_itl_score(true, true));
     }
 }

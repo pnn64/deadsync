@@ -2289,6 +2289,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         show_music_wheel_grades: true,
         show_music_wheel_lamps: true,
         itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
+        allow_online_fetch: false,
         new_pack_names: None,
     }));
 
