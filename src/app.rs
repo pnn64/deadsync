@@ -733,6 +733,11 @@ const fn should_background_throttle_unfocused(screen: CurrentScreen) -> bool {
     !matches!(screen, CurrentScreen::Gameplay)
 }
 
+#[inline(always)]
+const fn foreground_input_active(window_focused: bool, surface_active: bool) -> bool {
+    window_focused && surface_active
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum FrameLoopMode {
     Poll,
@@ -2546,6 +2551,14 @@ impl App {
         !self.state.shell.vsync_enabled
             && self.state.shell.present_mode_policy == PresentModePolicy::Mailbox
             && self.effective_frame_interval().is_none()
+    }
+
+    #[inline(always)]
+    fn accepts_live_input(&self) -> bool {
+        foreground_input_active(
+            self.state.shell.window_focused,
+            self.state.shell.surface_active,
+        )
     }
 
     #[inline(always)]
@@ -4389,7 +4402,7 @@ impl App {
 
     #[inline(always)]
     fn sync_gameplay_input_capture(&self) {
-        let capture_enabled = self.state.shell.window_focused && self.state.shell.surface_active;
+        let capture_enabled = self.accepts_live_input();
         let ring_enabled = capture_enabled
             && self.state.screens.current_screen == CurrentScreen::Gameplay
             && matches!(self.state.shell.transition, TransitionState::Idle);
@@ -7797,6 +7810,9 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             UserEvent::Pad(ev) => {
+                if !self.accepts_live_input() {
+                    return;
+                }
                 let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
                 let handled_started = Instant::now();
                 if self.state.screens.current_screen == CurrentScreen::Sandbox {
@@ -7821,6 +7837,9 @@ impl ApplicationHandler<UserEvent> for App {
                     .note_gameplay_pad_handler(gameplay_screen, elapsed_us_since(handled_started));
             }
             UserEvent::Key(ev) => {
+                if !self.accepts_live_input() {
+                    return;
+                }
                 let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
                 let handled_started = Instant::now();
                 self.handle_raw_key_event(event_loop, ev);
@@ -7904,6 +7923,8 @@ impl ApplicationHandler<UserEvent> for App {
                         focused, self.state.screens.current_screen
                     );
                     if !focused {
+                        self.state.shell.shift_held = false;
+                        self.state.shell.ctrl_held = false;
                         input::clear_debounce_state();
                         self.clear_gameplay_input_events();
                     }
@@ -8311,5 +8332,13 @@ mod tests {
         let pad = queued_input_event(input::InputSource::Gamepad, now, 100, now, now);
         assert!(gameplay_event_precedes(&key, &pad));
         assert!(!gameplay_event_precedes(&pad, &key));
+    }
+
+    #[test]
+    fn foreground_input_requires_focus_and_surface() {
+        assert!(foreground_input_active(true, true));
+        assert!(!foreground_input_active(false, true));
+        assert!(!foreground_input_active(true, false));
+        assert!(!foreground_input_active(false, false));
     }
 }
