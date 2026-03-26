@@ -1,8 +1,14 @@
 mod dynamic_media;
+mod input_routing;
 pub(crate) mod media_cache;
+mod screen_nav;
 mod screenshot;
 
 use self::dynamic_media::DynamicMedia;
+use self::input_routing::{
+    GameplayInputRing, GameplayQueuedEvent, gameplay_raw_key_event, proxy_gameplay_raw_key,
+};
+use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::AssetManager;
@@ -32,11 +38,8 @@ use winit::{
 
 use log::{debug, error, info, trace, warn};
 use std::borrow::Cow;
-use std::cell::UnsafeCell;
 use std::cmp;
 use std::collections::HashSet;
-use std::mem::MaybeUninit;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::{
     error::Error,
     ffi::OsString,
@@ -66,64 +69,6 @@ pub enum UserEvent {
     Key(input::RawKeyboardEvent),
     GamepadSystem(GpSystemEvent),
     GameplayInputReady,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct GameplayRawKeyEvent {
-    code: winit::keyboard::KeyCode,
-    pressed: bool,
-    timestamp: Instant,
-    timestamp_host_nanos: u64,
-    stored_at: Instant,
-    emitted_at: Instant,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum GameplayQueuedEvent {
-    Input(InputEvent),
-    RawKey(GameplayRawKeyEvent),
-}
-
-impl GameplayQueuedEvent {
-    #[inline(always)]
-    const fn timestamp(self) -> Instant {
-        match self {
-            Self::Input(ev) => ev.timestamp,
-            Self::RawKey(ev) => ev.timestamp,
-        }
-    }
-
-    #[inline(always)]
-    const fn timestamp_host_nanos(self) -> u64 {
-        match self {
-            Self::Input(ev) => ev.timestamp_host_nanos,
-            Self::RawKey(ev) => ev.timestamp_host_nanos,
-        }
-    }
-
-    #[inline(always)]
-    const fn stored_at(self) -> Instant {
-        match self {
-            Self::Input(ev) => ev.stored_at,
-            Self::RawKey(ev) => ev.stored_at,
-        }
-    }
-
-    #[inline(always)]
-    const fn emitted_at(self) -> Instant {
-        match self {
-            Self::Input(ev) => ev.emitted_at,
-            Self::RawKey(ev) => ev.emitted_at,
-        }
-    }
-
-    #[inline(always)]
-    const fn source(self) -> input::InputSource {
-        match self {
-            Self::Input(ev) => ev.source,
-            Self::RawKey(_) => input::InputSource::Keyboard,
-        }
-    }
 }
 
 /// Imperative effects to be executed by the shell.
@@ -213,164 +158,6 @@ struct CourseRunState {
     stage_eval_pages: Vec<evaluation::State>,
 }
 
-struct GameplayInputRing {
-    enabled: AtomicBool,
-    head: AtomicUsize,
-    tail: AtomicUsize,
-    dropped: AtomicU32,
-    slots: [UnsafeCell<MaybeUninit<GameplayQueuedEvent>>; GAMEPLAY_INPUT_RING_CAPACITY],
-}
-
-// SAFETY: `GameplayInputRing` is a single-producer/single-consumer ring. Slot
-// ownership is synchronized with the `head`/`tail` atomics, so moving the ring
-// between threads does not create unsynchronized aliasing of initialized items.
-unsafe impl Send for GameplayInputRing {}
-// SAFETY: readers and writers coordinate exclusively through atomics and only
-// touch disjoint slots at any instant. Shared references are therefore safe as
-// long as callers preserve the intended SPSC usage.
-unsafe impl Sync for GameplayInputRing {}
-
-impl GameplayInputRing {
-    #[inline(always)]
-    fn new() -> Self {
-        Self {
-            enabled: AtomicBool::new(false),
-            head: AtomicUsize::new(0),
-            tail: AtomicUsize::new(0),
-            dropped: AtomicU32::new(0),
-            slots: std::array::from_fn(|_| UnsafeCell::new(MaybeUninit::uninit())),
-        }
-    }
-
-    #[inline(always)]
-    fn set_enabled(&self, enabled: bool) {
-        self.enabled.store(enabled, Ordering::Relaxed);
-    }
-
-    #[inline(always)]
-    fn swap_enabled(&self, enabled: bool) -> bool {
-        self.enabled.swap(enabled, Ordering::Relaxed)
-    }
-
-    #[inline(always)]
-    fn is_enabled(&self) -> bool {
-        self.enabled.load(Ordering::Relaxed)
-    }
-
-    #[inline(always)]
-    fn push(&self, ev: GameplayQueuedEvent) {
-        if !self.enabled.load(Ordering::Relaxed) {
-            return;
-        }
-        let tail = self.tail.load(Ordering::Relaxed);
-        let head = self.head.load(Ordering::Acquire);
-        if tail.wrapping_sub(head) == GAMEPLAY_INPUT_RING_CAPACITY {
-            self.dropped.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
-        let slot = tail % GAMEPLAY_INPUT_RING_CAPACITY;
-        // SAFETY: `tail - head < capacity` guarantees this slot is not currently
-        // visible to the consumer. The write happens-before publication via the
-        // following Release store to `tail`.
-        unsafe { (*self.slots[slot].get()).write(ev) };
-        self.tail.store(tail.wrapping_add(1), Ordering::Release);
-    }
-
-    #[inline(always)]
-    fn pop(&self) -> Option<GameplayQueuedEvent> {
-        let head = self.head.load(Ordering::Relaxed);
-        let tail = self.tail.load(Ordering::Acquire);
-        if head == tail {
-            return None;
-        }
-        let slot = head % GAMEPLAY_INPUT_RING_CAPACITY;
-        // SAFETY: `head != tail` means the producer has already initialized this
-        // slot and published it with a Release store to `tail`. The Acquire load
-        // above pairs with that store before we read the item out exactly once.
-        let ev = unsafe { (*self.slots[slot].get()).assume_init_read() };
-        self.head.store(head.wrapping_add(1), Ordering::Release);
-        Some(ev)
-    }
-
-    #[inline(always)]
-    fn clear(&self) {
-        while self.pop().is_some() {}
-    }
-
-    #[inline(always)]
-    fn take_dropped(&self) -> u32 {
-        self.dropped.swap(0, Ordering::Relaxed)
-    }
-}
-
-#[inline(always)]
-fn gameplay_event_precedes(a: &GameplayQueuedEvent, b: &GameplayQueuedEvent) -> bool {
-    if a.timestamp_host_nanos() != 0
-        && b.timestamp_host_nanos() != 0
-        && a.timestamp_host_nanos() != b.timestamp_host_nanos()
-    {
-        return a.timestamp_host_nanos() < b.timestamp_host_nanos();
-    }
-    if a.timestamp() != b.timestamp() {
-        return a.timestamp() < b.timestamp();
-    }
-    if a.emitted_at() != b.emitted_at() {
-        return a.emitted_at() < b.emitted_at();
-    }
-    if a.stored_at() != b.stored_at() {
-        return a.stored_at() < b.stored_at();
-    }
-    matches!(
-        (a.source(), b.source()),
-        (input::InputSource::Keyboard, input::InputSource::Gamepad)
-    )
-}
-
-#[inline(always)]
-fn gameplay_raw_key_event(raw_key: &input::RawKeyboardEvent) -> Option<GameplayQueuedEvent> {
-    use winit::keyboard::KeyCode;
-
-    if raw_key.repeat {
-        return None;
-    }
-    match raw_key.code {
-        KeyCode::ShiftLeft
-        | KeyCode::ShiftRight
-        | KeyCode::ControlLeft
-        | KeyCode::ControlRight
-        | KeyCode::KeyR
-        | KeyCode::F6
-        | KeyCode::F7
-        | KeyCode::F8
-        | KeyCode::F11
-        | KeyCode::F12 => {}
-        _ => return None,
-    }
-    Some(GameplayQueuedEvent::RawKey(GameplayRawKeyEvent {
-        code: raw_key.code,
-        pressed: raw_key.pressed,
-        timestamp: raw_key.timestamp,
-        timestamp_host_nanos: raw_key.host_nanos,
-        stored_at: raw_key.timestamp,
-        emitted_at: raw_key.timestamp,
-    }))
-}
-
-#[inline(always)]
-fn proxy_gameplay_raw_key(raw_key: &input::RawKeyboardEvent) -> bool {
-    use winit::keyboard::KeyCode;
-
-    matches!(
-        raw_key.code,
-        KeyCode::ShiftLeft
-            | KeyCode::ShiftRight
-            | KeyCode::ControlLeft
-            | KeyCode::ControlRight
-            | KeyCode::F3
-            | KeyCode::F10
-    )
-}
-
 #[derive(Clone, Copy)]
 struct GameplayEventBatchTrace {
     started_at: Instant,
@@ -445,29 +232,6 @@ impl GameplayEventTrace {
     fn reset(&mut self, now: Instant) {
         *self = Self::new(now);
     }
-}
-
-/* -------------------- transition state machine -------------------- */
-#[derive(Debug)]
-enum TransitionState {
-    Idle,
-    FadingOut {
-        elapsed: f32,
-        duration: f32,
-        target: CurrentScreen,
-    },
-    FadingIn {
-        elapsed: f32,
-        duration: f32,
-    },
-    ActorsFadeOut {
-        elapsed: f32,
-        duration: f32,
-        target: CurrentScreen,
-    },
-    ActorsFadeIn {
-        elapsed: f32,
-    },
 }
 
 const STUTTER_SAMPLE_COUNT: usize = 5;
@@ -1396,102 +1160,6 @@ fn combo_carry_from_profiles() -> [u32; crate::game::gameplay::MAX_PLAYERS] {
         profile::get_for_side(profile::PlayerSide::P1).current_combo,
         profile::get_for_side(profile::PlayerSide::P2).current_combo,
     ]
-}
-
-#[inline(always)]
-const fn machine_startup_screen_enabled(cfg: &config::Config, screen: CurrentScreen) -> bool {
-    match screen {
-        CurrentScreen::SelectProfile => cfg.machine_show_select_profile,
-        CurrentScreen::SelectColor => cfg.machine_show_select_color,
-        CurrentScreen::SelectStyle => cfg.machine_show_select_style,
-        CurrentScreen::SelectPlayMode => cfg.machine_show_select_play_mode,
-        _ => true,
-    }
-}
-
-#[inline(always)]
-const fn machine_preferred_style(style: config::MachinePreferredPlayStyle) -> profile::PlayStyle {
-    match style {
-        config::MachinePreferredPlayStyle::Single => profile::PlayStyle::Single,
-        config::MachinePreferredPlayStyle::Versus => profile::PlayStyle::Versus,
-        config::MachinePreferredPlayStyle::Double => profile::PlayStyle::Double,
-    }
-}
-
-#[inline(always)]
-const fn machine_preferred_mode(mode: config::MachinePreferredPlayMode) -> profile::PlayMode {
-    match mode {
-        config::MachinePreferredPlayMode::Regular => profile::PlayMode::Regular,
-        config::MachinePreferredPlayMode::Marathon => profile::PlayMode::Marathon,
-    }
-}
-
-fn machine_resolve_startup_target(cfg: &config::Config, target: CurrentScreen) -> CurrentScreen {
-    let order = [
-        CurrentScreen::SelectProfile,
-        CurrentScreen::SelectColor,
-        CurrentScreen::SelectStyle,
-        CurrentScreen::SelectPlayMode,
-    ];
-    let Some(start_idx) = order.iter().position(|screen| *screen == target) else {
-        return target;
-    };
-    for screen in order.iter().skip(start_idx) {
-        if machine_startup_screen_enabled(cfg, *screen) {
-            return *screen;
-        }
-    }
-    CurrentScreen::ProfileLoad
-}
-
-#[inline(always)]
-fn machine_first_post_select_target(cfg: &config::Config) -> CurrentScreen {
-    if cfg.machine_show_eval_summary {
-        CurrentScreen::EvaluationSummary
-    } else if cfg.machine_show_name_entry {
-        CurrentScreen::Initials
-    } else if cfg.machine_show_gameover {
-        CurrentScreen::GameOver
-    } else {
-        CurrentScreen::Menu
-    }
-}
-
-#[inline(always)]
-fn machine_resolve_post_select_target(
-    cfg: &config::Config,
-    target: CurrentScreen,
-) -> CurrentScreen {
-    match target {
-        CurrentScreen::EvaluationSummary => {
-            if cfg.machine_show_eval_summary {
-                CurrentScreen::EvaluationSummary
-            } else if cfg.machine_show_name_entry {
-                CurrentScreen::Initials
-            } else if cfg.machine_show_gameover {
-                CurrentScreen::GameOver
-            } else {
-                CurrentScreen::Menu
-            }
-        }
-        CurrentScreen::Initials => {
-            if cfg.machine_show_name_entry {
-                CurrentScreen::Initials
-            } else if cfg.machine_show_gameover {
-                CurrentScreen::GameOver
-            } else {
-                CurrentScreen::Menu
-            }
-        }
-        CurrentScreen::GameOver => {
-            if cfg.machine_show_gameover {
-                CurrentScreen::GameOver
-            } else {
-                CurrentScreen::Menu
-            }
-        }
-        other => other,
-    }
 }
 
 fn course_stage_runtime_from_plan(
@@ -2427,18 +2095,6 @@ pub struct App {
 
 impl App {
     #[inline(always)]
-    const fn is_actor_fade_screen(screen: CurrentScreen) -> bool {
-        matches!(
-            screen,
-            CurrentScreen::Menu
-                | CurrentScreen::Options
-                | CurrentScreen::ManageLocalProfiles
-                | CurrentScreen::Mappings
-                | CurrentScreen::Input
-        )
-    }
-
-    #[inline(always)]
     fn effective_frame_interval(&self) -> Option<Duration> {
         self.state
             .shell
@@ -2639,6 +2295,7 @@ impl App {
         input_us = elapsed_us_since(input_started);
 
         let mut finished_fading_out_to: Option<CurrentScreen> = None;
+        let mut finished_actor_fade_to: Option<CurrentScreen> = None;
         let update_started = Instant::now();
         match &mut self.state.shell.transition {
             TransitionState::FadingOut {
@@ -2658,119 +2315,7 @@ impl App {
             } => {
                 *elapsed += delta_time;
                 if *elapsed >= *duration {
-                    let target_screen = *target;
-                    let prev = self.state.screens.current_screen;
-                    self.state.screens.current_screen = target_screen;
-                    if target_screen == CurrentScreen::SelectColor {
-                        select_color::on_enter(&mut self.state.screens.select_color_state);
-                    }
-
-                    let menu_music_enabled = config::get().menu_music;
-                    let target_menu_music = menu_music_enabled
-                        && matches!(
-                            target_screen,
-                            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
-                        );
-                    let prev_menu_music = menu_music_enabled
-                        && matches!(
-                            prev,
-                            CurrentScreen::SelectColor | CurrentScreen::SelectStyle
-                        );
-                    let keep_preview = (prev == CurrentScreen::SelectMusic
-                        && target_screen == CurrentScreen::PlayerOptions)
-                        || (prev == CurrentScreen::PlayerOptions
-                            && target_screen == CurrentScreen::SelectMusic);
-
-                    if target_menu_music {
-                        if !prev_menu_music {
-                            crate::core::audio::play_music(
-                                std::path::PathBuf::from("assets/music/in_two (loop).ogg"),
-                                crate::core::audio::Cut::default(),
-                                true,
-                                1.0,
-                            );
-                        }
-                    } else if prev_menu_music {
-                        crate::core::audio::stop_music();
-                    } else if !keep_preview {
-                        crate::core::audio::stop_music();
-                    }
-
-                    if target_screen == CurrentScreen::Menu {
-                        let current_color_index = self.state.screens.menu_state.active_color_index;
-                        self.state.screens.menu_state = menu::init();
-                        self.state.screens.menu_state.active_color_index = current_color_index;
-                    } else if target_screen == CurrentScreen::Options {
-                        self.reset_options_state_for_entry(prev);
-                    } else if target_screen == CurrentScreen::ManageLocalProfiles {
-                        let color_index = self.state.screens.options_state.active_color_index;
-                        self.state.screens.manage_local_profiles_state =
-                            manage_local_profiles::init();
-                        self.state
-                            .screens
-                            .manage_local_profiles_state
-                            .active_color_index = color_index;
-                    } else if target_screen == CurrentScreen::SelectProfile {
-                        let current_color_index =
-                            self.state.screens.select_profile_state.active_color_index;
-                        self.state.screens.select_profile_state = select_profile::init();
-                        self.state.screens.select_profile_state.active_color_index =
-                            current_color_index;
-                        if prev == CurrentScreen::Menu {
-                            let p2 = self.state.screens.menu_state.started_by_p2;
-                            select_profile::set_joined(
-                                &mut self.state.screens.select_profile_state,
-                                !p2,
-                                p2,
-                            );
-                        }
-                    } else if target_screen == CurrentScreen::SelectStyle {
-                        let current_color_index =
-                            self.state.screens.select_style_state.active_color_index;
-                        self.state.screens.select_style_state = select_style::init();
-                        self.state.screens.select_style_state.active_color_index =
-                            current_color_index;
-                        let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
-                        let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
-                        self.state.screens.select_style_state.selected_index =
-                            if p1_joined && p2_joined { 1 } else { 0 };
-                    } else if target_screen == CurrentScreen::Mappings {
-                        let color_index = self.state.screens.options_state.active_color_index;
-                        self.state.screens.mappings_state = mappings::init();
-                        self.state.screens.mappings_state.active_color_index = color_index;
-                    }
-
-                    if prev == CurrentScreen::SelectColor {
-                        let idx = self.state.screens.select_color_state.active_color_index;
-                        self.state.screens.menu_state.active_color_index = idx;
-                        self.state.screens.select_profile_state.active_color_index = idx;
-                        self.state.screens.select_style_state.active_color_index = idx;
-                        self.state.screens.select_play_mode_state.active_color_index = idx;
-                        self.state.screens.profile_load_state.active_color_index = idx;
-                        self.state.screens.select_music_state.active_color_index = idx;
-                        self.state.screens.select_course_state.active_color_index = idx;
-                        self.state.screens.credits_state.active_color_index = idx;
-                        if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                            gs.active_color_index = idx;
-                            gs.player_color = color::simply_love_rgba(idx);
-                        }
-                        self.state.screens.options_state.active_color_index = idx;
-                        self.state
-                            .screens
-                            .manage_local_profiles_state
-                            .active_color_index = idx;
-                    }
-
-                    if target_screen == CurrentScreen::Options {
-                        self.update_options_monitor_specs(event_loop);
-                    }
-
-                    self.state.shell.transition = if Self::is_actor_fade_screen(target_screen) {
-                        TransitionState::ActorsFadeIn { elapsed: 0.0 }
-                    } else {
-                        TransitionState::Idle
-                    };
-                    crate::core::ui::runtime::clear_all();
+                    finished_actor_fade_to = Some(*target);
                 }
             }
             TransitionState::FadingIn { elapsed, duration } => {
@@ -2829,6 +2374,9 @@ impl App {
             }
         }
 
+        if let Some(target) = finished_actor_fade_to {
+            self.finish_actor_fade_out(target, event_loop);
+        }
         if let Some(target) = finished_fading_out_to {
             self.on_fade_complete(target, event_loop);
         }
@@ -2962,52 +2510,6 @@ impl App {
             draw_us,
             draw_stats,
         );
-    }
-
-    fn flush_due_input_events(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-    ) -> Result<bool, Box<dyn Error>> {
-        if !matches!(self.state.shell.transition, TransitionState::Idle)
-            || self.state.screens.current_screen == CurrentScreen::Init
-        {
-            input::clear_debounce_state();
-            return Ok(false);
-        }
-        let mut flushed = false;
-        let mut err: Option<Box<dyn Error>> = None;
-        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
-        let start_screen = self.state.screens.current_screen;
-        let mut discard_gameplay_batch = false;
-        input::drain_debounced_input_events_with(|ev| {
-            flushed = true;
-            if gameplay_screen {
-                if discard_gameplay_batch || err.is_some() {
-                    return;
-                }
-                if let Err(e) =
-                    self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(ev))
-                {
-                    err = Some(e);
-                    return;
-                }
-                if !self.gameplay_dispatch_continues(start_screen) {
-                    discard_gameplay_batch = true;
-                }
-            } else if err.is_none()
-                && let Err(e) = self.route_input_event(event_loop, ev)
-            {
-                err = Some(e);
-            }
-        });
-        if discard_gameplay_batch {
-            self.gameplay_key_ring.clear();
-            self.gameplay_pad_ring.clear();
-        }
-        if let Some(e) = err {
-            return Err(e);
-        }
-        Ok(flushed)
     }
 
     fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
@@ -3564,114 +3066,6 @@ impl App {
         true
     }
 
-    fn handle_navigation_action(&mut self, target: CurrentScreen) {
-        self.handle_navigation_action_inner(target, true);
-    }
-
-    fn handle_navigation_action_after_prompt(&mut self, target: CurrentScreen) {
-        self.handle_navigation_action_inner(target, false);
-    }
-
-    fn handle_navigation_action_inner(&mut self, target: CurrentScreen, allow_offset_prompt: bool) {
-        let from = self.state.screens.current_screen;
-        let mut target = target;
-        let cfg = config::get();
-
-        // After at least one stage, leaving song/course select routes through the
-        // machine-configured post-session flow before returning to title.
-        if (from == CurrentScreen::SelectMusic || from == CurrentScreen::SelectCourse)
-            && target == CurrentScreen::Menu
-            && !self.state.session.played_stages.is_empty()
-        {
-            target = machine_first_post_select_target(&cfg);
-        }
-
-        let startup_flow = matches!(
-            from,
-            CurrentScreen::Menu
-                | CurrentScreen::SelectProfile
-                | CurrentScreen::SelectColor
-                | CurrentScreen::SelectStyle
-                | CurrentScreen::SelectPlayMode
-        ) && matches!(
-            target,
-            CurrentScreen::SelectProfile
-                | CurrentScreen::SelectColor
-                | CurrentScreen::SelectStyle
-                | CurrentScreen::SelectPlayMode
-                | CurrentScreen::ProfileLoad
-        );
-        if startup_flow {
-            target = machine_resolve_startup_target(&cfg, target);
-        }
-        target = machine_resolve_post_select_target(&cfg, target);
-        if startup_flow {
-            if !cfg.machine_show_select_style
-                && matches!(
-                    target,
-                    CurrentScreen::SelectPlayMode | CurrentScreen::ProfileLoad
-                )
-            {
-                let play_style = machine_preferred_style(cfg.machine_preferred_style);
-                profile::set_session_play_style(play_style);
-                self.state.session.preferred_difficulty_index =
-                    profile::get().last_played(play_style).difficulty_index;
-            }
-            if !cfg.machine_show_select_play_mode && target == CurrentScreen::ProfileLoad {
-                profile::set_session_play_mode(machine_preferred_mode(
-                    cfg.machine_preferred_play_mode,
-                ));
-            }
-        }
-
-        // If Select Profile is disabled and gameplay was started from Menu,
-        // initialize joined/session-side defaults from the Start button used on Menu.
-        if startup_flow
-            && from == CurrentScreen::Menu
-            && target != CurrentScreen::SelectProfile
-            && !cfg.machine_show_select_profile
-            && matches!(
-                target,
-                CurrentScreen::SelectColor
-                    | CurrentScreen::SelectStyle
-                    | CurrentScreen::SelectPlayMode
-                    | CurrentScreen::ProfileLoad
-            )
-        {
-            let p2_started = self.state.screens.menu_state.started_by_p2;
-            profile::set_session_player_side(if p2_started {
-                profile::PlayerSide::P2
-            } else {
-                profile::PlayerSide::P1
-            });
-            profile::set_session_joined(!p2_started, p2_started);
-            profile::set_fast_profile_switch_from_select_music(false);
-        }
-
-        if allow_offset_prompt && self.maybe_begin_gameplay_offset_prompt(from, target, false) {
-            return;
-        }
-
-        if from == CurrentScreen::Init && target == CurrentScreen::Menu {
-            debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
-            self.state.screens.current_screen = target;
-            self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
-            crate::core::ui::runtime::clear_all();
-            return;
-        }
-
-        if !matches!(self.state.shell.transition, TransitionState::Idle) {
-            return;
-        }
-
-        self.state.shell.pending_exit = false;
-        if self.is_actor_only_fade(from, target) {
-            self.start_actor_fade(from, target);
-        } else {
-            self.start_global_fade(target);
-        }
-    }
-
     fn clear_course_runtime(&mut self) {
         self.state.session.course_run = None;
         self.state.session.course_eval_pages.clear();
@@ -3920,79 +3314,6 @@ impl App {
         page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
         crate::core::audio::play_sfx("assets/sounds/change.ogg");
-    }
-
-    fn is_actor_only_fade(&self, from: CurrentScreen, to: CurrentScreen) -> bool {
-        (from == CurrentScreen::Menu
-            && (to == CurrentScreen::Options
-                || to == CurrentScreen::SelectProfile
-                || to == CurrentScreen::SelectColor))
-            || ((from == CurrentScreen::Options
-                || from == CurrentScreen::SelectProfile
-                || from == CurrentScreen::SelectColor)
-                && to == CurrentScreen::Menu)
-            || (from == CurrentScreen::SelectProfile && to == CurrentScreen::SelectColor)
-            || (from == CurrentScreen::SelectProfile && to == CurrentScreen::SelectStyle)
-            || (from == CurrentScreen::SelectStyle && to == CurrentScreen::SelectProfile)
-            || (from == CurrentScreen::SelectColor && to == CurrentScreen::SelectStyle)
-            || (from == CurrentScreen::SelectStyle && to == CurrentScreen::SelectColor)
-            || (from == CurrentScreen::Options && to == CurrentScreen::Mappings)
-            || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
-            || (from == CurrentScreen::Options && to == CurrentScreen::ManageLocalProfiles)
-            || (from == CurrentScreen::ManageLocalProfiles && to == CurrentScreen::Options)
-    }
-
-    fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
-        debug!("Starting actor-only fade out to screen: {target:?}");
-        let duration = if from == CurrentScreen::Menu
-            && (target == CurrentScreen::SelectProfile
-                || target == CurrentScreen::SelectColor
-                || target == CurrentScreen::Options)
-        {
-            MENU_TO_SELECT_COLOR_OUT_DURATION
-        } else if from == CurrentScreen::SelectColor {
-            select_color::exit_anim_duration()
-        } else if from == CurrentScreen::SelectProfile {
-            select_profile::exit_anim_duration()
-        } else {
-            FADE_OUT_DURATION
-        };
-        self.state.shell.transition = TransitionState::ActorsFadeOut {
-            elapsed: 0.0,
-            duration,
-            target,
-        };
-    }
-
-    fn start_global_fade(&mut self, target: CurrentScreen) {
-        debug!("Starting global fade out to screen: {target:?}");
-        let (_, out_duration) =
-            self.get_out_transition_for_screen(self.state.screens.current_screen);
-        self.state.shell.transition = TransitionState::FadingOut {
-            elapsed: 0.0,
-            duration: out_duration,
-            target,
-        };
-    }
-
-    fn handle_exit_action(&mut self) -> Vec<Command> {
-        if self.state.screens.current_screen == CurrentScreen::Menu
-            && matches!(self.state.shell.transition, TransitionState::Idle)
-        {
-            info!("Exit requested from Menu; playing menu out-transition before shutdown.");
-            let (_, out_duration) =
-                self.get_out_transition_for_screen(self.state.screens.current_screen);
-            self.state.shell.transition = TransitionState::FadingOut {
-                elapsed: 0.0,
-                duration: out_duration,
-                target: self.state.screens.current_screen,
-            };
-            self.state.shell.pending_exit = true;
-            Vec::new()
-        } else {
-            info!("Exit action received. Shutting down.");
-            vec![Command::ExitNow]
-        }
     }
 
     fn apply_select_music_join(&mut self, join_side: profile::PlayerSide) {
@@ -4274,148 +3595,6 @@ impl App {
             return Ok(());
         }
         self.handle_action(action, event_loop)
-    }
-
-    #[inline(always)]
-    fn gameplay_dispatch_continues(&self, start_screen: CurrentScreen) -> bool {
-        self.state.screens.current_screen == start_screen
-            && matches!(self.state.shell.transition, TransitionState::Idle)
-    }
-
-    #[inline(always)]
-    fn route_gameplay_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        ev: GameplayQueuedEvent,
-    ) -> Result<(), Box<dyn Error>> {
-        self.state.shell.note_gameplay_queued_input();
-        match ev {
-            GameplayQueuedEvent::Input(ev) => self.route_input_event(event_loop, ev),
-            GameplayQueuedEvent::RawKey(ev) => {
-                self.route_gameplay_raw_key_event(event_loop, ev);
-                Ok(())
-            }
-        }
-    }
-
-    fn route_gameplay_raw_key_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        ev: GameplayRawKeyEvent,
-    ) {
-        if self.state.screens.current_screen != CurrentScreen::Gameplay {
-            return;
-        }
-        let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
-            return;
-        };
-        let allow_commands = self.state.gameplay_offset_save_prompt.is_none();
-        let action = crate::game::gameplay::handle_queued_raw_key(
-            gs,
-            ev.code,
-            ev.pressed,
-            ev.timestamp,
-            allow_commands,
-        );
-        if matches!(action, crate::game::gameplay::RawKeyAction::Restart)
-            && config::get().keyboard_features
-            && self.state.session.course_run.is_none()
-        {
-            self.try_gameplay_restart(event_loop, "Ctrl+R");
-        }
-    }
-
-    #[inline(always)]
-    fn sync_gameplay_input_capture(&self) {
-        let capture_enabled = self.accepts_live_input();
-        let ring_enabled = capture_enabled
-            && self.state.screens.current_screen == CurrentScreen::Gameplay
-            && matches!(self.state.shell.transition, TransitionState::Idle);
-        let key_was_enabled = self.gameplay_key_ring.swap_enabled(ring_enabled);
-        let pad_was_enabled = self.gameplay_pad_ring.swap_enabled(ring_enabled);
-        input::set_raw_keyboard_capture_enabled(ring_enabled);
-        if key_was_enabled != ring_enabled || !ring_enabled {
-            self.gameplay_key_ring.clear();
-            self.gameplay_key_ring.take_dropped();
-        }
-        if pad_was_enabled != ring_enabled || !ring_enabled {
-            self.gameplay_pad_ring.clear();
-            self.gameplay_pad_ring.take_dropped();
-        }
-    }
-
-    #[inline(always)]
-    fn clear_gameplay_input_events(&self) {
-        self.gameplay_key_ring.set_enabled(false);
-        self.gameplay_pad_ring.set_enabled(false);
-        input::set_raw_keyboard_capture_enabled(false);
-        self.gameplay_key_ring.clear();
-        self.gameplay_key_ring.take_dropped();
-        self.gameplay_pad_ring.clear();
-        self.gameplay_pad_ring.take_dropped();
-    }
-
-    fn drain_gameplay_input_events(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-    ) -> Result<(), Box<dyn Error>> {
-        let dropped_keys = self.gameplay_key_ring.take_dropped();
-        if dropped_keys > 0 {
-            warn!(
-                "Gameplay key input ring overflowed; dropped {dropped_keys} event(s) on screen {:?}",
-                self.state.screens.current_screen
-            );
-        }
-        let dropped_pads = self.gameplay_pad_ring.take_dropped();
-        if dropped_pads > 0 {
-            warn!(
-                "Gameplay pad input ring overflowed; dropped {dropped_pads} event(s) on screen {:?}",
-                self.state.screens.current_screen
-            );
-        }
-        if self.state.screens.current_screen != CurrentScreen::Gameplay
-            || !matches!(self.state.shell.transition, TransitionState::Idle)
-        {
-            self.gameplay_key_ring.clear();
-            self.gameplay_pad_ring.clear();
-            return Ok(());
-        }
-        let start_screen = self.state.screens.current_screen;
-        let mut next_key = self.gameplay_key_ring.pop();
-        let mut next_pad = self.gameplay_pad_ring.pop();
-        loop {
-            let ev = match (next_key.as_ref(), next_pad.as_ref()) {
-                (Some(key_ev), Some(pad_ev)) => {
-                    if gameplay_event_precedes(key_ev, pad_ev) {
-                        let ev = next_key.take().unwrap();
-                        next_key = self.gameplay_key_ring.pop();
-                        ev
-                    } else {
-                        let ev = next_pad.take().unwrap();
-                        next_pad = self.gameplay_pad_ring.pop();
-                        ev
-                    }
-                }
-                (Some(_), None) => {
-                    let ev = next_key.take().unwrap();
-                    next_key = self.gameplay_key_ring.pop();
-                    ev
-                }
-                (None, Some(_)) => {
-                    let ev = next_pad.take().unwrap();
-                    next_pad = self.gameplay_pad_ring.pop();
-                    ev
-                }
-                (None, None) => break,
-            };
-            self.route_gameplay_event(event_loop, ev)?;
-            if !self.gameplay_dispatch_continues(start_screen) {
-                self.gameplay_key_ring.clear();
-                self.gameplay_pad_ring.clear();
-                break;
-            }
-        }
-        Ok(())
     }
 
     fn run_commands(
@@ -5016,62 +4195,6 @@ impl App {
         self.append_screenshot_overlay_actors(&mut actors, Instant::now());
 
         (actors, CLEAR)
-    }
-
-    fn get_out_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
-        match screen {
-            CurrentScreen::Menu => {
-                menu::out_transition(self.state.screens.menu_state.active_color_index)
-            }
-            CurrentScreen::Gameplay => gameplay::out_transition(),
-            CurrentScreen::Options => options::out_transition(),
-            CurrentScreen::Credits => credits::out_transition(),
-            CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
-            CurrentScreen::Mappings => mappings::out_transition(),
-            CurrentScreen::PlayerOptions => player_options::out_transition(),
-            CurrentScreen::SelectProfile => select_profile::out_transition(),
-            CurrentScreen::SelectColor => select_color::out_transition(),
-            CurrentScreen::SelectStyle => select_style::out_transition(),
-            CurrentScreen::SelectPlayMode => select_mode::out_transition(),
-            CurrentScreen::ProfileLoad => profile_load::out_transition(),
-            CurrentScreen::SelectMusic => select_music::out_transition(),
-            CurrentScreen::SelectCourse => select_course::out_transition(),
-            CurrentScreen::Sandbox => sandbox::out_transition(),
-            CurrentScreen::Init => init::out_transition(),
-            CurrentScreen::Evaluation => evaluation::out_transition(),
-            CurrentScreen::EvaluationSummary => evaluation_summary::out_transition(),
-            CurrentScreen::Initials => initials::out_transition(),
-            CurrentScreen::GameOver => gameover::out_transition(),
-            CurrentScreen::Input => input_screen::out_transition(),
-        }
-    }
-
-    fn get_in_transition_for_screen(&self, screen: CurrentScreen) -> (Vec<Actor>, f32) {
-        match screen {
-            CurrentScreen::Menu => menu::in_transition(),
-            CurrentScreen::Gameplay => {
-                gameplay::in_transition(self.state.screens.gameplay_state.as_ref())
-            }
-            CurrentScreen::Options => options::in_transition(),
-            CurrentScreen::Credits => credits::in_transition(),
-            CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
-            CurrentScreen::Mappings => mappings::in_transition(),
-            CurrentScreen::PlayerOptions => player_options::in_transition(),
-            CurrentScreen::SelectProfile => select_profile::in_transition(),
-            CurrentScreen::SelectColor => select_color::in_transition(),
-            CurrentScreen::SelectStyle => select_style::in_transition(),
-            CurrentScreen::SelectPlayMode => select_mode::in_transition(),
-            CurrentScreen::ProfileLoad => profile_load::in_transition(),
-            CurrentScreen::SelectMusic => select_music::in_transition(),
-            CurrentScreen::SelectCourse => select_course::in_transition(),
-            CurrentScreen::Sandbox => sandbox::in_transition(),
-            CurrentScreen::Evaluation => evaluation::in_transition(),
-            CurrentScreen::EvaluationSummary => evaluation_summary::in_transition(),
-            CurrentScreen::Initials => initials::in_transition(),
-            CurrentScreen::GameOver => gameover::in_transition(),
-            CurrentScreen::Input => input_screen::in_transition(),
-            CurrentScreen::Init => (vec![], 0.0),
-        }
     }
 
     fn collect_visible_stutters(
@@ -6186,51 +5309,6 @@ impl App {
     #[cfg(any())]
     #[inline(always)]
     fn poll_gamepad_and_dispatch(&mut self, _event_loop: &ActiveEventLoop) {}
-
-    fn on_fade_complete(&mut self, target: CurrentScreen, event_loop: &ActiveEventLoop) {
-        if self.state.shell.pending_exit {
-            info!("Fade-out complete; exiting application.");
-            event_loop.exit();
-            return;
-        }
-
-        let prev = self.state.screens.current_screen;
-        self.state.screens.current_screen = target;
-        if target != CurrentScreen::Gameplay {
-            self.state.gameplay_offset_save_prompt = None;
-        }
-        if target == CurrentScreen::SelectColor {
-            select_color::on_enter(&mut self.state.screens.select_color_state);
-        }
-
-        let mut commands: Vec<Command> = Vec::new();
-
-        commands.extend(self.handle_audio_and_profile_on_fade(prev, target));
-        self.handle_screen_state_on_fade(prev, target);
-        commands.extend(self.handle_screen_entry_on_fade(prev, target));
-
-        // Ensure monitor specs are fresh when entering the options screen
-        if target == CurrentScreen::Options {
-            self.update_options_monitor_specs(event_loop);
-        }
-
-        let instant_options_credits_swap = matches!(
-            (prev, target),
-            (CurrentScreen::Options, CurrentScreen::Credits)
-                | (CurrentScreen::Credits, CurrentScreen::Options)
-        );
-        if instant_options_credits_swap {
-            self.state.shell.transition = TransitionState::Idle;
-        } else {
-            let (_, in_duration) = self.get_in_transition_for_screen(target);
-            self.state.shell.transition = TransitionState::FadingIn {
-                elapsed: 0.0,
-                duration: in_duration,
-            };
-        }
-        crate::core::ui::runtime::clear_all();
-        let _ = self.run_commands(commands, event_loop);
-    }
 
     fn handle_audio_and_profile_on_fade(
         &mut self,
@@ -8035,8 +7113,8 @@ mod tests {
         let later = now + Duration::from_millis(1);
         let a = queued_input_event(input::InputSource::Gamepad, later, 100, later, later);
         let b = queued_input_event(input::InputSource::Keyboard, now, 200, now, now);
-        assert!(gameplay_event_precedes(&a, &b));
-        assert!(!gameplay_event_precedes(&b, &a));
+        assert!(input_routing::gameplay_event_precedes(&a, &b));
+        assert!(!input_routing::gameplay_event_precedes(&b, &a));
     }
 
     #[test]
@@ -8045,8 +7123,8 @@ mod tests {
         let later = now + Duration::from_millis(1);
         let a = queued_input_event(input::InputSource::Keyboard, now, 0, now, now);
         let b = queued_input_event(input::InputSource::Gamepad, later, 0, later, later);
-        assert!(gameplay_event_precedes(&a, &b));
-        assert!(!gameplay_event_precedes(&b, &a));
+        assert!(input_routing::gameplay_event_precedes(&a, &b));
+        assert!(!input_routing::gameplay_event_precedes(&b, &a));
     }
 
     #[test]
@@ -8054,8 +7132,8 @@ mod tests {
         let now = Instant::now();
         let key = queued_input_event(input::InputSource::Keyboard, now, 100, now, now);
         let pad = queued_input_event(input::InputSource::Gamepad, now, 100, now, now);
-        assert!(gameplay_event_precedes(&key, &pad));
-        assert!(!gameplay_event_precedes(&pad, &key));
+        assert!(input_routing::gameplay_event_precedes(&key, &pad));
+        assert!(!input_routing::gameplay_event_precedes(&pad, &key));
     }
 
     #[test]
