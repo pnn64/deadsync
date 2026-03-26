@@ -4,11 +4,12 @@ use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
 use std::{
     collections::{HashMap, HashSet},
-    error::Error,
     fs,
     path::Path,
     sync::{Arc, Mutex, RwLock, mpsc},
 };
+
+use super::AssetError;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TexMeta {
@@ -462,7 +463,7 @@ pub(crate) fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
 }
 
 impl AssetManager {
-    pub fn load_initial_textures(&mut self, backend: &mut Backend) -> Result<(), Box<dyn Error>> {
+    pub fn load_initial_textures(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
         debug!("Loading initial textures...");
 
         #[inline(always)]

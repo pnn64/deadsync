@@ -12,6 +12,8 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::error::Error as StdError;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -25,6 +27,62 @@ const FONT_DEFAULT_CHAR: char = '\u{F8FF}'; // SM default glyph (private use)
 const INTERNAL_ALIAS_START: u32 = 0xE000;
 const M_SKIP_CODEPOINT: u32 = 0xFEFF;
 const DEFAULT_STROKE_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+
+#[derive(Debug)]
+pub enum FontParseError {
+    Io(std::io::Error),
+    Image(image::ImageError),
+    ImportRecursion { current: PathBuf, chain: String },
+    MissingFontDir(PathBuf),
+    NoTexturePages(PathBuf),
+}
+
+impl fmt::Display for FontParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "{err}"),
+            Self::Image(err) => write!(f, "{err}"),
+            Self::ImportRecursion { current, chain } => {
+                write!(
+                    f,
+                    "Font import recursion detected while loading '{}':\n{}",
+                    current.display(),
+                    chain
+                )
+            }
+            Self::MissingFontDir(path) => {
+                write!(f, "Could not find font directory for '{}'", path.display())
+            }
+            Self::NoTexturePages(path) => {
+                write!(f, "No texture pages found for font '{}'", path.display())
+            }
+        }
+    }
+}
+
+impl StdError for FontParseError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            Self::Io(err) => Some(err),
+            Self::Image(err) => Some(err),
+            Self::ImportRecursion { .. } | Self::MissingFontDir(_) | Self::NoTexturePages(_) => {
+                None
+            }
+        }
+    }
+}
+
+impl From<std::io::Error> for FontParseError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value)
+    }
+}
+
+impl From<image::ImageError> for FontParseError {
+    fn from(value: image::ImageError) -> Self {
+        Self::Image(value)
+    }
+}
 
 #[derive(Clone, Copy)]
 enum AliasValue {
@@ -1903,7 +1961,7 @@ fn apply_range_mapping(
 
 /* ======================= PARSE ======================= */
 
-pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Error>> {
+pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
     use std::collections::HashMap;
 
     fn resolve_import_path(base_ini: &Path, spec: &str) -> Option<PathBuf> {
@@ -1976,7 +2034,10 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
             chain,
             ini_path_buf.to_string_lossy()
         );
-        return Err("Font import recursion detected".into());
+        return Err(FontParseError::ImportRecursion {
+            current: ini_path_buf.clone(),
+            chain,
+        });
     }
     struct LoadStackGuard;
     impl Drop for LoadStackGuard {
@@ -1987,7 +2048,9 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
         }
     }
     let _guard = LoadStackGuard;
-    let font_dir = ini_path.parent().ok_or("Could not find font directory")?;
+    let font_dir = ini_path
+        .parent()
+        .ok_or_else(|| FontParseError::MissingFontDir(ini_path_buf.clone()))?;
     let mut ini_text = fs::read_to_string(ini_path_str)?;
     ini_text = strip_bom(ini_text);
 
@@ -2012,7 +2075,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, Box<dyn std::error::Err
     let prefix = ini_path.file_stem().unwrap().to_str().unwrap();
     let texture_paths = list_texture_pages(font_dir, prefix)?;
     if texture_paths.is_empty() {
-        return Err(format!("No texture pages found for font '{ini_path_str}'").into());
+        return Err(FontParseError::NoTexturePages(ini_path_buf.clone()));
     }
 
     // ---- NEW: import merge (before local pages)

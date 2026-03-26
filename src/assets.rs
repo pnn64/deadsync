@@ -1,4 +1,5 @@
 pub(crate) mod dynamic;
+mod error;
 mod fonts;
 mod textures;
 
@@ -8,7 +9,7 @@ use crate::core::gfx::{
 };
 use crate::ui::font::Font;
 use image::RgbaImage;
-use std::{collections::HashMap, error::Error};
+use std::collections::HashMap;
 
 #[cfg(test)]
 pub(crate) use self::dynamic::{
@@ -16,6 +17,7 @@ pub(crate) use self::dynamic::{
     dynamic_image_cache_path_for, load_or_build_cached_dynamic_image, save_cached_banner_image,
     save_raw_cached_banner_image,
 };
+pub use self::error::AssetError;
 use self::textures::ascii_ci_hash;
 #[cfg(test)]
 pub(crate) use self::textures::parse_texture_resolution_hint;
@@ -186,7 +188,7 @@ impl AssetManager {
         backend: &mut Backend,
         key: &str,
         rgba: &RgbaImage,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), AssetError> {
         let dims = texture_dims(key);
         let handle = self.texture_handles.get(key).copied();
         if let (Some(meta), Some(handle)) = (dims, handle)
@@ -231,7 +233,7 @@ impl AssetManager {
         }
     }
 
-    pub fn load_initial_assets(&mut self, backend: &mut Backend) -> Result<(), Box<dyn Error>> {
+    pub fn load_initial_assets(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
         self.load_initial_textures(backend)?;
         self.load_initial_fonts(backend)?;
         Ok(())

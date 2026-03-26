@@ -2,18 +2,15 @@ use crate::assets::AssetManager;
 use crate::core::gfx::Backend;
 use crate::ui::font::{self, FontLoadData};
 use log::debug;
-use std::error::Error;
 
+use super::AssetError;
 use super::textures::{
     apply_texture_hints, canonical_texture_key, open_image_fallback, parse_texture_hints,
     register_texture_dims,
 };
 
 impl AssetManager {
-    pub(crate) fn load_initial_fonts(
-        &mut self,
-        backend: &mut Backend,
-    ) -> Result<(), Box<dyn Error>> {
+    pub(crate) fn load_initial_fonts(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
         for &name in &[
             "wendy",
             "miso",
@@ -47,7 +44,7 @@ impl AssetManager {
                 "combo_work" => "assets/fonts/_combo/Work/Work.ini",
                 "combo_wendy_cursed" => "assets/fonts/_combo/Wendy (Cursed)/Wendy (Cursed).ini",
                 "wendy_white" => "assets/fonts/wendy/_wendy white.ini",
-                _ => return Err(format!("Unknown font name: {name}").into()),
+                _ => return Err(AssetError::UnknownFont(name)),
             };
 
             let FontLoadData {
