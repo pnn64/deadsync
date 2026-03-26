@@ -220,7 +220,7 @@ pub struct ScoreInfo {
     pub disqualified: bool,
     pub groovestats: scores::GrooveStatsEvalState,
     pub itl: scores::ItlEvalState,
-    pub judgment_counts: HashMap<JudgeGrade, u32>,
+    pub judgment_counts: judgment::JudgeCounts,
     pub score_percent: f64,
     pub grade: scores::Grade,
     pub speed_mod: ScrollSpeedSetting,
@@ -270,6 +270,13 @@ pub struct ScoreInfo {
     pub personal_records: Vec<scores::LeaderboardEntry>,
     pub personal_record_highlight_rank: Option<u32>,
     pub show_machine_personal_split: bool,
+}
+
+impl ScoreInfo {
+    #[inline(always)]
+    pub fn judgment_count(&self, grade: JudgeGrade) -> u32 {
+        self.judgment_counts[judgment::judge_grade_ix(grade)]
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -906,32 +913,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 disqualified,
                 groovestats,
                 itl,
-                judgment_counts: HashMap::from([
-                    (
-                        JudgeGrade::Fantastic,
-                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Fantastic)],
-                    ),
-                    (
-                        JudgeGrade::Excellent,
-                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Excellent)],
-                    ),
-                    (
-                        JudgeGrade::Great,
-                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Great)],
-                    ),
-                    (
-                        JudgeGrade::Decent,
-                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Decent)],
-                    ),
-                    (
-                        JudgeGrade::WayOff,
-                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::WayOff)],
-                    ),
-                    (
-                        JudgeGrade::Miss,
-                        p.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Miss)],
-                    ),
-                ]),
+                judgment_counts: p.judgment_counts,
                 score_percent,
                 grade,
                 speed_mod: gs.scroll_speed[player_idx],

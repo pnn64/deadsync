@@ -1778,34 +1778,17 @@ fn score_info_from_stage(
 ) -> Option<evaluation::ScoreInfo> {
     let idx = side_ix(side);
     let player = stage.players[idx].as_ref()?;
-    let mut judgment_counts = HashMap::new();
-    judgment_counts.insert(
-        crate::game::judgment::JudgeGrade::Fantastic,
+    let judgment_counts = [
         player
             .window_counts
             .w0
             .saturating_add(player.window_counts.w1),
-    );
-    judgment_counts.insert(
-        crate::game::judgment::JudgeGrade::Excellent,
         player.window_counts.w2,
-    );
-    judgment_counts.insert(
-        crate::game::judgment::JudgeGrade::Great,
         player.window_counts.w3,
-    );
-    judgment_counts.insert(
-        crate::game::judgment::JudgeGrade::Decent,
         player.window_counts.w4,
-    );
-    judgment_counts.insert(
-        crate::game::judgment::JudgeGrade::WayOff,
         player.window_counts.w5,
-    );
-    judgment_counts.insert(
-        crate::game::judgment::JudgeGrade::Miss,
         player.window_counts.miss,
-    );
+    ];
 
     let chart_hash = player.chart.short_hash.as_str();
     let machine_records = scores::get_machine_leaderboard_local(chart_hash, usize::MAX);

@@ -1,6 +1,5 @@
 use crate::assets::AssetManager;
 use crate::game::chart::{ChartData, StaminaCounts};
-use crate::game::judgment::JudgeGrade;
 use crate::game::profile;
 use crate::game::scores::{Grade, GrooveStatsEvalState, ItlEvalState};
 use crate::game::scroll::ScrollSpeedSetting;
@@ -12,7 +11,6 @@ use crate::test_support::compose_scenarios;
 use crate::ui::actors::Actor;
 use rssp::TechCounts;
 use rssp::stats::ArrowStats;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -56,14 +54,7 @@ pub fn fixture() -> PaneStatsBenchFixture {
 fn bench_score_info() -> ScoreInfo {
     let song = Arc::new(bench_song());
     let chart = Arc::new(song.charts[0].clone());
-    let judgment_counts = HashMap::from([
-        (JudgeGrade::Fantastic, 28_904),
-        (JudgeGrade::Excellent, 2_318),
-        (JudgeGrade::Great, 481),
-        (JudgeGrade::Decent, 53),
-        (JudgeGrade::WayOff, 7),
-        (JudgeGrade::Miss, 1),
-    ]);
+    let judgment_counts = [28_904, 2_318, 481, 53, 7, 1];
 
     ScoreInfo {
         song,

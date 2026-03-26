@@ -185,8 +185,7 @@ pub(crate) fn build_stats_pane(
     } else {
         score_info.window_counts
     };
-    let judgment_counts =
-        JUDGMENT_ORDER.map(|grade| score_info.judgment_counts.get(&grade).copied().unwrap_or(0));
+    let judgment_counts = JUDGMENT_ORDER.map(|grade| score_info.judgment_count(grade));
 
     // --- Calculate label shift for large numbers ---
     let max_judgment_count = if !show_fa_plus_pane {
