@@ -3238,20 +3238,18 @@ fn load_for_side(side: PlayerSide) {
             profile.player_initials = profile_conf
                 .get("userprofile", "PlayerInitials")
                 .unwrap_or(default_profile.player_initials.clone());
-            profile.player_options_singles =
-                load_player_options(
-                    &profile_conf,
-                    "PlayerOptionsSingles",
-                    &default_profile.player_options_singles,
-                )
-                .unwrap_or_else(|| default_profile.player_options_singles.clone());
-            profile.player_options_doubles =
-                load_player_options(
-                    &profile_conf,
-                    "PlayerOptionsDoubles",
-                    &default_profile.player_options_doubles,
-                )
-                .unwrap_or_else(|| default_profile.player_options_doubles.clone());
+            profile.player_options_singles = load_player_options(
+                &profile_conf,
+                "PlayerOptionsSingles",
+                &default_profile.player_options_singles,
+            )
+            .unwrap_or_else(|| default_profile.player_options_singles.clone());
+            profile.player_options_doubles = load_player_options(
+                &profile_conf,
+                "PlayerOptionsDoubles",
+                &default_profile.player_options_doubles,
+            )
+            .unwrap_or_else(|| default_profile.player_options_doubles.clone());
             profile.apply_player_options_for_style(get_session_play_style());
 
             // Optional last-played sections: keep the legacy [LastPlayed]

@@ -192,6 +192,8 @@ impl TextLayoutCache {
         self.overflow_policy = overflow_policy;
     }
 
+    /// Freeze the cache at its current size so future misses saturate instead of
+    /// pruning or growing during a live frame.
     pub fn lock_growth(&mut self) {
         self.max_entries = self.entry_count.max(1);
         self.max_aliases = self.alias_count;
@@ -2495,10 +2497,21 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
 
 #[cfg(test)]
 mod tests {
-    use super::{fold_sprite_xy_rot, wrap_text_lines_by_words};
+    use super::{
+        CachedTextLayout, TextLayoutCache, TextLayoutKey, TextLayoutOverflowPolicy,
+        fold_sprite_xy_rot, wrap_text_lines_by_words,
+    };
 
     fn boxed_lines(lines: &[&str]) -> Vec<Box<str>> {
         lines.iter().map(|line| Box::<str>::from(*line)).collect()
+    }
+
+    fn test_layout() -> CachedTextLayout {
+        CachedTextLayout {
+            max_logical_width_i: 0,
+            glyph_count: 0,
+            lines: Vec::new(),
+        }
     }
 
     #[test]
@@ -2537,5 +2550,28 @@ mod tests {
         assert!(flip_y);
         assert!((size_x - 22.0).abs() < 0.0001);
         assert!((size_y - 10.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn lock_growth_saturates_future_inserts() {
+        let key = TextLayoutKey {
+            font_key: 7,
+            wrap_width_pixels: -1,
+        };
+        let mut cache =
+            TextLayoutCache::new_with_policy(4, TextLayoutOverflowPolicy::PruneOwnedEntries);
+        assert!(cache.insert_owned_layout(key, "alpha", test_layout(), 1));
+        assert_eq!(cache.entry_count, 1);
+
+        cache.lock_growth();
+
+        assert_eq!(cache.max_entries, 1);
+        assert_eq!(cache.max_aliases, 0);
+        assert!(cache.overflow_policy == TextLayoutOverflowPolicy::Saturating);
+        assert!(!cache.insert_owned_layout(key, "beta", test_layout(), 2));
+        assert_eq!(cache.entry_count, 1);
+        assert_eq!(cache.frame_stats.prunes, 0);
+        assert!(cache.owned_layout(key, "beta").is_none());
+        assert!(cache.uncached_layout.is_some());
     }
 }

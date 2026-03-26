@@ -2013,6 +2013,9 @@ fn prewarm_gameplay_text_layout_cache(
         cache, fonts, assets, state,
     );
     crate::screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
+    // Freeze the gameplay cache after prewarm so live-song misses saturate instead
+    // of triggering prune work on a frame.
+    cache.lock_growth();
 
     let stats = cache.frame_stats();
     debug!(
