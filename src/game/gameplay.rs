@@ -30,7 +30,7 @@ use crate::ui::color;
 use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::hash::Hasher;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -954,29 +954,50 @@ fn apply_turn_permutation(
     }
 }
 
-fn build_row_grid(
+#[derive(Clone, Copy)]
+struct RowGrid {
+    row_index: usize,
+    note_indices: [usize; MAX_COLS],
+}
+
+#[inline(always)]
+fn notes_row_sorted(notes: &[Note]) -> bool {
+    notes
+        .windows(2)
+        .all(|pair| pair[0].row_index <= pair[1].row_index)
+}
+
+fn build_row_grids(
     notes: &[Note],
     note_range: (usize, usize),
     col_offset: usize,
     cols: usize,
-) -> (Vec<usize>, HashMap<usize, [usize; MAX_COLS]>) {
+) -> Vec<RowGrid> {
     let (start, end) = note_range;
-    let mut map: HashMap<usize, [usize; MAX_COLS]> = HashMap::new();
+    debug_assert!(start <= end && end <= notes.len());
+    debug_assert!(notes_row_sorted(&notes[start..end]));
+
+    let mut rows = Vec::<RowGrid>::new();
     for note_idx in start..end {
-        let n = &notes[note_idx];
-        if n.column < col_offset {
+        let note = &notes[note_idx];
+        if note.column < col_offset {
             continue;
         }
-        let local = n.column - col_offset;
+        let local = note.column - col_offset;
         if local >= cols || local >= MAX_COLS {
             continue;
         }
-        let entry = map.entry(n.row_index).or_insert([usize::MAX; MAX_COLS]);
-        entry[local] = note_idx;
+        if !matches!(rows.last(), Some(row) if row.row_index == note.row_index) {
+            rows.push(RowGrid {
+                row_index: note.row_index,
+                note_indices: [usize::MAX; MAX_COLS],
+            });
+        }
+        rows.last_mut()
+            .expect("row grid inserted for current note")
+            .note_indices[local] = note_idx;
     }
-    let mut rows: Vec<usize> = map.keys().copied().collect();
-    rows.sort_unstable();
-    (rows, map)
+    rows
 }
 
 #[inline(always)]
@@ -1086,14 +1107,13 @@ fn apply_super_shuffle_taps(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    let (rows, mut map) = build_row_grid(notes, note_range, col_offset, cols);
+    let row_grids = build_row_grids(notes, note_range, col_offset, cols);
     let mut rng = TurnRng::new(seed);
     let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
 
-    for &row in &rows {
-        let Some(mut grid) = map.remove(&row) else {
-            continue;
-        };
+    for row_grid in row_grids {
+        let row = row_grid.row_index;
+        let mut grid = row_grid.note_indices;
         update_active_holds_for_row(notes, row, &grid, cols, &mut hold_end_row);
 
         for t1 in 0..cols {
@@ -1154,14 +1174,13 @@ fn apply_hyper_shuffle(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    let (rows, mut map) = build_row_grid(notes, note_range, col_offset, cols);
+    let row_grids = build_row_grids(notes, note_range, col_offset, cols);
     let mut rng = TurnRng::new(seed);
     let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
 
-    for &row in &rows {
-        let Some(grid) = map.remove(&row) else {
-            continue;
-        };
+    for row_grid in row_grids {
+        let row = row_grid.row_index;
+        let grid = row_grid.note_indices;
         for col in 0..cols {
             if let Some(end) = hold_end_row[col] {
                 if row > end {
@@ -1298,21 +1317,20 @@ fn enforce_max_simultaneous_notes(
     if notes.is_empty() || cols == 0 || cols > MAX_COLS {
         return;
     }
-
-    let mut row_to_indices: HashMap<usize, Vec<usize>> = HashMap::new();
-    row_to_indices.reserve(notes.len());
-    for (idx, note) in notes.iter().enumerate() {
-        row_to_indices.entry(note.row_index).or_default().push(idx);
-    }
-
-    let mut rows: Vec<usize> = row_to_indices.keys().copied().collect();
-    rows.sort_unstable();
+    debug_assert!(notes_row_sorted(notes));
 
     let mut remove_idx = vec![false; notes.len()];
     let mut active_hold_ends: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
     let mut row_candidates = Vec::<(usize, usize)>::with_capacity(MAX_COLS);
 
-    for &row in &rows {
+    let mut row_start = 0usize;
+    while row_start < notes.len() {
+        let row = notes[row_start].row_index;
+        let mut row_end = row_start + 1;
+        while row_end < notes.len() && notes[row_end].row_index == row {
+            row_end += 1;
+        }
+
         for held in active_hold_ends.iter_mut().take(cols) {
             if held.is_some_and(|end| end < row) {
                 *held = None;
@@ -1326,21 +1344,20 @@ fn enforce_max_simultaneous_notes(
             .count();
 
         row_candidates.clear();
-        if let Some(indices) = row_to_indices.get(&row) {
-            for &idx in indices {
-                let note = &notes[idx];
-                if note.column < col_offset {
-                    continue;
-                }
-                let local_col = note.column - col_offset;
-                if local_col >= cols || !note_counts_for_simultaneous_limit(note) {
-                    continue;
-                }
-                row_candidates.push((local_col, idx));
+        for idx in row_start..row_end {
+            let note = &notes[idx];
+            if note.column < col_offset {
+                continue;
             }
+            let local_col = note.column - col_offset;
+            if local_col >= cols || !note_counts_for_simultaneous_limit(note) {
+                continue;
+            }
+            row_candidates.push((local_col, idx));
         }
 
         if row_candidates.is_empty() {
+            row_start = row_end;
             continue;
         }
 
@@ -1372,6 +1389,8 @@ fn enforce_max_simultaneous_notes(
                 active_hold_ends[local_col] = Some(end_row);
             }
         }
+
+        row_start = row_end;
     }
 
     if remove_idx.iter().all(|remove| !*remove) {
@@ -11167,8 +11186,9 @@ mod tests {
         INSERT_MASK_BIT_MINES, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
         ScrollSpeedSetting, SongClockSnapshot, TickMode, advance_hold_last_held,
         apply_mines_insert, build_assist_clap_rows, build_attack_mask_windows_for_player,
-        count_rescore_tracks_on_row, frame_stable_display_music_time, input_queue_cap,
-        lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
+        build_row_grids, count_rescore_tracks_on_row, enforce_max_simultaneous_notes,
+        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recompute_player_totals, replay_edge_cap,
         score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
@@ -11518,6 +11538,43 @@ mod tests {
             can_be_judged: true,
         }];
         assert_eq!(build_assist_clap_rows(&notes, (0, 1)), vec![48]);
+    }
+
+    #[test]
+    fn row_grids_group_sorted_rows_and_ignore_out_of_range_columns() {
+        let notes = vec![
+            test_note(2, 48, NoteType::Tap),
+            test_note(0, 48, NoteType::Lift),
+            test_note(3, 96, NoteType::Tap),
+            test_note(5, 96, NoteType::Tap),
+        ];
+
+        let rows = build_row_grids(&notes, (0, notes.len()), 0, 4);
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].row_index, 48);
+        assert_eq!(rows[0].note_indices[0], 1);
+        assert_eq!(rows[0].note_indices[2], 0);
+        assert_eq!(rows[1].row_index, 96);
+        assert_eq!(rows[1].note_indices[3], 2);
+        assert_eq!(rows[1].note_indices[0], usize::MAX);
+    }
+
+    #[test]
+    fn max_simultaneous_counts_active_holds_before_row_taps() {
+        let mut notes = vec![
+            test_hold(0, 0, 96),
+            test_note(1, 48, NoteType::Tap),
+            test_note(2, 48, NoteType::Tap),
+        ];
+
+        enforce_max_simultaneous_notes(&mut notes, 2, 0, 4);
+
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0].column, 0);
+        assert_eq!(notes[0].row_index, 0);
+        assert_eq!(notes[1].column, 2);
+        assert_eq!(notes[1].row_index, 48);
     }
 
     #[test]
