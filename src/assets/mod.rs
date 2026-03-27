@@ -1,5 +1,4 @@
 pub(crate) mod dynamic;
-mod error;
 mod fonts;
 mod textures;
 
@@ -8,8 +7,10 @@ use crate::engine::gfx::{
     TextureHandle,
 };
 use crate::engine::present::font::Font;
+use crate::engine::present::font::FontParseError;
 use image::RgbaImage;
 use std::collections::HashMap;
+use std::{error::Error as StdError, fmt};
 
 #[cfg(test)]
 pub(crate) use self::dynamic::{
@@ -17,7 +18,6 @@ pub(crate) use self::dynamic::{
     dynamic_image_cache_path_for, load_or_build_cached_dynamic_image, save_cached_banner_image,
     save_raw_cached_banner_image,
 };
-pub use self::error::AssetError;
 use self::textures::ascii_ci_hash;
 #[cfg(test)]
 pub(crate) use self::textures::parse_texture_resolution_hint;
@@ -26,6 +26,53 @@ pub use self::textures::{
     parse_texture_hints, register_generated_texture, register_texture_dims, sprite_sheet_dims,
     texture_dims, texture_source_dims_from_real, texture_source_frame_dims_from_real,
 };
+
+#[derive(Debug)]
+pub enum AssetError {
+    FontParse(FontParseError),
+    Image(image::ImageError),
+    Backend(String),
+    UnknownFont(&'static str),
+}
+
+impl fmt::Display for AssetError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FontParse(err) => write!(f, "{err}"),
+            Self::Image(err) => write!(f, "{err}"),
+            Self::Backend(err) => write!(f, "GPU texture operation failed: {err}"),
+            Self::UnknownFont(name) => write!(f, "Unknown font name: {name}"),
+        }
+    }
+}
+
+impl StdError for AssetError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            Self::FontParse(err) => Some(err),
+            Self::Image(err) => Some(err),
+            Self::Backend(_) | Self::UnknownFont(_) => None,
+        }
+    }
+}
+
+impl From<FontParseError> for AssetError {
+    fn from(value: FontParseError) -> Self {
+        Self::FontParse(value)
+    }
+}
+
+impl From<image::ImageError> for AssetError {
+    fn from(value: image::ImageError) -> Self {
+        Self::Image(value)
+    }
+}
+
+impl From<Box<dyn StdError>> for AssetError {
+    fn from(value: Box<dyn StdError>) -> Self {
+        Self::Backend(value.to_string())
+    }
+}
 
 pub struct AssetManager {
     textures: HashMap<TextureHandle, GfxTexture>,
