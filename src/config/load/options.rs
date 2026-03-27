@@ -1,4 +1,3 @@
-use super::shared::{parse_bool_str, parse_loose_bool_str};
 use super::*;
 
 pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
