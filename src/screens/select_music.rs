@@ -16,7 +16,6 @@ use crate::engine::space::{
 };
 use crate::game::chart::ChartData;
 use crate::game::course;
-use crate::game::known_packs;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
@@ -992,13 +991,10 @@ fn sync_new_pack_names(
 ) -> HashSet<String> {
     match mode {
         NewPackMode::Disabled => {
-            known_packs::mark_packs_known(
-                profile_ids,
-                scanned_pack_names.iter().map(String::as_str),
-            );
+            profile::mark_packs_known(profile_ids, scanned_pack_names.iter().map(String::as_str));
             HashSet::new()
         }
-        NewPackMode::OpenPack => known_packs::sync_known_packs(profile_ids, &scanned_pack_names),
+        NewPackMode::OpenPack => profile::sync_known_packs(profile_ids, &scanned_pack_names),
         NewPackMode::HasScore => scanned_pack_names
             .into_iter()
             .filter(|name| !scored_pack_names.contains(name.as_str()))
@@ -5221,7 +5217,7 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
                 && state.new_pack_names.remove(&target)
             {
                 let profile_ids = joined_local_profile_ids();
-                known_packs::mark_pack_known(&profile_ids, &target);
+                profile::mark_pack_known(&profile_ids, &target);
             }
             if state.expanded_pack_name.as_ref() == Some(&target) {
                 state.expanded_pack_name = None;

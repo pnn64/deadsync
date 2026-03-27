@@ -451,7 +451,9 @@ fn texture_ids(render: &RenderList<'_>, flip_texture_keys: bool) -> HashMap<Stri
     let mut next_id = 1u64;
     for obj in &render.objects {
         let key = match &obj.object_type {
-            deadsync::engine::gfx::ObjectType::Sprite { texture_id, .. } => Some(texture_id.as_ref()),
+            deadsync::engine::gfx::ObjectType::Sprite { texture_id, .. } => {
+                Some(texture_id.as_ref())
+            }
             deadsync::engine::gfx::ObjectType::TexturedMesh { texture_id, .. } => {
                 Some(texture_id.as_ref())
             }
