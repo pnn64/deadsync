@@ -314,6 +314,11 @@ fn push_default_theme(content: &mut String, default: &Config) {
     );
     push_line(
         content,
+        "PackSyncThreads",
+        default.null_or_die_pack_sync_threads,
+    );
+    push_line(
+        content,
         "NullOrDieFingerprintMs",
         format!(
             "{:.1}",

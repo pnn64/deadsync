@@ -77,6 +77,11 @@ fn push_saved_options(
     );
     push_line(
         content,
+        "PackSyncThreads",
+        cfg.null_or_die_pack_sync_threads,
+    );
+    push_line(
+        content,
         "NullOrDieFingerprintMs",
         format!(
             "{:.1}",

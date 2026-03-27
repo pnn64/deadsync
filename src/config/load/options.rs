@@ -176,6 +176,17 @@ fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .and_then(|v| v.parse::<u8>().ok())
         .map(clamp_null_or_die_confidence_percent)
         .unwrap_or(default.null_or_die_confidence_percent);
+    cfg.null_or_die_pack_sync_threads = conf
+        .get("Options", "PackSyncThreads")
+        .map(|v| v.trim().to_string())
+        .and_then(|v| {
+            if v.eq_ignore_ascii_case("auto") || v.is_empty() {
+                Some(0u8)
+            } else {
+                v.parse::<u8>().ok()
+            }
+        })
+        .unwrap_or(default.null_or_die_pack_sync_threads);
     cfg.null_or_die_fingerprint_ms = conf
         .get("Options", "NullOrDieFingerprintMs")
         .and_then(|v| v.parse::<f64>().ok())

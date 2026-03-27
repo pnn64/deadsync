@@ -39,6 +39,7 @@ const OPTION_KEYS: &[&str] = &[
     "MineHitSound",
     "MusicVolume",
     "MusicWheelSwitchSpeed",
+    "PackSyncThreads",
     "SongParsingThreads",
     "RateModPreservesPitch",
     "SelectMusicBreakdown",

@@ -177,6 +177,8 @@ pub struct Config {
     pub null_or_die_sync_graph: SyncGraphMode,
     /// Minimum confidence percent required for pack sync saves.
     pub null_or_die_confidence_percent: u8,
+    /// Worker threads for null-or-die pack/all sync analysis.
+    pub null_or_die_pack_sync_threads: u8,
     pub null_or_die_fingerprint_ms: f64,
     pub null_or_die_window_ms: f64,
     pub null_or_die_step_ms: f64,
@@ -291,6 +293,7 @@ impl Default for Config {
             default_fail_type: DefaultFailType::ImmediateContinue,
             null_or_die_sync_graph: SyncGraphMode::PostKernelFingerprint,
             null_or_die_confidence_percent: 80,
+            null_or_die_pack_sync_threads: 0,
             null_or_die_fingerprint_ms: 50.0,
             null_or_die_window_ms: 10.0,
             null_or_die_step_ms: 0.2,

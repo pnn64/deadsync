@@ -23,6 +23,17 @@ pub fn update_null_or_die_confidence_percent(value: u8) {
     save_without_keymaps();
 }
 
+pub fn update_null_or_die_pack_sync_threads(threads: u8) {
+    {
+        let mut cfg = lock_config();
+        if cfg.null_or_die_pack_sync_threads == threads {
+            return;
+        }
+        cfg.null_or_die_pack_sync_threads = threads;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_null_or_die_fingerprint_ms(value: f64) {
     let value = clamp_null_or_die_positive_ms(value);
     {

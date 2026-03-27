@@ -697,6 +697,7 @@ const ADVANCED_ROW_CACHE_SONGS: &str = "Cache Songs";
 const ADVANCED_ROW_FAST_LOAD: &str = "Fast Load";
 const NULL_OR_DIE_SETTING_ROW_SYNC_GRAPH: &str = "Sync Graph";
 const NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE: &str = "Sync Confidence";
+const NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS: &str = "Pack Sync Threads";
 const NULL_OR_DIE_SETTING_ROW_FINGERPRINT: &str = "Fingerprint (ms)";
 const NULL_OR_DIE_SETTING_ROW_WINDOW: &str = "Window (ms)";
 const NULL_OR_DIE_SETTING_ROW_STEP: &str = "Step (ms)";
@@ -2057,6 +2058,11 @@ pub const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        label: NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS,
+        choices: &["Auto"],
+        inline: false,
+    },
+    SubRow {
         label: NULL_OR_DIE_SETTING_ROW_FINGERPRINT,
         choices: &["50.0 ms"],
         inline: false,
@@ -2234,6 +2240,14 @@ pub const NULL_OR_DIE_OPTIONS_ITEMS: &[Item] = &[
             "Set the minimum confidence required for Sync Pack saves.",
             "Charts below this value are analyzed and shown, but skipped when saving a pack.",
             "Single-song sync still allows saving below the threshold and shows a warning instead.",
+        ],
+    },
+    Item {
+        name: NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS,
+        help: &[
+            "Set worker threads used for pack/all sync null-or-die analysis.",
+            "Auto uses all logical cores; 1 keeps analysis single-threaded.",
+            "Default: Auto (PackSyncThreads=0).",
         ],
     },
     Item {
@@ -3557,6 +3571,17 @@ fn row_choices<'a>(
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Advanced)
         && row.label == ADVANCED_ROW_SONG_PARSING_THREADS
+    {
+        return state
+            .software_thread_labels
+            .iter()
+            .cloned()
+            .map(Cow::Owned)
+            .collect();
+    }
+    if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::NullOrDieOptions)
+        && row.label == NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS
     {
         return state
             .software_thread_labels
@@ -4975,6 +5000,15 @@ pub fn init() -> State {
         NULL_OR_DIE_OPTIONS_ROWS,
         NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE,
         sync_confidence_choice_index(cfg.null_or_die_confidence_percent),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_null_or_die_options,
+        NULL_OR_DIE_OPTIONS_ROWS,
+        NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS,
+        software_thread_choice_index(
+            &state.software_thread_choices,
+            cfg.null_or_die_pack_sync_threads,
+        ),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_null_or_die_options,
@@ -6722,6 +6756,9 @@ fn apply_submenu_choice_delta(
             config::update_null_or_die_sync_graph(sync_graph_mode_from_choice(new_index));
         } else if row.label == NULL_OR_DIE_SETTING_ROW_SYNC_CONFIDENCE {
             config::update_null_or_die_confidence_percent(sync_confidence_from_choice(new_index));
+        } else if row.label == NULL_OR_DIE_SETTING_ROW_PACK_SYNC_THREADS {
+            let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
+            config::update_null_or_die_pack_sync_threads(threads);
         } else if row.label == NULL_OR_DIE_SETTING_ROW_KERNEL_TARGET {
             config::update_null_or_die_kernel_target(null_or_die_kernel_target_from_choice(
                 new_index,

@@ -13,7 +13,7 @@ use crate::screens::components::shared::loading_bar;
 use null_or_die::{BiasStreamCfg, BiasStreamEvent, GraphOrientation};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 const OVERLAY_Z: i16 = 1496;
@@ -142,6 +142,22 @@ fn confidence_threshold() -> f64 {
 #[inline(always)]
 fn confidence_percent(confidence: Option<f64>) -> u32 {
     (confidence.unwrap_or(0.0).clamp(0.0, 1.0) * 100.0).round() as u32
+}
+
+#[inline(always)]
+fn pack_sync_worker_count(target_count: usize) -> usize {
+    if target_count == 0 {
+        return 0;
+    }
+    let avail_threads = std::thread::available_parallelism()
+        .map(std::num::NonZero::get)
+        .unwrap_or(1);
+    let configured_threads = match config::get().null_or_die_pack_sync_threads {
+        0 => avail_threads,
+        1 => 1,
+        n => (n as usize).min(avail_threads).max(1),
+    };
+    configured_threads.min(target_count).max(1)
 }
 
 pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Vec<Actor>> {
@@ -484,59 +500,91 @@ pub(crate) fn begin(state: &mut OverlayState, pack_name: String, targets: Vec<Ta
     }
 
     let min_confidence = confidence_threshold();
+    let worker_count = pack_sync_worker_count(targets.len());
     let cancel = Arc::new(AtomicBool::new(false));
     let cancel_thread = Arc::clone(&cancel);
     let (tx, rx) = mpsc::channel::<WorkerMsg>();
     let rows = build_rows(&targets);
 
     std::thread::spawn(move || {
-        let cfg = config::null_or_die_bias_cfg();
+        let cfg = Arc::new(config::null_or_die_bias_cfg());
         let stream_cfg = BiasStreamCfg {
             emit_freq_delta: false,
             orientation: GraphOrientation::Horizontal,
         };
+        let (job_tx, job_rx) = mpsc::channel::<(usize, TargetSpec)>();
+        let job_rx = Arc::new(Mutex::new(job_rx));
+        let mut workers = Vec::with_capacity(worker_count);
+
+        for _ in 0..worker_count {
+            let cancel_thread = Arc::clone(&cancel_thread);
+            let cfg = Arc::clone(&cfg);
+            let job_rx = Arc::clone(&job_rx);
+            let tx = tx.clone();
+            workers.push(std::thread::spawn(move || {
+                loop {
+                    if cancel_thread.load(Ordering::Relaxed) {
+                        return;
+                    }
+
+                    let job = {
+                        let Ok(rx) = job_rx.lock() else { return };
+                        rx.recv()
+                    };
+                    let Ok((index, target)) = job else { return };
+                    if cancel_thread.load(Ordering::Relaxed) {
+                        return;
+                    }
+
+                    let _ = tx.send(WorkerMsg::RowStarted { index });
+                    let mut total_beats = 0usize;
+                    let mut last_sent = 0usize;
+                    let result = null_or_die::api::analyze_chart_stream(
+                        target.simfile_path.as_path(),
+                        target.chart_ix,
+                        cfg.as_ref(),
+                        stream_cfg,
+                        |event| match event {
+                            BiasStreamEvent::Init(init) => {
+                                total_beats = init.planned_beats;
+                                let _ = tx.send(WorkerMsg::RowInit { index, total_beats });
+                            }
+                            BiasStreamEvent::Beat(beat) => {
+                                let beats_processed = beat.beat_seq.saturating_add(1);
+                                let is_last = total_beats > 0 && beats_processed >= total_beats;
+                                if beats_processed == 1
+                                    || is_last
+                                    || beats_processed.saturating_sub(last_sent)
+                                        >= PROGRESS_STEP_BEATS
+                                {
+                                    last_sent = beats_processed;
+                                    let _ = tx.send(WorkerMsg::RowBeat {
+                                        index,
+                                        beats_processed,
+                                        total_beats,
+                                    });
+                                }
+                            }
+                            BiasStreamEvent::Convolution(_) | BiasStreamEvent::Done(_) => {}
+                        },
+                    )
+                    .map(|result| AnalysisResult {
+                        bias_ms: result.estimate.bias_ms,
+                        confidence: result.estimate.confidence,
+                    });
+                    let _ = tx.send(WorkerMsg::RowFinished { index, result });
+                }
+            }));
+        }
 
         for (index, target) in targets.into_iter().enumerate() {
-            if cancel_thread.load(Ordering::Relaxed) {
+            if job_tx.send((index, target)).is_err() {
                 break;
             }
-
-            let _ = tx.send(WorkerMsg::RowStarted { index });
-            let mut total_beats = 0usize;
-            let mut last_sent = 0usize;
-            let result = null_or_die::api::analyze_chart_stream(
-                target.simfile_path.as_path(),
-                target.chart_ix,
-                &cfg,
-                stream_cfg,
-                |event| match event {
-                    BiasStreamEvent::Init(init) => {
-                        total_beats = init.planned_beats;
-                        let _ = tx.send(WorkerMsg::RowInit { index, total_beats });
-                    }
-                    BiasStreamEvent::Beat(beat) => {
-                        let beats_processed = beat.beat_seq.saturating_add(1);
-                        let is_last = total_beats > 0 && beats_processed >= total_beats;
-                        if beats_processed == 1
-                            || is_last
-                            || beats_processed.saturating_sub(last_sent) >= PROGRESS_STEP_BEATS
-                        {
-                            last_sent = beats_processed;
-                            let _ = tx.send(WorkerMsg::RowBeat {
-                                index,
-                                beats_processed,
-                                total_beats,
-                            });
-                        }
-                    }
-                    BiasStreamEvent::Convolution(_) | BiasStreamEvent::Done(_) => {}
-                },
-            )
-            .map(|result| AnalysisResult {
-                bias_ms: result.estimate.bias_ms,
-                confidence: result.estimate.confidence,
-            });
-            let _ = tx.send(WorkerMsg::RowFinished { index, result });
+        }
+        drop(job_tx);
+        for worker in workers {
+            let _ = worker.join();
         }
 
         let _ = tx.send(WorkerMsg::Finished);
@@ -921,7 +969,7 @@ fn poll_overlay(overlay: &mut OverlayStateData) {
             Ok(WorkerMsg::RowInit { index, total_beats }) => {
                 if let Some(row) = overlay.rows.get_mut(index) {
                     row.total_beats = total_beats;
-                    if overlay.auto_follow {
+                    if overlay.auto_follow && overlay.current_row == Some(index) {
                         follow_row(overlay, index);
                     }
                 }
@@ -935,15 +983,16 @@ fn poll_overlay(overlay: &mut OverlayStateData) {
                     row.phase = RowPhase::Running;
                     row.total_beats = row.total_beats.max(total_beats);
                     row.beats_processed = row.beats_processed.max(beats_processed);
-                    overlay.current_row = Some(index);
-                    if overlay.auto_follow {
+                    if overlay.auto_follow && overlay.current_row == Some(index) {
                         follow_row(overlay, index);
                     }
                 }
             }
             Ok(WorkerMsg::RowFinished { index, result }) => {
                 if let Some(row) = overlay.rows.get_mut(index) {
-                    overlay.current_row = None;
+                    if overlay.current_row == Some(index) {
+                        overlay.current_row = None;
+                    }
                     match result {
                         Ok(result) => {
                             row.phase = RowPhase::Ready;
