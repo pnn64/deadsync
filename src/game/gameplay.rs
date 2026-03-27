@@ -3,8 +3,8 @@ use crate::engine::gfx::MeshVertex;
 use crate::engine::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
-use crate::engine::space::{is_wide, screen_center_y, screen_height, screen_width};
 use crate::engine::present::color;
+use crate::engine::space::{is_wide, screen_center_y, screen_height, screen_width};
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};

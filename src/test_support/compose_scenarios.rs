@@ -1,9 +1,11 @@
 use crate::assets;
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
-use crate::engine::space::{Metrics, metrics_for_window};
-use crate::engine::present::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
+use crate::engine::present::actors::{
+    Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
+};
 use crate::engine::present::anim::{EffectMode, EffectState};
 use crate::engine::present::font::{Font, Glyph};
+use crate::engine::space::{Metrics, metrics_for_window};
 use crate::test_support::density_graph_bench;
 use crate::test_support::density_graph_life_bench;
 use crate::test_support::gameplay_bench;

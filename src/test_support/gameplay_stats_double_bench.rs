@@ -1,6 +1,6 @@
 use crate::assets::AssetManager;
-use crate::engine::space::screen_center_x;
 use crate::engine::present::actors::Actor;
+use crate::engine::space::screen_center_x;
 use crate::game::profile;
 use crate::game::scores::{
     CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,

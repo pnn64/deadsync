@@ -2,11 +2,13 @@ use crate::assets;
 use crate::engine::gfx::{
     BlendMode, MeshMode, MeshVertex, ObjectType, RenderList, RenderObject, TexturedMeshVertex,
 };
-use crate::engine::space::Metrics;
-use crate::engine::present::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
+use crate::engine::present::actors::{
+    Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent,
+};
 use crate::engine::present::anim::{EffectClock, EffectMode, EffectState};
 use crate::engine::present::compose;
 use crate::engine::present::font::{Font, Glyph};
+use crate::engine::space::Metrics;
 use cgmath::Matrix4;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

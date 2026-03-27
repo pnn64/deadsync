@@ -1,9 +1,9 @@
 use crate::assets;
 use crate::engine::gfx as renderer;
 use crate::engine::gfx::{BlendMode, RenderList, RenderObject};
-use crate::engine::space::Metrics;
 use crate::engine::present::actors::{self, Actor, SizeSpec};
 use crate::engine::present::{anim, font};
+use crate::engine::space::Metrics;
 use cgmath::{Matrix4, Rad, Vector2, Vector3};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};

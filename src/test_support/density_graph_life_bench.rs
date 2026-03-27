@@ -1,6 +1,6 @@
 use crate::engine::gfx::{BlendMode, MeshMode};
-use crate::engine::space::screen_center_x;
 use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::space::screen_center_x;
 use crate::screens::components::shared::density_graph;
 use std::cell::RefCell;
 use std::sync::Arc;

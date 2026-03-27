@@ -19,8 +19,8 @@ use crate::config::{self, DisplayMode};
 use crate::engine::display;
 use crate::engine::gfx::{self as renderer, BackendType, PresentModePolicy};
 use crate::engine::input::{self, InputEvent};
-use crate::engine::space::{self as space, Metrics};
 use crate::engine::present::color;
+use crate::engine::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::components::shared::density_graph::{DensityGraphSlot, DensityGraphSource};
@@ -2460,9 +2460,10 @@ impl App {
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache::default(),
-            gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache::saturating(
-                GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
-            ),
+            gameplay_text_layout_cache:
+                crate::engine::present::compose::TextLayoutCache::saturating(
+                    GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
+                ),
             state,
             gameplay_key_ring: Arc::new(GameplayInputRing::new()),
             gameplay_pad_ring: Arc::new(GameplayInputRing::new()),

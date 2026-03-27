@@ -284,7 +284,12 @@ impl App {
     }
 
     fn play_music_command(&self, path: PathBuf, looped: bool, volume: f32) {
-        crate::engine::audio::play_music(path, crate::engine::audio::Cut::default(), looped, volume);
+        crate::engine::audio::play_music(
+            path,
+            crate::engine::audio::Cut::default(),
+            looped,
+            volume,
+        );
     }
 
     fn stop_music_command(&self) {
