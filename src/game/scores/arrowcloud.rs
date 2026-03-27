@@ -1,5 +1,5 @@
 use super::{gameplay_side_for_player, log_body_snippet, submit_side_ix};
-use crate::core::network;
+use crate::engine::network;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::online;

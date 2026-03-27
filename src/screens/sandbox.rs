@@ -1,7 +1,7 @@
 use crate::act;
-use crate::core::input::{GpSystemEvent, InputEvent, PadEvent, RawKeyboardEvent, VirtualAction};
-use crate::core::space::{screen_center_x, screen_height, screen_width};
-use crate::core::ui::actors::Actor;
+use crate::engine::input::{GpSystemEvent, InputEvent, PadEvent, RawKeyboardEvent, VirtualAction};
+use crate::engine::space::{screen_center_x, screen_height, screen_width};
+use crate::engine::present::actors::Actor;
 use crate::screens::{Screen, ScreenAction};
 // Keyboard input is handled centrally via the virtual dispatcher in app
 use std::collections::VecDeque;

@@ -1,6 +1,6 @@
 use super::groovestats::{self, ConnectionStatus};
 use crate::config;
-use crate::core::network;
+use crate::engine::network;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -1,6 +1,6 @@
 use crate::act;
-use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::core::ui::actors::Actor;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::engine::present::actors::Actor;
 use crate::game::profile;
 use crate::screens::{Screen, ScreenAction};
 use std::sync::mpsc;
@@ -28,7 +28,7 @@ enum PreparedState {
 
 pub fn init() -> State {
     State {
-        active_color_index: crate::core::ui::color::DEFAULT_COLOR_INDEX,
+        active_color_index: crate::engine::present::color::DEFAULT_COLOR_INDEX,
         elapsed: 0.0,
         rx: None,
         prepared_select_music: None,
@@ -119,7 +119,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     None
 }
 
-pub fn handle_input(_: &mut State, _: &crate::core::input::InputEvent) -> ScreenAction {
+pub fn handle_input(_: &mut State, _: &crate::engine::input::InputEvent) -> ScreenAction {
     ScreenAction::None
 }
 

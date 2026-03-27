@@ -5,7 +5,7 @@ use super::{
     select_color, select_course, select_mode, select_music, select_profile, select_style,
 };
 use crate::config;
-use crate::core::ui::{actors::Actor, color};
+use crate::engine::present::{actors::Actor, color};
 use crate::game::profile;
 use log::{debug, info};
 use std::path::PathBuf;
@@ -172,17 +172,17 @@ impl App {
 
         if target_menu_music {
             if !prev_menu_music {
-                crate::core::audio::play_music(
+                crate::engine::audio::play_music(
                     PathBuf::from("assets/music/in_two (loop).ogg"),
-                    crate::core::audio::Cut::default(),
+                    crate::engine::audio::Cut::default(),
                     true,
                     1.0,
                 );
             }
         } else if prev_menu_music {
-            crate::core::audio::stop_music();
+            crate::engine::audio::stop_music();
         } else if !keep_preview {
-            crate::core::audio::stop_music();
+            crate::engine::audio::stop_music();
         }
 
         if target_screen == CurrentScreen::Menu {
@@ -250,7 +250,7 @@ impl App {
         } else {
             TransitionState::Idle
         };
-        crate::core::ui::runtime::clear_all();
+        crate::engine::present::runtime::clear_all();
     }
 
     pub(super) fn handle_navigation_action(&mut self, target: CurrentScreen) {
@@ -341,7 +341,7 @@ impl App {
             debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
             self.state.screens.current_screen = target;
             self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
-            crate::core::ui::runtime::clear_all();
+            crate::engine::present::runtime::clear_all();
             return;
         }
 
@@ -469,7 +469,7 @@ impl App {
                 duration: in_duration,
             };
         }
-        crate::core::ui::runtime::clear_all();
+        crate::engine::present::runtime::clear_all();
         let _ = self.run_commands(commands, event_loop);
     }
 

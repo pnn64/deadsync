@@ -1,11 +1,11 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::core::audio;
-use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{screen_center_x, screen_center_y};
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
-use crate::core::ui::font;
+use crate::engine::audio;
+use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::space::{screen_center_x, screen_center_y};
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
+use crate::engine::present::font;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -139,7 +139,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
     if !exiting {
         return 0.0;
     }
-    use crate::core::ui::{anim, runtime};
+    use crate::engine::present::{anim, runtime};
     static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
     let steps = STEPS.get_or_init(|| vec![anim::linear(EXIT_TOTAL_DUR).x(EXIT_TOTAL_DUR).build()]);
 
@@ -317,7 +317,7 @@ fn arrow_rotation(dir: &str) -> f32 {
 
 #[inline(always)]
 fn ease01(x: f32, f_ease: f32) -> f32 {
-    use crate::core::ui::anim;
+    use crate::engine::present::anim;
     let x = x.clamp(0.0, 1.0);
     // Use the same curve implementation as tween segments.
     anim::eval_ease_p_for_f_ease(x, f_ease)

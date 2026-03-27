@@ -1,5 +1,5 @@
 use crate::assets::{AssetManager, dynamic, open_image_fallback};
-use crate::core::{gfx::Backend, video};
+use crate::engine::{gfx::Backend, video};
 use image::RgbaImage;
 use log::{debug, warn};
 use std::{

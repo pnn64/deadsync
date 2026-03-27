@@ -1,18 +1,18 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::core::display::{self, MonitorSpec};
-use crate::core::gfx::{BackendType, PresentModePolicy};
-use crate::core::space::{is_wide, screen_height, screen_width, widescale};
+use crate::engine::display::{self, MonitorSpec};
+use crate::engine::gfx::{BackendType, PresentModePolicy};
+use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 // Screen navigation is handled in app via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SimpleIni, SyncGraphMode,
 };
-use crate::core::audio;
+use crate::engine::audio;
 #[cfg(target_os = "windows")]
-use crate::core::input::WindowsPadBackend;
-use crate::core::input::{InputEvent, VirtualAction};
+use crate::engine::input::WindowsPadBackend;
+use crate::engine::input::{InputEvent, VirtualAction};
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{course, profile, scores};
 use crate::screens::pack_sync as shared_pack_sync;
@@ -26,10 +26,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::core::ui::actors;
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
-use crate::core::ui::font;
+use crate::engine::present::actors;
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
+use crate::engine::present::font;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
 use null_or_die::{BiasKernel, KernelTarget};
@@ -2362,7 +2362,7 @@ pub const SCORE_IMPORT_OPTIONS_ITEMS: &[Item] = &[
 fn is_submenu_row_disabled(kind: SubmenuKind, label: &str) -> bool {
     match (kind, label) {
         (SubmenuKind::InputBackend, INPUT_ROW_DEDICATED_MENU_BUTTONS) => {
-            !crate::core::input::any_player_has_dedicated_menu_buttons()
+            !crate::engine::input::any_player_has_dedicated_menu_buttons()
         }
         _ => false,
     }
@@ -8098,11 +8098,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
         Actor::Sprite { tint, .. } => tint[3] *= alpha,
         Actor::Text { color, .. } => color[3] *= alpha,
         Actor::Mesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            let mut out: Vec<crate::engine::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::MeshVertex {
+                out.push(crate::engine::gfx::MeshVertex {
                     pos: v.pos,
                     color: c,
                 });
@@ -8110,12 +8110,12 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             *vertices = std::sync::Arc::from(out);
         }
         Actor::TexturedMesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::TexturedMeshVertex> =
+            let mut out: Vec<crate::engine::gfx::TexturedMeshVertex> =
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::TexturedMeshVertex {
+                out.push(crate::engine::gfx::TexturedMeshVertex {
                     pos: v.pos,
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,

@@ -1,11 +1,11 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::core::audio;
-use crate::core::gfx::BlendMode;
-use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::core::ui::actors::{self, Actor};
-use crate::core::ui::color;
+use crate::engine::audio;
+use crate::engine::gfx::BlendMode;
+use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::engine::present::actors::{self, Actor};
+use crate::engine::present::color;
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::profile::{self, ActiveProfile};
 use crate::game::scores;
@@ -740,11 +740,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
         Actor::Sprite { tint, .. } => tint[3] *= alpha,
         Actor::Text { color, .. } => color[3] *= alpha,
         Actor::Mesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            let mut out: Vec<crate::engine::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::MeshVertex {
+                out.push(crate::engine::gfx::MeshVertex {
                     pos: v.pos,
                     color: c,
                 });
@@ -752,12 +752,12 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             *vertices = std::sync::Arc::from(out);
         }
         Actor::TexturedMesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::TexturedMeshVertex> =
+            let mut out: Vec<crate::engine::gfx::TexturedMeshVertex> =
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::TexturedMeshVertex {
+                out.push(crate::engine::gfx::TexturedMeshVertex {
                     pos: v.pos,
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,
@@ -796,7 +796,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
         return 0.0;
     }
 
-    use crate::core::ui::{anim, runtime};
+    use crate::engine::present::{anim, runtime};
     static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
     let dur = EXIT_ANIM_DURATION.max(0.0);
     let steps = STEPS.get_or_init(|| vec![anim::linear(dur).x(dur).build()]);
@@ -810,7 +810,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
 
 #[inline(always)]
 fn exit_zoom(exit_t: f32) -> f32 {
-    let p = crate::core::ui::anim::bouncebegin_p(
+    let p = crate::engine::present::anim::bouncebegin_p(
         (exit_t / PLAYERFRAME_EXIT_ZOOM_OUT_DURATION).clamp(0.0, 1.0),
     );
     (1.0 - p).max(0.0)
@@ -826,7 +826,7 @@ fn join_pulse_zoom(join_t: f32) -> f32 {
     if join_t >= JOIN_PULSE_DURATION {
         return 1.0;
     }
-    let p = crate::core::ui::anim::bounceend_p((join_t / JOIN_PULSE_DURATION).clamp(0.0, 1.0));
+    let p = crate::engine::present::anim::bounceend_p((join_t / JOIN_PULSE_DURATION).clamp(0.0, 1.0));
     lerp(JOIN_PULSE_ZOOM_IN, 1.0, p).max(0.0)
 }
 
@@ -835,18 +835,18 @@ fn shake_x(shake_t: f32) -> f32 {
     if shake_t >= SHAKE_DUR {
         return 0.0;
     }
-    let p = crate::core::ui::anim::bounceend_p((shake_t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+    let p = crate::engine::present::anim::bounceend_p((shake_t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
     if shake_t < SHAKE_STEP_DUR {
         lerp(0.0, 5.0, p)
     } else if shake_t < SHAKE_STEP_DUR * 2.0 {
         let t = (shake_t - SHAKE_STEP_DUR).clamp(0.0, SHAKE_STEP_DUR);
-        let p = crate::core::ui::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+        let p = crate::engine::present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(5.0, -5.0, p)
     } else {
         let t = SHAKE_STEP_DUR
             .mul_add(-2.0, shake_t)
             .clamp(0.0, SHAKE_STEP_DUR);
-        let p = crate::core::ui::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
+        let p = crate::engine::present::anim::bounceend_p((t / SHAKE_STEP_DUR).clamp(0.0, 1.0));
         lerp(-5.0, 0.0, p)
     }
 }
@@ -887,9 +887,9 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                     *v *= zoom;
                 }
             }
-            let mut out: Vec<crate::core::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            let mut out: Vec<crate::engine::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
-                out.push(crate::core::gfx::MeshVertex {
+                out.push(crate::engine::gfx::MeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom],
                     color: v.color,
                 });
@@ -909,10 +909,10 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                     *v *= zoom;
                 }
             }
-            let mut out: Vec<crate::core::gfx::TexturedMeshVertex> =
+            let mut out: Vec<crate::engine::gfx::TexturedMeshVertex> =
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
-                out.push(crate::core::gfx::TexturedMeshVertex {
+                out.push(crate::engine::gfx::TexturedMeshVertex {
                     pos: [v.pos[0] * zoom, v.pos[1] * zoom],
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,
@@ -1057,7 +1057,7 @@ fn apply_clip_rect_to_actor(actor: &mut Actor, rect: [f32; 4]) {
 
 #[inline(always)]
 fn box_inner_alpha() -> f32 {
-    use crate::core::ui::{anim, runtime};
+    use crate::engine::present::{anim, runtime};
     static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
 
     let steps = STEPS.get_or_init(|| {

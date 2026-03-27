@@ -1,8 +1,8 @@
 use super::{App, CurrentScreen, ShellState};
 use crate::act;
 use crate::assets;
-use crate::core::space;
-use crate::core::ui::actors::Actor;
+use crate::engine::space;
+use crate::engine::present::actors::Actor;
 use crate::game::{profile, scores};
 use crate::screens::evaluation;
 use chrono::Local;
@@ -150,7 +150,7 @@ impl App {
                             }
                         }
 
-                        crate::core::audio::play_sfx("assets/sounds/screenshot.ogg");
+                        crate::engine::audio::play_sfx("assets/sounds/screenshot.ogg");
                         info!("Saved screenshot to {}", path.display());
                     }
                     Err(e) => warn!("Failed to save screenshot: {e}"),
@@ -191,7 +191,7 @@ impl App {
             backend.dispose_textures(&mut old_map);
         }
 
-        let texture = backend.create_texture(image, crate::core::gfx::SamplerDesc::default())?;
+        let texture = backend.create_texture(image, crate::engine::gfx::SamplerDesc::default())?;
         self.asset_manager
             .insert_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(), texture);
         assets::register_texture_dims(

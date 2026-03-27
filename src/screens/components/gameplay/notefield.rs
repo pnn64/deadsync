@@ -1,11 +1,11 @@
 use crate::act;
-use crate::core::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
-use crate::core::space::*;
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::cache::{TextCache, cached_text};
-use crate::core::ui::color;
-use crate::core::ui::compose::TextLayoutCache;
-use crate::core::ui::font;
+use crate::engine::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
+use crate::engine::space::*;
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::cache::{TextCache, cached_text};
+use crate::engine::present::color;
+use crate::engine::present::compose::TextLayoutCache;
+use crate::engine::present::font;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HOLD_JUDGMENT_TOTAL_DURATION, MAX_COLS,

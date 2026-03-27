@@ -1,6 +1,6 @@
 use crate::act;
-use crate::core::space::{screen_center_x, widescale};
-use crate::core::ui::actors::{Actor, TextContent};
+use crate::engine::space::{screen_center_x, widescale};
+use crate::engine::present::actors::{Actor, TextContent};
 
 pub fn build_session(text: impl Into<TextContent>) -> Actor {
     build_header_timer(text, screen_center_x())

@@ -1,9 +1,9 @@
-use deadsync::core::gfx::draw_prep::{
+use deadsync::engine::gfx::draw_prep::{
     self, DrawOp, GlScratch, PrepareStats, SpriteInstanceRaw, TexturedMeshInstanceRaw,
     TexturedMeshVertexRaw,
 };
-use deadsync::core::gfx::{BlendMode, MeshMode, RenderList, TextureHandle};
-use deadsync::core::ui::compose;
+use deadsync::engine::gfx::{BlendMode, MeshMode, RenderList, TextureHandle};
+use deadsync::engine::present::compose;
 use deadsync::test_support::{compose_case, compose_scenarios};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -451,11 +451,11 @@ fn texture_ids(render: &RenderList<'_>, flip_texture_keys: bool) -> HashMap<Stri
     let mut next_id = 1u64;
     for obj in &render.objects {
         let key = match &obj.object_type {
-            deadsync::core::gfx::ObjectType::Sprite { texture_id, .. } => Some(texture_id.as_ref()),
-            deadsync::core::gfx::ObjectType::TexturedMesh { texture_id, .. } => {
+            deadsync::engine::gfx::ObjectType::Sprite { texture_id, .. } => Some(texture_id.as_ref()),
+            deadsync::engine::gfx::ObjectType::TexturedMesh { texture_id, .. } => {
                 Some(texture_id.as_ref())
             }
-            deadsync::core::gfx::ObjectType::Mesh { .. } => None,
+            deadsync::engine::gfx::ObjectType::Mesh { .. } => None,
         };
         let Some(key) = key else {
             continue;
@@ -477,8 +477,8 @@ fn texture_ids(render: &RenderList<'_>, flip_texture_keys: bool) -> HashMap<Stri
 fn resolve_texture_handles(render: &mut RenderList<'_>, textures: &HashMap<String, TextureHandle>) {
     for obj in &mut render.objects {
         obj.texture_handle = match &obj.object_type {
-            deadsync::core::gfx::ObjectType::Sprite { texture_id, .. }
-            | deadsync::core::gfx::ObjectType::TexturedMesh { texture_id, .. } => textures
+            deadsync::engine::gfx::ObjectType::Sprite { texture_id, .. }
+            | deadsync::engine::gfx::ObjectType::TexturedMesh { texture_id, .. } => textures
                 .get(texture_id.as_ref())
                 .copied()
                 .or_else(|| {
@@ -488,9 +488,9 @@ fn resolve_texture_handles(render: &mut RenderList<'_>, textures: &HashMap<Strin
                             .then_some(*texture)
                     })
                 })
-                .unwrap_or(deadsync::core::gfx::INVALID_TEXTURE_HANDLE),
-            deadsync::core::gfx::ObjectType::Mesh { .. } => {
-                deadsync::core::gfx::INVALID_TEXTURE_HANDLE
+                .unwrap_or(deadsync::engine::gfx::INVALID_TEXTURE_HANDLE),
+            deadsync::engine::gfx::ObjectType::Mesh { .. } => {
+                deadsync::engine::gfx::INVALID_TEXTURE_HANDLE
             }
         };
     }

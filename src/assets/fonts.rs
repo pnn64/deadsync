@@ -1,6 +1,6 @@
 use crate::assets::AssetManager;
-use crate::core::gfx::Backend;
-use crate::core::ui::font::{self, FontLoadData};
+use crate::engine::gfx::Backend;
+use crate::engine::present::font::{self, FontLoadData};
 use log::debug;
 
 use super::AssetError;

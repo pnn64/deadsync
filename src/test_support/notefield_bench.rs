@@ -1,4 +1,4 @@
-use crate::core::ui::actors::Actor;
+use crate::engine::present::actors::Actor;
 use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
 use crate::game::gameplay::{
     self, ActiveHold, ActiveTapExplosion, Arrow, ColumnCue, ColumnCueColumn, ErrorBarText,

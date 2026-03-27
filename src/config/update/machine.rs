@@ -9,7 +9,7 @@ pub fn update_input_debounce_seconds(seconds: f32) {
         }
         cfg.input_debounce_seconds = seconds;
     }
-    crate::core::input::set_input_debounce_seconds(seconds);
+    crate::engine::input::set_input_debounce_seconds(seconds);
     save_without_keymaps();
 }
 
@@ -21,7 +21,7 @@ pub fn update_only_dedicated_menu_buttons(enabled: bool) {
         }
         cfg.only_dedicated_menu_buttons = enabled;
     }
-    crate::core::input::set_only_dedicated_menu_buttons(enabled);
+    crate::engine::input::set_only_dedicated_menu_buttons(enabled);
     save_without_keymaps();
 }
 

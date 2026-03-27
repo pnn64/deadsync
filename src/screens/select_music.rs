@@ -4,16 +4,16 @@ use crate::config::{
     self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
     SyncGraphMode,
 };
-use crate::core::audio;
-use crate::core::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
-use crate::core::input::{InputEvent, PadDir, RawKeyboardEvent, VirtualAction};
-use crate::core::space::{
+use crate::engine::audio;
+use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
+use crate::engine::input::{InputEvent, PadDir, RawKeyboardEvent, VirtualAction};
+use crate::engine::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
 };
-use crate::core::ui::actors::{Actor, SizeSpec, SpriteSource};
-use crate::core::ui::color;
-use crate::core::ui::font;
+use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
+use crate::engine::present::color;
+use crate::engine::present::font;
 use crate::game::chart::ChartData;
 use crate::game::course;
 use crate::game::known_packs;
@@ -4551,7 +4551,7 @@ fn switch_single_player_style(state: &mut State, new_style: profile::PlayStyle) 
     profile::set_session_play_style(new_style);
     refresh_after_reload(state);
     state.selection_animation_timer = 0.0;
-    crate::core::ui::runtime::clear_all();
+    crate::engine::present::runtime::clear_all();
 }
 
 fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {

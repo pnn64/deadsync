@@ -1,6 +1,6 @@
 use deadsync::assets::AssetManager;
-use deadsync::core::gfx::RenderList;
-use deadsync::core::ui::{actors::Actor, compose};
+use deadsync::engine::gfx::RenderList;
+use deadsync::engine::present::{actors::Actor, compose};
 use deadsync::test_support::{
     compose_case, compose_scenarios, density_graph_bench, density_graph_life_bench, gameplay_bench,
     gameplay_stats_bench, gameplay_stats_double_bench, gameplay_stats_versus_bench,
@@ -704,8 +704,8 @@ fn build_screen_for_mode<'a>(
     text_cache: &mut compose::TextLayoutCache,
     actors: &'a [Actor],
     clear_color: [f32; 4],
-    metrics: &deadsync::core::space::Metrics,
-    fonts: &'a HashMap<&'static str, deadsync::core::ui::font::Font>,
+    metrics: &deadsync::engine::space::Metrics,
+    fonts: &'a HashMap<&'static str, deadsync::engine::present::font::Font>,
     total_elapsed: f32,
 ) -> RenderList<'a> {
     match cache_mode {
@@ -726,8 +726,8 @@ fn build_screen_for_mode<'a>(
 fn benchmark_actor_builder<F>(
     name: &str,
     clear_color: [f32; 4],
-    metrics: &deadsync::core::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync::core::ui::font::Font>,
+    metrics: &deadsync::engine::space::Metrics,
+    fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     total_elapsed: f32,
     iters: u64,
     warmup: u64,
@@ -836,8 +836,8 @@ fn benchmark_compose<F>(
     name: &str,
     actors: &[Actor],
     clear_color: [f32; 4],
-    metrics: &deadsync::core::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync::core::ui::font::Font>,
+    metrics: &deadsync::engine::space::Metrics,
+    fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     iters: u64,
     warmup: u64,
     cache_mode: CacheMode,
@@ -977,8 +977,8 @@ fn benchmark_compose_resolve<F>(
     name: &str,
     actors: &[Actor],
     clear_color: [f32; 4],
-    metrics: &deadsync::core::space::Metrics,
-    fonts: &HashMap<&'static str, deadsync::core::ui::font::Font>,
+    metrics: &deadsync::engine::space::Metrics,
+    fonts: &HashMap<&'static str, deadsync::engine::present::font::Font>,
     iters: u64,
     warmup: u64,
     cache_mode: CacheMode,

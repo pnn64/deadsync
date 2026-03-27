@@ -1,5 +1,5 @@
 use crate::assets::AssetManager;
-use crate::core::ui::actors::Actor;
+use crate::engine::present::actors::Actor;
 use crate::game::profile;
 use crate::game::timing::WindowCounts;
 use crate::screens::components::gameplay::gameplay_stats;

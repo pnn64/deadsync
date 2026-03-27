@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::act;
-use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::color;
+use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::color;
 use crate::game::profile;
 use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
@@ -148,7 +148,7 @@ pub fn build_timing_pane(
 
     let pane_origin_x = pane_origin_x(controller);
     let frame_x = pane_origin_x - pane_width * 0.5;
-    let frame_y = crate::core::space::screen_center_y() - 56.0;
+    let frame_y = crate::engine::space::screen_center_y() - 56.0;
 
     let mut children = Vec::new();
     const BAR_BG_COLOR: [f32; 4] = color::rgba_hex("#101519");

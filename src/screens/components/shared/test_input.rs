@@ -1,9 +1,9 @@
 use crate::act;
-use crate::core::input::{
+use crate::engine::input::{
     InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
 };
-use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::core::ui::actors::Actor;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::engine::present::actors::Actor;
 use std::collections::HashMap;
 use winit::keyboard::KeyCode;
 
@@ -133,7 +133,7 @@ pub fn apply_virtual_input(state: &mut State, ev: &InputEvent) {
 }
 
 pub fn apply_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
-    use crate::core::input::PadEvent as PE;
+    use crate::engine::input::PadEvent as PE;
 
     let (key, pressed_opt, axis_value_opt) = match pad_event {
         PE::Dir {

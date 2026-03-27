@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets;
-use crate::core::ui::actors::Actor;
+use crate::engine::present::actors::Actor;
 use std::sync::Arc;
 
 const SCALE_TO_CLIPPED_FUDGE: f32 = 0.15;

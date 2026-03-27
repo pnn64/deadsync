@@ -1,10 +1,10 @@
 use crate::act;
 use crate::assets::{self, AssetManager};
-use crate::core::gfx::{BlendMode, SamplerDesc};
-use crate::core::space::screen_center_y;
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
-use crate::core::ui::font;
+use crate::engine::gfx::{BlendMode, SamplerDesc};
+use crate::engine::space::screen_center_y;
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
+use crate::engine::present::font;
 use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization};
 use crate::game::profile;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;

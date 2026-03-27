@@ -214,7 +214,7 @@ impl App {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,
     ) {
-        let (graph_w, graph_h) = if crate::core::space::is_wide() {
+        let (graph_w, graph_h) = if crate::engine::space::is_wide() {
             (286.0_f32, 64.0_f32)
         } else {
             (276.0_f32, 64.0_f32)
@@ -284,11 +284,11 @@ impl App {
     }
 
     fn play_music_command(&self, path: PathBuf, looped: bool, volume: f32) {
-        crate::core::audio::play_music(path, crate::core::audio::Cut::default(), looped, volume);
+        crate::engine::audio::play_music(path, crate::engine::audio::Cut::default(), looped, volume);
     }
 
     fn stop_music_command(&self) {
-        crate::core::audio::stop_music();
+        crate::engine::audio::stop_music();
     }
 
     pub(super) fn apply_dynamic_background(&mut self, path_opt: Option<PathBuf>) {

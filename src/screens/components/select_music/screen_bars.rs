@@ -1,4 +1,4 @@
-use crate::core::ui::actors::Actor;
+use crate::engine::present::actors::Actor;
 use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,

@@ -24,7 +24,7 @@ pub mod select_style;
 use std::path::PathBuf;
 
 use crate::config::DisplayMode;
-use crate::core::gfx::{BackendType, PresentModePolicy};
+use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::game::profile::ActiveProfile;
 use crate::screens::components::shared::density_graph::{DensityGraphSlot, DensityGraphSource};
 

@@ -1,10 +1,10 @@
 use crate::act;
-use crate::core::input::{
+use crate::engine::input::{
     InputEvent, InputSource, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
 };
-use crate::core::space::{screen_height, screen_width};
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
+use crate::engine::space::{screen_height, screen_width};
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 use crate::screens::components::shared::{heart_bg, test_input};
 use crate::screens::{Screen, ScreenAction};
 /* ---------------------------- transitions ---------------------------- */

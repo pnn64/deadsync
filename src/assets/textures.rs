@@ -1,5 +1,5 @@
 use crate::assets::AssetManager;
-use crate::core::gfx::{Backend, SamplerDesc, SamplerFilter, SamplerWrap};
+use crate::engine::gfx::{Backend, SamplerDesc, SamplerFilter, SamplerWrap};
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
 use std::{

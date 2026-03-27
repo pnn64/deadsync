@@ -1,6 +1,6 @@
 use crate::act;
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::color;
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::color;
 use crate::game::profile;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 
@@ -25,7 +25,7 @@ pub(crate) fn build_pane_percentage_display(
     }
 
     let pane_origin_x = pane_origin_x(controller);
-    let cy = crate::core::space::screen_center_y();
+    let cy = crate::engine::space::screen_center_y();
 
     let percent_text = format!("{:.2}", score_info.score_percent * 100.0);
     let ex_percent_text = format!("{:.2}", score_info.ex_score_percent.max(0.0));

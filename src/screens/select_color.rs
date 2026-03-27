@@ -1,16 +1,16 @@
 use crate::act;
-use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
 // Screen navigation handled in app
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{heart_bg, screen_bar};
 // Keyboard handling is centralized in app via virtual actions
-use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::ui::actors;
+use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::present::actors;
 use crate::screens::{Screen, ScreenAction};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -110,11 +110,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
         Actor::Sprite { tint, .. } => tint[3] *= alpha,
         Actor::Text { color, .. } => color[3] *= alpha,
         Actor::Mesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            let mut out: Vec<crate::engine::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::MeshVertex {
+                out.push(crate::engine::gfx::MeshVertex {
                     pos: v.pos,
                     color: c,
                 });
@@ -122,12 +122,12 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             *vertices = std::sync::Arc::from(out);
         }
         Actor::TexturedMesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::TexturedMeshVertex> =
+            let mut out: Vec<crate::engine::gfx::TexturedMeshVertex> =
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::TexturedMeshVertex {
+                out.push(crate::engine::gfx::TexturedMeshVertex {
                     pos: v.pos,
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,
@@ -292,7 +292,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     #[inline(always)]
     fn wheel_form_p() -> f32 {
-        use crate::core::ui::{anim, runtime};
+        use crate::engine::present::{anim, runtime};
         static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
         let steps = STEPS.get_or_init(|| vec![anim::linear(WHEEL_FORM_DURATION).x(1.0).build()]);
 
@@ -305,7 +305,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
     #[inline(always)]
     fn wheel_exit_t(wide: bool) -> f32 {
-        use crate::core::ui::{anim, runtime};
+        use crate::engine::present::{anim, runtime};
         static STEPS_WIDE: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
         static STEPS_NARROW: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
 
@@ -551,7 +551,7 @@ fn scroll_by(state: &mut State, delta: i32) {
     state.active_color_index += delta;
     state.scroll_to = state.active_color_index as f32;
     state.scroll_t = 0.0;
-    crate::core::audio::play_sfx("assets/sounds/expand.ogg");
+    crate::engine::audio::play_sfx("assets/sounds/expand.ogg");
     crate::config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
     state.bg_from_index = current_visible_bg_index(state);
     state.bg_to_index = state.active_color_index;
@@ -596,7 +596,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.scroll = state.scroll_to;
             state.scroll_from = state.scroll;
             state.scroll_t = SCROLL_TWEEN_DURATION;
-            crate::core::audio::play_sfx("assets/sounds/start.ogg");
+            crate::engine::audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::Navigate(Screen::SelectStyle)
         }
         Some(Nav::Back) => {

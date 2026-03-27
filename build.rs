@@ -9,7 +9,7 @@ use std::{
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Rerun on shader or asset changes
-    println!("cargo:rerun-if-changed=src/core/gfx/shaders");
+    println!("cargo:rerun-if-changed=src/engine/gfx/shaders");
     println!("cargo:rerun-if-changed=assets");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_PIPEWIRE_AUDIO");
     println!("cargo:rustc-check-cfg=cfg(has_jack_audio)");
@@ -121,7 +121,7 @@ fn compile_vulkan_shaders(compiler: &mut Compiler, out_dir: &Path) -> Result<(),
     }
 
     // Gather candidates deterministically
-    let mut paths: Vec<_> = glob::glob("src/core/gfx/shaders/vulkan_*.*")?
+    let mut paths: Vec<_> = glob::glob("src/engine/gfx/shaders/vulkan_*.*")?
         .filter_map(Result::ok)
         .collect();
     paths.sort();

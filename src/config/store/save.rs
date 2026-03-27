@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::input::Keymap;
+use crate::engine::input::Keymap;
 
 pub(super) fn build_content(
     cfg: &Config,

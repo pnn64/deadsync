@@ -1,4 +1,4 @@
-use deadsync::core::input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
+use deadsync::engine::input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::error::Error;
 use std::hint::black_box;

@@ -1,10 +1,10 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::core::audio;
-use crate::core::input::{InputEvent, RawKeyboardEvent, VirtualAction};
-use crate::core::space::{screen_height, screen_width};
-use crate::core::ui::actors::{self, Actor};
-use crate::core::ui::color;
+use crate::engine::audio;
+use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
+use crate::engine::space::{screen_height, screen_width};
+use crate::engine::present::actors::{self, Actor};
+use crate::engine::present::color;
 use crate::game::profile;
 use crate::screens::components::shared::heart_bg;
 use crate::screens::components::shared::screen_bar::{
@@ -716,11 +716,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
         Actor::Sprite { tint, .. } => tint[3] *= alpha,
         Actor::Text { color, .. } => color[3] *= alpha,
         Actor::Mesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            let mut out: Vec<crate::engine::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::MeshVertex {
+                out.push(crate::engine::gfx::MeshVertex {
                     pos: v.pos,
                     color: c,
                 });
@@ -728,12 +728,12 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             *vertices = std::sync::Arc::from(out);
         }
         Actor::TexturedMesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::TexturedMeshVertex> =
+            let mut out: Vec<crate::engine::gfx::TexturedMeshVertex> =
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::TexturedMeshVertex {
+                out.push(crate::engine::gfx::TexturedMeshVertex {
                     pos: v.pos,
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,

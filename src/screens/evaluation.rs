@@ -1,9 +1,9 @@
 use crate::act;
-use crate::core::gfx::{BlendMode, MeshMode, MeshVertex};
-use crate::core::space::widescale;
-use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::color;
+use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
+use crate::engine::space::widescale;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::color;
 use crate::screens::Screen;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -14,7 +14,7 @@ use crate::screens::components::{
 };
 
 use crate::assets::AssetManager;
-use crate::core::ui::font;
+use crate::engine::present::font;
 use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
 use crate::game::judgment::{self, JudgeGrade};
@@ -30,7 +30,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::LocalKey;
 
-use crate::core::input::{InputEvent, VirtualAction};
+use crate::engine::input::{InputEvent, VirtualAction};
 use crate::game::profile;
 use crate::screens::ScreenAction;
 // Keyboard handling is centralized in app via virtual actions

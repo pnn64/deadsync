@@ -1,6 +1,6 @@
 use crate::act;
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 use crate::screens::evaluation::ScoreInfo;
 
 pub fn build_modifiers_pane(
@@ -8,7 +8,7 @@ pub fn build_modifiers_pane(
     bar_center_x: f32,
     bar_width: f32,
 ) -> Vec<Actor> {
-    let frame_center_y = crate::core::space::screen_center_y() + 200.5;
+    let frame_center_y = crate::engine::space::screen_center_y() + 200.5;
     let font_zoom = 0.7;
 
     // Simply Love places the modifiers text 10px from the bar's left edge.

@@ -1,9 +1,9 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{screen_center_x, screen_height, screen_width, widescale};
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::color;
+use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::space::{screen_center_x, screen_height, screen_width, widescale};
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::color;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::SongData;
@@ -180,8 +180,8 @@ fn build_player_stats(
             -widescale(194.0, 250.0),
             1.0,
             0.0,
-            crate::core::ui::actors::TextAlign::Right,
-            crate::core::ui::actors::TextAlign::Left,
+            crate::engine::present::actors::TextAlign::Right,
+            crate::engine::present::actors::TextAlign::Left,
             -1.0,
         ),
         profile::PlayerSide::P2 => (
@@ -190,8 +190,8 @@ fn build_player_stats(
             widescale(194.0, 250.0),
             0.0,
             1.0,
-            crate::core::ui::actors::TextAlign::Left,
-            crate::core::ui::actors::TextAlign::Right,
+            crate::engine::present::actors::TextAlign::Left,
+            crate::engine::present::actors::TextAlign::Right,
             1.0,
         ),
     };

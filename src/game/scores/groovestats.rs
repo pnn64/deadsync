@@ -5,7 +5,7 @@ use super::{
     de_i32_from_string_or_number, de_string_from_string_or_number, de_u32_from_string_or_number,
     gameplay_side_for_player, itl, log_body_snippet, submit_record_banner, submit_side_ix,
 };
-use crate::core::network;
+use crate::engine::network;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::online;

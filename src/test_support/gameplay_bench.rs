@@ -1,6 +1,6 @@
 use crate::assets::AssetManager;
-use crate::core::gfx::MeshVertex;
-use crate::core::ui::actors::Actor;
+use crate::engine::gfx::MeshVertex;
+use crate::engine::present::actors::Actor;
 use crate::game::{gameplay, profile};
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};

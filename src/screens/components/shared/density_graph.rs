@@ -1,4 +1,4 @@
-use crate::core::gfx::MeshVertex;
+use crate::engine::gfx::MeshVertex;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

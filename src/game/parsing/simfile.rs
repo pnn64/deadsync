@@ -1,4 +1,4 @@
-use crate::core::audio::decode;
+use crate::engine::audio::decode;
 use crate::game::{
     chart::{ChartData, GameplayChartData, StaminaCounts},
     note::NoteType,

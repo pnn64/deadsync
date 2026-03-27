@@ -1,6 +1,6 @@
 use super::{App, CurrentScreen, GAMEPLAY_INPUT_RING_CAPACITY, TransitionState};
 use crate::config;
-use crate::core::input::{self, InputEvent};
+use crate::engine::input::{self, InputEvent};
 use log::warn;
 use std::cell::UnsafeCell;
 use std::error::Error;

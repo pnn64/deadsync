@@ -1,4 +1,4 @@
-use deadsync::core::input::{
+use deadsync::engine::input::{
     self, InputBinding, Keymap, PadDir, PadEvent, PadId, RawKeyboardEvent, VirtualAction,
 };
 use deadsync::game::gameplay;

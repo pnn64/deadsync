@@ -6,8 +6,8 @@ use self::{
     itg as noteskin_itg,
 };
 use crate::assets;
-use crate::core::gfx::SamplerDesc;
-use crate::core::ui::anim as ui_anim;
+use crate::engine::gfx::SamplerDesc;
+use crate::engine::present::anim as ui_anim;
 use image::{Rgba, RgbaImage, image_dimensions};
 use log::warn;
 use std::collections::{HashMap, HashSet};

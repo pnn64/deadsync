@@ -1,6 +1,6 @@
-use crate::core::gfx::{BlendMode, MeshMode};
-use crate::core::space::screen_center_x;
-use crate::core::ui::actors::{Actor, SizeSpec};
+use crate::engine::gfx::{BlendMode, MeshMode};
+use crate::engine::space::screen_center_x;
+use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::screens::components::shared::density_graph;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ pub struct DensityGraphLifeBenchFixture {
     thickness: f32,
     color: [f32; 4],
     offset_xy: [f32; 2],
-    mesh: RefCell<Option<Arc<[crate::core::gfx::MeshVertex]>>>,
+    mesh: RefCell<Option<Arc<[crate::engine::gfx::MeshVertex]>>>,
 }
 
 impl DensityGraphLifeBenchFixture {

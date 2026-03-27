@@ -7,7 +7,7 @@ use super::null_or_die_cfg::{
     clamp_null_or_die_positive_ms,
 };
 use super::*;
-use crate::core::input::{GamepadCodeBinding, InputBinding, PadDir};
+use crate::engine::input::{GamepadCodeBinding, InputBinding, PadDir};
 use winit::keyboard::KeyCode;
 
 fn assert_tenths_eq(actual: f64, expected_tenths: i32) {

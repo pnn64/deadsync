@@ -1,6 +1,6 @@
 use crate::act;
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::color;
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::color;
 use crate::game::{profile, scores};
 use crate::screens::components::shared::qr_code;
 use crate::screens::evaluation::ScoreInfo;
@@ -34,7 +34,7 @@ pub fn build_gs_qr_pane(score_info: &ScoreInfo, controller: profile::PlayerSide)
         score_info.groovestats.reason_lines.join("\n")
     };
     let pane_origin_x = pane_origin_x(controller);
-    let pane_origin_y = crate::core::space::screen_center_y() - 62.0;
+    let pane_origin_y = crate::engine::space::screen_center_y() - 62.0;
     let top_y = MACHINE_RECORD_DEFAULT_ROW_HEIGHT * 0.8;
     let score_w = 70.0;
     let score_h = 28.0;

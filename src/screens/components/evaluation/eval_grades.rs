@@ -1,5 +1,5 @@
 use crate::act;
-use crate::core::ui::actors::Actor;
+use crate::engine::present::actors::Actor;
 use crate::game::scores;
 
 const DEFAULT_EVAL_ZOOM: f32 = 0.4;

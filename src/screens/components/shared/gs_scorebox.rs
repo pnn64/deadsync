@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets;
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 use crate::game::{profile, scores};
 use std::cell::RefCell;
 use std::collections::HashMap;

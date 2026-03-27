@@ -1,7 +1,7 @@
 use crate::act;
-use crate::core::space::{screen_center_x, screen_width, widescale};
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
+use crate::engine::space::{screen_center_x, screen_width, widescale};
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 
 // --- Constants to match StepMania's SystemMessage display ---
 const FADE_IN_DURATION: f32 = 0.0; // SM appears instantly

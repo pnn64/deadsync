@@ -3,11 +3,11 @@ mod error;
 mod fonts;
 mod textures;
 
-use crate::core::gfx::{
+use crate::engine::gfx::{
     Backend, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, SamplerDesc, Texture as GfxTexture,
     TextureHandle,
 };
-use crate::core::ui::font::Font;
+use crate::engine::present::font::Font;
 use image::RgbaImage;
 use std::collections::HashMap;
 
@@ -88,7 +88,7 @@ impl AssetManager {
 
     pub fn resolve_render_textures(&self, render: &mut RenderList<'_>) {
         #[inline(always)]
-        fn texture_key<'a>(obj: &'a crate::core::gfx::RenderObject<'a>) -> Option<&'a str> {
+        fn texture_key<'a>(obj: &'a crate::engine::gfx::RenderObject<'a>) -> Option<&'a str> {
             match &obj.object_type {
                 ObjectType::Sprite { texture_id, .. }
                 | ObjectType::TexturedMesh { texture_id, .. } => Some(texture_id.as_ref()),

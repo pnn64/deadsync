@@ -1,5 +1,5 @@
-use crate::core::gfx::MeshVertex;
-use crate::core::ui::color;
+use crate::engine::gfx::MeshVertex;
+use crate::engine::present::color;
 use crate::game::timing::{HistogramMs, ScatterPoint};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

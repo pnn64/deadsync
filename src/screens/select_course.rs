@@ -1,10 +1,10 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::core::audio;
-use crate::core::input::{InputEvent, PadDir, VirtualAction};
-use crate::core::space::{is_wide, screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::color;
+use crate::engine::audio;
+use crate::engine::input::{InputEvent, PadDir, VirtualAction};
+use crate::engine::space::{is_wide, screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::color;
 use crate::game::chart::ChartData;
 use crate::game::course::get_course_cache;
 use crate::game::profile;

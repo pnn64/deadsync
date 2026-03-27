@@ -1,5 +1,5 @@
 use super::{SimpleIni, save_without_keymaps};
-use crate::core::input::{GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction};
+use crate::engine::input::{GamepadCodeBinding, InputBinding, Keymap, PadDir, VirtualAction};
 use std::str::FromStr;
 use winit::keyboard::KeyCode;
 
@@ -603,7 +603,7 @@ pub fn update_keymap_binding_unique_keyboard(
 ) {
     // Update keyboard bindings while ensuring that `keycode` is unique across
     // all Primary/Secondary slots (index >= 1) for P1/P2.
-    let current = crate::core::input::get_keymap();
+    let current = crate::engine::input::get_keymap();
     let mut new_map = Keymap::default();
 
     for act in ALL_VIRTUAL_ACTIONS {
@@ -659,7 +659,7 @@ pub fn update_keymap_binding_unique_keyboard(
         new_map.bind(act, &bindings);
     }
 
-    crate::core::input::set_keymap(new_map);
+    crate::engine::input::set_keymap(new_map);
     save_without_keymaps();
 }
 
@@ -671,7 +671,7 @@ pub fn update_keymap_binding_unique_gamepad(
     index: usize,
     binding: InputBinding,
 ) {
-    let current = crate::core::input::get_keymap();
+    let current = crate::engine::input::get_keymap();
     let mut new_map = Keymap::default();
 
     for act in ALL_VIRTUAL_ACTIONS {
@@ -723,6 +723,6 @@ pub fn update_keymap_binding_unique_gamepad(
         new_map.bind(act, &bindings);
     }
 
-    crate::core::input::set_keymap(new_map);
+    crate::engine::input::set_keymap(new_map);
     save_without_keymaps();
 }

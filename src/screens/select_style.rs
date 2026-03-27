@@ -1,9 +1,9 @@
 use crate::act;
-use crate::core::audio;
-use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{screen_center_x, screen_center_y, widescale};
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
+use crate::engine::audio;
+use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::space::{screen_center_x, screen_center_y, widescale};
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -206,7 +206,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
         return 0.0;
     }
 
-    use crate::core::ui::{anim, runtime};
+    use crate::engine::present::{anim, runtime};
     static STEPS: std::sync::OnceLock<Vec<anim::Step>> = std::sync::OnceLock::new();
     let dur = CHOICE_CHOSEN_ZOOM_OUT_DURATION.max(0.0);
     let steps = STEPS.get_or_init(|| vec![anim::linear(dur).x(dur).build()]);
@@ -258,7 +258,7 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     let exit_t = exit_anim_t(state.exit_chosen_anim);
     let (chosen_p, other_alpha) = if state.exit_chosen_anim {
         (
-            crate::core::ui::anim::bouncebegin_p(exit_t / CHOICE_CHOSEN_ZOOM_OUT_DURATION),
+            crate::engine::present::anim::bouncebegin_p(exit_t / CHOICE_CHOSEN_ZOOM_OUT_DURATION),
             not_chosen_alpha(exit_t),
         )
     } else {

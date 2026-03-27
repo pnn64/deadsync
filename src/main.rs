@@ -1,11 +1,11 @@
-use deadsync::{app, config, core, game};
+use deadsync::{app, config, engine, game};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
 #[cfg(windows)]
 struct WindowsTimingGuard {
     timer_period_ms: u32,
-    _thread_policy: core::windows_rt::ThreadPolicyGuard,
+    _thread_policy: engine::windows_rt::ThreadPolicyGuard,
 }
 
 #[cfg(windows)]
@@ -44,7 +44,9 @@ fn boost_windows_runtime_timing() -> WindowsTimingGuard {
 
     WindowsTimingGuard {
         timer_period_ms,
-        _thread_policy: core::windows_rt::boost_current_thread(core::windows_rt::ThreadRole::Main),
+        _thread_policy: engine::windows_rt::boost_current_thread(
+            engine::windows_rt::ThreadRole::Main,
+        ),
     }
 }
 
@@ -122,7 +124,7 @@ fn audio_request_line(cfg: &config::Config) -> String {
     }
 }
 
-fn audio_device_lines(devices: &[core::audio::OutputDeviceInfo]) -> Vec<String> {
+fn audio_device_lines(devices: &[engine::audio::OutputDeviceInfo]) -> Vec<String> {
     devices
         .iter()
         .enumerate()
@@ -174,10 +176,10 @@ fn install_panic_hook() {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     set_runtime_dir()?;
-    core::host_time::init();
+    engine::host_time::init();
 
     // Install logger immediately, then set runtime max level from config after loading it.
-    core::logging::init(config::bootstrap_log_to_file());
+    engine::logging::init(config::bootstrap_log_to_file());
     install_panic_hook();
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
@@ -185,11 +187,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config::load();
     let cfg = config::get();
     log::set_max_level(cfg.log_level.as_level_filter());
-    core::logging::write_startup_report(&startup_lines(&cfg));
+    engine::logging::write_startup_report(&startup_lines(&cfg));
     #[cfg(windows)]
     let _windows_timing = boost_windows_runtime_timing();
     game::profile::load();
-    if let Err(e) = core::audio::init(core::audio::InitConfig {
+    if let Err(e) = engine::audio::init(engine::audio::InitConfig {
         output_device_index: cfg.audio_output_device_index,
         output_mode: cfg.audio_output_mode,
         #[cfg(target_os = "linux")]
@@ -199,9 +201,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // The game can run without audio; log the error and continue.
         log::error!("Failed to initialize audio engine: {e}");
     } else {
-        core::logging::write_report_block(
+        engine::logging::write_report_block(
             "Startup audio devices",
-            &audio_device_lines(&core::audio::startup_output_devices()),
+            &audio_device_lines(&engine::audio::startup_output_devices()),
         );
     }
     app::run()

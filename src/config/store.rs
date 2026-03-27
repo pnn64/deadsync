@@ -50,7 +50,7 @@ pub(super) fn create_default_config_file() -> Result<(), std::io::Error> {
 
 pub(super) fn save_without_keymaps() {
     let cfg = *lock_config();
-    let keymap = crate::core::input::get_keymap();
+    let keymap = crate::engine::input::get_keymap();
     let machine_default_noteskin = MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone();
     let additional_song_folders = ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone();
     queue_save_write(save::build_content(

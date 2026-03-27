@@ -1,6 +1,6 @@
 use crate::act;
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::color;
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::color;
 use crate::game::profile;
 use crate::game::scores;
 
@@ -51,7 +51,7 @@ fn build_records_pane(
     arrowcloud: bool,
 ) -> Vec<Actor> {
     let pane_origin_x = pane_origin_x(controller);
-    let pane_origin_y = crate::core::space::screen_center_y() - 62.0;
+    let pane_origin_y = crate::engine::space::screen_center_y() - 62.0;
     let pane_zoom = 0.8_f32;
     let row_height = 22.0 * pane_zoom;
     let first_row_y = row_height;

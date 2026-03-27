@@ -1,6 +1,6 @@
 use crate::act;
-use crate::core::space::screen_height;
-use crate::core::ui::actors::Actor;
+use crate::engine::space::screen_height;
+use crate::engine::present::actors::Actor;
 
 pub struct StepArtistBarParams<'a> {
     pub x0: f32,

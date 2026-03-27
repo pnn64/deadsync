@@ -1,14 +1,14 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::core::audio;
-use crate::core::input::{
+use crate::engine::audio;
+use crate::engine::input::{
     GamepadCodeBinding, InputBinding, InputEvent, InputSource, PadEvent, RawKeyboardEvent,
     VirtualAction, with_keymap,
 };
-use crate::core::space::{screen_height, screen_width, widescale};
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
-use crate::core::ui::font;
+use crate::engine::space::{screen_height, screen_width, widescale};
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
+use crate::engine::present::font;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
 use crate::screens::{Screen, ScreenAction};
@@ -450,7 +450,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                 audio::play_sfx("assets/sounds/change_value.ogg");
 
                 if crate::config::get().only_dedicated_menu_buttons
-                    && !crate::core::input::any_player_has_dedicated_menu_buttons()
+                    && !crate::engine::input::any_player_has_dedicated_menu_buttons()
                 {
                     crate::config::update_only_dedicated_menu_buttons(false);
                 }
@@ -595,7 +595,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             audio::play_sfx("assets/sounds/change_value.ogg");
 
             if crate::config::get().only_dedicated_menu_buttons
-                && !crate::core::input::any_player_has_dedicated_menu_buttons()
+                && !crate::engine::input::any_player_has_dedicated_menu_buttons()
             {
                 crate::config::update_only_dedicated_menu_buttons(false);
             }
@@ -703,11 +703,11 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
         Actor::Sprite { tint, .. } => tint[3] *= alpha,
         Actor::Text { color, .. } => color[3] *= alpha,
         Actor::Mesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
+            let mut out: Vec<crate::engine::gfx::MeshVertex> = Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::MeshVertex {
+                out.push(crate::engine::gfx::MeshVertex {
                     pos: v.pos,
                     color: c,
                 });
@@ -715,12 +715,12 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             *vertices = std::sync::Arc::from(out);
         }
         Actor::TexturedMesh { vertices, .. } => {
-            let mut out: Vec<crate::core::gfx::TexturedMeshVertex> =
+            let mut out: Vec<crate::engine::gfx::TexturedMeshVertex> =
                 Vec::with_capacity(vertices.len());
             for v in vertices.iter() {
                 let mut c = v.color;
                 c[3] *= alpha;
-                out.push(crate::core::gfx::TexturedMeshVertex {
+                out.push(crate::engine::gfx::TexturedMeshVertex {
                     pos: v.pos,
                     uv: v.uv,
                     tex_matrix_scale: v.tex_matrix_scale,
@@ -734,7 +734,7 @@ fn apply_alpha_to_actor(actor: &mut Actor, alpha: f32) {
             children,
             ..
         } => {
-            if let Some(crate::core::ui::actors::Background::Color(c)) = background {
+            if let Some(crate::engine::present::actors::Background::Color(c)) = background {
                 c[3] *= alpha;
             }
             for child in children {
@@ -812,7 +812,7 @@ fn format_binding_for_display(binding: InputBinding) -> String {
 
 #[inline(always)]
 fn editable_slot_indices_for_action(
-    keymap: &crate::core::input::Keymap,
+    keymap: &crate::engine::input::Keymap,
     action: VirtualAction,
 ) -> (usize, usize) {
     if keymap.first_key_binding(action).is_some() {

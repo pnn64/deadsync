@@ -16,11 +16,11 @@ use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::AssetManager;
 use crate::config::{self, DisplayMode};
-use crate::core::display;
-use crate::core::gfx::{self as renderer, BackendType, PresentModePolicy};
-use crate::core::input::{self, InputEvent};
-use crate::core::space::{self as space, Metrics};
-use crate::core::ui::color;
+use crate::engine::display;
+use crate::engine::gfx::{self as renderer, BackendType, PresentModePolicy};
+use crate::engine::input::{self, InputEvent};
+use crate::engine::space::{self as space, Metrics};
+use crate::engine::present::color;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
 use crate::screens::components::shared::density_graph::{DensityGraphSlot, DensityGraphSource};
@@ -60,9 +60,9 @@ compile_error!(
     "deadsync control input requires a raw keyboard backend; only Windows, Linux, FreeBSD, and macOS are wired for full app input"
 );
 
-use crate::core::ui::actors::Actor;
+use crate::engine::present::actors::Actor;
 /* -------------------- gamepad -------------------- */
-use crate::core::input::{GpSystemEvent, PadEvent};
+use crate::engine::input::{GpSystemEvent, PadEvent};
 
 /* -------------------- user events -------------------- */
 #[derive(Debug, Clone)]
@@ -351,7 +351,7 @@ struct ComposeBreakdown {
     actor_stats: ActorTreeStats,
     render_objects: u32,
     render_cameras: u32,
-    text_layout: crate::core::ui::compose::TextLayoutFrameStats,
+    text_layout: crate::engine::present::compose::TextLayoutFrameStats,
 }
 
 #[inline(always)]
@@ -363,38 +363,38 @@ const fn saturating_u32(value: usize) -> u32 {
     }
 }
 
-fn actor_tree_stats(actors: &[crate::core::ui::actors::Actor]) -> ActorTreeStats {
-    fn visit(stats: &mut ActorTreeStats, actor: &crate::core::ui::actors::Actor) {
+fn actor_tree_stats(actors: &[crate::engine::present::actors::Actor]) -> ActorTreeStats {
+    fn visit(stats: &mut ActorTreeStats, actor: &crate::engine::present::actors::Actor) {
         stats.total = stats.total.saturating_add(1);
         match actor {
-            crate::core::ui::actors::Actor::Sprite { .. } => {
+            crate::engine::present::actors::Actor::Sprite { .. } => {
                 stats.sprites = stats.sprites.saturating_add(1);
             }
-            crate::core::ui::actors::Actor::Text { content, .. } => {
+            crate::engine::present::actors::Actor::Text { content, .. } => {
                 stats.texts = stats.texts.saturating_add(1);
                 stats.text_chars = stats
                     .text_chars
                     .saturating_add(saturating_u32(content.len()));
             }
-            crate::core::ui::actors::Actor::Mesh { .. } => {
+            crate::engine::present::actors::Actor::Mesh { .. } => {
                 stats.meshes = stats.meshes.saturating_add(1);
             }
-            crate::core::ui::actors::Actor::TexturedMesh { .. } => {
+            crate::engine::present::actors::Actor::TexturedMesh { .. } => {
                 stats.textured_meshes = stats.textured_meshes.saturating_add(1);
             }
-            crate::core::ui::actors::Actor::Frame { children, .. } => {
+            crate::engine::present::actors::Actor::Frame { children, .. } => {
                 stats.frames = stats.frames.saturating_add(1);
                 for child in children {
                     visit(stats, child);
                 }
             }
-            crate::core::ui::actors::Actor::Camera { children, .. } => {
+            crate::engine::present::actors::Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
                     visit(stats, child);
                 }
             }
-            crate::core::ui::actors::Actor::Shadow { child, .. } => {
+            crate::engine::present::actors::Actor::Shadow { child, .. } => {
                 stats.shadows = stats.shadows.saturating_add(1);
                 visit(stats, child);
             }
@@ -1477,26 +1477,26 @@ fn prewarm_gameplay_assets(
             media_cache::ensure_banner_texture(assets, backend, path);
         }
     }
-    crate::core::audio::preload_sfx("assets/sounds/boom.ogg");
-    crate::core::audio::preload_sfx("assets/sounds/assist_tick.ogg");
+    crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
+    crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
 }
 
 fn prewarm_gameplay_text_layout_cache(
     assets: &AssetManager,
     metrics: &Metrics,
-    cache: &mut crate::core::ui::compose::TextLayoutCache,
+    cache: &mut crate::engine::present::compose::TextLayoutCache,
     state: &gameplay::State,
 ) {
     let started = Instant::now();
     cache.configure(
         GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
-        crate::core::ui::compose::TextLayoutOverflowPolicy::PruneOwnedEntries,
+        crate::engine::present::compose::TextLayoutOverflowPolicy::PruneOwnedEntries,
     );
     cache.begin_frame_stats();
 
     let fonts = assets.fonts();
     let actors = gameplay::get_actors(state, assets);
-    let _ = crate::core::ui::compose::build_screen_cached(
+    let _ = crate::engine::present::compose::build_screen_cached(
         &actors,
         [0.0, 0.0, 0.0, 1.0],
         metrics,
@@ -1975,7 +1975,7 @@ impl AppState {
         color_index: i32,
     ) -> Self {
         let play_style = profile::get_session_play_style();
-        let max_diff_index = crate::core::ui::color::FILE_DIFFICULTY_NAMES
+        let max_diff_index = crate::engine::present::color::FILE_DIFFICULTY_NAMES
             .len()
             .saturating_sub(1);
         let preferred = if max_diff_index == 0 {
@@ -2006,8 +2006,8 @@ pub struct App {
     backend_type: BackendType,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
-    ui_text_layout_cache: crate::core::ui::compose::TextLayoutCache,
-    gameplay_text_layout_cache: crate::core::ui::compose::TextLayoutCache,
+    ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
+    gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache,
     state: AppState,
     gameplay_key_ring: Arc<GameplayInputRing>,
     gameplay_pad_ring: Arc<GameplayInputRing>,
@@ -2049,7 +2049,7 @@ impl App {
     fn stats_overlay_audio(
         &self,
     ) -> Option<crate::screens::components::shared::stats_overlay::AudioHealth> {
-        let audio = crate::core::audio::get_output_timing_snapshot();
+        let audio = crate::engine::audio::get_output_timing_snapshot();
         if !audio.has_measurement() {
             return None;
         }
@@ -2192,7 +2192,7 @@ impl App {
         let total_elapsed = redraw_started
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
-        crate::core::ui::runtime::tick(delta_time);
+        crate::engine::present::runtime::tick(delta_time);
 
         self.sync_gameplay_input_capture();
         self.state.shell.update_gamepad_overlay(redraw_started);
@@ -2348,7 +2348,7 @@ impl App {
         };
         text_layout_cache.begin_frame_stats();
         let build_screen_started = Instant::now();
-        let mut screen = crate::core::ui::compose::build_screen_cached(
+        let mut screen = crate::engine::present::compose::build_screen_cached(
             &actors,
             clear_color,
             &self.state.shell.metrics,
@@ -2459,8 +2459,8 @@ impl App {
             backend_type,
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
-            ui_text_layout_cache: crate::core::ui::compose::TextLayoutCache::default(),
-            gameplay_text_layout_cache: crate::core::ui::compose::TextLayoutCache::saturating(
+            ui_text_layout_cache: crate::engine::present::compose::TextLayoutCache::default(),
+            gameplay_text_layout_cache: crate::engine::present::compose::TextLayoutCache::saturating(
                 GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT,
             ),
             state,
@@ -2537,7 +2537,7 @@ impl App {
                     );
                 }
 
-                let max_diff_index = crate::core::ui::color::FILE_DIFFICULTY_NAMES
+                let max_diff_index = crate::engine::present::color::FILE_DIFFICULTY_NAMES
                     .len()
                     .saturating_sub(1);
                 let play_style = profile::get_session_play_style();
@@ -2941,7 +2941,7 @@ impl App {
                     moved = true;
                 }
                 if moved {
-                    crate::core::audio::play_sfx("assets/sounds/change.ogg");
+                    crate::engine::audio::play_sfx("assets/sounds/change.ogg");
                 }
                 None
             }
@@ -2957,7 +2957,7 @@ impl App {
                     moved = true;
                 }
                 if moved {
-                    crate::core::audio::play_sfx("assets/sounds/change.ogg");
+                    crate::engine::audio::play_sfx("assets/sounds/change.ogg");
                 }
                 None
             }
@@ -2970,7 +2970,7 @@ impl App {
                     .gameplay_offset_save_prompt
                     .as_ref()
                     .is_some_and(|prompt| prompt.active_choice == 0);
-                crate::core::audio::play_sfx("assets/sounds/start.ogg");
+                crate::engine::audio::play_sfx("assets/sounds/start.ogg");
                 Some(save_changes)
             }
             input::VirtualAction::p1_back | input::VirtualAction::p2_back => None,
@@ -3229,7 +3229,7 @@ impl App {
         page.return_to_course = true;
         page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
-        crate::core::audio::play_sfx("assets/sounds/change.ogg");
+        crate::engine::audio::play_sfx("assets/sounds/change.ogg");
     }
 
     fn apply_select_music_join(&mut self, join_side: profile::PlayerSide) {
@@ -3356,7 +3356,7 @@ impl App {
             self.apply_select_music_join(join_side);
         }
 
-        crate::core::audio::play_sfx("assets/sounds/start.ogg");
+        crate::engine::audio::play_sfx("assets/sounds/start.ogg");
         true
     }
 
@@ -3995,7 +3995,7 @@ impl App {
         } else {
             0.0
         };
-        let audio_stats = crate::core::audio::get_output_timing_snapshot();
+        let audio_stats = crate::engine::audio::get_output_timing_snapshot();
         log::trace!(
             "Frame stutter t={:.3}s sev={} screen={:?} dt={:.3}ms expected={:.3}ms x{:.2} req={} dom={} dom_ms={:.3} phases_ms=[pre_redraw:{:.3} input:{:.3} update:{:.3} compose:{:.3} upload:{:.3} draw:{:.3} unaccounted:{:.3}] compose_dbg=[actors:{:.3} build:{:.3} resolve:{:.3} nodes:{} sprites:{} text:{} chars:{} frames:{} mesh:{} tmesh:{} cameras:{} shadows:{} objects:{} render_cameras:{} txt_hits:{} txt_shared:{} txt_miss:{} txt_lines:{} txt_glyphs:{} txt_prunes:{} txt_entries:{} txt_aliases:{}] redraw_ms=[redrive_late:{:.3} request_to_redraw:{:.3}] draw_sub_ms=[acquire:{:.3} submit:{:.3} present:{:.3} gpu_wait:{:.3} other:{:.3}] draw_cpu_ms=[setup:{:.3} prep:{:.3} record:{:.3}] display_dbg=[active:{} err_ms:{:+.3} catch:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} submit_id:{} done_id:{} refresh_ms:{:.3} interval_ms:{:.3} margin_ms:{:.3} cal_ms:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             total_elapsed,
@@ -4211,7 +4211,7 @@ impl App {
         let ms = |sum_us: u64| sum_us as f64 / frames as f64 / 1000.0;
         let interval_samples = trace.present_interval_samples.max(1);
         let margin_samples = trace.present_margin_samples.max(1);
-        let audio_stats = crate::core::audio::get_output_timing_snapshot();
+        let audio_stats = crate::engine::audio::get_output_timing_snapshot();
         log::trace!(
             "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             frames,
@@ -5039,7 +5039,7 @@ impl App {
     ) -> Vec<Command> {
         let mut commands = Vec::new();
         if target == CurrentScreen::Gameplay {
-            crate::core::audio::stop_music();
+            crate::engine::audio::stop_music();
             if prev != CurrentScreen::Gameplay {
                 self.state.session.gameplay_restart_count = 0;
             }

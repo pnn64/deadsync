@@ -1,12 +1,12 @@
 use crate::assets;
-use crate::core::gfx::{
+use crate::engine::gfx::{
     BlendMode, MeshMode, MeshVertex, ObjectType, RenderList, RenderObject, TexturedMeshVertex,
 };
-use crate::core::space::Metrics;
-use crate::core::ui::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
-use crate::core::ui::anim::{EffectClock, EffectMode, EffectState};
-use crate::core::ui::compose;
-use crate::core::ui::font::{Font, Glyph};
+use crate::engine::space::Metrics;
+use crate::engine::present::actors::{Actor, Background, SizeSpec, SpriteSource, TextAlign, TextContent};
+use crate::engine::present::anim::{EffectClock, EffectMode, EffectState};
+use crate::engine::present::compose;
+use crate::engine::present::font::{Font, Glyph};
 use cgmath::Matrix4;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -272,7 +272,7 @@ pub struct TextureResolveSnapshot {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TextureResolveObjectSnapshot {
     pub texture_id: Option<String>,
-    pub texture_handle: crate::core::gfx::TextureHandle,
+    pub texture_handle: crate::engine::gfx::TextureHandle,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1265,7 +1265,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
                 uv_tex_shift: *uv_tex_shift,
             },
         },
-        texture_handle: crate::core::gfx::INVALID_TEXTURE_HANDLE,
+        texture_handle: crate::engine::gfx::INVALID_TEXTURE_HANDLE,
         transform: matrix_runtime(render.transform),
         blend: BlendMode::from(render.blend),
         z: render.z,

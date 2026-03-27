@@ -1,9 +1,9 @@
 use crate::act;
 use crate::config::SelectMusicItlWheelMode;
-use crate::core::space::widescale;
-use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::color;
+use crate::engine::space::widescale;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::color;
 use crate::game::chart::ChartData;
 use crate::game::profile;
 use crate::game::scores;

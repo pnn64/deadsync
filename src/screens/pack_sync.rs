@@ -1,12 +1,12 @@
 use crate::act;
 use crate::config;
-use crate::core::audio;
-use crate::core::input::{InputEvent, VirtualAction};
-use crate::core::space::{
+use crate::engine::audio;
+use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use crate::core::ui::actors::Actor;
-use crate::core::ui::color;
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 use crate::game::chart::ChartData;
 use crate::screens::SongOffsetSyncChange;
 use crate::screens::components::shared::loading_bar;

@@ -1,6 +1,6 @@
 use crate::config::SimpleIni;
-use crate::core::input::InputSource;
-use crate::core::network;
+use crate::engine::input::InputSource;
+use crate::engine::network;
 use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::online;

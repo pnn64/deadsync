@@ -1,10 +1,10 @@
-use crate::core::audio;
-use crate::core::gfx::MeshVertex;
-use crate::core::input::{
+use crate::engine::audio;
+use crate::engine::gfx::MeshVertex;
+use crate::engine::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
-use crate::core::space::{is_wide, screen_center_y, screen_height, screen_width};
-use crate::core::ui::color;
+use crate::engine::space::{is_wide, screen_center_y, screen_height, screen_width};
+use crate::engine::present::color;
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
@@ -11256,7 +11256,7 @@ mod tests {
         scored_hold_totals_with_carry, stage_music_cut, step_calories, tick_mode_status_line,
         turn_option_bits, update_lane_count,
     };
-    use crate::core::input::InputSource;
+    use crate::engine::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
     use crate::game::judgment::{JudgeGrade, Judgment};
     use crate::game::note::{HoldData, Note, NoteType};

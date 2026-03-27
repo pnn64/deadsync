@@ -1,8 +1,8 @@
 use crate::act;
 // Screen navigation is handled in app
-use crate::core::input::{InputEvent, RawKeyboardEvent, VirtualAction};
-use crate::core::ui::actors::{Actor, TextAlign};
-use crate::core::ui::color;
+use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
+use crate::engine::present::actors::{Actor, TextAlign};
+use crate::engine::present::color;
 use crate::game::course::get_course_cache;
 use crate::game::online::{self as network, ArrowCloudConnectionStatus, ConnectionStatus};
 use crate::game::song::get_song_cache;
@@ -15,7 +15,7 @@ use std::cell::RefCell;
 use std::sync::{Arc, LazyLock};
 use winit::keyboard::KeyCode;
 
-use crate::core::space::{screen_center_x, screen_height, screen_width};
+use crate::engine::space::{screen_center_x, screen_height, screen_width};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.5;
@@ -549,7 +549,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
-            crate::core::audio::play_sfx("assets/sounds/start.ogg");
+            crate::engine::audio::play_sfx("assets/sounds/start.ogg");
             state.started_by_p2 = matches!(ev.action, VirtualAction::p2_start);
             match state.selected_index {
                 0 => ScreenAction::Navigate(Screen::SelectProfile),
@@ -566,7 +566,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let n = OPTION_COUNT as isize;
             let cur = state.selected_index as isize;
             state.selected_index = ((cur - 1 + n) % n) as usize;
-            crate::core::audio::play_sfx("assets/sounds/change.ogg");
+            crate::engine::audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
         VirtualAction::p1_down
@@ -576,7 +576,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             let n = OPTION_COUNT as isize;
             let cur = state.selected_index as isize;
             state.selected_index = ((cur + 1 + n) % n) as usize;
-            crate::core::audio::play_sfx("assets/sounds/change.ogg");
+            crate::engine::audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
         _ => ScreenAction::None,

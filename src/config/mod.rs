@@ -46,9 +46,9 @@ use self::runtime::{
     sync_audio_mix_levels_from_config,
 };
 use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
-use crate::core::gfx::{BackendType, PresentModePolicy};
-use crate::core::input::WindowsPadBackend;
-use crate::core::logging;
+use crate::engine::gfx::{BackendType, PresentModePolicy};
+use crate::engine::input::WindowsPadBackend;
+use crate::engine::logging;
 use log::{info, warn};
 use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;

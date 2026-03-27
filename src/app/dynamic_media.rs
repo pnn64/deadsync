@@ -1,6 +1,6 @@
 use super::media_cache;
 use crate::assets::{AssetManager, dynamic, open_image_fallback, register_texture_dims};
-use crate::core::{
+use crate::engine::{
     gfx::{Backend, SamplerDesc, Texture as GfxTexture, TextureHandle},
     video,
 };

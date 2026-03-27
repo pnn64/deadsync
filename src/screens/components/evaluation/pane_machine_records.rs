@@ -1,6 +1,6 @@
 use crate::act;
-use crate::core::ui::actors::{Actor, SizeSpec};
-use crate::core::ui::color;
+use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::color;
 use crate::game::profile;
 use crate::game::scores;
 use crate::screens::evaluation::ScoreInfo;
@@ -135,7 +135,7 @@ pub fn build_machine_records_pane(
     elapsed_s: f32,
 ) -> Vec<Actor> {
     let pane_origin_x = pane_origin_x(controller);
-    let pane_origin_y = crate::core::space::screen_center_y() - 62.0;
+    let pane_origin_y = crate::engine::space::screen_center_y() - 62.0;
     let pane_zoom = 0.8_f32;
     let rank_x = -120.0 * pane_zoom;
     let name_x = -110.0 * pane_zoom;

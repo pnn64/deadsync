@@ -1,0 +1,223 @@
+use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
+use crate::engine::present::anim;
+use cgmath::Matrix4;
+use std::sync::Arc;
+
+#[derive(Clone, Debug)]
+pub enum Background {
+    Color([f32; 4]),
+    #[allow(dead_code)]
+    Texture(&'static str),
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Default)]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug)]
+pub enum SizeSpec {
+    Px(f32),
+    Fill,
+}
+
+/// A sprite can be sourced from either a texture or a solid color.
+/// For `Solid`, the final color is `tint` (no sampling).
+#[derive(Clone, Debug)]
+pub enum SpriteSource {
+    Texture(Arc<str>),
+    Solid,
+}
+
+#[derive(Clone, Debug)]
+pub enum Actor {
+    /// Unified Sprite
+    Sprite {
+        align: [f32; 2],
+        offset: [f32; 2],
+        world_z: f32,
+        size: [SizeSpec; 2],
+        source: SpriteSource,
+        tint: [f32; 4],
+        #[allow(dead_code)]
+        glow: [f32; 4],
+        z: i16,
+        cell: Option<(u32, u32)>,
+        grid: Option<(u32, u32)>,
+        uv_rect: Option<[f32; 4]>,
+        visible: bool,
+        flip_x: bool,
+        flip_y: bool,
+        cropleft: f32,
+        cropright: f32,
+        croptop: f32,
+        cropbottom: f32,
+        fadeleft: f32,
+        faderight: f32,
+        fadetop: f32,
+        fadebottom: f32,
+        blend: BlendMode,
+        mask_source: bool,
+        mask_dest: bool,
+        rot_x_deg: f32,
+        rot_y_deg: f32,
+        rot_z_deg: f32,
+        local_offset: [f32; 2],
+        local_offset_rot_sin_cos: [f32; 2],
+        texcoordvelocity: Option<[f32; 2]>,
+        animate: bool,
+        state_delay: f32,
+        scale: [f32; 2],
+        effect: anim::EffectState,
+    },
+
+    /// Text actor (BitmapText-like)
+    Text {
+        align: [f32; 2],  // halign/valign pivot inside line box
+        offset: [f32; 2], // parent top-left space
+        color: [f32; 4],
+        stroke_color: Option<[f32; 4]>,
+        #[allow(dead_code)]
+        glow: [f32; 4],
+        font: &'static str,
+        content: TextContent,
+        attributes: Vec<TextAttribute>,
+        align_text: TextAlign, // talign: left/center/right
+        z: i16,
+        scale: [f32; 2],
+        fit_width: Option<f32>,
+        fit_height: Option<f32>,
+        wrap_width_pixels: Option<i32>,
+        max_width: Option<f32>,
+        max_height: Option<f32>,
+        max_w_pre_zoom: bool,
+        max_h_pre_zoom: bool,
+        /// Clip rect in parent TL space: [x, y, w, h].
+        clip: Option<[f32; 4]>,
+        blend: BlendMode,
+        effect: anim::EffectState,
+    },
+
+    /// Mesh actor (ActorMultiVertex-like)
+    Mesh {
+        align: [f32; 2],
+        offset: [f32; 2],
+        size: [SizeSpec; 2],
+        vertices: Arc<[MeshVertex]>,
+        mode: MeshMode,
+        visible: bool,
+        blend: BlendMode,
+        z: i16,
+    },
+
+    /// Textured mesh actor (model-style triangles with UVs)
+    TexturedMesh {
+        align: [f32; 2],
+        offset: [f32; 2],
+        world_z: f32,
+        size: [SizeSpec; 2],
+        texture: Arc<str>,
+        vertices: Arc<[TexturedMeshVertex]>,
+        mode: MeshMode,
+        uv_scale: [f32; 2],
+        uv_offset: [f32; 2],
+        uv_tex_shift: [f32; 2],
+        visible: bool,
+        blend: BlendMode,
+        z: i16,
+    },
+
+    /// Frame/group box
+    Frame {
+        align: [f32; 2],
+        offset: [f32; 2],
+        size: [SizeSpec; 2],
+        children: Vec<Self>,
+        background: Option<Background>,
+        z: i16,
+    },
+
+    /// Camera wrapper: renders all child actors using the provided view-projection matrix.
+    /// The matrix is expected to map world coordinates to clip space.
+    Camera {
+        view_proj: Matrix4<f32>,
+        children: Vec<Self>,
+    },
+
+    /// Shadow wrapper: draws child's objects once more with an offset and tint,
+    /// matching `StepMania`'s `shadowlength*` and `shadowcolor` behavior.
+    Shadow {
+        len: [f32; 2],    // (x, y) shadow length in screen units
+        color: [f32; 4],  // shadow color; alpha multiplies the child's alpha
+        child: Box<Self>, // wrapped actor
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextAttribute {
+    pub start: usize,
+    pub length: usize,
+    pub color: [f32; 4],
+}
+
+#[derive(Clone, Debug)]
+pub enum TextContent {
+    Owned(String),
+    Shared(Arc<str>),
+}
+
+impl TextContent {
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Owned(s) => s.as_str(),
+            Self::Shared(s) => s.as_ref(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.as_str().len()
+    }
+}
+
+impl Default for TextContent {
+    fn default() -> Self {
+        Self::Owned(String::new())
+    }
+}
+
+impl From<String> for TextContent {
+    fn from(value: String) -> Self {
+        Self::Owned(value)
+    }
+}
+
+impl From<&String> for TextContent {
+    fn from(value: &String) -> Self {
+        Self::Owned(value.clone())
+    }
+}
+
+impl From<&str> for TextContent {
+    fn from(value: &str) -> Self {
+        Self::Owned(value.to_owned())
+    }
+}
+
+impl From<Arc<str>> for TextContent {
+    fn from(value: Arc<str>) -> Self {
+        Self::Shared(value)
+    }
+}
+
+impl From<&Arc<str>> for TextContent {
+    fn from(value: &Arc<str>) -> Self {
+        Self::Shared(value.clone())
+    }
+}
