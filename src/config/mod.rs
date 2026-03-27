@@ -10,7 +10,6 @@ mod store;
 mod tests;
 mod theme;
 mod update;
-mod video;
 
 pub use self::audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};
 pub use self::ini::SimpleIni;
@@ -31,7 +30,6 @@ pub use self::theme::{
     auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
-pub use self::video::{DisplayMode, FullscreenType};
 
 use self::keybinds::{
     ALL_VIRTUAL_ACTIONS, action_to_ini_key, binding_to_token, load_keymap_from_ini_local,
@@ -55,6 +53,39 @@ use std::str::FromStr;
 
 const CONFIG_PATH: &str = "deadsync.ini";
 const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FullscreenType {
+    Exclusive,
+    Borderless,
+}
+
+impl FullscreenType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Exclusive => "Exclusive",
+            Self::Borderless => "Borderless",
+        }
+    }
+}
+
+impl FromStr for FullscreenType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "exclusive" => Ok(Self::Exclusive),
+            "borderless" => Ok(Self::Borderless),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayMode {
+    Windowed,
+    Fullscreen(FullscreenType),
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
