@@ -1,8 +1,6 @@
 use super::store::create_default_config_file;
 use super::*;
 
-#[path = "load/apply.rs"]
-mod apply;
 #[path = "load/backfill.rs"]
 mod backfill;
 #[path = "load/options.rs"]
@@ -24,11 +22,11 @@ pub fn load() {
         Ok(()) => load_from_ini(&conf),
         Err(e) => {
             warn!("Failed to load '{CONFIG_PATH}': {e}. Using default values.");
-            apply::load_defaults_after_error();
+            load_defaults_after_error();
         }
     }
 
-    apply::apply_input_runtime_state();
+    apply_input_runtime_state();
 }
 
 fn ensure_config_file() {
@@ -47,7 +45,40 @@ fn load_from_ini(conf: &SimpleIni) {
     options::load(conf, default, &mut cfg);
     theme_load::load(conf, default, &mut cfg);
 
-    apply::publish_config(cfg);
-    apply::publish_keymap(conf);
+    publish_config(cfg);
+    publish_keymap(conf);
     backfill::write_missing_fields(conf);
+}
+
+fn publish_config(cfg: Config) {
+    {
+        let mut current = lock_config();
+        *current = cfg;
+        sync_audio_mix_levels_from_config(&current);
+        logging::set_file_logging_enabled(current.log_to_file);
+    }
+    info!("Configuration loaded from '{CONFIG_PATH}'.");
+}
+
+fn publish_keymap(conf: &SimpleIni) {
+    let km = load_keymap_from_ini_local(conf);
+    crate::engine::input::set_keymap(km);
+}
+
+fn load_defaults_after_error() {
+    *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = DEFAULT_MACHINE_NOTESKIN.to_string();
+    *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = String::new();
+}
+
+fn apply_input_runtime_state() {
+    let mut dedicated = get().only_dedicated_menu_buttons;
+    if dedicated && !crate::engine::input::any_player_has_dedicated_menu_buttons() {
+        warn!(
+            "only_dedicated_menu_buttons is enabled but no player has dedicated menu buttons mapped — disabling."
+        );
+        dedicated = false;
+        lock_config().only_dedicated_menu_buttons = false;
+    }
+    crate::engine::input::set_only_dedicated_menu_buttons(dedicated);
+    crate::engine::input::set_input_debounce_seconds(get().input_debounce_seconds);
 }
