@@ -32,7 +32,7 @@ pub struct State {
 
 pub fn init() -> State {
     State {
-        active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app.rs
+        active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app
         bg: heart_bg::State::new(),
         page: 1,
         elapsed: 0.0,

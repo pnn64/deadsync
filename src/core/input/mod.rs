@@ -213,7 +213,7 @@ pub enum GpSystemEvent {
 /// Run the platform pad backend on the current thread.
 ///
 /// This is intended to be called from a dedicated thread which forwards `PadEvent` and
-/// `GpSystemEvent` into the winit `EventLoopProxy` (see `deadsync/src/app.rs`).
+/// `GpSystemEvent` into the winit `EventLoopProxy` (see `deadsync/src/app/mod.rs`).
 #[cfg_attr(windows, allow(dead_code))]
 pub fn run_pad_backend(
     win_backend: WindowsPadBackend,

@@ -574,7 +574,7 @@ fn update_hold_scroll(p: &mut PlayerEntry) {
 
 pub fn init() -> State {
     State {
-        active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app.rs
+        active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app
         bg: heart_bg::State::new(),
         elapsed: 0.0,
         finish_hold_elapsed: None,

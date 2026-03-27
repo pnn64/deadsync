@@ -3,7 +3,7 @@ use crate::core::input::{GpSystemEvent, InputEvent, PadEvent, RawKeyboardEvent, 
 use crate::core::space::{screen_center_x, screen_height, screen_width};
 use crate::core::ui::actors::Actor;
 use crate::screens::{Screen, ScreenAction};
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
+// Keyboard input is handled centrally via the virtual dispatcher in app
 use std::collections::VecDeque;
 use std::time::Instant;
 use winit::keyboard::KeyCode;
@@ -29,7 +29,7 @@ pub fn init() -> State {
     }
 }
 
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
+// Keyboard input is handled centrally via the virtual dispatcher in app
 
 pub fn update(state: &mut State, dt: f32) {
     state.elapsed += dt;

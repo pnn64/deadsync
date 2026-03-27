@@ -1,5 +1,5 @@
 use crate::act;
-// Screen navigation is handled in app.rs
+// Screen navigation is handled in app
 use crate::core::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::core::ui::actors::{Actor, TextAlign};
 use crate::core::ui::color;
@@ -122,7 +122,7 @@ pub fn init() -> State {
     }
 }
 
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
+// Keyboard input is handled centrally via the virtual dispatcher in app
 // Screen-specific raw keyboard handling for Menu (e.g., F4 to Sandbox)
 pub fn handle_raw_key_event(_state: &mut State, key: &RawKeyboardEvent) -> ScreenAction {
     if !key.pressed {

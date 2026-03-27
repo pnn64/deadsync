@@ -151,7 +151,7 @@ fn init_inner(scan_totals: bool) -> State {
     };
 
     State {
-        active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app.rs
+        active_color_index: color::DEFAULT_COLOR_INDEX, // overwritten by app
         bg: heart_bg::State::new(),
         elapsed: 0.0,
         total_songs_played,

@@ -4054,7 +4054,7 @@ pub fn apply_choice_delta(
     change_choice_for_player(state, asset_manager, player_idx, delta);
 }
 
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
+// Keyboard input is handled centrally via the virtual dispatcher in app
 pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     // Keep options-screen noteskin previews on a stable clock.
     // ITG/SL preview actors are not driven by selected chart BPM, so tying this to song BPM

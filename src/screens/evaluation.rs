@@ -33,7 +33,7 @@ use std::thread::LocalKey;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::game::profile;
 use crate::screens::ScreenAction;
-// Keyboard handling is centralized in app.rs via virtual actions
+// Keyboard handling is centralized in app via virtual actions
 use chrono::Local;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -1150,7 +1150,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     }
 
     State {
-        active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app.rs
+        active_color_index: color::DEFAULT_COLOR_INDEX, // This will be overwritten by app
         bg: heart_bg::State::new(),
         screen_elapsed: 0.0,
         session_elapsed: 0.0,
@@ -1240,7 +1240,7 @@ pub fn init_from_score_info(
     }
 }
 
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
+// Keyboard input is handled centrally via the virtual dispatcher in app
 
 fn sync_submit_itl_progress(state: &mut State) {
     let mut found_new = false;

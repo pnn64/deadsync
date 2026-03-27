@@ -1,14 +1,14 @@
 use crate::act;
 use crate::core::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::profile;
-// Screen navigation handled in app.rs
+// Screen navigation handled in app
 use crate::core::ui::actors::Actor;
 use crate::core::ui::color;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{heart_bg, screen_bar};
-// Keyboard handling is centralized in app.rs via virtual actions
+// Keyboard handling is centralized in app via virtual actions
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::core::ui::actors;
 use crate::screens::{Screen, ScreenAction};
@@ -100,7 +100,7 @@ pub fn exit_anim_duration() -> f32 {
     WHEEL_OFF_STAGGER.mul_add(num_slots as f32, WHEEL_OFF_FADE_DURATION)
 }
 
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
+// Keyboard input is handled centrally via the virtual dispatcher in app
 
 /* ------------------------------- drawing ------------------------------- */
 

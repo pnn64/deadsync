@@ -3,7 +3,7 @@ use crate::assets::AssetManager;
 use crate::core::display::{self, MonitorSpec};
 use crate::core::gfx::{BackendType, PresentModePolicy};
 use crate::core::space::{is_wide, screen_height, screen_width, widescale};
-// Screen navigation is handled in app.rs via the dispatcher
+// Screen navigation is handled in app via the dispatcher
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlWheelMode,
@@ -149,7 +149,7 @@ fn f64_from_tenths(value: i32) -> f64 {
     value as f64 / 10.0
 }
 
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
+// Keyboard input is handled centrally via the virtual dispatcher in app
 
 /// Bars in `screen_bar.rs` use 32.0 px height.
 const BAR_H: f32 = 32.0;
@@ -5525,7 +5525,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 /* --------------------------------- input --------------------------------- */
 
-// Keyboard input is handled centrally via the virtual dispatcher in app.rs
+// Keyboard input is handled centrally via the virtual dispatcher in app
 
 fn clear_navigation_holds(state: &mut State) {
     state.nav_key_held_direction = None;
