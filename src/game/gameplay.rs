@@ -18,10 +18,6 @@ use crate::game::timing::{
     BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile, classify_offset_s,
 };
 use crate::game::{
-    life::{
-        LIFE_DECENT, LIFE_EXCELLENT, LIFE_FANTASTIC, LIFE_GREAT, LIFE_HELD, LIFE_HIT_MINE,
-        LIFE_LET_GO, LIFE_MISS, LIFE_WAY_OFF, REGEN_COMBO_AFTER_MISS,
-    },
     profile::{self, TimingTickMode as TickMode},
     scroll::ScrollSpeedSetting,
 };
@@ -46,6 +42,19 @@ pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 pub const MAX_COLS: usize = 8;
 pub const MAX_PLAYERS: usize = 2;
+const REGEN_COMBO_AFTER_MISS: u32 = 5;
+// In SM, life regeneration is tied to LifePercentChangeHeld. Simply Love sets
+// TimingWindowSecondsHold to 0.32s, so mirror that grace window. Reference:
+// itgmania/Themes/Simply Love/Scripts/SL_Init.lua
+const LIFE_FANTASTIC: f32 = 0.008;
+const LIFE_EXCELLENT: f32 = 0.008;
+const LIFE_GREAT: f32 = 0.004;
+const LIFE_DECENT: f32 = 0.0;
+const LIFE_WAY_OFF: f32 = -0.050;
+const LIFE_MISS: f32 = -0.100;
+const LIFE_HIT_MINE: f32 = -0.050;
+const LIFE_HELD: f32 = 0.008;
+const LIFE_LET_GO: f32 = -0.080;
 const OFFSET_ADJUST_STEP_SECONDS: f32 = 0.001;
 const OFFSET_ADJUST_REPEAT_DELAY: Duration = Duration::from_millis(300);
 const OFFSET_ADJUST_REPEAT_INTERVAL: Duration = Duration::from_millis(50);
