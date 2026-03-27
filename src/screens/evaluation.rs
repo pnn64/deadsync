@@ -1,9 +1,9 @@
 use crate::act;
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
-use crate::engine::space::widescale;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
+use crate::engine::space::widescale;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::screens::Screen;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -975,20 +975,19 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             density_graph_mesh[player_idx] = {
                 const GRAPH_H: f32 = 64.0;
                 let last_second = si.song.total_length_seconds.max(0) as f32;
-                let verts =
-                    crate::screens::components::shared::density_graph::build_density_histogram_mesh(
-                        &si.chart.measure_nps_vec,
-                        si.chart.max_nps,
-                        &si.chart.measure_seconds_vec,
-                        si.graph_first_second,
-                        last_second,
-                        graph_width,
-                        GRAPH_H,
-                        0.0,
-                        graph_width,
-                        Some(0.5),
-                        0.5,
-                    );
+                let verts = crate::engine::present::density::build_density_histogram_mesh(
+                    &si.chart.measure_nps_vec,
+                    si.chart.max_nps,
+                    &si.chart.measure_seconds_vec,
+                    si.graph_first_second,
+                    last_second,
+                    graph_width,
+                    GRAPH_H,
+                    0.0,
+                    graph_width,
+                    Some(0.5),
+                    0.5,
+                );
                 (!verts.is_empty()).then(|| Arc::from(verts.into_boxed_slice()))
             };
 

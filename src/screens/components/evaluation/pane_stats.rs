@@ -1,9 +1,9 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::engine::space::screen_center_y;
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
+use crate::engine::space::screen_center_y;
 use crate::game::judgment::JudgeGrade;
 use crate::game::profile;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};

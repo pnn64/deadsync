@@ -1,7 +1,7 @@
 use crate::act;
-use crate::engine::space::{screen_height, screen_width};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
+use crate::engine::space::{screen_height, screen_width};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 

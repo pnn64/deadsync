@@ -1,7 +1,7 @@
 use crate::act;
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
 use crate::engine::present::actors::{Actor, SizeSpec, TextAttribute};
 use crate::engine::present::color::{self, JUDGMENT_RGBA};
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height};
 use crate::game::{profile, scores, song::SongData};
 use crate::screens::components::shared::banner as shared_banner;
 

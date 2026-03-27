@@ -1,7 +1,7 @@
 use crate::engine::gfx::{BlendMode, MeshMode};
 use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::density;
 use crate::engine::space::screen_center_x;
-use crate::screens::components::shared::density_graph;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ pub struct DensityGraphLifeBenchFixture {
 impl DensityGraphLifeBenchFixture {
     pub fn build(&self) -> Vec<Actor> {
         let mut mesh = self.mesh.borrow_mut();
-        density_graph::update_density_life_mesh(
+        density::update_density_life_mesh(
             &mut mesh,
             &self.points,
             self.offset,

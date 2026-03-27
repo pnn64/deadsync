@@ -1,8 +1,8 @@
 use crate::act;
 use crate::engine::input::{InputEvent, VirtualAction};
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::online::{self as network, ConnectionStatus, downloads};
 use crate::game::profile;
 use crate::game::scores;

@@ -1,5 +1,4 @@
 pub mod banner;
-pub mod density_graph;
 pub mod gamepad_overlay;
 pub mod gs_scorebox;
 pub mod heart_bg;

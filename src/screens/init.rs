@@ -1,10 +1,10 @@
 use crate::act;
 use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 use crate::engine::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::game::{
     course,
     parsing::{noteskin, simfile as song_loading},

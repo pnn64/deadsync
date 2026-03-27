@@ -1,6 +1,6 @@
 use crate::act;
-use crate::engine::space::{screen_width, widescale};
 use crate::engine::present::actors::Actor;
+use crate::engine::space::{screen_width, widescale};
 use crate::game::profile;
 use crate::screens::components::shared::pad_display;
 

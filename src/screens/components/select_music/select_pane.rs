@@ -1,6 +1,6 @@
 use crate::act;
-use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 use crate::engine::present::actors::Actor;
+use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 
 #[derive(Clone, Copy)]
 pub struct PaneLayout {

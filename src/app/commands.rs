@@ -1,6 +1,7 @@
 use super::{App, CurrentScreen};
+use crate::engine::present::density;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting};
-use crate::screens::components::shared::density_graph::{DensityGraphSlot, DensityGraphSource};
+use crate::screens::{DensityGraphSlot, DensityGraphSource};
 use log::{debug, warn};
 use std::error::Error;
 use std::path::PathBuf;
@@ -220,20 +221,19 @@ impl App {
             (276.0_f32, 64.0_f32)
         };
         let mesh = chart_opt.and_then(|chart| {
-            let verts =
-                crate::screens::components::shared::density_graph::build_density_histogram_mesh(
-                    &chart.measure_nps_vec,
-                    chart.max_nps,
-                    &chart.measure_seconds_vec,
-                    chart.first_second,
-                    chart.last_second,
-                    graph_w,
-                    graph_h,
-                    0.0,
-                    graph_w,
-                    None,
-                    1.0,
-                );
+            let verts = density::build_density_histogram_mesh(
+                &chart.measure_nps_vec,
+                chart.max_nps,
+                &chart.measure_seconds_vec,
+                chart.first_second,
+                chart.last_second,
+                graph_w,
+                graph_h,
+                0.0,
+                graph_w,
+                None,
+                1.0,
+            );
             if verts.is_empty() {
                 None
             } else {

@@ -1,6 +1,6 @@
 use crate::act;
-use crate::engine::space::screen_center_x;
 use crate::engine::present::actors::Actor;
+use crate::engine::space::screen_center_x;
 
 // --- CONSTANTS TO MATCH THE LUA SCRIPT'S STATIC STATE ---
 const MENU_BASE_PX: f32 = 32.0; // An arbitrary base font size before zoom.

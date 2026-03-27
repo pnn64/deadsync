@@ -7,13 +7,13 @@ use crate::config::{
 use crate::engine::audio;
 use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, SamplerDesc, SamplerFilter};
 use crate::engine::input::{InputEvent, PadDir, RawKeyboardEvent, VirtualAction};
+use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
+use crate::engine::present::color;
+use crate::engine::present::font;
 use crate::engine::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
 };
-use crate::engine::present::actors::{Actor, SizeSpec, SpriteSource};
-use crate::engine::present::color;
-use crate::engine::present::font;
 use crate::game::chart::ChartData;
 use crate::game::course;
 use crate::game::known_packs;
@@ -25,12 +25,11 @@ use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar},
     shared::{
-        banner as shared_banner,
-        density_graph::{DensityGraphSlot, DensityGraphSource},
-        gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input, timers,
+        banner as shared_banner, gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input,
+        timers,
     },
 };
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
 use image::{Rgba, RgbaImage};
 use log::debug;
 use null_or_die::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};

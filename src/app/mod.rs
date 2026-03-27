@@ -23,12 +23,12 @@ use crate::engine::present::color;
 use crate::engine::space::{self as space, Metrics};
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores, scroll::ScrollSpeedSetting, stage_stats};
-use crate::screens::components::shared::density_graph::{DensityGraphSlot, DensityGraphSource};
 use crate::screens::{
-    Screen as CurrentScreen, ScreenAction, SongOffsetSyncChange, credits, evaluation,
-    evaluation_summary, gameover, gameplay, init, initials, input as input_screen,
-    manage_local_profiles, mappings, menu, options, player_options, profile_load, sandbox,
-    select_color, select_course, select_mode, select_music, select_profile, select_style,
+    DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
+    SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
+    initials, input as input_screen, manage_local_profiles, mappings, menu, options,
+    player_options, profile_load, sandbox, select_color, select_course, select_mode, select_music,
+    select_profile, select_style,
 };
 use winit::{
     application::ApplicationHandler,

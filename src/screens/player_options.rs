@@ -3,11 +3,11 @@ use crate::assets::AssetManager;
 use crate::engine::audio;
 use crate::engine::gfx::BlendMode;
 use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::present::actors::Actor;
+use crate::engine::present::color;
 use crate::engine::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use crate::engine::present::actors::Actor;
-use crate::engine::present::color;
 use crate::game::parsing::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization,
 };
@@ -585,8 +585,11 @@ fn measure_wendy_text_width(asset_manager: &AssetManager, text: &str) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("wendy", |metrics_font| {
-            let w = crate::engine::present::font::measure_line_width_logical(metrics_font, text, all_fonts)
-                as f32;
+            let w = crate::engine::present::font::measure_line_width_logical(
+                metrics_font,
+                text,
+                all_fonts,
+            ) as f32;
             if w.is_finite() && w > 0.0 {
                 out_w = w;
             }
@@ -3289,9 +3292,11 @@ fn measure_option_text(asset_manager: &AssetManager, text: &str, zoom: f32) -> (
     asset_manager.with_fonts(|all_fonts| {
         asset_manager.with_font("miso", |metrics_font| {
             out_h = (metrics_font.height as f32).max(1.0) * zoom;
-            let mut w =
-                crate::engine::present::font::measure_line_width_logical(metrics_font, text, all_fonts)
-                    as f32;
+            let mut w = crate::engine::present::font::measure_line_width_logical(
+                metrics_font,
+                text,
+                all_fonts,
+            ) as f32;
             if !w.is_finite() || w <= 0.0 {
                 w = 1.0;
             }

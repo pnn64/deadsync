@@ -1,8 +1,8 @@
 use crate::engine::gfx::{BlendMode, MeshMode};
 use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::density::{self, DensityHistCache};
 use crate::engine::space::screen_center_x;
 use crate::game::timing::{TimingData, TimingSegments};
-use crate::screens::components::shared::density_graph::{self, DensityHistCache};
 use std::sync::Arc;
 
 pub const SCENARIO_NAME: &str = "density-graph";
@@ -58,7 +58,7 @@ pub fn fixture() -> DensityGraphBenchFixture {
         .map(|measure| timing.get_time_for_beat((measure as f32) * 4.0))
         .collect();
     let visible_width = 286.0_f32;
-    let cache = density_graph::build_density_histogram_cache(
+    let cache = density::build_density_histogram_cache(
         &measure_nps,
         peak_nps,
         &measure_seconds,

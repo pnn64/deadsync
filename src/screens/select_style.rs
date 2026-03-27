@@ -1,9 +1,9 @@
 use crate::act;
 use crate::engine::audio;
 use crate::engine::input::{InputEvent, VirtualAction};
-use crate::engine::space::{screen_center_x, screen_center_y, widescale};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
+use crate::engine::space::{screen_center_x, screen_center_y, widescale};
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };

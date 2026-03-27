@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets;
-use crate::engine::space::screen_center_x;
 use crate::engine::present::actors::Actor;
+use crate::engine::space::screen_center_x;
 
 /// Parameters to tweak the layout easily.
 #[derive(Clone, Copy, Debug)]

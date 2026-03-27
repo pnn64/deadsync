@@ -3,7 +3,10 @@ use crate::engine::gfx::MeshVertex;
 use crate::engine::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
-use crate::engine::present::color;
+use crate::engine::present::{
+    color,
+    density::{self, DensityHistCache},
+};
 use crate::engine::space::{is_wide, screen_center_y, screen_height, screen_width};
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
@@ -22,10 +25,7 @@ use crate::game::{
     profile::{self, TimingTickMode as TickMode},
     scroll::ScrollSpeedSetting,
 };
-use crate::screens::components::shared::{
-    density_graph::{self, DensityHistCache},
-    noteskin_model::ModelMeshCache,
-};
+use crate::screens::components::shared::noteskin_model::ModelMeshCache;
 use crate::screens::{Screen, ScreenAction};
 use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;
@@ -5707,7 +5707,7 @@ fn update_density_graph(
             }
 
             let mesh_started = Instant::now();
-            density_graph::update_density_life_mesh(
+            density::update_density_life_mesh(
                 &mut state.density_graph_life_mesh[player],
                 &state.density_graph_life_points[player],
                 offset_px_f,
@@ -5724,7 +5724,7 @@ fn update_density_graph(
                 state.density_graph_life_mesh[player] = None;
                 continue;
             }
-            density_graph::update_density_life_mesh(
+            density::update_density_life_mesh(
                 &mut state.density_graph_life_mesh[player],
                 &state.density_graph_life_points[player],
                 offset_px_f,
@@ -6921,20 +6921,19 @@ pub fn init(
                 return None;
             }
             let chart = charts[p].as_ref();
-            let verts =
-                crate::screens::components::shared::density_graph::build_density_histogram_mesh(
-                    &chart.measure_nps_vec,
-                    chart.max_nps,
-                    &chart.measure_seconds_vec,
-                    density_graph_first_second,
-                    density_graph_last_second,
-                    graph_w,
-                    graph_h,
-                    0.0,
-                    graph_w,
-                    None,
-                    1.0,
-                );
+            let verts = density::build_density_histogram_mesh(
+                &chart.measure_nps_vec,
+                chart.max_nps,
+                &chart.measure_seconds_vec,
+                density_graph_first_second,
+                density_graph_last_second,
+                graph_w,
+                graph_h,
+                0.0,
+                graph_w,
+                None,
+                1.0,
+            );
             if verts.is_empty() {
                 None
             } else {
@@ -6947,7 +6946,7 @@ pub fn init(
             return None;
         }
         let chart = charts[p].as_ref();
-        crate::screens::components::shared::density_graph::build_density_histogram_cache(
+        density::build_density_histogram_cache(
             &chart.measure_nps_vec,
             chart.max_nps,
             &chart.measure_seconds_vec,

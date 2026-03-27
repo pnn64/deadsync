@@ -2,8 +2,8 @@ use crate::act;
 use crate::engine::input::{
     InputEvent, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
 };
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::engine::present::actors::Actor;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::collections::HashMap;
 use winit::keyboard::KeyCode;
 

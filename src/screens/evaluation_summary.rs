@@ -1,9 +1,9 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::engine::input::{InputEvent, VirtualAction};
-use crate::engine::space::{screen_center_x, screen_height, screen_width, widescale};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
+use crate::engine::space::{screen_center_x, screen_height, screen_width, widescale};
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::SongData;

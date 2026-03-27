@@ -3,9 +3,9 @@ use crate::assets::AssetManager;
 use crate::engine::audio;
 use crate::engine::gfx::BlendMode;
 use crate::engine::input::{InputEvent, VirtualAction};
-use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::engine::present::actors::{self, Actor};
 use crate::engine::present::color;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
 use crate::game::profile::{self, ActiveProfile};
 use crate::game::scores;
@@ -826,7 +826,8 @@ fn join_pulse_zoom(join_t: f32) -> f32 {
     if join_t >= JOIN_PULSE_DURATION {
         return 1.0;
     }
-    let p = crate::engine::present::anim::bounceend_p((join_t / JOIN_PULSE_DURATION).clamp(0.0, 1.0));
+    let p =
+        crate::engine::present::anim::bounceend_p((join_t / JOIN_PULSE_DURATION).clamp(0.0, 1.0));
     lerp(JOIN_PULSE_ZOOM_IN, 1.0, p).max(0.0)
 }
 

@@ -1,12 +1,12 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::engine::gfx::{BlendMode, MeshMode};
-use crate::engine::space::*;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::engine::present::compose::TextLayoutCache;
 use crate::engine::present::font;
+use crate::engine::space::*;
 use crate::game::gameplay::{self, State};
 use crate::game::judgment::{self, JudgeGrade};
 use crate::game::profile;

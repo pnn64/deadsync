@@ -1,8 +1,8 @@
 use crate::act;
 use crate::engine::audio::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality};
 use crate::engine::gfx::{BackendType, ClockDomainTrace, PresentModeTrace};
-use crate::engine::space::{screen_height, screen_width};
 use crate::engine::present::actors::Actor;
+use crate::engine::space::{screen_height, screen_width};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
