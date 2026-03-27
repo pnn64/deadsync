@@ -15,6 +15,7 @@ use crate::core::ui::actors::{Actor, SizeSpec, SpriteSource};
 use crate::core::ui::color;
 use crate::core::ui::font;
 use crate::game::chart::ChartData;
+use crate::game::course;
 use crate::game::known_packs;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
@@ -2859,11 +2860,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
                 course: course.to_owned(),
             });
         };
-        song_loading::scan_and_load_courses_with_progress_counts(
-            "courses",
-            "songs",
-            &mut on_course,
-        );
+        course::scan_and_load_courses_with_progress_counts("courses", "songs", &mut on_course);
 
         let _ = tx.send(ReloadMsg::Done);
     });

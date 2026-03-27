@@ -14,7 +14,7 @@ use crate::core::audio;
 use crate::core::input::WindowsPadBackend;
 use crate::core::input::{InputEvent, VirtualAction};
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
-use crate::game::{profile, scores};
+use crate::game::{course, profile, scores};
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ScreenAction};
@@ -5570,11 +5570,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
                 course: course.to_owned(),
             });
         };
-        song_loading::scan_and_load_courses_with_progress_counts(
-            "courses",
-            "songs",
-            &mut on_course,
-        );
+        course::scan_and_load_courses_with_progress_counts("courses", "songs", &mut on_course);
 
         let _ = tx.send(ReloadMsg::Done);
     });

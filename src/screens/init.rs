@@ -5,7 +5,10 @@ use crate::core::space::{
 };
 use crate::core::ui::actors::Actor;
 use crate::core::ui::color;
-use crate::game::parsing::{noteskin, simfile as song_loading};
+use crate::game::{
+    course,
+    parsing::{noteskin, simfile as song_loading},
+};
 use crate::screens::components::shared::{heart_bg, loading_bar};
 use crate::screens::{Screen, ScreenAction};
 use log::info;
@@ -385,11 +388,7 @@ fn start_loading_thread(state: &mut State) {
                 course: course.to_owned(),
             });
         };
-        song_loading::scan_and_load_courses_with_progress_counts(
-            "courses",
-            "songs",
-            &mut on_course,
-        );
+        course::scan_and_load_courses_with_progress_counts("courses", "songs", &mut on_course);
 
         let (banner_paths, cdtitle_paths) = collect_artwork_cache_paths();
         let artwork_total =
