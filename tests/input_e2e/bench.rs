@@ -2,7 +2,7 @@ use deadsync::engine::input::{
     self, InputBinding, Keymap, PadDir, PadEvent, PadId, RawKeyboardEvent, VirtualAction,
 };
 use deadsync::game::gameplay;
-use deadsync::screens::ScreenAction;
+use deadsync::screens::{ScreenAction, gameplay as gameplay_screen};
 use deadsync::test_support::notefield_bench;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::error::Error;
@@ -307,7 +307,7 @@ fn run_key_event(
         host_nanos,
     };
     input::map_raw_key_event_with(black_box(&ev), |iev| {
-        let action = gameplay::handle_input(state, black_box(&iev));
+        let action = gameplay_screen::handle_input(state, black_box(&iev));
         checksum = mix_checksum(checksum, checksum_input_event(iev, action));
     });
     checksum
@@ -328,7 +328,7 @@ fn run_pad_event(
         pressed,
     };
     input::map_pad_event_with(black_box(&ev), |iev| {
-        let action = gameplay::handle_input(state, black_box(&iev));
+        let action = gameplay_screen::handle_input(state, black_box(&iev));
         checksum = mix_checksum(checksum, checksum_input_event(iev, action));
     });
     checksum
@@ -340,7 +340,7 @@ fn step_gameplay(
     checksum: u64,
     measured: bool,
 ) -> u64 {
-    let action = gameplay::update(state, delta_time);
+    let action = gameplay_screen::update(state, delta_time);
     let mut checksum = mix_checksum(checksum, checksum_state(state, action));
     if measured {
         checksum = mix_checksum(

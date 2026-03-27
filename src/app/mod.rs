@@ -3502,7 +3502,7 @@ impl App {
             }
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
-                    crate::game::gameplay::handle_input(gs, &ev)
+                    crate::screens::gameplay::handle_input(gs, &ev)
                 } else {
                     ScreenAction::None
                 }

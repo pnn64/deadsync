@@ -21,7 +21,6 @@ use crate::game::{
     profile::{self, TimingTickMode as TickMode},
     scroll::ScrollSpeedSetting,
 };
-use crate::screens::{Screen, ScreenAction};
 use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;
 use std::cell::RefCell;
@@ -5384,10 +5383,22 @@ pub enum ExitTransitionKind {
     Cancel,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayExit {
+    Complete,
+    Cancel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayAction {
+    None,
+    Navigate(GameplayExit),
+    NavigateNoFade(GameplayExit),
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ExitTransition {
     pub kind: ExitTransitionKind,
-    pub target: Screen,
     pub started_at: Instant,
 }
 
@@ -5423,7 +5434,15 @@ fn abort_hold_to_exit(state: &mut State, at: Instant) {
 }
 
 #[inline(always)]
-fn begin_exit_transition(state: &mut State, kind: ExitTransitionKind, target: Screen) {
+const fn gameplay_exit_for_kind(kind: ExitTransitionKind) -> GameplayExit {
+    match kind {
+        ExitTransitionKind::Out => GameplayExit::Complete,
+        ExitTransitionKind::Cancel => GameplayExit::Cancel,
+    }
+}
+
+#[inline(always)]
+fn begin_exit_transition(state: &mut State, kind: ExitTransitionKind) {
     if state.exit_transition.is_some() {
         return;
     }
@@ -5432,7 +5451,6 @@ fn begin_exit_transition(state: &mut State, kind: ExitTransitionKind, target: Sc
     state.hold_to_exit_aborted_at = None;
     state.exit_transition = Some(ExitTransition {
         kind,
-        target,
         started_at: Instant::now(),
     });
     audio::stop_music();
@@ -9040,9 +9058,9 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
     true
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
     if state.exit_transition.is_some() {
-        return ScreenAction::None;
+        return GameplayAction::None;
     }
     if let Some(lane) = lane_from_action(ev.action) {
         queue_input_edge(
@@ -9056,7 +9074,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ev.emitted_at,
         );
         abort_hold_to_exit(state, ev.timestamp);
-        return ScreenAction::None;
+        return GameplayAction::None;
     }
     let is_p2_single = profile::get_session_play_style() == profile::PlayStyle::Single
         && profile::get_session_player_side() == profile::PlayerSide::P2;
@@ -9099,7 +9117,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         _ => {}
     }
-    ScreenAction::None
+    GameplayAction::None
 }
 
 #[inline(always)]
@@ -10871,14 +10889,14 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     }
 }
 
-pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
+pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     if let Some(exit) = state.exit_transition {
         state.total_elapsed_in_screen += delta_time;
         if exit.started_at.elapsed().as_secs_f32() >= exit_total_seconds(exit.kind) {
             state.exit_transition = None;
-            return ScreenAction::NavigateNoFade(exit.target);
+            return GameplayAction::NavigateNoFade(gameplay_exit_for_kind(exit.kind));
         }
-        return ScreenAction::None;
+        return GameplayAction::None;
     }
 
     let trace_enabled = log::log_enabled!(log::Level::Trace);
@@ -10935,10 +10953,10 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             }
             match key {
                 HoldToExitKey::Start => {
-                    begin_exit_transition(state, ExitTransitionKind::Out, Screen::Evaluation);
+                    begin_exit_transition(state, ExitTransitionKind::Out);
                 }
                 HoldToExitKey::Back => {
-                    begin_exit_transition(state, ExitTransitionKind::Cancel, Screen::SelectMusic);
+                    begin_exit_transition(state, ExitTransitionKind::Cancel);
                 }
             }
             finalize_update_trace(
@@ -10948,7 +10966,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
                 frame_trace_started,
                 phase_timings,
             );
-            return ScreenAction::None;
+            return GameplayAction::None;
         }
     }
     state.total_elapsed_in_screen += delta_time;
@@ -10998,7 +11016,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             frame_trace_started,
             phase_timings,
         );
-        return ScreenAction::Navigate(Screen::Evaluation);
+        return GameplayAction::Navigate(GameplayExit::Complete);
     }
 
     let autoplay_started = if trace_enabled {
@@ -11175,7 +11193,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
             frame_trace_started,
             phase_timings,
         );
-        return ScreenAction::Navigate(Screen::Evaluation);
+        return GameplayAction::Navigate(GameplayExit::Complete);
     }
 
     debug_validate_hot_state(state, delta_time, music_time_sec);
@@ -11186,7 +11204,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         frame_trace_started,
         phase_timings,
     );
-    ScreenAction::None
+    GameplayAction::None
 }
 
 fn update_danger_fx(state: &mut State) {

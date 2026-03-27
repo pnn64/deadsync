@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::engine::gfx::{BlendMode, MeshMode};
+use crate::engine::input::InputEvent;
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
@@ -12,6 +13,7 @@ use crate::game::profile;
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
+use crate::screens::{Screen, ScreenAction};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -19,12 +21,38 @@ use std::sync::{Arc, OnceLock};
 const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 
-pub use crate::game::gameplay::{State, init, update};
 use crate::game::gameplay::{
-    TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION,
-    TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player, timing_tick_status_line,
-    toggle_flash_text,
+    GameplayAction, GameplayExit, TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY,
+    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
+    handle_input as gameplay_handle_input, timing_tick_status_line, toggle_flash_text,
+    update as gameplay_update,
 };
+pub use crate::game::gameplay::{State, init};
+
+#[inline(always)]
+const fn screen_for_exit(exit: GameplayExit) -> Screen {
+    match exit {
+        GameplayExit::Complete => Screen::Evaluation,
+        GameplayExit::Cancel => Screen::SelectMusic,
+    }
+}
+
+#[inline(always)]
+const fn map_gameplay_action(action: GameplayAction) -> ScreenAction {
+    match action {
+        GameplayAction::None => ScreenAction::None,
+        GameplayAction::Navigate(exit) => ScreenAction::Navigate(screen_for_exit(exit)),
+        GameplayAction::NavigateNoFade(exit) => ScreenAction::NavigateNoFade(screen_for_exit(exit)),
+    }
+}
+
+pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
+    map_gameplay_action(gameplay_update(state, delta_time))
+}
+
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    map_gameplay_action(gameplay_handle_input(state, ev))
+}
 
 thread_local! {
     static SCORE_2DP_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(1024));
