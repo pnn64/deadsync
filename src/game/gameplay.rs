@@ -11,7 +11,7 @@ use crate::engine::space::{is_wide, screen_center_y, screen_height, screen_width
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
-use crate::game::parsing::noteskin::{self, Noteskin, Style};
+use crate::game::parsing::noteskin::{self, ModelMeshCache, Noteskin, Style};
 use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::timing::{
@@ -25,7 +25,6 @@ use crate::game::{
     profile::{self, TimingTickMode as TickMode},
     scroll::ScrollSpeedSetting,
 };
-use crate::screens::components::shared::noteskin_model::ModelMeshCache;
 use crate::screens::{Screen, ScreenAction};
 use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;

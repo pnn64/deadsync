@@ -1,6 +1,8 @@
 mod compile;
 mod itg;
+mod model_cache;
 
+pub(crate) use self::model_cache::ModelMeshCache;
 use self::{
     compile as noteskin_actor, compile as noteskin_compile, compile as noteskin_compiled,
     itg as noteskin_itg,
