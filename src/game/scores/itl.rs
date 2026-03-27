@@ -5,9 +5,9 @@ use super::{
     groovestats_eval_state_from_gameplay, groovestats_judgment_counts,
     leaderboard_entries_from_api,
 };
-use crate::game::downloads;
 use crate::game::gameplay;
 use crate::game::judgment;
+use crate::game::online::downloads;
 use crate::game::profile;
 use crate::game::song::get_song_cache;
 use chrono::Local;

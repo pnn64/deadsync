@@ -2610,7 +2610,7 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item>
         return sort_menu::ITEMS_SORTS.to_vec();
     }
     let replays_enabled = config::get().machine_enable_replays;
-    let downloads_enabled = crate::game::downloads::sort_menu_available();
+    let downloads_enabled = crate::game::online::downloads::sort_menu_available();
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
