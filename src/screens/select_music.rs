@@ -6321,7 +6321,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let (artist, bpm, len_text): (String, String, Arc<str>) = match entry_opt {
         Some(MusicWheelEntry::Song(s)) => (
             s.artist.clone(),
-            s.formatted_display_bpm(),
+            s.formatted_chart_display_bpm(immediate_chart_p1),
             format_chart_length(((s.total_length_seconds.max(0) as f32) / music_rate) as i32),
         ),
         Some(MusicWheelEntry::PackHeader { original_index, .. }) => {

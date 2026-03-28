@@ -4,6 +4,7 @@ use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_height, screen_width, widescale};
+use crate::game::chart::ChartData;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::SongData;
@@ -102,12 +103,12 @@ fn format_rate_x(rate: f32) -> String {
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-fn display_bpm_range(song: &SongData) -> Option<(f64, f64)> {
-    song.display_bpm_range()
+fn display_bpm_range(song: &SongData, chart: Option<&ChartData>) -> Option<(f64, f64)> {
+    song.chart_display_bpm_range(chart)
 }
 
-fn stringify_display_bpms(song: &SongData, music_rate: f32) -> String {
-    let Some((mut lo, mut hi)) = display_bpm_range(song) else {
+fn stringify_display_bpms(song: &SongData, chart: Option<&ChartData>, music_rate: f32) -> String {
+    let Some((mut lo, mut hi)) = display_bpm_range(song, chart) else {
         return String::new();
     };
 
@@ -406,7 +407,13 @@ fn build_row(
 
     let full_title = stage.song.display_full_title(translated_titles);
 
-    let bpm_str = stringify_display_bpms(&stage.song, stage.music_rate);
+    let eval_chart = stage
+        .players
+        .iter()
+        .flatten()
+        .next()
+        .map(|p| p.chart.as_ref());
+    let bpm_str = stringify_display_bpms(&stage.song, eval_chart, stage.music_rate);
     let bpm_line = if bpm_str.is_empty() {
         String::new()
     } else if (stage.music_rate - 1.0).abs() > 0.001 {

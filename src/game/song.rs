@@ -1,4 +1,4 @@
-use crate::game::chart::ChartData;
+use crate::game::chart::{ChartData, ChartDisplayBpm};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -195,6 +195,33 @@ impl SongData {
     /// as invalid and falling back to actual BPM range.
     pub fn formatted_display_bpm(&self) -> String {
         let Some((lo, hi)) = self.display_bpm_range() else {
+            return String::new();
+        };
+        let lo_i = lo.round() as i32;
+        let hi_i = hi.round() as i32;
+        if lo_i == hi_i {
+            lo_i.to_string()
+        } else {
+            format!("{} - {}", lo_i.min(hi_i), lo_i.max(hi_i))
+        }
+    }
+
+    /// Returns (lo, hi) display BPM, checking the chart's display_bpm first,
+    /// then falling back to the song-level display_bpm, then actual min/max.
+    pub fn chart_display_bpm_range(&self, chart: Option<&ChartData>) -> Option<(f64, f64)> {
+        if let Some(chart) = chart {
+            match &chart.display_bpm {
+                Some(ChartDisplayBpm::Specified { min, max }) => return Some((*min, *max)),
+                Some(ChartDisplayBpm::Random) => return None,
+                None => {}
+            }
+        }
+        self.display_bpm_range()
+    }
+
+    /// Formats display BPM for UI text, checking chart-level tag first.
+    pub fn formatted_chart_display_bpm(&self, chart: Option<&ChartData>) -> String {
+        let Some((lo, hi)) = self.chart_display_bpm_range(chart) else {
             return String::new();
         };
         let lo_i = lo.round() as i32;

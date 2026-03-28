@@ -420,6 +420,56 @@ impl From<CachedParsedNote> for ParsedNote {
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
+enum CachedChartDisplayBpm {
+    Specified { min: f64, max: f64 },
+    Random,
+}
+
+impl From<CachedChartDisplayBpm> for crate::game::chart::ChartDisplayBpm {
+    fn from(c: CachedChartDisplayBpm) -> Self {
+        match c {
+            CachedChartDisplayBpm::Specified { min, max } => Self::Specified { min, max },
+            CachedChartDisplayBpm::Random => Self::Random,
+        }
+    }
+}
+
+impl From<&crate::game::chart::ChartDisplayBpm> for CachedChartDisplayBpm {
+    fn from(c: &crate::game::chart::ChartDisplayBpm) -> Self {
+        match c {
+            crate::game::chart::ChartDisplayBpm::Specified { min, max } => {
+                Self::Specified { min: *min, max: *max }
+            }
+            crate::game::chart::ChartDisplayBpm::Random => Self::Random,
+        }
+    }
+}
+
+fn parse_chart_display_bpm(tag: Option<&str>) -> Option<CachedChartDisplayBpm> {
+    let s = tag?.trim();
+    if s.is_empty() {
+        return None;
+    }
+    if s == "*" {
+        return Some(CachedChartDisplayBpm::Random);
+    }
+    let (min, max) = if let Some((a, b)) = s.split_once(':') {
+        (a.trim().parse::<f64>().ok()?, b.trim().parse::<f64>().ok()?)
+    } else {
+        let v = s.parse::<f64>().ok()?;
+        (v, v)
+    };
+    if min.is_finite() && max.is_finite() && min > 0.0 && max > 0.0 {
+        Some(CachedChartDisplayBpm::Specified {
+            min: min.min(max),
+            max: min.max(max),
+        })
+    } else {
+        None
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 struct SerializableChartData {
     chart_type: String,
     difficulty: String,
@@ -448,6 +498,7 @@ struct SerializableChartData {
     chart_attacks: Option<String>,
     total_measures: usize,
     measure_nps_vec: Vec<f64>,
+    display_bpm: Option<CachedChartDisplayBpm>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
@@ -559,6 +610,7 @@ struct CachedChartMeta {
     holds_total: u32,
     rolls_total: u32,
     mines_total: u32,
+    display_bpm: Option<CachedChartDisplayBpm>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
@@ -745,6 +797,7 @@ fn build_chart_meta(
         holds_total,
         rolls_total,
         mines_total,
+        display_bpm: chart.display_bpm.map(Into::into),
     }
 }
 
@@ -796,6 +849,7 @@ fn build_cached_chart_meta(
         holds_total,
         rolls_total,
         mines_total,
+        display_bpm: chart.display_bpm.clone(),
     }
 }
 
@@ -832,6 +886,7 @@ fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
         holds_total: chart.holds_total,
         rolls_total: chart.rolls_total,
         mines_total: chart.mines_total,
+        display_bpm: chart.display_bpm.map(Into::into),
     }
 }
 
@@ -1780,6 +1835,7 @@ fn parse_and_process_song_file(
                 simple_breakdown: c.simple_breakdown,
                 measure_nps_vec: c.measure_nps_vec,
                 chart_attacks: c.chart_attacks,
+                display_bpm: parse_chart_display_bpm(c.chart_display_bpm.as_deref()),
             }
         })
         .collect();
