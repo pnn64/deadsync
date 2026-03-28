@@ -4529,8 +4529,10 @@ impl App {
         event_loop: &ActiveEventLoop,
         key_event: winit::event::KeyEvent,
     ) {
-        if let Some(text) = key_event.text.as_deref() {
-            self.handle_key_text(event_loop, text);
+        if key_event.state == winit::event::ElementState::Pressed {
+            if let Some(text) = key_event.text.as_deref() {
+                self.handle_key_text(event_loop, text);
+            }
         }
 
         let winit::keyboard::PhysicalKey::Code(code) = key_event.physical_key else {
