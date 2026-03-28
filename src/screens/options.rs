@@ -5502,6 +5502,17 @@ pub fn sync_show_stats_mode(state: &mut State, mode: u8) {
     clear_render_cache(state);
 }
 
+pub fn sync_translated_titles(state: &mut State, enabled: bool) {
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_NATIVE_LANGUAGE,
+        translated_titles_choice_index(enabled),
+    );
+    sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
+}
+
 pub fn sync_max_fps(state: &mut State, max_fps: u16) {
     let had_explicit_cap = state.max_fps_at_load != 0;
     state.max_fps_at_load = max_fps;
