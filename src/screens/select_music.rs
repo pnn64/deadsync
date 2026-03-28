@@ -5581,6 +5581,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         profile_boxes::update(overlay, dt);
         return ScreenAction::None;
     }
+    if crate::game::online::downloads::take_ready_song_reload_request() {
+        start_reload_songs_and_courses(state);
+        return ScreenAction::None;
+    }
 
     match state.out_prompt {
         OutPromptState::PressStartForOptions { elapsed } => {
