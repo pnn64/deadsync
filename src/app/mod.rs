@@ -4484,6 +4484,12 @@ impl App {
             config::update_show_stats_mode(mode);
             options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
         }
+        if raw_key.pressed && !raw_key.repeat && raw_key.code == KeyCode::F9 {
+            let new_value = !config::get().translated_titles;
+            config::update_translated_titles(new_value);
+            options::sync_translated_titles(&mut self.state.screens.options_state, new_value);
+            crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+        }
         if raw_key.pressed
             && !raw_key.repeat
             && self.state.shell.ctrl_held
