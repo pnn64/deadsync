@@ -43,7 +43,7 @@ use twox_hash::XxHash64;
 // --- CONSTANTS ---
 
 // Gameplay Layout & Feel
-const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Match Simply Love's on-screen arrow height
+const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Dance lane width for hold bodies and square fallback visuals
 const HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER: f32 = -90.0; // Mirrors Simply Love metrics for hold judgments
 const HOLD_JUDGMENT_OFFSET_FROM_RECEPTOR: f32 =
     HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER - RECEPTOR_Y_OFFSET_FROM_CENTER;
@@ -672,14 +672,15 @@ const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
 }
 
 #[inline(always)]
-fn note_scale_height(slot: &SpriteSlot) -> f32 {
+fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
     if let Some(model) = slot.model.as_ref() {
-        let model_h = model.size()[1];
-        if model_h > f32::EPSILON {
-            return model_h;
+        let model_size = model.size();
+        if model_size[0] > f32::EPSILON && model_size[1] > f32::EPSILON {
+            return [model_size[0] * scale, model_size[1] * scale];
         }
     }
-    slot.logical_size()[1].max(1.0)
+    let logical = slot.logical_size();
+    [logical[0] * scale, logical[1] * scale]
 }
 
 #[inline(always)]
@@ -2653,16 +2654,6 @@ pub fn build(
             }
         };
         let logical_slot_size = |slot: &SpriteSlot| -> [f32; 2] { slot.logical_size() };
-        let scaled_note_slot_size = |slot: &SpriteSlot, note_scale: f32| -> [f32; 2] {
-            if let Some(model) = slot.model.as_ref() {
-                let model_size = model.size();
-                if model_size[0] > f32::EPSILON && model_size[1] > f32::EPSILON {
-                    return [model_size[0] * note_scale, model_size[1] * note_scale];
-                }
-            }
-            let logical = logical_slot_size(slot);
-            [logical[0] * note_scale, logical[1] * note_scale]
-        };
         let scale_explosion = |logical_size: [f32; 2]| -> [f32; 2] {
             [logical_size[0] * field_zoom, logical_size[1] * field_zoom]
         };
@@ -4564,13 +4555,8 @@ pub fn build(
                     if !draw.visible {
                         return None;
                     }
-                    let h = note_scale_height(slot);
-                    let note_scale = if h > f32::EPSILON {
-                        target_arrow_px / h
-                    } else {
-                        1.0
-                    };
-                    let base_size = scaled_note_slot_size(slot, note_scale);
+                    let note_scale = field_zoom;
+                    let base_size = note_slot_base_size(slot, note_scale);
                     (base_size[0] * draw.zoom[0].max(0.0) > f32::EPSILON
                         && base_size[1] * draw.zoom[1].max(0.0) > f32::EPSILON)
                         .then_some((slot, draw, note_scale, base_size))
@@ -4663,12 +4649,7 @@ pub fn build(
                         ));
                     }
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
-                    let primary_h = note_slots.first().map(note_scale_height).unwrap_or(1.0);
-                    let note_scale = if primary_h > f32::EPSILON {
-                        target_arrow_px / primary_h
-                    } else {
-                        1.0
-                    };
+                    let note_scale = field_zoom;
                     for note_slot in note_slots.iter() {
                         let draw = note_slot.model_draw_at(elapsed, current_beat);
                         if !draw.visible {
@@ -4684,7 +4665,7 @@ pub fn build(
                             note_slot.uv_for_frame_at(frame, uv_elapsed),
                             hold_head_translation,
                         );
-                        let base_size = scaled_note_slot_size(note_slot, note_scale);
+                        let base_size = note_slot_base_size(note_slot, note_scale);
                         let offset_scale = note_scale;
                         let local_offset = [draw.pos[0] * offset_scale, draw.pos[1] * offset_scale];
                         let local_offset_rot_sin_cos = note_slot.base_rot_sin_cos();
@@ -5091,13 +5072,8 @@ pub fn build(
                             head_slot.uv_for_frame_at(note_frame, uv_elapsed),
                             head_translation,
                         );
-                        let h = note_scale_height(head_slot);
-                        let note_scale = if h > f32::EPSILON {
-                            target_arrow_px / h
-                        } else {
-                            1.0
-                        };
-                        let note_size = scaled_note_slot_size(head_slot, note_scale);
+                        let note_scale = field_zoom;
+                        let note_size = note_slot_base_size(head_slot, note_scale);
                         let center = [column_center_x, y_pos];
                         let draw = head_slot.model_draw_at(elapsed, current_beat);
                         if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
@@ -5141,12 +5117,7 @@ pub fn build(
                     let note_center = [column_center_x, y_pos];
                     let note_uv_phase =
                         ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
-                    let primary_h = note_slots.first().map(note_scale_height).unwrap_or(1.0);
-                    let note_scale = if primary_h > f32::EPSILON {
-                        target_arrow_px / primary_h
-                    } else {
-                        1.0
-                    };
+                    let note_scale = field_zoom;
                     for note_slot in note_slots.iter() {
                         let draw = note_slot.model_draw_at(elapsed, current_beat);
                         if !draw.visible {
@@ -5162,7 +5133,7 @@ pub fn build(
                             note_slot.uv_for_frame_at(note_frame, uv_elapsed),
                             tap_note_translation,
                         );
-                        let base_size = scaled_note_slot_size(note_slot, note_scale);
+                        let base_size = note_slot_base_size(note_slot, note_scale);
                         let offset_scale = note_scale;
                         let local_offset = [draw.pos[0] * offset_scale, draw.pos[1] * offset_scale];
                         let local_offset_rot_sin_cos = note_slot.base_rot_sin_cos();
@@ -6402,7 +6373,7 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hud_y, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha,
-        note_scale_height, note_world_z, note_x_extra, offset_center, push_transform_parts,
+        note_slot_base_size, note_world_z, note_x_extra, offset_center, push_transform_parts,
         receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tipsy_y_extra,
         top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
@@ -6927,7 +6898,7 @@ mod tests {
             logical_h / model_h > 1.5,
             "regression guard: cyber logical height must stay larger than model height so this test catches logical-height scaling; logical={logical_h}, model={model_h}"
         );
-        let scale_h = note_scale_height(slot);
+        let scale_h = note_slot_base_size(slot, 1.0)[1];
         assert!(
             (scale_h - model_h).abs() <= 1e-4,
             "model-backed tap notes must scale by model height; got scale_h={scale_h}, model_h={model_h}"
@@ -6942,7 +6913,6 @@ mod tests {
         };
         let ns = load_itg_skin(&style, "default")
             .expect("dance/default should load from assets/noteskins");
-        const TARGET_ARROW_PX: f32 = 64.0;
         const EPSILON: f32 = 1e-3;
 
         for col in 0..style.num_cols {
@@ -6952,13 +6922,6 @@ mod tests {
                 .get(note_idx)
                 .expect("default should expose Q4th tap layers for each column");
 
-            let primary_h = layers.first().map(note_scale_height).unwrap_or(1.0);
-            let note_scale = if primary_h > f32::EPSILON {
-                TARGET_ARROW_PX / primary_h
-            } else {
-                1.0
-            };
-
             let mut arrow_bounds: Option<(f32, f32, f32, f32)> = None;
             let mut circle_bounds = Vec::new();
 
@@ -6967,15 +6930,15 @@ mod tests {
                 if !draw.visible {
                     continue;
                 }
-                let logical = slot.logical_size();
+                let base_size = note_slot_base_size(slot, 1.0);
                 let size = [
-                    logical[0] * note_scale * draw.zoom[0].max(0.0),
-                    logical[1] * note_scale * draw.zoom[1].max(0.0),
+                    base_size[0] * draw.zoom[0].max(0.0),
+                    base_size[1] * draw.zoom[1].max(0.0),
                 ];
                 if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
                     continue;
                 }
-                let local_offset = [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
+                let local_offset = [draw.pos[0], draw.pos[1]];
                 let center = offset_center([0.0, 0.0], local_offset, slot.base_rot_sin_cos());
                 let half_w = size[0] * 0.5;
                 let half_h = size[1] * 0.5;
