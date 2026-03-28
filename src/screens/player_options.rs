@@ -995,12 +995,19 @@ fn build_main_rows(
         Row {
             name: {
                 let p1_chart = resolve_p1_chart(song, &chart_steps_index);
-                let reference_bpm = reference_bpm_for_song(song, p1_chart);
-                let effective_bpm = f64::from(reference_bpm) * f64::from(session_music_rate);
-                let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
-                    format!("{}", effective_bpm.round() as i32)
+                let is_random = p1_chart.is_some_and(|c| {
+                    matches!(c.display_bpm, Some(crate::game::chart::ChartDisplayBpm::Random))
+                });
+                let bpm_str = if is_random {
+                    "???".to_string()
                 } else {
-                    format!("{effective_bpm:.1}")
+                    let reference_bpm = reference_bpm_for_song(song, p1_chart);
+                    let effective_bpm = f64::from(reference_bpm) * f64::from(session_music_rate);
+                    if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
+                        format!("{}", effective_bpm.round() as i32)
+                    } else {
+                        format!("{effective_bpm:.1}")
+                    }
                 };
                 format!("Music Rate\nbpm: {bpm_str}")
             },
@@ -3527,12 +3534,19 @@ fn change_choice_for_player(
         row.choices[0] = fmt_music_rate(state.music_rate);
 
         let p1_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
-        let reference_bpm = reference_bpm_for_song(&state.song, p1_chart);
-        let effective_bpm = f64::from(reference_bpm) * f64::from(state.music_rate);
-        let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
-            format!("{}", effective_bpm.round() as i32)
+        let is_random = p1_chart.is_some_and(|c| {
+            matches!(c.display_bpm, Some(crate::game::chart::ChartDisplayBpm::Random))
+        });
+        let bpm_str = if is_random {
+            "???".to_string()
         } else {
-            format!("{effective_bpm:.1}")
+            let reference_bpm = reference_bpm_for_song(&state.song, p1_chart);
+            let effective_bpm = f64::from(reference_bpm) * f64::from(state.music_rate);
+            if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
+                format!("{}", effective_bpm.round() as i32)
+            } else {
+                format!("{effective_bpm:.1}")
+            }
         };
         row.name = format!("Music Rate\nbpm: {bpm_str}");
 

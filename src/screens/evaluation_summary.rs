@@ -108,6 +108,12 @@ fn display_bpm_range(song: &SongData, chart: Option<&ChartData>) -> Option<(f64,
 }
 
 fn stringify_display_bpms(song: &SongData, chart: Option<&ChartData>, music_rate: f32) -> String {
+    // Handle Random display BPM — show "???" on eval
+    if let Some(chart) = chart {
+        if matches!(chart.display_bpm, Some(crate::game::chart::ChartDisplayBpm::Random)) {
+            return "???".to_string();
+        }
+    }
     let Some((mut lo, mut hi)) = display_bpm_range(song, chart) else {
         return String::new();
     };
