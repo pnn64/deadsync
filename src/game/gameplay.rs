@@ -4944,6 +4944,20 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             );
         }
     }
+    for (row_entry_index, row_entry) in state.row_entries.iter().enumerate() {
+        debug_assert_eq!(
+            state.row_map_cache.get(row_entry.row_index).copied(),
+            Some(row_entry_index as u32)
+        );
+        for &note_index in &row_entry.nonmine_note_indices {
+            debug_assert!(note_index < state.notes.len());
+            let note = &state.notes[note_index];
+            debug_assert_eq!(note.row_index, row_entry.row_index);
+            debug_assert!(note.can_be_judged);
+            debug_assert!(!note.is_fake);
+            debug_assert!(!matches!(note.note_type, NoteType::Mine));
+        }
+    }
     for col in 0..state.num_cols {
         debug_assert!(state.column_scroll_dirs[col].is_finite());
         debug_assert!(
@@ -9869,6 +9883,7 @@ fn finalize_row_judgment(
     let mut row_has_miss = false;
     let mut row_has_successful_hit = false;
     let mut row_has_wayoff = false;
+    let mut player_row_note_count = 0u32;
     let row_notes = &state.row_entries[row_entry_index].nonmine_note_indices;
     let Some(final_judgment) =
         judgment::aggregate_row_final_judgment(row_notes.iter().filter_map(|&note_index| {
@@ -9876,7 +9891,9 @@ fn finalize_row_judgment(
             if note.column < col_start || note.column >= col_end {
                 return None;
             }
+            debug_assert!(note.result.is_some());
             let judgment = note.result.as_ref()?;
+            player_row_note_count = player_row_note_count.saturating_add(1);
             row_has_miss |= judgment.grade == JudgeGrade::Miss;
             row_has_wayoff |= judgment.grade == JudgeGrade::WayOff;
             row_has_successful_hit |= matches!(
@@ -9929,15 +9946,7 @@ fn finalize_row_judgment(
         p.full_combo_grade = None;
         p.current_combo_grade = None;
     } else {
-        let combo_increment: u32 = state.row_entries[row_entry_index]
-            .nonmine_note_indices
-            .iter()
-            .filter(|&&i| {
-                let col = state.notes[i].column;
-                col >= col_start && col < col_end
-            })
-            .count() as u32;
-        p.combo = p.combo.saturating_add(combo_increment);
+        p.combo = p.combo.saturating_add(player_row_note_count);
         let combo = p.combo;
         if combo > 0 && combo.is_multiple_of(1000) {
             trigger_combo_milestone(p, ComboMilestoneKind::Thousand);
@@ -9961,14 +9970,7 @@ fn finalize_row_judgment(
         p.current_combo_grade = Some(current_combo_grade);
     }
     if !row_has_miss && !row_has_wayoff {
-        let notes_on_row_count: usize = state.row_entries[row_entry_index]
-            .nonmine_note_indices
-            .iter()
-            .filter(|&&i| {
-                let note = &state.notes[i];
-                note.column >= col_start && note.column < col_end && !note.is_fake
-            })
-            .count();
+        let notes_on_row_count = player_row_note_count as usize;
         let carried_holds_down: usize = state.active_holds[col_start..col_end]
             .iter()
             .filter_map(|a| a.as_ref())
