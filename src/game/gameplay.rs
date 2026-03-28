@@ -4098,8 +4098,14 @@ const fn judge_life_delta(grade: JudgeGrade) -> f32 {
 fn score_missed_holds_and_rolls(chart_type: &str) -> bool {
     // ITGmania _fallback metrics:
     // ScoreMissedHoldsAndRolls = not IsGame("pump") and not IsGame("dance")
-    let chart_type = chart_type.trim().to_ascii_lowercase();
-    !(chart_type.starts_with("dance") || chart_type.starts_with("pump"))
+    let chart_type = chart_type.trim();
+    let is_dance = chart_type
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("dance"));
+    let is_pump = chart_type
+        .get(..4)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("pump"));
+    !(is_dance || is_pump)
 }
 
 fn init_player_runtime() -> PlayerRuntime {
@@ -4414,6 +4420,7 @@ pub struct State {
     pub autoplay_enabled: bool,
     pub autoplay_used: bool,
     pub score_valid: [bool; MAX_PLAYERS],
+    score_missed_holds_rolls: [bool; MAX_PLAYERS],
     replay_mode: bool,
     replay_capture_enabled: bool,
     pub course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
@@ -6551,6 +6558,7 @@ pub fn init(
     );
 
     let mut score_valid = [true; MAX_PLAYERS];
+    let mut score_missed_holds_rolls = [false; MAX_PLAYERS];
     for player in 0..num_players {
         score_valid[player] = score_valid_for_chart(
             &charts[player],
@@ -6558,6 +6566,7 @@ pub fn init(
             scroll_speed[player],
             rate,
         );
+        score_missed_holds_rolls[player] = score_missed_holds_and_rolls(&charts[player].chart_type);
     }
 
     let chart_layout_changed = (0..num_players)
@@ -6605,6 +6614,7 @@ pub fn init(
         jumps_total[1] = jumps_total[0];
         hands_total[1] = hands_total[0];
         score_valid[1] = score_valid[0];
+        score_missed_holds_rolls[1] = score_missed_holds_rolls[0];
         note_ranges[1] = note_ranges[0];
     }
     let transform_ms = transform_started.elapsed().as_secs_f64() * 1000.0;
@@ -7208,6 +7218,7 @@ pub fn init(
         autoplay_enabled: replay_mode,
         autoplay_used: replay_mode,
         score_valid,
+        score_missed_holds_rolls,
         replay_mode,
         replay_capture_enabled,
         course_display_carry,
@@ -10474,7 +10485,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     let cutoff_time = way_off_window.mul_add(-rate, music_time_sec);
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
-        let should_score_miss = score_missed_holds_and_rolls(&state.charts[player].chart_type);
+        let should_score_miss = state.score_missed_holds_rolls[player];
         let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
         while cursor < note_end {
             let note_time = state.note_time_cache[cursor];
@@ -11649,6 +11660,7 @@ mod tests {
     fn missed_holds_and_rolls_are_not_scored_for_dance_or_pump() {
         assert!(!score_missed_holds_and_rolls("dance-single"));
         assert!(!score_missed_holds_and_rolls("pump-single"));
+        assert!(!score_missed_holds_and_rolls(" Dance-single "));
         assert!(score_missed_holds_and_rolls("kb7-single"));
     }
 
