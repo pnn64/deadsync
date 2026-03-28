@@ -9823,39 +9823,26 @@ fn finalize_row_judgment(
     skip_life_change: bool,
 ) {
     let (col_start, col_end) = player_col_range(state, player);
-    let row_len = state.row_entries[row_entry_index]
-        .nonmine_note_indices
-        .len();
-
     let mut row_has_miss = false;
     let mut row_has_successful_hit = false;
     let mut row_has_wayoff = false;
-    let mut row_judgments: Vec<&Judgment> = Vec::with_capacity(row_len.min(MAX_COLS));
-    let mut i = 0;
-    while i < row_len {
-        let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
-        let note = &state.notes[note_index];
-        if note.column < col_start || note.column >= col_end {
-            i += 1;
-            continue;
-        }
-        let Some(judgment) = note.result.as_ref() else {
-            i += 1;
-            continue;
-        };
-
-        row_has_miss |= judgment.grade == JudgeGrade::Miss;
-        row_has_wayoff |= judgment.grade == JudgeGrade::WayOff;
-        row_has_successful_hit |= matches!(
-            judgment.grade,
-            JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-        );
-        row_judgments.push(judgment);
-        i += 1;
-    }
-
+    let row_notes = &state.row_entries[row_entry_index].nonmine_note_indices;
     let Some(final_judgment) =
-        judgment::aggregate_row_final_judgment(row_judgments.iter().copied()).cloned()
+        judgment::aggregate_row_final_judgment(row_notes.iter().filter_map(|&note_index| {
+            let note = &state.notes[note_index];
+            if note.column < col_start || note.column >= col_end {
+                return None;
+            }
+            let judgment = note.result.as_ref()?;
+            row_has_miss |= judgment.grade == JudgeGrade::Miss;
+            row_has_wayoff |= judgment.grade == JudgeGrade::WayOff;
+            row_has_successful_hit |= matches!(
+                judgment.grade,
+                JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+            );
+            Some(judgment)
+        }))
+        .cloned()
     else {
         return;
     };
