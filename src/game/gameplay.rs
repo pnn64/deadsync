@@ -3419,6 +3419,15 @@ pub struct Arrow {
     pub note_index: usize,
 }
 
+#[inline(always)]
+fn find_arrow_index(arrows: &[Arrow], note_index: usize) -> Option<usize> {
+    let pos = arrows.partition_point(|arrow| arrow.note_index < note_index);
+    arrows
+        .get(pos)
+        .filter(|arrow| arrow.note_index == note_index)
+        .map(|_| pos)
+}
+
 #[derive(Clone, Debug)]
 pub struct JudgmentRenderInfo {
     pub judgment: Judgment,
@@ -4916,6 +4925,11 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
     }
     for col in 0..state.num_cols {
         debug_assert!(state.column_scroll_dirs[col].is_finite());
+        debug_assert!(
+            state.arrows[col]
+                .windows(2)
+                .all(|pair| pair[0].note_index < pair[1].note_index)
+        );
         for arrow in &state.arrows[col] {
             debug_assert!(arrow.note_index < state.notes.len());
             debug_assert_eq!(state.notes[arrow.note_index].column, col);
@@ -7982,10 +7996,7 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) 
     let Some((note_index, time_error)) = best else {
         return false;
     };
-    if let Some(arrow_idx) = state.arrows[column]
-        .iter()
-        .position(|a| a.note_index == note_index)
-    {
+    if let Some(arrow_idx) = find_arrow_index(&state.arrows[column], note_index) {
         handle_mine_hit(state, column, arrow_idx, note_index, time_error)
     } else {
         hit_mine_timebased(state, column, note_index, time_error)
@@ -8076,10 +8087,7 @@ fn hit_mine_timebased(
         state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
     }
     let mut updated_scoring = false;
-    if let Some(pos) = state.arrows[column]
-        .iter()
-        .position(|a| a.note_index == note_index)
-    {
+    if let Some(pos) = find_arrow_index(&state.arrows[column], note_index) {
         state.arrows[column].remove(pos);
     }
     if !scoring_blocked {
@@ -8889,7 +8897,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 );
 
                 let col_arrows = &mut state.arrows[note_col];
-                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
+                if let Some(pos) = find_arrow_index(col_arrows, note_index) {
                     col_arrows.remove(pos);
                 }
                 trigger_receptor_glow_pulse(state, note_col);
@@ -8956,7 +8964,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 );
 
                 let col_arrows = &mut state.arrows[note_col];
-                if let Some(pos) = col_arrows.iter().position(|a| a.note_index == idx) {
+                if let Some(pos) = find_arrow_index(col_arrows, idx) {
                     col_arrows.remove(pos);
                 }
                 trigger_receptor_glow_pulse(state, note_col);
@@ -9081,7 +9089,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
     );
 
     let col_arrows = &mut state.arrows[note_col];
-    if let Some(pos) = col_arrows.iter().position(|a| a.note_index == note_index) {
+    if let Some(pos) = find_arrow_index(col_arrows, note_index) {
         col_arrows.remove(pos);
     }
     trigger_receptor_glow_pulse(state, note_col);
@@ -11286,15 +11294,15 @@ fn update_danger_fx(state: &mut State) {
 #[cfg(test)]
 mod tests {
     use super::{
-        COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN,
-        INSERT_MASK_BIT_MINES, MAX_COLS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
-        ScrollSpeedSetting, SongClockSnapshot, TickMode, advance_hold_last_held,
-        apply_mines_insert, build_assist_clap_rows, build_attack_mask_windows_for_player,
-        build_row_grids, collect_pressed_row_judge_indices, count_rescore_tracks_on_row,
-        crossed_mine_bounds, enforce_max_simultaneous_notes, frame_stable_display_music_time,
-        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
-        lane_release_finished, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
-        parse_attack_mods, partition_notes_before_time,
+        Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock,
+        GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, REPLAY_EDGE_RATE_PER_SEC,
+        RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode,
+        advance_hold_last_held, apply_mines_insert, build_assist_clap_rows,
+        build_attack_mask_windows_for_player, build_row_grids, collect_pressed_row_judge_indices,
+        count_rescore_tracks_on_row, crossed_mine_bounds, enforce_max_simultaneous_notes,
+        find_arrow_index, frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_press_started, lane_release_finished, mine_window_bounds,
+        music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
         replay_edge_cap, score_missed_holds_and_rolls, score_valid_for_chart,
         scored_hold_totals_with_carry, stage_music_cut, step_calories, tick_mode_status_line,
@@ -12023,6 +12031,31 @@ mod tests {
     fn crossed_mine_bounds_skip_previous_frame_boundary() {
         let mine_times = [1.0, 1.5, 2.0, 2.5];
         assert_eq!(crossed_mine_bounds(&mine_times, 1.5, 2.0), (2, 3));
+    }
+
+    #[test]
+    fn find_arrow_index_uses_sorted_note_indices() {
+        let arrows = [
+            Arrow {
+                beat: 1.0,
+                note_type: NoteType::Tap,
+                note_index: 4,
+            },
+            Arrow {
+                beat: 2.0,
+                note_type: NoteType::Tap,
+                note_index: 9,
+            },
+            Arrow {
+                beat: 3.0,
+                note_type: NoteType::Tap,
+                note_index: 15,
+            },
+        ];
+        assert_eq!(find_arrow_index(&arrows, 4), Some(0));
+        assert_eq!(find_arrow_index(&arrows, 9), Some(1));
+        assert_eq!(find_arrow_index(&arrows, 15), Some(2));
+        assert_eq!(find_arrow_index(&arrows, 8), None);
     }
 
     #[test]
