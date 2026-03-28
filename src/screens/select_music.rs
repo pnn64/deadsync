@@ -1529,6 +1529,35 @@ fn random_bpm_cycle_text(elapsed: f32) -> String {
     }
 }
 
+/// Formats a BPM range with music rate applied, matching Simply Love's
+/// `StringifyDisplayBPMs` semantics: integers at 1.0x, one decimal otherwise.
+fn format_bpm_with_rate(range: Option<(f64, f64)>, music_rate: f32) -> String {
+    let Some((lo, hi)) = range else {
+        return String::new();
+    };
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate as f64
+    } else {
+        1.0
+    };
+    let lo = lo * rate;
+    let hi = hi * rate;
+    let use_decimals = (music_rate - 1.0).abs() > 0.001;
+    let fmt_one = |v: f64| {
+        if use_decimals {
+            let s = format!("{v:.1}");
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        } else {
+            format!("{v:.0}")
+        }
+    };
+    if (lo - hi).abs() < 1.0e-6 {
+        fmt_one(lo)
+    } else {
+        format!("{} - {}", fmt_one(lo.min(hi)), fmt_one(lo.max(hi)))
+    }
+}
+
 #[inline(always)]
 fn bpm_bucket_name(max_bpm: i32) -> String {
     const SORT_BPM_DIVISION: i32 = 10;
@@ -6335,7 +6364,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         Some(MusicWheelEntry::Song(s)) => {
             let bpm = match immediate_chart_p1.and_then(|c| c.display_bpm.as_ref()) {
                 Some(ChartDisplayBpm::Random) => random_bpm_cycle_text(state.session_elapsed),
-                _ => s.formatted_chart_display_bpm(immediate_chart_p1),
+                _ => format_bpm_with_rate(
+                    s.chart_display_bpm_range(immediate_chart_p1),
+                    music_rate,
+                ),
             };
             (
                 s.artist.clone(),
