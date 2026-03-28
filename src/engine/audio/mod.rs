@@ -1521,7 +1521,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
         .unwrap_or_else(|| "Default Audio Device".to_string());
     let device_uid = selected_device.map(|device| device.uid.clone());
     let native_sample_rate_hz = cfg
-        .audio_sample_rate_hz
+        .sample_rate_hz
         .unwrap_or_else(|| selected_device.map_or(48_000, |device| device.default_rate_hz));
     let native_channels = selected_device.map_or(2, |device| device.channels);
     debug!(
