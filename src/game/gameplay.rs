@@ -721,34 +721,34 @@ fn counts_for_early_rescore(note_type: NoteType) -> bool {
 }
 
 #[inline(always)]
-fn count_rescore_tracks_on_row(
-    notes: &[Note],
-    row_entries: &[RowEntry],
+fn row_entry_for_cached_row<'a>(
+    row_entries: &'a [RowEntry],
     row_map_cache: &[u32],
     row_index: usize,
+) -> Option<&'a RowEntry> {
+    let pos = *row_map_cache.get(row_index)?;
+    if pos == u32::MAX {
+        return None;
+    }
+    let row_entry = row_entries.get(pos as usize)?;
+    debug_assert_eq!(row_entry.row_index, row_index);
+    Some(row_entry)
+}
+
+#[inline(always)]
+fn count_rescore_tracks_on_row(
+    notes: &[Note],
+    row_entry: &RowEntry,
     col_start: usize,
     col_end: usize,
 ) -> usize {
-    if let Some(&pos) = row_map_cache.get(row_index).filter(|&&x| x != u32::MAX) {
-        return row_entries[pos as usize]
-            .nonmine_note_indices
-            .iter()
-            .filter(|&&idx| {
-                let note = &notes[idx];
-                note.column >= col_start
-                    && note.column < col_end
-                    && counts_for_early_rescore(note.note_type)
-            })
-            .count();
-    }
-
-    notes
+    row_entry
+        .nonmine_note_indices
         .iter()
-        .filter(|note| {
-            note.row_index == row_index
-                && note.column >= col_start
+        .filter(|&&idx| {
+            let note = &notes[idx];
+            note.column >= col_start
                 && note.column < col_end
-                && note.can_be_judged
                 && counts_for_early_rescore(note.note_type)
         })
         .count()
@@ -4936,6 +4936,14 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             debug_assert!(matches!(state.notes[note_index].note_type, NoteType::Mine));
         }
     }
+    for note in &state.notes {
+        if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+            debug_assert!(
+                row_entry_for_cached_row(&state.row_entries, &state.row_map_cache, note.row_index)
+                    .is_some()
+            );
+        }
+    }
     for col in 0..state.num_cols {
         debug_assert!(state.column_scroll_dirs[col].is_finite());
         debug_assert!(
@@ -8750,50 +8758,28 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
 
         if abs_time_error <= way_off_window {
-            let row_rescore_track_count = count_rescore_tracks_on_row(
-                &state.notes,
-                &state.row_entries,
-                &state.row_map_cache,
-                note_row_index,
-                col_start,
-                col_end,
-            );
+            let Some(row_entry) =
+                row_entry_for_cached_row(&state.row_entries, &state.row_map_cache, note_row_index)
+            else {
+                debug_assert!(false, "missing row cache for row {note_row_index}");
+                return false;
+            };
+            let row_rescore_track_count =
+                count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
             let mut row_note_indices = [usize::MAX; MAX_COLS];
             let mut row_note_count = 0usize;
-            if let Some(&pos) = state
-                .row_map_cache
-                .get(note_row_index)
-                .filter(|&&x| x != u32::MAX)
-            {
-                for &idx in &state.row_entries[pos as usize].nonmine_note_indices {
-                    let row_note = &state.notes[idx];
-                    if row_note.column < col_start
-                        || row_note.column >= col_end
-                        || row_note.result.is_some()
-                        || row_note.note_type == NoteType::Lift
-                    {
-                        continue;
-                    }
-                    if row_note_count < MAX_COLS {
-                        row_note_indices[row_note_count] = idx;
-                        row_note_count += 1;
-                    }
+            for &idx in &row_entry.nonmine_note_indices {
+                let row_note = &state.notes[idx];
+                if row_note.column < col_start
+                    || row_note.column >= col_end
+                    || row_note.result.is_some()
+                    || row_note.note_type == NoteType::Lift
+                {
+                    continue;
                 }
-            } else {
-                for (idx, row_note) in state.notes.iter().enumerate() {
-                    if row_note.row_index != note_row_index
-                        || row_note.column < col_start
-                        || row_note.column >= col_end
-                        || matches!(row_note.note_type, NoteType::Mine | NoteType::Lift)
-                        || row_note.is_fake
-                        || row_note.result.is_some()
-                    {
-                        continue;
-                    }
-                    if row_note_count < MAX_COLS {
-                        row_note_indices[row_note_count] = idx;
-                        row_note_count += 1;
-                    }
+                if row_note_count < MAX_COLS {
+                    row_note_indices[row_note_count] = idx;
+                    row_note_count += 1;
                 }
             }
             if row_note_count == 0 {
@@ -11222,9 +11208,9 @@ mod tests {
         lane_release_finished, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
         parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
-        replay_edge_cap, score_missed_holds_and_rolls, score_valid_for_chart,
-        scored_hold_totals_with_carry, stage_music_cut, step_calories, tick_mode_status_line,
-        turn_option_bits, update_lane_count,
+        replay_edge_cap, row_entry_for_cached_row, score_missed_holds_and_rolls,
+        score_valid_for_chart, scored_hold_totals_with_carry, stage_music_cut, step_calories,
+        tick_mode_status_line, turn_option_bits, update_lane_count,
     };
     use crate::engine::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
@@ -11455,11 +11441,9 @@ mod tests {
             row_index,
             nonmine_note_indices: vec![0, 1],
         }];
-        let mut row_map_cache = vec![u32::MAX; row_index + 1];
-        row_map_cache[row_index] = 0;
 
         assert_eq!(
-            count_rescore_tracks_on_row(&notes, &row_entries, &row_map_cache, row_index, 0, 4),
+            count_rescore_tracks_on_row(&notes, &row_entries[0], 0, 4),
             2
         );
     }
@@ -11475,13 +11459,28 @@ mod tests {
             row_index,
             nonmine_note_indices: vec![0, 1],
         }];
+
+        assert_eq!(
+            count_rescore_tracks_on_row(&notes, &row_entries[0], 0, 4),
+            2
+        );
+    }
+
+    #[test]
+    fn cached_row_entry_lookup_uses_row_map_cache() {
+        let row_index = 48usize;
+        let row_entries = vec![RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        }];
         let mut row_map_cache = vec![u32::MAX; row_index + 1];
         row_map_cache[row_index] = 0;
 
-        assert_eq!(
-            count_rescore_tracks_on_row(&notes, &row_entries, &row_map_cache, row_index, 0, 4),
-            2
-        );
+        let row_entry = row_entry_for_cached_row(&row_entries, &row_map_cache, row_index)
+            .expect("expected cached row entry");
+
+        assert_eq!(row_entry.row_index, row_index);
+        assert_eq!(row_entry.nonmine_note_indices, vec![0, 1]);
     }
 
     #[test]
