@@ -755,6 +755,22 @@ fn count_rescore_tracks_on_row(
 }
 
 #[inline(always)]
+fn mine_window_bounds(mine_times: &[f32], start_t: f32, end_t: f32) -> (usize, usize) {
+    (
+        mine_times.partition_point(|&t| t < start_t),
+        mine_times.partition_point(|&t| t <= end_t),
+    )
+}
+
+#[inline(always)]
+fn crossed_mine_bounds(mine_times: &[f32], prev_time: f32, current_time: f32) -> (usize, usize) {
+    (
+        mine_times.partition_point(|&t| t <= prev_time),
+        mine_times.partition_point(|&t| t <= current_time),
+    )
+}
+
+#[inline(always)]
 fn collect_pressed_row_judge_indices(
     notes: &[Note],
     row_note_indices: &[usize; MAX_COLS],
@@ -4888,6 +4904,15 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             state.mine_note_time[player].len()
         );
         debug_assert!(state.next_mine_ix_cursor[player] <= state.mine_note_ix[player].len());
+        debug_assert!(
+            state.mine_note_time[player]
+                .windows(2)
+                .all(|pair| pair[0] <= pair[1])
+        );
+        for &note_index in &state.mine_note_ix[player] {
+            debug_assert!(note_index >= start && note_index < end);
+            debug_assert!(matches!(state.notes[note_index].note_type, NoteType::Mine));
+        }
     }
     for col in 0..state.num_cols {
         debug_assert!(state.column_scroll_dirs[col].is_finite());
@@ -7928,27 +7953,23 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time: f32) 
     let start_t = current_time - search_radius;
     let end_t = current_time + search_radius;
     let player = player_for_col(state, column);
-    let (note_start, note_end) = player_note_range(state, player);
-    let times = &state.note_time_cache[note_start..note_end];
-    let start_idx = times.partition_point(|&t| t < start_t);
-    let end_idx = times.partition_point(|&t| t <= end_t);
+    let mine_ix = &state.mine_note_ix[player];
+    let mine_times = &state.mine_note_time[player];
+    let (start_idx, end_idx) = mine_window_bounds(mine_times, start_t, end_t);
     let mut best: Option<(usize, f32)> = None;
     for i in start_idx..end_idx {
-        let idx = note_start + i;
+        let idx = mine_ix[i];
         let note = &state.notes[idx];
         if note.column != column {
             continue;
         }
-        if !matches!(note.note_type, NoteType::Mine) {
-            continue;
-        }
-        if !note.can_be_judged {
+        if !note.can_be_judged || note.is_fake {
             continue;
         }
         if note.mine_result.is_some() {
             continue;
         }
-        let note_time = times[i];
+        let note_time = mine_times[i];
         let time_error = current_time - note_time;
         let abs_err = (time_error / rate).abs();
         if abs_err <= mine_window {
@@ -7988,19 +8009,17 @@ fn try_hit_crossed_mines_while_held(
         1.0
     };
     let player = player_for_col(state, column);
-    let (note_start, note_end) = player_note_range(state, player);
     // ITG checks held mines as rows are crossed. Match that by only considering
     // mines whose note time crossed between previous and current music time.
-    let (start_idx, end_idx) = {
-        let times = &state.note_time_cache[note_start..note_end];
-        (
-            times.partition_point(|&t| t <= prev_time),
-            times.partition_point(|&t| t <= current_time),
-        )
-    };
+    let (start_idx, end_idx) =
+        crossed_mine_bounds(&state.mine_note_time[player], prev_time, current_time);
     let mut hit_any = false;
     for i in start_idx..end_idx {
-        let note_index = note_start + i;
+        let (note_index, note_time) = {
+            let mine_ix = &state.mine_note_ix[player];
+            let mine_times = &state.mine_note_time[player];
+            (mine_ix[i], mine_times[i])
+        };
         let (is_mine, can_be_judged, already_scored, is_fake, note_column) = {
             let note = &state.notes[note_index];
             (
@@ -8014,7 +8033,6 @@ fn try_hit_crossed_mines_while_held(
         if !is_mine || !can_be_judged || already_scored || is_fake || note_column != column {
             continue;
         }
-        let note_time = state.note_time_cache[note_index];
         let time_error = current_time - note_time;
         let abs_err = (time_error / rate).abs();
         if abs_err > mine_window {
@@ -11273,9 +11291,10 @@ mod tests {
         ScrollSpeedSetting, SongClockSnapshot, TickMode, advance_hold_last_held,
         apply_mines_insert, build_assist_clap_rows, build_attack_mask_windows_for_player,
         build_row_grids, collect_pressed_row_judge_indices, count_rescore_tracks_on_row,
-        enforce_max_simultaneous_notes, frame_stable_display_music_time, input_queue_cap,
-        lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
-        music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
+        crossed_mine_bounds, enforce_max_simultaneous_notes, frame_stable_display_music_time,
+        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
+        lane_release_finished, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
+        parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
         replay_edge_cap, score_missed_holds_and_rolls, score_valid_for_chart,
         scored_hold_totals_with_carry, stage_music_cut, step_calories, tick_mode_status_line,
@@ -11992,6 +12011,18 @@ mod tests {
         assert!(notes.iter().any(|note| note.row_index == 120
             && note.column == 1
             && note.note_type == NoteType::Mine));
+    }
+
+    #[test]
+    fn mine_window_bounds_exclude_left_edge_and_include_right_edge() {
+        let mine_times = [1.0, 1.5, 2.0, 2.5];
+        assert_eq!(mine_window_bounds(&mine_times, 1.5, 2.0), (1, 3));
+    }
+
+    #[test]
+    fn crossed_mine_bounds_skip_previous_frame_boundary() {
+        let mine_times = [1.0, 1.5, 2.0, 2.5];
+        assert_eq!(crossed_mine_bounds(&mine_times, 1.5, 2.0), (2, 3));
     }
 
     #[test]
