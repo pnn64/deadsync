@@ -202,6 +202,11 @@ fn push_saved_options(
     );
     push_line(
         content,
+        "SelectMusicWheelStyle",
+        cfg.select_music_wheel_style.as_str(),
+    );
+    push_line(
+        content,
         "SelectMusicNewPackMode",
         cfg.select_music_new_pack_mode.as_str(),
     );

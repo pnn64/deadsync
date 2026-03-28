@@ -1258,28 +1258,43 @@ pub(crate) fn best_steps_index(
 }
 
 fn rebuild_displayed_entries(state: &mut State) {
-    let has_pack_headers = state
-        .all_entries
+    state.entries = build_displayed_entries(
+        &state.all_entries,
+        state.expanded_pack_name.as_deref(),
+        config::get().select_music_wheel_style,
+    );
+    if state.entries.is_empty() {
+        state.wheel_offset_from_selection = 0.0;
+    }
+}
+
+fn build_displayed_entries(
+    all_entries: &[MusicWheelEntry],
+    expanded_pack_name: Option<&str>,
+    wheel_style: crate::config::SelectMusicWheelStyle,
+) -> Vec<MusicWheelEntry> {
+    let has_pack_headers = all_entries
         .iter()
-        .any(|e| matches!(e, MusicWheelEntry::PackHeader { .. }));
+        .any(|entry| matches!(entry, MusicWheelEntry::PackHeader { .. }));
     if !has_pack_headers {
-        state.entries = state.all_entries.clone();
-        if state.entries.is_empty() {
-            state.wheel_offset_from_selection = 0.0;
-        }
-        return;
+        return all_entries.to_vec();
     }
 
-    let mut new_entries = Vec::with_capacity(state.all_entries.len());
-    let mut current_pack_name: Option<&str> = None;
-    let expanded_pack_name = state.expanded_pack_name.as_deref();
+    // Simply Love parity:
+    // `OnlyShowActiveSection=true` hides every other section when a pack is open,
+    // but `HideActiveSectionTitle=false` keeps the active header visible.
+    let hide_non_active_packs = expanded_pack_name.is_some()
+        && matches!(wheel_style, crate::config::SelectMusicWheelStyle::Iidx);
 
-    // Linear pass, avoid per-entry string clones.
-    for entry in &state.all_entries {
+    let mut new_entries = Vec::with_capacity(all_entries.len());
+    let mut current_pack_name: Option<&str> = None;
+    for entry in all_entries {
         match entry {
             MusicWheelEntry::PackHeader { name, .. } => {
                 current_pack_name = Some(name.as_str());
-                new_entries.push(entry.clone());
+                if !hide_non_active_packs || expanded_pack_name == Some(name.as_str()) {
+                    new_entries.push(entry.clone());
+                }
             }
             MusicWheelEntry::Song(_) => {
                 if expanded_pack_name == current_pack_name {
@@ -1288,10 +1303,7 @@ fn rebuild_displayed_entries(state: &mut State) {
             }
         }
     }
-    state.entries = new_entries;
-    if state.entries.is_empty() {
-        state.wheel_offset_from_selection = 0.0;
-    }
+    new_entries
 }
 
 #[inline(always)]
@@ -7741,9 +7753,59 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
 #[cfg(test)]
 mod tests {
     use super::{
-        PREVIEW_DELAY_SECONDS, WheelSortMode, init_placeholder, reset_preview_after_gameplay,
-        sync_low_confidence_warning,
+        PREVIEW_DELAY_SECONDS, WheelSortMode, build_displayed_entries, init_placeholder,
+        reset_preview_after_gameplay, sync_low_confidence_warning,
     };
+    use crate::config::SelectMusicWheelStyle;
+    use crate::game::song::SongData;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    fn test_song(title: &str) -> Arc<SongData> {
+        Arc::new(SongData {
+            simfile_path: PathBuf::from(format!("{title}.ssc")),
+            title: title.to_string(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
+        })
+    }
+
+    fn test_entries() -> Vec<super::MusicWheelEntry> {
+        vec![
+            super::MusicWheelEntry::PackHeader {
+                name: "Pack A".to_string(),
+                original_index: 0,
+                banner_path: None,
+            },
+            super::MusicWheelEntry::Song(test_song("Song A1")),
+            super::MusicWheelEntry::Song(test_song("Song A2")),
+            super::MusicWheelEntry::PackHeader {
+                name: "Pack B".to_string(),
+                original_index: 1,
+                banner_path: None,
+            },
+            super::MusicWheelEntry::Song(test_song("Song B1")),
+        ]
+    }
 
     #[test]
     fn reset_preview_after_gameplay_rearms_leaderboard_refresh() {
@@ -7773,5 +7835,39 @@ mod tests {
         let warning = sync_low_confidence_warning(Some(0.73), 0.80).unwrap();
         assert!(warning.contains("73%"));
         assert!(warning.contains("80%"));
+    }
+
+    #[test]
+    fn itg_wheel_style_keeps_other_pack_headers_visible() {
+        let entries =
+            build_displayed_entries(&test_entries(), Some("Pack A"), SelectMusicWheelStyle::Itg);
+
+        assert_eq!(entries.len(), 4);
+        assert!(matches!(
+            entries[0],
+            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Pack A"
+        ));
+        assert!(matches!(
+            entries[3],
+            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Pack B"
+        ));
+    }
+
+    #[test]
+    fn iidx_wheel_style_only_shows_active_pack_and_header() {
+        let entries =
+            build_displayed_entries(&test_entries(), Some("Pack A"), SelectMusicWheelStyle::Iidx);
+
+        assert_eq!(entries.len(), 3);
+        assert!(matches!(
+            entries[0],
+            super::MusicWheelEntry::PackHeader { ref name, .. } if name == "Pack A"
+        ));
+        assert!(entries.iter().all(|entry| {
+            !matches!(
+                entry,
+                super::MusicWheelEntry::PackHeader { name, .. } if name == "Pack B"
+            )
+        }));
     }
 }

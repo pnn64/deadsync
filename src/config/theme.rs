@@ -121,6 +121,39 @@ impl FromStr for SelectMusicItlWheelMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectMusicWheelStyle {
+    Itg,
+    Iidx,
+}
+
+impl SelectMusicWheelStyle {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Itg => "ITG",
+            Self::Iidx => "IIDX",
+        }
+    }
+}
+
+impl FromStr for SelectMusicWheelStyle {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "itg" => Ok(Self::Itg),
+            "iidx" => Ok(Self::Iidx),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NewPackMode {
     Disabled,
     OpenPack,

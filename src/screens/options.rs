@@ -7,7 +7,8 @@ use crate::engine::space::{is_wide, screen_height, screen_width, widescale};
 use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SimpleIni, SyncGraphMode,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni,
+    SyncGraphMode,
 };
 use crate::engine::audio;
 #[cfg(target_os = "windows")]
@@ -660,6 +661,7 @@ const SELECT_MUSIC_ROW_SHOW_BREAKDOWN: &str = "Show Breakdown";
 const SELECT_MUSIC_ROW_BREAKDOWN_STYLE: &str = "Breakdown Style";
 const SELECT_MUSIC_ROW_NATIVE_LANGUAGE: &str = "Show Native Language";
 const SELECT_MUSIC_ROW_WHEEL_SPEED: &str = "Music Wheel Speed";
+const SELECT_MUSIC_ROW_WHEEL_STYLE: &str = "Music Wheel Style";
 const SELECT_MUSIC_ROW_CDTITLES: &str = "Show CDTitles";
 const SELECT_MUSIC_ROW_WHEEL_GRADES: &str = "Show Music Wheel Grades";
 const SELECT_MUSIC_ROW_WHEEL_LAMPS: &str = "Show Music Wheel Lamps";
@@ -974,12 +976,12 @@ const SELECT_MUSIC_SHOW_BANNERS_ROW_INDEX: usize = 0;
 const SELECT_MUSIC_SHOW_VIDEO_BANNERS_ROW_INDEX: usize = 1;
 const SELECT_MUSIC_SHOW_BREAKDOWN_ROW_INDEX: usize = 2;
 const SELECT_MUSIC_BREAKDOWN_STYLE_ROW_INDEX: usize = 3;
-const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 13;
-const SELECT_MUSIC_CHART_INFO_ROW_INDEX: usize = 12;
-const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 15;
-const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 17;
-const SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX: usize = 18;
-const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 19;
+const SELECT_MUSIC_MUSIC_PREVIEWS_ROW_INDEX: usize = 14;
+const SELECT_MUSIC_CHART_INFO_ROW_INDEX: usize = 13;
+const SELECT_MUSIC_PREVIEW_LOOP_ROW_INDEX: usize = 16;
+const SELECT_MUSIC_SHOW_SCOREBOX_ROW_INDEX: usize = 18;
+const SELECT_MUSIC_SCOREBOX_PLACEMENT_ROW_INDEX: usize = 19;
+const SELECT_MUSIC_SCOREBOX_CYCLE_ROW_INDEX: usize = 20;
 const MACHINE_SELECT_STYLE_ROW_INDEX: usize = 2;
 const MACHINE_PREFERRED_STYLE_ROW_INDEX: usize = 3;
 const MACHINE_SELECT_PLAY_MODE_ROW_INDEX: usize = 4;
@@ -1698,6 +1700,11 @@ pub const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: SELECT_MUSIC_ROW_WHEEL_STYLE,
+        choices: &["ITG", "IIDX"],
+        inline: true,
+    },
+    SubRow {
         label: SELECT_MUSIC_ROW_CDTITLES,
         choices: &["No", "Yes"],
         inline: true,
@@ -1805,6 +1812,14 @@ pub const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Set Select Music wheel hold-scroll speed.",
             "Parity mapping: Slow=5, Normal=10, Fast=15, Faster=25, Ridiculous=30, Ludicrous=45, Plaid=100.",
+        ],
+    },
+    Item {
+        name: SELECT_MUSIC_ROW_WHEEL_STYLE,
+        help: &[
+            "Choose how expanded packs appear on the wheel.",
+            "ITG keeps other pack headers visible while the active pack's songs are shown.",
+            "IIDX hides every other pack and keeps only the active pack header visible.",
         ],
     },
     Item {
@@ -4420,6 +4435,20 @@ const fn select_music_itl_wheel_from_choice(idx: usize) -> SelectMusicItlWheelMo
     }
 }
 
+const fn select_music_wheel_style_choice_index(style: SelectMusicWheelStyle) -> usize {
+    match style {
+        SelectMusicWheelStyle::Itg => 0,
+        SelectMusicWheelStyle::Iidx => 1,
+    }
+}
+
+const fn select_music_wheel_style_from_choice(idx: usize) -> SelectMusicWheelStyle {
+    match idx {
+        1 => SelectMusicWheelStyle::Iidx,
+        _ => SelectMusicWheelStyle::Itg,
+    }
+}
+
 const fn new_pack_mode_choice_index(mode: NewPackMode) -> usize {
     match mode {
         NewPackMode::Disabled => 0,
@@ -5174,6 +5203,12 @@ pub fn init() -> State {
         SELECT_MUSIC_OPTIONS_ROWS,
         SELECT_MUSIC_ROW_WHEEL_SPEED,
         music_wheel_scroll_speed_choice_index(cfg.music_wheel_switch_speed),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_select_music,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SELECT_MUSIC_ROW_WHEEL_STYLE,
+        select_music_wheel_style_choice_index(cfg.select_music_wheel_style),
     );
     set_choice_by_label(
         &mut state.sub_choice_indices_select_music,
@@ -6893,6 +6928,10 @@ fn apply_submenu_choice_delta(
             config::update_translated_titles(translated_titles_from_choice(new_index));
         } else if row.label == SELECT_MUSIC_ROW_WHEEL_SPEED {
             config::update_music_wheel_switch_speed(music_wheel_scroll_speed_from_choice(
+                new_index,
+            ));
+        } else if row.label == SELECT_MUSIC_ROW_WHEEL_STYLE {
+            config::update_select_music_wheel_style(select_music_wheel_style_from_choice(
                 new_index,
             ));
         } else if row.label == SELECT_MUSIC_ROW_CDTITLES {

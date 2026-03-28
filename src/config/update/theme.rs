@@ -88,6 +88,17 @@ pub fn update_select_music_itl_wheel_mode(mode: SelectMusicItlWheelMode) {
     save_without_keymaps();
 }
 
+pub fn update_select_music_wheel_style(style: SelectMusicWheelStyle) {
+    {
+        let mut cfg = lock_config();
+        if cfg.select_music_wheel_style == style {
+            return;
+        }
+        cfg.select_music_wheel_style = style;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_select_music_new_pack_mode(mode: NewPackMode) {
     {
         let mut cfg = lock_config();

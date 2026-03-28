@@ -130,6 +130,11 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_line(
         content,
+        "SelectMusicWheelStyle",
+        default.select_music_wheel_style.as_str(),
+    );
+    push_line(
+        content,
         "SelectMusicNewPackMode",
         default.select_music_new_pack_mode.as_str(),
     );

@@ -26,8 +26,8 @@ pub use self::theme::{
     AUTO_SS_QUADS, AUTO_SS_QUINTS, BreakdownStyle, DefaultFailType, GameFlag, LanguageFlag,
     LogLevel, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
     SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SyncGraphMode, ThemeFlag, auto_screenshot_bit, auto_screenshot_mask_from_str,
-    auto_screenshot_mask_to_str,
+    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, auto_screenshot_bit,
+    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
 
@@ -139,6 +139,8 @@ pub struct Config {
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
     pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
+    /// Simply Love MusicWheelStyle parity: IIDX only shows the active pack when expanded.
+    pub select_music_wheel_style: SelectMusicWheelStyle,
     pub select_music_new_pack_mode: NewPackMode,
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
@@ -272,6 +274,7 @@ impl Default for Config {
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
             select_music_itl_wheel_mode: SelectMusicItlWheelMode::Score,
+            select_music_wheel_style: SelectMusicWheelStyle::Itg,
             select_music_new_pack_mode: NewPackMode::Disabled,
             show_select_music_previews: true,
             show_select_music_preview_marker: false,
