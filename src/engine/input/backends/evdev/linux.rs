@@ -1,14 +1,14 @@
 use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
-use crate::engine::host_time::{instant_nanos, now_nanos};
+use crate::engine::host_time::instant_nanos;
 use crate::engine::input::RawKeyboardEvent;
-use log::{debug, warn};
+use log::warn;
 use std::collections::HashSet;
 use std::ffi::{CStr, c_char, c_void};
 use std::fs;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::platform::scancode::PhysicalKeyExtScancode;
 
@@ -136,8 +136,6 @@ struct Dev {
     name: String,
     path: String,
     file: std::fs::File,
-    monotonic_timestamps: bool,
-    clock_health: EvdevClockHealth,
     hat_x: i32,
     hat_y: i32,
     dir: [bool; 4],
@@ -146,8 +144,6 @@ struct Dev {
 struct KeyDev {
     path: String,
     file: std::fs::File,
-    monotonic_timestamps: bool,
-    clock_health: EvdevClockHealth,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,20 +161,8 @@ struct DevSpec {
     product_id: Option<u16>,
 }
 
-#[derive(Clone, Copy)]
-struct ClockSample {
-    instant: Instant,
-    monotonic_nanos: u64,
-}
-
 #[derive(Default)]
 struct CapabilityBits(Vec<u64>);
-
-struct EvdevClockHealth {
-    kernel_trusted: bool,
-    invalid_samples: u32,
-    last_event_nanos: u64,
-}
 
 struct InotifyWatch {
     fd: i32,
@@ -252,44 +236,6 @@ impl CapabilityBits {
             bit = bit.saturating_add(1);
         }
         false
-    }
-}
-
-impl EvdevClockHealth {
-    #[inline(always)]
-    const fn new(kernel_trusted: bool) -> Self {
-        Self {
-            kernel_trusted,
-            invalid_samples: 0,
-            last_event_nanos: 0,
-        }
-    }
-
-    #[inline(always)]
-    const fn uses_kernel_timestamps(&self) -> bool {
-        self.kernel_trusted
-    }
-
-    #[inline(always)]
-    fn note_success(&mut self, event_nanos: u64) {
-        self.last_event_nanos = event_nanos;
-        self.invalid_samples = self.invalid_samples.saturating_sub(1);
-    }
-
-    #[inline(always)]
-    fn note_failure(&mut self, path: &str, reason: &str, event_nanos: u64, sample_nanos: u64) {
-        self.invalid_samples = self.invalid_samples.saturating_add(1);
-        warn!(
-            "linux evdev '{}' rejected kernel timestamp ({reason}) event={} sample={} failure={}/{}",
-            path, event_nanos, sample_nanos, self.invalid_samples, EVDEV_MAX_INVALID_SAMPLES
-        );
-        if self.invalid_samples >= EVDEV_MAX_INVALID_SAMPLES && self.kernel_trusted {
-            self.kernel_trusted = false;
-            warn!(
-                "linux evdev '{}' disabling kernel timestamp use for the rest of the session; falling back to receipt-time timestamps.",
-                path
-            );
-        }
     }
 }
 
@@ -611,32 +557,6 @@ impl UdevState {
     }
 }
 
-const EVDEV_FUTURE_TOLERANCE_NS: u64 = 5_000_000;
-const EVDEV_REGRESSION_TOLERANCE_NS: u64 = 1_000_000;
-const EVDEV_MAX_INVALID_SAMPLES: u32 = 4;
-
-const IOC_NRBITS: u32 = 8;
-const IOC_TYPEBITS: u32 = 8;
-const IOC_SIZEBITS: u32 = 14;
-const IOC_NRSHIFT: u32 = 0;
-const IOC_TYPESHIFT: u32 = IOC_NRSHIFT + IOC_NRBITS;
-const IOC_SIZESHIFT: u32 = IOC_TYPESHIFT + IOC_TYPEBITS;
-const IOC_DIRSHIFT: u32 = IOC_SIZESHIFT + IOC_SIZEBITS;
-const IOC_WRITE: u32 = 1;
-
-const fn ioc(dir: u32, type_: u32, nr: u32, size: u32) -> libc::c_ulong {
-    ((dir << IOC_DIRSHIFT)
-        | (type_ << IOC_TYPESHIFT)
-        | (nr << IOC_NRSHIFT)
-        | (size << IOC_SIZESHIFT)) as libc::c_ulong
-}
-
-const fn iow(type_: u8, nr: u8, size: usize) -> libc::c_ulong {
-    ioc(IOC_WRITE, type_ as u32, nr as u32, size as u32)
-}
-
-const EVIOCSCLOCKID: libc::c_ulong = iow(b'E', 0xA0, size_of::<libc::c_int>());
-
 #[inline(always)]
 fn ptr_to_string(ptr: *const c_char) -> Option<String> {
     (!ptr.is_null()).then(|| {
@@ -656,98 +576,12 @@ fn cstr_matches(ptr: *const c_char, expected: &[u8]) -> bool {
 }
 
 #[inline(always)]
-fn current_monotonic_nanos() -> Option<u64> {
-    let mut ts = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    // SAFETY: `clock_gettime` writes into the provided stack local and
-    // `CLOCK_MONOTONIC` is a valid kernel clock id.
-    let rc = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
-    if rc != 0 || ts.tv_sec < 0 || ts.tv_nsec < 0 {
-        return None;
-    }
-    Some((ts.tv_sec as u64).saturating_mul(1_000_000_000) + ts.tv_nsec as u64)
-}
-
-#[inline(always)]
-fn evdev_event_nanos(ev: InputEventRaw) -> Option<u64> {
-    if ev.tv_sec < 0 || ev.tv_usec < 0 {
-        return None;
-    }
-    Some(
-        (ev.tv_sec as u64).saturating_mul(1_000_000_000)
-            + (ev.tv_usec as u64).saturating_mul(1_000),
-    )
-}
-
-#[inline(always)]
-fn sample_monotonic_clock() -> Option<ClockSample> {
-    Some(ClockSample {
-        instant: Instant::now(),
-        monotonic_nanos: current_monotonic_nanos()?,
-    })
-}
-
-#[inline(always)]
-fn instant_from_clock_sample(target_nanos: u64, sample: ClockSample) -> Instant {
-    if target_nanos >= sample.monotonic_nanos {
-        sample
-            .instant
-            .checked_add(Duration::from_nanos(
-                target_nanos.saturating_sub(sample.monotonic_nanos),
-            ))
-            .unwrap_or(sample.instant)
-    } else {
-        sample
-            .instant
-            .checked_sub(Duration::from_nanos(
-                sample.monotonic_nanos.saturating_sub(target_nanos),
-            ))
-            .unwrap_or(sample.instant)
-    }
-}
-
-#[inline(always)]
-fn event_time(
-    path: &str,
-    monotonic_timestamps: bool,
-    clock_health: &mut EvdevClockHealth,
-    ev: InputEventRaw,
-    sample: Option<ClockSample>,
-) -> (Instant, u64) {
-    if monotonic_timestamps
-        && clock_health.uses_kernel_timestamps()
-        && let Some(sample) = sample
-        && let Some(target_nanos) = evdev_event_nanos(ev)
-    {
-        if target_nanos
-            > sample
-                .monotonic_nanos
-                .saturating_add(EVDEV_FUTURE_TOLERANCE_NS)
-        {
-            clock_health.note_failure(path, "future", target_nanos, sample.monotonic_nanos);
-        } else if clock_health.last_event_nanos != 0
-            && target_nanos.saturating_add(EVDEV_REGRESSION_TOLERANCE_NS)
-                < clock_health.last_event_nanos
-        {
-            clock_health.note_failure(path, "regression", target_nanos, sample.monotonic_nanos);
-        } else {
-            clock_health.note_success(target_nanos);
-            let timestamp = instant_from_clock_sample(target_nanos, sample);
-            return (timestamp, instant_nanos(timestamp));
-        }
-    }
+fn receipt_time() -> (Instant, u64) {
+    // Keep Linux on a single event-driven receipt-time path so every machine
+    // follows the same timestamping behavior without depending on evdev clock
+    // configuration support.
     let timestamp = Instant::now();
-    (timestamp, now_nanos())
-}
-
-#[inline(always)]
-fn enable_monotonic_timestamps(fd: i32) -> bool {
-    let mut clock_id = libc::CLOCK_MONOTONIC;
-    // SAFETY: `fd` is the live evdev device descriptor and `clock_id` points to
-    // writable stack storage for the ioctl.
-    unsafe { libc::ioctl(fd, EVIOCSCLOCKID, &mut clock_id) == 0 }
+    (timestamp, instant_nanos(timestamp))
 }
 
 #[inline(always)]
@@ -916,18 +750,6 @@ fn open_dev(
             return None;
         }
     };
-    let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
-    if monotonic_timestamps {
-        debug!(
-            "linux evdev '{}' enabled CLOCK_MONOTONIC event timestamps",
-            spec.path
-        );
-    } else {
-        warn!(
-            "linux evdev '{}' could not enable CLOCK_MONOTONIC event timestamps; using receipt-time fallback",
-            spec.path
-        );
-    }
     let uuid = uuid_from_bytes(spec.path.as_bytes());
     emit_sys(GpSystemEvent::Connected {
         name: spec.name.clone(),
@@ -943,8 +765,6 @@ fn open_dev(
         name: spec.name,
         path: spec.path,
         file,
-        monotonic_timestamps,
-        clock_health: EvdevClockHealth::new(monotonic_timestamps),
         hat_x: 0,
         hat_y: 0,
         dir: [false; 4],
@@ -962,12 +782,9 @@ fn open_key_dev(spec: DevSpec) -> Option<KeyDev> {
             return None;
         }
     };
-    let monotonic_timestamps = enable_monotonic_timestamps(file.as_raw_fd());
     Some(KeyDev {
         path: spec.path,
         file,
-        monotonic_timestamps,
-        clock_health: EvdevClockHealth::new(monotonic_timestamps),
     })
 }
 
@@ -1146,6 +963,7 @@ fn run_inner(
         if rc < 0 {
             continue;
         }
+        let (receipt_timestamp, receipt_host_nanos) = receipt_time();
 
         let mut hotplug = Vec::new();
         let mut fallback_refresh = false;
@@ -1193,12 +1011,6 @@ fn run_inner(
 
             let dev = &mut devs[i];
             let count = (n as usize / size_of::<InputEventRaw>()).min(buf.len());
-            let clock_sample =
-                if dev.monotonic_timestamps && dev.clock_health.uses_kernel_timestamps() {
-                    sample_monotonic_clock()
-                } else {
-                    None
-                };
 
             for j in 0..count {
                 // SAFETY: `count` is derived from the number of bytes returned by
@@ -1212,18 +1024,11 @@ fn run_inner(
                     if ev.value == 2 {
                         continue;
                     }
-                    let (timestamp, host_nanos) = event_time(
-                        &dev.path,
-                        dev.monotonic_timestamps,
-                        &mut dev.clock_health,
-                        ev,
-                        clock_sample,
-                    );
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
-                        timestamp,
-                        host_nanos,
+                        timestamp: receipt_timestamp,
+                        host_nanos: receipt_host_nanos,
                         code: PadCode(code_u32(ev.type_, ev.code)),
                         uuid: dev.uuid,
                         value: if pressed { 1.0 } else { 0.0 },
@@ -1235,17 +1040,10 @@ fn run_inner(
                     continue;
                 }
 
-                let (timestamp, host_nanos) = event_time(
-                    &dev.path,
-                    dev.monotonic_timestamps,
-                    &mut dev.clock_health,
-                    ev,
-                    clock_sample,
-                );
                 emit_pad(PadEvent::RawAxis {
                     id: dev.id,
-                    timestamp,
-                    host_nanos,
+                    timestamp: receipt_timestamp,
+                    host_nanos: receipt_host_nanos,
                     code: PadCode(code_u32(ev.type_, ev.code)),
                     uuid: dev.uuid,
                     value: ev.value as f32,
@@ -1264,8 +1062,8 @@ fn run_inner(
                     &mut emit_pad,
                     dev.id,
                     &mut dev.dir,
-                    timestamp,
-                    host_nanos,
+                    receipt_timestamp,
+                    receipt_host_nanos,
                     want,
                 );
             }
@@ -1296,14 +1094,7 @@ fn run_inner(
                 continue;
             }
 
-            let dev = &mut key_devs[i];
             let count = (n as usize / size_of::<InputEventRaw>()).min(buf.len());
-            let clock_sample =
-                if dev.monotonic_timestamps && dev.clock_health.uses_kernel_timestamps() {
-                    sample_monotonic_clock()
-                } else {
-                    None
-                };
 
             for j in 0..count {
                 // SAFETY: `count` is derived from the number of bytes returned by
@@ -1318,20 +1109,13 @@ fn run_inner(
                 };
                 let repeat = ev.value == 2;
                 let pressed = ev.value != 0;
-                let (timestamp, host_nanos) = event_time(
-                    &dev.path,
-                    dev.monotonic_timestamps,
-                    &mut dev.clock_health,
-                    ev,
-                    clock_sample,
-                );
                 if keyboard_capture_active() {
                     emit_key(RawKeyboardEvent {
                         code,
                         pressed,
                         repeat,
-                        timestamp,
-                        host_nanos,
+                        timestamp: receipt_timestamp,
+                        host_nanos: receipt_host_nanos,
                     });
                 }
             }
