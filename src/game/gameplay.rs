@@ -4211,7 +4211,6 @@ struct GameplayUpdatePhaseTimings {
     visuals_us: u32,
     spawn_arrows_us: u32,
     mine_avoid_us: u32,
-    passive_miss_us: u32,
     tap_miss_us: u32,
     cull_us: u32,
     judged_rows_us: u32,
@@ -4586,9 +4585,6 @@ fn max_phase_name_and_us(phases: &GameplayUpdatePhaseTimings) -> (&'static str, 
     if phases.mine_avoid_us > best.1 {
         best = ("mine_avoid", phases.mine_avoid_us);
     }
-    if phases.passive_miss_us > best.1 {
-        best = ("passive_miss", phases.passive_miss_us);
-    }
     if phases.tap_miss_us > best.1 {
         best = ("tap_miss", phases.tap_miss_us);
     }
@@ -4626,7 +4622,6 @@ fn accumulate_phase_max(dst: &mut GameplayUpdatePhaseTimings, src: &GameplayUpda
     dst.visuals_us = dst.visuals_us.max(src.visuals_us);
     dst.spawn_arrows_us = dst.spawn_arrows_us.max(src.spawn_arrows_us);
     dst.mine_avoid_us = dst.mine_avoid_us.max(src.mine_avoid_us);
-    dst.passive_miss_us = dst.passive_miss_us.max(src.passive_miss_us);
     dst.tap_miss_us = dst.tap_miss_us.max(src.tap_miss_us);
     dst.cull_us = dst.cull_us.max(src.cull_us);
     dst.judged_rows_us = dst.judged_rows_us.max(src.judged_rows_us);
@@ -4651,7 +4646,6 @@ fn tracked_phase_total_us(phases: &GameplayUpdatePhaseTimings) -> u32 {
         .saturating_add(phases.visuals_us)
         .saturating_add(phases.spawn_arrows_us)
         .saturating_add(phases.mine_avoid_us)
-        .saturating_add(phases.passive_miss_us)
         .saturating_add(phases.tap_miss_us)
         .saturating_add(phases.cull_us)
         .saturating_add(phases.judged_rows_us)
@@ -4757,7 +4751,7 @@ fn trace_gameplay_update(
         state.update_trace.summary_slow_frames =
             state.update_trace.summary_slow_frames.saturating_add(1);
         debug!(
-            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} arrows={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} pmiss:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3} other:{:.3}] input_sub_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}]",
+            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} arrows={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3} other:{:.3}] input_sub_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}]",
             frame_counter,
             music_time_sec,
             total_us as f32 / 1000.0,
@@ -4775,7 +4769,6 @@ fn trace_gameplay_update(
             phases.visuals_us as f32 / 1000.0,
             phases.spawn_arrows_us as f32 / 1000.0,
             phases.mine_avoid_us as f32 / 1000.0,
-            phases.passive_miss_us as f32 / 1000.0,
             phases.tap_miss_us as f32 / 1000.0,
             phases.cull_us as f32 / 1000.0,
             phases.judged_rows_us as f32 / 1000.0,
@@ -10444,109 +10437,6 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
 }
 
 #[inline(always)]
-fn apply_passive_misses_and_mine_avoidance(state: &mut State, music_time_sec: f32) {
-    let way_off_window = state.timing_profile.windows_s[4];
-    let num_players = state.num_players;
-    let cols_per_player = state.cols_per_player;
-    let log_mine_avoid = mine_avoid_log_enabled();
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
-    for (col_idx, col_arrows) in state.arrows.iter_mut().enumerate() {
-        let Some(next_arrow_index) = col_arrows
-            .iter()
-            .position(|arrow| state.notes[arrow.note_index].result.is_none())
-        else {
-            continue;
-        };
-        let note_index = col_arrows[next_arrow_index].note_index;
-        let (note_row_index, note_type) = {
-            let note = &state.notes[note_index];
-            (note.row_index, note.note_type)
-        };
-        let note_time = state.note_time_cache[note_index];
-
-        if matches!(note_type, NoteType::Mine) {
-            match state.notes[note_index].mine_result {
-                Some(MineResult::Hit) => {
-                    col_arrows.remove(next_arrow_index);
-                }
-                Some(MineResult::Avoided) => {}
-                None => {
-                    let mine_window = state.timing_profile.mine_window_s;
-                    if music_time_sec - note_time > mine_window * rate
-                        && state.notes[note_index].can_be_judged
-                    {
-                        state.notes[note_index].mine_result = Some(MineResult::Avoided);
-                        let player = if num_players <= 1 || cols_per_player == 0 {
-                            0
-                        } else {
-                            (col_idx / cols_per_player).min(num_players.saturating_sub(1))
-                        };
-                        state.players[player].mines_avoided =
-                            state.players[player].mines_avoided.saturating_add(1);
-                        if log_mine_avoid {
-                            trace!(
-                                "MINE AVOIDED: Row {note_row_index}, Col {col_idx}, Time: {music_time_sec:.2}s"
-                            );
-                        }
-                    }
-                }
-            }
-            continue;
-        }
-        if state.notes[note_index].is_fake {
-            continue;
-        }
-        if !state.notes[note_index].can_be_judged {
-            continue;
-        }
-        if music_time_sec - note_time > way_off_window * rate {
-            let player = if num_players <= 1 || cols_per_player == 0 {
-                0
-            } else {
-                (col_idx / cols_per_player).min(num_players.saturating_sub(1))
-            };
-            let time_err_music = music_time_sec - note_time;
-            let time_err_real = time_err_music / rate;
-            let miss_because_held = lane_counts_pressed(
-                state.keyboard_lane_counts[col_idx],
-                state.gamepad_lane_counts[col_idx],
-            );
-            let miss = Judgment {
-                time_error_ms: time_err_real * 1000.0,
-                grade: JudgeGrade::Miss,
-                window: None,
-                miss_because_held,
-            };
-            let judgment = state.notes[note_index].early_result.clone().unwrap_or(miss);
-            if judgment.grade == JudgeGrade::Miss {
-                let should_score_miss =
-                    score_missed_holds_and_rolls(&state.charts[player].chart_type);
-                if let Some(hold) = state.notes[note_index].hold.as_mut()
-                    && hold.result != Some(HoldResult::Held)
-                {
-                    if should_score_miss {
-                        hold.result = Some(HoldResult::LetGo);
-                    }
-                    begin_hold_life_decay(
-                        hold,
-                        &mut state.hold_decay_active,
-                        &mut state.decaying_hold_indices,
-                        note_index,
-                        music_time_sec,
-                    );
-                }
-            }
-            state.notes[note_index].result = Some(judgment);
-            debug!("MISSED (pending): Row {note_row_index}, Col {col_idx}");
-        }
-    }
-}
-
-#[inline(always)]
 fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     let way_off_window = state.timing_profile.windows_s[4];
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -10557,6 +10447,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     let cutoff_time = way_off_window.mul_add(-rate, music_time_sec);
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
+        let should_score_miss = score_missed_holds_and_rolls(&state.charts[player].chart_type);
         let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
         while cursor < note_end {
             let note_time = state.note_time_cache[cursor];
@@ -10588,8 +10479,6 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 let judgment_grade = judgment.grade;
                 let judgment_time_error_ms = judgment.time_error_ms;
                 if judgment_grade == JudgeGrade::Miss {
-                    let should_score_miss =
-                        score_missed_holds_and_rolls(&state.charts[player].chart_type);
                     if let Some(hold) = state.notes[cursor].hold.as_mut()
                         && hold.result != Some(HoldResult::Held)
                     {
@@ -11142,16 +11031,6 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     apply_time_based_mine_avoidance(state, music_time_sec);
     if let Some(started) = mine_avoid_started {
         phase_timings.mine_avoid_us = elapsed_us_since(started);
-    }
-
-    let passive_miss_started = if trace_enabled {
-        Some(Instant::now())
-    } else {
-        None
-    };
-    apply_passive_misses_and_mine_avoidance(state, music_time_sec);
-    if let Some(started) = passive_miss_started {
-        phase_timings.passive_miss_us = elapsed_us_since(started);
     }
 
     let tap_miss_started = if trace_enabled {
