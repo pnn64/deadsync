@@ -763,6 +763,19 @@ fn mine_window_bounds(mine_times: &[f32], start_t: f32, end_t: f32) -> (usize, u
 }
 
 #[inline(always)]
+fn arrow_time_window_bounds(
+    arrows: &[Arrow],
+    note_times: &[f32],
+    start_t: f32,
+    end_t: f32,
+) -> (usize, usize) {
+    (
+        arrows.partition_point(|arrow| note_times[arrow.note_index] < start_t),
+        arrows.partition_point(|arrow| note_times[arrow.note_index] <= end_t),
+    )
+}
+
+#[inline(always)]
 fn crossed_mine_bounds(mine_times: &[f32], prev_time: f32, current_time: f32) -> (usize, usize) {
     (
         mine_times.partition_point(|&t| t <= prev_time),
@@ -4923,6 +4936,11 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
                 .windows(2)
                 .all(|pair| pair[0].note_index < pair[1].note_index)
         );
+        debug_assert!(state.arrows[col].windows(2).all(|pair| {
+            let t0 = state.note_time_cache[pair[0].note_index];
+            let t1 = state.note_time_cache[pair[1].note_index];
+            t0 <= t1
+        }));
         for arrow in &state.arrows[col] {
             debug_assert!(arrow.note_index < state.notes.len());
             debug_assert_eq!(state.notes[arrow.note_index].column, col);
@@ -8662,21 +8680,25 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     let search_window_music = way_off_window_music.max(mine_window_music);
     let search_start_time = current_time - search_window_music;
     let search_end_time = current_time + search_window_music;
+    let col_arrows = &state.arrows[column];
+    let (search_start_idx, search_end_idx) = arrow_time_window_bounds(
+        col_arrows,
+        &state.note_time_cache,
+        search_start_time,
+        search_end_time,
+    );
     let mut best: Option<(usize, usize, f32)> = None;
-    for (idx, arrow) in state.arrows[column].iter().enumerate() {
+    for (offset, arrow) in col_arrows[search_start_idx..search_end_idx]
+        .iter()
+        .enumerate()
+    {
+        let idx = search_start_idx + offset;
         let note_index = arrow.note_index;
         let n = &state.notes[note_index];
         if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type == NoteType::Lift {
             continue;
         }
         let note_time = state.note_time_cache[note_index];
-        if note_time < search_start_time {
-            continue;
-        }
-        if note_time > search_end_time {
-            // Arrows are emitted in chart order, so later entries are even farther ahead.
-            break;
-        }
         let abs_err_music = (current_time - note_time).abs();
         let window_music = if matches!(n.note_type, NoteType::Mine) {
             mine_window_music
@@ -9001,21 +9023,26 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
     let way_off_window_music = way_off_window * rate;
     let search_start_time = current_time - way_off_window_music;
     let search_end_time = current_time + way_off_window_music;
+    let col_arrows = &state.arrows[column];
+    let (search_start_idx, search_end_idx) = arrow_time_window_bounds(
+        col_arrows,
+        &state.note_time_cache,
+        search_start_time,
+        search_end_time,
+    );
 
     let mut best: Option<(usize, usize, f32)> = None;
-    for (idx, arrow) in state.arrows[column].iter().enumerate() {
+    for (offset, arrow) in col_arrows[search_start_idx..search_end_idx]
+        .iter()
+        .enumerate()
+    {
+        let idx = search_start_idx + offset;
         let note_index = arrow.note_index;
         let n = &state.notes[note_index];
         if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type != NoteType::Lift {
             continue;
         }
         let note_time = state.note_time_cache[note_index];
-        if note_time < search_start_time {
-            continue;
-        }
-        if note_time > search_end_time {
-            break;
-        }
         let abs_err_music = (current_time - note_time).abs();
         if abs_err_music <= way_off_window_music {
             match best {
@@ -11176,12 +11203,13 @@ mod tests {
         Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock,
         GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, REPLAY_EDGE_RATE_PER_SEC,
         RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode,
-        advance_hold_last_held, apply_mines_insert, build_assist_clap_rows,
-        build_attack_mask_windows_for_player, build_row_grids, collect_pressed_row_judge_indices,
-        count_rescore_tracks_on_row, crossed_mine_bounds, enforce_max_simultaneous_notes,
-        find_arrow_index, frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_press_started, lane_release_finished, mine_window_bounds,
-        music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
+        advance_hold_last_held, apply_mines_insert, arrow_time_window_bounds,
+        build_assist_clap_rows, build_attack_mask_windows_for_player, build_row_grids,
+        collect_pressed_row_judge_indices, count_rescore_tracks_on_row, crossed_mine_bounds,
+        enforce_max_simultaneous_notes, find_arrow_index, frame_stable_display_music_time,
+        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
+        lane_release_finished, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
+        parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
         replay_edge_cap, score_missed_holds_and_rolls, score_valid_for_chart,
         scored_hold_totals_with_carry, stage_music_cut, step_calories, tick_mode_status_line,
@@ -11910,6 +11938,35 @@ mod tests {
     fn crossed_mine_bounds_skip_previous_frame_boundary() {
         let mine_times = [1.0, 1.5, 2.0, 2.5];
         assert_eq!(crossed_mine_bounds(&mine_times, 1.5, 2.0), (2, 3));
+    }
+
+    #[test]
+    fn arrow_time_window_bounds_exclude_left_edge_and_include_right_edge() {
+        let arrows = [
+            Arrow {
+                beat: 1.0,
+                note_type: NoteType::Tap,
+                note_index: 4,
+            },
+            Arrow {
+                beat: 2.0,
+                note_type: NoteType::Tap,
+                note_index: 9,
+            },
+            Arrow {
+                beat: 3.0,
+                note_type: NoteType::Tap,
+                note_index: 15,
+            },
+        ];
+        let mut note_times = [0.0_f32; 16];
+        note_times[4] = 1.0;
+        note_times[9] = 1.5;
+        note_times[15] = 2.0;
+        assert_eq!(
+            arrow_time_window_bounds(&arrows, &note_times, 1.5, 2.0),
+            (1, 3)
+        );
     }
 
     #[test]
