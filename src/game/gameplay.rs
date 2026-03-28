@@ -755,6 +755,39 @@ fn count_rescore_tracks_on_row(
 }
 
 #[inline(always)]
+fn collect_pressed_row_judge_indices(
+    notes: &[Note],
+    row_note_indices: &[usize; MAX_COLS],
+    row_note_count: usize,
+    lead_note_index: usize,
+    mut lane_is_down: impl FnMut(usize) -> bool,
+) -> Option<([usize; MAX_COLS], usize)> {
+    if row_note_count == 0 {
+        return None;
+    }
+    if row_note_count > 1 {
+        for &idx in &row_note_indices[..row_note_count] {
+            if !lane_is_down(notes[idx].column) {
+                return None;
+            }
+        }
+    }
+
+    let mut judge_indices = [usize::MAX; MAX_COLS];
+    let mut judge_count = 0usize;
+    judge_indices[judge_count] = lead_note_index;
+    judge_count += 1;
+    for &idx in &row_note_indices[..row_note_count] {
+        if idx == lead_note_index {
+            continue;
+        }
+        judge_indices[judge_count] = idx;
+        judge_count += 1;
+    }
+    Some((judge_indices, judge_count))
+}
+
+#[inline(always)]
 fn trigger_receptor_glow_pulse(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
     state.receptor_glow_press_timers[col] = 0.0;
@@ -8675,7 +8708,6 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             );
             let mut row_note_indices = [usize::MAX; MAX_COLS];
             let mut row_note_count = 0usize;
-            let mut row_has_hold_or_roll = false;
             if let Some(&pos) = state
                 .row_map_cache
                 .get(note_row_index)
@@ -8690,8 +8722,6 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     {
                         continue;
                     }
-                    row_has_hold_or_roll |=
-                        matches!(row_note.note_type, NoteType::Hold | NoteType::Roll);
                     if row_note_count < MAX_COLS {
                         row_note_indices[row_note_count] = idx;
                         row_note_count += 1;
@@ -8708,8 +8738,6 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     {
                         continue;
                     }
-                    row_has_hold_or_roll |=
-                        matches!(row_note.note_type, NoteType::Hold | NoteType::Roll);
                     if row_note_count < MAX_COLS {
                         row_note_indices[row_note_count] = idx;
                         row_note_count += 1;
@@ -8718,15 +8746,6 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             }
             if row_note_count == 0 {
                 return false;
-            }
-            if !matches!(note_type, NoteType::Hold | NoteType::Roll) && row_has_hold_or_roll {
-                let all_pressed = row_note_indices[..row_note_count].iter().all(|&idx| {
-                    let row_note_col = state.notes[idx].column;
-                    lane_is_pressed(state, row_note_col)
-                });
-                if !all_pressed {
-                    return false;
-                }
             }
             let mut timing_profile = state.timing_profile;
             timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
@@ -8878,21 +8897,15 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 return true;
             }
 
-            let mut judge_indices = [usize::MAX; MAX_COLS];
-            let mut judge_count = 1usize;
-            judge_indices[0] = note_index;
-            if matches!(note_type, NoteType::Hold | NoteType::Roll) {
-                for &idx in &row_note_indices[..row_note_count] {
-                    if idx == note_index {
-                        continue;
-                    }
-                    let row_note_col = state.notes[idx].column;
-                    if lane_is_pressed(state, row_note_col) && judge_count < MAX_COLS {
-                        judge_indices[judge_count] = idx;
-                        judge_count += 1;
-                    }
-                }
-            }
+            let Some((judge_indices, judge_count)) = collect_pressed_row_judge_indices(
+                &state.notes,
+                &row_note_indices,
+                row_note_count,
+                note_index,
+                |row_note_col| lane_is_pressed(state, row_note_col),
+            ) else {
+                return false;
+            };
 
             for &idx in &judge_indices[..judge_count] {
                 let note_col = state.notes[idx].column;
@@ -11272,9 +11285,9 @@ mod tests {
         INSERT_MASK_BIT_MINES, MAX_COLS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
         ScrollSpeedSetting, SongClockSnapshot, TickMode, advance_hold_last_held,
         apply_mines_insert, build_assist_clap_rows, build_attack_mask_windows_for_player,
-        build_row_grids, count_rescore_tracks_on_row, enforce_max_simultaneous_notes,
-        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_press_started, lane_release_finished,
+        build_row_grids, collect_pressed_row_judge_indices, count_rescore_tracks_on_row,
+        enforce_max_simultaneous_notes, frame_stable_display_music_time, input_queue_cap,
+        lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
         replay_edge_cap, score_missed_holds_and_rolls, score_valid_for_chart,
@@ -11537,6 +11550,43 @@ mod tests {
             count_rescore_tracks_on_row(&notes, &row_entries, &row_map_cache, row_index, 0, 4),
             2
         );
+    }
+
+    #[test]
+    fn pressed_row_judge_indices_reject_partial_jump_press() {
+        let row_index = 48usize;
+        let notes = vec![
+            test_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Tap),
+        ];
+        let mut row_note_indices = [usize::MAX; MAX_COLS];
+        row_note_indices[0] = 0;
+        row_note_indices[1] = 1;
+
+        assert!(
+            collect_pressed_row_judge_indices(&notes, &row_note_indices, 2, 0, |col| col == 0)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn pressed_row_judge_indices_accept_full_jump_press_and_keep_lead_first() {
+        let row_index = 48usize;
+        let notes = vec![
+            test_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Tap),
+        ];
+        let mut row_note_indices = [usize::MAX; MAX_COLS];
+        row_note_indices[0] = 0;
+        row_note_indices[1] = 1;
+
+        let (judge_indices, judge_count) =
+            collect_pressed_row_judge_indices(&notes, &row_note_indices, 2, 1, |_| true)
+                .expect("all jump lanes down should judge the full row");
+
+        assert_eq!(judge_count, 2);
+        assert_eq!(judge_indices[0], 1);
+        assert_eq!(judge_indices[1], 0);
     }
 
     #[test]
