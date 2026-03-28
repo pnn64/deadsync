@@ -307,6 +307,21 @@ pub struct SpeedMod {
     pub value: f32,
 }
 
+#[inline(always)]
+fn scroll_speed_for_mod(speed_mod: &SpeedMod) -> crate::game::scroll::ScrollSpeedSetting {
+    match speed_mod.mod_type.as_str() {
+        "C" => crate::game::scroll::ScrollSpeedSetting::CMod(speed_mod.value),
+        "X" => crate::game::scroll::ScrollSpeedSetting::XMod(speed_mod.value),
+        "M" => crate::game::scroll::ScrollSpeedSetting::MMod(speed_mod.value),
+        _ => crate::game::scroll::ScrollSpeedSetting::default(),
+    }
+}
+
+#[inline(always)]
+fn sync_profile_scroll_speed(profile: &mut crate::game::profile::Profile, speed_mod: &SpeedMod) {
+    profile.scroll_speed = scroll_speed_for_mod(speed_mod);
+}
+
 #[derive(Clone, Copy, Debug)]
 struct RowTween {
     from_y: f32,
@@ -3519,15 +3534,19 @@ fn change_choice_for_player(
 
     // Per-player row: Speed Mod numeric
     if row_name == "Speed Mod" {
-        let speed_mod = &mut state.speed_mod[player_idx];
-        let (upper, increment) = match speed_mod.mod_type.as_str() {
-            "X" => (20.0, 0.05),
-            "C" | "M" => (2000.0, 5.0),
-            _ => (1.0, 0.1),
+        let speed_mod = {
+            let speed_mod = &mut state.speed_mod[player_idx];
+            let (upper, increment) = match speed_mod.mod_type.as_str() {
+                "X" => (20.0, 0.05),
+                "C" | "M" => (2000.0, 5.0),
+                _ => (1.0, 0.1),
+            };
+            speed_mod.value += delta as f32 * increment;
+            speed_mod.value = (speed_mod.value / increment).round() * increment;
+            speed_mod.value = speed_mod.value.clamp(increment, upper);
+            speed_mod.clone()
         };
-        speed_mod.value += delta as f32 * increment;
-        speed_mod.value = (speed_mod.value / increment).round() * increment;
-        speed_mod.value = speed_mod.value.clamp(increment, upper);
+        sync_profile_scroll_speed(&mut state.player_profiles[player_idx], &speed_mod);
         audio::play_sfx("assets/sounds/change_value.ogg");
         return;
     }
@@ -3599,6 +3618,8 @@ fn change_choice_for_player(
         };
         speed_mod.mod_type = new_type.to_string();
         speed_mod.value = new_value;
+        let speed_mod = speed_mod.clone();
+        sync_profile_scroll_speed(&mut state.player_profiles[player_idx], &speed_mod);
     } else if row_name == "Turn" {
         let setting = match row.selected_choice_index[player_idx] {
             0 => crate::game::profile::TurnOption::None,
@@ -7421,4 +7442,43 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SpeedMod, sync_profile_scroll_speed};
+    use crate::game::profile::Profile;
+    use crate::game::scroll::ScrollSpeedSetting;
+
+    #[test]
+    fn sync_profile_scroll_speed_matches_speed_mod() {
+        let mut profile = Profile::default();
+
+        sync_profile_scroll_speed(
+            &mut profile,
+            &SpeedMod {
+                mod_type: "X".to_string(),
+                value: 1.5,
+            },
+        );
+        assert_eq!(profile.scroll_speed, ScrollSpeedSetting::XMod(1.5));
+
+        sync_profile_scroll_speed(
+            &mut profile,
+            &SpeedMod {
+                mod_type: "M".to_string(),
+                value: 750.0,
+            },
+        );
+        assert_eq!(profile.scroll_speed, ScrollSpeedSetting::MMod(750.0));
+
+        sync_profile_scroll_speed(
+            &mut profile,
+            &SpeedMod {
+                mod_type: "C".to_string(),
+                value: 600.0,
+            },
+        );
+        assert_eq!(profile.scroll_speed, ScrollSpeedSetting::CMod(600.0));
+    }
 }
