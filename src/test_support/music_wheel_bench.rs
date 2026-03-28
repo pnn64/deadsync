@@ -202,5 +202,7 @@ fn bench_chart(base: &str, difficulty: &str, meter: u32) -> ChartData {
         rolls_total: 0,
         mines_total: 0,
         display_bpm: None,
+        min_bpm: 150.0,
+        max_bpm: 150.0,
     }
 }

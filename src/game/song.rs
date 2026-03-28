@@ -213,7 +213,14 @@ impl SongData {
             match &chart.display_bpm {
                 Some(ChartDisplayBpm::Specified { min, max }) => return Some((*min, *max)),
                 Some(ChartDisplayBpm::Random) => return None,
-                None => {}
+                None => {
+                    // Use chart's own actual BPM range (accounts for split timing)
+                    let lo = chart.min_bpm;
+                    let hi = chart.max_bpm;
+                    if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
+                        return Some((lo.min(hi), lo.max(hi)));
+                    }
+                }
             }
         }
         self.display_bpm_range()

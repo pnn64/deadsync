@@ -499,6 +499,8 @@ struct SerializableChartData {
     total_measures: usize,
     measure_nps_vec: Vec<f64>,
     display_bpm: Option<CachedChartDisplayBpm>,
+    min_bpm: f64,
+    max_bpm: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
@@ -611,6 +613,8 @@ struct CachedChartMeta {
     rolls_total: u32,
     mines_total: u32,
     display_bpm: Option<CachedChartDisplayBpm>,
+    min_bpm: f64,
+    max_bpm: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
@@ -798,6 +802,8 @@ fn build_chart_meta(
         rolls_total,
         mines_total,
         display_bpm: chart.display_bpm.map(Into::into),
+        min_bpm: chart.min_bpm,
+        max_bpm: chart.max_bpm,
     }
 }
 
@@ -850,6 +856,8 @@ fn build_cached_chart_meta(
         rolls_total,
         mines_total,
         display_bpm: chart.display_bpm.clone(),
+        min_bpm: chart.min_bpm,
+        max_bpm: chart.max_bpm,
     }
 }
 
@@ -887,6 +895,8 @@ fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
         rolls_total: chart.rolls_total,
         mines_total: chart.mines_total,
         display_bpm: chart.display_bpm.map(Into::into),
+        min_bpm: chart.min_bpm,
+        max_bpm: chart.max_bpm,
     }
 }
 
@@ -1836,6 +1846,8 @@ fn parse_and_process_song_file(
                 measure_nps_vec: c.measure_nps_vec,
                 chart_attacks: c.chart_attacks,
                 display_bpm: parse_chart_display_bpm(c.chart_display_bpm.as_deref()),
+                min_bpm: timing_segments.bpms.iter().map(|&(_, b)| f64::from(b)).filter(|b| b.is_finite() && *b > 0.0).fold(f64::INFINITY, f64::min).min(f64::MAX),
+                max_bpm: timing_segments.bpms.iter().map(|&(_, b)| f64::from(b)).filter(|b| b.is_finite() && *b > 0.0).fold(0.0_f64, f64::max),
             }
         })
         .collect();

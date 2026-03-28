@@ -66,6 +66,8 @@ pub struct ChartData {
     pub rolls_total: u32,
     pub mines_total: u32,
     pub display_bpm: Option<ChartDisplayBpm>,
+    pub min_bpm: f64,
+    pub max_bpm: f64,
 }
 
 #[derive(Clone, Debug)]
