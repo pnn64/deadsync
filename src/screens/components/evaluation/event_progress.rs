@@ -15,6 +15,7 @@ const BLACK: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 const BODY_FONT_HEIGHT: f32 = 19.0;
 const BODY_LINE_SPACING: f32 = 24.0;
 const BODY_AVG_CHAR_WIDTH: f32 = 8.0;
+const BODY_SIDE_PAD: f32 = 8.0;
 const UPPER_ROW_HEIGHT: f32 = 25.0;
 const OVERLAY_ROW_HEIGHT: f32 = 24.0;
 const POPUP_DISMISS_TEXT: &str = "Press &START; to dismiss.";
@@ -164,9 +165,52 @@ fn quantize_zoom(zoom: f32) -> f32 {
     ((zoom * 20.0).floor() / 20.0).clamp(0.1, 1.0)
 }
 
+struct BodyLayout {
+    text: String,
+    zoom: f32,
+}
+
 #[inline(always)]
-fn fit_body_zoom(text: &str, pane_width: f32, pane_height: f32, row_height: f32) -> f32 {
-    let lines: Vec<&str> = text.lines().collect();
+fn wrap_body_text(text: &str, wrap_width: f32) -> String {
+    let max_line_chars = (wrap_width / BODY_AVG_CHAR_WIDTH).floor().max(1.0) as usize;
+    let mut lines = Vec::new();
+    for src in text.split('\n') {
+        let trimmed = src.trim_end();
+        if trimmed.is_empty() {
+            lines.push(String::new());
+            continue;
+        }
+
+        let mut current = String::new();
+        let mut current_len = 0usize;
+        for word in trimmed.split_whitespace() {
+            let word_len = word.chars().count();
+            let next_len = if current.is_empty() {
+                word_len
+            } else {
+                current_len + 1 + word_len
+            };
+            if !current.is_empty() && next_len > max_line_chars {
+                lines.push(std::mem::take(&mut current));
+                current.push_str(word);
+                current_len = word_len;
+            } else {
+                if !current.is_empty() {
+                    current.push(' ');
+                }
+                current.push_str(word);
+                current_len = next_len;
+            }
+        }
+        lines.push(current);
+    }
+    lines.join("\n")
+}
+
+#[inline(always)]
+fn body_layout(text: &str, pane_width: f32, pane_height: f32, row_height: f32) -> BodyLayout {
+    let wrapped = wrap_body_text(text, pane_width);
+    let lines: Vec<&str> = wrapped.lines().collect();
     let line_count = lines.len().max(1) as f32;
     let max_line_chars = lines
         .iter()
@@ -176,7 +220,10 @@ fn fit_body_zoom(text: &str, pane_width: f32, pane_height: f32, row_height: f32)
     let block_height = BODY_FONT_HEIGHT + (line_count - 1.0).max(0.0) * BODY_LINE_SPACING;
     let fit_height = ((pane_height - 2.0 - row_height * 1.5) / block_height.max(1.0)).min(1.0);
     let fit_width = (pane_width / (max_line_chars.max(1.0) * BODY_AVG_CHAR_WIDTH)).min(1.0);
-    quantize_zoom(fit_height.min(fit_width))
+    BodyLayout {
+        text: wrapped,
+        zoom: quantize_zoom(fit_height.min(fit_width)),
+    }
 }
 
 #[inline(always)]
@@ -308,14 +355,15 @@ fn build_body_text(
     row_height: f32,
     z: i16,
 ) -> Actor {
-    let zoom = fit_body_zoom(text.as_str(), pane_width, pane_height, row_height);
+    let body_width = (pane_width - BODY_SIDE_PAD * 2.0).max(1.0);
+    let layout = body_layout(text.as_str(), body_width, pane_height, row_height);
     let mut actor = act!(text:
         font("miso"):
-        settext(text):
+        settext(layout.text):
         align(0.5, 0.0):
         xy(0.0, -pane_height * 0.5 + row_height * 1.5):
-        zoom(zoom):
-        wrapwidthpixels(pane_width / zoom):
+        zoom(layout.zoom):
+        wrapwidthpixels(body_width / layout.zoom):
         horizalign(center):
         valign(top):
         diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
@@ -758,4 +806,40 @@ pub fn build_itl_event_overlay(
     ));
 
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BODY_SIDE_PAD, OVERLAY_ROW_HEIGHT, body_layout};
+
+    #[test]
+    fn long_achievement_titles_wrap_without_shrinking_body_text() {
+        let body_width = 330.0 - BODY_SIDE_PAD * 2.0;
+        let short = body_layout(
+            "Completed the \"Short Achievement\" Achievement!",
+            body_width,
+            360.0,
+            OVERLAY_ROW_HEIGHT,
+        );
+        let long = body_layout(
+            "Completed the \"This Achievement Title Is Extremely Long And Should Wrap Instead Of Shrinking The Popup Text\" Achievement!",
+            body_width,
+            360.0,
+            OVERLAY_ROW_HEIGHT,
+        );
+        assert_eq!(short.zoom, 1.0);
+        assert_eq!(long.zoom, short.zoom);
+        assert!(long.text.contains('\n'));
+    }
+
+    #[test]
+    fn tall_body_text_still_scales_down_to_fit_height() {
+        let body_width = 330.0 - BODY_SIDE_PAD * 2.0;
+        let text = (0..18)
+            .map(|idx| format!("Line {idx}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let layout = body_layout(text.as_str(), body_width, 180.0, OVERLAY_ROW_HEIGHT);
+        assert!(layout.zoom < 1.0);
+    }
 }
