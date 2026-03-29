@@ -4,12 +4,15 @@ use crate::engine::input::{
 };
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
 
 const UNMAPPED_AXIS_HELD_THRESHOLD: f32 = 0.5;
 const SORT_MENU_DIM_ALPHA: f32 = 0.875;
 const SORT_MENU_CLOSE_HINT: &str = "Press &START; to dismiss.";
+const EVENT_RATE_WINDOW: Duration = Duration::from_millis(500);
+const EVENT_RATE_MAX_SAMPLES: usize = 512;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogicalButton {
@@ -33,6 +36,7 @@ pub enum PlayerSlot {
 pub struct State {
     buttons_held: HashMap<(PlayerSlot, LogicalButton), bool>,
     unmapped: UnmappedTracker,
+    event_rate: EventRateTracker,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -47,6 +51,138 @@ enum UnmappedKey {
     RawButton { dev: usize, code_u32: u32 },
     RawAxis { dev: usize, code_u32: u32 },
     Keyboard { code: KeyCode },
+}
+
+#[derive(Clone, Debug, Default)]
+struct EventRateTracker {
+    samples: VecDeque<Instant>,
+    last_sample: Option<EventSampleKey>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EventSampleKey {
+    KeyboardHost {
+        host_nanos: u64,
+        code: KeyCode,
+        pressed: bool,
+    },
+    KeyboardInstant {
+        timestamp: Instant,
+        code: KeyCode,
+        pressed: bool,
+    },
+    PadHost {
+        dev: usize,
+        host_nanos: u64,
+    },
+    PadInstant {
+        dev: usize,
+        timestamp: Instant,
+    },
+}
+
+impl EventRateTracker {
+    #[inline(always)]
+    fn record_key(&mut self, key_event: &RawKeyboardEvent) {
+        let key = if key_event.host_nanos != 0 {
+            EventSampleKey::KeyboardHost {
+                host_nanos: key_event.host_nanos,
+                code: key_event.code,
+                pressed: key_event.pressed,
+            }
+        } else {
+            EventSampleKey::KeyboardInstant {
+                timestamp: key_event.timestamp,
+                code: key_event.code,
+                pressed: key_event.pressed,
+            }
+        };
+        self.record_sample(key, key_event.timestamp);
+    }
+
+    #[inline(always)]
+    fn record_pad(&mut self, pad_event: &PadEvent) {
+        let (dev, timestamp, host_nanos) = match *pad_event {
+            PadEvent::Dir {
+                id,
+                timestamp,
+                host_nanos,
+                ..
+            }
+            | PadEvent::RawButton {
+                id,
+                timestamp,
+                host_nanos,
+                ..
+            }
+            | PadEvent::RawAxis {
+                id,
+                timestamp,
+                host_nanos,
+                ..
+            } => (usize::from(id), timestamp, host_nanos),
+        };
+        let key = if host_nanos != 0 {
+            EventSampleKey::PadHost { dev, host_nanos }
+        } else {
+            EventSampleKey::PadInstant { dev, timestamp }
+        };
+        self.record_sample(key, timestamp);
+    }
+
+    #[inline(always)]
+    fn record_sample(&mut self, key: EventSampleKey, timestamp: Instant) {
+        if self.last_sample == Some(key) {
+            return;
+        }
+        self.last_sample = Some(key);
+        self.samples.push_back(timestamp);
+        while self.samples.len() > EVENT_RATE_MAX_SAMPLES {
+            self.samples.pop_front();
+        }
+        self.prune(timestamp);
+    }
+
+    #[inline(always)]
+    fn prune(&mut self, now: Instant) {
+        while let Some(&sample) = self.samples.front() {
+            if now.saturating_duration_since(sample) <= EVENT_RATE_WINDOW {
+                break;
+            }
+            self.samples.pop_front();
+        }
+    }
+
+    fn hz(&self, now: Instant) -> u32 {
+        let cutoff = now.checked_sub(EVENT_RATE_WINDOW).unwrap_or(now);
+        let mut count = 0usize;
+        let mut first = None;
+        let mut last = None;
+
+        for &sample in &self.samples {
+            if sample < cutoff {
+                continue;
+            }
+            count += 1;
+            first.get_or_insert(sample);
+            last = Some(sample);
+        }
+
+        if count < 2 {
+            return 0;
+        }
+        let Some(first) = first else {
+            return 0;
+        };
+        let Some(last) = last else {
+            return 0;
+        };
+        let span = last.saturating_duration_since(first).as_secs_f32();
+        if span <= 0.0 {
+            return 0;
+        }
+        ((count - 1) as f32 / span).round() as u32
+    }
 }
 
 impl UnmappedTracker {
@@ -135,6 +271,8 @@ pub fn apply_virtual_input(state: &mut State, ev: &InputEvent) {
 pub fn apply_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     use crate::engine::input::PadEvent as PE;
 
+    state.event_rate.record_pad(pad_event);
+
     let (key, pressed_opt, axis_value_opt) = match pad_event {
         PE::Dir {
             id, dir, pressed, ..
@@ -188,6 +326,7 @@ pub fn apply_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) {
     if key_event.repeat {
         return;
     }
+    state.event_rate.record_key(key_event);
     let mapped = with_keymap(|km| km.raw_key_event_mapped(key_event));
     if mapped {
         return;
@@ -321,7 +460,7 @@ fn push_pad(
 }
 
 pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(48);
+    let mut actors = Vec::with_capacity(50);
     let cx = screen_center_x();
     let cy = screen_center_y() - 20.0;
     let pad_spacing = 150.0;
@@ -371,6 +510,27 @@ pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
         xy(cx, screen_height() - 40.0):
         zoom(0.8):
         horizalign(center):
+        z(30)
+    ));
+
+    let event_rate = state.event_rate.hz(Instant::now());
+    actors.push(act!(text:
+        font("miso"):
+        settext("RAW EVENT RATE"):
+        align(1.0, 1.0):
+        xy(screen_width() - 20.0, screen_height() - 42.0):
+        zoom(0.55):
+        horizalign(right):
+        diffuse(1.0, 1.0, 1.0, 0.8):
+        z(30)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(format!("{event_rate} Hz")):
+        align(1.0, 1.0):
+        xy(screen_width() - 20.0, screen_height() - 20.0):
+        zoom(0.9):
+        horizalign(right):
         z(30)
     ));
 
@@ -435,4 +595,74 @@ pub fn build_select_music_overlay(
     ));
 
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::input::{PadCode, PadId};
+
+    #[test]
+    fn dedups_pad_events_from_the_same_report() {
+        let base = Instant::now();
+        let mut tracker = EventRateTracker::default();
+
+        tracker.record_pad(&PadEvent::RawButton {
+            id: PadId(0),
+            timestamp: base,
+            host_nanos: 123,
+            code: PadCode(1),
+            uuid: [0; 16],
+            value: 1.0,
+            pressed: true,
+        });
+        tracker.record_pad(&PadEvent::Dir {
+            id: PadId(0),
+            timestamp: base,
+            host_nanos: 123,
+            dir: PadDir::Up,
+            pressed: true,
+        });
+
+        assert_eq!(tracker.samples.len(), 1);
+    }
+
+    #[test]
+    fn reports_recent_event_rate() {
+        let base = Instant::now();
+        let mut tracker = EventRateTracker::default();
+
+        for i in 0..6 {
+            tracker.record_key(&RawKeyboardEvent {
+                code: KeyCode::KeyA,
+                pressed: i % 2 == 0,
+                repeat: false,
+                timestamp: base + Duration::from_millis(i * 10),
+                host_nanos: i * 10_000_000,
+            });
+        }
+
+        assert_eq!(tracker.hz(base + Duration::from_millis(50)), 100);
+    }
+
+    #[test]
+    fn drops_to_zero_after_the_window_expires() {
+        let base = Instant::now();
+        let mut tracker = EventRateTracker::default();
+
+        for i in 0..4 {
+            tracker.record_key(&RawKeyboardEvent {
+                code: KeyCode::KeyA,
+                pressed: i % 2 == 0,
+                repeat: false,
+                timestamp: base + Duration::from_millis(i * 20),
+                host_nanos: i * 20_000_000,
+            });
+        }
+
+        assert_eq!(
+            tracker.hz(base + EVENT_RATE_WINDOW + Duration::from_millis(1)),
+            0
+        );
+    }
 }
