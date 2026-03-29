@@ -66,6 +66,12 @@ impl DebounceStore {
         self.entries.capacity()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
+    #[inline(always)]
+    pub(super) fn len(&self) -> usize {
+        self.entries.len()
+    }
+
     #[inline(always)]
     fn find_index(&self, binding: DebounceBinding) -> Option<usize> {
         self.entries

@@ -1169,6 +1169,10 @@ pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent
     if ev.pressed && ev.repeat {
         return;
     }
+    let km = load_compiled_keymap();
+    if collect_key_mask_from_compiled(km.as_ref(), ev.code) == 0 {
+        return;
+    }
     let edges = debounce_input_edge_in_store(
         &KEYBOARD_DEBOUNCE_STATE,
         DebounceBinding::Keyboard(ev.code),
@@ -1177,7 +1181,6 @@ pub fn map_raw_key_event_with(ev: &RawKeyboardEvent, emit: impl FnMut(InputEvent
         ev.host_nanos,
         debounce_windows(),
     );
-    let km = load_compiled_keymap();
     emit_debounced_edges(km.as_ref(), edges, emit);
 }
 
@@ -1216,6 +1219,7 @@ pub fn map_keycode_event_with_host(
 
 #[inline(always)]
 pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
+    let km = load_compiled_keymap();
     let edges = match *ev {
         PadEvent::Dir {
             id,
@@ -1223,14 +1227,19 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
             pressed,
             timestamp,
             host_nanos,
-        } => debounce_input_edge_in_store(
-            &PAD_DEBOUNCE_STATE,
-            DebounceBinding::PadDir { id, dir },
-            pressed,
-            timestamp,
-            host_nanos,
-            debounce_windows(),
-        ),
+        } => {
+            if collect_pad_dir_mask_from_compiled(km.as_ref(), id, dir) == 0 {
+                return;
+            }
+            debounce_input_edge_in_store(
+                &PAD_DEBOUNCE_STATE,
+                DebounceBinding::PadDir { id, dir },
+                pressed,
+                timestamp,
+                host_nanos,
+                debounce_windows(),
+            )
+        }
         PadEvent::RawButton {
             id,
             code,
@@ -1239,17 +1248,21 @@ pub fn map_pad_event_with(ev: &PadEvent, mut emit: impl FnMut(InputEvent)) {
             timestamp,
             host_nanos,
             ..
-        } => debounce_input_edge_in_store(
-            &PAD_DEBOUNCE_STATE,
-            DebounceBinding::PadButton { id, code, uuid },
-            pressed,
-            timestamp,
-            host_nanos,
-            debounce_windows(),
-        ),
+        } => {
+            if collect_pad_button_mask_from_compiled(km.as_ref(), id, code, uuid) == 0 {
+                return;
+            }
+            debounce_input_edge_in_store(
+                &PAD_DEBOUNCE_STATE,
+                DebounceBinding::PadButton { id, code, uuid },
+                pressed,
+                timestamp,
+                host_nanos,
+                debounce_windows(),
+            )
+        }
         PadEvent::RawAxis { .. } => return,
     };
-    let km = load_compiled_keymap();
     emit_debounced_edges(km.as_ref(), edges, &mut emit);
 }
 
@@ -1539,6 +1552,58 @@ mod tests {
             assert!(km.pad_event_mapped(&mapped));
             assert!(!km.pad_event_mapped(&wrong_dev));
         });
+    }
+
+    #[test]
+    fn map_raw_key_event_with_skips_unmapped_keys_before_debounce() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_back,
+            &[InputBinding::Key(KeyCode::Escape)],
+        );
+        set_keymap(km);
+
+        let raw = RawKeyboardEvent {
+            code: KeyCode::ArrowLeft,
+            pressed: true,
+            repeat: false,
+            timestamp: Instant::now(),
+            host_nanos: 123,
+        };
+        let mut actual = Vec::new();
+        map_raw_key_event_with(&raw, |event| actual.push(event));
+
+        assert!(actual.is_empty());
+        assert_eq!(KEYBOARD_DEBOUNCE_STATE.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn map_pad_event_with_skips_unmapped_pad_buttons_before_debounce() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_left,
+            &[InputBinding::PadDir(PadDir::Left)],
+        );
+        set_keymap(km);
+
+        let pad = PadEvent::RawButton {
+            id: PadId(1),
+            timestamp: Instant::now(),
+            host_nanos: 456,
+            code: PadCode(77),
+            uuid: [7; 16],
+            value: 1.0,
+            pressed: true,
+        };
+        let mut actual = Vec::new();
+        map_pad_event_with(&pad, |event| actual.push(event));
+
+        assert!(actual.is_empty());
+        assert_eq!(PAD_DEBOUNCE_STATE.lock().unwrap().len(), 0);
     }
 
     #[test]
