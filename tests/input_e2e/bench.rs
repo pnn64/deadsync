@@ -376,7 +376,9 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     state.next_mine_avoid_cursor.fill(0);
     state.next_mine_ix_cursor.fill(0);
     state.row_entries.clear();
-    state.row_map_cache.clear();
+    for row_map_cache in &mut state.row_map_cache {
+        row_map_cache.clear();
+    }
     state.tap_row_hold_roll_flags.clear();
     state.note_time_cache.clear();
     state.note_display_beat_cache.clear();

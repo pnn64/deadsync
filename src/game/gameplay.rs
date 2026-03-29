@@ -4401,8 +4401,8 @@ pub struct State {
     pub mini_indicator_target_score_percent: [f64; MAX_PLAYERS],
     pub mini_indicator_rival_score_percent: [f64; MAX_PLAYERS],
 
-    // Optimization: Direct array lookup instead of HashMap
-    pub row_map_cache: Vec<u32>,
+    // Optimization: Per-player direct row lookup instead of HashMap
+    pub row_map_cache: [Vec<u32>; MAX_PLAYERS],
     // Bit flags per note index:
     // bit0 => same row contains a hold start, bit1 => same row contains a roll start.
     pub tap_row_hold_roll_flags: Vec<u8>,
@@ -4938,15 +4938,24 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
     }
     for note in &state.notes {
         if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+            let player = player_for_col(state, note.column);
             debug_assert!(
-                row_entry_for_cached_row(&state.row_entries, &state.row_map_cache, note.row_index)
-                    .is_some()
+                row_entry_for_cached_row(
+                    &state.row_entries,
+                    &state.row_map_cache[player],
+                    note.row_index
+                )
+                .is_some()
             );
         }
     }
     for (row_entry_index, row_entry) in state.row_entries.iter().enumerate() {
+        let first_note_index = row_entry.nonmine_note_indices[0];
+        let player = player_for_col(state, state.notes[first_note_index].column);
         debug_assert_eq!(
-            state.row_map_cache.get(row_entry.row_index).copied(),
+            state.row_map_cache[player]
+                .get(row_entry.row_index)
+                .copied(),
             Some(row_entry_index as u32)
         );
         for &note_index in &row_entry.nonmine_note_indices {
@@ -6670,7 +6679,8 @@ pub fn init(
     debug!("Parsed {} notes from chart data.", notes.len());
 
     let mut row_entries: Vec<RowEntry> = Vec::with_capacity(notes.len() / 2);
-    let mut row_map_cache = vec![u32::MAX; max_row_index + 1];
+    let mut row_map_cache: [Vec<u32>; MAX_PLAYERS] =
+        std::array::from_fn(|_| vec![u32::MAX; max_row_index + 1]);
     let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
     let mut cursor = 0usize;
     while cursor < notes.len() {
@@ -6692,7 +6702,8 @@ pub fn init(
         }
         if !nonmine_note_indices.is_empty() {
             let row_entry_index = row_entries.len() as u32;
-            row_map_cache[row_index] = row_entry_index;
+            let player = note_player_for_col(notes[nonmine_note_indices[0]].column);
+            row_map_cache[player][row_index] = row_entry_index;
             row_entries.push(RowEntry {
                 row_index,
                 nonmine_note_indices,
@@ -8772,9 +8783,11 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
 
         if abs_time_error <= way_off_window {
-            let Some(row_entry) =
-                row_entry_for_cached_row(&state.row_entries, &state.row_map_cache, note_row_index)
-            else {
+            let Some(row_entry) = row_entry_for_cached_row(
+                &state.row_entries,
+                &state.row_map_cache[player],
+                note_row_index,
+            ) else {
                 debug_assert!(false, "missing row cache for row {note_row_index}");
                 return false;
             };
@@ -11200,9 +11213,9 @@ fn update_danger_fx(state: &mut State) {
 mod tests {
     use super::{
         Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock,
-        GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, REPLAY_EDGE_RATE_PER_SEC,
-        RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode,
-        advance_hold_last_held, apply_mines_insert, arrow_time_window_bounds,
+        GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
+        REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
+        TickMode, advance_hold_last_held, apply_mines_insert, arrow_time_window_bounds,
         build_assist_clap_rows, build_attack_mask_windows_for_player, build_row_grids,
         collect_pressed_row_judge_indices, count_rescore_tracks_on_row, crossed_mine_bounds,
         enforce_max_simultaneous_notes, find_arrow_index, frame_stable_display_music_time,
@@ -11483,6 +11496,33 @@ mod tests {
 
         assert_eq!(row_entry.row_index, row_index);
         assert_eq!(row_entry.nonmine_note_indices, vec![0, 1]);
+    }
+
+    #[test]
+    fn cached_row_entry_lookup_keeps_duplicate_rows_player_specific() {
+        let row_index = 48usize;
+        let row_entries = vec![
+            RowEntry {
+                row_index,
+                nonmine_note_indices: vec![0, 1],
+            },
+            RowEntry {
+                row_index,
+                nonmine_note_indices: vec![2, 3],
+            },
+        ];
+        let mut row_map_cache: [Vec<u32>; MAX_PLAYERS] =
+            std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+        row_map_cache[0][row_index] = 0;
+        row_map_cache[1][row_index] = 1;
+
+        let p1 = row_entry_for_cached_row(&row_entries, &row_map_cache[0], row_index)
+            .expect("expected cached p1 row entry");
+        let p2 = row_entry_for_cached_row(&row_entries, &row_map_cache[1], row_index)
+            .expect("expected cached p2 row entry");
+
+        assert_eq!(p1.nonmine_note_indices, vec![0, 1]);
+        assert_eq!(p2.nonmine_note_indices, vec![2, 3]);
     }
 
     #[test]
