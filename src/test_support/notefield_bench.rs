@@ -309,6 +309,9 @@ fn bench_chart() -> ChartData {
         holds_total: holds,
         rolls_total: rolls,
         mines_total: mines,
+        display_bpm: None,
+        min_bpm: 120.0,
+        max_bpm: 120.0,
     }
 }
 

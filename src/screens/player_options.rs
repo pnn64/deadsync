@@ -8,6 +8,7 @@ use crate::engine::present::color;
 use crate::engine::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
+use crate::game::chart::ChartData;
 use crate::game::parsing::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization,
 };
@@ -488,10 +489,22 @@ fn custom_fantastic_window_choices() -> Vec<String> {
     out
 }
 
+fn resolve_p1_chart<'a>(
+    song: &'a SongData,
+    chart_steps_index: &[usize; PLAYER_SLOTS],
+) -> Option<&'a ChartData> {
+    let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
+    crate::screens::select_music::chart_for_steps_index(
+        song,
+        target_chart_type,
+        chart_steps_index[0],
+    )
+}
+
 // Prefer #DISPLAYBPM for reference BPM (use max of range or single value); fallback to song.max_bpm, then 120.
-fn reference_bpm_for_song(song: &SongData) -> f32 {
+fn reference_bpm_for_song(song: &SongData, chart: Option<&ChartData>) -> f32 {
     let bpm = song
-        .display_bpm_range()
+        .chart_display_bpm_range(chart)
         .map(|(_, hi)| hi as f32)
         .unwrap_or(song.max_bpm as f32);
     if bpm.is_finite() && bpm > 0.0 {
@@ -502,14 +515,18 @@ fn reference_bpm_for_song(song: &SongData) -> f32 {
 }
 
 #[inline(always)]
-fn display_bpm_pair_for_options(song: &SongData, music_rate: f32) -> Option<(f32, f32)> {
+fn display_bpm_pair_for_options(
+    song: &SongData,
+    chart: Option<&ChartData>,
+    music_rate: f32,
+) -> Option<(f32, f32)> {
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {
         1.0
     };
     let (mut lo, mut hi) = song
-        .display_bpm_range()
+        .chart_display_bpm_range(chart)
         .map_or((120.0_f32, 120.0_f32), |(a, b)| (a as f32, b as f32));
     if !lo.is_finite() || !hi.is_finite() || lo <= 0.0 || hi <= 0.0 {
         lo = 120.0;
@@ -521,10 +538,11 @@ fn display_bpm_pair_for_options(song: &SongData, music_rate: f32) -> Option<(f32
 #[inline(always)]
 fn speed_mod_bpm_pair(
     song: &SongData,
+    chart: Option<&ChartData>,
     speed_mod: &SpeedMod,
     music_rate: f32,
 ) -> Option<(f32, f32)> {
-    let (mut lo, mut hi) = display_bpm_pair_for_options(song, music_rate)?;
+    let (mut lo, mut hi) = display_bpm_pair_for_options(song, chart, music_rate)?;
     match speed_mod.mod_type.as_str() {
         "X" => {
             lo *= speed_mod.value;
@@ -573,19 +591,25 @@ fn perspective_speed_mult(perspective: crate::game::profile::Perspective) -> f32
 }
 
 #[inline(always)]
-fn speed_mod_helper_scroll_text(song: &SongData, speed_mod: &SpeedMod, music_rate: f32) -> String {
-    speed_mod_bpm_pair(song, speed_mod, music_rate)
+fn speed_mod_helper_scroll_text(
+    song: &SongData,
+    chart: Option<&ChartData>,
+    speed_mod: &SpeedMod,
+    music_rate: f32,
+) -> String {
+    speed_mod_bpm_pair(song, chart, speed_mod, music_rate)
         .map_or_else(String::new, |(lo, hi)| format_speed_bpm_pair(lo, hi))
 }
 
 #[inline(always)]
 fn speed_mod_helper_scaled_text(
     song: &SongData,
+    chart: Option<&ChartData>,
     speed_mod: &SpeedMod,
     music_rate: f32,
     profile: &crate::game::profile::Profile,
 ) -> String {
-    let Some((mut lo, mut hi)) = speed_mod_bpm_pair(song, speed_mod, music_rate) else {
+    let Some((mut lo, mut hi)) = speed_mod_bpm_pair(song, chart, speed_mod, music_rate) else {
         return String::new();
     };
     let mini = profile.mini_percent.clamp(-100, 150) as f32;
@@ -986,12 +1010,23 @@ fn build_main_rows(
         },
         Row {
             name: {
-                let reference_bpm = reference_bpm_for_song(song);
-                let effective_bpm = f64::from(reference_bpm) * f64::from(session_music_rate);
-                let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
-                    format!("{}", effective_bpm.round() as i32)
+                let p1_chart = resolve_p1_chart(song, &chart_steps_index);
+                let is_random = p1_chart.is_some_and(|c| {
+                    matches!(
+                        c.display_bpm,
+                        Some(crate::game::chart::ChartDisplayBpm::Random)
+                    )
+                });
+                let bpm_str = if is_random {
+                    "???".to_string()
                 } else {
-                    format!("{effective_bpm:.1}")
+                    let reference_bpm = reference_bpm_for_song(song, p1_chart);
+                    let effective_bpm = f64::from(reference_bpm) * f64::from(session_music_rate);
+                    if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
+                        format!("{}", effective_bpm.round() as i32)
+                    } else {
+                        format!("{effective_bpm:.1}")
+                    }
                 };
                 format!("Music Rate\nbpm: {bpm_str}")
             },
@@ -3517,12 +3552,23 @@ fn change_choice_for_player(
         state.music_rate = state.music_rate.clamp(min_rate, max_rate);
         row.choices[0] = fmt_music_rate(state.music_rate);
 
-        let reference_bpm = reference_bpm_for_song(&state.song);
-        let effective_bpm = f64::from(reference_bpm) * f64::from(state.music_rate);
-        let bpm_str = if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
-            format!("{}", effective_bpm.round() as i32)
+        let p1_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
+        let is_random = p1_chart.is_some_and(|c| {
+            matches!(
+                c.display_bpm,
+                Some(crate::game::chart::ChartDisplayBpm::Random)
+            )
+        });
+        let bpm_str = if is_random {
+            "???".to_string()
         } else {
-            format!("{effective_bpm:.1}")
+            let reference_bpm = reference_bpm_for_song(&state.song, p1_chart);
+            let effective_bpm = f64::from(reference_bpm) * f64::from(state.music_rate);
+            if (effective_bpm - effective_bpm.round()).abs() < 0.05 {
+                format!("{}", effective_bpm.round() as i32)
+            } else {
+                format!("{effective_bpm:.1}")
+            }
         };
         row.name = format!("Music Rate\nbpm: {bpm_str}");
 
@@ -3588,7 +3634,10 @@ fn change_choice_for_player(
         let speed_mod = &mut state.speed_mod[player_idx];
         let old_type = speed_mod.mod_type.clone();
         let old_value = speed_mod.value;
-        let reference_bpm = reference_bpm_for_song(&state.song);
+        let reference_bpm = reference_bpm_for_song(
+            &state.song,
+            resolve_p1_chart(&state.song, &state.chart_steps_index),
+        );
         let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
             state.music_rate
         } else {
@@ -5804,8 +5853,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             }
             let speed_mod = &state.speed_mod[player_idx];
             let speed_color = color::simply_love_rgba(player_color_index(player_idx));
+            let p_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
             let main_scroll =
-                speed_mod_helper_scroll_text(&state.song, speed_mod, state.music_rate);
+                speed_mod_helper_scroll_text(&state.song, p_chart, speed_mod, state.music_rate);
             let speed_prefix = speed_mod.mod_type.as_str();
             let speed_text = format!("{speed_prefix}{main_scroll}");
             // zmod uses GetWidth() from the main helper actor (unzoomed width), then +w*0.4.
@@ -5820,6 +5870,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
             let scaled_scroll = speed_mod_helper_scaled_text(
                 &state.song,
+                p_chart,
                 speed_mod,
                 state.music_rate,
                 &state.player_profiles[player_idx],

@@ -1,14 +1,15 @@
-use super::{GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, uuid_from_bytes};
-use crate::engine::host_time::instant_nanos;
+use super::{
+    GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges, event_time, receipt_time,
+    uuid_from_bytes,
+};
 use crate::engine::input::RawKeyboardEvent;
-use log::warn;
+use log::{debug, warn};
 use std::collections::HashSet;
 use std::ffi::{CStr, c_char, c_void};
 use std::fs;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::platform::scancode::PhysicalKeyExtScancode;
 
@@ -55,6 +56,14 @@ const ACTION_REMOVE: &[u8] = b"remove\0";
 const ID_INPUT_KEYBOARD: &[u8] = b"ID_INPUT_KEYBOARD\0";
 const INOTIFY_MASK: u32 =
     libc::IN_CREATE | libc::IN_DELETE | libc::IN_ATTRIB | libc::IN_MOVED_TO | libc::IN_MOVED_FROM;
+const IOC_NRBITS: u32 = 8;
+const IOC_TYPEBITS: u32 = 8;
+const IOC_SIZEBITS: u32 = 14;
+const IOC_NRSHIFT: u32 = 0;
+const IOC_TYPESHIFT: u32 = IOC_NRSHIFT + IOC_NRBITS;
+const IOC_SIZESHIFT: u32 = IOC_TYPESHIFT + IOC_TYPEBITS;
+const IOC_DIRSHIFT: u32 = IOC_SIZESHIFT + IOC_SIZEBITS;
+const IOC_WRITE: u32 = 1;
 
 type UdevCtxHandle = c_void;
 type UdevEnumHandle = c_void;
@@ -178,6 +187,15 @@ struct UdevState {
     _ctx: UdevContext,
     monitor: UdevMonitor,
 }
+
+const fn iow(type_: u8, nr: u8, size: usize) -> libc::c_ulong {
+    ((IOC_WRITE << IOC_DIRSHIFT)
+        | ((type_ as u32) << IOC_TYPESHIFT)
+        | ((nr as u32) << IOC_NRSHIFT)
+        | ((size as u32) << IOC_SIZESHIFT)) as libc::c_ulong
+}
+
+const EVIOCSCLOCKID: libc::c_ulong = iow(b'E', 0xa0, size_of::<libc::c_int>());
 
 enum Discovery {
     Udev(UdevState),
@@ -576,12 +594,17 @@ fn cstr_matches(ptr: *const c_char, expected: &[u8]) -> bool {
 }
 
 #[inline(always)]
-fn receipt_time() -> (Instant, u64) {
-    // Keep Linux on a single event-driven receipt-time path so every machine
-    // follows the same timestamping behavior without depending on evdev clock
-    // configuration support.
-    let timestamp = Instant::now();
-    (timestamp, instant_nanos(timestamp))
+fn configure_evdev_clock(file: &std::fs::File) {
+    let mut clock_id: libc::c_int = libc::CLOCK_MONOTONIC;
+    // SAFETY: `file` is a live evdev descriptor, `EVIOCSCLOCKID` expects a
+    // writable `int*`, and `CLOCK_MONOTONIC` is valid on Linux.
+    let rc = unsafe { libc::ioctl(file.as_raw_fd(), EVIOCSCLOCKID, &mut clock_id) };
+    if rc < 0 {
+        debug!(
+            "linux evdev could not switch '{}' to CLOCK_MONOTONIC timestamps",
+            file.as_raw_fd()
+        );
+    }
 }
 
 #[inline(always)]
@@ -750,6 +773,7 @@ fn open_dev(
             return None;
         }
     };
+    configure_evdev_clock(&file);
     let uuid = uuid_from_bytes(spec.path.as_bytes());
     emit_sys(GpSystemEvent::Connected {
         name: spec.name.clone(),
@@ -782,6 +806,7 @@ fn open_key_dev(spec: DevSpec) -> Option<KeyDev> {
             return None;
         }
     };
+    configure_evdev_clock(&file);
     Some(KeyDev {
         path: spec.path,
         file,
@@ -870,6 +895,14 @@ fn init_discovery() -> Discovery {
     }
     warn!("linux evdev has no hotplug discovery backend; startup enumeration only");
     Discovery::None
+}
+
+pub fn run(
+    emit_pad: impl FnMut(PadEvent),
+    emit_sys: impl FnMut(GpSystemEvent),
+    emit_key: impl FnMut(RawKeyboardEvent),
+) {
+    run_inner(true, emit_pad, emit_sys, emit_key);
 }
 
 pub fn run_pad_only(emit_pad: impl FnMut(PadEvent), emit_sys: impl FnMut(GpSystemEvent)) {
@@ -963,7 +996,7 @@ fn run_inner(
         if rc < 0 {
             continue;
         }
-        let (receipt_timestamp, receipt_host_nanos) = receipt_time();
+        let receipt = receipt_time();
 
         let mut hotplug = Vec::new();
         let mut fallback_refresh = false;
@@ -1017,6 +1050,8 @@ fn run_inner(
                 // `read`, so the first `count` entries of `buf` were initialized by
                 // the kernel in this iteration.
                 let ev = unsafe { buf[j].assume_init() };
+                let (event_timestamp, event_host_nanos) =
+                    event_time(receipt, ev.tv_sec, ev.tv_usec);
                 if ev.type_ == EV_SYN {
                     continue;
                 }
@@ -1027,8 +1062,8 @@ fn run_inner(
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
-                        timestamp: receipt_timestamp,
-                        host_nanos: receipt_host_nanos,
+                        timestamp: event_timestamp,
+                        host_nanos: event_host_nanos,
                         code: PadCode(code_u32(ev.type_, ev.code)),
                         uuid: dev.uuid,
                         value: if pressed { 1.0 } else { 0.0 },
@@ -1042,8 +1077,8 @@ fn run_inner(
 
                 emit_pad(PadEvent::RawAxis {
                     id: dev.id,
-                    timestamp: receipt_timestamp,
-                    host_nanos: receipt_host_nanos,
+                    timestamp: event_timestamp,
+                    host_nanos: event_host_nanos,
                     code: PadCode(code_u32(ev.type_, ev.code)),
                     uuid: dev.uuid,
                     value: ev.value as f32,
@@ -1062,8 +1097,8 @@ fn run_inner(
                     &mut emit_pad,
                     dev.id,
                     &mut dev.dir,
-                    receipt_timestamp,
-                    receipt_host_nanos,
+                    event_timestamp,
+                    event_host_nanos,
                     want,
                 );
             }
@@ -1101,6 +1136,8 @@ fn run_inner(
                 // `read`, so the first `count` entries of `buf` were initialized by
                 // the kernel in this iteration.
                 let ev = unsafe { buf[j].assume_init() };
+                let (event_timestamp, event_host_nanos) =
+                    event_time(receipt, ev.tv_sec, ev.tv_usec);
                 if ev.type_ != EV_KEY {
                     continue;
                 }
@@ -1114,8 +1151,8 @@ fn run_inner(
                         code,
                         pressed,
                         repeat,
-                        timestamp: receipt_timestamp,
-                        host_nanos: receipt_host_nanos,
+                        timestamp: event_timestamp,
+                        host_nanos: event_host_nanos,
                     });
                 }
             }

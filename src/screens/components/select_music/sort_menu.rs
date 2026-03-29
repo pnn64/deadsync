@@ -708,7 +708,7 @@ pub fn build_song_search_overlay(
                         "Subtitle",
                         candidate.song.display_subtitle(false).to_string(),
                     ),
-                    ("BPMs", candidate.song.formatted_display_bpm()),
+                    ("BPMs", candidate.song.formatted_chart_display_bpm(None)),
                     (
                         "Difficulties",
                         song_search_difficulties_text(candidate.song.as_ref(), chart_type),

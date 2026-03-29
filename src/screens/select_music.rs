@@ -14,7 +14,7 @@ use crate::engine::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
     widescale,
 };
-use crate::game::chart::ChartData;
+use crate::game::chart::{ChartData, ChartDisplayBpm};
 use crate::game::course;
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
@@ -1514,6 +1514,48 @@ fn song_bpm_for_sort(song: &SongData) -> i32 {
 
 fn song_display_bpm_range(song: &SongData) -> Option<(f64, f64)> {
     song.display_bpm_range()
+}
+
+const RANDOM_BPM_CYCLE_SPEED: f32 = 0.2;
+
+fn random_bpm_cycle_text(elapsed: f32) -> String {
+    let cycle = (elapsed / RANDOM_BPM_CYCLE_SPEED) as u32;
+    // Deterministic per-cycle "random" via integer hash (Knuth multiplicative)
+    let hash = cycle.wrapping_mul(2654435761);
+    if hash % 10 == 0 {
+        "???".to_string()
+    } else {
+        (hash % 1000).to_string()
+    }
+}
+
+/// Formats a BPM range with music rate applied, matching Simply Love's
+/// `StringifyDisplayBPMs` semantics: integers at 1.0x, one decimal otherwise.
+fn format_bpm_with_rate(range: Option<(f64, f64)>, music_rate: f32) -> String {
+    let Some((lo, hi)) = range else {
+        return String::new();
+    };
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate as f64
+    } else {
+        1.0
+    };
+    let lo = lo * rate;
+    let hi = hi * rate;
+    let use_decimals = (music_rate - 1.0).abs() > 0.001;
+    let fmt_one = |v: f64| {
+        if use_decimals {
+            let s = format!("{v:.1}");
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        } else {
+            format!("{v:.0}")
+        }
+    };
+    if (lo - hi).abs() < 1.0e-6 {
+        fmt_one(lo)
+    } else {
+        format!("{} - {}", fmt_one(lo.min(hi)), fmt_one(lo.max(hi)))
+    }
 }
 
 #[inline(always)]
@@ -6320,11 +6362,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     };
     let entry_opt = selected_entry;
     let (artist, bpm, len_text): (String, String, Arc<str>) = match entry_opt {
-        Some(MusicWheelEntry::Song(s)) => (
-            s.artist.clone(),
-            s.formatted_display_bpm(),
-            format_chart_length(((s.total_length_seconds.max(0) as f32) / music_rate) as i32),
-        ),
+        Some(MusicWheelEntry::Song(s)) => {
+            let bpm = match immediate_chart_p1.and_then(|c| c.display_bpm.as_ref()) {
+                Some(ChartDisplayBpm::Random) => random_bpm_cycle_text(state.session_elapsed),
+                _ => {
+                    format_bpm_with_rate(s.chart_display_bpm_range(immediate_chart_p1), music_rate)
+                }
+            };
+            (
+                s.artist.clone(),
+                bpm,
+                format_chart_length(((s.total_length_seconds.max(0) as f32) / music_rate) as i32),
+            )
+        }
         Some(MusicWheelEntry::PackHeader { original_index, .. }) => {
             let total_sec = state
                 .pack_total_seconds_by_index

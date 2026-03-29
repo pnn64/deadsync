@@ -3,6 +3,15 @@ use crate::game::timing::{TimingData, TimingSegments};
 use rssp::TechCounts;
 use rssp::stats::ArrowStats;
 
+/// Chart-level display BPM override parsed from `#DISPLAYBPM` inside a `#NOTEDATA` block.
+#[derive(Clone, Debug)]
+pub enum ChartDisplayBpm {
+    /// A specific BPM or range specified via `#DISPLAYBPM` (min == max for a single value).
+    Specified { min: f64, max: f64 },
+    /// `#DISPLAYBPM:*` — show randomly cycling values (ITGmania shows animated random numbers).
+    Random,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct StaminaCounts {
     pub anchors: u32,
@@ -56,6 +65,9 @@ pub struct ChartData {
     pub holds_total: u32,
     pub rolls_total: u32,
     pub mines_total: u32,
+    pub display_bpm: Option<ChartDisplayBpm>,
+    pub min_bpm: f64,
+    pub max_bpm: f64,
 }
 
 #[derive(Clone, Debug)]
