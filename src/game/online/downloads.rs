@@ -1,5 +1,6 @@
 use super::groovestats::{self, ConnectionStatus};
 use crate::config;
+use crate::config::dirs;
 use crate::engine::network;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
@@ -147,7 +148,7 @@ fn begin_download(url: &str, name: String, destination: String) -> Option<u64> {
 }
 
 fn download_worker(id: u64, url: String, destination: String) {
-    let zip_path = downloads_dir().join(download_filename(id));
+    let zip_path = dirs::app_dirs().downloads_dir().join(download_filename(id));
     let result = download_one(id, url.as_str(), destination.as_str(), &zip_path)
         .and_then(|_| extract_zip(id, &zip_path, destination.as_str(), url.as_str()));
     finish_download(id, result.err());
@@ -207,7 +208,7 @@ fn download_one(id: u64, url: &str, _destination: &str, zip_path: &Path) -> Resu
 }
 
 fn extract_zip(id: u64, zip_path: &Path, destination: &str, url: &str) -> Result<(), String> {
-    let destination_pack = songs_dir().join(destination);
+    let destination_pack = dirs::app_dirs().songs_dir().join(destination);
     unzip_to_destination(zip_path, &destination_pack)
         .map_err(|_| "Failed to Unzip!".to_string())?;
     write_pack_ini_if_needed(&destination_pack, destination).map_err(|error| error.to_string())?;
@@ -310,7 +311,7 @@ fn ensure_cache_loaded(state: &mut DownloadState) {
 }
 
 fn load_unlock_cache() -> UnlockCache {
-    let path = unlock_cache_path();
+    let path = dirs::app_dirs().unlock_cache_path();
     let Ok(text) = fs::read_to_string(&path) else {
         return HashMap::new();
     };
@@ -323,7 +324,7 @@ fn load_unlock_cache() -> UnlockCache {
 }
 
 fn write_unlock_cache(cache: &UnlockCache) {
-    let path = unlock_cache_path();
+    let path = dirs::app_dirs().unlock_cache_path();
     if let Some(parent) = path.parent()
         && let Err(error) = fs::create_dir_all(parent)
     {
@@ -351,22 +352,6 @@ fn cache_has_destination(cache: &UnlockCache, url: &str, destination: &str) -> b
         .and_then(|packs| packs.get(destination))
         .copied()
         .unwrap_or(false)
-}
-
-fn unlock_cache_path() -> PathBuf {
-    cache_dir().join("unlocks-cache.json")
-}
-
-fn cache_dir() -> PathBuf {
-    PathBuf::from("cache")
-}
-
-fn songs_dir() -> PathBuf {
-    PathBuf::from("songs")
-}
-
-fn downloads_dir() -> PathBuf {
-    PathBuf::from("cache/downloads")
 }
 
 fn download_filename(id: u64) -> String {
