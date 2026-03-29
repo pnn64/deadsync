@@ -6061,13 +6061,56 @@ fn music_time_from_song_clock(
     };
     if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
         let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
+        if audio::timing_diag_enabled() {
+            debug!(
+                "AUDIO_DIAG snap_age_ms={:.3} path=host callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
+                dt_nanos as f64 * 1e-6,
+                audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
+                snapshot.song_time,
+                slope,
+                snapshot.valid_at_host_nanos,
+                captured_host_nanos,
+            );
+        }
         return snapshot.song_time + (dt_nanos as f64 * 1e-9 * slope as f64) as f32;
     }
     if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at) {
+        if audio::timing_diag_enabled() {
+            debug!(
+                "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
+                -(age.as_secs_f64() * 1000.0),
+                audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
+                snapshot.song_time,
+                slope,
+                snapshot.valid_at_host_nanos,
+                captured_host_nanos,
+            );
+        }
         snapshot.song_time - age.as_secs_f32() * slope
     } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
+        if audio::timing_diag_enabled() {
+            debug!(
+                "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
+                lead.as_secs_f64() * 1000.0,
+                audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
+                snapshot.song_time,
+                slope,
+                snapshot.valid_at_host_nanos,
+                captured_host_nanos,
+            );
+        }
         snapshot.song_time + lead.as_secs_f32() * slope
     } else {
+        if audio::timing_diag_enabled() {
+            debug!(
+                "AUDIO_DIAG snap_age_ms=0.000 path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
+                audio::timing_diag_last_callback_gap_ns() as f64 * 1e-6,
+                snapshot.song_time,
+                slope,
+                snapshot.valid_at_host_nanos,
+                captured_host_nanos,
+            );
+        }
         snapshot.song_time
     }
 }

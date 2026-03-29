@@ -475,6 +475,10 @@ static LAST_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_ELAPSED_NANOS: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_BASE_FRAMES: AtomicU64 = AtomicU64::new(0);
 static PREV_CALLBACK_FRAMES: AtomicU64 = AtomicU64::new(0);
+static AUDIO_TIMING_DIAG_ENABLED: OnceLock<bool> = OnceLock::new();
+static AUDIO_TIMING_DIAG_LAST_SOURCE: AtomicU8 = AtomicU8::new(0);
+static AUDIO_TIMING_DIAG_LAST_NANOS: AtomicU64 = AtomicU64::new(0);
+static AUDIO_TIMING_DIAG_LAST_GAP_NS: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_BACKEND: AtomicU8 = AtomicU8::new(OutputTelemetryBackend::Unknown as u8);
 static OUTPUT_TIMING_REQUESTED_MODE: AtomicU8 = AtomicU8::new(1);
 static OUTPUT_TIMING_NATIVE_FALLBACK: AtomicBool = AtomicBool::new(false);
@@ -521,6 +525,44 @@ impl CallbackClockSource {
             2 => Self::Qpc,
             _ => Self::Instant,
         }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn timing_diag_enabled() -> bool {
+    *AUDIO_TIMING_DIAG_ENABLED.get_or_init(|| {
+        let Ok(value) = std::env::var("DEADSYNC_AUDIO_TIMING_DIAG") else {
+            return false;
+        };
+        let value = value.trim();
+        !(value.is_empty()
+            || value == "0"
+            || value.eq_ignore_ascii_case("false")
+            || value.eq_ignore_ascii_case("off")
+            || value.eq_ignore_ascii_case("no"))
+    })
+}
+
+#[inline(always)]
+pub(crate) fn timing_diag_last_callback_gap_ns() -> u64 {
+    AUDIO_TIMING_DIAG_LAST_GAP_NS.load(Ordering::Relaxed)
+}
+
+#[inline(always)]
+fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource) {
+    if !timing_diag_enabled() || anchor_nanos == 0 {
+        return;
+    }
+    let source_id = source as u8;
+    let prev_source = AUDIO_TIMING_DIAG_LAST_SOURCE.swap(source_id, Ordering::Relaxed);
+    let prev_nanos = if prev_source == source_id {
+        AUDIO_TIMING_DIAG_LAST_NANOS.swap(anchor_nanos, Ordering::Relaxed)
+    } else {
+        AUDIO_TIMING_DIAG_LAST_NANOS.store(anchor_nanos, Ordering::Relaxed);
+        0
+    };
+    if prev_nanos != 0 && anchor_nanos >= prev_nanos {
+        AUDIO_TIMING_DIAG_LAST_GAP_NS.store(anchor_nanos - prev_nanos, Ordering::Relaxed);
     }
 }
 
@@ -790,7 +832,9 @@ fn i16_to_f32(sample: i16) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{MusicMapSeg, PlaybackPosMap};
+    use super::{
+        CallbackClockWindow, MusicMapSeg, PlaybackPosMap, stream_position_frames_from_window,
+    };
 
     #[test]
     fn playback_pos_map_extrapolates_past_last_segment() {
@@ -808,6 +852,26 @@ mod tests {
             (sec_per_frame - (1.0 / 48_000.0)).abs() <= 1e-12,
             "sec_per_frame={sec_per_frame}"
         );
+    }
+
+    #[test]
+    fn stream_clock_extrapolates_back_before_future_callback_anchor() {
+        let frames = stream_position_frames_from_window(
+            48_000,
+            1_000,
+            7_000_000,
+            CallbackClockWindow {
+                total_frames: 1_720,
+                last_nanos: 15_000_001,
+                last_base_frames: 1_480,
+                last_callback_frames: 240,
+                prev_nanos: 10_000_001,
+                prev_base_frames: 1_240,
+                prev_callback_frames: 240,
+            },
+        );
+
+        assert!((frames - 96.0).abs() <= 1e-6, "frames={frames}");
     }
 }
 
@@ -834,6 +898,36 @@ fn stream_position_frames_from_callback(
 }
 
 #[inline(always)]
+fn stream_position_frames_from_anchor_pair(
+    start_frame: u64,
+    at_nanos: u64,
+    earlier_nanos_plus_one: u64,
+    earlier_base_frames: u64,
+    later_nanos_plus_one: u64,
+    later_base_frames: u64,
+) -> Option<f64> {
+    if earlier_nanos_plus_one == 0 || later_nanos_plus_one == 0 {
+        return None;
+    }
+    let earlier_nanos = earlier_nanos_plus_one.saturating_sub(1);
+    let later_nanos = later_nanos_plus_one.saturating_sub(1);
+    if later_nanos <= earlier_nanos || later_base_frames <= earlier_base_frames {
+        return None;
+    }
+    let nanos_span = later_nanos.saturating_sub(earlier_nanos) as f64;
+    if nanos_span <= 0.0 {
+        return None;
+    }
+    let frames_per_ns = (later_base_frames - earlier_base_frames) as f64 / nanos_span;
+    if !frames_per_ns.is_finite() || frames_per_ns <= 0.0 {
+        return None;
+    }
+    let dt_ns = at_nanos as f64 - later_nanos as f64;
+    let frames_now = later_base_frames as f64 + dt_ns * frames_per_ns;
+    Some((frames_now.max(start_frame as f64) - start_frame as f64).max(0.0))
+}
+
+#[inline(always)]
 fn begin_callback_clock_write() {
     CALLBACK_CLOCK_SEQ.fetch_add(1, Ordering::AcqRel);
 }
@@ -849,6 +943,7 @@ fn publish_callback_window_start_nanos(
     anchor_nanos: u64,
     source: CallbackClockSource,
 ) {
+    note_timing_diag_callback_gap(anchor_nanos, source);
     begin_callback_clock_write();
     CALLBACK_CLOCK_SOURCE.store(source as u8, Ordering::Relaxed);
     PREV_CALLBACK_BASE_FRAMES.store(
@@ -933,6 +1028,31 @@ fn stream_position_frames_from_window(
         window.prev_callback_frames,
     ) {
         return frames;
+    }
+    if let Some(frames) = stream_position_frames_from_anchor_pair(
+        start_frame,
+        at_nanos,
+        window.prev_nanos,
+        window.prev_base_frames,
+        window.last_nanos,
+        window.last_base_frames,
+    ) {
+        return frames;
+    }
+    if timing_diag_enabled() {
+        debug!(
+            "AUDIO_DIAG stream_pos_fallback sample_rate_hz={} at_nanos={} last_nanos={} last_base_frames={} last_callback_frames={} prev_nanos={} prev_base_frames={} prev_callback_frames={} total_frames={} start_frame={}",
+            sample_rate,
+            at_nanos,
+            window.last_nanos,
+            window.last_base_frames,
+            window.last_callback_frames,
+            window.prev_nanos,
+            window.prev_base_frames,
+            window.prev_callback_frames,
+            window.total_frames,
+            start_frame,
+        );
     }
     window.total_frames.saturating_sub(start_frame) as f64
 }
