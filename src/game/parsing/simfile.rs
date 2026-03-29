@@ -437,9 +437,10 @@ impl From<CachedChartDisplayBpm> for crate::game::chart::ChartDisplayBpm {
 impl From<&crate::game::chart::ChartDisplayBpm> for CachedChartDisplayBpm {
     fn from(c: &crate::game::chart::ChartDisplayBpm) -> Self {
         match c {
-            crate::game::chart::ChartDisplayBpm::Specified { min, max } => {
-                Self::Specified { min: *min, max: *max }
-            }
+            crate::game::chart::ChartDisplayBpm::Specified { min, max } => Self::Specified {
+                min: *min,
+                max: *max,
+            },
             crate::game::chart::ChartDisplayBpm::Random => Self::Random,
         }
     }
@@ -1846,8 +1847,19 @@ fn parse_and_process_song_file(
                 measure_nps_vec: c.measure_nps_vec,
                 chart_attacks: c.chart_attacks,
                 display_bpm: parse_chart_display_bpm(c.chart_display_bpm.as_deref()),
-                min_bpm: timing_segments.bpms.iter().map(|&(_, b)| f64::from(b)).filter(|b| b.is_finite() && *b > 0.0).fold(f64::INFINITY, f64::min).min(f64::MAX),
-                max_bpm: timing_segments.bpms.iter().map(|&(_, b)| f64::from(b)).filter(|b| b.is_finite() && *b > 0.0).fold(0.0_f64, f64::max),
+                min_bpm: timing_segments
+                    .bpms
+                    .iter()
+                    .map(|&(_, b)| f64::from(b))
+                    .filter(|b| b.is_finite() && *b > 0.0)
+                    .fold(f64::INFINITY, f64::min)
+                    .min(f64::MAX),
+                max_bpm: timing_segments
+                    .bpms
+                    .iter()
+                    .map(|&(_, b)| f64::from(b))
+                    .filter(|b| b.is_finite() && *b > 0.0)
+                    .fold(0.0_f64, f64::max),
             }
         })
         .collect();

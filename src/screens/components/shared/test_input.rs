@@ -5,14 +5,14 @@ use crate::engine::input::{
 use crate::engine::present::actors::Actor;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::collections::{HashMap, VecDeque};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use winit::keyboard::KeyCode;
 
 const UNMAPPED_AXIS_HELD_THRESHOLD: f32 = 0.5;
 const SORT_MENU_DIM_ALPHA: f32 = 0.875;
 const SORT_MENU_CLOSE_HINT: &str = "Press &START; to dismiss.";
-const EVENT_RATE_WINDOW: Duration = Duration::from_millis(500);
-const EVENT_RATE_MAX_SAMPLES: usize = 512;
+const EVENT_RATE_HISTORY: usize = 64;
+const MAX_DISPLAY_HZ: u32 = 1000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogicalButton {
@@ -55,8 +55,22 @@ enum UnmappedKey {
 
 #[derive(Clone, Debug, Default)]
 struct EventRateTracker {
-    samples: VecDeque<Instant>,
+    stats: HashMap<EventStreamKey, EventStreamStats>,
+    active_stream: Option<EventStreamKey>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum EventStreamKey {
+    Keyboard,
+    Pad { dev: usize },
+}
+
+#[derive(Clone, Debug, Default)]
+struct EventStreamStats {
+    prev_time: Option<EventSampleTime>,
     last_sample: Option<EventSampleKey>,
+    hz_samples: VecDeque<u32>,
+    latest_hz: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -81,6 +95,56 @@ enum EventSampleKey {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EventSampleTime {
+    HostNanos(u64),
+    Local(Instant),
+}
+
+impl EventSampleTime {
+    fn hz_since(self, prev: Self) -> Option<u32> {
+        let delta_ns = match (self, prev) {
+            (Self::HostNanos(now), Self::HostNanos(prev)) => now.checked_sub(prev)?,
+            (Self::Local(now), Self::Local(prev)) => {
+                let nanos = now.checked_duration_since(prev)?.as_nanos();
+                u64::try_from(nanos).ok()?
+            }
+            _ => return None,
+        };
+        if delta_ns == 0 {
+            return None;
+        }
+        let hz = 1_000_000_000u64 / delta_ns;
+        u32::try_from(hz).ok().filter(|hz| *hz != 0)
+    }
+}
+
+impl EventStreamStats {
+    fn record(&mut self, sample: EventSampleKey, time: EventSampleTime) {
+        if self.last_sample == Some(sample) {
+            return;
+        }
+        self.last_sample = Some(sample);
+        if let Some(prev) = self.prev_time
+            && let Some(hz) = time.hz_since(prev)
+        {
+            self.latest_hz = hz;
+            if self.hz_samples.len() == EVENT_RATE_HISTORY {
+                self.hz_samples.pop_front();
+            }
+            self.hz_samples.push_back(hz);
+        }
+        self.prev_time = Some(time);
+    }
+
+    fn max_hz(&self) -> u32 {
+        if self.hz_samples.is_empty() {
+            return 0;
+        }
+        self.hz_samples.iter().copied().max().unwrap_or(0)
+    }
+}
+
 impl EventRateTracker {
     #[inline(always)]
     fn record_key(&mut self, key_event: &RawKeyboardEvent) {
@@ -97,7 +161,12 @@ impl EventRateTracker {
                 pressed: key_event.pressed,
             }
         };
-        self.record_sample(key, key_event.timestamp);
+        let time = if key_event.host_nanos != 0 {
+            EventSampleTime::HostNanos(key_event.host_nanos)
+        } else {
+            EventSampleTime::Local(key_event.timestamp)
+        };
+        self.record_sample(EventStreamKey::Keyboard, key, time);
     }
 
     #[inline(always)]
@@ -127,62 +196,42 @@ impl EventRateTracker {
         } else {
             EventSampleKey::PadInstant { dev, timestamp }
         };
-        self.record_sample(key, timestamp);
+        let time = if host_nanos != 0 {
+            EventSampleTime::HostNanos(host_nanos)
+        } else {
+            EventSampleTime::Local(timestamp)
+        };
+        self.record_sample(EventStreamKey::Pad { dev }, key, time);
     }
 
     #[inline(always)]
-    fn record_sample(&mut self, key: EventSampleKey, timestamp: Instant) {
-        if self.last_sample == Some(key) {
-            return;
-        }
-        self.last_sample = Some(key);
-        self.samples.push_back(timestamp);
-        while self.samples.len() > EVENT_RATE_MAX_SAMPLES {
-            self.samples.pop_front();
-        }
-        self.prune(timestamp);
+    fn record_sample(
+        &mut self,
+        stream: EventStreamKey,
+        key: EventSampleKey,
+        time: EventSampleTime,
+    ) {
+        self.active_stream = Some(stream);
+        self.stats.entry(stream).or_default().record(key, time);
     }
 
-    #[inline(always)]
-    fn prune(&mut self, now: Instant) {
-        while let Some(&sample) = self.samples.front() {
-            if now.saturating_duration_since(sample) <= EVENT_RATE_WINDOW {
-                break;
-            }
-            self.samples.pop_front();
-        }
-    }
-
-    fn hz(&self, now: Instant) -> u32 {
-        let cutoff = now.checked_sub(EVENT_RATE_WINDOW).unwrap_or(now);
-        let mut count = 0usize;
-        let mut first = None;
-        let mut last = None;
-
-        for &sample in &self.samples {
-            if sample < cutoff {
-                continue;
-            }
-            count += 1;
-            first.get_or_insert(sample);
-            last = Some(sample);
-        }
-
-        if count < 2 {
-            return 0;
-        }
-        let Some(first) = first else {
-            return 0;
+    fn readout(&self) -> Option<(String, u32, u32)> {
+        let stream = self.active_stream?;
+        let stats = self.stats.get(&stream)?;
+        let label = match stream {
+            EventStreamKey::Keyboard => "Keyboard".to_owned(),
+            EventStreamKey::Pad { dev } => format!("Gamepad {dev}"),
         };
-        let Some(last) = last else {
-            return 0;
-        };
-        let span = last.saturating_duration_since(first).as_secs_f32();
-        if span <= 0.0 {
-            return 0;
-        }
-        ((count - 1) as f32 / span).round() as u32
+        Some((label, stats.latest_hz, stats.max_hz()))
     }
+}
+
+#[inline(always)]
+fn format_hz(hz: u32) -> String {
+    if hz > MAX_DISPLAY_HZ {
+        return format!(">{MAX_DISPLAY_HZ} Hz");
+    }
+    format!("{hz} Hz")
 }
 
 impl UnmappedTracker {
@@ -460,7 +509,7 @@ fn push_pad(
 }
 
 pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(50);
+    let mut actors = Vec::with_capacity(51);
     let cx = screen_center_x();
     let cy = screen_center_y() - 20.0;
     let pad_spacing = 150.0;
@@ -513,12 +562,15 @@ pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
         z(30)
     ));
 
-    let event_rate = state.event_rate.hz(Instant::now());
+    let (rate_source, latest_hz, max_hz) = state
+        .event_rate
+        .readout()
+        .unwrap_or_else(|| ("Waiting for raw input".to_owned(), 0, 0));
     actors.push(act!(text:
         font("miso"):
-        settext("RAW EVENT RATE"):
+        settext("RAW EVENT POLLING"):
         align(1.0, 1.0):
-        xy(screen_width() - 20.0, screen_height() - 42.0):
+        xy(screen_width() - 20.0, screen_height() - 60.0):
         zoom(0.55):
         horizalign(right):
         diffuse(1.0, 1.0, 1.0, 0.8):
@@ -526,10 +578,20 @@ pub fn build_test_input_screen_content(state: &State) -> Vec<Actor> {
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(format!("{event_rate} Hz")):
+        settext(rate_source):
+        align(1.0, 1.0):
+        xy(screen_width() - 20.0, screen_height() - 38.0):
+        zoom(0.65):
+        horizalign(right):
+        diffuse(1.0, 1.0, 1.0, 0.9):
+        z(30)
+    ));
+    actors.push(act!(text:
+        font("miso"):
+        settext(format!("{} latest / {} max", format_hz(latest_hz), format_hz(max_hz))):
         align(1.0, 1.0):
         xy(screen_width() - 20.0, screen_height() - 20.0):
-        zoom(0.9):
+        zoom(0.72):
         horizalign(right):
         z(30)
     ));
@@ -601,6 +663,7 @@ pub fn build_select_music_overlay(
 mod tests {
     use super::*;
     use crate::engine::input::{PadCode, PadId};
+    use std::time::Duration;
 
     #[test]
     fn dedups_pad_events_from_the_same_report() {
@@ -624,45 +687,98 @@ mod tests {
             pressed: true,
         });
 
-        assert_eq!(tracker.samples.len(), 1);
+        let (_, latest, max) = tracker.readout().expect("missing readout");
+        assert_eq!(latest, 0);
+        assert_eq!(max, 0);
     }
 
     #[test]
-    fn reports_recent_event_rate() {
+    fn reports_latest_and_peak_rate() {
         let base = Instant::now();
         let mut tracker = EventRateTracker::default();
 
-        for i in 0..6 {
+        for (i, host_nanos) in [0u64, 1_000_000, 3_000_000, 4_000_000]
+            .into_iter()
+            .enumerate()
+        {
             tracker.record_key(&RawKeyboardEvent {
                 code: KeyCode::KeyA,
                 pressed: i % 2 == 0,
                 repeat: false,
-                timestamp: base + Duration::from_millis(i * 10),
-                host_nanos: i * 10_000_000,
+                timestamp: base + Duration::from_nanos(host_nanos),
+                host_nanos,
             });
         }
 
-        assert_eq!(tracker.hz(base + Duration::from_millis(50)), 100);
+        let (source, latest, max) = tracker.readout().expect("missing readout");
+        assert_eq!(source, "Keyboard");
+        assert_eq!(latest, 1000);
+        assert_eq!(max, 1000);
     }
 
     #[test]
-    fn drops_to_zero_after_the_window_expires() {
+    fn keeps_only_the_last_sixty_four_samples_in_the_peak() {
         let base = Instant::now();
         let mut tracker = EventRateTracker::default();
+        let mut host_nanos = 0u64;
 
-        for i in 0..4 {
+        for i in 0..66 {
+            host_nanos += if i < 2 { 2_000_000 } else { 1_000_000 };
             tracker.record_key(&RawKeyboardEvent {
                 code: KeyCode::KeyA,
                 pressed: i % 2 == 0,
                 repeat: false,
-                timestamp: base + Duration::from_millis(i * 20),
-                host_nanos: i * 20_000_000,
+                timestamp: base + Duration::from_nanos(host_nanos),
+                host_nanos,
             });
         }
 
-        assert_eq!(
-            tracker.hz(base + EVENT_RATE_WINDOW + Duration::from_millis(1)),
-            0
-        );
+        let (_, latest, max) = tracker.readout().expect("missing readout");
+        assert_eq!(latest, 1000);
+        assert_eq!(max, 1000);
+    }
+
+    #[test]
+    fn peak_drops_once_old_spike_leaves_history() {
+        let base = Instant::now();
+        let mut tracker = EventRateTracker::default();
+        let mut host_nanos = 0u64;
+
+        tracker.record_key(&RawKeyboardEvent {
+            code: KeyCode::KeyA,
+            pressed: true,
+            repeat: false,
+            timestamp: base,
+            host_nanos,
+        });
+        host_nanos += 500_000;
+        tracker.record_key(&RawKeyboardEvent {
+            code: KeyCode::KeyA,
+            pressed: false,
+            repeat: false,
+            timestamp: base + Duration::from_nanos(host_nanos),
+            host_nanos,
+        });
+
+        for i in 0..64 {
+            host_nanos += 1_000_000;
+            tracker.record_key(&RawKeyboardEvent {
+                code: KeyCode::KeyA,
+                pressed: i % 2 == 0,
+                repeat: false,
+                timestamp: base + Duration::from_nanos(host_nanos),
+                host_nanos,
+            });
+        }
+
+        let (_, latest, max) = tracker.readout().expect("missing readout");
+        assert_eq!(latest, 1000);
+        assert_eq!(max, 1000);
+    }
+
+    #[test]
+    fn caps_display_above_one_thousand_hz() {
+        assert_eq!(format_hz(1000), "1000 Hz");
+        assert_eq!(format_hz(1001), ">1000 Hz");
     }
 }

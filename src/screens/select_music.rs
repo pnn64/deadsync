@@ -6364,10 +6364,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         Some(MusicWheelEntry::Song(s)) => {
             let bpm = match immediate_chart_p1.and_then(|c| c.display_bpm.as_ref()) {
                 Some(ChartDisplayBpm::Random) => random_bpm_cycle_text(state.session_elapsed),
-                _ => format_bpm_with_rate(
-                    s.chart_display_bpm_range(immediate_chart_p1),
-                    music_rate,
-                ),
+                _ => {
+                    format_bpm_with_rate(s.chart_display_bpm_range(immediate_chart_p1), music_rate)
+                }
             };
             (
                 s.artist.clone(),

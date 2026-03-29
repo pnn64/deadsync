@@ -6753,8 +6753,8 @@ pub fn init(
     let first_note_beat = timing.get_beat_for_time(first_second);
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);
 
-    let mut reference_bpm =
-        get_reference_bpm_from_display_tag(&charts[0], &song.display_bpm).unwrap_or_else(|| {
+    let mut reference_bpm = get_reference_bpm_from_display_tag(&charts[0], &song.display_bpm)
+        .unwrap_or_else(|| {
             let mut actual_max = timing.get_capped_max_bpm(Some(M_MOD_HIGH_CAP));
             if !actual_max.is_finite() || actual_max <= 0.0 {
                 actual_max = initial_bpm.max(120.0);
