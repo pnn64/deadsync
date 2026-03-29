@@ -2,6 +2,7 @@ use crate::game::{
     parsing::simfile::{collect_song_scan_roots, fmt_scan_time},
     song::get_song_cache,
 };
+use crate::config::dirs;
 use log::{info, warn};
 use std::collections::HashMap;
 use std::fs;
@@ -38,13 +39,17 @@ fn report_load_progress<F>(
 }
 
 #[inline(always)]
-fn course_progress_names<'a>(path: &'a Path, root: &'a str) -> (&'a str, &'a str) {
+fn course_progress_names<'a>(path: &'a Path, root: &'a Path) -> (&'a str, &'a str) {
+    let fallback = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("courses");
     let group = path
         .parent()
         .and_then(|dir| dir.file_name())
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty())
-        .unwrap_or(root);
+        .unwrap_or(fallback);
     let course = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -218,7 +223,7 @@ fn autogen_nonstop_group_courses() -> Vec<(PathBuf, rssp::course::CourseFile)> {
             });
         }
 
-        let mut path = PathBuf::from("courses");
+        let mut path = dirs::app_dirs().courses_dir();
         path.push(group_name);
         path.push("__deadsync_autogen_nonstop_random.crs");
 
@@ -246,53 +251,52 @@ fn autogen_nonstop_group_courses() -> Vec<(PathBuf, rssp::course::CourseFile)> {
     out
 }
 
-pub fn scan_and_load_courses(courses_root_str: &'static str, songs_root_str: &'static str) {
+pub fn scan_and_load_courses(courses_root: &Path, songs_root: &Path) {
     scan_and_load_courses_impl::<fn(usize, usize, &str, &str)>(
-        courses_root_str,
-        songs_root_str,
+        courses_root,
+        songs_root,
         None,
     );
 }
 
 pub fn scan_and_load_courses_with_progress<F>(
-    courses_root_str: &'static str,
-    songs_root_str: &'static str,
+    courses_root: &Path,
+    songs_root: &Path,
     progress: &mut F,
 ) where
     F: FnMut(&str, &str),
 {
     let mut with_counts = |_: usize, _: usize, group: &str, course: &str| progress(group, course);
-    scan_and_load_courses_impl(courses_root_str, songs_root_str, Some(&mut with_counts));
+    scan_and_load_courses_impl(courses_root, songs_root, Some(&mut with_counts));
 }
 
 pub fn scan_and_load_courses_with_progress_counts<F>(
-    courses_root_str: &'static str,
-    songs_root_str: &'static str,
+    courses_root: &Path,
+    songs_root: &Path,
     progress: &mut F,
 ) where
     F: FnMut(usize, usize, &str, &str),
 {
-    scan_and_load_courses_impl(courses_root_str, songs_root_str, Some(progress));
+    scan_and_load_courses_impl(courses_root, songs_root, Some(progress));
 }
 
 fn scan_and_load_courses_impl<F>(
-    courses_root_str: &'static str,
-    songs_root_str: &'static str,
+    courses_root: &Path,
+    songs_root: &Path,
     mut progress: Option<&mut F>,
 ) where
     F: FnMut(usize, usize, &str, &str),
 {
-    info!("Starting course scan in '{courses_root_str}'...");
+    info!("Starting course scan in '{}'...", courses_root.display());
     let started = Instant::now();
 
-    let courses_root = Path::new(courses_root_str);
     if !courses_root.is_dir() {
-        warn!("Courses directory '{courses_root_str}' not found. No courses will be loaded.");
+        warn!("Courses directory '{}' not found. No courses will be loaded.", courses_root.display());
         set_course_cache(Vec::new());
         return;
     }
 
-    let song_roots = collect_song_scan_roots(songs_root_str);
+    let song_roots = collect_song_scan_roots(songs_root);
     if song_roots.is_empty() {
         warn!("No valid song roots found. No courses will be loaded.");
         set_course_cache(Vec::new());
@@ -315,7 +319,7 @@ fn scan_and_load_courses_impl<F>(
     report_load_progress(&mut progress, 0, total_courses, "", "");
 
     for course_path in course_paths {
-        let (group_display, course_display) = course_progress_names(&course_path, courses_root_str);
+        let (group_display, course_display) = course_progress_names(&course_path, courses_root);
         let group_display = group_display.to_owned();
         let course_display = course_display.to_owned();
         let mut report_done = || {

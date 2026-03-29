@@ -44,8 +44,9 @@ pub(super) fn normalize_machine_default_noteskin(raw: &str) -> String {
 }
 
 pub(super) fn create_default_config_file() -> Result<(), std::io::Error> {
-    info!("'{CONFIG_PATH}' not found, creating with default values.");
-    std::fs::write(CONFIG_PATH, defaults::build_content())
+    let path = dirs::app_dirs().config_path();
+    info!("'{}' not found, creating with default values.", path.display());
+    std::fs::write(path, defaults::build_content())
 }
 
 pub(super) fn save_without_keymaps() {

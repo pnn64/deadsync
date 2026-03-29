@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::AssetManager;
+use crate::config::dirs;
 use crate::engine::audio;
 use crate::engine::gfx::BlendMode;
 use crate::engine::input::{InputEvent, VirtualAction};
@@ -281,7 +282,7 @@ fn build_choices() -> Vec<Choice> {
         let mut mini_indicator = profile::MiniIndicator::None;
         let mut noteskin = profile::NoteSkin::default();
         let mut judgment = profile::JudgmentGraphic::default();
-        let ini_path = std::path::Path::new("save/profiles")
+        let ini_path = dirs::app_dirs().profiles_root()
             .join(&p.id)
             .join("profile.ini");
         let mut ini = crate::config::SimpleIni::new();

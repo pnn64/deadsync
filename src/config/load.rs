@@ -11,7 +11,7 @@ mod theme_load;
 pub fn bootstrap_log_to_file() -> bool {
     let mut conf = SimpleIni::new();
     let default = Config::default().log_to_file;
-    if conf.load(CONFIG_PATH).is_err() {
+    if conf.load(dirs::app_dirs().config_path()).is_err() {
         return default;
     }
     conf.get("Options", "LogToFile")
@@ -23,10 +23,11 @@ pub fn load() {
     ensure_config_file();
 
     let mut conf = SimpleIni::new();
-    match conf.load(CONFIG_PATH) {
+    let path = dirs::app_dirs().config_path();
+    match conf.load(&path) {
         Ok(()) => load_from_ini(&conf),
         Err(e) => {
-            warn!("Failed to load '{CONFIG_PATH}': {e}. Using default values.");
+            warn!("Failed to load '{}': {e}. Using default values.", path.display());
             load_defaults_after_error();
         }
     }
@@ -35,7 +36,7 @@ pub fn load() {
 }
 
 fn ensure_config_file() {
-    if !std::path::Path::new(CONFIG_PATH).exists()
+    if !dirs::app_dirs().config_path().exists()
         && let Err(e) = create_default_config_file()
     {
         warn!("Failed to create default config file: {e}");
@@ -62,7 +63,7 @@ fn publish_config(cfg: Config) {
         sync_audio_mix_levels_from_config(&current);
         logging::set_file_logging_enabled(current.log_to_file);
     }
-    info!("Configuration loaded from '{CONFIG_PATH}'.");
+    info!("Configuration loaded from '{}'.", dirs::app_dirs().config_path().display());
 }
 
 fn publish_keymap(conf: &SimpleIni) {

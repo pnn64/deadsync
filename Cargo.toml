@@ -72,6 +72,9 @@ ureq = { version = "3.3.0", features = ["json", "rustls"] }
 # Unlocks
 zip = { version = "8.4.0", default-features = false, features = ["deflate"] }
 
+# Platform-native data directories
+directories = "6"
+
 # Song cache
 bincode = "2.0.1"
 twox-hash = "2.1.2"

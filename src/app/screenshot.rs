@@ -1,6 +1,7 @@
 use super::{App, CurrentScreen, ShellState};
 use crate::act;
 use crate::assets;
+use crate::config::dirs;
 use crate::engine::present::actors::Actor;
 use crate::engine::space;
 use crate::game::{profile, scores};
@@ -15,7 +16,6 @@ use std::time::Instant;
 const SCREENSHOT_FLASH_ATTACK_SECONDS: f32 = 0.02;
 const SCREENSHOT_FLASH_DECAY_SECONDS: f32 = 0.18;
 const SCREENSHOT_FLASH_MAX_ALPHA: f32 = 0.7;
-const SCREENSHOT_DIR: &str = "save/screenshots";
 const SCREENSHOT_PREVIEW_TEXTURE_KEY: &str = "__screenshot_preview";
 const SCREENSHOT_PREVIEW_SCALE: f32 = 0.2;
 const SCREENSHOT_PREVIEW_HOLD_SECONDS: f32 = 0.4;
@@ -67,7 +67,7 @@ pub(super) fn should_auto_screenshot_eval(eval: &evaluation::State, mask: u8) ->
 }
 
 fn save_screenshot_image(image: &image::RgbaImage) -> Result<PathBuf, Box<dyn Error>> {
-    let dir = PathBuf::from(SCREENSHOT_DIR);
+    let dir = dirs::app_dirs().screenshots_dir();
     std::fs::create_dir_all(&dir)?;
 
     let stamp = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();

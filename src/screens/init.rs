@@ -1,4 +1,5 @@
 use crate::act;
+use crate::config::dirs;
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -377,7 +378,8 @@ fn start_loading_thread(state: &mut State) {
                 song: song.to_owned(),
             });
         };
-        song_loading::scan_and_load_songs_with_progress_counts("songs", &mut on_song);
+        let dirs = dirs::app_dirs();
+        song_loading::scan_and_load_songs_with_progress_counts(&dirs.songs_dir(), &mut on_song);
 
         let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Courses));
         let mut on_course = |done: usize, total: usize, group: &str, course: &str| {
@@ -388,7 +390,7 @@ fn start_loading_thread(state: &mut State) {
                 course: course.to_owned(),
             });
         };
-        course::scan_and_load_courses_with_progress_counts("courses", "songs", &mut on_course);
+        course::scan_and_load_courses_with_progress_counts(&dirs.courses_dir(), &dirs.songs_dir(), &mut on_course);
 
         let (banner_paths, cdtitle_paths) = collect_artwork_cache_paths();
         let artwork_total =

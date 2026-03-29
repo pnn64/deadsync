@@ -8,7 +8,7 @@ use crate::config::{
     self, BreakdownStyle, DefaultFailType, DisplayMode, FullscreenType, LogLevel,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicWheelStyle, SimpleIni,
-    SyncGraphMode,
+    SyncGraphMode, dirs,
 };
 use crate::engine::audio;
 #[cfg(target_os = "windows")]
@@ -22,7 +22,6 @@ use crate::screens::{Screen, ScreenAction};
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -3288,7 +3287,7 @@ fn sync_pack_options() -> (Vec<String>, Vec<Option<String>>) {
 fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
     let mut profiles = Vec::new();
     for summary in profile::scan_local_profiles() {
-        let profile_dir = PathBuf::from("save/profiles").join(summary.id.as_str());
+        let profile_dir = dirs::app_dirs().profiles_root().join(summary.id.as_str());
         let mut gs = SimpleIni::new();
         let mut ac = SimpleIni::new();
         let gs_api_key = if gs.load(profile_dir.join("groovestats.ini")).is_ok() {
@@ -5638,7 +5637,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
                 song: song.to_owned(),
             });
         };
-        song_loading::scan_and_load_songs_with_progress_counts("songs", &mut on_song);
+        song_loading::scan_and_load_songs_with_progress_counts(&dirs::app_dirs().songs_dir(), &mut on_song);
 
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Courses));
 
@@ -5650,7 +5649,8 @@ fn start_reload_songs_and_courses(state: &mut State) {
                 course: course.to_owned(),
             });
         };
-        course::scan_and_load_courses_with_progress_counts("courses", "songs", &mut on_course);
+        let dirs = dirs::app_dirs();
+        course::scan_and_load_courses_with_progress_counts(&dirs.courses_dir(), &dirs.songs_dir(), &mut on_course);
 
         let _ = tx.send(ReloadMsg::Done);
     });

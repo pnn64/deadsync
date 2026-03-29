@@ -1,4 +1,5 @@
 use crate::config::SimpleIni;
+use crate::config::dirs;
 use crate::engine::input::InputSource;
 use crate::engine::network;
 use crate::game::gameplay;
@@ -125,7 +126,8 @@ static GS_SCORE_CACHE: std::sync::LazyLock<Mutex<GsScoreCacheState>> =
     std::sync::LazyLock::new(|| Mutex::new(GsScoreCacheState::default()));
 
 fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
-    PathBuf::from("save/profiles")
+    dirs::app_dirs()
+        .profiles_root()
         .join(profile_id)
         .join("scores")
         .join("gs")
@@ -282,7 +284,8 @@ static MACHINE_LOCAL_SCORE_CACHE: std::sync::LazyLock<Mutex<MachineLocalScoreCac
     std::sync::LazyLock::new(|| Mutex::new(MachineLocalScoreCacheState::default()));
 
 fn local_scores_root_for_profile(profile_id: &str) -> PathBuf {
-    PathBuf::from("save/profiles")
+    dirs::app_dirs()
+        .profiles_root()
         .join(profile_id)
         .join("scores")
         .join("local")
@@ -430,7 +433,7 @@ fn collect_recent_plays_in_root(root: &Path, latest_by_chart: &mut HashMap<Strin
 /// Returns chart hashes ordered by latest local play time (most recent first),
 /// aggregated across all local profiles.
 pub fn recent_played_chart_hashes_for_machine() -> Vec<String> {
-    let profiles_root = PathBuf::from("save/profiles");
+    let profiles_root = dirs::app_dirs().profiles_root();
     let Ok(read_dir) = fs::read_dir(&profiles_root) else {
         return Vec::new();
     };
@@ -496,7 +499,7 @@ fn collect_play_counts_in_root(root: &Path, counts_by_chart: &mut HashMap<String
 /// Returns `(chart_hash, play_count)` pairs ordered by play count descending,
 /// aggregated across all local profiles.
 pub fn played_chart_counts_for_machine() -> Vec<(String, u32)> {
-    let profiles_root = PathBuf::from("save/profiles");
+    let profiles_root = dirs::app_dirs().profiles_root();
     let Ok(read_dir) = fs::read_dir(&profiles_root) else {
         return Vec::new();
     };
@@ -571,7 +574,8 @@ fn ensure_local_score_cache_loaded(profile_id: &str) {
 }
 
 fn profile_initials_for_id(profile_id: &str) -> Option<String> {
-    let ini_path = PathBuf::from("save/profiles")
+    let ini_path = dirs::app_dirs()
+        .profiles_root()
         .join(profile_id)
         .join("profile.ini");
     if !ini_path.is_file() {

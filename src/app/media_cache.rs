@@ -1,4 +1,5 @@
 use crate::assets::{AssetManager, dynamic, open_image_fallback};
+use crate::config::dirs;
 use crate::engine::{gfx::Backend, video};
 use image::RgbaImage;
 use log::{debug, warn};
@@ -8,9 +9,6 @@ use std::{
     sync::{Arc, Mutex, mpsc},
     time::Instant,
 };
-
-const BANNER_CACHE_DIR: &str = "cache/banner";
-const CDTITLE_CACHE_DIR: &str = "cache/cdtitle";
 
 #[inline(always)]
 pub(crate) fn banner_cache_options() -> dynamic::BannerCacheOptions {
@@ -29,7 +27,7 @@ pub(crate) fn cdtitle_cache_options() -> dynamic::BannerCacheOptions {
 pub(crate) fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
     let opts = banner_cache_options();
     if opts.enabled {
-        return dynamic::load_or_build_cached_dynamic_image(path, opts, BANNER_CACHE_DIR)
+        return dynamic::load_or_build_cached_dynamic_image(path, opts, &dirs::app_dirs().banner_cache_dir())
             .map_err(|e| e.to_string());
     }
     if dynamic::is_dynamic_video_path(path) {
@@ -43,7 +41,7 @@ pub(crate) fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> 
 pub(crate) fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String> {
     let opts = cdtitle_cache_options();
     if opts.enabled {
-        return dynamic::load_or_build_cached_dynamic_image(path, opts, CDTITLE_CACHE_DIR)
+        return dynamic::load_or_build_cached_dynamic_image(path, opts, &dirs::app_dirs().cdtitle_cache_dir())
             .map_err(|e| e.to_string());
     }
     open_image_fallback(path)
@@ -82,7 +80,7 @@ enum DynamicImagePrewarmOutcome {
 struct DynamicImagePrewarmJob {
     path: PathBuf,
     opts: dynamic::BannerCacheOptions,
-    cache_dir: &'static str,
+    cache_dir: PathBuf,
     label: &'static str,
 }
 
@@ -96,7 +94,7 @@ fn push_dynamic_image_prewarm_jobs(
     unique: &mut HashSet<String>,
     paths: &[PathBuf],
     opts: dynamic::BannerCacheOptions,
-    cache_dir: &'static str,
+    cache_dir: &Path,
     label: &'static str,
 ) -> usize {
     if !opts.enabled {
@@ -109,7 +107,7 @@ fn push_dynamic_image_prewarm_jobs(
             jobs.push(DynamicImagePrewarmJob {
                 path: path.clone(),
                 opts,
-                cache_dir,
+                cache_dir: cache_dir.to_path_buf(),
                 label,
             });
         } else {
@@ -123,7 +121,7 @@ fn push_dynamic_image_prewarm_jobs(
 fn prewarm_one_dynamic_image(
     path: PathBuf,
     opts: dynamic::BannerCacheOptions,
-    cache_dir: &'static str,
+    cache_dir: &Path,
 ) -> DynamicImagePrewarmOutcome {
     if !path.is_file() {
         return DynamicImagePrewarmOutcome::SkippedNonFile { path };
@@ -164,7 +162,7 @@ fn dynamic_image_prewarm_workers(job_count: usize) -> usize {
 fn dynamic_image_prewarm_dedupe_key(
     path: &Path,
     opts: dynamic::BannerCacheOptions,
-    cache_dir: &'static str,
+    cache_dir: &Path,
 ) -> String {
     dynamic::dynamic_image_cache_path_for(path, opts, cache_dir).map_or_else(
         || path.to_string_lossy().replace('\\', "/"),
@@ -206,7 +204,7 @@ fn prewarm_dynamic_image_jobs_with_progress<F>(
                 let Ok(job) = job else {
                     return;
                 };
-                let outcome = prewarm_one_dynamic_image(job.path, job.opts, job.cache_dir);
+                let outcome = prewarm_one_dynamic_image(job.path, job.opts, &job.cache_dir);
                 let _ = res_tx.send(DynamicImagePrewarmResult {
                     label: job.label,
                     outcome,
@@ -314,12 +312,14 @@ pub(crate) fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[Path
     let cdtitle_opts = cdtitle_cache_options();
     let total_paths = banner_paths.len().saturating_add(cdtitle_paths.len());
     let mut unique = HashSet::<String>::with_capacity(total_paths);
+    let bcache = dirs::app_dirs().banner_cache_dir();
+    let ccache = dirs::app_dirs().cdtitle_cache_dir();
     if banner_opts.enabled {
         for path in banner_paths {
             unique.insert(dynamic_image_prewarm_dedupe_key(
                 path,
                 banner_opts,
-                BANNER_CACHE_DIR,
+                &bcache,
             ));
         }
     }
@@ -328,7 +328,7 @@ pub(crate) fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[Path
             unique.insert(dynamic_image_prewarm_dedupe_key(
                 path,
                 cdtitle_opts,
-                CDTITLE_CACHE_DIR,
+                &ccache,
             ));
         }
     }
@@ -348,12 +348,14 @@ pub(crate) fn prewarm_artwork_cache_with_progress<F>(
     let mut unique = HashSet::<String>::with_capacity(total_paths);
     let mut jobs = Vec::<DynamicImagePrewarmJob>::with_capacity(total_paths);
     let mut duplicate = 0usize;
+    let bcache = dirs::app_dirs().banner_cache_dir();
+    let ccache = dirs::app_dirs().cdtitle_cache_dir();
     duplicate = duplicate.saturating_add(push_dynamic_image_prewarm_jobs(
         &mut jobs,
         &mut unique,
         banner_paths,
         banner_opts,
-        BANNER_CACHE_DIR,
+        &bcache,
         "Banner",
     ));
     duplicate = duplicate.saturating_add(push_dynamic_image_prewarm_jobs(
@@ -361,7 +363,7 @@ pub(crate) fn prewarm_artwork_cache_with_progress<F>(
         &mut unique,
         cdtitle_paths,
         cdtitle_opts,
-        CDTITLE_CACHE_DIR,
+        &ccache,
         "CDTitle",
     ));
     prewarm_dynamic_image_jobs_with_progress(total_paths, jobs, duplicate, "Artwork", progress);
