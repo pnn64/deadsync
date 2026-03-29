@@ -265,8 +265,7 @@ pub fn run_linux_backend(
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
 ) {
-    let _ = emit_key;
-    backends::evdev::run_pad_only(emit_pad, emit_sys);
+    backends::evdev::run(emit_pad, emit_sys, emit_key);
 }
 
 #[cfg(target_os = "freebsd")]
@@ -275,8 +274,7 @@ pub fn run_freebsd_backend(
     emit_sys: impl FnMut(GpSystemEvent) + Send + 'static,
     emit_key: impl FnMut(RawKeyboardEvent) + Send + 'static,
 ) {
-    let _ = emit_key;
-    backends::evdev::run_pad_only(emit_pad, emit_sys);
+    backends::evdev::run(emit_pad, emit_sys, emit_key);
 }
 
 #[cfg(target_os = "macos")]

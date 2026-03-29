@@ -1,8 +1,7 @@
 use super::{
     DevdEvent, DevdWatch, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, emit_dir_edges,
-    uuid_from_bytes,
+    event_time, receipt_time, uuid_from_bytes,
 };
-use crate::engine::host_time::instant_nanos;
 use crate::engine::input::RawKeyboardEvent;
 use log::{debug, warn};
 use std::ffi::c_void;
@@ -10,7 +9,6 @@ use std::fs;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::platform::scancode::PhysicalKeyExtScancode;
 
@@ -218,15 +216,6 @@ const fn eviocgname(len: usize) -> libc::c_ulong {
 #[inline(always)]
 const fn eviocgbit(ev: u8, len: usize) -> libc::c_ulong {
     ioc(IOC_READ, b'E' as u32, 0x20 + ev as u32, len as u32)
-}
-
-#[inline(always)]
-fn receipt_time() -> (Instant, u64) {
-    // Keep FreeBSD on the same event-driven receipt-time path as Linux so
-    // timestamp behavior stays consistent across machines without depending on
-    // evdev clock configuration support.
-    let timestamp = Instant::now();
-    (timestamp, instant_nanos(timestamp))
 }
 
 #[inline(always)]
@@ -550,6 +539,14 @@ fn remove_dev_by_path(
     }
 }
 
+pub fn run(
+    emit_pad: impl FnMut(PadEvent),
+    emit_sys: impl FnMut(GpSystemEvent),
+    emit_key: impl FnMut(RawKeyboardEvent),
+) {
+    run_inner(true, emit_pad, emit_sys, emit_key);
+}
+
 pub fn run_pad_only(emit_pad: impl FnMut(PadEvent), emit_sys: impl FnMut(GpSystemEvent)) {
     run_inner(false, emit_pad, emit_sys, |_| {});
 }
@@ -640,7 +637,7 @@ fn run_inner(
         if rc < 0 {
             continue;
         }
-        let (receipt_timestamp, receipt_host_nanos) = receipt_time();
+        let receipt = receipt_time();
 
         let mut hotplug = Vec::new();
         if watch_offset == 1 {
@@ -683,6 +680,8 @@ fn run_inner(
                 // `read`, so the first `count` entries of `buf` were initialized by
                 // the kernel in this iteration.
                 let ev = unsafe { buf[j].assume_init() };
+                let (event_timestamp, event_host_nanos) =
+                    event_time(receipt, ev.tv_sec, ev.tv_usec);
                 if ev.type_ == EV_SYN {
                     continue;
                 }
@@ -694,8 +693,8 @@ fn run_inner(
                     let pressed = ev.value != 0;
                     emit_pad(PadEvent::RawButton {
                         id: dev.id,
-                        timestamp: receipt_timestamp,
-                        host_nanos: receipt_host_nanos,
+                        timestamp: event_timestamp,
+                        host_nanos: event_host_nanos,
                         code: PadCode(code_u32(ev.type_, ev.code)),
                         uuid: dev.uuid,
                         value: if pressed { 1.0 } else { 0.0 },
@@ -710,8 +709,8 @@ fn run_inner(
 
                 emit_pad(PadEvent::RawAxis {
                     id: dev.id,
-                    timestamp: receipt_timestamp,
-                    host_nanos: receipt_host_nanos,
+                    timestamp: event_timestamp,
+                    host_nanos: event_host_nanos,
                     code: PadCode(code_u32(ev.type_, ev.code)),
                     uuid: dev.uuid,
                     value: ev.value as f32,
@@ -730,8 +729,8 @@ fn run_inner(
                     &mut emit_pad,
                     dev.id,
                     &mut dev.dir,
-                    receipt_timestamp,
-                    receipt_host_nanos,
+                    event_timestamp,
+                    event_host_nanos,
                     want,
                 );
             }
@@ -765,6 +764,8 @@ fn run_inner(
                 // `read`, so the first `count` entries of `buf` were initialized by
                 // the kernel in this iteration.
                 let ev = unsafe { buf[j].assume_init() };
+                let (event_timestamp, event_host_nanos) =
+                    event_time(receipt, ev.tv_sec, ev.tv_usec);
                 if ev.type_ != EV_KEY {
                     continue;
                 }
@@ -778,8 +779,8 @@ fn run_inner(
                         code,
                         pressed,
                         repeat,
-                        timestamp: receipt_timestamp,
-                        host_nanos: receipt_host_nanos,
+                        timestamp: event_timestamp,
+                        host_nanos: event_host_nanos,
                     });
                 }
             }
