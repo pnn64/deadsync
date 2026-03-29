@@ -6240,8 +6240,23 @@ const fn lane_from_column(column: usize) -> Option<Lane> {
     }
 }
 
-fn get_reference_bpm_from_display_tag(display_bpm_str: &str) -> Option<f32> {
-    let s = display_bpm_str.trim();
+fn get_reference_bpm_from_display_tag(
+    chart: &ChartData,
+    song_display_bpm_str: &str,
+) -> Option<f32> {
+    // 1. Try chart-level display BPM
+    match &chart.display_bpm {
+        Some(crate::game::chart::ChartDisplayBpm::Specified { max, .. }) => {
+            let v = *max as f32;
+            if v.is_finite() && v > 0.0 {
+                return Some(v);
+            }
+        }
+        Some(crate::game::chart::ChartDisplayBpm::Random) => return None,
+        None => {}
+    }
+    // 2. Fall back to song-level display BPM string
+    let s = song_display_bpm_str.trim();
     if s.is_empty() || s == "*" {
         return None;
     }
@@ -6739,7 +6754,7 @@ pub fn init(
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);
 
     let mut reference_bpm =
-        get_reference_bpm_from_display_tag(&song.display_bpm).unwrap_or_else(|| {
+        get_reference_bpm_from_display_tag(&charts[0], &song.display_bpm).unwrap_or_else(|| {
             let mut actual_max = timing.get_capped_max_bpm(Some(M_MOD_HIGH_CAP));
             if !actual_max.is_finite() || actual_max <= 0.0 {
                 actual_max = initial_bpm.max(120.0);

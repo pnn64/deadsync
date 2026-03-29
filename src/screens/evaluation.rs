@@ -1863,11 +1863,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.push(title_and_banner_frame);
 
         // --- SongFeatures Group ---
-        let bpm_text = cached_bpm_text(
-            score_info.song.min_bpm,
-            score_info.song.max_bpm,
-            score_info.music_rate,
-        );
+        let (bpm_lo, bpm_hi) = score_info
+            .song
+            .chart_display_bpm_range(Some(&score_info.chart))
+            .unwrap_or((score_info.song.min_bpm, score_info.song.max_bpm));
+        let bpm_text = if matches!(
+            score_info.chart.display_bpm,
+            Some(crate::game::chart::ChartDisplayBpm::Random)
+        ) {
+            Arc::<str>::from("??? bpm")
+        } else {
+            cached_bpm_text(bpm_lo, bpm_hi, score_info.music_rate)
+        };
 
         let length_text = {
             // Simply Love uses Song:MusicLengthSeconds() divided by MusicRate
