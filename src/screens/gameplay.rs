@@ -694,6 +694,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
     }
 
+    // Simply Love parity: BGAnimations/ScreenGameplay underlay/Shared/Header.lua.
+    // This translucent top strip sits underneath the UpperNPSGraph and other HUD actors.
+    actors.push(act!(quad:
+        align(0.5, 0.0): xy(screen_center_x(), 0.0):
+        zoomto(screen_width(), 80.0):
+        diffuse(0.0, 0.0, 0.0, 0.85):
+        z(83)
+    ));
+
     actors.reserve(p1_actors.len() + p2_actors.as_ref().map_or(0, Vec::len) + 48);
     if let Some(p2_actors) = p2_actors {
         actors.extend(p2_actors);
