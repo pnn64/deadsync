@@ -164,7 +164,7 @@ fn should_display_profile_names(stages: &[stage_stats::StageSummary]) -> bool {
     let mut p1: HashSet<&str> = HashSet::new();
     let mut p2: HashSet<&str> = HashSet::new();
     for s in stages {
-        if let Some(p) = s.players.get(0).and_then(|p| p.as_ref()) {
+        if let Some(p) = s.players.first().and_then(|p| p.as_ref()) {
             p1.insert(p.profile_name.as_str());
         }
         if let Some(p) = s.players.get(1).and_then(|p| p.as_ref()) {

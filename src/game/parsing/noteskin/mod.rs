@@ -1187,10 +1187,8 @@ impl Noteskin {
                 h.topcap_active.as_ref(),
                 h.bottomcap_inactive.as_ref(),
                 h.bottomcap_active.as_ref(),
-            ] {
-                if let Some(slot) = slot {
-                    visit(slot.texture_key());
-                }
+            ].into_iter().flatten() {
+                visit(slot.texture_key());
             }
             if let Some(slot) = h.explosion.as_ref() {
                 visit(slot.texture_key());
@@ -4465,7 +4463,7 @@ fn itg_resolve_actor_file_compiled(
         .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"));
     if !is_lua {
         if let Some(mut slot) =
-            itg_slot_from_path_with_frame(&path, 0).or_else(|| itg_slot_from_path(&path))
+            itg_slot_from_path_with_frame(path, 0).or_else(|| itg_slot_from_path(path))
         {
             if let Some(rot) = rotation_z {
                 slot.set_rotation_deg(rot);

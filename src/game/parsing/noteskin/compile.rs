@@ -245,7 +245,7 @@ mod actor {
         }
         after += 2;
         after = skip_ws(content, after);
-        if !content.as_bytes().get(after).is_some_and(|ch| *ch == b'{') {
+        if content.as_bytes().get(after).is_none_or(|ch| *ch != b'{') {
             return (HashMap::new(), call_close + 1);
         }
         let Some(end) = find_matching(content, after, '{', '}') else {
@@ -267,7 +267,7 @@ mod actor {
         }
         after += 2;
         after = skip_ws(content, after);
-        if !content.as_bytes().get(after).is_some_and(|ch| *ch == b'{') {
+        if content.as_bytes().get(after).is_none_or(|ch| *ch != b'{') {
             return None;
         }
         let end = find_matching(content, after, '{', '}')?;
@@ -374,7 +374,6 @@ mod actor {
                 frame_delays = linear_delays
                     .into_iter()
                     .enumerate()
-                    .map(|(idx, delay)| (idx, delay))
                     .collect();
                 continue;
             }
@@ -1118,7 +1117,7 @@ fn compiled_hash_cache_key(game: &str, skin: &str) -> String {
 
 fn source_hash(game: &str, data: &noteskin_itg::NoteskinData) -> Result<String, String> {
     let mut paths = source_paths(data);
-    paths.sort_by(|left, right| source_label(data, left).cmp(&source_label(data, right)));
+    paths.sort_by_key(|left| source_label(data, left));
     let mut hasher = XxHash64::default();
     hasher.write_u32(noteskin_compiled::CACHE_SCHEMA_VERSION);
     hasher.write_u32(COMPILER_VERSION);

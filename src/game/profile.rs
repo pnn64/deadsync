@@ -929,7 +929,7 @@ fn load_player_options(
     options.scroll_speed = profile_conf
         .get(section, "ScrollSpeed")
         .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
-        .unwrap_or_else(|| options.scroll_speed.clone());
+        .unwrap_or_else(|| options.scroll_speed);
     options.turn_option = profile_conf
         .get(section, "Turn")
         .and_then(|s| TurnOption::from_str(&s).ok())
@@ -1036,7 +1036,7 @@ fn load_player_options(
     options.mini_indicator = profile_conf
         .get(section, "MiniIndicator")
         .and_then(|s| MiniIndicator::from_str(&s).ok())
-        .unwrap_or_else(|| {
+        .unwrap_or({
             if options.subtractive_scoring {
                 MiniIndicator::SubtractiveScoring
             } else if options.pacemaker {
@@ -2277,12 +2277,12 @@ impl Default for Profile {
             groovestats_is_pad_player: false,
             groovestats_username: String::new(),
             arrowcloud_api_key: String::new(),
-            background_filter: player_options.background_filter.clone(),
-            hold_judgment_graphic: player_options.hold_judgment_graphic.clone(),
-            judgment_graphic: player_options.judgment_graphic.clone(),
-            combo_font: player_options.combo_font.clone(),
-            combo_colors: player_options.combo_colors.clone(),
-            combo_mode: player_options.combo_mode.clone(),
+            background_filter: player_options.background_filter,
+            hold_judgment_graphic: player_options.hold_judgment_graphic,
+            judgment_graphic: player_options.judgment_graphic,
+            combo_font: player_options.combo_font,
+            combo_colors: player_options.combo_colors,
+            combo_mode: player_options.combo_mode,
             carry_combo_between_songs: player_options.carry_combo_between_songs,
             current_combo: 0,
             known_pack_names: HashSet::new(),
@@ -2290,7 +2290,7 @@ impl Default for Profile {
             mine_noteskin: player_options.mine_noteskin.clone(),
             avatar_path: None,
             avatar_texture_key: None,
-            scroll_speed: player_options.scroll_speed.clone(),
+            scroll_speed: player_options.scroll_speed,
             scroll_option: player_options.scroll_option,
             reverse_scroll: player_options.reverse_scroll,
             turn_option: player_options.turn_option,
@@ -2399,16 +2399,16 @@ impl Profile {
     #[inline(always)]
     pub fn current_player_options(&self) -> PlayerOptionsData {
         PlayerOptionsData {
-            background_filter: self.background_filter.clone(),
-            hold_judgment_graphic: self.hold_judgment_graphic.clone(),
-            judgment_graphic: self.judgment_graphic.clone(),
-            combo_font: self.combo_font.clone(),
-            combo_colors: self.combo_colors.clone(),
-            combo_mode: self.combo_mode.clone(),
+            background_filter: self.background_filter,
+            hold_judgment_graphic: self.hold_judgment_graphic,
+            judgment_graphic: self.judgment_graphic,
+            combo_font: self.combo_font,
+            combo_colors: self.combo_colors,
+            combo_mode: self.combo_mode,
             carry_combo_between_songs: self.carry_combo_between_songs,
             noteskin: self.noteskin.clone(),
             mine_noteskin: self.mine_noteskin.clone(),
-            scroll_speed: self.scroll_speed.clone(),
+            scroll_speed: self.scroll_speed,
             scroll_option: self.scroll_option,
             reverse_scroll: self.reverse_scroll,
             turn_option: self.turn_option,
@@ -2481,16 +2481,16 @@ impl Profile {
     }
 
     fn apply_player_options(&mut self, options: &PlayerOptionsData) {
-        self.background_filter = options.background_filter.clone();
-        self.hold_judgment_graphic = options.hold_judgment_graphic.clone();
-        self.judgment_graphic = options.judgment_graphic.clone();
-        self.combo_font = options.combo_font.clone();
-        self.combo_colors = options.combo_colors.clone();
-        self.combo_mode = options.combo_mode.clone();
+        self.background_filter = options.background_filter;
+        self.hold_judgment_graphic = options.hold_judgment_graphic;
+        self.judgment_graphic = options.judgment_graphic;
+        self.combo_font = options.combo_font;
+        self.combo_colors = options.combo_colors;
+        self.combo_mode = options.combo_mode;
         self.carry_combo_between_songs = options.carry_combo_between_songs;
         self.noteskin = options.noteskin.clone();
         self.mine_noteskin = options.mine_noteskin.clone();
-        self.scroll_speed = options.scroll_speed.clone();
+        self.scroll_speed = options.scroll_speed;
         self.scroll_option = options.scroll_option;
         self.reverse_scroll = options.reverse_scroll;
         self.turn_option = options.turn_option;
@@ -3715,8 +3715,7 @@ fn allocate_local_profile_id() -> Result<String, std::io::Error> {
     }
     if next > LOCAL_PROFILE_MAX_ID {
         if first_free > LOCAL_PROFILE_MAX_ID {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(std::io::Error::other(
                 "Too many profiles",
             ));
         }

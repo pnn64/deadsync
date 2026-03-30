@@ -2287,9 +2287,9 @@ fn start_output_backend(
 
     #[cfg(not(target_os = "linux"))]
     {
-        return Err(
+        Err(
             "no native audio backend hint is available on this platform build.".to_string(),
-        );
+        )
     }
 }
 

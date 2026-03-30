@@ -1522,7 +1522,7 @@ fn random_bpm_cycle_text(elapsed: f32) -> String {
     let cycle = (elapsed / RANDOM_BPM_CYCLE_SPEED) as u32;
     // Deterministic per-cycle "random" via integer hash (Knuth multiplicative)
     let hash = cycle.wrapping_mul(2654435761);
-    if hash % 10 == 0 {
+    if hash.is_multiple_of(10) {
         "???".to_string()
     } else {
         (hash % 1000).to_string()
@@ -5703,7 +5703,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         .nav_key_held_since
         .is_some_and(|t| now.duration_since(t) >= NAV_INITIAL_HOLD_DELAY);
     if wheel_moving {
-        match state.nav_key_held_direction.clone() {
+        match state.nav_key_held_direction {
             Some(dir) => music_wheel_update_hold_scroll(state, dt, dir),
             None => music_wheel_settle_offset(state, dt),
         };
@@ -6123,7 +6123,7 @@ fn step_artist_cycle_text(chart: &ChartData, cycle_elapsed: f32) -> &str {
     ];
     let mut non_empty: Vec<&str> = Vec::with_capacity(3);
     for &s in &candidates {
-        if !s.trim().is_empty() && !non_empty.iter().any(|&prev| prev == s) {
+        if !s.trim().is_empty() && !non_empty.contains(&s) {
             non_empty.push(s);
         }
     }

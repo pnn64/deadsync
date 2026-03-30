@@ -699,7 +699,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         f(p);
         if all_done(state) {
-            return;
         }
     };
 

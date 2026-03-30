@@ -1057,7 +1057,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             color: *color,
             stroke_color: *stroke_color,
             glow: *glow,
-            font: *name_map
+            font: name_map
                 .get(font)
                 .unwrap_or_else(|| panic!("missing font mapping for '{font}'")),
             content: TextContent::Owned(content.clone()),

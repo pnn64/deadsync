@@ -3843,7 +3843,9 @@ enum HealthState {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[derive(Default)]
 enum DangerAnim {
+    #[default]
     Hidden,
     Danger {
         started_at: f32,
@@ -3859,11 +3861,6 @@ enum DangerAnim {
     },
 }
 
-impl Default for DangerAnim {
-    fn default() -> Self {
-        Self::Hidden
-    }
-}
 
 #[derive(Clone, Copy, Debug, Default)]
 struct DangerFx {
@@ -5634,7 +5631,7 @@ fn recent_step_tracks(
         .filter(|pressed_at| {
             pressed_at.is_some_and(|pressed_at| {
                 let age = event_music_time - pressed_at;
-                age >= 0.0 && age < STEP_CAL_JUMP_WINDOW_S
+                (0.0..STEP_CAL_JUMP_WINDOW_S).contains(&age)
             })
         })
         .count()
@@ -9786,7 +9783,7 @@ fn offset_adjust_delta(code: KeyCode) -> Option<f32> {
     match code {
         KeyCode::F11 => Some(-OFFSET_ADJUST_STEP_SECONDS),
         KeyCode::F12 => Some(OFFSET_ADJUST_STEP_SECONDS),
-        _ => return None,
+        _ => None,
     }
 }
 

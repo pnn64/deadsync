@@ -709,7 +709,7 @@ fn init_uniform_proj(
 ) -> ProjState {
     let align = device.limits().min_uniform_buffer_offset_alignment as u64;
     let stride = if align > 0 {
-        ((PROJ_BYTES + align - 1) / align) * align
+        PROJ_BYTES.div_ceil(align) * align
     } else {
         PROJ_BYTES
     };

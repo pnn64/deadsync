@@ -606,7 +606,7 @@ fn stroked_text_actor(text: &'static str, x: f32, y: f32, row: usize) -> Actor {
         font: BENCH_FONT,
         content: TextContent::Shared(Arc::<str>::from(text)),
         attributes: Vec::new(),
-        align_text: if row % 2 == 0 {
+        align_text: if row.is_multiple_of(2) {
             TextAlign::Left
         } else {
             TextAlign::Center
@@ -618,7 +618,7 @@ fn stroked_text_actor(text: &'static str, x: f32, y: f32, row: usize) -> Actor {
         wrap_width_pixels: None,
         max_width: Some(220.0),
         max_height: Some(22.0),
-        max_w_pre_zoom: row % 2 == 0,
+        max_w_pre_zoom: row.is_multiple_of(2),
         max_h_pre_zoom: false,
         clip: Some([x, y, 210.0, 24.0]),
         blend: BlendMode::Alpha,

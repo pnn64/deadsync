@@ -2989,7 +2989,7 @@ fn indicator_score_type_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> b
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
         // Visible for Subtractive(1), Predictive(2), Pace(3)
-        if choice_idx >= 1 && choice_idx <= 3 {
+        if (1..=3).contains(&choice_idx) {
             return true;
         }
     }

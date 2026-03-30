@@ -948,7 +948,7 @@ fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
         let side = i / cols_per_side;
         let on_side = i % cols_per_side;
         let left_mid = (cols_per_side - 1) / 2;
-        let right_mid = (cols_per_side + 1) / 2;
+        let right_mid = cols_per_side.div_ceil(2);
         let (first, last) = if on_side <= left_mid {
             (0, left_mid)
         } else if on_side >= right_mid {
@@ -3112,11 +3112,7 @@ pub fn build(
                 let visuals = ns.hold_visuals_for_col(i, matches!(note_type, NoteType::Roll));
                 if let Some(slot) = visuals.explosion.as_ref() {
                     Some(slot)
-                } else if let Some(slot) = ns.hold.explosion.as_ref() {
-                    Some(slot)
-                } else {
-                    None
-                }
+                } else { ns.hold.explosion.as_ref().map(|slot| slot) }
             } else {
                 None
             };
@@ -5576,7 +5572,7 @@ pub fn build(
         && let Some(text) = p.offset_indicator_text
     {
         let age = elapsed_screen - text.started_at;
-        if age >= 0.0 && age < OFFSET_INDICATOR_DUR_S {
+        if (0.0..OFFSET_INDICATOR_DUR_S).contains(&age) {
             let mut offset_y = screen_center_y() + notefield_offset_y;
             if show_error_bar {
                 let min_sep = error_bar_max_h * 0.5 + 6.0;
@@ -5768,7 +5764,7 @@ pub fn build(
                         .error_bar_color_bar_started_at
                         .map(|t0| {
                             let age = elapsed_screen - t0;
-                            age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL
+                            (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age)
                         })
                         .unwrap_or(false);
 
@@ -5861,7 +5857,7 @@ pub fn build(
                         .error_bar_color_bar_started_at
                         .map(|t0| {
                             let age = elapsed_screen - t0;
-                            age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL
+                            (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age)
                         })
                         .unwrap_or(false);
 
@@ -5959,7 +5955,7 @@ pub fn build(
                         .error_bar_avg_bar_started_at
                         .map(|t0| {
                             let age = elapsed_screen - t0;
-                            age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL
+                            (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age)
                         })
                         .unwrap_or(false);
                     if bar_visible && wscale.is_finite() && wscale > 0.0 {
@@ -5997,7 +5993,7 @@ pub fn build(
         }
         if show_error_bar_text && let Some(text) = p.error_bar_text {
             let age = elapsed_screen - text.started_at;
-            if age >= 0.0 && age < ERROR_BAR_TICK_DUR_COLORFUL {
+            if (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age) {
                 let x = if text.early { -40.0 } else { 40.0 };
                 let s = if text.early { "EARLY" } else { "LATE" };
                 hud_actors.push(act!(text:

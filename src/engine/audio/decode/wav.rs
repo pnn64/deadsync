@@ -277,7 +277,7 @@ fn decode_packet(
     bytes: &[u8],
     spec: Spec,
 ) -> Result<Vec<i16>, Box<dyn std::error::Error + Send + Sync>> {
-    if bytes.len() % spec.bytes_per_sample != 0 {
+    if !bytes.len().is_multiple_of(spec.bytes_per_sample) {
         return Err("WAV packet ended mid-sample".into());
     }
     let mut out = Vec::with_capacity(bytes.len() / spec.bytes_per_sample);

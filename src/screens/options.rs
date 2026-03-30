@@ -6148,7 +6148,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     .sub_choice_indices_graphics
                     .get(VSYNC_ROW_INDEX)
                     .copied()
-                    .map_or(true, |idx| yes_no_from_choice(idx));
+                    .is_none_or(yes_no_from_choice);
                 (
                     Some(selected_video_renderer(state)),
                     Some(selected_display_mode(state)),
@@ -7681,7 +7681,7 @@ fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32, dt: f32) {
                 .iter()
                 .position(|&old_actual| old_actual == actual_idx)
                 .and_then(|old_idx| old_tweens.get(old_idx).map(|tw| (tw.y(), tw.a())))
-                .or_else(|| {
+                .or({
                     if actual_idx == SOFTWARE_THREADS_ROW_INDEX {
                         Some((parent_from.0, 0.0))
                     } else {

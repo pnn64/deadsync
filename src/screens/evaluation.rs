@@ -2623,7 +2623,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     actors.extend(eval_panes::build_modifiers_pane(si, center_x, graph_width));
                 }
             }
-        } else if let Some(si) = state.score_info.get(0).and_then(|s| s.as_ref()) {
+        } else if let Some(si) = state.score_info.first().and_then(|s| s.as_ref()) {
             actors.extend(eval_panes::build_modifiers_pane(
                 si,
                 screen_center_x(),

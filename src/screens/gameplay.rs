@@ -1475,11 +1475,10 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }));
     let show_step_stats = match play_style {
         profile::PlayStyle::Single | profile::PlayStyle::Double => state
-            .player_profiles
-            .get(0)
+            .player_profiles.first()
             .is_some_and(|p| p.data_visualizations == profile::DataVisualizations::StepStatistics),
         profile::PlayStyle::Versus => {
-            state.player_profiles.get(0).is_some_and(|p| {
+            state.player_profiles.first().is_some_and(|p| {
                 p.data_visualizations == profile::DataVisualizations::StepStatistics
             }) || state.player_profiles.get(1).is_some_and(|p| {
                 p.data_visualizations == profile::DataVisualizations::StepStatistics

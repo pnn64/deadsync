@@ -2198,10 +2198,10 @@ impl App {
 
         self.sync_gameplay_input_capture();
         self.state.shell.update_gamepad_overlay(redraw_started);
-        let input_us: u32;
-        let update_us: u32;
-        let compose_us: u32;
-        let compose_breakdown: ComposeBreakdown;
+        
+        
+        
+        
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;
         let mut draw_stats = renderer::DrawStats::default();
@@ -2211,7 +2211,7 @@ impl App {
             event_loop.exit();
             return;
         }
-        input_us = elapsed_us_since(input_started);
+        let input_us: u32 = elapsed_us_since(input_started);
 
         let mut finished_fading_out_to: Option<CurrentScreen> = None;
         let mut finished_actor_fade_to: Option<CurrentScreen> = None;
@@ -2299,7 +2299,7 @@ impl App {
         if let Some(target) = finished_fading_out_to {
             self.on_fade_complete(target, event_loop);
         }
-        update_us = elapsed_us_since(update_started);
+        let update_us: u32 = elapsed_us_since(update_started);
 
         if self.window.as_ref().map(|w| w.id()) != Some(window.id()) {
             self.state.shell.last_frame_end_time = Instant::now();
@@ -2358,10 +2358,10 @@ impl App {
         let resolve_textures_started = Instant::now();
         self.asset_manager.resolve_render_textures(&mut screen);
         let resolve_textures_us = elapsed_us_since(resolve_textures_started);
-        compose_us = actor_build_us
+        let compose_us: u32 = actor_build_us
             .saturating_add(build_screen_us)
             .saturating_add(resolve_textures_us);
-        compose_breakdown = ComposeBreakdown {
+        let compose_breakdown: ComposeBreakdown = ComposeBreakdown {
             actor_build_us,
             build_screen_us,
             resolve_textures_us,

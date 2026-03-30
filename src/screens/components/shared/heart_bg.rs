@@ -49,6 +49,12 @@ pub struct Params {
     pub alpha_mul: f32,
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl State {
     pub fn new() -> Self {
         Self::with_texture("heart.png")

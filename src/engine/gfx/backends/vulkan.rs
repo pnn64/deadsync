@@ -1785,7 +1785,7 @@ pub fn draw(
         for op in ops {
             match op {
                 Op::Sprite(run) => {
-                    if matches!(bound, Bound::Sprite) == false {
+                    if !matches!(bound, Bound::Sprite) {
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
@@ -1836,7 +1836,7 @@ pub fn draw(
                     vertices_drawn = vertices_drawn.saturating_add(4 * run.count);
                 }
                 Op::Mesh(draw) => {
-                    if matches!(bound, Bound::Mesh) == false {
+                    if !matches!(bound, Bound::Mesh) {
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
@@ -1871,7 +1871,7 @@ pub fn draw(
                     vertices_drawn = vertices_drawn.saturating_add(draw.count);
                 }
                 Op::TexturedMesh(draw) => {
-                    if matches!(bound, Bound::TexturedMesh) == false {
+                    if !matches!(bound, Bound::TexturedMesh) {
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,

@@ -612,7 +612,7 @@ fn gameplay_panes_from_snapshot<'a>(
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
-        return vec![gameplay_status_pane(side, &text)];
+        return vec![gameplay_status_pane(side, text)];
     }
     let Some(data) = snapshot.data.as_ref() else {
         return vec![gameplay_status_pane(side, "No Scores")];
@@ -637,7 +637,7 @@ fn select_music_panes_from_snapshot<'a>(
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
-        return vec![gameplay_status_pane(side, &text)];
+        return vec![gameplay_status_pane(side, text)];
     }
     let Some(data) = snapshot.data.as_ref() else {
         return vec![gameplay_status_pane(side, "No Scores")];

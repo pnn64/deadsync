@@ -96,8 +96,8 @@ pub fn fixture() -> MusicWheelBenchFixture {
 }
 
 fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
-    let has_subtitle = song_idx % 3 != 0;
-    let has_edit = song_idx % 3 == 0;
+    let has_subtitle = !song_idx.is_multiple_of(3);
+    let has_edit = song_idx.is_multiple_of(3);
     let base = format!("P{}-{:02}", pack_idx + 1, song_idx + 1);
     let title = format!("Benchmark {base} Velocity");
     let subtitle = if has_subtitle {
@@ -115,7 +115,7 @@ fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
         banner_path: None,
         background_path: None,
         background_changes: Vec::new(),
-        has_lua: song_idx % 4 == 0,
+        has_lua: song_idx.is_multiple_of(4),
         cdtitle_path: None,
         music_path: None,
         display_bpm: String::from("160"),
