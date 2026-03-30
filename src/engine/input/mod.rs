@@ -343,6 +343,18 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     backends::evdev::set_keyboard_capture_enabled(enabled);
 }
 
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[inline(always)]
+pub fn unix_raw_keyboard_backend_active() -> bool {
+    backends::evdev::keyboard_backend_active()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+#[inline(always)]
+pub fn unix_raw_keyboard_backend_active() -> bool {
+    true
+}
+
 #[cfg(target_os = "macos")]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {

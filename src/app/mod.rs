@@ -16,6 +16,8 @@ use crate::assets::AssetManager;
 use crate::config::{self, DisplayMode};
 use crate::engine::display;
 use crate::engine::gfx::{self as renderer, BackendType, PresentModePolicy};
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+use crate::engine::host_time;
 use crate::engine::input::{self, InputEvent};
 use crate::engine::present::color;
 use crate::engine::space::{self as space, Metrics};
@@ -4573,6 +4575,37 @@ impl App {
         );
     }
 
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[inline(always)]
+    fn handle_unix_window_keyboard_fallback(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        key_event: &winit::event::KeyEvent,
+    ) {
+        use winit::event::ElementState;
+        use winit::keyboard::PhysicalKey;
+
+        if input::unix_raw_keyboard_backend_active()
+            || !self.accepts_live_input()
+            || self.state.screens.current_screen == CurrentScreen::Init
+        {
+            return;
+        }
+        let PhysicalKey::Code(code) = key_event.physical_key else {
+            return;
+        };
+        self.handle_live_key_event(
+            event_loop,
+            input::RawKeyboardEvent {
+                code,
+                pressed: key_event.state == ElementState::Pressed,
+                repeat: key_event.repeat,
+                timestamp: Instant::now(),
+                host_nanos: host_time::now_nanos(),
+            },
+        );
+    }
+
     /* -------------------- pad event routing -------------------- */
 
     #[inline(always)]
@@ -6051,6 +6084,8 @@ impl ApplicationHandler<UserEvent> for App {
                 {
                     self.handle_key_text(event_loop, text);
                 }
+                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+                self.handle_unix_window_keyboard_fallback(event_loop, &key_event);
             }
             WindowEvent::RedrawRequested => {
                 let redraw_started = Instant::now();

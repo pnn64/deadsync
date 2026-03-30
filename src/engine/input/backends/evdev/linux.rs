@@ -7,6 +7,7 @@ use log::{debug, warn};
 use std::collections::HashSet;
 use std::ffi::{CStr, c_char, c_void};
 use std::fs;
+use std::io::ErrorKind;
 use std::mem::{MaybeUninit, size_of};
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -210,6 +211,15 @@ enum HotplugEvent {
 
 static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(true);
 static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
+static KEYBOARD_BACKEND_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+#[derive(Default)]
+struct KeyboardStartupStats {
+    candidates: u32,
+    opened: u32,
+    permission_denied: u32,
+    open_errors: u32,
+}
 
 #[inline(always)]
 pub fn set_keyboard_window_focused(focused: bool) {
@@ -222,9 +232,44 @@ pub fn set_keyboard_capture_enabled(enabled: bool) {
 }
 
 #[inline(always)]
+pub fn keyboard_backend_active() -> bool {
+    KEYBOARD_BACKEND_ACTIVE.load(Ordering::Relaxed)
+}
+
+#[inline(always)]
 fn keyboard_capture_active() -> bool {
     KEYBOARD_WINDOW_FOCUSED.load(Ordering::Relaxed)
         && KEYBOARD_CAPTURE_ENABLED.load(Ordering::Relaxed)
+}
+
+#[inline(always)]
+fn publish_keyboard_backend_state(key_devs: &[KeyDev]) {
+    KEYBOARD_BACKEND_ACTIVE.store(!key_devs.is_empty(), Ordering::Relaxed);
+}
+
+fn warn_keyboard_startup(stats: &KeyboardStartupStats) {
+    if stats.candidates == 0 || stats.opened != 0 {
+        return;
+    }
+    if stats.permission_denied == stats.candidates {
+        warn!(
+            "linux evdev could not open any of the {} keyboard candidates due to permissions; using focused-window keyboard fallback until /dev/input/event* is readable",
+            stats.candidates
+        );
+        return;
+    }
+    if stats.permission_denied != 0 {
+        warn!(
+            "linux evdev could not open {} of {} keyboard candidates due to permissions",
+            stats.permission_denied, stats.candidates
+        );
+    }
+    if stats.open_errors != 0 {
+        warn!(
+            "linux evdev hit open errors on {} of {} keyboard candidates during startup; using focused-window keyboard fallback",
+            stats.open_errors, stats.candidates
+        );
+    }
 }
 
 impl CapabilityBits {
@@ -795,10 +840,20 @@ fn open_dev(
     })
 }
 
-fn open_key_dev(spec: DevSpec) -> Option<KeyDev> {
+fn open_key_dev(spec: DevSpec, mut stats: Option<&mut KeyboardStartupStats>) -> Option<KeyDev> {
+    if let Some(stats) = stats.as_deref_mut() {
+        stats.candidates = stats.candidates.saturating_add(1);
+    }
     let file = match std::fs::File::open(&spec.path) {
         Ok(file) => file,
         Err(err) => {
+            if let Some(stats) = stats.as_deref_mut() {
+                if err.kind() == ErrorKind::PermissionDenied {
+                    stats.permission_denied = stats.permission_denied.saturating_add(1);
+                } else {
+                    stats.open_errors = stats.open_errors.saturating_add(1);
+                }
+            }
             warn!(
                 "linux evdev could not open keyboard candidate '{}' at '{}': {err}",
                 spec.name, spec.path
@@ -806,6 +861,9 @@ fn open_key_dev(spec: DevSpec) -> Option<KeyDev> {
             return None;
         }
     };
+    if let Some(stats) = stats.as_deref_mut() {
+        stats.opened = stats.opened.saturating_add(1);
+    }
     configure_evdev_clock(&file);
     Some(KeyDev {
         path: spec.path,
@@ -830,12 +888,17 @@ fn add_dev_if_new(
     }
 }
 
-fn add_key_dev_if_new(spec: DevSpec, key_devs: &mut Vec<KeyDev>) {
+fn add_key_dev_if_new(
+    spec: DevSpec,
+    key_devs: &mut Vec<KeyDev>,
+    stats: Option<&mut KeyboardStartupStats>,
+) {
     if key_devs.iter().any(|dev| dev.path == spec.path) {
         return;
     }
-    if let Some(dev) = open_key_dev(spec) {
+    if let Some(dev) = open_key_dev(spec, stats) {
         key_devs.push(dev);
+        publish_keyboard_backend_state(key_devs);
     }
 }
 
@@ -871,6 +934,7 @@ fn refresh_fallback(
     for &idx in key_remove.iter().rev() {
         key_devs.swap_remove(idx);
     }
+    publish_keyboard_backend_state(key_devs);
     let open_paths = devs
         .iter()
         .map(|dev| dev.path.clone())
@@ -879,10 +943,11 @@ fn refresh_fallback(
     for spec in scan_fallback_specs(&open_paths) {
         match spec.class {
             DevClass::Pad => add_dev_if_new(spec, devs, next_id, false, emit_sys),
-            DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, key_devs),
+            DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, key_devs, None),
             DevClass::Keyboard => {}
         }
     }
+    publish_keyboard_backend_state(key_devs);
 }
 
 fn init_discovery() -> Discovery {
@@ -918,6 +983,7 @@ fn run_inner(
     let discovery = init_discovery();
     let mut devs: Vec<Dev> = Vec::new();
     let mut key_devs: Vec<KeyDev> = Vec::new();
+    let mut keyboard_startup = KeyboardStartupStats::default();
     let mut next_id = 0u32;
 
     match &discovery {
@@ -927,7 +993,9 @@ fn run_inner(
                     DevClass::Pad => {
                         add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys)
                     }
-                    DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, &mut key_devs),
+                    DevClass::Keyboard if scan_keyboards => {
+                        add_key_dev_if_new(spec, &mut key_devs, Some(&mut keyboard_startup))
+                    }
                     DevClass::Keyboard => {}
                 }
             }
@@ -938,11 +1006,17 @@ fn run_inner(
                     DevClass::Pad => {
                         add_dev_if_new(spec, &mut devs, &mut next_id, true, &mut emit_sys)
                     }
-                    DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, &mut key_devs),
+                    DevClass::Keyboard if scan_keyboards => {
+                        add_key_dev_if_new(spec, &mut key_devs, Some(&mut keyboard_startup))
+                    }
                     DevClass::Keyboard => {}
                 }
             }
         }
+    }
+    publish_keyboard_backend_state(&key_devs);
+    if scan_keyboards {
+        warn_keyboard_startup(&keyboard_startup);
     }
 
     emit_sys(GpSystemEvent::StartupComplete);
@@ -1174,6 +1248,7 @@ fn run_inner(
         for &idx in key_remove.iter().rev() {
             key_devs.swap_remove(idx);
         }
+        publish_keyboard_backend_state(&key_devs);
 
         for event in hotplug {
             match event {
@@ -1181,11 +1256,14 @@ fn run_inner(
                     DevClass::Pad => {
                         add_dev_if_new(spec, &mut devs, &mut next_id, false, &mut emit_sys)
                     }
-                    DevClass::Keyboard if scan_keyboards => add_key_dev_if_new(spec, &mut key_devs),
+                    DevClass::Keyboard if scan_keyboards => {
+                        add_key_dev_if_new(spec, &mut key_devs, None)
+                    }
                     DevClass::Keyboard => {}
                 },
                 HotplugEvent::Remove(path) => {
-                    remove_dev_by_path(&path, &mut devs, &mut key_devs, &mut emit_sys)
+                    remove_dev_by_path(&path, &mut devs, &mut key_devs, &mut emit_sys);
+                    publish_keyboard_backend_state(&key_devs);
                 }
             }
         }
@@ -1198,6 +1276,7 @@ fn run_inner(
                 &mut emit_sys,
             );
         }
+        publish_keyboard_backend_state(&key_devs);
     }
 }
 

@@ -93,9 +93,15 @@ mod freebsd;
 mod linux;
 
 #[cfg(target_os = "freebsd")]
-pub use freebsd::{run, run_pad_only, set_keyboard_capture_enabled, set_keyboard_window_focused};
+pub use freebsd::{
+    keyboard_backend_active, run, run_pad_only, set_keyboard_capture_enabled,
+    set_keyboard_window_focused,
+};
 #[cfg(target_os = "linux")]
-pub use linux::{run, run_pad_only, set_keyboard_capture_enabled, set_keyboard_window_focused};
+pub use linux::{
+    keyboard_backend_active, run, run_pad_only, set_keyboard_capture_enabled,
+    set_keyboard_window_focused,
+};
 
 #[cfg(test)]
 mod tests {
