@@ -11376,17 +11376,16 @@ mod tests {
         chart_attacks: Option<&str>,
     ) -> ChartData {
         let mines_nonfake = stats.mines;
-        let (raw_min_bpm, raw_max_bpm) =
-            timing_segments
-                .bpms
-                .iter()
-                .fold((f32::INFINITY, 0.0_f32), |(min_bpm, max_bpm), &(_, bpm)| {
-                    if !bpm.is_finite() || bpm <= 0.0 {
-                        (min_bpm, max_bpm)
-                    } else {
-                        (min_bpm.min(bpm), max_bpm.max(bpm))
-                    }
-                });
+        let (raw_min_bpm, raw_max_bpm) = timing_segments.bpms.iter().fold(
+            (f32::INFINITY, 0.0_f32),
+            |(min_bpm, max_bpm), &(_, bpm)| {
+                if !bpm.is_finite() || bpm <= 0.0 {
+                    (min_bpm, max_bpm)
+                } else {
+                    (min_bpm.min(bpm), max_bpm.max(bpm))
+                }
+            },
+        );
         let has_significant_timing_changes = !timing_segments.stops.is_empty()
             || !timing_segments.delays.is_empty()
             || !timing_segments.warps.is_empty()

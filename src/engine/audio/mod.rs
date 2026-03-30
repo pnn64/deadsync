@@ -688,6 +688,11 @@ fn engine_init_cfg() -> InitConfig {
         .expect("engine::audio::init must be called before audio use")
 }
 
+#[inline(always)]
+pub fn is_initialized() -> bool {
+    ENGINE_INIT_CFG.get().is_some()
+}
+
 /// Initializes the audio engine. Must be called once at startup.
 pub fn init(cfg: InitConfig) -> Result<(), String> {
     if let Some(existing) = ENGINE_INIT_CFG.get() {

@@ -773,7 +773,11 @@ fn discover_system_noteskin_choices() -> Vec<String> {
 }
 
 fn build_sound_device_options() -> Vec<SoundDeviceOption> {
-    let discovered = audio::startup_output_devices();
+    let discovered = if audio::is_initialized() {
+        audio::startup_output_devices()
+    } else {
+        Vec::new()
+    };
     let default_rates = discovered
         .iter()
         .find(|dev| dev.is_default)
