@@ -5810,25 +5810,21 @@ fn update_density_graph(
         if trace_enabled {
             let started = Instant::now();
             state.density_graph_mesh_offset_px[player] = offset_px;
-            let verts = state.density_graph_cache[player]
-                .as_ref()
-                .map_or(Vec::new(), |cache| cache.mesh(offset_px as f32, graph_w));
-            state.density_graph_mesh[player] = if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            };
+            density::update_density_hist_mesh(
+                &mut state.density_graph_mesh[player],
+                state.density_graph_cache[player].as_ref(),
+                offset_px as f32,
+                graph_w,
+            );
             add_elapsed_us(&mut phase_timings.density_hist_mesh_us, started);
         } else {
             state.density_graph_mesh_offset_px[player] = offset_px;
-            let verts = state.density_graph_cache[player]
-                .as_ref()
-                .map_or(Vec::new(), |cache| cache.mesh(offset_px as f32, graph_w));
-            state.density_graph_mesh[player] = if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            };
+            density::update_density_hist_mesh(
+                &mut state.density_graph_mesh[player],
+                state.density_graph_cache[player].as_ref(),
+                offset_px as f32,
+                graph_w,
+            );
         }
     }
 
@@ -7173,14 +7169,14 @@ pub fn init(
         if !density_graph_enabled || p >= num_players {
             return None;
         }
-        density_graph_cache[p].as_ref().and_then(|cache| {
-            let verts = cache.mesh(0.0_f32, density_graph_graph_w);
-            if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            }
-        })
+        let mut mesh = None;
+        density::update_density_hist_mesh(
+            &mut mesh,
+            density_graph_cache[p].as_ref(),
+            0.0_f32,
+            density_graph_graph_w,
+        );
+        mesh
     });
 
     let mut density_graph_life_update_rate = 0.25_f32;

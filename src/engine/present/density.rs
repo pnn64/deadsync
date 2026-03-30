@@ -48,6 +48,16 @@ struct HistCol {
     top_color: [f32; 4],
 }
 
+#[derive(Clone, Copy, Debug)]
+struct HistWindow {
+    left: f32,
+    right: f32,
+    li: usize,
+    ri: usize,
+    point_count: usize,
+    full_range: bool,
+}
+
 pub struct DensityHistCache {
     cols: Arc<[HistCol]>,
     bottom_color: [f32; 4],
@@ -213,66 +223,202 @@ fn push_hist_segment(
     });
 }
 
+#[inline(always)]
+fn write_hist_segment(
+    dst: &mut [MeshVertex],
+    written: usize,
+    a: HistCol,
+    b: HistCol,
+    left: f32,
+    bottom_y: f32,
+    bottom_color: [f32; 4],
+) -> usize {
+    let ax = a.x - left;
+    let bx = b.x - left;
+
+    let verts = [
+        MeshVertex {
+            pos: [ax, bottom_y],
+            color: bottom_color,
+        },
+        MeshVertex {
+            pos: [ax, a.top_y],
+            color: a.top_color,
+        },
+        MeshVertex {
+            pos: [bx, bottom_y],
+            color: bottom_color,
+        },
+        MeshVertex {
+            pos: [ax, a.top_y],
+            color: a.top_color,
+        },
+        MeshVertex {
+            pos: [bx, b.top_y],
+            color: b.top_color,
+        },
+        MeshVertex {
+            pos: [bx, bottom_y],
+            color: bottom_color,
+        },
+    ];
+    dst[written..written + verts.len()].copy_from_slice(&verts);
+    written + verts.len()
+}
+
 impl DensityHistCache {
-    pub fn mesh(&self, offset: f32, visible_width: f32) -> Vec<MeshVertex> {
+    fn visible_window(&self, offset: f32, visible_width: f32) -> Option<HistWindow> {
         let visible_width = visible_width.max(0.0);
         if visible_width <= 0.0 || self.scaled_width <= 0.0 || self.height <= 0.0 {
-            return Vec::new();
+            return None;
         }
 
         let left = offset.clamp(0.0, self.scaled_width);
         let right = (left + visible_width).clamp(0.0, self.scaled_width);
         if self.cols.is_empty() || left >= right {
-            return Vec::new();
+            return None;
         }
 
         let cols = &self.cols;
-        let point_count = if left <= cols[0].x && right >= cols[cols.len() - 1].x {
-            cols.len()
-        } else {
-            let li = cols.partition_point(|p| p.x < left);
-            let ri = cols.partition_point(|p| p.x <= right);
-            ri.saturating_sub(li) + usize::from(li > 0) + usize::from(ri < cols.len() && ri > 0)
-        };
-        if point_count < 2 {
-            return Vec::new();
-        }
-
-        let mut out = Vec::with_capacity((point_count - 1) * 6);
-        let mut prev: Option<HistCol> = None;
-
-        let mut push_point = |point: HistCol| {
-            if let Some(last) = prev {
-                push_hist_segment(&mut out, last, point, left, self.height, self.bottom_color);
+        let full_range = left <= cols[0].x && right >= cols[cols.len() - 1].x;
+        if full_range {
+            if cols.len() < 2 {
+                return None;
             }
-            prev = Some(point);
-        };
-
-        if left <= cols[0].x && right >= cols[cols.len() - 1].x {
-            for &point in cols.iter() {
-                push_point(point);
-            }
-            return out;
+            return Some(HistWindow {
+                left,
+                right,
+                li: 0,
+                ri: cols.len(),
+                point_count: cols.len(),
+                full_range: true,
+            });
         }
 
         let li = cols.partition_point(|p| p.x < left);
         if li >= cols.len() {
-            return Vec::new();
+            return None;
         }
         let ri = cols.partition_point(|p| p.x <= right);
-
-        if li > 0 {
-            push_point(interp_hist_col(cols[li - 1], cols[li], left));
-        }
-        for &point in &cols[li..ri] {
-            push_point(point);
-        }
-        if ri < cols.len() && ri > 0 {
-            push_point(interp_hist_col(cols[ri - 1], cols[ri], right));
+        let point_count =
+            ri.saturating_sub(li) + usize::from(li > 0) + usize::from(ri < cols.len() && ri > 0);
+        if point_count < 2 {
+            return None;
         }
 
+        Some(HistWindow {
+            left,
+            right,
+            li,
+            ri,
+            point_count,
+            full_range: false,
+        })
+    }
+
+    fn visit_window_points(&self, window: HistWindow, mut push: impl FnMut(HistCol)) {
+        let cols = &self.cols;
+        if window.full_range {
+            for &point in cols.iter() {
+                push(point);
+            }
+            return;
+        }
+
+        if window.li > 0 {
+            push(interp_hist_col(
+                cols[window.li - 1],
+                cols[window.li],
+                window.left,
+            ));
+        }
+        for &point in &cols[window.li..window.ri] {
+            push(point);
+        }
+        if window.ri < cols.len() && window.ri > 0 {
+            push(interp_hist_col(
+                cols[window.ri - 1],
+                cols[window.ri],
+                window.right,
+            ));
+        }
+    }
+
+    fn fill_mesh_vertices(&self, dst: &mut [MeshVertex], window: HistWindow) -> usize {
+        let mut prev: Option<HistCol> = None;
+        let mut written = 0usize;
+        self.visit_window_points(window, |point| {
+            if let Some(last) = prev {
+                written = write_hist_segment(
+                    dst,
+                    written,
+                    last,
+                    point,
+                    window.left,
+                    self.height,
+                    self.bottom_color,
+                );
+            }
+            prev = Some(point);
+        });
+        written
+    }
+
+    pub fn mesh(&self, offset: f32, visible_width: f32) -> Vec<MeshVertex> {
+        let Some(window) = self.visible_window(offset, visible_width) else {
+            return Vec::new();
+        };
+
+        let mut out = Vec::with_capacity((window.point_count - 1) * 6);
+        let mut prev: Option<HistCol> = None;
+
+        let push_point = |point: HistCol| {
+            if let Some(last) = prev {
+                push_hist_segment(
+                    &mut out,
+                    last,
+                    point,
+                    window.left,
+                    self.height,
+                    self.bottom_color,
+                );
+            }
+            prev = Some(point);
+        };
+
+        self.visit_window_points(window, push_point);
         out
     }
+}
+
+pub fn update_density_hist_mesh(
+    mesh: &mut Option<Arc<[MeshVertex]>>,
+    cache: Option<&DensityHistCache>,
+    offset: f32,
+    visible_width: f32,
+) {
+    let Some(cache) = cache else {
+        *mesh = None;
+        return;
+    };
+    let Some(window) = cache.visible_window(offset, visible_width) else {
+        *mesh = None;
+        return;
+    };
+
+    let len = (window.point_count - 1) * 6;
+    if let Some(existing) = mesh.as_mut().and_then(Arc::get_mut)
+        && existing.len() == len
+    {
+        let written = cache.fill_mesh_vertices(existing, window);
+        debug_assert_eq!(written, len);
+        return;
+    }
+
+    let mut verts = vec![MeshVertex::default(); len];
+    let written = cache.fill_mesh_vertices(&mut verts, window);
+    debug_assert_eq!(written, len);
+    *mesh = Some(Arc::from(verts.into_boxed_slice()));
 }
 
 #[inline(always)]
@@ -420,4 +566,61 @@ pub fn build_density_histogram_mesh(
         return Vec::new();
     };
     cache.mesh(offset, visible_width)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_cache() -> DensityHistCache {
+        build_density_histogram_cache(
+            &[0.0, 0.0, 2.0, 5.0, 3.0, 4.0, 1.0],
+            5.0,
+            &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            0.0,
+            6.0,
+            240.0,
+            64.0,
+            None,
+            1.0,
+        )
+        .expect("sample cache")
+    }
+
+    fn assert_mesh_matches(actual: &[MeshVertex], expected: &[MeshVertex]) {
+        assert_eq!(actual.len(), expected.len());
+        for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert_eq!(actual.pos, expected.pos, "pos mismatch at {index}");
+            assert_eq!(actual.color, expected.color, "color mismatch at {index}");
+        }
+    }
+
+    #[test]
+    fn update_density_hist_mesh_reuses_existing_buffer_when_vertex_count_matches() {
+        let cache = sample_cache();
+        let mut mesh = None;
+
+        update_density_hist_mesh(&mut mesh, Some(&cache), 48.0, 120.0);
+        let expected = cache.mesh(48.0, 120.0);
+        let first_ptr = mesh.as_ref().expect("mesh").as_ptr();
+        assert_mesh_matches(mesh.as_ref().expect("mesh"), &expected);
+
+        update_density_hist_mesh(&mut mesh, Some(&cache), 48.0, 120.0);
+        let second_ptr = mesh.as_ref().expect("mesh").as_ptr();
+
+        assert_eq!(first_ptr, second_ptr);
+        assert_mesh_matches(mesh.as_ref().expect("mesh"), &expected);
+    }
+
+    #[test]
+    fn update_density_hist_mesh_clears_mesh_without_cache() {
+        let cache = sample_cache();
+        let mut mesh = None;
+
+        update_density_hist_mesh(&mut mesh, Some(&cache), 0.0, 120.0);
+        assert!(mesh.is_some());
+
+        update_density_hist_mesh(&mut mesh, None, 0.0, 120.0);
+        assert!(mesh.is_none());
+    }
 }

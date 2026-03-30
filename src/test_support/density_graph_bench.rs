@@ -3,6 +3,7 @@ use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::density::{self, DensityHistCache};
 use crate::engine::space::screen_center_x;
 use crate::game::timing::{TimingData, TimingSegments};
+use std::cell::RefCell;
 use std::sync::Arc;
 
 pub const SCENARIO_NAME: &str = "density-graph";
@@ -12,22 +13,26 @@ pub struct DensityGraphBenchFixture {
     offset: f32,
     visible_width: f32,
     offset_xy: [f32; 2],
+    mesh: RefCell<Option<Arc<[crate::engine::gfx::MeshVertex]>>>,
 }
 
 impl DensityGraphBenchFixture {
     pub fn build(&self) -> Vec<Actor> {
-        let Some(cache) = self.cache.as_ref() else {
+        let mut mesh = self.mesh.borrow_mut();
+        density::update_density_hist_mesh(
+            &mut mesh,
+            self.cache.as_ref(),
+            self.offset,
+            self.visible_width,
+        );
+        let Some(vertices) = mesh.as_ref() else {
             return Vec::new();
         };
-        let verts = cache.mesh(self.offset, self.visible_width);
-        if verts.is_empty() {
-            return Vec::new();
-        }
         vec![Actor::Mesh {
             align: [0.0, 0.0],
             offset: self.offset_xy,
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            vertices: Arc::from(verts.into_boxed_slice()),
+            vertices: Arc::clone(vertices),
             mode: MeshMode::Triangles,
             visible: true,
             blend: BlendMode::Alpha,
@@ -75,6 +80,7 @@ pub fn fixture() -> DensityGraphBenchFixture {
         offset: 319.0,
         visible_width,
         offset_xy: [screen_center_x() - visible_width * 0.5, 128.0],
+        mesh: RefCell::new(None),
     }
 }
 
