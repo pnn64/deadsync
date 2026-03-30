@@ -19,6 +19,7 @@ use crate::game::chart::ChartData;
 use crate::game::gameplay::MAX_PLAYERS;
 use crate::game::judgment::{self, JudgeGrade};
 use crate::game::note::NoteType;
+use crate::game::online;
 use crate::game::parsing::noteskin::Noteskin;
 use crate::game::scores;
 use crate::game::scroll::ScrollSpeedSetting;
@@ -56,6 +57,8 @@ const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
 const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
 const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
+const SUBMIT_STATUS_CHECK_GLYPH: &str = "✔";
+const SUBMIT_STATUS_CROSS_GLYPH: &str = "❌";
 const MACHINE_RECORD_ROWS: usize = 10;
 const GS_RECORD_ROWS: usize = 10;
 const ENABLE_GS_QR_PANE: bool = true;
@@ -185,6 +188,111 @@ const fn arrowcloud_submit_status_text(status: scores::ArrowCloudSubmitUiStatus)
         scores::ArrowCloudSubmitUiStatus::SubmitFailed => "Submit Failed",
         scores::ArrowCloudSubmitUiStatus::TimedOut => "Timed Out - F5 Retry",
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SubmitFooterStatus {
+    Submitting,
+    Submitted,
+    SubmitFailed,
+    TimedOut,
+}
+
+impl From<scores::GrooveStatsSubmitUiStatus> for SubmitFooterStatus {
+    fn from(value: scores::GrooveStatsSubmitUiStatus) -> Self {
+        match value {
+            scores::GrooveStatsSubmitUiStatus::Submitting => Self::Submitting,
+            scores::GrooveStatsSubmitUiStatus::Submitted => Self::Submitted,
+            scores::GrooveStatsSubmitUiStatus::SubmitFailed => Self::SubmitFailed,
+            scores::GrooveStatsSubmitUiStatus::TimedOut => Self::TimedOut,
+        }
+    }
+}
+
+impl From<scores::ArrowCloudSubmitUiStatus> for SubmitFooterStatus {
+    fn from(value: scores::ArrowCloudSubmitUiStatus) -> Self {
+        match value {
+            scores::ArrowCloudSubmitUiStatus::Submitting => Self::Submitting,
+            scores::ArrowCloudSubmitUiStatus::Submitted => Self::Submitted,
+            scores::ArrowCloudSubmitUiStatus::SubmitFailed => Self::SubmitFailed,
+            scores::ArrowCloudSubmitUiStatus::TimedOut => Self::TimedOut,
+        }
+    }
+}
+
+#[inline(always)]
+const fn submit_footer_can_combine(status: SubmitFooterStatus) -> bool {
+    matches!(
+        status,
+        SubmitFooterStatus::Submitted | SubmitFooterStatus::SubmitFailed
+    )
+}
+
+#[inline(always)]
+const fn submit_footer_status_glyph(status: SubmitFooterStatus) -> &'static str {
+    match status {
+        SubmitFooterStatus::Submitted => SUBMIT_STATUS_CHECK_GLYPH,
+        SubmitFooterStatus::SubmitFailed => SUBMIT_STATUS_CROSS_GLYPH,
+        SubmitFooterStatus::Submitting | SubmitFooterStatus::TimedOut => "",
+    }
+}
+
+fn combined_submit_footer_text(
+    groovestats_status: Option<scores::GrooveStatsSubmitUiStatus>,
+    arrowcloud_status: Option<scores::ArrowCloudSubmitUiStatus>,
+) -> Option<Arc<str>> {
+    let gs_status = groovestats_status.map(SubmitFooterStatus::from)?;
+    let ac_status = arrowcloud_status.map(SubmitFooterStatus::from)?;
+    if !submit_footer_can_combine(gs_status) || !submit_footer_can_combine(ac_status) {
+        return None;
+    }
+
+    let prefix = if matches!(gs_status, SubmitFooterStatus::Submitted)
+        || matches!(ac_status, SubmitFooterStatus::Submitted)
+    {
+        "Submitted!"
+    } else {
+        "Submit Failed"
+    };
+    let gs_label = if online::is_boogiestats_active() {
+        "BS"
+    } else {
+        "GS"
+    };
+
+    Some(Arc::<str>::from(format!(
+        "{prefix} {} {gs_label} {} AC",
+        submit_footer_status_glyph(gs_status),
+        submit_footer_status_glyph(ac_status),
+    )))
+}
+
+fn submit_footer_lines(
+    groovestats_status: Option<scores::GrooveStatsSubmitUiStatus>,
+    arrowcloud_status: Option<scores::ArrowCloudSubmitUiStatus>,
+) -> Vec<Arc<str>> {
+    if groovestats_status
+        .map(SubmitFooterStatus::from)
+        .is_some_and(|status| matches!(status, SubmitFooterStatus::Submitting))
+        || arrowcloud_status
+            .map(SubmitFooterStatus::from)
+            .is_some_and(|status| matches!(status, SubmitFooterStatus::Submitting))
+    {
+        return vec![cached_str_ref("Submitting ...")];
+    }
+
+    if let Some(text) = combined_submit_footer_text(groovestats_status, arrowcloud_status) {
+        return vec![text];
+    }
+
+    let mut lines = Vec::with_capacity(2);
+    if let Some(status) = groovestats_status {
+        lines.push(cached_str_ref(groovestats_submit_status_text(status)));
+    }
+    if let Some(status) = arrowcloud_status {
+        lines.push(cached_str_ref(arrowcloud_submit_status_text(status)));
+    }
+    lines
 }
 
 #[inline(always)]
@@ -410,9 +518,11 @@ fn compute_column_judgments(
 
 #[cfg(test)]
 mod tests {
-    use super::compute_column_judgments;
+    use super::{combined_submit_footer_text, compute_column_judgments, submit_footer_lines};
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{Note, NoteType};
+    use crate::game::online;
+    use crate::game::scores;
 
     fn tap_note(column: usize, result: Judgment, early_result: Option<Judgment>) -> Note {
         Note {
@@ -484,6 +594,44 @@ mod tests {
         assert_eq!(out[0].w0, 1);
         assert_eq!(out[0].early_total_w0, 1);
         assert_eq!(out[0].early_total_w4, 1);
+    }
+
+    #[test]
+    fn combined_submit_footer_text_collapses_resolved_mixed_results() {
+        let text = combined_submit_footer_text(
+            Some(scores::GrooveStatsSubmitUiStatus::SubmitFailed),
+            Some(scores::ArrowCloudSubmitUiStatus::Submitted),
+        )
+        .expect("resolved submit states should combine");
+
+        let gs_label = if online::is_boogiestats_active() {
+            "BS"
+        } else {
+            "GS"
+        };
+        assert_eq!(&*text, format!("Submitted! ❌ {gs_label} ✔ AC"));
+    }
+
+    #[test]
+    fn combined_submit_footer_text_keeps_timeouts_unstacked() {
+        assert!(
+            combined_submit_footer_text(
+                Some(scores::GrooveStatsSubmitUiStatus::Submitted),
+                Some(scores::ArrowCloudSubmitUiStatus::TimedOut),
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn submit_footer_lines_collapses_in_flight_submits_to_one_line() {
+        let lines = submit_footer_lines(
+            Some(scores::GrooveStatsSubmitUiStatus::Submitted),
+            Some(scores::ArrowCloudSubmitUiStatus::Submitting),
+        );
+
+        assert_eq!(lines.len(), 1);
+        assert_eq!(&*lines[0], "Submitting ...");
     }
 }
 
@@ -2861,7 +3009,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     // top PB/WR banner plus bottom submit-status actors.
     // Common Normal/ThemeFont Normal @ x(25%/75%), y(screen.h-15), zoom(0.8).
     // In SL/zmod, Common Normal.redir points to Miso/_miso light.
-    // When both GrooveStats/BoogieStats and ArrowCloud are active, stack them vertically.
+    // When both GrooveStats/BoogieStats and ArrowCloud resolve to submitted/failed,
+    // collapse them into one summary line; keep stacked lines for pending/timeouts.
     {
         for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
             if !profile::is_session_side_joined(side) {
@@ -2902,18 +3051,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     effectperiod(AUTO_SUBMIT_RECORD_TEXT_PERIOD)
                 ));
             }
-            let mut lines: Vec<&str> = Vec::with_capacity(2);
-            if let Some(status) = scores::get_groovestats_submit_ui_status_for_side(
+            let groovestats_status = scores::get_groovestats_submit_ui_status_for_side(
                 si.chart.short_hash.as_str(),
                 side,
-            ) {
-                lines.push(groovestats_submit_status_text(status));
-            }
-            if let Some(status) =
-                scores::get_arrowcloud_submit_ui_status_for_side(si.chart.short_hash.as_str(), side)
-            {
-                lines.push(arrowcloud_submit_status_text(status));
-            }
+            );
+            let arrowcloud_status = scores::get_arrowcloud_submit_ui_status_for_side(
+                si.chart.short_hash.as_str(),
+                side,
+            );
+            let lines = submit_footer_lines(groovestats_status, arrowcloud_status);
             if lines.is_empty() {
                 continue;
             }
@@ -2927,7 +3073,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 let y = base_y - (lines.len().saturating_sub(1 + idx) as f32 * 12.0);
                 actors.push(act!(text:
                     font("miso"):
-                    settext(*status_text):
+                    settext(status_text.clone()):
                     align(0.5, 0.5):
                     xy(x, y):
                     zoom(0.8):
