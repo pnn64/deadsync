@@ -474,6 +474,18 @@ pub fn update_noteskin_for_side(side: PlayerSide, setting: NoteSkin) {
     save_profile_ini_for_side(side);
 }
 
+pub fn update_mine_noteskin_for_side(side: PlayerSide, setting: Option<NoteSkin>) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.mine_noteskin == setting {
+            return;
+        }
+        profile.mine_noteskin = setting;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_notefield_offset_x_for_side(side: PlayerSide, offset: i32) {
     let clamped = offset.clamp(0, 50);
     {

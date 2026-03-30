@@ -10,7 +10,7 @@ use crate::engine::space::{
 };
 use crate::game::chart::ChartData;
 use crate::game::parsing::noteskin::{
-    self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization,
+    self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
 };
 use crate::game::song::SongData;
 use crate::screens::components::shared::heart_bg;
@@ -250,6 +250,7 @@ const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 const PLAYER_SLOTS: usize = 2;
 const P1: usize = 0;
 const P2: usize = 1;
+const MATCH_NOTESKIN_LABEL: &str = "Same as NoteSkin";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavDirection {
@@ -427,6 +428,7 @@ pub struct State {
     noteskin_names: Vec<String>,
     noteskin_cache: HashMap<String, Arc<Noteskin>>,
     noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
+    mine_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
     preview_time: f32,
     preview_beat: f32,
     help_anim_time: [f32; PLAYER_SLOTS],
@@ -665,6 +667,17 @@ fn discover_noteskin_names() -> Vec<String> {
     noteskin::discover_itg_skins("dance")
 }
 
+fn build_mine_noteskin_choices(noteskin_names: &[String]) -> Vec<String> {
+    let mut choices = Vec::with_capacity(noteskin_names.len() + 1);
+    choices.push(MATCH_NOTESKIN_LABEL.to_string());
+    if noteskin_names.is_empty() {
+        choices.push(crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
+    } else {
+        choices.extend(noteskin_names.iter().cloned());
+    }
+    choices
+}
+
 fn build_noteskin_cache(
     cols_per_player: usize,
     initial_names: &[String],
@@ -726,6 +739,52 @@ fn cached_or_load_noteskin(
     }
 
     fallback_noteskin(cache)
+}
+
+fn cached_or_load_noteskin_exact(
+    cache: &mut HashMap<String, Arc<Noteskin>>,
+    skin: &crate::game::profile::NoteSkin,
+    cols_per_player: usize,
+) -> Option<Arc<Noteskin>> {
+    if let Some(ns) = cached_noteskin(cache, skin) {
+        return Some(ns);
+    }
+
+    let loaded = load_noteskin_cached(skin.as_str(), cols_per_player)?;
+    cache.insert(skin.as_str().to_string(), loaded.clone());
+    Some(loaded)
+}
+
+fn resolved_mine_noteskin_preview(
+    cache: &mut HashMap<String, Arc<Noteskin>>,
+    noteskin: &crate::game::profile::NoteSkin,
+    mine_noteskin: Option<&crate::game::profile::NoteSkin>,
+    cols_per_player: usize,
+) -> Option<Arc<Noteskin>> {
+    if let Some(mine_noteskin) = mine_noteskin
+        && let Some(ns) = cached_or_load_noteskin_exact(cache, mine_noteskin, cols_per_player)
+    {
+        return Some(ns);
+    }
+
+    cached_or_load_noteskin(cache, noteskin, cols_per_player)
+}
+
+fn sync_noteskin_previews_for_player(state: &mut State, player_idx: usize) {
+    let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
+    let noteskin_setting = state.player_profiles[player_idx].noteskin.clone();
+    let mine_noteskin_setting = state.player_profiles[player_idx].mine_noteskin.clone();
+    state.noteskin[player_idx] = cached_or_load_noteskin(
+        &mut state.noteskin_cache,
+        &noteskin_setting,
+        cols_per_player,
+    );
+    state.mine_noteskin[player_idx] = resolved_mine_noteskin_preview(
+        &mut state.noteskin_cache,
+        &noteskin_setting,
+        mine_noteskin_setting.as_ref(),
+        cols_per_player,
+    );
 }
 
 #[inline(always)]
@@ -904,6 +963,13 @@ fn build_main_rows(
             },
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Change the appearance of the arrows.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "MineSkin".to_string(),
+            choices: build_mine_noteskin_choices(noteskin_names),
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec!["Change mine graphics independently from the main noteskin.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -1741,6 +1807,23 @@ fn apply_profile_defaults(
             })
             .unwrap_or(0);
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "MineSkin") {
+        row.selected_choice_index[player_idx] = profile.mine_noteskin.as_ref().map_or_else(
+            || {
+                row.choices
+                    .iter()
+                    .position(|c| c == MATCH_NOTESKIN_LABEL)
+                    .unwrap_or(0)
+            },
+            |mine_noteskin| {
+                row.choices
+                    .iter()
+                    .position(|c| c.eq_ignore_ascii_case(mine_noteskin.as_str()))
+                    .or_else(|| row.choices.iter().position(|c| c == MATCH_NOTESKIN_LABEL))
+                    .unwrap_or(0)
+            },
+        );
+    }
     // Initialize Combo Font row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Font") {
         row.selected_choice_index[player_idx] = match profile.combo_font {
@@ -2508,12 +2591,28 @@ pub fn init(
         if !initial_noteskin_names.iter().any(|n| n == &name) {
             initial_noteskin_names.push(name);
         }
+        if let Some(mine_name) = profile
+            .mine_noteskin
+            .as_ref()
+            .map(|skin| skin.as_str().to_string())
+            && !initial_noteskin_names.iter().any(|n| n == &mine_name)
+        {
+            initial_noteskin_names.push(mine_name);
+        }
     }
     let mut noteskin_cache = build_noteskin_cache(cols_per_player, &initial_noteskin_names);
     let noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] = std::array::from_fn(|i| {
         cached_or_load_noteskin(
             &mut noteskin_cache,
             &player_profiles[i].noteskin,
+            cols_per_player,
+        )
+    });
+    let mine_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] = std::array::from_fn(|i| {
+        resolved_mine_noteskin_preview(
+            &mut noteskin_cache,
+            &player_profiles[i].noteskin,
+            player_profiles[i].mine_noteskin.as_ref(),
             cols_per_player,
         )
     });
@@ -2583,6 +2682,7 @@ pub fn init(
         noteskin_names,
         noteskin_cache,
         noteskin: noteskin_previews,
+        mine_noteskin: mine_noteskin_previews,
         preview_time: 0.0,
         preview_beat: 0.0,
         help_anim_time: [0.0; PLAYER_SLOTS],
@@ -4081,10 +4181,23 @@ fn change_choice_for_player(
         if should_persist {
             crate::game::profile::update_noteskin_for_side(persist_side, setting.clone());
         }
-        let cols_per_player =
-            noteskin_cols_per_player(crate::game::profile::get_session_play_style());
-        state.noteskin[player_idx] =
-            cached_or_load_noteskin(&mut state.noteskin_cache, &setting, cols_per_player);
+        sync_noteskin_previews_for_player(state, player_idx);
+    } else if row_name == "MineSkin" {
+        let selected = row
+            .choices
+            .get(row.selected_choice_index[player_idx])
+            .map(String::as_str)
+            .unwrap_or(MATCH_NOTESKIN_LABEL);
+        let setting = if selected == MATCH_NOTESKIN_LABEL {
+            None
+        } else {
+            Some(crate::game::profile::NoteSkin::new(selected))
+        };
+        state.player_profiles[player_idx].mine_noteskin = setting.clone();
+        if should_persist {
+            crate::game::profile::update_mine_noteskin_for_side(persist_side, setting);
+        }
+        sync_noteskin_previews_for_player(state, player_idx);
     } else if row_name == "Stepchart" {
         if let Some(diff_indices) = &row.choice_difficulty_indices
             && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[player_idx])
@@ -7182,7 +7295,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     // Match ITGmania themes that show four directional noteskin preview arrows
                     // with explicit quant offsets: Left/Down/Up/Right and 0/1/3/2 quant indices.
-                    if row.name == "NoteSkin" {
+                    if row.name == "NoteSkin" || row.name == "MineSkin" {
                         const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
                         const PREVIEW_SCALE: f32 = 0.45;
                         const PREVIEW_ARROWS: [(usize, f32, f32); 4] = [
@@ -7353,17 +7466,132 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
                                 for (col, quant_idx, x_mult) in PREVIEW_ARROWS {
                                     let x = center_x + x_mult * target_height;
-                                    let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+                                    let note_idx =
+                                        col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
                                     draw_noteskin_note(ns, note_idx, quant_idx, x, actors);
                                 }
                             };
-                        if let Some(ns) = state.noteskin[primary_player_idx].as_ref() {
-                            draw_noteskin_preview(ns, preview_x_for(primary_player_idx), &mut actors);
-                        }
-                        if show_p2 && primary_player_idx != P2
-                            && let Some(ns) = state.noteskin[P2].as_ref()
-                        {
-                            draw_noteskin_preview(ns, preview_x_for(P2), &mut actors);
+                        let draw_mine_preview =
+                            |mine_ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
+                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                let mine_col = if mine_ns.mines.len() > 1 || mine_ns.mine_frames.len() > 1 {
+                                    1
+                                } else {
+                                    0
+                                };
+                                let fill_slot =
+                                    mine_ns.mines.get(mine_col).and_then(|slot| slot.as_ref());
+                                let frame_slot = mine_ns
+                                    .mine_frames
+                                    .get(mine_col)
+                                    .and_then(|slot| slot.as_ref());
+                                let Some(primary_slot) = frame_slot.or(fill_slot) else {
+                                    return;
+                                };
+                                let mine_phase =
+                                    mine_ns.tap_mine_uv_phase(state.preview_time, state.preview_beat, 0.0);
+                                let mine_translation =
+                                    mine_ns.part_uv_translation(NoteAnimPart::Mine, 0.0, false);
+                                let mine_center = [center_x, current_row_y];
+                                let scale_mine_slot = |slot: &SpriteSlot| {
+                                    let size = slot
+                                        .model
+                                        .as_ref()
+                                        .map(|model| model.size())
+                                        .unwrap_or_else(|| {
+                                            let logical = slot.logical_size();
+                                            [logical[0], logical[1]]
+                                        });
+                                    let width = size[0].max(1.0);
+                                    let height = size[1].max(1.0);
+                                    let scale = target_height / height;
+                                    [width * scale, target_height]
+                                };
+                                let draw_mine_slot =
+                                    |slot: &SpriteSlot, alpha: f32, z: i32, actors: &mut Vec<Actor>| {
+                                        let draw = slot.model_draw_at(state.preview_time, state.preview_beat);
+                                        if !draw.visible {
+                                            return;
+                                        }
+                                        let frame = slot.frame_index_from_phase(mine_phase);
+                                        let uv_elapsed = if slot.model.is_some() {
+                                            mine_phase
+                                        } else {
+                                            state.preview_time
+                                        };
+                                        let uv = slot.uv_for_frame_at(frame, uv_elapsed);
+                                        let uv = [
+                                            uv[0] + mine_translation[0],
+                                            uv[1] + mine_translation[1],
+                                            uv[2] + mine_translation[0],
+                                            uv[3] + mine_translation[1],
+                                        ];
+                                        let size = scale_mine_slot(slot);
+                                        if let Some(model_actor) = noteskin_model_actor(
+                                            slot,
+                                            mine_center,
+                                            size,
+                                            uv,
+                                            -slot.def.rotation_deg as f32,
+                                            state.preview_time,
+                                            state.preview_beat,
+                                            [1.0, 1.0, 1.0, alpha],
+                                            BlendMode::Alpha,
+                                            z as i16,
+                                        ) {
+                                            actors.push(model_actor);
+                                        } else {
+                                            actors.push(act!(sprite(slot.texture_key_shared()):
+                                                align(0.5, 0.5):
+                                                xy(mine_center[0], mine_center[1]):
+                                                setsize(size[0], size[1]):
+                                                rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
+                                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                                diffuse(1.0, 1.0, 1.0, alpha):
+                                                z(z)
+                                            ));
+                                        }
+                                    };
+                                if let Some(slot) = fill_slot {
+                                    draw_mine_slot(slot, 0.85 * a, 106, actors);
+                                }
+                                if let Some(slot) = frame_slot {
+                                    draw_mine_slot(slot, a, 107, actors);
+                                } else if fill_slot.is_none() {
+                                    draw_mine_slot(primary_slot, a, 107, actors);
+                                }
+                            };
+                        if row.name == "NoteSkin" {
+                            if let Some(ns) = state.noteskin[primary_player_idx].as_ref() {
+                                draw_noteskin_preview(
+                                    ns,
+                                    preview_x_for(primary_player_idx),
+                                    &mut actors,
+                                );
+                            }
+                            if show_p2 && primary_player_idx != P2
+                                && let Some(ns) = state.noteskin[P2].as_ref()
+                            {
+                                draw_noteskin_preview(ns, preview_x_for(P2), &mut actors);
+                            }
+                        } else if row.name == "MineSkin" {
+                            if let Some(mine_ns) = state.mine_noteskin[primary_player_idx]
+                                .as_deref()
+                                .or_else(|| state.noteskin[primary_player_idx].as_deref())
+                            {
+                                draw_mine_preview(
+                                    mine_ns,
+                                    preview_x_for(primary_player_idx),
+                                    &mut actors,
+                                );
+                            }
+                            if show_p2 && primary_player_idx != P2
+                                && let Some(mine_ns) = state.mine_noteskin[P2]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[P2].as_deref())
+                            {
+                                draw_mine_preview(mine_ns, preview_x_for(P2), &mut actors);
+                            }
                         }
                     }
                     // Add combo preview for "Combo Font" row showing ticking numbers

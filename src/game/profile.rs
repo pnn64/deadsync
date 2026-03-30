@@ -642,6 +642,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         i32::from(options.carry_combo_between_songs)
     ));
     content.push_str(&format!("NoteSkin={}\n", options.noteskin));
+    content.push_str(&format!(
+        "MineSkin={}\n",
+        options.mine_noteskin.as_ref().map_or("", NoteSkin::as_str)
+    ));
     content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
     content.push_str(&format!("Perspective={}\n", options.perspective));
     content.push_str(&format!(
@@ -703,6 +707,9 @@ fn load_player_options(
         .get(section, "NoteSkin")
         .and_then(|s| NoteSkin::from_str(&s).ok())
         .unwrap_or_else(|| options.noteskin.clone());
+    options.mine_noteskin = profile_conf
+        .get(section, "MineSkin")
+        .and_then(|s| NoteSkin::from_str(&s).ok());
     options.mini_percent = profile_conf
         .get(section, "MiniPercent")
         .and_then(|s| s.parse::<i32>().ok())
@@ -1938,6 +1945,7 @@ pub struct PlayerOptionsData {
     pub combo_mode: ComboMode,
     pub carry_combo_between_songs: bool,
     pub noteskin: NoteSkin,
+    pub mine_noteskin: Option<NoteSkin>,
     pub scroll_speed: ScrollSpeedSetting,
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
@@ -2019,6 +2027,7 @@ fn default_player_options() -> PlayerOptionsData {
         combo_mode: ComboMode::default(),
         carry_combo_between_songs: true,
         noteskin: NoteSkin::default(),
+        mine_noteskin: None,
         scroll_speed: ScrollSpeedSetting::default(),
         scroll_option: ScrollOption::default(),
         reverse_scroll: false,
@@ -2124,6 +2133,7 @@ pub struct Profile {
     pub current_combo: u32,
     pub known_pack_names: HashSet<String>,
     pub noteskin: NoteSkin,
+    pub mine_noteskin: Option<NoteSkin>,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
@@ -2277,6 +2287,7 @@ impl Default for Profile {
             current_combo: 0,
             known_pack_names: HashSet::new(),
             noteskin: player_options.noteskin.clone(),
+            mine_noteskin: player_options.mine_noteskin.clone(),
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: player_options.scroll_speed.clone(),
@@ -2381,6 +2392,11 @@ impl Profile {
     }
 
     #[inline(always)]
+    pub fn resolved_mine_noteskin(&self) -> &NoteSkin {
+        self.mine_noteskin.as_ref().unwrap_or(&self.noteskin)
+    }
+
+    #[inline(always)]
     pub fn current_player_options(&self) -> PlayerOptionsData {
         PlayerOptionsData {
             background_filter: self.background_filter.clone(),
@@ -2391,6 +2407,7 @@ impl Profile {
             combo_mode: self.combo_mode.clone(),
             carry_combo_between_songs: self.carry_combo_between_songs,
             noteskin: self.noteskin.clone(),
+            mine_noteskin: self.mine_noteskin.clone(),
             scroll_speed: self.scroll_speed.clone(),
             scroll_option: self.scroll_option,
             reverse_scroll: self.reverse_scroll,
@@ -2472,6 +2489,7 @@ impl Profile {
         self.combo_mode = options.combo_mode.clone();
         self.carry_combo_between_songs = options.carry_combo_between_songs;
         self.noteskin = options.noteskin.clone();
+        self.mine_noteskin = options.mine_noteskin.clone();
         self.scroll_speed = options.scroll_speed.clone();
         self.scroll_option = options.scroll_option;
         self.reverse_scroll = options.reverse_scroll;

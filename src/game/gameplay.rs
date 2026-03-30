@@ -4443,6 +4443,7 @@ pub struct State {
     active_attack_scroll_speed: [Option<ScrollSpeedSetting>; MAX_PLAYERS],
     active_attack_mini_percent: [Option<f32>; MAX_PLAYERS],
     pub noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
+    pub mine_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
     pub active_color_index: i32,
     pub player_color: [f32; 4],
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -6415,6 +6416,15 @@ pub fn init(
         let skin = player_profiles[player].noteskin.to_string();
         noteskin::load_itg_skin_cached(&style, &skin).ok()
     });
+    let mine_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return None;
+        }
+        let skin = player_profiles[player].resolved_mine_noteskin().to_string();
+        noteskin::load_itg_skin_cached(&style, &skin)
+            .ok()
+            .or_else(|| noteskin[player].clone())
+    });
     let notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] =
         std::array::from_fn(|player| {
             RefCell::new(if player < num_players {
@@ -7328,6 +7338,7 @@ pub fn init(
         active_attack_scroll_speed: [None; MAX_PLAYERS],
         active_attack_mini_percent: [None; MAX_PLAYERS],
         noteskin,
+        mine_noteskin,
         active_color_index,
         player_color: color::decorative_rgba(player_color_index),
         scroll_speed,
@@ -10376,7 +10387,7 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
             } else {
                 (col / cols_per_player).min(num_players.saturating_sub(1))
             };
-            let lifetime = state.noteskin[player]
+            let lifetime = state.mine_noteskin[player]
                 .as_ref()
                 .and_then(|ns| ns.mine_hit_explosion.as_ref())
                 .map_or(MINE_EXPLOSION_DURATION, |explosion| {

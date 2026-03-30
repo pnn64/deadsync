@@ -2619,6 +2619,7 @@ pub fn build(
     let blind_active = visibility.blind > f32::EPSILON;
 
     if let Some(ns) = &state.noteskin[player_idx] {
+        let mine_ns = state.mine_noteskin[player_idx].as_deref().unwrap_or(ns);
         let timing = &state.timing_players[player_idx];
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
         let scale_sprite = |size: [i32; 2]| -> [f32; 2] {
@@ -3380,7 +3381,7 @@ pub fn build(
             let Some(active) = state.mine_explosions[col].as_ref() else {
                 continue;
             };
-            let Some(explosion) = ns.mine_hit_explosion.as_ref() else {
+            let Some(explosion) = mine_ns.mine_hit_explosion.as_ref() else {
                 continue;
             };
             let slot = &explosion.slot;
@@ -4810,12 +4811,15 @@ pub fn build(
             let column_arrows = &state.arrows[col];
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
-            let fill_slot = ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
-            let fill_gradient_slot = ns
+            let fill_slot = mine_ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
+            let fill_gradient_slot = mine_ns
                 .mine_fill_slots
                 .get(col_idx)
                 .and_then(|slot| slot.as_ref());
-            let frame_slot = ns.mine_frames.get(col_idx).and_then(|slot| slot.as_ref());
+            let frame_slot = mine_ns
+                .mine_frames
+                .get(col_idx)
+                .and_then(|slot| slot.as_ref());
             for arrow in column_arrows {
                 let raw_travel_offset = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
@@ -4866,9 +4870,10 @@ pub fn build(
                         continue;
                     }
                     let mine_note_beat = note.beat;
-                    let mine_uv_phase = ns.tap_mine_uv_phase(elapsed, current_beat, mine_note_beat);
+                    let mine_uv_phase =
+                        mine_ns.tap_mine_uv_phase(elapsed, current_beat, mine_note_beat);
                     let mine_translation =
-                        ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false);
+                        mine_ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false);
                     let circle_reference = frame_slot
                         .map(scale_mine_slot)
                         .or_else(|| fill_slot.map(scale_mine_slot))
