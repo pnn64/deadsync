@@ -11376,6 +11376,28 @@ mod tests {
         chart_attacks: Option<&str>,
     ) -> ChartData {
         let mines_nonfake = stats.mines;
+        let (raw_min_bpm, raw_max_bpm) =
+            timing_segments
+                .bpms
+                .iter()
+                .fold((f32::INFINITY, 0.0_f32), |(min_bpm, max_bpm), &(_, bpm)| {
+                    if !bpm.is_finite() || bpm <= 0.0 {
+                        (min_bpm, max_bpm)
+                    } else {
+                        (min_bpm.min(bpm), max_bpm.max(bpm))
+                    }
+                });
+        let has_significant_timing_changes = !timing_segments.stops.is_empty()
+            || !timing_segments.delays.is_empty()
+            || !timing_segments.warps.is_empty()
+            || !timing_segments.speeds.is_empty()
+            || !timing_segments.scrolls.is_empty()
+            || (raw_min_bpm.is_finite() && raw_max_bpm - raw_min_bpm > 3.0);
+        let (min_bpm, max_bpm) = if raw_min_bpm.is_finite() {
+            (raw_min_bpm as f64, raw_max_bpm as f64)
+        } else {
+            (0.0, 0.0)
+        };
         ChartData {
             chart_type: "dance-single".to_string(),
             difficulty: "Challenge".to_string(),
@@ -11403,29 +11425,14 @@ mod tests {
             first_second: 0.0,
             has_note_data: true,
             has_chart_attacks: chart_attacks.is_some_and(|attacks| !attacks.trim().is_empty()),
-            has_significant_timing_changes: {
-                !timing_segments.stops.is_empty()
-                    || !timing_segments.delays.is_empty()
-                    || !timing_segments.warps.is_empty()
-                    || !timing_segments.speeds.is_empty()
-                    || !timing_segments.scrolls.is_empty()
-                    || {
-                        let mut min_bpm = f32::INFINITY;
-                        let mut max_bpm = 0.0_f32;
-                        for &(_, bpm) in &timing_segments.bpms {
-                            if !bpm.is_finite() || bpm <= 0.0 {
-                                continue;
-                            }
-                            min_bpm = min_bpm.min(bpm);
-                            max_bpm = max_bpm.max(bpm);
-                        }
-                        min_bpm.is_finite() && max_bpm - min_bpm > 3.0
-                    }
-            },
+            has_significant_timing_changes,
             possible_grade_points: 0,
             holds_total: 0,
             rolls_total: 0,
             mines_total: 0,
+            display_bpm: None,
+            min_bpm,
+            max_bpm,
         }
     }
 

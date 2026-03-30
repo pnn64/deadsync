@@ -87,6 +87,31 @@ impl DebounceStore {
             .filter_map(|entry| debounce_due_at(entry.state, windows))
             .min();
     }
+
+    #[inline(always)]
+    fn refresh_next_due_at_after_entry_change(
+        &mut self,
+        old_due_at: Option<Instant>,
+        new_due_at: Option<Instant>,
+        windows: DebounceWindows,
+    ) {
+        if old_due_at == new_due_at {
+            return;
+        }
+        if let Some(next_due_at) = self.next_due_at {
+            if let Some(new_due_at) = new_due_at
+                && new_due_at < next_due_at
+            {
+                self.next_due_at = Some(new_due_at);
+                return;
+            }
+            if old_due_at == Some(next_due_at) {
+                self.recalc_next_due_at(windows);
+            }
+            return;
+        }
+        self.next_due_at = new_due_at;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -253,9 +278,10 @@ pub(super) fn debounce_input_edge_in_store(
 ) -> DebounceEdges {
     let now = Instant::now();
     let mut states = states.lock().unwrap();
-    let edges = if let Some(index) = states.find_index(binding) {
-        let (edges, prune) = {
+    if let Some(index) = states.find_index(binding) {
+        let (edges, prune, old_due_at, new_due_at) = {
             let state = &mut states.entries[index].state;
+            let old_due_at = debounce_due_at(*state, windows);
             let edges = debounce_step(
                 state,
                 binding,
@@ -265,11 +291,18 @@ pub(super) fn debounce_input_edge_in_store(
                 now,
                 windows,
             );
-            (edges, should_prune_debounce_state(*state, now, windows))
+            let prune = should_prune_debounce_state(*state, now, windows);
+            let new_due_at = if prune {
+                None
+            } else {
+                debounce_due_at(*state, windows)
+            };
+            (edges, prune, old_due_at, new_due_at)
         };
         if prune {
             states.entries.swap_remove(index);
         }
+        states.refresh_next_due_at_after_entry_change(old_due_at, new_due_at, windows);
         edges
     } else {
         let mut state = DebounceState {
@@ -289,13 +322,18 @@ pub(super) fn debounce_input_edge_in_store(
             now,
             windows,
         );
-        if !should_prune_debounce_state(state, now, windows) {
+        let prune = should_prune_debounce_state(state, now, windows);
+        let new_due_at = if prune {
+            None
+        } else {
+            debounce_due_at(state, windows)
+        };
+        if !prune {
             states.entries.push(DebounceEntry { binding, state });
         }
+        states.refresh_next_due_at_after_entry_change(None, new_due_at, windows);
         edges
-    };
-    states.recalc_next_due_at(windows);
-    edges
+    }
 }
 
 pub(super) fn emit_due_debounce_edges_from(
@@ -313,10 +351,11 @@ pub(super) fn emit_due_debounce_edges_from(
         return false;
     }
     let mut flushed = false;
+    let mut next_due_at = None;
     let mut i = 0;
     while i < states.entries.len() {
         let mut edge = None;
-        let remove = {
+        let (remove, due_at) = {
             let entry = &mut states.entries[i];
             if let Some((pressed, timestamp, timestamp_host_nanos, stored_at)) =
                 debounce_emit_if_due(&mut entry.state, now, windows)
@@ -330,7 +369,13 @@ pub(super) fn emit_due_debounce_edges_from(
                     now,
                 ));
             }
-            should_prune_debounce_state(entry.state, now, windows)
+            let remove = should_prune_debounce_state(entry.state, now, windows);
+            let due_at = if remove {
+                None
+            } else {
+                debounce_due_at(entry.state, windows)
+            };
+            (remove, due_at)
         };
         if let Some(edge) = edge {
             flushed = true;
@@ -340,9 +385,13 @@ pub(super) fn emit_due_debounce_edges_from(
             states.entries.swap_remove(i);
             continue;
         }
+        next_due_at = match (next_due_at, due_at) {
+            (Some(current), Some(due_at)) => Some(current.min(due_at)),
+            (None, due_at) | (due_at, None) => due_at,
+        };
         i += 1;
     }
-    states.recalc_next_due_at(windows);
+    states.next_due_at = next_due_at;
     flushed
 }
 
@@ -563,5 +612,95 @@ mod tests {
         ));
         assert!(emitted.is_empty());
         assert!(states.lock().unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn next_due_cache_recomputes_when_current_min_moves_later() {
+        let window = Duration::from_millis(20);
+        let windows = DebounceWindows::uniform(window);
+        let t0 = Instant::now();
+        let mut store = DebounceStore::new();
+        let early_due = t0 + Duration::from_millis(10);
+        let late_due = t0 + Duration::from_millis(30);
+        store.entries.push(DebounceEntry {
+            binding: DebounceBinding::Keyboard(KeyCode::KeyA),
+            state: DebounceState {
+                held_raw: true,
+                held_reported: false,
+                last_raw_change_time: t0,
+                last_raw_change_host_nanos: 0,
+                last_raw_store_time: t0,
+                last_report_time: early_due.checked_sub(window).unwrap_or(early_due),
+            },
+        });
+        store.entries.push(DebounceEntry {
+            binding: DebounceBinding::Keyboard(KeyCode::KeyB),
+            state: DebounceState {
+                held_raw: true,
+                held_reported: false,
+                last_raw_change_time: t0,
+                last_raw_change_host_nanos: 0,
+                last_raw_store_time: t0,
+                last_report_time: late_due.checked_sub(window).unwrap_or(late_due),
+            },
+        });
+        store.recalc_next_due_at(windows);
+
+        store.entries[0].state.last_report_time = t0 + Duration::from_millis(40);
+        store.refresh_next_due_at_after_entry_change(
+            Some(early_due),
+            Some(t0 + Duration::from_millis(60)),
+            windows,
+        );
+
+        assert_eq!(store.next_due_at, Some(late_due));
+    }
+
+    #[test]
+    fn emit_due_edges_updates_next_due_without_rescan() {
+        let window = Duration::from_millis(20);
+        let windows = DebounceWindows::uniform(window);
+        let t0 = Instant::now();
+        let mut store = DebounceStore::new();
+        let first_due = t0 + Duration::from_millis(10);
+        let second_due = t0 + Duration::from_millis(30);
+        store.entries.push(DebounceEntry {
+            binding: DebounceBinding::Keyboard(KeyCode::KeyA),
+            state: DebounceState {
+                held_raw: true,
+                held_reported: false,
+                last_raw_change_time: t0,
+                last_raw_change_host_nanos: 100,
+                last_raw_store_time: t0,
+                last_report_time: first_due.checked_sub(window).unwrap_or(first_due),
+            },
+        });
+        store.entries.push(DebounceEntry {
+            binding: DebounceBinding::Keyboard(KeyCode::KeyB),
+            state: DebounceState {
+                held_raw: true,
+                held_reported: false,
+                last_raw_change_time: t0,
+                last_raw_change_host_nanos: 200,
+                last_raw_store_time: t0,
+                last_report_time: second_due.checked_sub(window).unwrap_or(second_due),
+            },
+        });
+        store.recalc_next_due_at(windows);
+        let states = Mutex::new(store);
+        let mut emitted = Vec::new();
+
+        assert!(emit_due_debounce_edges_from(
+            &states,
+            first_due,
+            windows,
+            |edge| emitted.push(edge)
+        ));
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].binding, DebounceBinding::Keyboard(KeyCode::KeyA));
+
+        let guard = states.lock().unwrap();
+        assert_eq!(guard.next_due_at, Some(second_due));
+        assert_eq!(guard.entries.len(), 2);
     }
 }

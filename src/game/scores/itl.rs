@@ -1421,6 +1421,9 @@ mod tests {
             holds_total: 0,
             rolls_total: 0,
             mines_total: 12,
+            display_bpm: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
         }
     }
 
