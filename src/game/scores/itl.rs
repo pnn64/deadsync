@@ -350,12 +350,17 @@ pub fn save_itl_data_from_gameplay(
         return progress;
     }
 
-    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+    for (player_idx, chart) in gs
+        .charts
+        .iter()
+        .enumerate()
+        .take(gs.num_players.min(gameplay::MAX_PLAYERS))
+    {
         let side = gameplay_side_for_player(gs, player_idx);
         let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
             continue;
         };
-        let chart_hash = gs.charts[player_idx].short_hash.trim();
+        let chart_hash = chart.short_hash.trim();
         if chart_hash.is_empty() {
             continue;
         }

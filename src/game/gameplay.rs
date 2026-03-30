@@ -1047,8 +1047,8 @@ fn build_row_grids(
     debug_assert!(notes_row_sorted(&notes[start..end]));
 
     let mut rows = Vec::<RowGrid>::new();
-    for note_idx in start..end {
-        let note = &notes[note_idx];
+    for (offset, note) in notes[start..end].iter().enumerate() {
+        let note_idx = start + offset;
         if note.column < col_offset {
             continue;
         }
@@ -1142,16 +1142,15 @@ fn update_active_holds_for_row(
     cols: usize,
     hold_end_row: &mut [Option<usize>; MAX_COLS],
 ) {
-    for col in 0..cols.min(MAX_COLS) {
-        if let Some(end) = hold_end_row[col] {
-            if row_index > end {
-                hold_end_row[col] = None;
-            }
+    for hold_end in hold_end_row.iter_mut().take(cols.min(MAX_COLS)) {
+        if let Some(end) = *hold_end
+            && row_index > end
+        {
+            *hold_end = None;
         }
     }
 
-    for col in 0..cols.min(MAX_COLS) {
-        let idx = grid[col];
+    for (col, &idx) in grid.iter().enumerate().take(cols.min(MAX_COLS)) {
         if idx == usize::MAX {
             continue;
         }
@@ -1250,18 +1249,18 @@ fn apply_hyper_shuffle(
     for row_grid in row_grids {
         let row = row_grid.row_index;
         let grid = row_grid.note_indices;
-        for col in 0..cols {
-            if let Some(end) = hold_end_row[col] {
-                if row > end {
-                    hold_end_row[col] = None;
-                }
+        for hold_end in hold_end_row.iter_mut().take(cols) {
+            if let Some(end) = *hold_end
+                && row > end
+            {
+                *hold_end = None;
             }
         }
 
         let mut free_cols = [0usize; MAX_COLS];
         let mut free_len = 0usize;
-        for col in 0..cols {
-            if hold_end_row[col].is_none() {
+        for (col, hold_end) in hold_end_row.iter().enumerate().take(cols) {
+            if hold_end.is_none() {
                 free_cols[free_len] = col;
                 free_len += 1;
             }
@@ -1272,11 +1271,10 @@ fn apply_hyper_shuffle(
 
         let mut row_notes = [usize::MAX; MAX_COLS];
         let mut notes_len = 0usize;
-        for col in 0..cols {
+        for (col, &idx) in grid.iter().enumerate().take(cols) {
             if hold_end_row[col].is_some() {
                 continue;
             }
-            let idx = grid[col];
             if idx == usize::MAX {
                 continue;
             }
@@ -1289,14 +1287,11 @@ fn apply_hyper_shuffle(
 
         rng.shuffle(&mut free_cols[..free_len]);
         let place_len = notes_len.min(free_len);
-        for i in 0..place_len {
-            let idx = row_notes[i];
-            let col = free_cols[i];
+        for (&idx, &col) in row_notes.iter().zip(free_cols.iter()).take(place_len) {
             notes[idx].column = col_offset + col;
         }
 
-        for i in 0..place_len {
-            let idx = row_notes[i];
+        for &idx in row_notes.iter().take(place_len) {
             if !matches!(notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
                 continue;
             }
@@ -1413,8 +1408,8 @@ fn enforce_max_simultaneous_notes(
             .count();
 
         row_candidates.clear();
-        for idx in row_start..row_end {
-            let note = &notes[idx];
+        for (offset, note) in notes[row_start..row_end].iter().enumerate() {
+            let idx = row_start + offset;
             if note.column < col_offset {
                 continue;
             }
@@ -6861,13 +6856,12 @@ pub fn init(
         compute_end_times(&notes, &note_time_cache, &hold_end_time_cache, rate);
     let notes_len = notes.len();
     let mut column_scroll_dirs = [1.0_f32; MAX_COLS];
-    for player in 0..num_players {
+    for (player, player_profile) in player_profiles.iter().enumerate().take(num_players) {
         let start = player * cols_per_player;
         let end = (start + cols_per_player).min(num_cols).min(MAX_COLS);
-        let local_dirs =
-            compute_column_scroll_dirs(player_profiles[player].scroll_option, cols_per_player);
-        for col in start..end {
-            column_scroll_dirs[col] = local_dirs[col - start];
+        let local_dirs = compute_column_scroll_dirs(player_profile.scroll_option, cols_per_player);
+        for (offset, column_scroll_dir) in column_scroll_dirs[start..end].iter_mut().enumerate() {
+            *column_scroll_dir = local_dirs[offset];
         }
     }
 
@@ -8450,7 +8444,7 @@ fn update_active_holds(
     current_time: f32,
     delta_time: f32,
 ) {
-    for column in 0..state.active_holds.len() {
+    for (column, _) in inputs.iter().enumerate().take(state.active_holds.len()) {
         let player = player_for_col(state, column);
         let timing = &state.timing_players[player];
         let current_beat = timing.get_beat_for_time(current_time);
@@ -10582,21 +10576,20 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 let judgment = state.notes[cursor].early_result.clone().unwrap_or(miss);
                 let judgment_grade = judgment.grade;
                 let judgment_time_error_ms = judgment.time_error_ms;
-                if judgment_grade == JudgeGrade::Miss {
-                    if let Some(hold) = state.notes[cursor].hold.as_mut()
-                        && hold.result != Some(HoldResult::Held)
-                    {
-                        if should_score_miss {
-                            hold.result = Some(HoldResult::LetGo);
-                        }
-                        begin_hold_life_decay(
-                            hold,
-                            &mut state.hold_decay_active,
-                            &mut state.decaying_hold_indices,
-                            cursor,
-                            music_time_sec,
-                        );
+                if judgment_grade == JudgeGrade::Miss
+                    && let Some(hold) = state.notes[cursor].hold.as_mut()
+                    && hold.result != Some(HoldResult::Held)
+                {
+                    if should_score_miss {
+                        hold.result = Some(HoldResult::LetGo);
                     }
+                    begin_hold_life_decay(
+                        hold,
+                        &mut state.hold_decay_active,
+                        &mut state.decaying_hold_indices,
+                        cursor,
+                        music_time_sec,
+                    );
                 }
                 state.notes[cursor].result = Some(judgment);
                 if log::log_enabled!(log::Level::Debug) {
@@ -10857,18 +10850,18 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
     }
 
     // ITG parity guard: cap total past-receptor arrows per player.
-    for player in 0..num_players {
+    for (player, &cull_beat) in player_cull_beat.iter().enumerate().take(num_players) {
         let start_col = player.saturating_mul(cols_per_player);
         let end_col = (start_col + cols_per_player).min(num_cols).min(MAX_COLS);
         if start_col >= end_col {
             continue;
         }
 
-        let cull_beat = player_cull_beat[player];
         let mut past_prefix_len = [0usize; MAX_COLS];
         let mut total_past = 0usize;
-        for col_idx in start_col..end_col {
-            let len = state.arrows[col_idx].partition_point(|arrow| arrow.beat <= cull_beat);
+        for (offset, arrows) in state.arrows[start_col..end_col].iter().enumerate() {
+            let col_idx = start_col + offset;
+            let len = arrows.partition_point(|arrow| arrow.beat <= cull_beat);
             past_prefix_len[col_idx] = len;
             total_past += len;
         }
@@ -10880,12 +10873,13 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         let mut drop_remaining = total_past - MAX_NOTES_AFTER_TARGETS;
         while drop_remaining > 0 {
             let mut best = (usize::MAX, usize::MAX, usize::MAX);
-            for col_idx in start_col..end_col {
+            for (offset, arrows) in state.arrows[start_col..end_col].iter().enumerate() {
+                let col_idx = start_col + offset;
                 let arrow_idx = drop_prefix[col_idx];
                 if arrow_idx >= past_prefix_len[col_idx] {
                     continue;
                 }
-                let note_index = state.arrows[col_idx][arrow_idx].note_index;
+                let note_index = arrows[arrow_idx].note_index;
                 let row_index = state.notes[note_index].row_index;
                 let candidate = (row_index, col_idx, arrow_idx);
                 if candidate < best {
@@ -10898,11 +10892,11 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
             drop_prefix[best.1] += 1;
             drop_remaining -= 1;
         }
-        for col_idx in start_col..end_col {
-            let drop_count = drop_prefix[col_idx];
+        for (offset, &drop_count) in drop_prefix[start_col..end_col].iter().enumerate() {
             if drop_count == 0 {
                 continue;
             }
+            let col_idx = start_col + offset;
             state.arrows[col_idx].drain(..drop_count);
         }
     }

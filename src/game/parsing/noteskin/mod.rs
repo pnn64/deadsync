@@ -322,12 +322,11 @@ impl SpriteSlot {
                         AnimationRate::FramesPerSecond(_) => time,
                         AnimationRate::FramesPerBeat(_) => beat,
                     };
-                    if let Some(total) = frame_duration_total(durations, frames) {
-                        if let Some(idx) =
+                    if let Some(total) = frame_duration_total(durations, frames)
+                        && let Some(idx) =
                             duration_frame_index(durations, frames, clock.rem_euclid(total))
-                        {
-                            return idx;
-                        }
+                    {
+                        return idx;
                     }
                 }
                 let frame = match rate {
@@ -355,12 +354,11 @@ impl SpriteSlot {
             SpriteSource::Animated {
                 frame_durations, ..
             } => {
-                if let Some(durations) = frame_durations.as_ref() {
-                    if let Some(total) = frame_duration_total(durations, frames) {
-                        if let Some(idx) = duration_frame_index(durations, frames, p * total) {
-                            return idx;
-                        }
-                    }
+                if let Some(durations) = frame_durations.as_ref()
+                    && let Some(total) = frame_duration_total(durations, frames)
+                    && let Some(idx) = duration_frame_index(durations, frames, p * total)
+                {
+                    return idx;
                 }
                 ((p * frames as f32).floor() as usize).min(frames - 1)
             }
@@ -685,8 +683,8 @@ impl GlowEffect {
             .mul_add(0.5, 0.5);
 
         let mut color = [0.0; 4];
-        for i in 0..4 {
-            color[i] =
+        for (i, channel) in color.iter_mut().enumerate() {
+            *channel =
                 self.color1[i].mul_add(percent_between, self.color2[i] * (1.0 - percent_between));
         }
         color[3] *= base_alpha;
@@ -1396,8 +1394,8 @@ impl ReceptorPulse {
         };
 
         let mut color = [0.0; 4];
-        for i in 0..4 {
-            color[i] =
+        for (i, channel) in color.iter_mut().enumerate() {
+            *channel =
                 self.effect_color1[i].mul_add(percent, self.effect_color2[i] * (1.0 - percent));
         }
         color
@@ -3427,23 +3425,23 @@ fn itg_model_draw_program(
         if grouped_mods.is_empty() {
             return;
         }
-        if let Some((duration, tween)) = pending_tween.take() {
-            if duration > f32::EPSILON {
-                let from = *state;
-                let mut to = from;
-                itg_apply_actor_mods(&mut to, grouped_mods);
-                timeline.push(ModelTweenSegment {
-                    start: *cursor_time,
-                    duration,
-                    tween,
-                    from,
-                    to,
-                });
-                *state = to;
-                *cursor_time += duration;
-                grouped_mods.clear();
-                return;
-            }
+        if let Some((duration, tween)) = pending_tween.take()
+            && duration > f32::EPSILON
+        {
+            let from = *state;
+            let mut to = from;
+            itg_apply_actor_mods(&mut to, grouped_mods);
+            timeline.push(ModelTweenSegment {
+                start: *cursor_time,
+                duration,
+                tween,
+                from,
+                to,
+            });
+            *state = to;
+            *cursor_time += duration;
+            grouped_mods.clear();
+            return;
         }
         itg_apply_actor_mods(state, grouped_mods);
         grouped_mods.clear();

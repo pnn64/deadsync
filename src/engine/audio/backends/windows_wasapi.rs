@@ -162,10 +162,10 @@ pub(crate) fn enumerate_output_devices() -> Result<Vec<WasapiOutputDevice>, Stri
             channels,
         });
     }
-    if !devices.iter().any(|device| device.is_default) {
-        if let Some(device) = devices.first_mut() {
-            device.is_default = true;
-        }
+    if !devices.iter().any(|device| device.is_default)
+        && let Some(device) = devices.first_mut()
+    {
+        device.is_default = true;
     }
     Ok(devices)
 }
@@ -288,10 +288,10 @@ fn render_thread(
     ready_tx: Sender<Result<(), String>>,
 ) {
     let _thread_policy = boost_current_thread(ThreadRole::AudioRender);
-    if let Err(err) = render_thread_inner(prep, music_ring, sfx_receiver, stop_event, &ready_tx) {
-        if ready_tx.send(Err(err.clone())).is_err() {
-            error!("WASAPI render thread failed: {err}");
-        }
+    if let Err(err) = render_thread_inner(prep, music_ring, sfx_receiver, stop_event, &ready_tx)
+        && ready_tx.send(Err(err.clone())).is_err()
+    {
+        error!("WASAPI render thread failed: {err}");
     }
 }
 

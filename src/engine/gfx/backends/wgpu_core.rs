@@ -892,7 +892,7 @@ fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 4], [f32; 2], [f32; 2]) {
 }
 
 #[inline(always)]
-fn pick_tex<'a>(api: Api, tex: &'a RendererTexture) -> Option<&'a Texture> {
+fn pick_tex(api: Api, tex: &RendererTexture) -> Option<&Texture> {
     match (api, tex) {
         #[cfg(not(target_pointer_width = "32"))]
         (Api::Vulkan, RendererTexture::VulkanWgpu(t)) => Some(t),

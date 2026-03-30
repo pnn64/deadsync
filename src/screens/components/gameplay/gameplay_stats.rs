@@ -505,8 +505,8 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
             let anchor_p1 = base_anchor_p1.clamp(bar_left + margin, bar_right - margin - block_w);
             let anchor_p2 = base_anchor_p2.clamp(bar_left + margin + block_w, bar_right - margin);
 
-            for player_idx in 0..2usize {
-                if !show_for[player_idx] {
+            for (player_idx, show) in show_for.iter().copied().enumerate() {
+                if !show {
                     continue;
                 }
                 let is_p1 = player_idx == 0;
@@ -543,10 +543,10 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                         color::JUDGMENT_DIM_RGBA[4],
                         color::JUDGMENT_DIM_RGBA[5],
                     ];
-                    for row_i in 0..counts.len() {
+                    for (row_i, count) in counts.iter().copied().enumerate() {
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let (dim_text, bright_text) = cached_padded_runs(counts[row_i], digits);
+                        let (dim_text, bright_text) = cached_padded_runs(count, digits);
                         push_versus_count_texts(
                             &mut actors,
                             is_p1,
@@ -571,10 +571,10 @@ pub fn build_versus_step_stats(state: &State, asset_manager: &AssetManager) -> V
                         gameplay::display_judgment_count(state, player_idx, JudgeGrade::WayOff),
                         gameplay::display_judgment_count(state, player_idx, JudgeGrade::Miss),
                     ];
-                    for row_i in 0..counts.len() {
+                    for (row_i, count) in counts.iter().copied().enumerate() {
                         let y =
                             group_origin_y + (y_base + row_i as f32 * row_height) * group_zoom_y;
-                        let (dim_text, bright_text) = cached_padded_runs(counts[row_i], digits);
+                        let (dim_text, bright_text) = cached_padded_runs(count, digits);
                         push_versus_count_texts(
                             &mut actors,
                             is_p1,
@@ -1337,13 +1337,13 @@ fn build_holds_mines_rolls_pane_at(
                 let right_anchor_x = 0.0;
                 let mut cursor_x = right_anchor_x;
 
-                let possible_str = cached_padded_num(*total as u32, digits_to_fmt);
-                let achieved_str = cached_padded_num(*achieved as u32, digits_to_fmt);
+                let possible_str = cached_padded_num(*total, digits_to_fmt);
+                let achieved_str = cached_padded_num(*achieved, digits_to_fmt);
                 let possible_bytes = possible_str.as_bytes();
                 let achieved_bytes = achieved_str.as_bytes();
-                let possible_split = padded_dim_len(possible_str.as_ref(), *total as u32, digits_to_fmt);
+                let possible_split = padded_dim_len(possible_str.as_ref(), *total, digits_to_fmt);
                 let achieved_split =
-                    padded_dim_len(achieved_str.as_ref(), *achieved as u32, digits_to_fmt);
+                    padded_dim_len(achieved_str.as_ref(), *achieved, digits_to_fmt);
 
                 for char_idx in 0..possible_bytes.len() {
                     let original_index = possible_bytes.len() - 1 - char_idx;
@@ -1500,12 +1500,12 @@ fn build_holds_mines_rolls_pane(
             };
             let mut cursor_x = right_anchor_x;
 
-            let possible_str = cached_padded_num(*total as u32, digits_to_fmt);
-            let achieved_str = cached_padded_num(*achieved as u32, digits_to_fmt);
+            let possible_str = cached_padded_num(*total, digits_to_fmt);
+            let achieved_str = cached_padded_num(*achieved, digits_to_fmt);
             let possible_bytes = possible_str.as_bytes();
             let achieved_bytes = achieved_str.as_bytes();
-            let possible_split = padded_dim_len(possible_str.as_ref(), *total as u32, digits_to_fmt);
-            let achieved_split = padded_dim_len(achieved_str.as_ref(), *achieved as u32, digits_to_fmt);
+            let possible_split = padded_dim_len(possible_str.as_ref(), *total, digits_to_fmt);
+            let achieved_split = padded_dim_len(achieved_str.as_ref(), *achieved, digits_to_fmt);
 
             // --- Layout Numbers using MEASURED widths ---
             // 1. Draw "possible" number (right-most part)

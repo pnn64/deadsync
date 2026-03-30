@@ -203,13 +203,12 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
         }
     }
 
-    if state.exit_requested {
-        if let Some(target) = state.exit_target
-            && exit_anim_t(true) >= EXIT_TOTAL_DUR
-        {
-            state.exit_target = None;
-            return Some(ScreenAction::Navigate(target));
-        }
+    if state.exit_requested
+        && let Some(target) = state.exit_target
+        && exit_anim_t(true) >= EXIT_TOTAL_DUR
+    {
+        state.exit_target = None;
+        return Some(ScreenAction::Navigate(target));
     }
     None
 }

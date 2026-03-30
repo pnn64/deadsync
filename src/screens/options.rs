@@ -6087,10 +6087,10 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             state.content_alpha = 1.0 - state.submenu_fade_t;
             if state.submenu_fade_t >= 1.0 {
                 // Apply deferred settings before leaving the submenu.
-                if matches!(state.view, OptionsView::Submenu(SubmenuKind::InputBackend)) {
-                    if let Some(enabled) = state.pending_dedicated_menu_buttons.take() {
-                        config::update_only_dedicated_menu_buttons(enabled);
-                    }
+                if matches!(state.view, OptionsView::Submenu(SubmenuKind::InputBackend))
+                    && let Some(enabled) = state.pending_dedicated_menu_buttons.take()
+                {
+                    config::update_only_dedicated_menu_buttons(enabled);
                 }
                 // Switch view to the target submenu, then fade it in.
                 let target_kind = state.pending_submenu_kind.unwrap_or(SubmenuKind::System);
@@ -7622,9 +7622,8 @@ fn update_row_tweens(
         *row_tweens = init_row_tweens(total_rows, selected, s, list_y);
         return;
     }
-    for row_idx in 0..total_rows {
+    for (row_idx, tw) in row_tweens.iter_mut().enumerate().take(total_rows) {
         let (to_y, to_a) = row_dest_for_index(total_rows, selected, row_idx, s, list_y);
-        let tw = &mut row_tweens[row_idx];
         let cur_y = tw.y();
         let cur_a = tw.a();
         if (to_y - tw.to_y).abs() > 0.01 || (to_a - tw.to_a).abs() > 0.001 {
@@ -8476,7 +8475,7 @@ pub fn get_actors(
 
             let total_items = ITEMS.len();
             let row_h = ROW_H * s;
-            for item_idx in 0..total_items {
+            for (item_idx, _) in ITEMS.iter().enumerate() {
                 let (row_mid_y, row_alpha) = state
                     .row_tweens
                     .get(item_idx)

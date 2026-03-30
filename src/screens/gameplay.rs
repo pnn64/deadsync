@@ -832,7 +832,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     {
         let chart = &state.charts[player_idx];
         let difficulty_color = color::difficulty_rgba(&chart.difficulty, state.active_color_index);
-        let meter_text = cached_meter_text(chart.meter as u32);
+        let meter_text = cached_meter_text(chart.meter);
         let meter_detail_text =
             color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
 

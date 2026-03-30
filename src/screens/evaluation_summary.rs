@@ -109,13 +109,13 @@ fn display_bpm_range(song: &SongData, chart: Option<&ChartData>) -> Option<(f64,
 
 fn stringify_display_bpms(song: &SongData, chart: Option<&ChartData>, music_rate: f32) -> String {
     // Handle Random display BPM — show "???" on eval
-    if let Some(chart) = chart {
-        if matches!(
+    if let Some(chart) = chart
+        && matches!(
             chart.display_bpm,
             Some(crate::game::chart::ChartDisplayBpm::Random)
-        ) {
-            return "???".to_string();
-        }
+        )
+    {
+        return "???".to_string();
     }
     let Some((mut lo, mut hi)) = display_bpm_range(song, chart) else {
         return String::new();
@@ -353,7 +353,7 @@ fn build_player_stats(
     }
     let y_base = if show_w0 { -58.0 } else { -63.0 };
 
-    for i in 0..counts.len() {
+    for (i, count) in counts.iter().copied().enumerate() {
         if i == 0 && !show_w0 {
             continue;
         }
@@ -376,7 +376,7 @@ fn build_player_stats(
 
         let mut a = act!(text:
             font("wendy"):
-            settext(counts[i].to_string()):
+            settext(count.to_string()):
             align(align2_x, 0.5):
             xy(col2x, y):
             zoom(0.28):

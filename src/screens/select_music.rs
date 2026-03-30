@@ -2206,51 +2206,51 @@ pub fn init() -> State {
     let displayed_entries_len = state.entries.len();
 
     // Restore selection
-    if let Some(last_song) = last_song_arc {
-        if let Some(idx) = state.entries.iter().position(|e| match e {
+    if let Some(last_song) = last_song_arc
+        && let Some(idx) = state.entries.iter().position(|e| match e {
             MusicWheelEntry::Song(s) => Arc::ptr_eq(s, &last_song),
             _ => false,
-        }) {
-            state.selected_index = idx;
-            if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-                if let Some(hash) = last_played.chart_hash.as_deref()
-                    && let Some(idx2) = steps_index_for_chart_hash(song, target_chart_type, hash)
-                {
-                    state.selected_steps_index = idx2;
-                    if idx2 < color::FILE_DIFFICULTY_NAMES.len() {
-                        state.preferred_difficulty_index = idx2;
-                    }
-                    state.p2_selected_steps_index = state.selected_steps_index;
-                    state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
-                    state.prev_selected_index = state.selected_index;
-                    debug!(
-                        "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
-                        total_songs,
-                        lock_wait,
-                        rebuild_dur,
-                        started.elapsed()
-                    );
-                    return state;
+        })
+    {
+        state.selected_index = idx;
+        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+            if let Some(hash) = last_played.chart_hash.as_deref()
+                && let Some(idx2) = steps_index_for_chart_hash(song, target_chart_type, hash)
+            {
+                state.selected_steps_index = idx2;
+                if idx2 < color::FILE_DIFFICULTY_NAMES.len() {
+                    state.preferred_difficulty_index = idx2;
                 }
+                state.p2_selected_steps_index = state.selected_steps_index;
+                state.p2_preferred_difficulty_index = state.preferred_difficulty_index;
+                state.prev_selected_index = state.selected_index;
+                debug!(
+                    "SelectMusic state ready: chart_type={target_chart_type} matched {matched_songs} songs in {matched_packs}/{total_packs} packs ({} total songs), entries {built_entries_len}→{displayed_entries_len}, lock {:?}, rebuild {:?}, total {:?}.",
+                    total_songs,
+                    lock_wait,
+                    rebuild_dur,
+                    started.elapsed()
+                );
+                return state;
+            }
 
-                if let Some(idx2) =
-                    best_steps_index(song, target_chart_type, state.preferred_difficulty_index)
-                {
-                    state.selected_steps_index = idx2;
-                }
-                if let Some(idx2) =
-                    best_steps_index(song, target_chart_type, state.p2_preferred_difficulty_index)
-                {
-                    state.p2_selected_steps_index = idx2;
-                } else {
-                    state.p2_selected_steps_index = state.selected_steps_index;
-                }
-                if state.selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
-                    state.preferred_difficulty_index = state.selected_steps_index;
-                }
-                if state.p2_selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
-                    state.p2_preferred_difficulty_index = state.p2_selected_steps_index;
-                }
+            if let Some(idx2) =
+                best_steps_index(song, target_chart_type, state.preferred_difficulty_index)
+            {
+                state.selected_steps_index = idx2;
+            }
+            if let Some(idx2) =
+                best_steps_index(song, target_chart_type, state.p2_preferred_difficulty_index)
+            {
+                state.p2_selected_steps_index = idx2;
+            } else {
+                state.p2_selected_steps_index = state.selected_steps_index;
+            }
+            if state.selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+                state.preferred_difficulty_index = state.selected_steps_index;
+            }
+            if state.p2_selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+                state.p2_preferred_difficulty_index = state.p2_selected_steps_index;
             }
         }
     }
@@ -5058,18 +5058,17 @@ pub fn handle_pad_dir(
                             state.p1_chord_up_pressed_at,
                             state.p1_chord_down_pressed_at,
                         )
+                        && let Some(pack) = state.expanded_pack_name.take()
                     {
-                        if let Some(pack) = state.expanded_pack_name.take() {
-                            debug!("Up+Down combo: Collapsing pack '{}'.", pack);
-                            rebuild_displayed_entries(state);
-                            if let Some(new_sel) = state.entries.iter().position(|e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack)) {
-                                state.selected_index = new_sel;
-                                state.prev_selected_index = new_sel;
-                                state.time_since_selection_change = 0.0;
-                                // Clear delayed chart-driven panels immediately on folder close.
-                                state.displayed_chart_p1 = None;
-                                state.displayed_chart_p2 = None;
-                            }
+                        debug!("Up+Down combo: Collapsing pack '{}'.", pack);
+                        rebuild_displayed_entries(state);
+                        if let Some(new_sel) = state.entries.iter().position(|e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack)) {
+                            state.selected_index = new_sel;
+                            state.prev_selected_index = new_sel;
+                            state.time_since_selection_change = 0.0;
+                            // Clear delayed chart-driven panels immediately on folder close.
+                            state.displayed_chart_p1 = None;
+                            state.displayed_chart_p2 = None;
                         }
                     }
                 }
@@ -5209,20 +5208,19 @@ fn handle_pad_dir_p2(
                     state.p2_chord_up_pressed_at,
                     state.p2_chord_down_pressed_at,
                 )
+                && let Some(pack) = state.expanded_pack_name.take()
             {
-                if let Some(pack) = state.expanded_pack_name.take() {
-                    debug!("Up+Down combo: Collapsing pack '{}'.", pack);
-                    rebuild_displayed_entries(state);
-                    if let Some(new_sel) = state.entries.iter().position(
-                        |e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack),
-                    ) {
-                        state.selected_index = new_sel;
-                        state.prev_selected_index = new_sel;
-                        state.time_since_selection_change = 0.0;
-                        // Clear delayed chart-driven panels immediately on folder close.
-                        state.displayed_chart_p1 = None;
-                        state.displayed_chart_p2 = None;
-                    }
+                debug!("Up+Down combo: Collapsing pack '{}'.", pack);
+                rebuild_displayed_entries(state);
+                if let Some(new_sel) = state.entries.iter().position(
+                    |e| matches!(e, MusicWheelEntry::PackHeader { name, .. } if name == &pack),
+                ) {
+                    state.selected_index = new_sel;
+                    state.prev_selected_index = new_sel;
+                    state.time_since_selection_change = 0.0;
+                    // Clear delayed chart-driven panels immediately on folder close.
+                    state.displayed_chart_p1 = None;
+                    state.displayed_chart_p2 = None;
                 }
             }
         }
@@ -5381,13 +5379,12 @@ pub fn handle_raw_key_event(
             }
             return ScreenAction::None;
         }
-    } else if key.is_none() && text.is_some() {
-        if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
-            if let Some(text) = text {
-                sort_menu::song_search_add_text(entry, text);
-            }
-            return ScreenAction::None;
-        }
+    } else if key.is_none()
+        && let Some(text) = text
+        && let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search
+    {
+        sort_menu::song_search_add_text(entry, text);
+        return ScreenAction::None;
     }
 
     if !key.is_some_and(|key| key.pressed) {
@@ -5395,12 +5392,11 @@ pub fn handle_raw_key_event(
     }
     if key.is_some_and(|key| key.code == KeyCode::F7) {
         let target_chart_type = profile::get_session_play_style().chart_type();
-        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
-            if let Some(chart) =
+        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index)
+            && let Some(chart) =
                 chart_for_steps_index(song, target_chart_type, state.selected_steps_index)
-            {
-                return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
-            }
+        {
+            return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
         }
     }
     ScreenAction::None
@@ -6119,7 +6115,7 @@ fn maybe_refresh_select_music_leaderboard(
 /// Selects the step artist display text for a chart, cycling through non-empty
 /// values of [step_artist, description, chart_name] every 2 seconds, matching
 /// Simply Love / ITGMania behavior.
-fn step_artist_cycle_text<'a>(chart: &'a ChartData, cycle_elapsed: f32) -> &'a str {
+fn step_artist_cycle_text(chart: &ChartData, cycle_elapsed: f32) -> &str {
     let candidates: [&str; 3] = [
         chart.step_artist.as_str(),
         chart.description.as_str(),
@@ -6771,8 +6767,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 .unwrap_or(score_mode_label_storage.as_str());
             out.push(act!(text: font("miso"): settext(score_mode_label): align(0.5, 0.5): xy(pane_cx + cols[2] - 15.0, pane_top + rows[2]): maxwidth(90.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0): horizalign(center)));
             if gs_view.show_rivals {
-                for i in 0..3 {
-                    let (name, pct) = (&gs_view.rivals[i].0, &gs_view.rivals[i].1);
+                for (i, (name, pct)) in gs_view.rivals.iter().enumerate() {
                     let pct = pct.as_ref();
                     out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] + 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                     out.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(pane_cx + cols[2] + 125.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));

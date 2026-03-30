@@ -3180,10 +3180,7 @@ pub struct ScoreImportProgress {
     pub detail: String,
 }
 
-fn score_import_api_key_for_endpoint<'a>(
-    endpoint: ScoreImportEndpoint,
-    profile: &'a Profile,
-) -> &'a str {
+fn score_import_api_key_for_endpoint(endpoint: ScoreImportEndpoint, profile: &Profile) -> &str {
     match endpoint {
         ScoreImportEndpoint::GrooveStats | ScoreImportEndpoint::BoogieStats => {
             profile.groovestats_api_key.trim()

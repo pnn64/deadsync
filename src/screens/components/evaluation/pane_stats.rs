@@ -252,13 +252,13 @@ pub(crate) fn build_stats_pane(
 
                 let number_local_y = (i as f32).mul_add(35.0, -20.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
-                for char_idx in 0..digits_to_fmt {
+                for (char_idx, digit) in digits.iter().take(digits_to_fmt).enumerate() {
                     let is_dim = if count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
                     let color = if is_dim { dim_color } else { bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
 
-                    actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(digits[char_idx])):
+                    actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(*digit)):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
                     ));
@@ -307,13 +307,13 @@ pub(crate) fn build_stats_pane(
                 // Numbers: match Simply Love Pane2 numbers using 32px spacing.
                 let number_local_y = (i as f32).mul_add(32.0, -24.0);
                 let number_final_y = frame_origin_y + (number_local_y * numbers_frame_zoom);
-                for char_idx in 0..digits_to_fmt {
+                for (char_idx, digit) in digits.iter().take(digits_to_fmt).enumerate() {
                     let is_dim = if count == 0 { char_idx < digits_to_fmt - 1 } else { char_idx < first_nonzero };
                     let color = if is_dim { *dim_color } else { *bright_color };
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
 
-                    actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(digits[char_idx])):
+                    actors.push(act!(text: font("wendy_screenevaluation"): settext(digit_text(*digit)):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
                     ));

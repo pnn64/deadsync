@@ -977,7 +977,7 @@ fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
 fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
     let num_cols = col_offsets.len();
     let width = if num_cols > 4 { 2 } else { 3 };
-    for i in 0..num_cols {
+    for (i, bounds) in out.iter_mut().take(num_cols).enumerate() {
         let start = i.saturating_sub(width);
         let end = (i + width).min(num_cols.saturating_sub(1));
         let mut min_x = f32::INFINITY;
@@ -986,7 +986,7 @@ fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
             min_x = min_x.min(*x);
             max_x = max_x.max(*x);
         }
-        out[i] = TornadoBounds { min_x, max_x };
+        *bounds = TornadoBounds { min_x, max_x };
     }
 }
 
@@ -1626,11 +1626,11 @@ fn zmod_measure_counter_text(
         if !is_lookahead {
             let first = segs[0];
             if !first.is_break {
-                let v = ((beat_div4 * -1.0) + (1.0 * multiplier)).floor() as i32;
+                let v = ((-beat_div4) + (1.0 * multiplier)).floor() as i32;
                 return Some(cached_paren_i32(v));
             }
             let len = (first.end - first.start) as i32;
-            let v_unscaled = (beat_div4 * -1.0).floor() as i32 + 1 + len;
+            let v_unscaled = (-beat_div4).floor() as i32 + 1 + len;
             let v = ((v_unscaled as f32) * multiplier).floor() as i32;
             return Some(cached_paren_i32(v));
         }
@@ -2674,8 +2674,8 @@ pub fn build(
         };
         let beat_push = beat_factor(current_beat);
         let mut col_offsets = [0.0_f32; MAX_COLS];
-        for i in 0..num_cols {
-            col_offsets[i] = ns.column_xs[i] as f32 * field_zoom;
+        for (i, col_offset) in col_offsets.iter_mut().take(num_cols).enumerate() {
+            *col_offset = ns.column_xs[i] as f32 * field_zoom;
         }
         let mut invert_distances = [0.0_f32; MAX_COLS];
         compute_invert_distances(&col_offsets[..num_cols], &mut invert_distances[..num_cols]);
@@ -3049,9 +3049,8 @@ pub fn build(
         }
 
         // Receptors + glow
-        for i in 0..num_cols {
+        for (i, &receptor_y_lane) in column_receptor_ys.iter().take(num_cols).enumerate() {
             let col = col_start + i;
-            let receptor_y_lane = column_receptor_ys[i];
             let receptor_center = receptor_row_center(
                 playfield_center_x,
                 i,
@@ -3231,52 +3230,54 @@ pub fn build(
                     }
                 }
             }
-            if !profile.hide_targets && receptor_alpha > f32::EPSILON {
-                if let Some((alpha, zoom)) = receptor_glow_visual_for_col(state, col)
-                    && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
-                {
-                    let alpha = alpha * receptor_alpha;
-                    if alpha > f32::EPSILON {
-                        let glow_frame =
-                            glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
-                        let glow_uv =
-                            glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
-                        let glow_size = scale_explosion(logical_slot_size(glow_slot));
-                        let behavior = ns.receptor_glow_behavior;
-                        let width = glow_size[0] * zoom;
-                        let height = glow_size[1] * zoom;
-                        if behavior.blend_add {
-                            actors.push(act!(sprite(glow_slot.texture_key_shared()):
-                                align(0.5, 0.5):
-                                xy(receptor_center[0], receptor_center[1]):
-                                setsize(width, height):
-                                rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
-                                customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
-                                diffuse(1.0, 1.0, 1.0, alpha):
-                                blend(add):
-                                z(Z_HOLD_GLOW)
-                            ));
-                        } else {
-                            actors.push(act!(sprite(glow_slot.texture_key_shared()):
-                                align(0.5, 0.5):
-                                xy(receptor_center[0], receptor_center[1]):
-                                setsize(width, height):
-                                rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
-                                customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
-                                diffuse(1.0, 1.0, 1.0, alpha):
-                                blend(normal):
-                                z(Z_HOLD_GLOW)
-                            ));
-                        }
+            if !profile.hide_targets
+                && receptor_alpha > f32::EPSILON
+                && let Some((alpha, zoom)) = receptor_glow_visual_for_col(state, col)
+                && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
+            {
+                let alpha = alpha * receptor_alpha;
+                if alpha > f32::EPSILON {
+                    let glow_frame =
+                        glow_slot.frame_index(state.total_elapsed_in_screen, current_beat);
+                    let glow_uv =
+                        glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
+                    let glow_size = scale_explosion(logical_slot_size(glow_slot));
+                    let behavior = ns.receptor_glow_behavior;
+                    let width = glow_size[0] * zoom;
+                    let height = glow_size[1] * zoom;
+                    if behavior.blend_add {
+                        actors.push(act!(sprite(glow_slot.texture_key_shared()):
+                            align(0.5, 0.5):
+                            xy(receptor_center[0], receptor_center[1]):
+                            setsize(width, height):
+                            rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                            customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
+                            diffuse(1.0, 1.0, 1.0, alpha):
+                            blend(add):
+                            z(Z_HOLD_GLOW)
+                        ));
+                    } else {
+                        actors.push(act!(sprite(glow_slot.texture_key_shared()):
+                            align(0.5, 0.5):
+                            xy(receptor_center[0], receptor_center[1]):
+                            setsize(width, height):
+                            rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
+                            customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
+                            diffuse(1.0, 1.0, 1.0, alpha):
+                            blend(normal):
+                            z(Z_HOLD_GLOW)
+                        ));
                     }
                 }
             }
         }
         // Tap explosions (receptor noteflash / GhostArrow) are independent of
         // the "Hide Combo Explosions" UI option, which only affects combo splodes.
-        for i in 0..num_cols {
-            let col = col_start + i;
-            if let Some(active) = state.tap_explosions[col].as_ref()
+        for (i, active_opt) in state.tap_explosions[col_start..col_start + num_cols]
+            .iter()
+            .enumerate()
+        {
+            if let Some(active) = active_opt.as_ref()
                 && let Some(explosion) = ns.tap_explosions.get(&active.window)
             {
                 let receptor_y_lane = column_receptor_ys[i];
@@ -3376,9 +3377,11 @@ pub fn build(
             }
         }
         // Mine explosions
-        for i in 0..num_cols {
-            let col = col_start + i;
-            let Some(active) = state.mine_explosions[col].as_ref() else {
+        for (i, active_opt) in state.mine_explosions[col_start..col_start + num_cols]
+            .iter()
+            .enumerate()
+        {
+            let Some(active) = active_opt.as_ref() else {
                 continue;
             };
             let Some(explosion) = mine_ns.mine_hit_explosion.as_ref() else {
@@ -5670,8 +5673,8 @@ pub fn build(
                         ERROR_BAR_LINE_ALPHA
                     };
                     if line_alpha > 0.0 && wscale.is_finite() && wscale > 0.0 {
-                        for i in 0..bounds_len {
-                            let offset = bounds_s[i] * wscale;
+                        for &bound in bounds_s.iter().take(bounds_len) {
+                            let offset = bound * wscale;
                             if !offset.is_finite() {
                                 continue;
                             }
@@ -5783,8 +5786,8 @@ pub fn build(
                             1usize
                         };
                         let mut lastx = 0.0_f32;
-                        for i in 0..bounds_len {
-                            let x = bounds_s[i] * wscale;
+                        for (i, &bound) in bounds_s.iter().take(bounds_len).enumerate() {
+                            let x = bound * wscale;
                             let width = x - lastx;
                             if !x.is_finite() || !width.is_finite() || width <= 0.0 {
                                 lastx = x;
@@ -5876,8 +5879,8 @@ pub fn build(
                             1usize
                         };
                         let mut lastx = 0.0_f32;
-                        for i in 0..bounds_len {
-                            let x = bounds_s[i] * wscale;
+                        for (i, &bound) in bounds_s.iter().take(bounds_len).enumerate() {
+                            let x = bound * wscale;
                             let width = x - lastx;
                             if !x.is_finite() || !width.is_finite() || width <= 0.0 {
                                 lastx = x;
@@ -6098,11 +6101,11 @@ pub fn build(
                             // BrokenRunCounter.lua special-cases negative time.
                             let first = segs[0];
                             if !first.is_break {
-                                let v = (curr_measure * -1.0).floor() as i32 + 1;
+                                let v = (-curr_measure).floor() as i32 + 1;
                                 cached_paren_i32(v)
                             } else {
                                 let first_len = (first.end - first.start) as i32;
-                                let v = (curr_measure * -1.0).floor() as i32 + 1 + first_len;
+                                let v = (-curr_measure).floor() as i32 + 1 + first_len;
                                 cached_paren_i32(v)
                             }
                         } else if curr_count != 0 {
@@ -6295,12 +6298,14 @@ pub fn build(
             }
         }
     }
-    for i in 0..num_cols {
-        let col = col_start + i;
+    for (i, hold_judgment) in state.hold_judgments[col_start..col_start + num_cols]
+        .iter()
+        .enumerate()
+    {
         if blind_active {
             continue;
         }
-        let Some(render_info) = state.hold_judgments[col].as_ref() else {
+        let Some(render_info) = hold_judgment.as_ref() else {
             continue;
         };
         let elapsed = render_info.triggered_at.elapsed().as_secs_f32();

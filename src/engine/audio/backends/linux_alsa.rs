@@ -94,10 +94,10 @@ pub(crate) fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
         .into_iter()
         .map(|device| build_output_device(device, default_pcm_id.as_deref()))
         .collect::<Vec<_>>();
-    if !devices.iter().any(|device| device.is_default) {
-        if let Some(device) = devices.first_mut() {
-            device.is_default = true;
-        }
+    if !devices.iter().any(|device| device.is_default)
+        && let Some(device) = devices.first_mut()
+    {
+        device.is_default = true;
     }
     devices
 }

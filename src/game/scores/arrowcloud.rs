@@ -541,7 +541,7 @@ fn arrowcloud_nps_info(gs: &gameplay::State, player_idx: usize) -> ArrowCloudNps
         };
         points.push(ArrowCloudNpsPoint {
             x: x as f64,
-            y: y as f64,
+            y,
             measure: measure as u32,
             nps,
         });

@@ -176,10 +176,10 @@ const fn select_music_filter_allows_kind(kind: PaneKind, filter: SelectMusicPane
     }
 }
 
-fn select_music_filtered_panes<'a>(
-    panes: &'a [scores::LeaderboardPane],
+fn select_music_filtered_panes(
+    panes: &[scores::LeaderboardPane],
     filter: SelectMusicPaneFilter,
-) -> Vec<&'a scores::LeaderboardPane> {
+) -> Vec<&scores::LeaderboardPane> {
     let mut out = Vec::with_capacity(panes.len());
     for pane in panes {
         if select_music_filter_allows_kind(pane_kind(pane), filter) {
@@ -214,7 +214,7 @@ fn pane_kind(pane: &scores::LeaderboardPane) -> PaneKind {
 }
 
 #[inline(always)]
-fn pane_mode_text<'a>(kind: PaneKind, pane: &'a scores::LeaderboardPane) -> &'a str {
+fn pane_mode_text(kind: PaneKind, pane: &scores::LeaderboardPane) -> &str {
     match kind {
         PaneKind::Gs => "ITG",
         PaneKind::Ex => "EX",

@@ -1234,8 +1234,8 @@ pub fn build_scatter_points(
 
         let mut representative_ix: Option<usize> = None;
         let mut direction_code = 0u8;
-        for i in row_start..row_end {
-            let n = &notes[i];
+        for (offset, n) in notes[row_start..row_end].iter().enumerate() {
+            let i = row_start + offset;
             if n.is_fake || !n.can_be_judged || matches!(n.note_type, NoteType::Mine) {
                 continue;
             }

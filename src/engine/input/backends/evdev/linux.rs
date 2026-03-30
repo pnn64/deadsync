@@ -1119,11 +1119,11 @@ fn run_inner(
             let dev = &mut devs[i];
             let count = (n as usize / size_of::<InputEventRaw>()).min(buf.len());
 
-            for j in 0..count {
+            for event in buf.iter().take(count) {
                 // SAFETY: `count` is derived from the number of bytes returned by
                 // `read`, so the first `count` entries of `buf` were initialized by
                 // the kernel in this iteration.
-                let ev = unsafe { buf[j].assume_init() };
+                let ev = unsafe { event.assume_init() };
                 let (event_timestamp, event_host_nanos) =
                     event_time(receipt, ev.tv_sec, ev.tv_usec);
                 if ev.type_ == EV_SYN {
@@ -1205,11 +1205,11 @@ fn run_inner(
 
             let count = (n as usize / size_of::<InputEventRaw>()).min(buf.len());
 
-            for j in 0..count {
+            for event in buf.iter().take(count) {
                 // SAFETY: `count` is derived from the number of bytes returned by
                 // `read`, so the first `count` entries of `buf` were initialized by
                 // the kernel in this iteration.
-                let ev = unsafe { buf[j].assume_init() };
+                let ev = unsafe { event.assume_init() };
                 let (event_timestamp, event_host_nanos) =
                     event_time(receipt, ev.tv_sec, ev.tv_usec);
                 if ev.type_ != EV_KEY {

@@ -252,6 +252,13 @@ const P1: usize = 0;
 const P2: usize = 1;
 const MATCH_NOTESKIN_LABEL: &str = "Same as NoteSkin";
 
+#[inline(always)]
+fn active_player_indices(active: [bool; PLAYER_SLOTS]) -> impl Iterator<Item = usize> {
+    [P1, P2]
+        .into_iter()
+        .filter(move |&player_idx| active[player_idx])
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NavDirection {
     Up,
@@ -2872,10 +2879,7 @@ fn measure_counter_children_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) 
     };
     let max_choice = row.choices.len().saturating_sub(1);
     let mut any_active = false;
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
         if choice_idx != 0 {
@@ -2892,10 +2896,7 @@ fn judgment_tilt_intensity_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -
     };
     let max_choice = row.choices.len().saturating_sub(1);
     let mut any_active = false;
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
         if choice_idx != 0 {
@@ -2910,10 +2911,7 @@ fn error_bar_children_visible(
     error_bar_active_mask: [u8; PLAYER_SLOTS],
 ) -> bool {
     let mut any_active = false;
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         any_active = true;
         if crate::game::profile::normalize_error_bar_mask(error_bar_active_mask[player_idx]) != 0 {
             return true;
@@ -2928,10 +2926,7 @@ fn custom_fantastic_window_ms_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]
     };
     let max_choice = row.choices.len().saturating_sub(1);
     let mut any_active = false;
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
         if choice_idx != 0 {
@@ -2947,10 +2942,7 @@ fn density_graph_background_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) 
     };
     let max_choice = row.choices.len().saturating_sub(1);
     let mut any_active = false;
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
         if choice_idx == 2 {
@@ -2962,10 +2954,7 @@ fn density_graph_background_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) 
 
 fn combo_rows_visible(active: [bool; PLAYER_SLOTS], hide_active_mask: [u8; PLAYER_SLOTS]) -> bool {
     let mut any_active = false;
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         any_active = true;
         let hide_combo = (hide_active_mask[player_idx] & (1u8 << 2)) != 0;
         if !hide_combo {
@@ -2980,10 +2969,7 @@ fn lifebar_rows_visible(
     hide_active_mask: [u8; PLAYER_SLOTS],
 ) -> bool {
     let mut any_active = false;
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         any_active = true;
         let hide_lifebar = (hide_active_mask[player_idx] & (1u8 << 3)) != 0;
         if !hide_lifebar {
@@ -2999,10 +2985,7 @@ fn indicator_score_type_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> b
     };
     let max_choice = row.choices.len().saturating_sub(1);
     let mut any_active = false;
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         any_active = true;
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
         // Visible for Subtractive(1), Predictive(2), Pace(3)
@@ -3153,7 +3136,7 @@ fn sync_selected_rows_with_visibility(state: &mut State, active: [bool; PLAYER_S
         state.hide_active_mask,
         state.error_bar_active_mask,
     );
-    for player_idx in 0..PLAYER_SLOTS {
+    for player_idx in [P1, P2] {
         let idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
         if is_row_visible(&state.rows, idx, visibility) {
             state.selected_row[player_idx] = idx;
@@ -4198,14 +4181,13 @@ fn change_choice_for_player(
             crate::game::profile::update_mine_noteskin_for_side(persist_side, setting);
         }
         sync_noteskin_previews_for_player(state, player_idx);
-    } else if row_name == "Stepchart" {
-        if let Some(diff_indices) = &row.choice_difficulty_indices
-            && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[player_idx])
-        {
-            state.chart_steps_index[player_idx] = difficulty_idx;
-            if difficulty_idx < crate::engine::present::color::FILE_DIFFICULTY_NAMES.len() {
-                state.chart_difficulty_index[player_idx] = difficulty_idx;
-            }
+    } else if row_name == "Stepchart"
+        && let Some(diff_indices) = &row.choice_difficulty_indices
+        && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[player_idx])
+    {
+        state.chart_steps_index[player_idx] = difficulty_idx;
+        if difficulty_idx < crate::engine::present::color::FILE_DIFFICULTY_NAMES.len() {
+            state.chart_difficulty_index[player_idx] = difficulty_idx;
         }
     }
 
@@ -4255,10 +4237,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     sync_selected_rows_with_visibility(state, active);
 
     // Hold-to-scroll per player.
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
             state.nav_key_held_direction[player_idx],
             state.nav_key_held_since[player_idx],
@@ -4329,18 +4308,13 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     }
 
     // Advance help reveal timers.
-    for player_idx in 0..PLAYER_SLOTS {
-        if active[player_idx] {
-            state.help_anim_time[player_idx] += dt;
-        }
+    for player_idx in active_player_indices(active) {
+        state.help_anim_time[player_idx] += dt;
     }
 
     // If either player is on the Combo Font row, tick the preview combo once per second.
     let mut combo_row_active = false;
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         if let Some(row) = state.rows.get(state.selected_row[player_idx])
             && row.name == "Combo Font"
         {
@@ -4467,10 +4441,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     }
 
     // Reset help reveal and play SFX when a player changes rows.
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         if state.selected_row[player_idx] == state.prev_selected_row[player_idx] {
             continue;
         }
@@ -4485,10 +4456,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     }
 
     // Retarget cursor tween destinations to match current selection and row destinations.
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         let Some((to_x, to_y, to_w, to_h)) =
             cursor_dest_for_player(state, asset_manager, player_idx)
         else {
@@ -4536,7 +4504,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
     }
 
     // Advance cursor tween.
-    for player_idx in 0..PLAYER_SLOTS {
+    for player_idx in [P1, P2] {
         if state.cursor_t[player_idx] < 1.0 {
             if CURSOR_TWEEN_SECONDS > 0.0 {
                 state.cursor_t[player_idx] =
@@ -5960,10 +5928,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let preview_x_for = |player_idx: usize| speed_x_for(player_idx) + preview_dx;
 
     if state.current_pane == OptionsPane::Main {
-        for player_idx in 0..PLAYER_SLOTS {
-            if !active[player_idx] {
-                continue;
-            }
+        for player_idx in active_player_indices(active) {
             let speed_mod = &state.speed_mod[player_idx];
             let speed_color = color::simply_love_rgba(player_color_index(player_idx));
             let p_chart = resolve_p1_chart(&state.song, &state.chart_steps_index);
@@ -6155,8 +6120,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Draw the selection cursor for the centered "Exit" text when active
             if is_active {
                 let border_w = widescale(2.0, 2.5);
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] || state.selected_row[player_idx] != item_idx {
+                for player_idx in active_player_indices(active) {
+                    if state.selected_row[player_idx] != item_idx {
                         continue;
                     }
                     let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(player_idx) else {
@@ -6242,10 +6207,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.scroll_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6282,10 +6244,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.hide_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6322,10 +6281,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.insert_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6362,10 +6318,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.remove_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6402,10 +6355,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.holds_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6442,10 +6392,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.accel_effects_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6482,10 +6429,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.visual_effects_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6522,10 +6466,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.appearance_effects_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6562,10 +6503,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.life_bar_options_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6602,10 +6540,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.fa_plus_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6642,10 +6577,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.gameplay_extras_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6682,10 +6614,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.gameplay_extras_more_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6722,10 +6651,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.results_extras_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6762,10 +6688,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.measure_counter_options_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6802,10 +6725,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.error_bar_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6842,10 +6762,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.error_bar_options_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6882,10 +6799,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let mask = state.early_dw_active_mask[player_idx];
                     if mask == 0 {
                         continue;
@@ -6922,10 +6836,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         underline_base_y
                     }
                 };
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] {
-                        continue;
-                    }
+                for player_idx in active_player_indices(active) {
                     let idx =
                         row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
                     if let Some(sel_x) = x_positions.get(idx).copied() {
@@ -6947,8 +6858,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // Draw the 4-sided cursor ring around the selected option when this row is active.
             if !widths.is_empty() {
                 let border_w = widescale(2.0, 2.5);
-                for player_idx in 0..PLAYER_SLOTS {
-                    if !active[player_idx] || state.selected_row[player_idx] != item_idx {
+                for player_idx in active_player_indices(active) {
+                    if state.selected_row[player_idx] != item_idx {
                         continue;
                     }
                     let Some((center_x, center_y, ring_w, ring_h)) = cursor_now(player_idx) else {
@@ -7646,10 +7557,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     ));
     const REVEAL_DURATION: f32 = 0.5;
     let split_help = active[P1] && active[P2];
-    for player_idx in 0..PLAYER_SLOTS {
-        if !active[player_idx] {
-            continue;
-        }
+    for player_idx in active_player_indices(active) {
         let row_idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
         let Some(row) = state.rows.get(row_idx) else {
             continue;

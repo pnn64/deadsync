@@ -1114,7 +1114,7 @@ fn build_course_run_from_selection(
     let mut course_display_totals =
         [crate::game::gameplay::CourseDisplayTotals::default(); crate::game::gameplay::MAX_PLAYERS];
     for stage in &stages {
-        for player_idx in 0..crate::game::gameplay::MAX_PLAYERS {
+        for (player_idx, total) in course_display_totals.iter_mut().enumerate() {
             let Some(chart) = select_music::chart_for_steps_index(
                 stage.song.as_ref(),
                 chart_type,
@@ -1123,7 +1123,6 @@ fn build_course_run_from_selection(
                 continue;
             };
             let add = crate::game::gameplay::course_display_totals_for_chart(chart);
-            let total = &mut course_display_totals[player_idx];
             total.possible_grade_points = total
                 .possible_grade_points
                 .saturating_add(add.possible_grade_points);
@@ -2267,16 +2266,16 @@ impl App {
                 let gameplay_prompt_active = self.state.screens.current_screen
                     == CurrentScreen::Gameplay
                     && self.state.gameplay_offset_save_prompt.is_some();
-                if !gameplay_prompt_active {
-                    if let Some(action) = self.state.screens.step_idle(
+                if !gameplay_prompt_active
+                    && let Some(action) = self.state.screens.step_idle(
                         delta_time,
                         redraw_started,
                         &self.state.session,
                         &self.asset_manager,
-                    ) && !matches!(action, ScreenAction::None)
-                    {
-                        let _ = self.handle_action(action, event_loop);
-                    }
+                    )
+                    && !matches!(action, ScreenAction::None)
+                {
+                    let _ = self.handle_action(action, event_loop);
                 }
                 if self.state.screens.current_screen == CurrentScreen::Evaluation
                     && !self.state.screens.evaluation_state.auto_screenshot_taken
@@ -5078,17 +5077,18 @@ impl App {
                 .course_run
                 .as_ref()
                 .map(|course| course.course_display_totals);
-            if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some() {
-                if let Some(gameplay_results) = self.state.screens.gameplay_state.take() {
-                    self.update_combo_carry_from_gameplay(&gameplay_results);
-                    course_display_carry = Some(
-                        crate::game::gameplay::course_display_carry_from_state(&gameplay_results),
-                    );
-                    let color_idx = gameplay_results.active_color_index;
-                    let mut eval_state = evaluation::init(Some(gameplay_results));
-                    eval_state.active_color_index = color_idx;
-                    let _ = self.append_stage_results_from_eval(&eval_state);
-                }
+            if prev == CurrentScreen::Gameplay
+                && self.state.session.course_run.is_some()
+                && let Some(gameplay_results) = self.state.screens.gameplay_state.take()
+            {
+                self.update_combo_carry_from_gameplay(&gameplay_results);
+                course_display_carry = Some(
+                    crate::game::gameplay::course_display_carry_from_state(&gameplay_results),
+                );
+                let color_idx = gameplay_results.active_color_index;
+                let mut eval_state = evaluation::init(Some(gameplay_results));
+                eval_state.active_color_index = color_idx;
+                let _ = self.append_stage_results_from_eval(&eval_state);
             }
 
             let replay_pending =

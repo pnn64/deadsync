@@ -894,7 +894,11 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         scores::submit_arrowcloud_payloads_from_gameplay(&gs);
 
         let cols_per_player = gs.cols_per_player;
-        for player_idx in 0..gs.num_players.min(MAX_PLAYERS) {
+        for (player_idx, score_info_slot) in score_info
+            .iter_mut()
+            .enumerate()
+            .take(gs.num_players.min(MAX_PLAYERS))
+        {
             let noteskin = gs.noteskin[player_idx].take();
             let (start, end) = gs.note_ranges[player_idx];
             let notes = &gs.notes[start..end];
@@ -1053,7 +1057,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 prof.show_fa_plus_window,
             );
 
-            score_info[player_idx] = Some(ScoreInfo {
+            *score_info_slot = Some(ScoreInfo {
                 song: gs.song.clone(),
                 chart: gs.charts[player_idx].clone(),
                 side,
