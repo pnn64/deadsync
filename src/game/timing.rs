@@ -493,13 +493,26 @@ impl TimingData {
         if self.fakes.is_empty() {
             return false;
         }
-        // Binary search for last segment starting at or before beat
-        let idx = self.fakes.partition_point(|seg| seg.beat <= beat);
+        let row = beat_to_note_row(beat);
+        let beat_row = note_row_to_beat(row);
+        // Mirror ITGmania row semantics by quantizing the query beat first.
+        let idx = self
+            .fakes
+            .partition_point(|seg| beat_to_note_row(seg.beat) <= row);
         if idx == 0 {
             return false;
         }
         let seg = self.fakes[idx - 1];
-        beat >= seg.beat && beat < seg.beat + seg.length
+        beat_row >= seg.beat && beat_row < seg.beat + seg.length
+    }
+
+    #[inline(always)]
+    fn has_stop_or_delay_at_row(&self, row: i32) -> bool {
+        self.stops.iter().any(|seg| {
+            beat_to_note_row(seg.beat) == row && seg.duration.is_finite() && seg.duration != 0.0
+        }) || self.delays.iter().any(|seg| {
+            beat_to_note_row(seg.beat) == row && seg.duration.is_finite() && seg.duration != 0.0
+        })
     }
 
     #[inline(always)]
@@ -507,8 +520,11 @@ impl TimingData {
         if self.warps.is_empty() {
             return false;
         }
-        // warps represent a range [beat, beat+length) of non-judgable rows
-        let idx = self.warps.partition_point(|seg| seg.beat <= beat);
+        let row = beat_to_note_row(beat);
+        let beat_row = note_row_to_beat(row);
+        let idx = self
+            .warps
+            .partition_point(|seg| beat_to_note_row(seg.beat) <= row);
         if idx == 0 {
             return false;
         }
@@ -517,7 +533,17 @@ impl TimingData {
         if !(seg.length.is_finite() && seg.length > 0.0) {
             return false;
         }
-        beat >= seg.beat && beat < seg.beat + seg.length
+        if !(seg.beat <= beat_row && beat_row < seg.beat + seg.length) {
+            return false;
+        }
+
+        // ITGmania allows rows with an explicit stop/delay on the warp start row
+        // to remain judgable, enabling stop+warp patterns like NULCTRL.
+        if self.stops.is_empty() && self.delays.is_empty() {
+            return true;
+        }
+
+        !self.has_stop_or_delay_at_row(row)
     }
 
     #[inline(always)]
@@ -1593,5 +1619,57 @@ mod tests {
             ((expected_window / HIST_BIN_MS).round() as usize * 2) + 1
         );
         assert!(hist.smoothed.iter().all(|(_, value)| value.abs() < 0.0001));
+    }
+
+    #[test]
+    fn warp_start_row_with_stop_remains_judgable() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 100.0)],
+                stops: vec![StopSegment {
+                    beat: 60.0,
+                    duration: 0.150,
+                }],
+                warps: vec![WarpSegment {
+                    beat: 60.0,
+                    length: 0.250,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+
+        assert!(timing.is_judgable_at_beat(60.0));
+        assert!(!timing.is_warp_at_beat(60.0));
+        assert!(timing.is_warp_at_beat(60.125));
+        assert!(!timing.is_judgable_at_beat(60.125));
+    }
+
+    #[test]
+    fn warp_start_row_with_delay_remains_judgable() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 100.0)],
+                delays: vec![DelaySegment {
+                    beat: 14.0,
+                    duration: 0.150,
+                }],
+                warps: vec![WarpSegment {
+                    beat: 14.0,
+                    length: 0.250,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+
+        assert!(timing.is_judgable_at_beat(14.0));
+        assert!(!timing.is_warp_at_beat(14.0));
+        assert!(timing.is_warp_at_beat(14.125));
+        assert!(!timing.is_judgable_at_beat(14.125));
     }
 }
