@@ -460,11 +460,9 @@ mod tests {
 
     #[test]
     fn collect_stale_dynamic_keys_skips_desired_entries() {
-        let current = vec![
-            "keep.mp4".to_string(),
+        let current = ["keep.mp4".to_string(),
             "drop-a.mp4".to_string(),
-            "drop-b.mp4".to_string(),
-        ];
+            "drop-b.mp4".to_string()];
         let desired = HashSet::from(["keep.mp4".to_string()]);
         assert_eq!(
             collect_stale_dynamic_keys(current.iter(), &desired),

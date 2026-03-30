@@ -261,11 +261,11 @@ fn run_workload(
             InputKind::Pad => run_pad_event(state, timestamp, host_nanos, pressed, checksum),
         };
         i += 1;
-        if i % args.frame_batch == 0 {
+        if i.is_multiple_of(args.frame_batch) {
             checksum = step_gameplay(state, args.delta_time, checksum, measured);
         }
     }
-    if total_events % args.frame_batch != 0 {
+    if !total_events.is_multiple_of(args.frame_batch) {
         checksum = step_gameplay(state, args.delta_time, checksum, measured);
     }
     checksum

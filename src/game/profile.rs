@@ -929,7 +929,7 @@ fn load_player_options(
     options.scroll_speed = profile_conf
         .get(section, "ScrollSpeed")
         .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
-        .unwrap_or_else(|| options.scroll_speed);
+        .unwrap_or(options.scroll_speed);
     options.turn_option = profile_conf
         .get(section, "Turn")
         .and_then(|s| TurnOption::from_str(&s).ok())

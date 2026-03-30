@@ -11514,7 +11514,7 @@ mod tests {
             judged_note(0, row_index, NoteType::Tap),
             test_note(1, row_index, NoteType::Tap),
         ];
-        let row_entries = vec![RowEntry {
+        let row_entries = [RowEntry {
             row_index,
             nonmine_note_indices: vec![0, 1],
         }];
@@ -11532,7 +11532,7 @@ mod tests {
             test_note(0, row_index, NoteType::Tap),
             test_note(1, row_index, NoteType::Lift),
         ];
-        let row_entries = vec![RowEntry {
+        let row_entries = [RowEntry {
             row_index,
             nonmine_note_indices: vec![0, 1],
         }];
