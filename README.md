@@ -150,7 +150,7 @@ By default, DeadSync stores user data outside the install directory so that upgr
 | Platform | Data directory | Cache directory |
 |----------|---------------|-----------------|
 | **Linux / FreeBSD** | `~/.deadsync` | `~/.deadsync/cache` |
-| **Windows** | `%APPDATA%\deadsync` | `%LOCALAPPDATA%\deadsync\cache` |
+| **Windows** | `%APPDATA%\deadsync` | `%APPDATA%\deadsync\cache` |
 | **macOS** | `~/Library/Application Support/deadsync` | `~/Library/Caches/deadsync` |
 
 **Data directory** contains user data that should be backed up:
