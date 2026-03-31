@@ -59,8 +59,12 @@ Follow these steps to get the game running:
     ```
 
 2.  **Add Songs:**
-    Create a folder named `songs` in the project root. Place your song packs inside this directory.
-    *   *Example structure: `deadsync/songs/MyPack/MySong/MySong.ssc`*
+    Place your song packs in one of DeadSync's song scan roots:
+    *   the `songs/` folder inside the data directory (see [Data Directories](#data-directories))
+    *   the `songs/` folder next to the executable
+    *   any folder listed in `AdditionalSongFolders`, `AdditionalSongFoldersReadOnly`, or `AdditionalSongFoldersWritable`
+
+    *Example structure inside a song root: `<song-root>/MyPack/MySong/MySong.ssc`*
 
 3.  **Build the Project:**
     Compile the game in release mode for optimal performance:
@@ -132,20 +136,20 @@ P1_Back=PadCode[0x00030031]@0
 Legacy high-level bindings like `PadDir::Up`, `PadButton::Confirm`, and `PadN::Dir::Left` are still accepted for convenience, but low-level `PadCode[...]` bindings are the most accurate and device-agnostic way to configure controllers.
 
 ### Profile & Online Features
-A `save` directory is created to store your personal data (see [Data Directories](#data-directories) for its location).
+A `save` directory is created inside the data directory to store your personal data (see [Data Directories](#data-directories) for its location).
 
-*   To enable online features with **GrooveStats**, edit `save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores.
-*   You can also change your in-game display name in `save/profiles/00000000/profile.ini`.
+*   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores.
+*   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
 
 ## Data Directories
 
-By default, DeadSync stores user data and cache in **platform-native directories** so that upgrading the game doesn't risk overwriting your config, saves, or scores.
+By default, DeadSync stores user data outside the install directory so that upgrading the game doesn't risk overwriting your config, saves, or scores. Linux and FreeBSD use a single `~/.deadsync` root; Windows and macOS use platform-native locations.
 
 ### Default locations
 
 | Platform | Data directory | Cache directory |
 |----------|---------------|-----------------|
-| **Linux** | `$XDG_DATA_HOME/deadsync` (`~/.local/share/deadsync`) | `$XDG_CACHE_HOME/deadsync` (`~/.cache/deadsync`) |
+| **Linux / FreeBSD** | `~/.deadsync` | `~/.deadsync/cache` |
 | **Windows** | `%APPDATA%\deadsync` | `%LOCALAPPDATA%\deadsync\cache` |
 | **macOS** | `~/Library/Application Support/deadsync` | `~/Library/Caches/deadsync` |
 
@@ -167,6 +171,9 @@ courses/              # course files
 songs/                # parsed song metadata cache
 banner/               # banner image cache
 cdtitle/              # CD title image cache
+downloads/            # temporary download data
+noteskins/            # compiled noteskin cache
+unlocks-cache.json    # online unlock cache
 ```
 
 ### Portable mode
@@ -180,12 +187,14 @@ The file's contents are ignored; only its presence matters.
 DeadSync scans for songs in the following locations:
 
 1. The `songs/` folder inside the data directory.
-2. The `songs/` folder next to the executable (in platform-native mode, so bundled songs are always found).
-3. Any additional folders listed in `AdditionalSongFolders` / `AdditionalSongFoldersReadOnly` in `deadsync.ini`.
+2. The `songs/` folder next to the executable (in non-portable mode, so bundled songs are always found).
+3. Any additional folders listed in `AdditionalSongFolders`, `AdditionalSongFoldersReadOnly`, or `AdditionalSongFoldersWritable` in `deadsync.ini`.
+
+Course files follow the same pattern: DeadSync scans the data-directory `courses/` root first and, in non-portable mode, also scans the `courses/` folder next to the executable.
 
 ### Migration
 
-On first run in platform-native mode, if DeadSync finds a `deadsync.ini` next to the executable but not in the platform data directory, it will automatically copy your config, saves, songs, and courses to the new location. The originals are **not** deleted — you can clean them up manually after verifying everything works.
+On first run in non-portable mode, if DeadSync finds a `deadsync.ini` next to the executable but not in the data directory, it will automatically copy `deadsync.ini`, `save/`, and legacy cache subdirectories into the new data/cache locations. Install-folder `songs/` and `courses/` are **not** copied; they remain in place and are still scanned in non-portable mode. The originals are **not** deleted — you can clean them up manually after verifying everything works.
 
 ## Contributing
 
