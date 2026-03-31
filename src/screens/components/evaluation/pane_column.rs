@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::{self, AssetManager};
+use crate::config::dirs;
 use crate::engine::gfx::{BlendMode, SamplerDesc};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
@@ -29,7 +30,8 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> String {
         return key;
     }
 
-    let path = Path::new("assets").join(texture_key);
+    let candidate = Path::new("assets").join(texture_key);
+    let path = dirs::app_dirs().resolve_asset_path(&candidate.to_string_lossy());
     let Ok(src) = assets::open_image_fallback(&path).map(|img| img.to_rgba8()) else {
         return texture_key.to_string();
     };

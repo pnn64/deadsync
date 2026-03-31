@@ -90,6 +90,47 @@ impl AppDirs {
             Vec::new()
         }
     }
+
+    /// Resolves a relative asset path (e.g. `"assets/sounds/change.ogg"`) by
+    /// checking the data dir overlay first. In platform-native mode, if the
+    /// file or directory exists at `{data_dir}/{path}`, returns that absolute
+    /// path; otherwise returns the original path (which resolves to
+    /// `{exe_dir}/{path}` via CWD).
+    pub fn resolve_asset_path(&self, path: &str) -> PathBuf {
+        if !self.portable {
+            let candidate = self.data_dir.join(path);
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+        PathBuf::from(path)
+    }
+
+    /// Strips the data-dir or exe-dir `assets/` prefix from an absolute path,
+    /// returning the relative portion after `assets/`. Returns `None` if the
+    /// path doesn't start with either prefix.
+    pub fn strip_asset_prefix<'a>(&self, path: &'a std::path::Path) -> Option<&'a std::path::Path> {
+        let data_assets = self.data_dir.join("assets");
+        let exe_assets = self.exe_dir.join("assets");
+        path.strip_prefix(&data_assets)
+            .or_else(|_| path.strip_prefix(&exe_assets))
+            .ok()
+    }
+
+    /// Returns all root directories where noteskins may be found.
+    /// In platform-native mode the data-dir variant is listed first so that
+    /// user-added skins take priority over bundled ones.
+    pub fn noteskin_roots(&self) -> Vec<PathBuf> {
+        let mut roots = Vec::with_capacity(2);
+        if !self.portable {
+            let data_root = self.data_dir.join("assets").join("noteskins");
+            if data_root.is_dir() {
+                roots.push(data_root);
+            }
+        }
+        roots.push(self.exe_dir.join("assets").join("noteskins"));
+        roots
+    }
 }
 
 static APP_DIRS: std::sync::LazyLock<AppDirs> = std::sync::LazyLock::new(AppDirs::resolve);

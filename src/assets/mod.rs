@@ -1,6 +1,7 @@
 pub(crate) mod dynamic;
 mod textures;
 
+use crate::config::dirs;
 use crate::engine::gfx::{
     Backend, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, SamplerDesc, Texture as GfxTexture,
     TextureHandle,
@@ -317,10 +318,12 @@ impl AssetManager {
                 _ => return Err(AssetError::UnknownFont(name)),
             };
 
+            let resolved = dirs::app_dirs().resolve_asset_path(ini_path_str);
+            let resolved_str = resolved.to_string_lossy();
             let FontLoadData {
                 mut font,
                 required_textures,
-            } = font::parse(ini_path_str)?;
+            } = font::parse(&resolved_str)?;
 
             if name == "miso" {
                 font.fallback_font_name = Some("game");

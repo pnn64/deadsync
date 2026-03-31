@@ -13,7 +13,7 @@ use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::AssetManager;
-use crate::config::{self, DisplayMode};
+use crate::config::{self, dirs, DisplayMode};
 use crate::engine::display;
 use crate::engine::gfx::{self as renderer, BackendType, PresentModePolicy};
 use crate::engine::input::{self, InputEvent};
@@ -4648,7 +4648,7 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 commands.push(Command::PlayMusic {
-                    path: PathBuf::from("assets/music/in_two (loop).ogg"),
+                    path: dirs::app_dirs().resolve_asset_path("assets/music/in_two (loop).ogg"),
                     looped: true,
                     volume: 1.0,
                 });
@@ -4656,7 +4656,7 @@ impl App {
         } else if target_course_music {
             if !prev_course_music {
                 commands.push(Command::PlayMusic {
-                    path: PathBuf::from("assets/music/select_course (loop).ogg"),
+                    path: dirs::app_dirs().resolve_asset_path("assets/music/select_course (loop).ogg"),
                     looped: true,
                     volume: 1.0,
                 });
@@ -4664,7 +4664,7 @@ impl App {
         } else if target_credits_music {
             if !prev_credits_music {
                 commands.push(Command::PlayMusic {
-                    path: PathBuf::from("assets/music/credits.ogg"),
+                    path: dirs::app_dirs().resolve_asset_path("assets/music/credits.ogg"),
                     looped: true,
                     volume: 1.0,
                 });
