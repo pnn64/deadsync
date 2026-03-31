@@ -58,6 +58,10 @@ impl AppDirs {
         self.cache_dir.join("downloads")
     }
 
+    pub fn noteskin_cache_dir(&self) -> PathBuf {
+        self.cache_dir.join("noteskins")
+    }
+
     pub fn unlock_cache_path(&self) -> PathBuf {
         self.cache_dir.join("unlocks-cache.json")
     }
@@ -158,6 +162,20 @@ impl AppDirs {
             };
         }
 
+        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+        {
+            let home_dir = std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .expect("cannot determine home directory");
+            let data_dir = home_dir.join(".deadsync");
+            return Self {
+                cache_dir: data_dir.join("cache"),
+                data_dir,
+                exe_dir,
+                portable: false,
+            };
+        }
+
         let proj = directories::ProjectDirs::from("", "", "deadsync")
             .expect("cannot determine platform directories");
 
@@ -193,9 +211,9 @@ pub fn ensure_dirs_exist() {
     }
 }
 
-/// Attempts to migrate data from the exe directory to platform-native dirs.
-/// Only runs in platform-native mode when data exists at the old location but
-/// not yet at the new location.
+/// Attempts to migrate mutable data from the exe directory to platform-native
+/// dirs. Only runs in platform-native mode when data exists at the old
+/// location but not yet at the new location.
 pub fn maybe_migrate_from_exe_dir() {
     let dirs = app_dirs();
     if dirs.portable {
@@ -217,8 +235,6 @@ pub fn maybe_migrate_from_exe_dir() {
 
     copy_item(&exe_config, &native_config);
     copy_dir_if_exists(&dirs.exe_dir.join("save"), &dirs.data_dir.join("save"));
-    copy_dir_if_exists(&dirs.exe_dir.join("songs"), &dirs.songs_dir());
-    copy_dir_if_exists(&dirs.exe_dir.join("courses"), &dirs.courses_dir());
 
     // Migrate cache subdirectories.
     let exe_cache = dirs.exe_dir.join("cache");
@@ -234,16 +250,17 @@ pub fn maybe_migrate_from_exe_dir() {
 fn copy_item(src: &std::path::Path, dst: &std::path::Path) {
     if let Some(parent) = dst.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
-            warn!(
-                "Failed to create parent dir for {}: {e}",
-                dst.display()
-            );
+            warn!("Failed to create parent dir for {}: {e}", dst.display());
             return;
         }
     }
     match std::fs::copy(src, dst) {
         Ok(_) => info!("  Copied {} -> {}", src.display(), dst.display()),
-        Err(e) => warn!("  Failed to copy {} -> {}: {e}", src.display(), dst.display()),
+        Err(e) => warn!(
+            "  Failed to copy {} -> {}: {e}",
+            src.display(),
+            dst.display()
+        ),
     }
 }
 
@@ -251,16 +268,21 @@ fn copy_dir_if_exists(src: &std::path::Path, dst: &std::path::Path) {
     if !src.is_dir() {
         return;
     }
-    info!("  Copying directory {} -> {} ...", src.display(), dst.display());
+    info!(
+        "  Copying directory {} -> {} ...",
+        src.display(),
+        dst.display()
+    );
     if let Err(e) = copy_dir_recursive(src, dst) {
-        warn!("  Failed to copy directory {} -> {}: {e}", src.display(), dst.display());
+        warn!(
+            "  Failed to copy directory {} -> {}: {e}",
+            src.display(),
+            dst.display()
+        );
     }
 }
 
-fn copy_dir_recursive(
-    src: &std::path::Path,
-    dst: &std::path::Path,
-) -> Result<(), std::io::Error> {
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), std::io::Error> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;

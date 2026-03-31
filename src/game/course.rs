@@ -1,10 +1,10 @@
+use crate::config::dirs;
 use crate::game::{
     parsing::simfile::{collect_song_scan_roots, fmt_scan_time},
     song::get_song_cache,
 };
-use crate::config::dirs;
 use log::{info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -102,6 +102,56 @@ fn collect_course_paths(root: &Path) -> Vec<PathBuf> {
                 .extension()
                 .is_some_and(|e| e.eq_ignore_ascii_case("crs"))
             {
+                out.push(path);
+            }
+        }
+    }
+    out.sort_by_cached_key(|p| p.to_string_lossy().to_ascii_lowercase());
+    out
+}
+
+fn collect_course_scan_roots(root_path: &Path) -> Vec<PathBuf> {
+    fn push_unique_root(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<String>) {
+        let mut key = path.to_string_lossy().into_owned();
+        if cfg!(windows) {
+            key.make_ascii_lowercase();
+        }
+        if keys.iter().any(|existing| existing == &key) {
+            return;
+        }
+        keys.push(key);
+        roots.push(path);
+    }
+
+    let mut roots = Vec::with_capacity(2);
+    let mut keys = Vec::with_capacity(2);
+    if root_path.is_dir() {
+        push_unique_root(root_path.to_path_buf(), &mut roots, &mut keys);
+    } else {
+        warn!("Courses directory '{}' not found.", root_path.display());
+    }
+
+    for extra in dirs::app_dirs().extra_course_roots() {
+        push_unique_root(extra, &mut roots, &mut keys);
+    }
+
+    roots
+}
+
+fn collect_merged_course_paths(roots: &[PathBuf]) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for root in roots {
+        for path in collect_course_paths(root) {
+            let mut key = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            if cfg!(windows) {
+                key.make_ascii_lowercase();
+            }
+            if seen.insert(key) {
                 out.push(path);
             }
         }
@@ -252,11 +302,7 @@ fn autogen_nonstop_group_courses() -> Vec<(PathBuf, rssp::course::CourseFile)> {
 }
 
 pub fn scan_and_load_courses(courses_root: &Path, songs_root: &Path) {
-    scan_and_load_courses_impl::<fn(usize, usize, &str, &str)>(
-        courses_root,
-        songs_root,
-        None,
-    );
+    scan_and_load_courses_impl::<fn(usize, usize, &str, &str)>(courses_root, songs_root, None);
 }
 
 pub fn scan_and_load_courses_with_progress<F>(
@@ -290,15 +336,15 @@ fn scan_and_load_courses_impl<F>(
     info!("Starting course scan in '{}'...", courses_root.display());
     let started = Instant::now();
 
-    if !courses_root.is_dir() {
-        warn!("Courses directory '{}' not found. No courses will be loaded.", courses_root.display());
-        set_course_cache(Vec::new());
-        return;
-    }
-
     let song_roots = collect_song_scan_roots(songs_root);
     if song_roots.is_empty() {
         warn!("No valid song roots found. No courses will be loaded.");
+        set_course_cache(Vec::new());
+        return;
+    }
+    let course_roots = collect_course_scan_roots(courses_root);
+    if course_roots.is_empty() {
+        warn!("No valid course roots found. No courses will be loaded.");
         set_course_cache(Vec::new());
         return;
     }
@@ -313,7 +359,7 @@ fn scan_and_load_courses_impl<F>(
             .map(|pack| pack.songs.len())
             .sum::<usize>()
     };
-    let course_paths = collect_course_paths(courses_root);
+    let course_paths = collect_merged_course_paths(&course_roots);
     let total_courses = course_paths.len();
     let mut courses_done = 0usize;
     report_load_progress(&mut progress, 0, total_courses, "", "");
