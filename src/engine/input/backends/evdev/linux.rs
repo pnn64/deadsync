@@ -841,13 +841,13 @@ fn open_dev(
 }
 
 fn open_key_dev(spec: DevSpec, mut stats: Option<&mut KeyboardStartupStats>) -> Option<KeyDev> {
-    if let Some(stats) = stats.as_deref_mut() {
+    if let Some(stats) = &mut stats {
         stats.candidates = stats.candidates.saturating_add(1);
     }
     let file = match std::fs::File::open(&spec.path) {
         Ok(file) => file,
         Err(err) => {
-            if let Some(stats) = stats.as_deref_mut() {
+            if let Some(stats) = &mut stats {
                 if err.kind() == ErrorKind::PermissionDenied {
                     stats.permission_denied = stats.permission_denied.saturating_add(1);
                 } else {
@@ -861,7 +861,7 @@ fn open_key_dev(spec: DevSpec, mut stats: Option<&mut KeyboardStartupStats>) -> 
             return None;
         }
     };
-    if let Some(stats) = stats.as_deref_mut() {
+    if let Some(stats) = &mut stats {
         stats.opened = stats.opened.saturating_add(1);
     }
     configure_evdev_clock(&file);

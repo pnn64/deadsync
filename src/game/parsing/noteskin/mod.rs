@@ -3985,9 +3985,7 @@ fn itg_parse_lua_float_expr(raw: &str) -> Option<f32> {
 
 fn itg_parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
     let value = raw.trim().trim_end_matches(';').trim();
-    let Some(open) = value.find('(') else {
-        return None;
-    };
+    let open = value.find('(')?;
     let head = value[..open].trim();
     if !head.eq_ignore_ascii_case("Sprite.LinearFrames") {
         return None;

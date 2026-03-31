@@ -109,11 +109,11 @@ fn audio_request_line(cfg: &config::Config) -> String {
         .map_or_else(|| "Auto".to_string(), |hz| format!("{hz} Hz"));
     #[cfg(target_os = "linux")]
     {
-        return format!(
+        format!(
             "Audio request: device={device}, mode={}, backend={}, rate={rate}",
             cfg.audio_output_mode.as_str(),
             cfg.linux_audio_backend.as_str()
-        );
+        )
     }
     #[cfg(not(target_os = "linux"))]
     {

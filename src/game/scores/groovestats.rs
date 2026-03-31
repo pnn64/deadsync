@@ -617,9 +617,7 @@ fn groovestats_manual_qr_url_from_gameplay(
     if player_idx >= gs.num_players {
         return None;
     }
-    let Some(payload) = groovestats_payload_for_player(gs, player_idx) else {
-        return None;
-    };
+    let payload = groovestats_payload_for_player(gs, player_idx)?;
     groovestats_manual_qr_url(
         online::groovestats_qr_base_url(),
         gs.charts[player_idx].short_hash.as_str(),

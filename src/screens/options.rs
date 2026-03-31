@@ -3719,9 +3719,7 @@ fn build_submenu_row_layout(
     row_idx: usize,
 ) -> Option<SubmenuRowLayout> {
     let rows = submenu_rows(kind);
-    let Some(row) = rows.get(row_idx) else {
-        return None;
-    };
+    let row = rows.get(row_idx)?;
     let choice_texts = submenu_display_choice_texts(state, kind, rows, row_idx);
     if choice_texts.is_empty() {
         return None;
@@ -8164,9 +8162,7 @@ fn submenu_cursor_dest(
         let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h);
         return Some((single_center_x, row_mid_y, ring_w, ring_h));
     }
-    let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-        return None;
-    };
+    let row_idx = submenu_visible_row_to_actual(state, kind, selected_row)?;
     let row = &rows[row_idx];
     let layout = submenu_row_layout(state, asset_manager, kind, row_idx)?;
     if layout.texts.is_empty() {

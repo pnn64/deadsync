@@ -1191,7 +1191,7 @@ fn create_opengl_context(
                 SwapInterval::DontWait
             };
 
-            if let Err(e) = surface.set_swap_interval(&context, interval) {
+            if let Err(e) = surface.set_swap_interval(context, interval) {
                 warn!("Failed to set swap interval (VSync): {:?}", e);
             } else {
                 debug!(

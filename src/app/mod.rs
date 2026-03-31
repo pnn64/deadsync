@@ -1598,9 +1598,7 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
             }
         }
         profile::PlayStyle::Single | profile::PlayStyle::Double => {
-            let Some(si) = eval.score_info.first().and_then(|s| s.as_ref()) else {
-                return None;
-            };
+            let si = eval.score_info.first().and_then(|s| s.as_ref())?;
             song_opt = Some(si.song.clone());
             music_rate = si.music_rate;
             players[side_ix(player_side)] = Some(to_player(si));

@@ -142,9 +142,6 @@ pub fn draw(
                 remainder = rest;
 
                 let objects = &render_list.objects;
-                let textures = textures;
-                let default_proj = default_proj;
-                let cameras = cameras;
                 let width = w;
                 let height = h;
                 let counter = &vertex_counter;
@@ -357,13 +354,7 @@ pub fn cleanup(_state: &mut State) {
 #[inline(always)]
 fn pack_rgba(c: [f32; 4]) -> u32 {
     fn clamp01(x: f32) -> f32 {
-        if x <= 0.0 {
-            0.0
-        } else if x >= 1.0 {
-            1.0
-        } else {
-            x
-        }
+        x.clamp(0.0, 1.0)
     }
 
     let r = clamp01(c[0]).mul_add(255.0, 0.5) as u32;

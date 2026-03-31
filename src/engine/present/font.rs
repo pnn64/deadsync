@@ -2281,8 +2281,8 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
             if let Some(map) = ini_map_lower.get(&sec_lc) {
                 for (raw_key_lc, val_str) in map {
                     let key_lc = raw_key_lc.as_str();
-                    if key_lc.starts_with("line ") {
-                        if let Ok(row) = key_lc[5..].trim().parse::<u32>() {
+                    if let Some(row_str) = key_lc.strip_prefix("line ") {
+                        if let Ok(row) = row_str.trim().parse::<u32>() {
                             if row >= num_frames_high {
                                 continue;
                             }

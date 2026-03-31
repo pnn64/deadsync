@@ -521,7 +521,7 @@ fn create_sprite_pipeline(
     let frag_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_shader.frag.spv"));
     let vert_module = create_shader_module(device, vert_shader_code)?;
     let frag_module = create_shader_module(device, frag_shader_code)?;
-    let main_name = ffi::CStr::from_bytes_with_nul(b"main\0")?;
+    let main_name = c"main";
 
     let shader_stages = [
         vk::PipelineShaderStageCreateInfo::default()
@@ -619,7 +619,7 @@ fn create_mesh_pipeline(
     let frag_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_mesh.frag.spv"));
     let vert_module = create_shader_module(device, vert_shader_code)?;
     let frag_module = create_shader_module(device, frag_shader_code)?;
-    let main_name = ffi::CStr::from_bytes_with_nul(b"main\0")?;
+    let main_name = c"main";
 
     let shader_stages = [
         vk::PipelineShaderStageCreateInfo::default()
@@ -714,7 +714,7 @@ fn create_textured_mesh_pipeline(
     let frag_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.frag.spv"));
     let vert_module = create_shader_module(device, vert_shader_code)?;
     let frag_module = create_shader_module(device, frag_shader_code)?;
-    let main_name = ffi::CStr::from_bytes_with_nul(b"main\0")?;
+    let main_name = c"main";
 
     let shader_stages = [
         vk::PipelineShaderStageCreateInfo::default()
@@ -2986,11 +2986,11 @@ fn create_instance(
     window: &Window,
     gfx_debug_enabled: bool,
 ) -> Result<(Instance, bool), Box<dyn Error>> {
-    let app_name = ffi::CStr::from_bytes_with_nul(b"DeadSync\0")?;
+    let app_name = c"DeadSync";
     let app_info = vk::ApplicationInfo::default()
         .application_name(app_name)
         .application_version(vk::make_api_version(0, 1, 0, 0))
-        .engine_name(ffi::CStr::from_bytes_with_nul(b"DeadSync Engine\0")?)
+        .engine_name(c"DeadSync Engine")
         .engine_version(vk::make_api_version(0, 1, 0, 0))
         .api_version(vk::API_VERSION_1_3);
 

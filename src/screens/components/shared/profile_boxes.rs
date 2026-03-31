@@ -173,9 +173,7 @@ fn preview_noteskin_for_choice(
     choices: &[Choice],
     selected_index: usize,
 ) -> Option<Arc<Noteskin>> {
-    let Some(choice) = choices.get(selected_index) else {
-        return None;
-    };
+    let choice = choices.get(selected_index)?;
     match choice.kind {
         ActiveProfile::Guest => None,
         ActiveProfile::Local { .. } => cache.get(&choice.noteskin),

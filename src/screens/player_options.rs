@@ -5600,9 +5600,7 @@ fn handle_start_event(
         return None;
     }
     let row_index = state.selected_row[player_idx].min(num_rows.saturating_sub(1));
-    let Some(row) = state.rows.get(row_index) else {
-        return None;
-    };
+    let row = state.rows.get(row_index)?;
     let row_name = row.name.clone();
     if row_supports_inline_nav(row) {
         let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);

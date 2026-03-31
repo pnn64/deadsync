@@ -2088,8 +2088,7 @@ pub fn get_actors(state: &State, _asset_manager: &AssetManager) -> Vec<Actor> {
         let visible_rows = rating
             .entries
             .len()
-            .min(COURSE_TRACKLIST_TARGET_VISIBLE_ROWS)
-            .max(1);
+            .clamp(1, COURSE_TRACKLIST_TARGET_VISIBLE_ROWS);
         let row_spacing = COURSE_TRACKLIST_ROW_SPACING;
         let (start_idx, frac, _) =
             course_tracklist_scroll(rating.entries.len(), visible_rows, state.session_elapsed);

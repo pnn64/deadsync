@@ -1639,13 +1639,10 @@ fn zmod_measure_counter_text(
         }
     }
 
-    let Some(seg) = stream_index
+    let seg = stream_index
         .try_into()
         .ok()
-        .and_then(|i: usize| segs.get(i).copied())
-    else {
-        return None;
-    };
+        .and_then(|i: usize| segs.get(i).copied())?;
 
     let segment_start = seg.start as f32;
     let segment_end = seg.end as f32;
@@ -1866,7 +1863,7 @@ pub fn prewarm_text_layout(
         prewarm_timer(cache, mc_font_name, music_end_seconds, 60, false);
         prewarm_timer(cache, mc_font_name, music_end_seconds, 59, true);
         if profile.measure_counter != crate::game::profile::MeasureCounter::None {
-            let countdown_max = max_measure_len.max(16).min(MEASURE_PREWARM_CAP);
+            let countdown_max = max_measure_len.clamp(16, MEASURE_PREWARM_CAP);
             for value in 0..=countdown_max {
                 prewarm_i32(cache, mc_font_name, value);
             }

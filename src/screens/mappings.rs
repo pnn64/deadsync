@@ -142,13 +142,7 @@ const fn row_actions(row_idx: usize) -> (Option<VirtualAction>, Option<VirtualAc
 
 #[inline(always)]
 fn ease_out_cubic(t: f32) -> f32 {
-    let clamped = if t < 0.0 {
-        0.0
-    } else if t > 1.0 {
-        1.0
-    } else {
-        t
-    };
+    let clamped = t.clamp(0.0, 1.0);
     let u = 1.0 - clamped;
     (u * u).mul_add(-u, 1.0)
 }

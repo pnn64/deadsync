@@ -2078,7 +2078,7 @@ fn start_output_backend(
     let requested_output_mode = alsa
         .as_ref()
         .map(|hint| hint.output_mode)
-        .or_else(|| {
+        .or({
             #[cfg(target_os = "linux")]
             #[cfg(has_pipewire_audio)]
             {
@@ -2089,7 +2089,7 @@ fn start_output_backend(
                 None
             }
         })
-        .or_else(|| {
+        .or({
             #[cfg(target_os = "linux")]
             #[cfg(has_jack_audio)]
             {
@@ -2100,7 +2100,7 @@ fn start_output_backend(
                 None
             }
         })
-        .or_else(|| {
+        .or({
             #[cfg(target_os = "linux")]
             #[cfg(has_pulse_audio)]
             {
@@ -2118,7 +2118,7 @@ fn start_output_backend(
             let Some(alsa) = alsa else {
                 return Err("Linux ALSA backend hint unavailable.".to_string());
             };
-            return start_linux_alsa_backend(alsa, music_ring);
+            start_linux_alsa_backend(alsa, music_ring)
         }
         crate::config::LinuxAudioBackend::Jack => {
             #[cfg(has_jack_audio)]
@@ -2126,11 +2126,11 @@ fn start_output_backend(
                 let Some(jack) = jack else {
                     return Err("JACK backend hint unavailable.".to_string());
                 };
-                return start_linux_jack_backend(jack, music_ring);
+                start_linux_jack_backend(jack, music_ring)
             }
             #[cfg(not(has_jack_audio))]
             {
-                return Err("JACK backend support was not built into this binary.".to_string());
+                Err("JACK backend support was not built into this binary.".to_string())
             }
         }
         crate::config::LinuxAudioBackend::PipeWire => {
@@ -2143,7 +2143,7 @@ fn start_output_backend(
             }
             #[cfg(not(has_pipewire_audio))]
             {
-                return Err("PipeWire backend support was not built into this binary.".to_string());
+                Err("PipeWire backend support was not built into this binary.".to_string())
             }
         }
         crate::config::LinuxAudioBackend::PulseAudio => {
@@ -2152,7 +2152,7 @@ fn start_output_backend(
                 let Some(pulse) = pulse else {
                     return Err("PulseAudio backend hint unavailable.".to_string());
                 };
-                return start_linux_pulse_backend(pulse, music_ring);
+                start_linux_pulse_backend(pulse, music_ring)
             }
             #[cfg(not(has_pulse_audio))]
             {
@@ -2231,7 +2231,7 @@ fn start_output_backend(
                     }
                 }
             }
-            return Err("no native Linux audio backend hint is available.".to_string());
+            Err("no native Linux audio backend hint is available.".to_string())
         }
     }
     #[cfg(target_os = "freebsd")]
