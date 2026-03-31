@@ -1,4 +1,5 @@
 use super::{fmt_scan_time, process_song};
+use crate::config::dirs;
 use crate::game::song::{SongData, SongPack, set_song_cache};
 use log::{debug, info, warn};
 use rssp::pack::{PackScan, SongScan};
@@ -8,26 +9,26 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub fn scan_and_load_songs(root_path_str: &'static str) {
-    scan_and_load_songs_impl::<fn(usize, usize, &str, &str)>(root_path_str, None);
+pub fn scan_and_load_songs(root_path: &Path) {
+    scan_and_load_songs_impl::<fn(usize, usize, &str, &str)>(root_path, None);
 }
 
-pub fn scan_and_load_songs_with_progress<F>(root_path_str: &'static str, progress: &mut F)
+pub fn scan_and_load_songs_with_progress<F>(root_path: &Path, progress: &mut F)
 where
     F: FnMut(&str, &str),
 {
     let mut with_counts = |_: usize, _: usize, pack: &str, song: &str| progress(pack, song);
-    scan_and_load_songs_impl(root_path_str, Some(&mut with_counts));
+    scan_and_load_songs_impl(root_path, Some(&mut with_counts));
 }
 
-pub fn scan_and_load_songs_with_progress_counts<F>(root_path_str: &'static str, progress: &mut F)
+pub fn scan_and_load_songs_with_progress_counts<F>(root_path: &Path, progress: &mut F)
 where
     F: FnMut(usize, usize, &str, &str),
 {
-    scan_and_load_songs_impl(root_path_str, Some(progress));
+    scan_and_load_songs_impl(root_path, Some(progress));
 }
 
-pub(crate) fn collect_song_scan_roots(root_path_str: &str) -> Vec<PathBuf> {
+pub(crate) fn collect_song_scan_roots(root_path: &Path) -> Vec<PathBuf> {
     fn push_unique_root(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<String>) {
         let mut key = path.to_string_lossy().into_owned();
         if cfg!(windows) {
@@ -42,11 +43,15 @@ pub(crate) fn collect_song_scan_roots(root_path_str: &str) -> Vec<PathBuf> {
 
     let mut roots = Vec::with_capacity(4);
     let mut keys: Vec<String> = Vec::with_capacity(4);
-    let root_path = PathBuf::from(root_path_str);
     if root_path.is_dir() {
-        push_unique_root(root_path, &mut roots, &mut keys);
+        push_unique_root(root_path.to_path_buf(), &mut roots, &mut keys);
     } else {
-        warn!("Songs directory '{root_path_str}' not found.");
+        warn!("Songs directory '{}' not found.", root_path.display());
+    }
+
+    // In platform-native mode, also include exe-dir songs.
+    for extra in dirs::app_dirs().extra_song_roots() {
+        push_unique_root(extra, &mut roots, &mut keys);
     }
 
     let additional_folders = crate::config::additional_song_folders();
@@ -315,11 +320,11 @@ fn reap_song_parse<F>(
     }
 }
 
-fn scan_and_load_songs_impl<F>(root_path_str: &'static str, mut progress: Option<&mut F>)
+fn scan_and_load_songs_impl<F>(root_path: &Path, mut progress: Option<&mut F>)
 where
     F: FnMut(usize, usize, &str, &str),
 {
-    info!("Starting simfile scan (base songs root '{root_path_str}')...");
+    info!("Starting simfile scan (base songs root '{}')...", root_path.display());
 
     let started = std::time::Instant::now();
     let config = crate::config::get();
@@ -340,8 +345,8 @@ where
     }
     let parallel_parsing = parse_threads > 1;
 
-    let cache_dir = Path::new("cache/songs");
-    if let Err(error) = fs::create_dir_all(cache_dir) {
+    let cache_dir = dirs::app_dirs().song_cache_dir();
+    if let Err(error) = fs::create_dir_all(&cache_dir) {
         warn!(
             "Could not create cache directory '{}': {}. Caching will be disabled.",
             cache_dir.to_string_lossy(),
@@ -349,7 +354,7 @@ where
         );
     }
 
-    let song_roots = collect_song_scan_roots(root_path_str);
+    let song_roots = collect_song_scan_roots(root_path);
     if song_roots.is_empty() {
         warn!("No valid song roots found. No songs will be loaded.");
         set_song_cache(Vec::new());

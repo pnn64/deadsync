@@ -1,4 +1,5 @@
 mod audio;
+pub mod dirs;
 mod ini;
 mod keybinds;
 mod load;
@@ -51,7 +52,6 @@ use log::{info, warn};
 use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;
 
-const CONFIG_PATH: &str = "deadsync.ini";
 const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

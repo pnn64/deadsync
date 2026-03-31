@@ -840,13 +840,13 @@ mod actor {
 
 mod compiled {
     use super::actor as noteskin_actor;
+    use crate::config::dirs;
     use bincode::{Decode, Encode};
     use log::warn;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    pub const CACHE_ROOT: &str = "cache/noteskins";
     pub const CACHE_SCHEMA_VERSION: u32 = 1;
     static CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -910,7 +910,8 @@ mod compiled {
     }
 
     pub fn compiled_bundle_path(game: &str, skin: &str, source_hash: &str) -> PathBuf {
-        Path::new(CACHE_ROOT)
+        dirs::app_dirs()
+            .noteskin_cache_dir()
             .join(format!("v{}", CACHE_SCHEMA_VERSION))
             .join(game.trim().to_ascii_lowercase())
             .join(skin.trim().to_ascii_lowercase())

@@ -5,10 +5,10 @@ use super::{
     select_color, select_course, select_mode, select_music, select_profile, select_style,
 };
 use crate::config;
+use crate::config::dirs;
 use crate::engine::present::{actors::Actor, color};
 use crate::game::profile;
 use log::{debug, info};
-use std::path::PathBuf;
 use winit::event_loop::ActiveEventLoop;
 
 /* -------------------- transition state machine -------------------- */
@@ -173,7 +173,7 @@ impl App {
         if target_menu_music {
             if !prev_menu_music {
                 crate::engine::audio::play_music(
-                    PathBuf::from("assets/music/in_two (loop).ogg"),
+                    dirs::app_dirs().resolve_asset_path("assets/music/in_two (loop).ogg"),
                     crate::engine::audio::Cut::default(),
                     true,
                     1.0,

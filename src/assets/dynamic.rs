@@ -31,7 +31,7 @@ const BANNER_CACHE_HEADER_SIZE: usize = 16;
 pub(crate) fn dynamic_image_cache_path_for(
     path: &Path,
     opts: BannerCacheOptions,
-    cache_dir: &str,
+    cache_dir: &Path,
 ) -> Option<(PathBuf, String)> {
     let canonical = path.canonicalize().ok()?;
     let mut hasher = XxHash64::with_seed(0);
@@ -41,7 +41,7 @@ pub(crate) fn dynamic_image_cache_path_for(
     let opt_hash = banner_cache_opthash(opts);
     let shard2 = &path_hex[..2];
     let stem = format!("{path_hex}-{opt_hash:016x}");
-    let dir = Path::new(cache_dir).join(shard2);
+    let dir = cache_dir.join(shard2);
     Some((dir.join(format!("{stem}.rgba")), path_hex))
 }
 
@@ -186,7 +186,7 @@ pub(crate) fn save_cached_banner_image(cache_path: &Path, path_hex: &str, rgba: 
 pub(crate) fn load_or_build_cached_dynamic_image(
     path: &Path,
     opts: BannerCacheOptions,
-    cache_dir: &str,
+    cache_dir: &Path,
 ) -> image::ImageResult<RgbaImage> {
     let Some((cache_path, path_hex)) = dynamic_image_cache_path_for(path, opts, cache_dir) else {
         return build_cached_banner_rgba(path, opts);
@@ -242,7 +242,7 @@ pub(crate) fn is_dynamic_video_path(path: &Path) -> bool {
 pub(crate) fn ensure_cached_dynamic_image_on_disk(
     path: &Path,
     opts: BannerCacheOptions,
-    cache_dir: &str,
+    cache_dir: &Path,
 ) -> image::ImageResult<bool> {
     let Some((cache_path, path_hex)) = dynamic_image_cache_path_for(path, opts, cache_dir) else {
         return Ok(false);

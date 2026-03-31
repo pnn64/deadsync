@@ -1,4 +1,5 @@
 use super::App;
+use crate::config::dirs;
 use crate::config::{self, DisplayMode};
 use crate::engine::display;
 use crate::engine::gfx::{BackendType, create_backend};
@@ -6,7 +7,6 @@ use crate::engine::space;
 use crate::screens::{DensityGraphSlot, options, select_music};
 use log::{error, info};
 use std::error::Error;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::{
@@ -21,8 +21,10 @@ fn load_window_icon() -> Option<Icon> {
         "assets/graphics/icon/icon-256.png",
         "assets/graphics/icon/icon.png",
     ];
+    let dirs = dirs::app_dirs();
     for path in WINDOW_ICON_PATHS {
-        let Ok(img) = image::open(Path::new(path)) else {
+        let resolved = dirs.resolve_asset_path(path);
+        let Ok(img) = image::open(&resolved) else {
             continue;
         };
         let rgba = img.into_rgba8();
@@ -47,8 +49,10 @@ fn set_macos_app_icon() {
 
     let mtm = MainThreadMarker::new().expect("AppKit icon setup requires the main thread");
     let app = NSApplication::sharedApplication(mtm);
+    let dirs = dirs::app_dirs();
     for path in MACOS_APP_ICON_PATHS {
-        let ns_path = NSString::from_str(path);
+        let resolved = dirs.resolve_asset_path(path);
+        let ns_path = NSString::from_str(&resolved.to_string_lossy());
         let icon_image = NSImage::initWithContentsOfFile(NSImage::alloc(), &ns_path);
         if let Some(icon_image) = icon_image {
             // SAFETY: `app` and `icon_image` are valid AppKit objects on the main

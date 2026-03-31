@@ -1,5 +1,5 @@
 use super::audio::{pack_audio_mix_levels, unpack_audio_mix_levels};
-use super::{AudioMixLevels, CONFIG_PATH, Config, DEFAULT_MACHINE_NOTESKIN};
+use super::{AudioMixLevels, Config, DEFAULT_MACHINE_NOTESKIN};
 use log::{debug, warn};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, mpsc};
@@ -189,7 +189,7 @@ fn save_worker_loop(rx: mpsc::Receiver<SaveReq>) {
 
 #[inline(always)]
 fn write_config_file(content: &str) {
-    if let Err(e) = std::fs::write(CONFIG_PATH, content) {
+    if let Err(e) = std::fs::write(super::dirs::app_dirs().config_path(), content) {
         warn!("Failed to save config file: {e}");
     }
 }

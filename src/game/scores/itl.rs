@@ -6,6 +6,7 @@ use super::{
     leaderboard_entries_from_api,
 };
 use crate::game::gameplay;
+use crate::config::dirs;
 use crate::game::judgment;
 use crate::game::online::downloads;
 use crate::game::profile;
@@ -197,7 +198,8 @@ fn online_itl_self_score_key_for_side(
 }
 
 fn online_itl_self_score_index_path_for_profile(profile_id: &str) -> PathBuf {
-    PathBuf::from("save/profiles")
+    dirs::app_dirs()
+        .profiles_root()
         .join(profile_id)
         .join("scores")
         .join("gs")

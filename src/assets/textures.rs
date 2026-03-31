@@ -1,4 +1,5 @@
 use crate::assets::AssetManager;
+use crate::config::dirs;
 use crate::engine::gfx::{Backend, SamplerDesc, SamplerFilter, SamplerWrap};
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
@@ -333,6 +334,10 @@ pub(crate) fn take_pending_generated_texture_keys() -> Vec<String> {
 
 pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
     let p = p.as_ref();
+    // Try stripping data-dir or exe-dir asset prefix for absolute paths.
+    if let Some(rel) = dirs::app_dirs().strip_asset_prefix(p) {
+        return rel.to_string_lossy().replace('\\', "/");
+    }
     let rel = p.strip_prefix(Path::new("assets")).unwrap_or(p);
     rel.to_string_lossy().replace('\\', "/")
 }
@@ -376,26 +381,32 @@ pub(crate) fn open_image_fallback_quiet(path: &Path) -> image::ImageResult<image
 }
 
 pub(crate) fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, folder: &str) {
-    let mut dirs = vec![Path::new("assets").join(folder)];
-    while let Some(dir) = dirs.pop() {
-        let Ok(entries) = fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                dirs.push(path);
+    let roots = dirs::app_dirs().noteskin_roots();
+    let mut seen_keys = HashSet::new();
+    for root in &roots {
+        let base = root.parent().expect("noteskin root has parent");
+        let mut dirs = vec![base.join(folder)];
+        while let Some(dir) = dirs.pop() {
+            let Ok(entries) = fs::read_dir(&dir) else {
                 continue;
-            }
-            if !path
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
-            {
-                continue;
-            }
-            let key = canonical_texture_key(&path);
-            if key.starts_with("noteskins/") {
-                list.push((key.clone(), key));
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    dirs.push(path);
+                    continue;
+                }
+                if !path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+                {
+                    continue;
+                }
+                let key = canonical_texture_key(&path);
+                if key.starts_with("noteskins/") && seen_keys.insert(key.clone()) {
+                    let file_path = path.to_string_lossy().replace('\\', "/");
+                    list.push((key, file_path));
+                }
             }
         }
     }
@@ -784,11 +795,15 @@ impl AssetManager {
             key: String,
             relative_path: String,
         ) -> Result<(String, RgbaImage), (String, String)> {
-            let path = if relative_path.starts_with("noteskins/") {
+            let rel = Path::new(&relative_path);
+            let path = if rel.is_absolute() {
+                rel.to_path_buf()
+            } else if relative_path.starts_with("noteskins/") {
                 Path::new("assets").join(&relative_path)
             } else {
                 Path::new("assets/graphics").join(&relative_path)
             };
+            let path = dirs::app_dirs().resolve_asset_path(&path.to_string_lossy());
             match open_image_fallback(&path) {
                 Ok(img) => Ok((key, img.to_rgba8())),
                 Err(e) => Err((key, e.to_string())),
@@ -896,9 +911,10 @@ impl AssetManager {
             return;
         }
 
-        let mut path = Path::new("assets").join(&key);
+        let dirs = dirs::app_dirs();
+        let mut path = dirs.resolve_asset_path(&format!("assets/{key}"));
         if !path.is_file() {
-            path = Path::new("assets/graphics").join(&key);
+            path = dirs.resolve_asset_path(&format!("assets/graphics/{key}"));
         }
         if !path.is_file() {
             warn!("Failed to resolve texture key '{key}' for preload.");

@@ -5,6 +5,7 @@ use super::{
     build_song_meta_from_cache,
 };
 use crate::game::{chart::GameplayChartData, song::SongData};
+use crate::config::dirs;
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::fs;
@@ -152,7 +153,7 @@ fn get_cache_path(simfile_path: &Path) -> Result<PathBuf, std::io::Error> {
     hasher.write(canonical_path.to_string_lossy().as_bytes());
     let path_hash = hasher.finish();
 
-    let cache_dir = Path::new("cache/songs");
+    let cache_dir = dirs::app_dirs().song_cache_dir();
     let hash_hex = format!("{path_hash:016x}");
     let shard2 = &hash_hex[..2];
     Ok(cache_dir.join(shard2).join(format!("{hash_hex}.bin")))

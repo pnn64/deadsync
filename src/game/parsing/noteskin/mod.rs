@@ -8,6 +8,7 @@ use self::{
     itg as noteskin_itg,
 };
 use crate::assets;
+use crate::config::dirs;
 use crate::engine::gfx::SamplerDesc;
 use crate::engine::present::anim as ui_anim;
 use image::{Rgba, RgbaImage, image_dimensions};
@@ -1433,7 +1434,8 @@ fn mine_fill_slots(mines: &[Option<SpriteSlot>]) -> Vec<Option<SpriteSlot>> {
 
 fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     let texture_key = slot.texture_key();
-    let path = Path::new("assets").join(texture_key);
+    let candidate = Path::new("assets").join(texture_key);
+    let path = dirs::app_dirs().resolve_asset_path(&candidate.to_string_lossy());
     let image = assets::open_image_fallback(&path).ok()?.to_rgba8();
 
     let mut width = slot.def.size[0];
@@ -1781,7 +1783,7 @@ pub fn compile_all_itg_caches_with_progress<F>(mut on_progress: F) -> CompileAll
 where
     F: FnMut(usize, usize, &str, &str),
 {
-    let root = Path::new("assets/noteskins");
+    let roots = dirs::app_dirs().noteskin_roots();
     let game = "dance";
     let skins = discover_itg_skins(game);
     let total = skins.len();
@@ -1791,9 +1793,15 @@ where
     };
     for (idx, skin) in skins.iter().enumerate() {
         let label = format!("{game}/{skin}");
-        match noteskin_itg::load_noteskin_data(root, game, skin).and_then(|data| {
-            noteskin_compile::ensure_compiled(game, &data).map(|outcome| (data, outcome))
-        }) {
+        let loaded = roots.iter().find_map(|root| {
+            noteskin_itg::load_noteskin_data(root, game, skin).ok()
+        });
+        let result = loaded
+            .ok_or_else(|| format!("noteskin '{game}/{skin}' not found in any root"))
+            .and_then(|data| {
+                noteskin_compile::ensure_compiled(game, &data).map(|outcome| (data, outcome))
+            });
+        match result {
             Ok((_data, noteskin_compile::CompileOutcome::Built)) => {
                 summary.built += 1;
                 on_progress(idx + 1, total, &label, "compiled");
@@ -1813,45 +1821,52 @@ where
 }
 
 pub fn load_itg_default(style: &Style) -> Result<Noteskin, String> {
-    let root = Path::new("assets/noteskins");
-    load_itg(root, "dance", "default", style).or_else(|default_err| {
-        warn!("ITG default noteskin load failed ({default_err}); trying dance/cel fallback");
-        load_itg(root, "dance", "cel", style).map_err(|cel_err| {
-            format!(
-                "failed to load ITG default noteskin ({default_err}) and dance/cel fallback ({cel_err})"
-            )
-        })
-    })
+    let roots = dirs::app_dirs().noteskin_roots();
+    for root in &roots {
+        if let Ok(ns) = load_itg(root, "dance", "default", style) {
+            return Ok(ns);
+        }
+    }
+    // Final attempt: try cel fallback on any root
+    for root in &roots {
+        if let Ok(ns) = load_itg(root, "dance", "cel", style) {
+            warn!("ITG default noteskin load failed; using dance/cel fallback");
+            return Ok(ns);
+        }
+    }
+    Err("failed to load ITG default noteskin from any root".to_string())
 }
 
 pub fn discover_itg_skins(game: &str) -> Vec<String> {
-    let root = Path::new("assets/noteskins");
-    let mut found = Vec::new();
-    let game_dir = root.join(game);
-    let Ok(entries) = fs::read_dir(&game_dir) else {
-        return vec!["default".to_string(), "cel".to_string()];
-    };
+    let roots = dirs::app_dirs().noteskin_roots();
     let mut seen = HashSet::new();
-    for entry in entries.flatten() {
-        let Ok(meta) = entry.metadata() else {
+    let mut found = Vec::new();
+    for root in &roots {
+        let game_dir = root.join(game);
+        let Ok(entries) = fs::read_dir(&game_dir) else {
             continue;
         };
-        if !meta.is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-        if name.is_empty() || name == "common" || name.starts_with('.') {
-            continue;
-        }
-        let dir = entry.path();
-        let has_itg_files = dir.join("NoteSkin.lua").is_file()
-            || dir.join("metrics.ini").is_file()
-            || fs::read_dir(&dir)
-                .ok()
-                .and_then(|mut it| it.next())
-                .is_some();
-        if has_itg_files && seen.insert(name.clone()) {
-            found.push(name);
+        for entry in entries.flatten() {
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            if !meta.is_dir() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            if name.is_empty() || name == "common" || name.starts_with('.') {
+                continue;
+            }
+            let dir = entry.path();
+            let has_itg_files = dir.join("NoteSkin.lua").is_file()
+                || dir.join("metrics.ini").is_file()
+                || fs::read_dir(&dir)
+                    .ok()
+                    .and_then(|mut it| it.next())
+                    .is_some();
+            if has_itg_files && seen.insert(name.clone()) {
+                found.push(name);
+            }
         }
     }
     found.sort();
@@ -1875,8 +1890,15 @@ pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
         return load_itg_default(style);
     }
 
-    let root = Path::new("assets/noteskins");
-    load_itg(root, "dance", requested, style)
+    let roots = dirs::app_dirs().noteskin_roots();
+    let mut last_err = String::new();
+    for root in &roots {
+        match load_itg(root, "dance", requested, style) {
+            Ok(ns) => return Ok(ns),
+            Err(e) => last_err = e,
+        }
+    }
+    Err(last_err)
 }
 
 pub fn load_itg(root: &Path, game: &str, skin: &str, style: &Style) -> Result<Noteskin, String> {

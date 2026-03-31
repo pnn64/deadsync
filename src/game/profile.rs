@@ -1,5 +1,5 @@
 pub use super::scroll::ScrollSpeedSetting;
-use crate::config::{self, SimpleIni};
+use crate::config::{self, SimpleIni, dirs};
 use bincode::{Decode, Encode};
 use chrono::{Datelike, Local};
 use log::{debug, info, warn};
@@ -353,13 +353,12 @@ pub const fn normalize_appearance_effects_mask(mask: u8) -> u8 {
 }
 
 // --- Profile Data ---
-const PROFILES_ROOT: &str = "save/profiles";
 const DEFAULT_PROFILE_ID: &str = "00000000";
 const PROFILE_STATS_VERSION_V1: u16 = 1;
 
 #[inline(always)]
 fn local_profile_dir(id: &str) -> PathBuf {
-    PathBuf::from(PROFILES_ROOT).join(id)
+    dirs::app_dirs().profiles_root().join(id)
 }
 
 #[inline(always)]
@@ -3611,8 +3610,8 @@ fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> std::cmp::Ordering {
 }
 
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
-    let root = Path::new(PROFILES_ROOT);
-    let Ok(read_dir) = fs::read_dir(root) else {
+    let root = dirs::app_dirs().profiles_root();
+    let Ok(read_dir) = fs::read_dir(&root) else {
         return Vec::new();
     };
 
@@ -3665,8 +3664,8 @@ pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
 const LOCAL_PROFILE_MAX_ID: u32 = 99_999_999;
 
 fn scan_local_profile_numbers() -> Vec<u32> {
-    let root = Path::new(PROFILES_ROOT);
-    let Ok(read_dir) = fs::read_dir(root) else {
+    let root = dirs::app_dirs().profiles_root();
+    let Ok(read_dir) = fs::read_dir(&root) else {
         return Vec::new();
     };
 

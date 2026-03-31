@@ -1,3 +1,4 @@
+use crate::config::dirs;
 use chrono::Local;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
@@ -9,7 +10,7 @@ use std::sync::{Mutex, OnceLock};
 #[cfg(not(windows))]
 use std::ffi::OsStr;
 
-const LOG_FILE_PATH: &str = "deadsync.log";
+const LOG_FILE_PATH_FALLBACK: &str = "deadsync.log";
 static FILE_LOGGING_ENABLED: AtomicBool = AtomicBool::new(true);
 static LOG_FILE: OnceLock<Mutex<Option<File>>> = OnceLock::new();
 
@@ -71,16 +72,24 @@ fn reset_log_file() {
     }
 }
 
+fn log_file_path() -> std::path::PathBuf {
+    // Try to use the app_dirs path. During very early init (before AppDirs is
+    // resolved), fall back to the constant next to the exe.
+    std::panic::catch_unwind(|| dirs::app_dirs().log_path())
+        .unwrap_or_else(|_| std::path::PathBuf::from(LOG_FILE_PATH_FALLBACK))
+}
+
 fn open_log_file() -> Option<File> {
+    let path = log_file_path();
     match OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
-        .open(LOG_FILE_PATH)
+        .open(&path)
     {
         Ok(file) => Some(file),
         Err(err) => {
-            eprintln!("Failed to open '{LOG_FILE_PATH}' for logging: {err}");
+            eprintln!("Failed to open '{}' for logging: {err}", path.display());
             None
         }
     }

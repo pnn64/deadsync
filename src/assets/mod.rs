@@ -1,6 +1,7 @@
 pub(crate) mod dynamic;
 mod textures;
 
+use crate::config::dirs;
 use crate::engine::gfx::{
     Backend, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, SamplerDesc, Texture as GfxTexture,
     TextureHandle,
@@ -317,10 +318,12 @@ impl AssetManager {
                 _ => return Err(AssetError::UnknownFont(name)),
             };
 
+            let resolved = dirs::app_dirs().resolve_asset_path(ini_path_str);
+            let resolved_str = resolved.to_string_lossy();
             let FontLoadData {
                 mut font,
                 required_textures,
-            } = font::parse(ini_path_str)?;
+            } = font::parse(&resolved_str)?;
 
             if name == "miso" {
                 font.fallback_font_name = Some("game");
@@ -500,7 +503,7 @@ mod tests {
 
         write_test_png(&src, [1, 2, 3, 4]);
         let (cache_path, path_hex) =
-            dynamic_image_cache_path_for(&src, opts, cache_dir.to_str().unwrap()).unwrap();
+            dynamic_image_cache_path_for(&src, opts, &cache_dir).unwrap();
         let stale_path = cache_path
             .parent()
             .unwrap()
@@ -511,7 +514,7 @@ mod tests {
             &test_rgba([9, 8, 7, 6])
         ));
 
-        let rgba = load_or_build_cached_dynamic_image(&src, opts, cache_dir.to_str().unwrap())
+        let rgba = load_or_build_cached_dynamic_image(&src, opts, &cache_dir)
             .expect("cache hit should load cached image");
 
         assert_eq!(rgba, expected);
@@ -528,7 +531,7 @@ mod tests {
 
         write_test_png(&src, [4, 3, 2, 1]);
         let (cache_path, path_hex) =
-            dynamic_image_cache_path_for(&src, opts, cache_dir.to_str().unwrap()).unwrap();
+            dynamic_image_cache_path_for(&src, opts, &cache_dir).unwrap();
         let stale_path = cache_path
             .parent()
             .unwrap()

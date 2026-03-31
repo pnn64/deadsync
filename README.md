@@ -82,7 +82,7 @@ Follow these steps to get the game running:
 
 ## Configuration
 
-After running the game for the first time, configuration files and a `save` directory will be generated in the project root.
+After running the game for the first time, configuration files and a `save` directory will be generated.
 
 ### Game Settings
 You can edit `deadsync.ini` to change various settings, including renderer, video resolution, VSync, `GfxDebug` (backend validation/debugging), and the default theme color.
@@ -132,10 +132,60 @@ P1_Back=PadCode[0x00030031]@0
 Legacy high-level bindings like `PadDir::Up`, `PadButton::Confirm`, and `PadN::Dir::Left` are still accepted for convenience, but low-level `PadCode[...]` bindings are the most accurate and device-agnostic way to configure controllers.
 
 ### Profile & Online Features
-A `save` directory is also created to store your personal data.
+A `save` directory is created to store your personal data (see [Data Directories](#data-directories) for its location).
 
-*   To enable online features with **GrooveStats**, edit the `save/profiles/00000000/groovestats.ini` file and add your API key and username. This allows the game to fetch your online scores.
+*   To enable online features with **GrooveStats**, edit `save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores.
 *   You can also change your in-game display name in `save/profiles/00000000/profile.ini`.
+
+## Data Directories
+
+By default, DeadSync stores user data and cache in **platform-native directories** so that upgrading the game doesn't risk overwriting your config, saves, or scores.
+
+### Default locations
+
+| Platform | Data directory | Cache directory |
+|----------|---------------|-----------------|
+| **Linux** | `$XDG_DATA_HOME/deadsync` (`~/.local/share/deadsync`) | `$XDG_CACHE_HOME/deadsync` (`~/.cache/deadsync`) |
+| **Windows** | `%APPDATA%\deadsync` | `%LOCALAPPDATA%\deadsync\cache` |
+| **macOS** | `~/Library/Application Support/deadsync` | `~/Library/Caches/deadsync` |
+
+**Data directory** contains user data that should be backed up:
+
+```
+deadsync.ini          # game configuration
+deadsync.log          # log file
+save/
+  profiles/           # player profiles, scores, settings
+  screenshots/        # captured screenshots
+songs/                # default song scan root
+courses/              # course files
+```
+
+**Cache directory** contains regenerable data that can be freely deleted:
+
+```
+songs/                # parsed song metadata cache
+banner/               # banner image cache
+cdtitle/              # CD title image cache
+```
+
+### Portable mode
+
+If you prefer a fully self-contained install (e.g. for arcade cabs or USB sticks), create an empty file named **`portable.txt`** next to the executable. When this file is present, DeadSync stores everything in the executable's directory — the same behavior as older versions.
+
+The file's contents are ignored; only its presence matters.
+
+### Song directories
+
+DeadSync scans for songs in the following locations:
+
+1. The `songs/` folder inside the data directory.
+2. The `songs/` folder next to the executable (in platform-native mode, so bundled songs are always found).
+3. Any additional folders listed in `AdditionalSongFolders` / `AdditionalSongFoldersReadOnly` in `deadsync.ini`.
+
+### Migration
+
+On first run in platform-native mode, if DeadSync finds a `deadsync.ini` next to the executable but not in the platform data directory, it will automatically copy your config, saves, songs, and courses to the new location. The originals are **not** deleted — you can clean them up manually after verifying everything works.
 
 ## Contributing
 
@@ -153,7 +203,7 @@ When reporting a bug, attaching a log file helps the team diagnose the problem q
 
 ### 1. Enable file logging
 
-Open `deadsync.ini` (created in the project root after the first run) and set the following under `[Options]`:
+Open `deadsync.ini` (created after the first run; see [Data Directories](#data-directories)) and set the following under `[Options]`:
 
 ```ini
 [Options]
@@ -170,7 +220,7 @@ Use **Debug** for most bug reports. Use **Trace** only if asked—it produces si
 
 ### 2. Reproduce the issue
 
-Launch the game and reproduce the problem. The log is written to **`deadsync.log`** in the project root (the same folder as the executable).
+Launch the game and reproduce the problem. The log is written to **`deadsync.log`** in the data directory (see [Data Directories](#data-directories) above).
 
 ### 3. Share the log
 

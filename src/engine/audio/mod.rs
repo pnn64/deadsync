@@ -2,6 +2,7 @@ mod backends;
 pub(crate) mod decode;
 mod resample;
 
+use crate::config::dirs;
 use crate::engine::host_time::instant_nanos;
 #[cfg(windows)]
 use crate::engine::windows_rt::current_qpc_nanos;
@@ -747,7 +748,9 @@ fn play_sfx_on_lane(path: &str, lane: SfxLane) {
         if let Some(data) = cache.get(path) {
             data.clone()
         } else {
-            match resample::load_and_resample_sfx(path) {
+            let resolved = dirs::app_dirs().resolve_asset_path(path);
+            let resolved_str = resolved.to_string_lossy();
+            match resample::load_and_resample_sfx(&resolved_str) {
                 Ok(data) => {
                     cache.insert(path.to_string(), data.clone());
                     debug!("Cached SFX: {path}");
@@ -773,7 +776,9 @@ pub fn preload_sfx(path: &str) {
     if cache.contains_key(path) {
         return;
     }
-    match resample::load_and_resample_sfx(path) {
+    let resolved = dirs::app_dirs().resolve_asset_path(path);
+    let resolved_str = resolved.to_string_lossy();
+    match resample::load_and_resample_sfx(&resolved_str) {
         Ok(data) => {
             cache.insert(path.to_string(), data);
             debug!("Cached SFX: {path}");

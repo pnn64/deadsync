@@ -63,13 +63,17 @@ fn set_runtime_dir() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn startup_lines(cfg: &config::Config) -> Vec<String> {
+    let dirs = config::dirs::app_dirs();
     vec![
+        format!("Portable mode: {}", dirs.portable),
+        format!("Data directory: {}", dirs.data_dir.display()),
+        format!("Cache directory: {}", dirs.cache_dir.display()),
         format!(
             "Log file: {}",
             if cfg.log_to_file {
-                "deadsync.log"
+                dirs.log_path().display().to_string()
             } else {
-                "disabled"
+                "disabled".to_string()
             }
         ),
         format!("Log level: {}", cfg.log_level.as_str()),
@@ -178,11 +182,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     set_runtime_dir()?;
     engine::host_time::init();
 
+    // Resolve and create platform-native data/cache directories.
+    config::dirs::ensure_dirs_exist();
+
     // Install logger immediately, then set runtime max level from config after loading it.
     engine::logging::init(config::bootstrap_log_to_file());
     install_panic_hook();
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
+
+    // Log resolved directories and migrate data from exe dir if necessary.
+    config::dirs::maybe_migrate_from_exe_dir();
 
     config::load();
     let cfg = config::get();
