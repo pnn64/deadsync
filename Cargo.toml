@@ -73,7 +73,7 @@ ureq = { version = "3.3.0", features = ["json", "rustls"] }
 zip = { version = "8.4.0", default-features = false, features = ["deflate"] }
 
 # Platform-native data directories
-directories = "6"
+directories = "6.0.0"
 
 # Song cache
 bincode = "2.0.1"
