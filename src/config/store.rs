@@ -45,7 +45,10 @@ pub(super) fn normalize_machine_default_noteskin(raw: &str) -> String {
 
 pub(super) fn create_default_config_file() -> Result<(), std::io::Error> {
     let path = dirs::app_dirs().config_path();
-    info!("'{}' not found, creating with default values.", path.display());
+    info!(
+        "'{}' not found, creating with default values.",
+        path.display()
+    );
     std::fs::write(path, defaults::build_content())
 }
 

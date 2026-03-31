@@ -390,7 +390,11 @@ fn start_loading_thread(state: &mut State) {
                 course: course.to_owned(),
             });
         };
-        course::scan_and_load_courses_with_progress_counts(&dirs.courses_dir(), &dirs.songs_dir(), &mut on_course);
+        course::scan_and_load_courses_with_progress_counts(
+            &dirs.courses_dir(),
+            &dirs.songs_dir(),
+            &mut on_course,
+        );
 
         let (banner_paths, cdtitle_paths) = collect_artwork_cache_paths();
         let artwork_total =

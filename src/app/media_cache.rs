@@ -27,8 +27,12 @@ pub(crate) fn cdtitle_cache_options() -> dynamic::BannerCacheOptions {
 pub(crate) fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
     let opts = banner_cache_options();
     if opts.enabled {
-        return dynamic::load_or_build_cached_dynamic_image(path, opts, &dirs::app_dirs().banner_cache_dir())
-            .map_err(|e| e.to_string());
+        return dynamic::load_or_build_cached_dynamic_image(
+            path,
+            opts,
+            &dirs::app_dirs().banner_cache_dir(),
+        )
+        .map_err(|e| e.to_string());
     }
     if dynamic::is_dynamic_video_path(path) {
         return video::load_poster(path);
@@ -41,8 +45,12 @@ pub(crate) fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> 
 pub(crate) fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String> {
     let opts = cdtitle_cache_options();
     if opts.enabled {
-        return dynamic::load_or_build_cached_dynamic_image(path, opts, &dirs::app_dirs().cdtitle_cache_dir())
-            .map_err(|e| e.to_string());
+        return dynamic::load_or_build_cached_dynamic_image(
+            path,
+            opts,
+            &dirs::app_dirs().cdtitle_cache_dir(),
+        )
+        .map_err(|e| e.to_string());
     }
     open_image_fallback(path)
         .map(|img| img.to_rgba8())
@@ -316,11 +324,7 @@ pub(crate) fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[Path
     let ccache = dirs::app_dirs().cdtitle_cache_dir();
     if banner_opts.enabled {
         for path in banner_paths {
-            unique.insert(dynamic_image_prewarm_dedupe_key(
-                path,
-                banner_opts,
-                &bcache,
-            ));
+            unique.insert(dynamic_image_prewarm_dedupe_key(path, banner_opts, &bcache));
         }
     }
     if cdtitle_opts.enabled {

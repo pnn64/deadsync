@@ -13,7 +13,7 @@ use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::AssetManager;
-use crate::config::{self, dirs, DisplayMode};
+use crate::config::{self, DisplayMode, dirs};
 use crate::engine::display;
 use crate::engine::gfx::{self as renderer, BackendType, PresentModePolicy};
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -4692,7 +4692,8 @@ impl App {
         } else if target_course_music {
             if !prev_course_music {
                 commands.push(Command::PlayMusic {
-                    path: dirs::app_dirs().resolve_asset_path("assets/music/select_course (loop).ogg"),
+                    path: dirs::app_dirs()
+                        .resolve_asset_path("assets/music/select_course (loop).ogg"),
                     looped: true,
                     volume: 1.0,
                 });

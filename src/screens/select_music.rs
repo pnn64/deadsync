@@ -2897,7 +2897,10 @@ fn start_reload_songs_and_courses(state: &mut State) {
                 song: song.to_owned(),
             });
         };
-        song_loading::scan_and_load_songs_with_progress_counts(&dirs::app_dirs().songs_dir(), &mut on_song);
+        song_loading::scan_and_load_songs_with_progress_counts(
+            &dirs::app_dirs().songs_dir(),
+            &mut on_song,
+        );
 
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Courses));
 
@@ -2910,7 +2913,11 @@ fn start_reload_songs_and_courses(state: &mut State) {
             });
         };
         let dirs = dirs::app_dirs();
-        course::scan_and_load_courses_with_progress_counts(&dirs.courses_dir(), &dirs.songs_dir(), &mut on_course);
+        course::scan_and_load_courses_with_progress_counts(
+            &dirs.courses_dir(),
+            &dirs.songs_dir(),
+            &mut on_course,
+        );
 
         let _ = tx.send(ReloadMsg::Done);
     });

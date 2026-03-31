@@ -145,6 +145,11 @@ pub fn app_dirs() -> &'static AppDirs {
     &APP_DIRS
 }
 
+#[cfg(any(windows, test))]
+fn native_cache_dir_for_data_dir(data_dir: &std::path::Path) -> PathBuf {
+    data_dir.join("cache")
+}
+
 impl AppDirs {
     fn resolve() -> Self {
         let exe_dir = std::env::current_exe()
@@ -168,35 +173,43 @@ impl AppDirs {
                 .map(PathBuf::from)
                 .expect("cannot determine home directory");
             let data_dir = home_dir.join(".deadsync");
-            return Self {
+            Self {
                 cache_dir: data_dir.join("cache"),
                 data_dir,
                 exe_dir,
                 portable: false,
-            };
+            }
         }
 
-        let proj = directories::ProjectDirs::from("", "", "deadsync")
-            .expect("cannot determine platform directories");
+        #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+        {
+            let proj = directories::ProjectDirs::from("", "", "deadsync")
+                .expect("cannot determine platform directories");
 
-        // On Windows, `data_dir()` appends a `\data` subdirectory
-        // (e.g. `%APPDATA%\deadsync\data`). We want `%APPDATA%\deadsync`
-        // directly, so use `config_dir().parent()` which strips the suffix.
-        // On Linux/macOS, `data_dir()` already gives the flat path we want.
-        #[cfg(windows)]
-        let data_dir = proj
-            .config_dir()
-            .parent()
-            .expect("config_dir has no parent")
-            .to_path_buf();
-        #[cfg(not(windows))]
-        let data_dir = proj.data_dir().to_path_buf();
+            // On Windows, `data_dir()` appends a `\data` subdirectory
+            // (e.g. `%APPDATA%\deadsync\data`). We want `%APPDATA%\deadsync`
+            // directly, so use `config_dir().parent()` which strips the suffix.
+            // On macOS, `data_dir()` already gives the flat path we want.
+            #[cfg(windows)]
+            let data_dir = proj
+                .config_dir()
+                .parent()
+                .expect("config_dir has no parent")
+                .to_path_buf();
+            #[cfg(not(windows))]
+            let data_dir = proj.data_dir().to_path_buf();
 
-        Self {
-            data_dir,
-            cache_dir: proj.cache_dir().to_path_buf(),
-            exe_dir,
-            portable: false,
+            #[cfg(windows)]
+            let cache_dir = native_cache_dir_for_data_dir(&data_dir);
+            #[cfg(not(windows))]
+            let cache_dir = proj.cache_dir().to_path_buf();
+
+            Self {
+                data_dir,
+                cache_dir,
+                exe_dir,
+                portable: false,
+            }
         }
     }
 }
@@ -278,6 +291,20 @@ fn copy_dir_if_exists(src: &std::path::Path, dst: &std::path::Path) {
             "  Failed to copy directory {} -> {}: {e}",
             src.display(),
             dst.display()
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::native_cache_dir_for_data_dir;
+    use std::path::Path;
+
+    #[test]
+    fn native_cache_dir_is_nested_under_data_dir() {
+        assert_eq!(
+            native_cache_dir_for_data_dir(Path::new("/tmp/deadsync")),
+            Path::new("/tmp/deadsync/cache")
         );
     }
 }

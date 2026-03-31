@@ -96,7 +96,10 @@ const THEME_KEYS: &[&str] = &[
 pub(super) fn write_missing_fields(conf: &SimpleIni) {
     if has_missing_fields(conf) {
         save_without_keymaps();
-        info!("'{}' updated with default values for any missing fields.", dirs::app_dirs().config_path().display());
+        info!(
+            "'{}' updated with default values for any missing fields.",
+            dirs::app_dirs().config_path().display()
+        );
     } else {
         info!("Configuration OK; no write needed.");
     }

@@ -502,8 +502,7 @@ mod tests {
         let expected = test_rgba([1, 2, 3, 4]);
 
         write_test_png(&src, [1, 2, 3, 4]);
-        let (cache_path, path_hex) =
-            dynamic_image_cache_path_for(&src, opts, &cache_dir).unwrap();
+        let (cache_path, path_hex) = dynamic_image_cache_path_for(&src, opts, &cache_dir).unwrap();
         let stale_path = cache_path
             .parent()
             .unwrap()
@@ -530,8 +529,7 @@ mod tests {
         let current = test_rgba([4, 3, 2, 1]);
 
         write_test_png(&src, [4, 3, 2, 1]);
-        let (cache_path, path_hex) =
-            dynamic_image_cache_path_for(&src, opts, &cache_dir).unwrap();
+        let (cache_path, path_hex) = dynamic_image_cache_path_for(&src, opts, &cache_dir).unwrap();
         let stale_path = cache_path
             .parent()
             .unwrap()

@@ -324,7 +324,10 @@ fn scan_and_load_songs_impl<F>(root_path: &Path, mut progress: Option<&mut F>)
 where
     F: FnMut(usize, usize, &str, &str),
 {
-    info!("Starting simfile scan (base songs root '{}')...", root_path.display());
+    info!(
+        "Starting simfile scan (base songs root '{}')...",
+        root_path.display()
+    );
 
     let started = std::time::Instant::now();
     let config = crate::config::get();

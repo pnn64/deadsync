@@ -4,8 +4,8 @@ use super::{
     SerializableSongData, build_cached_song_meta, build_gameplay_chart_from_payload,
     build_song_meta_from_cache,
 };
-use crate::game::{chart::GameplayChartData, song::SongData};
 use crate::config::dirs;
+use crate::game::{chart::GameplayChartData, song::SongData};
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::fs;

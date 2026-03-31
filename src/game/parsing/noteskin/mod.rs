@@ -1793,9 +1793,9 @@ where
     };
     for (idx, skin) in skins.iter().enumerate() {
         let label = format!("{game}/{skin}");
-        let loaded = roots.iter().find_map(|root| {
-            noteskin_itg::load_noteskin_data(root, game, skin).ok()
-        });
+        let loaded = roots
+            .iter()
+            .find_map(|root| noteskin_itg::load_noteskin_data(root, game, skin).ok());
         let result = loaded
             .ok_or_else(|| format!("noteskin '{game}/{skin}' not found in any root"))
             .and_then(|data| {

@@ -280,7 +280,8 @@ fn build_choices() -> Vec<Choice> {
         let mut mini_indicator = profile::MiniIndicator::None;
         let mut noteskin = profile::NoteSkin::default();
         let mut judgment = profile::JudgmentGraphic::default();
-        let ini_path = dirs::app_dirs().profiles_root()
+        let ini_path = dirs::app_dirs()
+            .profiles_root()
             .join(&p.id)
             .join("profile.ini");
         let mut ini = crate::config::SimpleIni::new();

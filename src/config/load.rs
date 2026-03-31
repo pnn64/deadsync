@@ -27,7 +27,10 @@ pub fn load() {
     match conf.load(&path) {
         Ok(()) => load_from_ini(&conf),
         Err(e) => {
-            warn!("Failed to load '{}': {e}. Using default values.", path.display());
+            warn!(
+                "Failed to load '{}': {e}. Using default values.",
+                path.display()
+            );
             load_defaults_after_error();
         }
     }
@@ -63,7 +66,10 @@ fn publish_config(cfg: Config) {
         sync_audio_mix_levels_from_config(&current);
         logging::set_file_logging_enabled(current.log_to_file);
     }
-    info!("Configuration loaded from '{}'.", dirs::app_dirs().config_path().display());
+    info!(
+        "Configuration loaded from '{}'.",
+        dirs::app_dirs().config_path().display()
+    );
 }
 
 fn publish_keymap(conf: &SimpleIni) {

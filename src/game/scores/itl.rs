@@ -5,8 +5,8 @@ use super::{
     groovestats_eval_state_from_gameplay, groovestats_judgment_counts,
     leaderboard_entries_from_api,
 };
-use crate::game::gameplay;
 use crate::config::dirs;
+use crate::game::gameplay;
 use crate::game::judgment;
 use crate::game::online::downloads;
 use crate::game::profile;
