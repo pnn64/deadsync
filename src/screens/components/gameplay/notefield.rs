@@ -2509,7 +2509,7 @@ pub fn build(
         + if error_bar_mask != 0 { 18 } else { 0 };
     let hud_cap = 8
         + if profile.column_cues { 1 } else { 0 }
-        + if !profile.hide_combo { 2 } else { 0 }
+        + if profile.hide_combo { 0 } else { 2 }
         + if (error_bar_mask & profile::ERROR_BAR_BIT_TEXT) != 0 {
             1
         } else {
@@ -2850,14 +2850,14 @@ pub fn build(
             for i in 0..num_cols {
                 let x = ns.column_xs[i] as f32;
                 if column_dirs[i] >= 0.0 {
-                    if !pos_any {
+                    if pos_any {
+                        pos_min_x = pos_min_x.min(x);
+                        pos_max_x = pos_max_x.max(x);
+                    } else {
                         pos_any = true;
                         pos_receptor_y = column_receptor_ys[i];
                         pos_min_x = x;
                         pos_max_x = x;
-                    } else {
-                        pos_min_x = pos_min_x.min(x);
-                        pos_max_x = pos_max_x.max(x);
                     }
                 } else if !neg_any {
                     neg_any = true;
@@ -3112,7 +3112,9 @@ pub fn build(
                 let visuals = ns.hold_visuals_for_col(i, matches!(note_type, NoteType::Roll));
                 if let Some(slot) = visuals.explosion.as_ref() {
                     Some(slot)
-                } else { ns.hold.explosion.as_ref().map(|slot| slot) }
+                } else {
+                    ns.hold.explosion.as_ref().map(|slot| slot)
+                }
             } else {
                 None
             };
@@ -3788,7 +3790,9 @@ pub fn build(
                         let visible_bottom_distance = clipped_bottom - natural_top;
                         let anchor_to_top =
                             lane_reverse && note_display.top_hold_anchor_when_reverse;
-                        let phase_offset = if !anchor_to_top {
+                        let phase_offset = if anchor_to_top {
+                            0.0
+                        } else {
                             let total_phase = hold_length / segment_height;
                             if total_phase >= 1.0 + SEGMENT_PHASE_EPS {
                                 let fractional = total_phase.fract();
@@ -3802,8 +3806,6 @@ pub fn build(
                             } else {
                                 0.0
                             }
-                        } else {
-                            0.0
                         };
 
                         let mut phase = visible_top_distance / segment_height + phase_offset;
@@ -6096,12 +6098,12 @@ pub fn build(
                         let text = if curr_measure < 0.0 {
                             // BrokenRunCounter.lua special-cases negative time.
                             let first = segs[0];
-                            if !first.is_break {
-                                let v = (-curr_measure).floor() as i32 + 1;
-                                cached_paren_i32(v)
-                            } else {
+                            if first.is_break {
                                 let first_len = (first.end - first.start) as i32;
                                 let v = (-curr_measure).floor() as i32 + 1 + first_len;
+                                cached_paren_i32(v)
+                            } else {
+                                let v = (-curr_measure).floor() as i32 + 1;
                                 cached_paren_i32(v)
                             }
                         } else if curr_count != 0 {

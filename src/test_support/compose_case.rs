@@ -420,13 +420,13 @@ pub fn render_case_output(case: &ComposeCase) -> Result<RenderListSnapshot, Box<
 }
 
 pub fn asset_manager_for_case(case: &ComposeCase) -> Result<assets::AssetManager, Box<dyn Error>> {
-    asset_manager_for_case_impl(case, |key| key.to_string())
+    asset_manager_for_case_impl(case, ToString::to_string)
 }
 
 pub fn asset_manager_for_case_lowercase(
     case: &ComposeCase,
 ) -> Result<assets::AssetManager, Box<dyn Error>> {
-    asset_manager_for_case_impl(case, |key| key.to_ascii_lowercase())
+    asset_manager_for_case_impl(case, str::to_ascii_lowercase)
 }
 
 fn asset_manager_for_case_impl(

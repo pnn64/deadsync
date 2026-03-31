@@ -1943,12 +1943,7 @@ pub fn draw(
         let screenshot_staging = if state.screenshot_requested {
             state.screenshot_requested = false;
             state.captured_frame = None;
-            if !state.swapchain_resources.supports_transfer_src {
-                warn!(
-                    "Vulkan swapchain does not support transfer-src usage; screenshot unavailable"
-                );
-                None
-            } else {
+            if state.swapchain_resources.supports_transfer_src {
                 let width = state.swapchain_resources.extent.width;
                 let height = state.swapchain_resources.extent.height;
                 let bytes_per_row = width as usize * 4;
@@ -2038,6 +2033,11 @@ pub fn draw(
                     height,
                     state.swapchain_resources.format.format,
                 ))
+            } else {
+                warn!(
+                    "Vulkan swapchain does not support transfer-src usage; screenshot unavailable"
+                );
+                None
             }
         } else {
             None

@@ -2489,7 +2489,7 @@ impl Profile {
         self.combo_mode = options.combo_mode;
         self.carry_combo_between_songs = options.carry_combo_between_songs;
         self.noteskin = options.noteskin.clone();
-        self.mine_noteskin = options.mine_noteskin.clone();
+        self.mine_noteskin.clone_from(&options.mine_noteskin);
         self.scroll_speed = options.scroll_speed;
         self.scroll_option = options.scroll_option;
         self.reverse_scroll = options.reverse_scroll;
@@ -3715,9 +3715,7 @@ fn allocate_local_profile_id() -> Result<String, std::io::Error> {
     }
     if next > LOCAL_PROFILE_MAX_ID {
         if first_free > LOCAL_PROFILE_MAX_ID {
-            return Err(std::io::Error::other(
-                "Too many profiles",
-            ));
+            return Err(std::io::Error::other("Too many profiles"));
         }
         next = first_free;
     }

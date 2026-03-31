@@ -2162,7 +2162,7 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
                     settings.advance_extra_pixels = n;
                 }
                 if let Some(v) = map.get("texturehints") {
-                    settings.texture_hints = v.clone();
+                    settings.texture_hints.clone_from(v);
                 }
 
                 for (key, val) in map {
@@ -2253,15 +2253,15 @@ pub fn parse(ini_path_str: &str) -> Result<FontLoadData, FontParseError> {
         } else {
             settings.line_spacing
         };
-        let baseline_authored = if settings.baseline != -1 {
-            settings.baseline
-        } else {
+        let baseline_authored = if settings.baseline == -1 {
             (frame_h_i as f32).mul_add(0.5, line_spacing_authored as f32 * 0.5) as i32
-        };
-        let top_authored = if settings.top != -1 {
-            settings.top
         } else {
+            settings.baseline
+        };
+        let top_authored = if settings.top == -1 {
             (frame_h_i as f32).mul_add(0.5, -(line_spacing_authored as f32 * 0.5)) as i32
+        } else {
+            settings.top
         };
         let height_authored = baseline_authored - top_authored;
         let vshift_authored = -(baseline_authored as f32);

@@ -426,7 +426,7 @@ fn gameplay_empty_row<'a>() -> GameplayScoreboxRow<'a> {
 }
 
 #[inline(always)]
-fn gameplay_status_row<'a>(text: &'a str) -> GameplayScoreboxRow<'a> {
+fn gameplay_status_row(text: &str) -> GameplayScoreboxRow<'_> {
     GameplayScoreboxRow {
         rank: empty_text(),
         name: text,
@@ -441,7 +441,7 @@ fn empty_rows<'a>() -> [GameplayScoreboxRow<'a>; SCOREBOX_NUM_ENTRIES] {
     std::array::from_fn(|_| gameplay_empty_row())
 }
 
-fn gameplay_status_pane<'a>(side: profile::PlayerSide, text: &'a str) -> GameplayScoreboxPane<'a> {
+fn gameplay_status_pane(side: profile::PlayerSide, text: &str) -> GameplayScoreboxPane<'_> {
     let mut rows = empty_rows();
     rows[0] = gameplay_status_row(text);
     let kind = if profile::get_for_side(side).show_ex_score {
@@ -457,10 +457,10 @@ fn gameplay_status_pane<'a>(side: profile::PlayerSide, text: &'a str) -> Gamepla
     }
 }
 
-fn gameplay_row_from_entry<'a>(
-    entry: &'a scores::LeaderboardEntry,
+fn gameplay_row_from_entry(
+    entry: &scores::LeaderboardEntry,
     kind: PaneKind,
-) -> GameplayScoreboxRow<'a> {
+) -> GameplayScoreboxRow<'_> {
     let mut rank_color = [1.0; 4];
     let mut name_color = [1.0; 4];
     if entry.is_self {
@@ -538,10 +538,10 @@ fn next_best_entry<'a>(
         .min_by_key(|entry| entry.rank)
 }
 
-fn scorebox_rows_for_kind<'a>(
-    entries: &'a [scores::LeaderboardEntry],
+fn scorebox_rows_for_kind(
+    entries: &[scores::LeaderboardEntry],
     kind: PaneKind,
-) -> [GameplayScoreboxRow<'a>; SCOREBOX_NUM_ENTRIES] {
+) -> [GameplayScoreboxRow<'_>; SCOREBOX_NUM_ENTRIES] {
     let mut rows = empty_rows();
     if entries.is_empty() {
         rows[0] = gameplay_status_row("No Scores");
@@ -591,9 +591,7 @@ fn scorebox_rows_for_kind<'a>(
     rows
 }
 
-fn gameplay_pane_from_leaderboard<'a>(
-    pane: &'a scores::LeaderboardPane,
-) -> GameplayScoreboxPane<'a> {
+fn gameplay_pane_from_leaderboard(pane: &scores::LeaderboardPane) -> GameplayScoreboxPane<'_> {
     let kind = pane_kind(pane);
     GameplayScoreboxPane {
         kind,
@@ -603,10 +601,10 @@ fn gameplay_pane_from_leaderboard<'a>(
     }
 }
 
-fn gameplay_panes_from_snapshot<'a>(
-    snapshot: &'a scores::CachedPlayerLeaderboardData,
+fn gameplay_panes_from_snapshot(
+    snapshot: &scores::CachedPlayerLeaderboardData,
     side: profile::PlayerSide,
-) -> Vec<GameplayScoreboxPane<'a>> {
+) -> Vec<GameplayScoreboxPane<'_>> {
     if snapshot.loading {
         return vec![gameplay_status_pane(side, "Loading ...")];
     }
@@ -628,10 +626,10 @@ fn gameplay_panes_from_snapshot<'a>(
     panes
 }
 
-fn select_music_panes_from_snapshot<'a>(
-    snapshot: &'a scores::CachedPlayerLeaderboardData,
+fn select_music_panes_from_snapshot(
+    snapshot: &scores::CachedPlayerLeaderboardData,
     side: profile::PlayerSide,
-) -> Vec<GameplayScoreboxPane<'a>> {
+) -> Vec<GameplayScoreboxPane<'_>> {
     if snapshot.loading {
         return vec![gameplay_status_pane(side, "Loading ...")];
     }

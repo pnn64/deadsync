@@ -48,7 +48,7 @@ pub fn set_current_window_px(px_w: u32, px_h: u32) {
 
 #[inline(always)]
 pub fn current_window_px() -> (u32, u32) {
-    CURRENT_PIXEL.with(|c| c.get())
+    CURRENT_PIXEL.with(std::cell::Cell::get)
 }
 
 #[allow(dead_code)]

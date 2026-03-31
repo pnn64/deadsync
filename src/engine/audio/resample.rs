@@ -90,10 +90,10 @@ pub(super) fn spawn_music_decoder_thread(
 
 #[inline]
 fn secs_to_frames(seconds: f64, sample_rate: u32) -> u64 {
-    if !seconds.is_finite() {
-        0
-    } else {
+    if seconds.is_finite() {
         (seconds.max(0.0) * f64::from(sample_rate)).round() as u64
+    } else {
+        0
     }
 }
 

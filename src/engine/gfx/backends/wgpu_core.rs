@@ -1360,14 +1360,7 @@ pub fn draw(
 
     let screenshot_readback = if state.screenshot_requested {
         state.screenshot_requested = false;
-        if !state.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
-            state.captured_frame = None;
-            warn!(
-                "{} (wgpu) surface does not support COPY_SRC; screenshot unavailable.",
-                state.api.name()
-            );
-            None
-        } else {
+        if state.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
             let width = state.config.width.max(1);
             let height = state.config.height.max(1);
             let bytes_per_row = 4 * width;
@@ -1408,6 +1401,13 @@ pub fn draw(
                 padded_bytes_per_row as usize,
                 state.config.format,
             ))
+        } else {
+            state.captured_frame = None;
+            warn!(
+                "{} (wgpu) surface does not support COPY_SRC; screenshot unavailable.",
+                state.api.name()
+            );
+            None
         }
     } else {
         None

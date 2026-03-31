@@ -876,10 +876,10 @@ fn submit_groovestats_request(
     }
 
     let snippet = log_body_snippet(body.as_str());
-    if !snippet.is_empty() {
-        debug!("{service_name} submit success body='{}'", snippet.as_str());
-    } else {
+    if snippet.is_empty() {
         debug!("{service_name} submit success");
+    } else {
+        debug!("{service_name} submit success body='{}'", snippet.as_str());
     }
     Ok(decoded)
 }

@@ -678,18 +678,18 @@ fn submit_arrowcloud_payload(
     let body = response.into_body().read_to_string().unwrap_or_default();
     if status.is_success() {
         let snippet = log_body_snippet(body.as_str());
-        if !snippet.is_empty() {
+        if snippet.is_empty() {
+            debug!(
+                "ArrowCloud submit success for {:?} ({}) status={}",
+                side, payload.hash, status_code
+            );
+        } else {
             debug!(
                 "ArrowCloud submit success for {:?} ({}) status={} body='{}'",
                 side,
                 payload.hash,
                 status_code,
                 snippet.as_str()
-            );
-        } else {
-            debug!(
-                "ArrowCloud submit success for {:?} ({}) status={}",
-                side, payload.hash, status_code
             );
         }
         return Ok(());

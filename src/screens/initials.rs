@@ -698,8 +698,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             return;
         }
         f(p);
-        if all_done(state) {
-        }
+        if all_done(state) {}
     };
 
     match ev.action {

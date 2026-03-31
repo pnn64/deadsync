@@ -239,7 +239,7 @@ fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
     let cache = CHILD_DIR_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(cached) = cache
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(&key)
         .cloned()
     {
@@ -263,7 +263,7 @@ fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
     }
     cache
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(key, found.clone());
     found
 }
@@ -274,7 +274,7 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
     let cache = FILE_PREFIX_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(cached) = cache
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(&key)
         .cloned()
     {
@@ -295,7 +295,7 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
     if matches.is_empty() {
         cache
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(key, None);
         return None;
     }
@@ -326,7 +326,7 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
     let chosen = matches.into_iter().next();
     cache
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(key, chosen.clone());
     chosen
 }

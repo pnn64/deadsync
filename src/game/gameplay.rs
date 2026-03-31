@@ -1217,14 +1217,14 @@ fn apply_super_shuffle_taps(
                     continue;
                 }
 
-                if idx2 != usize::MAX {
-                    notes[idx1].column = col_offset + t2;
-                    notes[idx2].column = col_offset + t1;
-                    grid.swap(t1, t2);
-                } else {
+                if idx2 == usize::MAX {
                     notes[idx1].column = col_offset + t2;
                     grid[t2] = idx1;
                     grid[t1] = usize::MAX;
+                } else {
+                    notes[idx1].column = col_offset + t2;
+                    notes[idx2].column = col_offset + t1;
+                    grid.swap(t1, t2);
                 }
                 break;
             }
@@ -2560,7 +2560,7 @@ fn attack_token_key(token: &str) -> String {
             key.push(ch.to_ascii_lowercase());
         }
     }
-    while key.as_bytes().first().is_some_and(|c| c.is_ascii_digit()) {
+    while key.as_bytes().first().is_some_and(u8::is_ascii_digit) {
         key.remove(0);
     }
     key
@@ -3842,8 +3842,7 @@ enum HealthState {
     Dead,
 }
 
-#[derive(Clone, Copy, Debug)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 enum DangerAnim {
     #[default]
     Hidden,
@@ -3860,7 +3859,6 @@ enum DangerAnim {
         rgb: [f32; 3],
     },
 }
-
 
 #[derive(Clone, Copy, Debug, Default)]
 struct DangerFx {
@@ -6958,7 +6956,8 @@ pub fn init(
         );
     }
     if num_players == 1 {
-        column_cues[1] = column_cues[0].clone();
+        let (first, second) = column_cues.split_at_mut(1);
+        second[0].clone_from(&first[0]);
     }
 
     let measure_densities: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|p| {

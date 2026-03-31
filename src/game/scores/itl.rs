@@ -452,7 +452,7 @@ pub fn save_itl_data_from_gameplay(
                     .steps_type
                     .eq_ignore_ascii_case(new_entry.steps_type.as_str())
                 {
-                    existing.steps_type = new_entry.steps_type.clone();
+                    existing.steps_type.clone_from(&new_entry.steps_type);
                     needs_write = true;
                 }
 
@@ -461,12 +461,12 @@ pub fn save_itl_data_from_gameplay(
                 if ex_improved {
                     existing.ex = new_entry.ex;
                     existing.points = new_entry.points;
-                    existing.judgments = new_entry.judgments.clone();
+                    existing.judgments.clone_from(&new_entry.judgments);
                     needs_write = true;
                     best_changed = true;
                 } else if ex_tied && itl_judgments_better(&new_entry.judgments, &existing.judgments)
                 {
-                    existing.judgments = new_entry.judgments.clone();
+                    existing.judgments.clone_from(&new_entry.judgments);
                     needs_write = true;
                     best_changed = true;
                 }
@@ -477,7 +477,7 @@ pub fn save_itl_data_from_gameplay(
                 }
                 if best_changed {
                     existing.used_cmod = new_entry.used_cmod;
-                    existing.date = new_entry.date.clone();
+                    existing.date.clone_from(&new_entry.date);
                     existing.no_cmod = new_entry.no_cmod;
                     existing.passing_points = new_entry.passing_points;
                     existing.max_scoring_points = new_entry.max_scoring_points;

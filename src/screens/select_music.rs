@@ -3552,21 +3552,21 @@ fn sync_overlay_apply_result(
     match result {
         Ok(result) => {
             if overlay.times_ms.is_empty() {
-                overlay.times_ms = result.plot.times_ms.clone();
+                overlay.times_ms.clone_from(&result.plot.times_ms);
                 overlay.cols = result.plot.cols;
             }
             overlay.freq_rows = result.plot.freq_rows;
-            overlay.freq_domain = result.plot.freq_domain.clone();
+            overlay.freq_domain.clone_from(&result.plot.freq_domain);
             overlay.total_beats = overlay.total_beats.max(result.plot.digest_rows);
             overlay.beats_processed = overlay.beats_processed.max(result.plot.digest_rows);
             if overlay.beat_digest.len() != result.plot.beat_digest.len() {
-                overlay.beat_digest = result.plot.beat_digest.clone();
+                overlay.beat_digest.clone_from(&result.plot.beat_digest);
             }
             overlay.digest_rows = result.plot.digest_rows;
             overlay.post_rows = result.plot.post_rows;
-            overlay.post_kernel = result.plot.post_kernel.clone();
+            overlay.post_kernel.clone_from(&result.plot.post_kernel);
             if overlay.convolution.is_empty() {
-                overlay.convolution = result.plot.convolution.clone();
+                overlay.convolution.clone_from(&result.plot.convolution);
                 overlay.edge_discard = result.plot.edge_discard;
             }
             overlay.final_bias_ms = Some(result.estimate.bias_ms);
@@ -5811,7 +5811,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     };
 
     if state.last_requested_banner_path != new_banner {
-        state.last_requested_banner_path = new_banner.clone();
+        state.last_requested_banner_path.clone_from(&new_banner);
         state.banner_high_quality_requested = false;
         return ScreenAction::RequestBanner(new_banner);
     }
@@ -5828,7 +5828,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.cdtitle_spin_elapsed = 0.0;
             state.cdtitle_anim_elapsed = 0.0;
         }
-        state.last_requested_cdtitle_path = new_cdtitle.clone();
+        state.last_requested_cdtitle_path.clone_from(&new_cdtitle);
         return ScreenAction::RequestCdTitle(new_cdtitle);
     }
 

@@ -186,9 +186,10 @@ pub(crate) fn build_stats_pane(
         score_info.window_counts
     };
     let judgment_counts = JUDGMENT_ORDER.map(|grade| score_info.judgment_count(grade));
+    let show_standard_judgments = !show_fa_plus_pane;
 
     // --- Calculate label shift for large numbers ---
-    let max_judgment_count = if !show_fa_plus_pane {
+    let max_judgment_count = if show_standard_judgments {
         *judgment_counts.iter().max().unwrap_or(&0)
     } else {
         max_window_count(wc)
@@ -232,7 +233,7 @@ pub(crate) fn build_stats_pane(
         let number_base_x = numbers_frame_origin_x + (number_local_x * numbers_frame_zoom);
         let mut digits = [0u8; 10];
 
-        if !show_fa_plus_pane {
+        if show_standard_judgments {
             for (i, info) in JUDGMENT_INFO.iter().enumerate() {
                 let target_count = judgment_counts[i];
                 let count = rolling_number_value(target_count, elapsed_s);

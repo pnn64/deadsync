@@ -1140,7 +1140,9 @@ fn create_opengl_context(
             type SwapIntervalFn = extern "system" fn(i32) -> i32;
             let proc_name = c"wglSwapIntervalEXT";
             let proc = display.get_proc_address(proc_name);
-            if !proc.is_null() {
+            if proc.is_null() {
+                warn!("wglSwapIntervalEXT function not found. Cannot control VSync.");
+            } else {
                 // SAFETY: `proc` was looked up specifically as `wglSwapIntervalEXT`
                 // and is only called when non-null, so this cast matches the WGL
                 // extension signature.
@@ -1154,8 +1156,6 @@ fn create_opengl_context(
                 } else {
                     warn!("wglSwapIntervalEXT call failed. VSync state may not be as requested.");
                 }
-            } else {
-                warn!("wglSwapIntervalEXT function not found. Cannot control VSync.");
             }
         };
         (display, vsync_logic)

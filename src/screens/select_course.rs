@@ -344,14 +344,14 @@ fn course_group_name(path: &Path) -> String {
 
 #[inline(always)]
 fn course_name(path: &Path, course: &rssp::course::CourseFile) -> String {
-    if !course.name.trim().is_empty() {
-        course.name.clone()
-    } else {
+    if course.name.trim().is_empty() {
         path.file_stem()
             .and_then(|n| n.to_str())
             .filter(|s| !s.trim().is_empty())
             .map(str::to_string)
             .unwrap_or_else(|| "Untitled Course".to_string())
+    } else {
+        course.name.clone()
     }
 }
 
@@ -1613,7 +1613,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if state.time_since_selection_change >= BANNER_UPDATE_DELAY_SECONDS {
         let banner = selected_banner_path(state);
         if banner != state.last_requested_banner_path {
-            state.last_requested_banner_path = banner.clone();
+            state.last_requested_banner_path.clone_from(&banner);
             state.banner_high_quality_requested = false;
             return ScreenAction::RequestBanner(banner);
         }

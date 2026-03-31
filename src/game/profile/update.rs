@@ -59,7 +59,7 @@ pub fn add_stage_calories_for_side(side: PlayerSide, calories_burned: f32) {
         let profile = &mut profiles[side_ix(side)];
 
         if profile.calories_burned_day.trim() != today {
-            profile.calories_burned_day = today.clone();
+            profile.calories_burned_day.clone_from(&today);
             profile.calories_burned_today = 0.0;
         }
 

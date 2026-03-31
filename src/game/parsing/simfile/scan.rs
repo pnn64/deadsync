@@ -167,22 +167,22 @@ fn song_scan_key(song: &SongScan) -> String {
 }
 
 fn merge_pack_scan(dst: &mut PackScan, mut src: PackScan) {
-    dst.dir = src.dir.clone();
+    dst.dir.clone_from(&src.dir);
     if src.has_pack_ini {
-        dst.display_title = src.display_title.clone();
-        dst.sort_title = src.sort_title.clone();
-        dst.translit_title = src.translit_title.clone();
-        dst.series = src.series.clone();
+        dst.display_title.clone_from(&src.display_title);
+        dst.sort_title.clone_from(&src.sort_title);
+        dst.translit_title.clone_from(&src.translit_title);
+        dst.series.clone_from(&src.series);
         dst.year = src.year;
         dst.version = src.version;
         dst.has_pack_ini = true;
         dst.sync_pref = src.sync_pref;
     }
     if src.banner_path.is_some() {
-        dst.banner_path = src.banner_path.clone();
+        dst.banner_path.clone_from(&src.banner_path);
     }
     if src.background_path.is_some() {
-        dst.background_path = src.background_path.clone();
+        dst.background_path.clone_from(&src.background_path);
     }
 
     let mut song_slots = HashMap::with_capacity(dst.songs.len() + src.songs.len());

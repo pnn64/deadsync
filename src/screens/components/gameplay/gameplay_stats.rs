@@ -731,8 +731,9 @@ pub fn build_double_step_stats(
                 let label_x =
                     origin_x + ((80.0 + (digits.saturating_sub(4) as f32 * 16.0)) * base_zoom);
                 let label_zoom = base_zoom * 0.833;
+                let show_standard_judgments = !show_fa_split;
 
-                if !show_fa_split {
+                if show_standard_judgments {
                     let counts = [
                         gameplay::display_judgment_count(state, 0, JudgeGrade::Fantastic),
                         gameplay::display_judgment_count(state, 0, JudgeGrade::Excellent),
@@ -941,24 +942,24 @@ pub fn build_double_step_stats(
         } else {
             1.0
         };
-        let total_display_seconds = if rate != 0.0 {
-            base_total / rate
-        } else {
+        let total_display_seconds = if rate == 0.0 {
             base_total
-        };
-        let elapsed_display_seconds = if rate != 0.0 {
-            state.current_music_time_display.max(0.0) / rate
         } else {
+            base_total / rate
+        };
+        let elapsed_display_seconds = if rate == 0.0 {
             state.current_music_time_display.max(0.0)
+        } else {
+            state.current_music_time_display.max(0.0) / rate
         };
 
         let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
         let total_time_str = cached_game_time(total_time_key.0, total_time_key.1);
         let remaining_display_seconds = if let Some(fail_time) = state.players[0].fail_time {
-            let fail_disp = if rate != 0.0 {
-                fail_time.max(0.0) / rate
-            } else {
+            let fail_disp = if rate == 0.0 {
                 fail_time.max(0.0)
+            } else {
+                fail_time.max(0.0) / rate
             };
             (total_display_seconds - fail_disp).max(0.0)
         } else {
@@ -1673,8 +1674,9 @@ fn build_side_pane(
         let numbers_local_x_offset = base_numbers_local_x_offset + (extra_digits * digit_local_width);
         let numbers_cx =
             final_judgments_center_x + (x_sign * numbers_local_x_offset * final_text_base_zoom);
+        let show_standard_judgments = !show_fa_split;
 
-        if !show_fa_split {
+        if show_standard_judgments {
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = judgment_info(*grade);
@@ -1888,25 +1890,25 @@ fn build_side_pane(
             } else {
                 1.0
             };
-            let total_display_seconds = if rate != 0.0 {
-                base_total / rate
-            } else {
+            let total_display_seconds = if rate == 0.0 {
                 base_total
-            };
-            let elapsed_display_seconds = if rate != 0.0 {
-                state.current_music_time_display.max(0.0) / rate
             } else {
+                base_total / rate
+            };
+            let elapsed_display_seconds = if rate == 0.0 {
                 state.current_music_time_display.max(0.0)
+            } else {
+                state.current_music_time_display.max(0.0) / rate
             };
 
             let total_time_key = game_time_key(total_display_seconds, total_display_seconds);
             let total_time_str = cached_game_time(total_time_key.0, total_time_key.1);
 
             let remaining_display_seconds = if let Some(fail_time) = state.players[0].fail_time {
-                let fail_disp = if rate != 0.0 {
-                    fail_time.max(0.0) / rate
-                } else {
+                let fail_disp = if rate == 0.0 {
                     fail_time.max(0.0)
+                } else {
+                    fail_time.max(0.0) / rate
                 };
                 (total_display_seconds - fail_disp).max(0.0)
             } else {

@@ -1169,10 +1169,10 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         return None;
     }
     let mut summary_song = (*course.song_stub).clone();
-    summary_song.simfile_path = course.path.clone();
-    summary_song.title = course.name.clone();
-    summary_song.translit_title = course.name.clone();
-    summary_song.banner_path = course.banner_path.clone();
+    summary_song.simfile_path.clone_from(&course.path);
+    summary_song.title.clone_from(&course.name);
+    summary_song.translit_title.clone_from(&course.name);
+    summary_song.banner_path.clone_from(&course.banner_path);
     let duration_seconds: f32 = course
         .stage_summaries
         .iter()
@@ -1259,9 +1259,11 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
             grade = scores::Grade::Quint;
         }
         let mut summary_chart = (*first_player.chart).clone();
-        summary_chart.short_hash = course.score_hash.clone();
-        summary_chart.difficulty = course.course_difficulty_name.clone();
-        summary_chart.description = course.name.clone();
+        summary_chart.short_hash.clone_from(&course.score_hash);
+        summary_chart
+            .difficulty
+            .clone_from(&course.course_difficulty_name);
+        summary_chart.description.clone_from(&course.name);
         summary_chart.meter = course.course_meter.unwrap_or_else(|| {
             if meter_count > 0 {
                 (meter_sum as f32 / meter_count as f32).round() as u32
@@ -2198,10 +2200,7 @@ impl App {
 
         self.sync_gameplay_input_capture();
         self.state.shell.update_gamepad_overlay(redraw_started);
-        
-        
-        
-        
+
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;
         let mut draw_stats = renderer::DrawStats::default();
@@ -3095,7 +3094,7 @@ impl App {
             None,
         );
         po_state.music_rate = gs.music_rate;
-        po_state.player_profiles = gs.player_profiles.clone();
+        po_state.player_profiles.clone_from(&gs.player_profiles);
         po_state.speed_mod = std::array::from_fn(|i| match gs.scroll_speed[i] {
             ScrollSpeedSetting::XMod(v) => player_options::SpeedMod {
                 mod_type: "X".to_string(),

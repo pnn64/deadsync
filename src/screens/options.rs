@@ -2491,7 +2491,7 @@ fn selected_video_renderer(state: &State) -> BackendType {
 
 fn build_software_thread_choices() -> Vec<u8> {
     let max_threads = std::thread::available_parallelism()
-        .map(|n| n.get())
+        .map(std::num::NonZero::get)
         .unwrap_or(8)
         .clamp(2, 32);
     let mut out = Vec::with_capacity(max_threads + 1);
@@ -3441,7 +3441,8 @@ fn selected_score_import_pack_group(state: &State) -> Option<String> {
     state
         .score_import_pack_filters
         .get(pack_idx)
-        .and_then(|opt| opt.clone())
+        .cloned()
+        .flatten()
 }
 
 fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConfig> {
@@ -3454,7 +3455,8 @@ fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConf
     let profile_id = state
         .score_import_profile_ids
         .get(profile_idx)
-        .and_then(|id| id.clone())?;
+        .cloned()
+        .flatten()?;
     state
         .score_import_profiles
         .iter()
@@ -3501,10 +3503,7 @@ fn selected_sync_pack_selection(state: &State) -> SyncPackSelection {
         .copied()
         .unwrap_or(0)
         .min(state.sync_pack_filters.len().saturating_sub(1));
-    let pack_group = state
-        .sync_pack_filters
-        .get(pack_idx)
-        .and_then(|opt| opt.clone());
+    let pack_group = state.sync_pack_filters.get(pack_idx).cloned().flatten();
     let pack_label = state
         .sync_pack_choices
         .get(pack_idx)
@@ -3783,7 +3782,7 @@ fn submenu_row_layout(
         cache.clear();
         cache.resize(rows.len(), None);
     }
-    if let Some(layout) = cache.get(row_idx).and_then(|entry| entry.clone()) {
+    if let Some(layout) = cache.get(row_idx).cloned().flatten() {
         return Some(layout);
     }
     let layout = build_submenu_row_layout(state, asset_manager, kind, row_idx)?;
@@ -5666,10 +5665,18 @@ fn begin_score_import(state: &mut State, selection: ScoreImportSelection) {
     }
     clear_navigation_holds(state);
     let mut profile_cfg = profile::Profile::default();
-    profile_cfg.display_name = selection.profile.display_name.clone();
-    profile_cfg.groovestats_api_key = selection.profile.gs_api_key.clone();
-    profile_cfg.groovestats_username = selection.profile.gs_username.clone();
-    profile_cfg.arrowcloud_api_key = selection.profile.ac_api_key.clone();
+    profile_cfg
+        .display_name
+        .clone_from(&selection.profile.display_name);
+    profile_cfg
+        .groovestats_api_key
+        .clone_from(&selection.profile.gs_api_key);
+    profile_cfg
+        .groovestats_username
+        .clone_from(&selection.profile.gs_username);
+    profile_cfg
+        .arrowcloud_api_key
+        .clone_from(&selection.profile.ac_api_key);
 
     let endpoint = selection.endpoint;
     let profile_id = selection.profile.id.clone();
@@ -6392,7 +6399,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
             if let Some((to_x, to_y, to_w, to_h)) =
                 submenu_cursor_dest(state, asset_manager, kind, s, list_x, list_y, list_w)
             {
-                if !state.cursor_initialized {
+                let needs_cursor_init = !state.cursor_initialized;
+                if needs_cursor_init {
                     state.cursor_initialized = true;
                     state.cursor_from_x = to_x;
                     state.cursor_from_y = to_y;
@@ -8766,8 +8774,9 @@ pub fn get_actors(
                         zoomto(row_w, row_h):
                         diffuse(bg[0], bg[1], bg[2], bg[3] * row_alpha)
                     ));
+                    let show_option_row = !is_exit;
 
-                    if !is_exit {
+                    if show_option_row {
                         let Some(actual_row_idx) = visible_rows.get(row_idx).copied() else {
                             continue;
                         };

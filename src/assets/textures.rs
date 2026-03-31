@@ -797,7 +797,7 @@ impl AssetManager {
 
         let job_count = textures_to_load.len();
         let worker_count = std::thread::available_parallelism()
-            .map(|n| n.get())
+            .map(std::num::NonZero::get)
             .unwrap_or(1)
             .min(job_count.max(1));
 

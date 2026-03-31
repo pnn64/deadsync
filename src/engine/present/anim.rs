@@ -751,7 +751,7 @@ impl Segment {
                     });
                 }
                 BuildOp::ZoomToW(w) => {
-                    let to = if s.w != 0.0 { w / s.w } else { 0.0 };
+                    let to = if s.w == 0.0 { 0.0 } else { w / s.w };
                     self.prepared.push(OpPrepared {
                         kind: PreparedKind::ScaleX {
                             from: s.scale[0],
@@ -760,7 +760,7 @@ impl Segment {
                     });
                 }
                 BuildOp::ZoomToH(h) => {
-                    let to = if s.h != 0.0 { h / s.h } else { 0.0 };
+                    let to = if s.h == 0.0 { 0.0 } else { h / s.h };
                     self.prepared.push(OpPrepared {
                         kind: PreparedKind::ScaleY {
                             from: s.scale[1],
@@ -1298,12 +1298,10 @@ impl TweenSeq {
 
             if finished_now {
                 // Take the finished step out of `current`.
-                if let Some(step) = self.current.take() {
+                if let Some(Step::Segment(seg)) = self.current.take() {
                     // If it was a segment, snap to exact targets.
-                    if let Step::Segment(seg) = step {
-                        for p in &seg.prepared {
-                            p.apply_final(&mut self.state);
-                        }
+                    for p in &seg.prepared {
+                        p.apply_final(&mut self.state);
                     }
                 }
                 // Loop continues to consume remaining dt on next steps.

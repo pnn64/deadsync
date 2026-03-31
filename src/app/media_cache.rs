@@ -155,7 +155,7 @@ fn dynamic_image_prewarm_workers(job_count: usize) -> usize {
         return 0;
     }
     std::thread::available_parallelism()
-        .map(|n| n.get())
+        .map(std::num::NonZero::get)
         .unwrap_or(1)
         .min(job_count)
 }

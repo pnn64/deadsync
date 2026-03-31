@@ -98,11 +98,7 @@ fn compute_row_window(
     let p2_choice = p2_choice.clamp(0, total_rows_i - 1);
 
     let (mut first_start, mut first_end, mut second_start, mut second_end) =
-        if !(active[P1] && active[P2]) {
-            let first_start = (p1_choice - halfsize).max(0);
-            let first_end = first_start + total;
-            (first_start, first_end, first_end, first_end)
-        } else {
+        if active[P1] && active[P2] {
             let earliest = p1_choice.min(p2_choice);
             let first_start = (earliest - halfsize / 2).max(0);
             let first_end = first_start + halfsize;
@@ -111,6 +107,10 @@ fn compute_row_window(
             let second_start = (latest - halfsize / 2).max(0).max(first_end);
             let second_end = second_start + halfsize;
             (first_start, first_end, second_start, second_end)
+        } else {
+            let first_start = (p1_choice - halfsize).max(0);
+            let first_end = first_start + total;
+            (first_start, first_end, first_end, first_end)
         };
 
     first_end = first_end.min(total_rows_i);
@@ -3821,7 +3821,7 @@ fn change_choice_for_player(
         let choice = row
             .choices
             .get(row.selected_choice_index[player_idx])
-            .map(|s| s.as_str())
+            .map(String::as_str)
             .unwrap_or("None");
         let mini_indicator = match choice {
             "Subtractive Scoring" => crate::game::profile::MiniIndicator::SubtractiveScoring,
@@ -3855,7 +3855,7 @@ fn change_choice_for_player(
         let choice = row
             .choices
             .get(row.selected_choice_index[player_idx])
-            .map(|s| s.as_str())
+            .map(String::as_str)
             .unwrap_or("ITG");
         let score_type = match choice {
             "EX" => crate::game::profile::MiniIndicatorScoreType::Ex,
@@ -4176,7 +4176,9 @@ fn change_choice_for_player(
         } else {
             Some(crate::game::profile::NoteSkin::new(selected))
         };
-        state.player_profiles[player_idx].mine_noteskin = setting.clone();
+        state.player_profiles[player_idx]
+            .mine_noteskin
+            .clone_from(&setting);
         if should_persist {
             crate::game::profile::update_mine_noteskin_for_side(persist_side, setting);
         }
@@ -4463,7 +4465,8 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
             continue;
         };
 
-        if !state.cursor_initialized[player_idx] {
+        let needs_cursor_init = !state.cursor_initialized[player_idx];
+        if needs_cursor_init {
             state.cursor_initialized[player_idx] = true;
             state.cursor_from_x[player_idx] = to_x;
             state.cursor_from_y[player_idx] = to_y;

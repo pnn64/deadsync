@@ -1095,8 +1095,9 @@ pub fn get_actors(
         if !is_exit && row_idx >= NUM_MAPPING_ROWS {
             continue;
         }
+        let show_mapping_row = !is_exit;
 
-        if !is_exit {
+        if show_mapping_row {
             let bg = if is_active {
                 col_active_bg
             } else {

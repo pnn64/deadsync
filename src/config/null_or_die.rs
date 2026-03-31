@@ -49,7 +49,7 @@ pub(super) fn parse_null_or_die_kernel_target(raw: &str) -> Option<KernelTarget>
     let key = raw
         .trim()
         .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .map(|ch| ch.to_ascii_lowercase())
         .collect::<String>();
     match key.as_str() {
@@ -71,7 +71,7 @@ pub(super) fn parse_null_or_die_kernel_type(raw: &str) -> Option<BiasKernel> {
     let key = raw
         .trim()
         .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .map(|ch| ch.to_ascii_lowercase())
         .collect::<String>();
     match key.as_str() {

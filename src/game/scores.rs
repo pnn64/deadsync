@@ -605,7 +605,7 @@ fn ensure_machine_local_score_cache_loaded() {
                 Some(existing) => {
                     if is_better_itg(&score, &existing.score) {
                         existing.score = score;
-                        existing.initials = initials.clone();
+                        existing.initials.clone_from(&initials);
                     }
                 }
                 None => {
@@ -2237,7 +2237,7 @@ fn fetch_player_leaderboards_internal(
             itl,
         } = player;
 
-        gs_entries = gs_leaderboard.clone();
+        gs_entries.clone_from(&gs_leaderboard);
         if show_ex_score {
             push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
             push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);

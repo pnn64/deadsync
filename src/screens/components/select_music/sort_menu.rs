@@ -1351,7 +1351,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                 }
             } else if let Some(err) = &side.error_text {
                 if i == 0 {
-                    name = err.clone();
+                    name.clone_from(err);
                 }
             } else if is_disabled {
                 if i == 0 {
@@ -1360,7 +1360,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
             } else if let Some(current) = pane {
                 if let Some(entry) = current.entries.get(i) {
                     rank = format!("{}.", entry.rank);
-                    name = entry.name.clone();
+                    name.clone_from(&entry.name);
                     score = format!("{:.2}%", entry.score / 100.0);
                     date = format_groovestats_date(&entry.date);
 

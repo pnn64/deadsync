@@ -1187,7 +1187,10 @@ impl Noteskin {
                 h.topcap_active.as_ref(),
                 h.bottomcap_inactive.as_ref(),
                 h.bottomcap_active.as_ref(),
-            ].into_iter().flatten() {
+            ]
+            .into_iter()
+            .flatten()
+            {
                 visit(slot.texture_key());
             }
             if let Some(slot) = h.explosion.as_ref() {
@@ -1706,7 +1709,7 @@ fn load_itg_data_cached(
     let cache = ITG_DATA_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(cached) = cache
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(&key)
         .cloned()
     {
@@ -1715,7 +1718,7 @@ fn load_itg_data_cached(
     let loaded = Arc::new(noteskin_itg::load_noteskin_data(root, game, skin)?);
     let mut guard = cache
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let entry = guard.entry(key).or_insert_with(|| loaded.clone());
     Ok(entry.clone())
 }
@@ -1725,7 +1728,7 @@ pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, 
     let cache = ITG_SKIN_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(cached) = cache
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(&key)
         .cloned()
     {
@@ -1735,7 +1738,7 @@ pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, 
     let loaded = Arc::new(load_itg_skin(style, skin)?);
     let mut guard = cache
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let entry = guard.entry(key).or_insert_with(|| loaded.clone());
     Ok(entry.clone())
 }
@@ -2399,10 +2402,10 @@ fn load_itg_sprite_noteskin_compiled(
         }
     }
     for visuals in &mut hold_columns {
-        visuals.explosion = hold.explosion.clone();
+        visuals.explosion.clone_from(&hold.explosion);
     }
     for visuals in &mut roll_columns {
-        visuals.explosion = roll.explosion.clone();
+        visuals.explosion.clone_from(&roll.explosion);
     }
     let explosion_slot = dim_sprites
         .first()
@@ -4714,7 +4717,7 @@ fn itg_resolve_model_texture_path(
     let ext = model_path
         .extension()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_ascii_lowercase());
+        .map(str::to_ascii_lowercase);
     if let Some(ref ext) = ext {
         if itg_is_texture_image_ext(ext) {
             return Some(ItgResolvedModelTexture::from_path(model_path.to_path_buf()));
@@ -4736,7 +4739,7 @@ fn itg_resolve_model_texture_path(
         let ext = candidate_path
             .extension()
             .and_then(|s| s.to_str())
-            .map(|s| s.to_ascii_lowercase());
+            .map(str::to_ascii_lowercase);
         let Some(ext) = ext else {
             continue;
         };
@@ -4762,7 +4765,7 @@ fn itg_resolve_model_texture_path(
         let ext = path
             .extension()
             .and_then(|s| s.to_str())
-            .map(|s| s.to_ascii_lowercase())
+            .map(str::to_ascii_lowercase)
             .unwrap_or_default();
         if itg_is_texture_image_ext(&ext) {
             Some(ItgResolvedModelTexture::from_path(path))
@@ -5022,7 +5025,7 @@ fn itg_resolve_model_material_texture(
     let ext = texture_path
         .extension()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_ascii_lowercase())
+        .map(str::to_ascii_lowercase)
         .unwrap_or_default();
     if itg_is_texture_image_ext(&ext) {
         Some(ItgResolvedModelTexture::from_path(texture_path))
@@ -7014,7 +7017,7 @@ mod tests {
             "cel mine should come from Tap Mine model actor, not _mine texture fallback"
         );
         assert!(
-            ns.mine_frames.first().is_some_and(|slot| slot.is_none()),
+            ns.mine_frames.first().is_some_and(Option::is_none),
             "cel mine uses a single model actor and should not duplicate it as a frame layer"
         );
     }

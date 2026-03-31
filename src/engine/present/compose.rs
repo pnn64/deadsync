@@ -634,10 +634,10 @@ fn wrapped_text_lines_with_indices(
                 line_width += width_to_add;
             } else {
                 out.push(WrappedLine {
-                    text: line.into_boxed_str(),
-                    char_indices: line_char_indices,
+                    text: std::mem::take(&mut line).into_boxed_str(),
+                    char_indices: std::mem::take(&mut line_char_indices),
                 });
-                line = word.text.to_owned();
+                word.text.clone_into(&mut line);
                 line_char_indices = (0..word.text.chars().count())
                     .map(|i| word.start_char + i)
                     .collect();

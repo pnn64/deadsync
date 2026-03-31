@@ -250,7 +250,7 @@ fn sprite_native_dims(
 /* ======================== SPRITE/QUAD CORE ======================== */
 
 #[inline(always)]
-fn build_sprite_like<'a>(source: SpriteSource, mods: &[Mod<'a>], site_base: u64) -> Actor {
+fn build_sprite_like(source: SpriteSource, mods: &[Mod<'_>], site_base: u64) -> Actor {
     // defaults
     let (mut x, mut y, mut w, mut h) = (0.0, 0.0, 0.0, 0.0);
     let (mut hx, mut vy) = (0.5, 0.5);
@@ -361,10 +361,10 @@ fn build_sprite_like<'a>(source: SpriteSource, mods: &[Mod<'a>], site_base: u64)
             }
             Mod::ZoomToPx(tw, th) => {
                 let (nw, nh) = sprite_native_dims(&source, uv, cell, grid);
-                let base_w = if w != 0.0 { w } else { nw };
-                let base_h = if h != 0.0 { h } else { nh };
-                sx = if base_w != 0.0 { *tw / base_w } else { 0.0 };
-                sy = if base_h != 0.0 { *th / base_h } else { 0.0 };
+                let base_w = if w == 0.0 { nw } else { w };
+                let base_h = if h == 0.0 { nh } else { h };
+                sx = if base_w == 0.0 { 0.0 } else { *tw / base_w };
+                sy = if base_h == 0.0 { 0.0 } else { *th / base_h };
             }
 
             // aspect-preserving absolute sizes
@@ -712,7 +712,7 @@ fn build_sprite_like<'a>(source: SpriteSource, mods: &[Mod<'a>], site_base: u64)
 }
 
 #[inline(always)]
-pub fn sprite<'a, T: IntoTextureKey>(tex: T, mods: &[Mod<'a>], site_base: u64) -> Actor {
+pub fn sprite<T: IntoTextureKey>(tex: T, mods: &[Mod<'_>], site_base: u64) -> Actor {
     build_sprite_like(
         SpriteSource::Texture(tex.into_texture_key()),
         mods,
@@ -721,14 +721,14 @@ pub fn sprite<'a, T: IntoTextureKey>(tex: T, mods: &[Mod<'a>], site_base: u64) -
 }
 
 #[inline(always)]
-pub fn quad<'a>(mods: &[Mod<'a>], site_base: u64) -> Actor {
+pub fn quad(mods: &[Mod<'_>], site_base: u64) -> Actor {
     build_sprite_like(SpriteSource::Solid, mods, site_base)
 }
 
 /* ============================== TEXT =============================== */
 
 #[inline(always)]
-pub fn text<'a>(mods: &[Mod<'a>], site_base: u64) -> Actor {
+pub fn text(mods: &[Mod<'_>], site_base: u64) -> Actor {
     let (mut x, mut y) = (0.0, 0.0);
     let (mut hx, mut vy) = (0.5, 0.5);
     let mut color = [1.0, 1.0, 1.0, 1.0];

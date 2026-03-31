@@ -138,12 +138,12 @@ mod actor {
                 let (outer_commands, outer_next_cursor) =
                     find_post_call_commands(content, outer_close, metrics);
                 let outer_frame_override = find_post_call_frame_override(content, outer_close);
-                if !outer_commands.is_empty() {
+                if outer_commands.is_empty() {
+                    next_cursor = outer_close + 1;
+                } else {
                     commands = outer_commands;
                     next_cursor = outer_next_cursor;
                     frame_override = outer_frame_override;
-                } else {
-                    next_cursor = outer_close + 1;
                 }
             }
             decl.refs.push(ItgLuaRefDecl {
@@ -295,8 +295,8 @@ mod actor {
         let digits: String = frame_tail[frame_eq + 1..]
             .trim()
             .chars()
-            .skip_while(|ch| ch.is_ascii_whitespace())
-            .take_while(|ch| ch.is_ascii_digit())
+            .skip_while(char::is_ascii_whitespace)
+            .take_while(char::is_ascii_digit)
             .collect();
         if digits.is_empty() {
             return None;
@@ -371,10 +371,7 @@ mod actor {
                 && let Some((linear_count, linear_delays)) = parse_linear_frames_expr(value)
             {
                 frame_count = linear_count.max(1);
-                frame_delays = linear_delays
-                    .into_iter()
-                    .enumerate()
-                    .collect();
+                frame_delays = linear_delays.into_iter().enumerate().collect();
                 continue;
             }
             let key_lower = key.to_ascii_lowercase();
@@ -1093,7 +1090,7 @@ fn cached_bundle_path(game: &str, skin: &str) -> Option<PathBuf> {
     let key = compiled_hash_cache_key(game, skin);
     let hash = COMPILED_HASH_CACHE
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(&key)
         .cloned()?;
     Some(noteskin_compiled::compiled_bundle_path(game, skin, &hash))
@@ -1103,7 +1100,7 @@ fn remember_source_hash(game: &str, skin: &str, source_hash: &str) {
     let key = compiled_hash_cache_key(game, skin);
     COMPILED_HASH_CACHE
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(key, source_hash.to_string());
 }
 
