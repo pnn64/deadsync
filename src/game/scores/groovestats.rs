@@ -706,6 +706,14 @@ fn groovestats_rescore_add_target(counts: &mut GrooveStatsRescoreCounts, j: &jud
     }
 }
 
+#[inline(always)]
+fn groovestats_final_result_counts_as_rescore_target(j: &judgment::Judgment) -> bool {
+    !matches!(
+        j.grade,
+        judgment::JudgeGrade::Decent | judgment::JudgeGrade::WayOff | judgment::JudgeGrade::Miss
+    )
+}
+
 fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> GrooveStatsRescoreCounts {
     let (start, end) = gs.note_ranges[player_idx];
     let mut counts = GrooveStatsRescoreCounts::default();
@@ -716,7 +724,9 @@ fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> Groove
         let Some(early_result) = note.early_result.as_ref() else {
             continue;
         };
-        groovestats_rescore_add_target(&mut counts, final_result);
+        if groovestats_final_result_counts_as_rescore_target(final_result) {
+            groovestats_rescore_add_target(&mut counts, final_result);
+        }
         groovestats_rescore_add_target(&mut counts, early_result);
     }
     counts
@@ -1347,6 +1357,25 @@ mod tests {
             url,
             "https://www.groovestats.com/QR/deadbeef/T1dGaHbIcJdKeLfM10H11T12R13T14M15T16G1H2I3J4K5L6/F1R96C1V3"
         );
+    }
+
+    #[test]
+    fn groovestats_rescore_targets_only_include_rescued_final_windows() {
+        let way_off = judgment::Judgment {
+            time_error_ms: -18.0,
+            grade: judgment::JudgeGrade::WayOff,
+            window: Some(judgment::TimingWindow::W5),
+            miss_because_held: false,
+        };
+        let great = judgment::Judgment {
+            time_error_ms: -10.0,
+            grade: judgment::JudgeGrade::Great,
+            window: Some(judgment::TimingWindow::W3),
+            miss_because_held: false,
+        };
+
+        assert!(!groovestats_final_result_counts_as_rescore_target(&way_off));
+        assert!(groovestats_final_result_counts_as_rescore_target(&great));
     }
 
     #[test]

@@ -8785,6 +8785,35 @@ fn error_bar_register_tap(
     }
 }
 
+#[inline(always)]
+fn set_last_judgment(state: &mut State, player: usize, judgment: Judgment) {
+    state.players[player].last_judgment = Some(JudgmentRenderInfo {
+        judgment,
+        judged_at: Instant::now(),
+    });
+}
+
+#[inline(always)]
+fn render_provisional_early_rescore_feedback(
+    state: &mut State,
+    player: usize,
+    column: usize,
+    judgment: &Judgment,
+    current_time: f32,
+    hide_early_dw_judgments: bool,
+    hide_early_dw_flash: bool,
+) {
+    if !hide_early_dw_judgments {
+        set_last_judgment(state, player, judgment.clone());
+        error_bar_register_tap(state, player, judgment, current_time);
+    }
+
+    if !hide_early_dw_flash {
+        trigger_receptor_glow_pulse(state, column);
+        trigger_tap_explosion(state, column, judgment.grade);
+    }
+}
+
 pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool {
     let windows = state.timing_profile.windows_s;
     let way_off_window = windows[4];
@@ -8931,15 +8960,19 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             if !scoring_blocked {
                                 apply_life_change(p, state.current_music_time, life_delta);
                             }
-                            if !hide_early_dw_judgments {
-                                p.last_judgment = Some(JudgmentRenderInfo {
-                                    judgment: judgment.clone(),
-                                    judged_at: Instant::now(),
-                                });
-                            }
                         }
+                        render_provisional_early_rescore_feedback(
+                            state,
+                            player,
+                            note_col,
+                            &judgment,
+                            current_time,
+                            hide_early_dw_judgments,
+                            hide_early_dw_flash,
+                        );
                         // Zmod parity: provisional early W4/W5 (with Rescore Early Hits enabled)
-                        // should not add error-bar ticks before the final row judgment is known.
+                        // should immediately drive EarlyHit-style visuals, but the later finalized
+                        // W4/W5 should not produce a second bad popup/tick.
                         log_timing_hit_detail(
                             timing_hit_log,
                             stream_pos_s,
@@ -8955,11 +8988,6 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             rate,
                             lead_in_s,
                         );
-
-                        if !hide_early_dw_flash {
-                            trigger_receptor_glow_pulse(state, note_col);
-                            trigger_tap_explosion(state, note_col, grade);
-                        }
 
                         if let Some(end_time) = state.hold_end_time_cache[note_index]
                             && matches!(
@@ -9125,6 +9153,9 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
     };
     let timing_hit_log = timing_hit_log_enabled();
     let player = player_for_col(state, column);
+    let rescore_early_hits = state.player_profiles[player].rescore_early_hits;
+    let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
+    let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
     let way_off_window_music = way_off_window * rate;
     let search_start_time = current_time - way_off_window_music;
@@ -9187,6 +9218,76 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
     let note_col = state.notes[note_index].column;
     let note_row_index = state.notes[note_index].row_index;
     let note_beat = state.notes[note_index].beat;
+
+    if rescore_early_hits {
+        let Some(row_entry) = row_entry_for_cached_row(
+            &state.row_entries,
+            &state.row_map_cache[player],
+            note_row_index,
+        ) else {
+            debug_assert!(false, "missing row cache for row {note_row_index}");
+            return false;
+        };
+        let (col_start, col_end) = player_col_range(state, player);
+        let row_rescore_track_count =
+            count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
+        let is_early = time_error_real < 0.0;
+        let is_bad = matches!(grade, JudgeGrade::Decent | JudgeGrade::WayOff);
+
+        if row_rescore_track_count == 1 && is_early && is_bad {
+            if state.notes[note_index].early_result.is_none() {
+                let judgment = Judgment {
+                    time_error_ms: time_error_real * 1000.0,
+                    grade,
+                    window: Some(window),
+                    miss_because_held: false,
+                };
+                state.notes[note_index].early_result = Some(judgment.clone());
+                let life_delta = judge_life_delta(grade);
+                if !scoring_blocked {
+                    let p = &mut state.players[player];
+                    apply_life_change(p, state.current_music_time, life_delta);
+                }
+                render_provisional_early_rescore_feedback(
+                    state,
+                    player,
+                    note_col,
+                    &judgment,
+                    current_time,
+                    hide_early_dw_judgments,
+                    hide_early_dw_flash,
+                );
+
+                log_timing_hit_detail(
+                    timing_hit_log,
+                    stream_pos_s,
+                    grade,
+                    note_row_index,
+                    note_col,
+                    note_beat,
+                    song_offset_s,
+                    global_offset_s,
+                    note_time,
+                    current_time,
+                    state.current_music_time,
+                    rate,
+                    lead_in_s,
+                );
+            }
+            return true;
+        }
+
+        if row_rescore_track_count == 1
+            && state.notes[note_index].early_result.is_some()
+            && !matches!(
+                grade,
+                JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+            )
+        {
+            return true;
+        }
+    }
+
     let judgment = Judgment {
         time_error_ms: time_error_real * 1000.0,
         grade,
@@ -9769,6 +9870,14 @@ fn apply_autosync_for_row_hits(
 }
 
 #[inline(always)]
+const fn suppress_final_bad_rescore_visual(
+    row_had_provisional_early_hit: bool,
+    final_grade: JudgeGrade,
+) -> bool {
+    row_had_provisional_early_hit && matches!(final_grade, JudgeGrade::Decent | JudgeGrade::WayOff)
+}
+
+#[inline(always)]
 fn refresh_sync_overlay_message(state: &mut State) {
     let mut message = String::new();
     if let Some(global_line) = quantized_offset_change_line(
@@ -10005,11 +10114,12 @@ fn finalize_row_judgment(
     apply_autosync_for_row_hits(state, row_entry_index, col_start, col_end);
     let final_grade = final_judgment.grade;
     record_display_window_counts(state, player, &final_judgment);
+    let suppress_final_early_bad_visual =
+        suppress_final_bad_rescore_visual(skip_life_change, final_grade);
     if scoring_blocked {
-        state.players[player].last_judgment = Some(JudgmentRenderInfo {
-            judgment: final_judgment,
-            judged_at: Instant::now(),
-        });
+        if !suppress_final_early_bad_visual {
+            set_last_judgment(state, player, final_judgment);
+        }
         return;
     }
     let p = &mut state.players[player];
@@ -10023,10 +10133,12 @@ fn finalize_row_judgment(
     if !skip_life_change {
         apply_life_change(p, state.current_music_time, life_delta);
     }
-    p.last_judgment = Some(JudgmentRenderInfo {
-        judgment: final_judgment,
-        judged_at: Instant::now(),
-    });
+    if !suppress_final_early_bad_visual {
+        p.last_judgment = Some(JudgmentRenderInfo {
+            judgment: final_judgment,
+            judged_at: Instant::now(),
+        });
+    }
     if row_has_successful_hit {
         p.miss_combo = 0;
     }
@@ -11307,7 +11419,8 @@ mod tests {
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
         replay_edge_cap, row_entry_for_cached_row, score_missed_holds_and_rolls,
         score_valid_for_chart, scored_hold_totals_with_carry, stage_music_cut, step_calories,
-        tick_mode_status_line, turn_option_bits, update_lane_count,
+        suppress_final_bad_rescore_visual, tick_mode_status_line, turn_option_bits,
+        update_lane_count,
     };
     use crate::engine::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
@@ -11783,6 +11896,17 @@ mod tests {
     #[test]
     fn immediate_hold_let_go_does_not_break_combo_by_default() {
         assert!(!COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO);
+    }
+
+    #[test]
+    fn final_bad_rescore_visuals_are_suppressed_only_for_bad_rows() {
+        assert!(suppress_final_bad_rescore_visual(true, JudgeGrade::Decent));
+        assert!(suppress_final_bad_rescore_visual(true, JudgeGrade::WayOff));
+        assert!(!suppress_final_bad_rescore_visual(true, JudgeGrade::Great));
+        assert!(!suppress_final_bad_rescore_visual(
+            false,
+            JudgeGrade::Decent
+        ));
     }
 
     #[test]
