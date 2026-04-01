@@ -7,7 +7,10 @@ pub struct AppDirs {
     pub data_dir: PathBuf,
     /// Root for regenerable cache data.
     pub cache_dir: PathBuf,
-    /// Directory containing the executable.
+    /// Directory containing bundled runtime data.
+    /// Usually this is the executable directory. For test binaries built under
+    /// `target/<profile>/deps`, this is normalized back to `target/<profile>`
+    /// so copied assets remain discoverable.
     pub exe_dir: PathBuf,
     /// Whether running in portable mode.
     pub portable: bool,
@@ -151,12 +154,37 @@ fn native_cache_dir_for_data_dir(data_dir: &std::path::Path) -> PathBuf {
 }
 
 impl AppDirs {
-    fn resolve() -> Self {
-        let exe_dir = std::env::current_exe()
-            .expect("cannot determine exe path")
+    fn runtime_root_from_exe_path(exe_path: &std::path::Path) -> PathBuf {
+        let exe_dir = exe_path
             .parent()
             .expect("exe has no parent dir")
             .to_path_buf();
+        let in_cargo_deps_dir = exe_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("deps"));
+        if !in_cargo_deps_dir {
+            return exe_dir;
+        }
+
+        let Some(parent) = exe_dir.parent() else {
+            return exe_dir;
+        };
+        let parent = parent.to_path_buf();
+        let looks_like_bundle_root = parent.join("assets").is_dir()
+            || parent.join("portable.txt").exists()
+            || parent.join("songs").is_dir()
+            || parent.join("courses").is_dir();
+        if looks_like_bundle_root {
+            parent
+        } else {
+            exe_dir
+        }
+    }
+
+    fn resolve() -> Self {
+        let exe_path = std::env::current_exe().expect("cannot determine exe path");
+        let exe_dir = Self::runtime_root_from_exe_path(&exe_path);
 
         if exe_dir.join("portable.txt").exists() {
             return Self {
@@ -297,14 +325,44 @@ fn copy_dir_if_exists(src: &std::path::Path, dst: &std::path::Path) {
 
 #[cfg(test)]
 mod tests {
-    use super::native_cache_dir_for_data_dir;
-    use std::path::Path;
+    use super::{AppDirs, native_cache_dir_for_data_dir};
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn native_cache_dir_is_nested_under_data_dir() {
         assert_eq!(
             native_cache_dir_for_data_dir(Path::new("/tmp/deadsync")),
             Path::new("/tmp/deadsync/cache")
+        );
+    }
+
+    #[test]
+    fn runtime_root_uses_parent_profile_dir_for_cargo_test_binaries() {
+        let unique = format!(
+            "deadsync-dirs-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time before unix epoch")
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(unique);
+        let exe_path = root.join("target/debug/deps/deadsync-test");
+        let expected = root.join("target/debug");
+        std::fs::create_dir_all(expected.join("assets")).expect("create mock assets dir");
+
+        assert_eq!(AppDirs::runtime_root_from_exe_path(&exe_path), expected);
+
+        std::fs::remove_dir_all(root).expect("cleanup mock target dir");
+    }
+
+    #[test]
+    fn runtime_root_keeps_regular_executable_dir() {
+        let exe_path = PathBuf::from("/tmp/deadsync/bin/deadsync");
+        assert_eq!(
+            AppDirs::runtime_root_from_exe_path(&exe_path),
+            PathBuf::from("/tmp/deadsync/bin")
         );
     }
 }
