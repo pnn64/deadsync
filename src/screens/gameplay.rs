@@ -881,10 +881,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
             screen_name: "ScreenGameplay",
             joined,
-            active_color_index: state.active_color_index,
-            x: screen_width() - 280.0,
-            y: 70.0,
-            width: 264.0,
             z: 995,
             show_song_info: false,
         }));

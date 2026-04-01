@@ -8162,10 +8162,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
             screen_name: "ScreenSelectMusic",
             joined,
-            active_color_index: state.active_color_index,
-            x: screen_width() - 304.0,
-            y: 72.0,
-            width: 288.0,
             z: 1288,
             show_song_info: true,
         }));
