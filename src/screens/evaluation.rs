@@ -10,7 +10,7 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::components::{
     evaluation::{self as eval_panes, eval_grades},
-    shared::{banner as shared_banner, heart_bg, mode_pads, screen_bar, timers},
+    shared::{banner as shared_banner, heart_bg, lobby_hud, mode_pads, screen_bar, timers},
 };
 
 use crate::assets::AssetManager;
@@ -3348,17 +3348,15 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         z(121) // a bit above the screen bar (z=120)
     ));
 
-    if let Some(lock_text) = evaluation_lobby_status_text(state) {
-        actors.push(act!(text:
-            font("miso"):
-            settext(lock_text):
-            align(0.5, 1.0):
-            xy(screen_center_x(), screen_height() - 34.0):
-            zoom(0.26):
-            diffuse(1.0, 0.92, 0.35, 1.0):
-            horizalign(center):
-            z(121)
-        ));
+    let lobby_snapshot = online::lobbies::snapshot();
+    if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
+        actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
+            screen_name: "ScreenEvaluationStage",
+            joined,
+            z: 121,
+            show_song_info: false,
+            status_text: evaluation_lobby_status_text(state),
+        }));
     }
 
     // ScreenEvaluationStage in stinger (standard Simply Love visual style).

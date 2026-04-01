@@ -32,7 +32,7 @@ use crate::screens::components::{
 };
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
 use image::{Rgba, RgbaImage};
-use log::debug;
+use log::{debug, warn};
 use null_or_die::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
 use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
@@ -930,6 +930,7 @@ pub struct State {
     lobby_last_published_song_sig: Option<String>,
     lobby_last_observed_local_song_sig: Option<String>,
     lobby_last_applied_remote_song_sig: Option<String>,
+    lobby_last_failed_remote_song_sig: Option<String>,
     lobby_notice_text: Option<String>,
     lobby_notice_time_left: f32,
     lobby_disconnect_hold_p1: Option<Instant>,
@@ -2194,6 +2195,7 @@ pub fn init() -> State {
         lobby_last_published_song_sig: None,
         lobby_last_observed_local_song_sig: None,
         lobby_last_applied_remote_song_sig: None,
+        lobby_last_failed_remote_song_sig: None,
         lobby_notice_text: None,
         lobby_notice_time_left: 0.0,
         lobby_disconnect_hold_p1: None,
@@ -2387,6 +2389,7 @@ pub fn init_placeholder() -> State {
         lobby_last_published_song_sig: None,
         lobby_last_observed_local_song_sig: None,
         lobby_last_applied_remote_song_sig: None,
+        lobby_last_failed_remote_song_sig: None,
         lobby_notice_text: None,
         lobby_notice_time_left: 0.0,
         lobby_disconnect_hold_p1: None,
@@ -4401,8 +4404,29 @@ fn normalize_lobby_song_path(song_path: &str) -> String {
         .join("/")
 }
 
+fn pack_and_song_name_from_lobby_path(song_path: &str) -> Option<(String, String)> {
+    let normalized = normalize_lobby_song_path(song_path);
+    let mut parts = normalized
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>();
+    let song = parts.pop()?.to_string();
+    let pack = parts.pop()?.to_string();
+    Some((pack, song))
+}
+
 fn lobby_song_path(song: &SongData) -> Option<String> {
-    let song_dir = song.simfile_path.parent()?.file_name()?.to_string_lossy();
+    let song_dir = song.simfile_path.parent()?;
+    for root in song_loading::collect_song_scan_roots(dirs::app_dirs().songs_dir().as_path()) {
+        if let Ok(relative) = song_dir.strip_prefix(root.as_path()) {
+            let normalized = normalize_lobby_song_path(relative.to_string_lossy().as_ref());
+            if !normalized.is_empty() {
+                return Some(normalized);
+            }
+        }
+    }
+
+    let song_dir = song_dir.file_name()?.to_string_lossy();
     let group_dir = song
         .simfile_path
         .parent()?
@@ -4412,14 +4436,69 @@ fn lobby_song_path(song: &SongData) -> Option<String> {
     Some(format!("{group_dir}/{song_dir}"))
 }
 
+fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
+    let song_dir = song.simfile_path.parent()?.file_name()?.to_str()?;
+    let pack_dir = song
+        .simfile_path
+        .parent()?
+        .parent()?
+        .file_name()?
+        .to_str()?;
+    Some((pack_dir, song_dir))
+}
+
 fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongData>> {
     let needle = normalize_lobby_song_path(song_path);
-    state.group_entries.iter().find_map(|entry| match entry {
+    let needle_leaf = needle.rsplit('/').next().unwrap_or(needle.as_str());
+    let needle_pack_and_song = pack_and_song_name_from_lobby_path(song_path);
+    if let Some(song) = state.group_entries.iter().find_map(|entry| match entry {
         MusicWheelEntry::Song(song) => lobby_song_path(song.as_ref())
             .filter(|path| path.eq_ignore_ascii_case(needle.as_str()))
             .map(|_| song.clone()),
         _ => None,
-    })
+    }) {
+        return Some(song);
+    }
+
+    let song_cache = get_song_cache();
+    let mut leaf_match = None;
+    for pack in song_cache.iter() {
+        for song in &pack.songs {
+            let Some(path) = lobby_song_path(song.as_ref()) else {
+                continue;
+            };
+            if path.eq_ignore_ascii_case(needle.as_str()) {
+                return Some(song.clone());
+            }
+            if let Some((needle_pack, needle_song)) = needle_pack_and_song.as_ref()
+                && let Some((pack_dir, song_dir)) = song_pack_and_dir_name(song.as_ref())
+                && pack_dir.eq_ignore_ascii_case(needle_pack.as_str())
+                && song_dir.eq_ignore_ascii_case(needle_song.as_str())
+            {
+                return Some(song.clone());
+            }
+            if leaf_match.is_none()
+                && path
+                    .rsplit('/')
+                    .next()
+                    .is_some_and(|leaf| leaf.eq_ignore_ascii_case(needle_leaf))
+            {
+                leaf_match = Some(song.clone());
+            }
+        }
+    }
+    leaf_match
+}
+
+fn debug_screen_name(screen_name: &str) -> String {
+    let screen_name = screen_name.trim();
+    if screen_name.is_empty() || screen_name.eq_ignore_ascii_case("NoScreen") {
+        return "NoScreen".to_string();
+    }
+    screen_name
+        .strip_prefix("Screen")
+        .unwrap_or(screen_name)
+        .to_string()
 }
 
 fn local_lobby_machine_signature() -> String {
@@ -4646,6 +4725,12 @@ fn apply_remote_lobby_song_selection(
     state.prev_selected_index = state.selected_index;
     state.time_since_selection_change = 0.0;
     state.wheel_offset_from_selection = 0.0;
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+    state.last_steps_nav_dir_p1 = None;
+    state.last_steps_nav_time_p1 = None;
+    state.last_steps_nav_dir_p2 = None;
+    state.last_steps_nav_time_p2 = None;
     state.step_artist_cycle_base = state.session_elapsed;
     state.last_requested_banner_path = None;
     state.last_requested_cdtitle_path = None;
@@ -4701,6 +4786,7 @@ fn sync_lobby_select_music(state: &mut State) {
         state.lobby_last_published_song_sig = None;
         state.lobby_last_observed_local_song_sig = None;
         state.lobby_last_applied_remote_song_sig = None;
+        state.lobby_last_failed_remote_song_sig = None;
         return;
     };
 
@@ -4711,6 +4797,7 @@ fn sync_lobby_select_music(state: &mut State) {
         state.lobby_last_observed_local_song_sig =
             build_local_lobby_song_info(state).map(|song_info| lobby_song_signature(&song_info));
         state.lobby_last_applied_remote_song_sig = None;
+        state.lobby_last_failed_remote_song_sig = None;
     }
 
     if !matches!(
@@ -4719,6 +4806,7 @@ fn sync_lobby_select_music(state: &mut State) {
     ) {
         state.lobby_last_published_machine_sig = None;
         state.lobby_last_published_song_sig = None;
+        state.lobby_last_failed_remote_song_sig = None;
         return;
     }
 
@@ -4735,9 +4823,37 @@ fn sync_lobby_select_music(state: &mut State) {
             if apply_remote_lobby_song_selection(state, song_info) {
                 state.lobby_last_observed_local_song_sig = build_local_lobby_song_info(state)
                     .map(|song_info| lobby_song_signature(&song_info));
+                state.lobby_last_applied_remote_song_sig = Some(remote_sig);
+                state.lobby_last_failed_remote_song_sig = None;
+            } else if state.lobby_last_failed_remote_song_sig.as_deref()
+                != Some(remote_sig.as_str())
+            {
+                let matched_path = find_song_by_lobby_path(state, song_info.song_path.as_str())
+                    .and_then(|song| lobby_song_path(song.as_ref()));
+                let player_screens = joined
+                    .players
+                    .iter()
+                    .map(|player| {
+                        format!(
+                            "{}={}",
+                            player.label,
+                            debug_screen_name(player.screen_name.as_str())
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                warn!(
+                    "Lobby remote song could not be resolved locally: remote_path='{}' matched_path={:?} local_selected={:?} screens=[{}]",
+                    song_info.song_path,
+                    matched_path,
+                    build_local_lobby_song_info(state).map(|song| song.song_path),
+                    player_screens,
+                );
+                state.lobby_last_failed_remote_song_sig = Some(remote_sig);
             }
-            state.lobby_last_applied_remote_song_sig = Some(remote_sig);
         }
+    } else {
+        state.lobby_last_failed_remote_song_sig = None;
     }
 
     let remote_song_info = joined.song_info.as_ref();
@@ -8164,6 +8280,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             joined,
             z: 1288,
             show_song_info: true,
+            status_text: None,
         }));
     }
 

@@ -193,36 +193,6 @@ fn gameplay_requires_lobby_wait() -> bool {
     joined.players.is_empty() || joined.players.len() > local_lobby_player_count()
 }
 
-fn gameplay_lobby_screen_suffix(screen_name: &str) -> &'static str {
-    if screen_name.eq_ignore_ascii_case("ScreenGameplay") {
-        ""
-    } else if screen_name.eq_ignore_ascii_case("ScreenSelectMusic") {
-        "  (select music)"
-    } else if screen_name.eq_ignore_ascii_case("ScreenEvaluationStage") {
-        "  (evaluation)"
-    } else if screen_name.eq_ignore_ascii_case("NoScreen") {
-        "  (connecting)"
-    } else {
-        "  (other screen)"
-    }
-}
-
-fn gameplay_lobby_player_status_line(
-    idx: usize,
-    player: &crate::game::online::lobbies::LobbyPlayer,
-) -> String {
-    let status = if player.screen_name.eq_ignore_ascii_case("ScreenGameplay") {
-        if player.ready {
-            "  ✔"
-        } else {
-            "  (not ready)"
-        }
-    } else {
-        gameplay_lobby_screen_suffix(player.screen_name.as_str())
-    };
-    format!("{}. {}{}", idx + 1, player.label, status)
-}
-
 fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
     if state.lobby_music_started {
         return None;
@@ -255,15 +225,6 @@ fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
     if !local_lobby_players_ready(state) {
         message.push_str("\nPress START to ready up.");
     }
-    if !joined.players.is_empty() {
-        message.push_str("\n\n");
-        for (idx, player) in joined.players.iter().enumerate() {
-            if idx > 0 {
-                message.push('\n');
-            }
-            message.push_str(&gameplay_lobby_player_status_line(idx, player));
-        }
-    }
     Some(message)
 }
 
@@ -279,6 +240,15 @@ fn gameplay_lobby_disconnect_prompt(state: &State) -> Option<String> {
         "Continue holding &START; for {remaining} more second{} to disconnect...",
         if remaining == 1 { "" } else { "s" }
     ))
+}
+
+fn gameplay_lobby_hud_status_text(state: &State) -> Option<String> {
+    let mut text = gameplay_lobby_wait_text(state)?;
+    if let Some(prompt) = gameplay_lobby_disconnect_prompt(state) {
+        text.push('\n');
+        text.push_str(prompt.as_str());
+    }
+    Some(text)
 }
 
 pub fn on_enter(state: &mut State) {
@@ -808,28 +778,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Hold START/BACK prompt (Simply Love parity: ScreenGameplay debug text).
     {
-        if let Some(lock_text) = gameplay_lobby_wait_text(state) {
-            actors.push(act!(text:
-                font("miso"):
-                settext(lock_text):
-                align(0.5, 1.0):
-                xy(screen_center_x(), screen_height() - 40.0):
-                zoom(0.42):
-                shadowlength(2.0):
-                diffuse(1.0, 0.92, 0.35, 1.0):
-                horizalign(center):
-                z(1000)
-            ));
-        }
-
         const HOLD_FADE_IN_S: f32 = 1.0 / 8.0;
         const ABORT_FADE_OUT_S: f32 = 0.5;
 
         let y = screen_height() - 116.0;
-        let msg: Option<(String, f32)> = if let Some(prompt) =
-            gameplay_lobby_disconnect_prompt(state)
-        {
-            Some((prompt, 1.0))
+        let msg: Option<(String, f32)> = if gameplay_lobby_wait_text(state).is_some() {
+            None
         } else if let (Some(key), Some(start)) = (state.hold_to_exit_key, state.hold_to_exit_start)
         {
             let s = match key {
@@ -883,6 +837,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             joined,
             z: 995,
             show_song_info: false,
+            status_text: gameplay_lobby_hud_status_text(state),
         }));
     }
 

@@ -15,10 +15,16 @@ pub struct RenderParams<'a> {
     pub joined: &'a lobbies::JoinedLobby,
     pub z: i16,
     pub show_song_info: bool,
+    pub status_text: Option<String>,
 }
 
 pub fn build_panel(params: RenderParams<'_>) -> Vec<Actor> {
-    let body_lines = build_body_lines(params.joined, params.screen_name, params.show_song_info);
+    let body_lines = build_body_lines(
+        params.joined,
+        params.screen_name,
+        params.show_song_info,
+        params.status_text.as_deref(),
+    );
     let body_text = body_lines.join("\n");
     let x = display_x(params.screen_name);
     let y = screen_center_y();
@@ -50,12 +56,17 @@ fn build_body_lines(
     joined: &lobbies::JoinedLobby,
     current_screen_name: &str,
     show_song_info: bool,
+    status_text: Option<&str>,
 ) -> Vec<String> {
     let mut lines = Vec::new();
 
-    if let Some(reconnect_text) = lobbies::reconnect_status_text() {
-        lines.push(truncate_text(reconnect_text.as_str(), 44));
-        lines.push(String::new());
+    if let Some(status_text) = status_text {
+        for line in status_text.lines() {
+            lines.push(truncate_text(line, 44));
+        }
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
     }
 
     let ordered_players = ordered_players(joined);

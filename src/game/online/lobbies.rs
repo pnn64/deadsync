@@ -464,9 +464,11 @@ fn worker_main(rx: Receiver<Command>) {
     let mut last_ping_at = Instant::now();
     loop {
         while let Ok(command) = rx.try_recv() {
-            if handle_command(&mut socket, command).is_err() {
-                handle_connection_loss(ConnectionState::Disconnected);
-                return;
+            if let Err(error) = handle_command(&mut socket, command) {
+                if !is_transient_socket_error(&error) {
+                    handle_connection_loss(ConnectionState::Error(error.to_string()));
+                    return;
+                }
             }
         }
 
@@ -490,10 +492,19 @@ fn worker_main(rx: Receiver<Command>) {
 
         if last_ping_at.elapsed() >= SOCKET_PING_INTERVAL {
             if let Err(error) = socket.send(Message::Ping(Vec::new().into())) {
-                handle_connection_loss(ConnectionState::Error(error.to_string()));
-                return;
+                if !is_transient_socket_error(&error) {
+                    handle_connection_loss(ConnectionState::Error(error.to_string()));
+                    return;
+                }
             }
             last_ping_at = Instant::now();
+        }
+
+        if let Err(error) = socket.flush()
+            && !is_transient_socket_error(&error)
+        {
+            handle_connection_loss(ConnectionState::Error(error.to_string()));
+            return;
         }
 
         thread::sleep(SOCKET_POLL_SLEEP);
@@ -570,6 +581,16 @@ fn send_event(
         .to_string()
         .into(),
     ))
+}
+
+fn is_transient_socket_error(error: &tungstenite::Error) -> bool {
+    match error {
+        tungstenite::Error::Io(error) => {
+            matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted)
+        }
+        tungstenite::Error::WriteBufferFull(_) => true,
+        _ => false,
+    }
 }
 
 fn local_machine_state_json(
@@ -792,6 +813,7 @@ struct LobbyStatePlayerData {
 }
 
 #[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct LobbyStateData {
     #[serde(default)]
     code: String,
