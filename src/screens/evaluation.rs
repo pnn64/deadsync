@@ -30,6 +30,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::LocalKey;
+use std::time::Instant;
 
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::game::profile;
@@ -852,6 +853,8 @@ pub struct State {
     pub auto_screenshot_taken: bool,
     pub itl_overlay_visible: bool,
     itl_overlay_shown: bool,
+    lobby_disconnect_hold_p1: Option<Instant>,
+    lobby_disconnect_hold_p2: Option<Instant>,
     itl_overlay_page: [usize; MAX_PLAYERS],
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
@@ -1325,6 +1328,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         auto_screenshot_taken: false,
         itl_overlay_visible: false,
         itl_overlay_shown: false,
+        lobby_disconnect_hold_p1: None,
+        lobby_disconnect_hold_p2: None,
         itl_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
@@ -1385,6 +1390,8 @@ pub fn init_from_score_info(
         auto_screenshot_taken: false,
         itl_overlay_visible: false,
         itl_overlay_shown: false,
+        lobby_disconnect_hold_p1: None,
+        lobby_disconnect_hold_p2: None,
         itl_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
@@ -1421,10 +1428,149 @@ fn sync_submit_itl_progress(state: &mut State) {
 }
 
 pub fn update(state: &mut State, dt: f32) {
+    online::lobbies::poll_reconnect();
+    online::lobbies::update_machine_state_sides_with_stats(
+        "ScreenEvaluationStage",
+        true,
+        true,
+        evaluation_lobby_player_stats(state, profile::PlayerSide::P1),
+        evaluation_lobby_player_stats(state, profile::PlayerSide::P2),
+    );
+    if evaluation_lobby_lock_text().is_some() {
+        if lobby_disconnect_hold_elapsed(state)
+            .is_some_and(|elapsed| elapsed >= online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS)
+        {
+            clear_lobby_disconnect_holds(state);
+            online::lobbies::disconnect();
+        }
+    } else {
+        clear_lobby_disconnect_holds(state);
+    }
     sync_submit_itl_progress(state);
     if dt > 0.0 {
         state.screen_elapsed += dt;
     }
+}
+
+fn local_lobby_player_count() -> usize {
+    let mut count = 0usize;
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if profile::is_session_side_joined(side) {
+            count += 1;
+        }
+    }
+    if count == 0 { 1 } else { count }
+}
+
+fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
+    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    if !(p1_joined || p2_joined) {
+        return profile::get_session_player_side() == side;
+    }
+    match side {
+        profile::PlayerSide::P1 => p1_joined,
+        profile::PlayerSide::P2 => p2_joined,
+    }
+}
+
+fn evaluation_lobby_player_stats(
+    state: &State,
+    side: profile::PlayerSide,
+) -> Option<online::lobbies::MachinePlayerStats> {
+    let score_info = state
+        .score_info
+        .iter()
+        .flatten()
+        .find(|score_info| score_info.side == side)?;
+    let judgments = online::lobbies::LobbyJudgments {
+        fantastic_plus: score_info.window_counts.w0,
+        fantastics: score_info.window_counts.w1,
+        excellents: score_info.window_counts.w2,
+        greats: score_info.window_counts.w3,
+        decents: score_info.window_counts.w4,
+        way_offs: score_info.window_counts.w5,
+        misses: score_info.window_counts.miss,
+        total_steps: score_info.chart.stats.total_steps,
+        mines_hit: score_info
+            .mines_total
+            .saturating_sub(score_info.mines_avoided),
+        total_mines: score_info.mines_total,
+        holds_held: score_info.holds_held,
+        total_holds: score_info.holds_total,
+        rolls_held: score_info.rolls_held,
+        total_rolls: score_info.rolls_total,
+    };
+    Some(online::lobbies::MachinePlayerStats {
+        judgments: Some(judgments),
+        score: Some((score_info.score_percent * 100.0) as f32),
+        ex_score: Some(score_info.ex_score_percent as f32),
+    })
+}
+
+fn clear_lobby_disconnect_holds(state: &mut State) {
+    state.lobby_disconnect_hold_p1 = None;
+    state.lobby_disconnect_hold_p2 = None;
+}
+
+fn set_lobby_disconnect_hold(
+    state: &mut State,
+    side: profile::PlayerSide,
+    started_at: Option<Instant>,
+) {
+    match side {
+        profile::PlayerSide::P1 if local_lobby_side_is_active(profile::PlayerSide::P1) => {
+            state.lobby_disconnect_hold_p1 = started_at;
+        }
+        profile::PlayerSide::P2 if local_lobby_side_is_active(profile::PlayerSide::P2) => {
+            state.lobby_disconnect_hold_p2 = started_at;
+        }
+        _ => {}
+    }
+}
+
+fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
+    [
+        state.lobby_disconnect_hold_p1,
+        state.lobby_disconnect_hold_p2,
+    ]
+    .into_iter()
+    .flatten()
+    .map(|started_at| started_at.elapsed().as_secs_f32())
+    .max_by(f32::total_cmp)
+}
+
+fn evaluation_lobby_lock_text() -> Option<String> {
+    let snapshot = online::lobbies::snapshot();
+    let joined = snapshot.joined_lobby.as_ref()?;
+    if joined.players.len() <= local_lobby_player_count() {
+        return None;
+    }
+    if let Some(text) = online::lobbies::reconnect_status_text() {
+        return Some(text);
+    }
+    joined
+        .players
+        .iter()
+        .any(|player| player.screen_name.eq_ignore_ascii_case("ScreenGameplay"))
+        .then(|| "Waiting for players to finish gameplay...".to_string())
+}
+
+fn evaluation_lobby_status_text(state: &State) -> Option<String> {
+    let mut text = evaluation_lobby_lock_text()?;
+    let prompt = if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
+        let remaining = (online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
+        let remaining = remaining.max(0);
+        format!(
+            "Continue holding &START; for {remaining} more second{} to disconnect...",
+            if remaining == 1 { "" } else { "s" }
+        )
+    } else {
+        "Hold &START; to disconnect from the lobby.".to_string()
+    };
+    text.push('\n');
+    text.push_str(prompt.as_str());
+    Some(text)
 }
 
 pub fn retry_timed_out_submissions(state: &State) -> bool {
@@ -1683,6 +1829,26 @@ fn barely_marker_sample(si: &ScoreInfo) -> Option<(f32, f32)> {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if evaluation_lobby_lock_text().is_some() {
+        match ev.action {
+            VirtualAction::p1_start => {
+                if ev.pressed {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, Some(ev.timestamp));
+                } else {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, None);
+                }
+            }
+            VirtualAction::p2_start => {
+                if ev.pressed {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, Some(ev.timestamp));
+                } else {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, None);
+                }
+            }
+            _ => {}
+        }
+        return ScreenAction::None;
+    }
     if !ev.pressed {
         return ScreenAction::None;
     }
@@ -3181,6 +3347,19 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         horizalign(center):
         z(121) // a bit above the screen bar (z=120)
     ));
+
+    if let Some(lock_text) = evaluation_lobby_status_text(state) {
+        actors.push(act!(text:
+            font("miso"):
+            settext(lock_text):
+            align(0.5, 1.0):
+            xy(screen_center_x(), screen_height() - 34.0):
+            zoom(0.26):
+            diffuse(1.0, 0.92, 0.35, 1.0):
+            horizalign(center):
+            z(121)
+        ));
+    }
 
     // ScreenEvaluationStage in stinger (standard Simply Love visual style).
     actors.extend(build_stage_in_stinger(state));

@@ -226,6 +226,7 @@ pub enum Action {
     SongSearch,
     SwitchProfile,
     ReloadSongsCourses,
+    ShowLobbies,
     ViewDownloads,
     SyncSong,
     SyncPack,
@@ -314,6 +315,11 @@ pub const ITEM_RELOAD_SONGS_COURSES: Item = Item {
     top_label: "Take a Breather~",
     bottom_label: "Load New Songs",
     action: Action::ReloadSongsCourses,
+};
+pub const ITEM_SHOW_LOBBIES: Item = Item {
+    top_label: "Friends Online?",
+    bottom_label: "Online Lobbies",
+    action: Action::ShowLobbies,
 };
 pub const ITEM_VIEW_DOWNLOADS: Item = Item {
     top_label: "Need More RAM",

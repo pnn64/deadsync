@@ -1,6 +1,7 @@
 pub mod arrowcloud;
 pub mod downloads;
 pub mod groovestats;
+pub mod lobbies;
 
 pub use arrowcloud::{
     ConnectionStatus as ArrowCloudConnectionStatus, api_base_url as arrowcloud_api_base_url,
@@ -19,4 +20,5 @@ pub use groovestats::{
 pub fn init() {
     groovestats::init();
     arrowcloud::init();
+    lobbies::init();
 }

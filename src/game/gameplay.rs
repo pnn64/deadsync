@@ -4466,6 +4466,11 @@ pub struct State {
 
     pub total_elapsed_in_screen: f32,
 
+    pub lobby_music_started: bool,
+    pub lobby_ready_p1: bool,
+    pub lobby_ready_p2: bool,
+    pub lobby_disconnect_hold_p1: Option<Instant>,
+    pub lobby_disconnect_hold_p2: Option<Instant>,
     pub sync_overlay_message: Option<Arc<str>>,
     pub replay_status_text: Option<Arc<str>>,
     danger_fx: [DangerFx; MAX_PLAYERS],
@@ -6176,7 +6181,7 @@ fn stage_music_cut(lead_in_seconds: f32) -> audio::Cut {
     }
 }
 
-pub fn start_stage_music(state: &State) {
+fn start_stage_music_audio(state: &State) {
     let Some(music_path) = state.song.music_path.as_ref() else {
         return;
     };
@@ -6188,6 +6193,23 @@ pub fn start_stage_music(state: &State) {
     };
     debug!("Starting music with a preroll delay of {lead_in:.2}s");
     audio::play_music(music_path.clone(), stage_music_cut(lead_in), false, rate);
+}
+
+pub fn start_stage_music(state: &mut State) {
+    let start_time = -state.audio_lead_in_seconds.max(0.0);
+    state.current_music_time = start_time;
+    state.current_music_time_display = state.display_clock.reset(start_time);
+    state.current_beat = state.timing.get_beat_for_time(start_time);
+    state.current_beat_display = state.current_beat;
+    for player in 0..state.num_players {
+        let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
+        let visible_time = start_time - delay;
+        state.current_music_time_visible[player] = visible_time;
+        state.current_beat_visible[player] =
+            state.timing_players[player].get_beat_for_time(visible_time);
+    }
+    state.total_elapsed_in_screen = 0.0;
+    start_stage_music_audio(state);
 }
 
 #[inline(always)]
@@ -7356,6 +7378,11 @@ pub fn init(
         jumps_total,
         hands_total,
         total_elapsed_in_screen: 0.0,
+        lobby_music_started: false,
+        lobby_ready_p1: false,
+        lobby_ready_p2: false,
+        lobby_disconnect_hold_p1: None,
+        lobby_disconnect_hold_p2: None,
         sync_overlay_message: None,
         replay_status_text,
         danger_fx: std::array::from_fn(|_| DangerFx::default()),

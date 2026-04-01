@@ -22,10 +22,12 @@ use crate::game::scores;
 use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
-    select_music::{music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar},
+    select_music::{
+        lobby_overlay, music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar,
+    },
     shared::{
-        banner as shared_banner, gs_scorebox, heart_bg, mode_pads, profile_boxes, test_input,
-        timers,
+        banner as shared_banner, gs_scorebox, heart_bg, lobby_hud, mode_pads, profile_boxes,
+        test_input, timers,
     },
 };
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
@@ -865,6 +867,7 @@ pub struct State {
     song_search: sort_menu::SongSearchState,
     song_search_ignore_next_back_select: bool,
     replay_overlay: sort_menu::ReplayOverlayState,
+    lobby_overlay: lobby_overlay::OverlayState,
     sync_overlay: SyncOverlayState,
     pack_sync_overlay: crate::screens::pack_sync::OverlayState,
     pub test_input_overlay_visible: bool,
@@ -922,6 +925,15 @@ pub struct State {
     currently_playing_preview_length_sec: Option<f32>,
     prev_selected_index: usize,
     time_since_selection_change: f32,
+    lobby_last_joined_code: Option<String>,
+    lobby_last_published_machine_sig: Option<String>,
+    lobby_last_published_song_sig: Option<String>,
+    lobby_last_observed_local_song_sig: Option<String>,
+    lobby_last_applied_remote_song_sig: Option<String>,
+    lobby_notice_text: Option<String>,
+    lobby_notice_time_left: f32,
+    lobby_disconnect_hold_p1: Option<Instant>,
+    lobby_disconnect_hold_p2: Option<Instant>,
 
     // Caches to avoid O(N) ops in hot paths
     cached_song: Option<Arc<SongData>>,
@@ -2118,6 +2130,7 @@ pub fn init() -> State {
         song_search: sort_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
         replay_overlay: sort_menu::ReplayOverlayState::Hidden,
+        lobby_overlay: lobby_overlay::OverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
         pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
@@ -2176,6 +2189,15 @@ pub fn init() -> State {
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
+        lobby_last_joined_code: None,
+        lobby_last_published_machine_sig: None,
+        lobby_last_published_song_sig: None,
+        lobby_last_observed_local_song_sig: None,
+        lobby_last_applied_remote_song_sig: None,
+        lobby_notice_text: None,
+        lobby_notice_time_left: 0.0,
+        lobby_disconnect_hold_p1: None,
+        lobby_disconnect_hold_p2: None,
         step_artist_cycle_base: 0.0,
         cached_song: None,
         cached_chart_type: "",
@@ -2301,6 +2323,7 @@ pub fn init_placeholder() -> State {
         song_search: sort_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
         replay_overlay: sort_menu::ReplayOverlayState::Hidden,
+        lobby_overlay: lobby_overlay::OverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
         pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         test_input_overlay_visible: false,
@@ -2359,6 +2382,15 @@ pub fn init_placeholder() -> State {
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
+        lobby_last_joined_code: None,
+        lobby_last_published_machine_sig: None,
+        lobby_last_published_song_sig: None,
+        lobby_last_observed_local_song_sig: None,
+        lobby_last_applied_remote_song_sig: None,
+        lobby_notice_text: None,
+        lobby_notice_time_left: 0.0,
+        lobby_disconnect_hold_p1: None,
+        lobby_disconnect_hold_p2: None,
         step_artist_cycle_base: 0.0,
         cached_song: None,
         cached_chart_type: "",
@@ -2672,7 +2704,7 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item>
     let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
-    let mut items = Vec::with_capacity(11);
+    let mut items = Vec::with_capacity(12);
     items.push(sort_menu::ITEM_CATEGORY_SORTS);
     match (profile::get_session_play_style(), single_player_joined) {
         (profile::PlayStyle::Single, true) => items.push(sort_menu::ITEM_SWITCH_TO_DOUBLE),
@@ -2683,6 +2715,7 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item>
     items.push(sort_menu::ITEM_SONG_SEARCH);
     items.push(sort_menu::ITEM_SWITCH_PROFILE);
     items.push(sort_menu::ITEM_RELOAD_SONGS_COURSES);
+    items.push(sort_menu::ITEM_SHOW_LOBBIES);
     if downloads_enabled {
         items.push(sort_menu::ITEM_VIEW_DOWNLOADS);
     }
@@ -2706,6 +2739,7 @@ fn show_test_input_overlay(state: &mut State) {
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
@@ -2722,12 +2756,30 @@ fn hide_test_input_overlay(state: &mut State) {
     state.test_input_overlay_visible = false;
 }
 
+fn show_lobby_overlay(state: &mut State) {
+    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
+    state.profile_switch_overlay = None;
+    hide_test_input_overlay(state);
+    clear_menu_chord(state);
+    clear_overlay_nav_hold(state);
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+    state.lobby_overlay = lobby_overlay::show_overlay();
+    crate::game::online::lobbies::search_lobbies();
+    clear_preview(state);
+}
+
 fn start_song_search_prompt(state: &mut State) {
     clear_preview(state);
     state.sort_menu = sort_menu::State::Hidden;
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
@@ -2747,6 +2799,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     hide_test_input_overlay(state);
@@ -4169,6 +4222,7 @@ fn show_leaderboard_overlay(state: &mut State) {
     if let Some(overlay) = sort_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
         state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
         state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
+        state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
         state.sync_overlay = SyncOverlayState::Hidden;
         pack_sync::hide_overlay(state);
         state.profile_switch_overlay = None;
@@ -4181,6 +4235,7 @@ fn show_leaderboard_overlay(state: &mut State) {
 fn show_downloads_overlay(state: &mut State) {
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
@@ -4206,12 +4261,83 @@ fn show_replay_overlay(state: &mut State) {
     }
     state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
+    state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     state.replay_overlay = overlay;
     clear_preview(state);
+}
+
+fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    match lobby_overlay::handle_input(&mut state.lobby_overlay, ev) {
+        lobby_overlay::InputOutcome::None => {}
+        lobby_overlay::InputOutcome::ChangedSelection => {
+            audio::play_sfx("assets/sounds/change.ogg");
+        }
+        lobby_overlay::InputOutcome::Closed => {
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
+        lobby_overlay::InputOutcome::ConnectRequested
+        | lobby_overlay::InputOutcome::SearchRequested => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            crate::game::online::lobbies::search_lobbies();
+        }
+        lobby_overlay::InputOutcome::CreateRequested(password) => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            crate::game::online::lobbies::create_lobby_with_password(password.as_str());
+        }
+        lobby_overlay::InputOutcome::JoinRequested { code, password } => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            crate::game::online::lobbies::join_lobby_with_password(
+                code.as_str(),
+                password.as_str(),
+            );
+        }
+        lobby_overlay::InputOutcome::LeaveRequested => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            crate::game::online::lobbies::leave_lobby();
+        }
+    }
+    ScreenAction::None
+}
+
+fn handle_lobby_overlay_raw_key(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+    text: Option<&str>,
+) -> ScreenAction {
+    match lobby_overlay::handle_raw_key(&mut state.lobby_overlay, key, text) {
+        lobby_overlay::InputOutcome::None => {}
+        lobby_overlay::InputOutcome::ChangedSelection => {
+            audio::play_sfx("assets/sounds/change.ogg");
+        }
+        lobby_overlay::InputOutcome::Closed => {
+            audio::play_sfx("assets/sounds/start.ogg");
+        }
+        lobby_overlay::InputOutcome::ConnectRequested
+        | lobby_overlay::InputOutcome::SearchRequested => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            crate::game::online::lobbies::search_lobbies();
+        }
+        lobby_overlay::InputOutcome::CreateRequested(password) => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            crate::game::online::lobbies::create_lobby_with_password(password.as_str());
+        }
+        lobby_overlay::InputOutcome::JoinRequested { code, password } => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            crate::game::online::lobbies::join_lobby_with_password(
+                code.as_str(),
+                password.as_str(),
+            );
+        }
+        lobby_overlay::InputOutcome::LeaveRequested => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            crate::game::online::lobbies::leave_lobby();
+        }
+    }
+    ScreenAction::None
 }
 
 #[inline(always)]
@@ -4230,6 +4356,158 @@ fn selected_steps_index_for_sync(state: &State) -> usize {
     }
 }
 
+#[inline(always)]
+fn preferred_steps_index_for_sync(state: &State) -> usize {
+    match (
+        profile::get_session_play_style(),
+        profile::get_session_player_side(),
+    ) {
+        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => {
+            state.p2_preferred_difficulty_index
+        }
+        _ => state.preferred_difficulty_index,
+    }
+}
+
+#[inline(always)]
+fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
+    match (
+        profile::get_session_play_style(),
+        profile::get_session_player_side(),
+    ) {
+        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => {
+            state.p2_selected_steps_index = steps_index;
+            if steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+                state.p2_preferred_difficulty_index = steps_index;
+            }
+        }
+        _ => {
+            state.selected_steps_index = steps_index;
+            if steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+                state.preferred_difficulty_index = steps_index;
+            }
+        }
+    }
+}
+
+fn normalize_lobby_song_path(song_path: &str) -> String {
+    song_path
+        .trim()
+        .trim_matches('/')
+        .replace('\\', "/")
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn lobby_song_path(song: &SongData) -> Option<String> {
+    let song_dir = song.simfile_path.parent()?.file_name()?.to_string_lossy();
+    let group_dir = song
+        .simfile_path
+        .parent()?
+        .parent()?
+        .file_name()?
+        .to_string_lossy();
+    Some(format!("{group_dir}/{song_dir}"))
+}
+
+fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongData>> {
+    let needle = normalize_lobby_song_path(song_path);
+    state.group_entries.iter().find_map(|entry| match entry {
+        MusicWheelEntry::Song(song) => lobby_song_path(song.as_ref())
+            .filter(|path| path.eq_ignore_ascii_case(needle.as_str()))
+            .map(|_| song.clone()),
+        _ => None,
+    })
+}
+
+fn local_lobby_machine_signature() -> String {
+    let mut parts = vec!["ScreenSelectMusic".to_string()];
+    let mut any_joined = false;
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if !profile::is_session_side_joined(side) {
+            continue;
+        }
+        any_joined = true;
+        let player_id = match side {
+            profile::PlayerSide::P1 => "P1",
+            profile::PlayerSide::P2 => "P2",
+        };
+        let player = profile::get_for_side(side);
+        parts.push(format!("{player_id}:{}", player.display_name));
+    }
+    if !any_joined {
+        let side = profile::get_session_player_side();
+        let player_id = match side {
+            profile::PlayerSide::P1 => "P1",
+            profile::PlayerSide::P2 => "P2",
+        };
+        let player = profile::get_for_side(side);
+        parts.push(format!("{player_id}:{}", player.display_name));
+    }
+    parts.join("|")
+}
+
+fn local_lobby_player_count() -> usize {
+    let mut count = 0usize;
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if profile::is_session_side_joined(side) {
+            count += 1;
+        }
+    }
+    if count == 0 { 1 } else { count }
+}
+
+fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
+    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    if !(p1_joined || p2_joined) {
+        return profile::get_session_player_side() == side;
+    }
+    match side {
+        profile::PlayerSide::P1 => p1_joined,
+        profile::PlayerSide::P2 => p2_joined,
+    }
+}
+
+fn set_lobby_notice(state: &mut State, text: impl Into<String>) {
+    state.lobby_notice_text = Some(text.into());
+    state.lobby_notice_time_left = 2.5;
+}
+
+fn clear_lobby_disconnect_holds(state: &mut State) {
+    state.lobby_disconnect_hold_p1 = None;
+    state.lobby_disconnect_hold_p2 = None;
+}
+
+fn set_lobby_disconnect_hold(
+    state: &mut State,
+    side: profile::PlayerSide,
+    started_at: Option<Instant>,
+) {
+    match side {
+        profile::PlayerSide::P1 if local_lobby_side_is_active(profile::PlayerSide::P1) => {
+            state.lobby_disconnect_hold_p1 = started_at;
+        }
+        profile::PlayerSide::P2 if local_lobby_side_is_active(profile::PlayerSide::P2) => {
+            state.lobby_disconnect_hold_p2 = started_at;
+        }
+        _ => {}
+    }
+}
+
+fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
+    [
+        state.lobby_disconnect_hold_p1,
+        state.lobby_disconnect_hold_p2,
+    ]
+    .into_iter()
+    .flatten()
+    .map(|started_at| started_at.elapsed().as_secs_f32())
+    .max_by(f32::total_cmp)
+}
+
 fn sync_chart_label(chart: &ChartData) -> String {
     if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.description.trim().is_empty() {
         format!("{} ({})", chart.difficulty, chart.description)
@@ -4246,6 +4524,297 @@ pub(crate) fn selected_chart_ix_for_sync(
     let standard = standard_chart_indices(song, chart_type);
     let edits = edit_chart_indices_sorted(song, chart_type);
     chart_ix_for_steps_index(&standard, steps_index, edits.as_slice())
+}
+
+fn build_local_lobby_song_info(
+    state: &State,
+) -> Option<crate::game::online::lobbies::LobbySongInfo> {
+    let song = selected_song_arc(state)?;
+    let song_path = lobby_song_path(song.as_ref())?;
+    let chart_type = profile::get_session_play_style().chart_type();
+    let chart = chart_for_steps_index(
+        song.as_ref(),
+        chart_type,
+        selected_steps_index_for_sync(state),
+    )?;
+    Some(crate::game::online::lobbies::LobbySongInfo {
+        song_path,
+        title: Some(song.display_full_title(false)),
+        artist: Some(song.artist.clone()),
+        song_length_seconds: Some(song.music_length_seconds),
+        chart_hash: Some(chart.short_hash.clone()),
+        chart_type: Some(chart.chart_type.clone()),
+        chart_label: Some(sync_chart_label(chart)),
+        rate: Some(profile::get_session_music_rate()),
+    })
+}
+
+fn lobby_song_signature(song_info: &crate::game::online::lobbies::LobbySongInfo) -> String {
+    let rate_bits = song_info.rate.unwrap_or(1.0).to_bits();
+    format!(
+        "{}|{}|{}|{}",
+        normalize_lobby_song_path(song_info.song_path.as_str()),
+        song_info.chart_hash.as_deref().unwrap_or(""),
+        song_info.chart_type.as_deref().unwrap_or(""),
+        rate_bits,
+    )
+}
+
+fn lobby_song_matches_remote_selection(
+    local_song_info: &crate::game::online::lobbies::LobbySongInfo,
+    remote_song_info: &crate::game::online::lobbies::LobbySongInfo,
+) -> bool {
+    if normalize_lobby_song_path(local_song_info.song_path.as_str())
+        != normalize_lobby_song_path(remote_song_info.song_path.as_str())
+    {
+        return false;
+    }
+
+    if let Some(remote_chart_hash) = remote_song_info
+        .chart_hash
+        .as_deref()
+        .filter(|chart_hash| !chart_hash.is_empty())
+        && local_song_info.chart_hash.as_deref() != Some(remote_chart_hash)
+    {
+        return false;
+    }
+
+    if let Some(remote_chart_type) = remote_song_info
+        .chart_type
+        .as_deref()
+        .map(str::trim)
+        .filter(|chart_type| !chart_type.is_empty())
+        && !local_song_info
+            .chart_type
+            .as_deref()
+            .is_some_and(|chart_type| chart_type.eq_ignore_ascii_case(remote_chart_type))
+    {
+        return false;
+    }
+
+    if let Some(remote_rate) = remote_song_info
+        .rate
+        .filter(|rate| rate.is_finite() && *rate > 0.0)
+        && !local_song_info
+            .rate
+            .is_some_and(|local_rate| (local_rate - remote_rate).abs() < 0.0005)
+    {
+        return false;
+    }
+
+    true
+}
+
+fn apply_remote_lobby_song_selection(
+    state: &mut State,
+    song_info: &crate::game::online::lobbies::LobbySongInfo,
+) -> bool {
+    let Some(target_song) = find_song_by_lobby_path(state, song_info.song_path.as_str()) else {
+        return false;
+    };
+
+    let old_song_path = selected_song_arc(state).and_then(|song| lobby_song_path(song.as_ref()));
+    let old_rate = profile::get_session_music_rate();
+    focus_song_from_search(state, &target_song);
+
+    let target_chart_type = profile::get_session_play_style().chart_type();
+    if let Some(chart_hash) = song_info.chart_hash.as_deref()
+        && let Some(index) =
+            steps_index_for_chart_hash(target_song.as_ref(), target_chart_type, chart_hash)
+    {
+        set_selected_steps_index_for_sync(state, index);
+    } else if let Some(index) = best_steps_index(
+        target_song.as_ref(),
+        target_chart_type,
+        preferred_steps_index_for_sync(state),
+    ) {
+        set_selected_steps_index_for_sync(state, index);
+    }
+
+    let mut rate_changed = false;
+    if let Some(rate) = song_info
+        .rate
+        .filter(|rate| rate.is_finite() && *rate > 0.0)
+    {
+        let rate = rate.clamp(0.5, 3.0);
+        if (rate - old_rate).abs() >= 0.0005 {
+            profile::set_session_music_rate(rate);
+            rate_changed = true;
+        }
+    }
+
+    state.prev_selected_index = state.selected_index;
+    state.time_since_selection_change = 0.0;
+    state.wheel_offset_from_selection = 0.0;
+    state.step_artist_cycle_base = state.session_elapsed;
+    state.last_requested_banner_path = None;
+    state.last_requested_cdtitle_path = None;
+    state.cdtitle_spin_elapsed = 0.0;
+    state.cdtitle_anim_elapsed = 0.0;
+    state.last_requested_chart_hash = None;
+    state.last_requested_chart_hash_p2 = None;
+
+    if rate_changed || old_song_path != lobby_song_path(target_song.as_ref()) {
+        clear_preview(state);
+    }
+
+    true
+}
+
+fn publish_lobby_confirmed_song_selection(state: &mut State) {
+    let snapshot = crate::game::online::lobbies::snapshot();
+    let Some(joined) = snapshot.joined_lobby.as_ref() else {
+        return;
+    };
+    if joined.players.len() <= local_lobby_player_count() {
+        return;
+    }
+    if !matches!(
+        snapshot.connection,
+        crate::game::online::lobbies::ConnectionState::Connected
+    ) {
+        return;
+    }
+
+    let Some(song_info) = build_local_lobby_song_info(state) else {
+        return;
+    };
+    let local_sig = lobby_song_signature(&song_info);
+    state.lobby_last_observed_local_song_sig = Some(local_sig.clone());
+
+    if joined.song_info.as_ref().is_some_and(|remote_song_info| {
+        lobby_song_matches_remote_selection(&song_info, remote_song_info)
+    }) {
+        state.lobby_last_published_song_sig = Some(local_sig);
+        return;
+    }
+
+    crate::game::online::lobbies::select_song(song_info);
+    state.lobby_last_published_song_sig = Some(local_sig);
+}
+
+fn sync_lobby_select_music(state: &mut State) {
+    let snapshot = crate::game::online::lobbies::snapshot();
+    let Some(joined) = snapshot.joined_lobby.as_ref() else {
+        state.lobby_last_joined_code = None;
+        state.lobby_last_published_machine_sig = None;
+        state.lobby_last_published_song_sig = None;
+        state.lobby_last_observed_local_song_sig = None;
+        state.lobby_last_applied_remote_song_sig = None;
+        return;
+    };
+
+    if state.lobby_last_joined_code.as_deref() != Some(joined.code.as_str()) {
+        state.lobby_last_joined_code = Some(joined.code.clone());
+        state.lobby_last_published_machine_sig = None;
+        state.lobby_last_published_song_sig = None;
+        state.lobby_last_observed_local_song_sig =
+            build_local_lobby_song_info(state).map(|song_info| lobby_song_signature(&song_info));
+        state.lobby_last_applied_remote_song_sig = None;
+    }
+
+    if !matches!(
+        snapshot.connection,
+        crate::game::online::lobbies::ConnectionState::Connected
+    ) {
+        state.lobby_last_published_machine_sig = None;
+        state.lobby_last_published_song_sig = None;
+        return;
+    }
+
+    // Always republish SelectMusic presence here. The online layer already dedupes
+    // identical machine-state payloads, and SelectMusic can be re-entered multiple
+    // times during a session while this screen state persists locally.
+    let machine_sig = local_lobby_machine_signature();
+    crate::game::online::lobbies::update_machine_state("ScreenSelectMusic", true);
+    state.lobby_last_published_machine_sig = Some(machine_sig);
+
+    if let Some(song_info) = joined.song_info.as_ref() {
+        let remote_sig = lobby_song_signature(song_info);
+        if state.lobby_last_applied_remote_song_sig.as_deref() != Some(remote_sig.as_str()) {
+            if apply_remote_lobby_song_selection(state, song_info) {
+                state.lobby_last_observed_local_song_sig = build_local_lobby_song_info(state)
+                    .map(|song_info| lobby_song_signature(&song_info));
+            }
+            state.lobby_last_applied_remote_song_sig = Some(remote_sig);
+        }
+    }
+
+    let remote_song_info = joined.song_info.as_ref();
+    if let Some(song_info) = build_local_lobby_song_info(state) {
+        let local_sig = lobby_song_signature(&song_info);
+        state.lobby_last_observed_local_song_sig = Some(local_sig.clone());
+        if remote_song_info.is_some_and(|remote_song_info| {
+            lobby_song_matches_remote_selection(&song_info, remote_song_info)
+        }) {
+            state.lobby_last_published_song_sig = Some(local_sig);
+        }
+    } else {
+        state.lobby_last_observed_local_song_sig = None;
+        state.lobby_last_published_song_sig = None;
+    }
+}
+
+fn select_music_lobby_lock_text() -> Option<String> {
+    let snapshot = crate::game::online::lobbies::snapshot();
+    let joined = snapshot.joined_lobby.as_ref()?;
+    if joined.players.len() <= local_lobby_player_count() {
+        return None;
+    }
+    if let Some(text) = crate::game::online::lobbies::reconnect_status_text() {
+        return Some(text);
+    }
+
+    let any_in_gameplay = joined
+        .players
+        .iter()
+        .any(|player| player.screen_name.eq_ignore_ascii_case("ScreenGameplay"));
+    if any_in_gameplay {
+        return Some("Waiting for players to finish gameplay...".to_string());
+    }
+
+    let any_in_eval = joined.players.iter().any(|player| {
+        player
+            .screen_name
+            .eq_ignore_ascii_case("ScreenEvaluationStage")
+    });
+    let all_in_select_music = joined
+        .players
+        .iter()
+        .all(|player| player.screen_name.eq_ignore_ascii_case("ScreenSelectMusic"));
+
+    if joined.song_info.is_some() && !any_in_eval {
+        return None;
+    }
+    if all_in_select_music {
+        return None;
+    }
+    if any_in_eval {
+        return Some("Waiting for players to finish evaluation...".to_string());
+    }
+
+    Some("Waiting for players to sync screens...".to_string())
+}
+
+fn select_music_lobby_status_text(state: &State) -> Option<String> {
+    if let Some(text) = state.lobby_notice_text.clone() {
+        return Some(text);
+    }
+    let mut text = select_music_lobby_lock_text()?;
+    let prompt = if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
+        let remaining =
+            (crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
+        let remaining = remaining.max(0);
+        format!(
+            "Continue holding &START; for {remaining} more second{} to disconnect...",
+            if remaining == 1 { "" } else { "s" }
+        )
+    } else {
+        "Hold &START; to disconnect from the lobby.".to_string()
+    };
+    text.push('\n');
+    text.push_str(prompt.as_str());
+    Some(text)
 }
 
 #[inline(always)]
@@ -4789,6 +5358,11 @@ fn sort_menu_activate(state: &mut State) -> ScreenAction {
             start_reload_songs_and_courses(state);
             ScreenAction::None
         }
+        sort_menu::Action::ShowLobbies => {
+            hide_sort_menu(state);
+            show_lobby_overlay(state);
+            ScreenAction::None
+        }
         sort_menu::Action::ViewDownloads => {
             hide_sort_menu(state);
             show_downloads_overlay(state);
@@ -5258,9 +5832,9 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
         audio::play_sfx("assets/sounds/expand.ogg");
         return ScreenAction::None;
     }
-    match state.entries.get(state.selected_index) {
+    match state.entries.get(state.selected_index).cloned() {
         Some(MusicWheelEntry::Song(song)) => {
-            let song = song.clone();
+            publish_lobby_confirmed_song_selection(state);
             audio::play_sfx("assets/sounds/start.ogg");
             // ITGmania parity: force sample preview to start on selection finalize.
             let cfg = config::get();
@@ -5340,6 +5914,13 @@ pub fn handle_raw_key_event(
         return ScreenAction::None;
     }
     if state.profile_switch_overlay.is_some() {
+        return ScreenAction::None;
+    }
+    if !matches!(state.lobby_overlay, lobby_overlay::OverlayState::Hidden) {
+        return handle_lobby_overlay_raw_key(state, key, text);
+    }
+
+    if select_music_lobby_lock_text().is_some() {
         return ScreenAction::None;
     }
 
@@ -5454,6 +6035,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return handle_song_search_input(state, ev);
     }
 
+    if !matches!(state.lobby_overlay, lobby_overlay::OverlayState::Hidden) {
+        return handle_lobby_overlay_input(state, ev);
+    }
+
     if !matches!(
         state.pack_sync_overlay,
         crate::screens::pack_sync::OverlayState::Hidden
@@ -5473,6 +6058,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     if state.profile_switch_overlay.is_some() {
         return handle_profile_switch_overlay_input(state, ev);
+    }
+
+    if select_music_lobby_lock_text().is_some() {
+        match ev.action {
+            VirtualAction::p1_start => {
+                if ev.pressed {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, Some(ev.timestamp));
+                } else {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, None);
+                }
+            }
+            VirtualAction::p2_start => {
+                if ev.pressed {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, Some(ev.timestamp));
+                } else {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, None);
+                }
+            }
+            _ => {}
+        }
+        return ScreenAction::None;
     }
 
     if state.exit_prompt != ExitPromptState::None {
@@ -5608,6 +6214,26 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 }
 
 pub fn update(state: &mut State, dt: f32) -> ScreenAction {
+    crate::game::online::lobbies::poll_reconnect();
+
+    if state.lobby_notice_time_left > 0.0 {
+        state.lobby_notice_time_left = (state.lobby_notice_time_left - dt.max(0.0)).max(0.0);
+        if state.lobby_notice_time_left <= 0.0 {
+            state.lobby_notice_text = None;
+        }
+    }
+    if select_music_lobby_lock_text().is_some() {
+        if lobby_disconnect_hold_elapsed(state).is_some_and(|elapsed| {
+            elapsed >= crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
+        }) {
+            clear_lobby_disconnect_holds(state);
+            crate::game::online::lobbies::disconnect();
+            set_lobby_notice(state, "Disconnected from lobby.");
+        }
+    } else {
+        clear_lobby_disconnect_holds(state);
+    }
+
     if state.reload_ui.is_some() {
         let done = {
             let reload = state.reload_ui.as_mut().unwrap();
@@ -5625,6 +6251,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         update_overlay_nav_hold(state);
         return ScreenAction::None;
     }
+    lobby_overlay::update_overlay(&mut state.lobby_overlay, dt);
     if pack_sync::poll(state) {
         return ScreenAction::None;
     }
@@ -5769,6 +6396,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             play_style == profile::PlayStyle::Versus,
         );
     }
+
+    sync_lobby_select_music(state);
 
     let overlays_block_delayed_updates = state.sort_menu != sort_menu::State::Hidden
         || !matches!(
@@ -7521,6 +8150,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         ));
         return actors;
     }
+    if let Some(lobby_overlay) =
+        lobby_overlay::build_overlay(&state.lobby_overlay, state.active_color_index)
+    {
+        actors.extend(lobby_overlay);
+        return actors;
+    }
+
+    let lobby_snapshot = crate::game::online::lobbies::snapshot();
+    if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
+        actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
+            screen_name: "ScreenSelectMusic",
+            joined,
+            active_color_index: state.active_color_index,
+            x: screen_width() - 304.0,
+            y: 72.0,
+            width: 288.0,
+            z: 1288,
+            show_song_info: true,
+        }));
+    }
 
     if let sort_menu::State::Visible {
         page,
@@ -7544,6 +8193,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         sort_menu::build_downloads_overlay(&state.downloads_overlay, state.active_color_index)
     {
         actors.extend(downloads_overlay);
+    }
+
+    let lobby_status_text = select_music_lobby_status_text(state);
+    if let Some(text) = lobby_status_text {
+        actors.push(act!(text:
+            font("miso"):
+            settext(text):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_height() - 78.0):
+            zoom(0.9):
+            diffuse(1.0, 0.92, 0.35, 1.0):
+            z(1300):
+            horizalign(center)
+        ));
     }
 
     // Simply Love ScreenSelectMusic out transition: "Press &START; for options"

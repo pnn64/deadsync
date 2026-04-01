@@ -3687,7 +3687,9 @@ fn itg_find_texture_with_prefix(
 }
 
 fn itg_texture_key(path: &Path) -> Option<String> {
-    let rel = path.strip_prefix("assets").ok()?;
+    let rel = dirs::app_dirs()
+        .strip_asset_prefix(path)
+        .or_else(|| path.strip_prefix("assets").ok())?;
     let mut key = rel.to_string_lossy().replace('\\', "/");
     while key.starts_with('/') {
         key.remove(0);

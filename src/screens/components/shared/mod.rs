@@ -3,6 +3,7 @@ pub mod gamepad_overlay;
 pub mod gs_scorebox;
 pub mod heart_bg;
 pub mod loading_bar;
+pub mod lobby_hud;
 pub mod mode_pads;
 pub mod noteskin_model;
 pub mod pad_display;

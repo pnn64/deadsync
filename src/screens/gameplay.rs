@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::engine::gfx::{BlendMode, MeshMode};
-use crate::engine::input::InputEvent;
+use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
@@ -12,11 +12,13 @@ use crate::engine::space::{screen_center_x, screen_center_y, screen_height, scre
 use crate::game::profile;
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::banner as shared_banner;
+use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
+use std::time::Instant;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
@@ -46,11 +48,315 @@ const fn map_gameplay_action(action: GameplayAction) -> ScreenAction {
     }
 }
 
+fn local_lobby_side_is_active(side: profile::PlayerSide) -> bool {
+    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    if !(p1_joined || p2_joined) {
+        return profile::get_session_player_side() == side;
+    }
+    match side {
+        profile::PlayerSide::P1 => p1_joined,
+        profile::PlayerSide::P2 => p2_joined,
+    }
+}
+
+fn local_lobby_player_count() -> usize {
+    let mut count = 0usize;
+    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+        if local_lobby_side_is_active(side) {
+            count += 1;
+        }
+    }
+    count.max(1)
+}
+
+fn gameplay_player_index_for_side(state: &State, side: profile::PlayerSide) -> Option<usize> {
+    if state.num_players >= 2 {
+        return Some(match side {
+            profile::PlayerSide::P1 => 0,
+            profile::PlayerSide::P2 => 1,
+        });
+    }
+    if state.num_players == 0 || profile::get_session_player_side() != side {
+        return None;
+    }
+    Some(0)
+}
+
+fn gameplay_lobby_player_stats(
+    state: &State,
+    side: profile::PlayerSide,
+) -> Option<crate::game::online::lobbies::MachinePlayerStats> {
+    let player_idx = gameplay_player_index_for_side(state, side)?;
+    let ex_data = crate::game::gameplay::display_ex_score_data(state, player_idx);
+    let judgments = crate::game::online::lobbies::LobbyJudgments {
+        fantastic_plus: ex_data.counts.w0,
+        fantastics: ex_data.counts.w1,
+        excellents: ex_data.counts.w2,
+        greats: ex_data.counts.w3,
+        decents: ex_data.counts.w4,
+        way_offs: ex_data.counts.w5,
+        misses: ex_data.counts.miss,
+        total_steps: ex_data.total_steps,
+        mines_hit: ex_data.mines_hit,
+        total_mines: ex_data.mines_total,
+        holds_held: ex_data.holds_held,
+        total_holds: ex_data.holds_total,
+        rolls_held: ex_data.rolls_held,
+        total_rolls: ex_data.rolls_total,
+    };
+    Some(crate::game::online::lobbies::MachinePlayerStats {
+        judgments: Some(judgments),
+        score: Some(
+            (crate::game::gameplay::display_itg_score_percent(state, player_idx) * 100.0) as f32,
+        ),
+        ex_score: Some(crate::game::gameplay::display_ex_score_percent(state, player_idx) as f32),
+    })
+}
+
+fn local_lobby_ready_tuple(state: &State) -> (bool, bool) {
+    (
+        local_lobby_side_is_active(profile::PlayerSide::P1) && state.lobby_ready_p1,
+        local_lobby_side_is_active(profile::PlayerSide::P2) && state.lobby_ready_p2,
+    )
+}
+
+fn local_lobby_players_ready(state: &State) -> bool {
+    let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
+    let mut any_active = false;
+    let mut all_ready = true;
+    if local_lobby_side_is_active(profile::PlayerSide::P1) {
+        any_active = true;
+        all_ready &= p1_ready;
+    }
+    if local_lobby_side_is_active(profile::PlayerSide::P2) {
+        any_active = true;
+        all_ready &= p2_ready;
+    }
+    any_active && all_ready
+}
+
+fn set_all_local_lobby_players_ready(state: &mut State, ready: bool) {
+    state.lobby_ready_p1 = local_lobby_side_is_active(profile::PlayerSide::P1) && ready;
+    state.lobby_ready_p2 = local_lobby_side_is_active(profile::PlayerSide::P2) && ready;
+}
+
+fn set_local_lobby_player_ready(state: &mut State, side: profile::PlayerSide) {
+    match side {
+        profile::PlayerSide::P1 if local_lobby_side_is_active(profile::PlayerSide::P1) => {
+            state.lobby_ready_p1 = true;
+        }
+        profile::PlayerSide::P2 if local_lobby_side_is_active(profile::PlayerSide::P2) => {
+            state.lobby_ready_p2 = true;
+        }
+        _ => {}
+    }
+}
+
+fn clear_lobby_disconnect_holds(state: &mut State) {
+    state.lobby_disconnect_hold_p1 = None;
+    state.lobby_disconnect_hold_p2 = None;
+}
+
+fn set_lobby_disconnect_hold(
+    state: &mut State,
+    side: profile::PlayerSide,
+    started_at: Option<Instant>,
+) {
+    match side {
+        profile::PlayerSide::P1 if local_lobby_side_is_active(profile::PlayerSide::P1) => {
+            state.lobby_disconnect_hold_p1 = started_at;
+        }
+        profile::PlayerSide::P2 if local_lobby_side_is_active(profile::PlayerSide::P2) => {
+            state.lobby_disconnect_hold_p2 = started_at;
+        }
+        _ => {}
+    }
+}
+
+fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
+    [
+        state.lobby_disconnect_hold_p1,
+        state.lobby_disconnect_hold_p2,
+    ]
+    .into_iter()
+    .flatten()
+    .map(|started_at| started_at.elapsed().as_secs_f32())
+    .max_by(f32::total_cmp)
+}
+
+fn gameplay_requires_lobby_wait() -> bool {
+    let snapshot = crate::game::online::lobbies::snapshot();
+    let Some(joined) = snapshot.joined_lobby.as_ref() else {
+        return false;
+    };
+    joined.players.is_empty() || joined.players.len() > local_lobby_player_count()
+}
+
+fn gameplay_lobby_screen_suffix(screen_name: &str) -> &'static str {
+    if screen_name.eq_ignore_ascii_case("ScreenGameplay") {
+        ""
+    } else if screen_name.eq_ignore_ascii_case("ScreenSelectMusic") {
+        "  (select music)"
+    } else if screen_name.eq_ignore_ascii_case("ScreenEvaluationStage") {
+        "  (evaluation)"
+    } else if screen_name.eq_ignore_ascii_case("NoScreen") {
+        "  (connecting)"
+    } else {
+        "  (other screen)"
+    }
+}
+
+fn gameplay_lobby_player_status_line(
+    idx: usize,
+    player: &crate::game::online::lobbies::LobbyPlayer,
+) -> String {
+    let status = if player.screen_name.eq_ignore_ascii_case("ScreenGameplay") {
+        if player.ready {
+            "  ✔"
+        } else {
+            "  (not ready)"
+        }
+    } else {
+        gameplay_lobby_screen_suffix(player.screen_name.as_str())
+    };
+    format!("{}. {}{}", idx + 1, player.label, status)
+}
+
+fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
+    if state.lobby_music_started {
+        return None;
+    }
+
+    let snapshot = crate::game::online::lobbies::snapshot();
+    let joined = snapshot.joined_lobby.as_ref()?;
+    if !(joined.players.is_empty() || joined.players.len() > local_lobby_player_count()) {
+        return None;
+    }
+    if let Some(text) = crate::game::online::lobbies::reconnect_status_text() {
+        return Some(text);
+    }
+
+    let all_in_gameplay = !joined.players.is_empty()
+        && joined
+            .players
+            .iter()
+            .all(|player| player.screen_name.eq_ignore_ascii_case("ScreenGameplay"));
+    let all_ready = !joined.players.is_empty() && joined.players.iter().all(|player| player.ready);
+    if all_in_gameplay && all_ready {
+        return None;
+    }
+
+    let mut message = if all_in_gameplay {
+        "Waiting for players to ready up...".to_string()
+    } else {
+        "Waiting for players to sync screens...".to_string()
+    };
+    if !local_lobby_players_ready(state) {
+        message.push_str("\nPress START to ready up.");
+    }
+    if !joined.players.is_empty() {
+        message.push_str("\n\n");
+        for (idx, player) in joined.players.iter().enumerate() {
+            if idx > 0 {
+                message.push('\n');
+            }
+            message.push_str(&gameplay_lobby_player_status_line(idx, player));
+        }
+    }
+    Some(message)
+}
+
+fn gameplay_lobby_disconnect_prompt(state: &State) -> Option<String> {
+    gameplay_lobby_wait_text(state)?;
+    let Some(elapsed) = lobby_disconnect_hold_elapsed(state) else {
+        return Some("Hold &START; to disconnect from the lobby.".to_string());
+    };
+    let remaining =
+        (crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
+    let remaining = remaining.max(0);
+    Some(format!(
+        "Continue holding &START; for {remaining} more second{} to disconnect...",
+        if remaining == 1 { "" } else { "s" }
+    ))
+}
+
+pub fn on_enter(state: &mut State) {
+    state.lobby_music_started = false;
+    set_all_local_lobby_players_ready(state, false);
+    clear_lobby_disconnect_holds(state);
+    if gameplay_requires_lobby_wait() {
+        return;
+    }
+
+    set_all_local_lobby_players_ready(state, true);
+    crate::game::gameplay::start_stage_music(state);
+    state.lobby_music_started = true;
+}
+
 pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
+    crate::game::online::lobbies::poll_reconnect();
+
+    if !state.lobby_music_started {
+        if lobby_disconnect_hold_elapsed(state).is_some_and(|elapsed| {
+            elapsed >= crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
+        }) {
+            clear_lobby_disconnect_holds(state);
+            crate::game::online::lobbies::disconnect();
+        }
+
+        let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
+        crate::game::online::lobbies::update_machine_state_sides_with_stats(
+            "ScreenGameplay",
+            p1_ready,
+            p2_ready,
+            gameplay_lobby_player_stats(state, profile::PlayerSide::P1),
+            gameplay_lobby_player_stats(state, profile::PlayerSide::P2),
+        );
+
+        if gameplay_lobby_wait_text(state).is_some() {
+            return ScreenAction::None;
+        }
+
+        clear_lobby_disconnect_holds(state);
+        set_all_local_lobby_players_ready(state, true);
+        crate::game::gameplay::start_stage_music(state);
+        state.lobby_music_started = true;
+    }
+    let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
+    crate::game::online::lobbies::update_machine_state_sides_with_stats(
+        "ScreenGameplay",
+        p1_ready,
+        p2_ready,
+        gameplay_lobby_player_stats(state, profile::PlayerSide::P1),
+        gameplay_lobby_player_stats(state, profile::PlayerSide::P2),
+    );
     map_gameplay_action(gameplay_update(state, delta_time))
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if gameplay_lobby_wait_text(state).is_some() {
+        match ev.action {
+            VirtualAction::p1_start => {
+                if ev.pressed {
+                    set_local_lobby_player_ready(state, profile::PlayerSide::P1);
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, Some(ev.timestamp));
+                } else {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P1, None);
+                }
+            }
+            VirtualAction::p2_start => {
+                if ev.pressed {
+                    set_local_lobby_player_ready(state, profile::PlayerSide::P2);
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, Some(ev.timestamp));
+                } else {
+                    set_lobby_disconnect_hold(state, profile::PlayerSide::P2, None);
+                }
+            }
+            _ => {}
+        }
+        return ScreenAction::None;
+    }
     map_gameplay_action(gameplay_handle_input(state, ev))
 }
 
@@ -258,6 +564,12 @@ pub fn prewarm_text_layout(
     cache.prewarm_text(fonts, "miso", "AutoSync Machine", None);
     cache.prewarm_text(fonts, "miso", "Continue holding &START; to give up", None);
     cache.prewarm_text(fonts, "miso", "Continue holding &BACK; to give up", None);
+    cache.prewarm_text(
+        fonts,
+        "miso",
+        "Hold &START; to disconnect from the lobby.",
+        None,
+    );
     cache.prewarm_text(fonts, "miso", "Don't go back!", None);
     if let Some(text) = state.replay_status_text.as_ref() {
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
@@ -496,39 +808,57 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     // Hold START/BACK prompt (Simply Love parity: ScreenGameplay debug text).
     {
+        if let Some(lock_text) = gameplay_lobby_wait_text(state) {
+            actors.push(act!(text:
+                font("miso"):
+                settext(lock_text):
+                align(0.5, 1.0):
+                xy(screen_center_x(), screen_height() - 40.0):
+                zoom(0.42):
+                shadowlength(2.0):
+                diffuse(1.0, 0.92, 0.35, 1.0):
+                horizalign(center):
+                z(1000)
+            ));
+        }
+
         const HOLD_FADE_IN_S: f32 = 1.0 / 8.0;
         const ABORT_FADE_OUT_S: f32 = 0.5;
 
         let y = screen_height() - 116.0;
-        let msg =
-            if let (Some(key), Some(start)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
-                let s = match key {
-                    crate::game::gameplay::HoldToExitKey::Start => {
-                        Some("Continue holding &START; to give up")
-                    }
-                    crate::game::gameplay::HoldToExitKey::Back => {
-                        Some("Continue holding &BACK; to give up")
-                    }
-                };
-                let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
-                s.map(|text| (text, alpha))
-            } else if let Some(exit) = &state.exit_transition {
-                let t = exit.started_at.elapsed().as_secs_f32();
-                match exit.kind {
-                    crate::game::gameplay::ExitTransitionKind::Out => {
-                        let alpha = (1.0 - t / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-                        Some(("Continue holding &START; to give up", alpha))
-                    }
-                    crate::game::gameplay::ExitTransitionKind::Cancel => {
-                        Some(("Continue holding &BACK; to give up", 1.0))
-                    }
+        let msg: Option<(String, f32)> = if let Some(prompt) =
+            gameplay_lobby_disconnect_prompt(state)
+        {
+            Some((prompt, 1.0))
+        } else if let (Some(key), Some(start)) = (state.hold_to_exit_key, state.hold_to_exit_start)
+        {
+            let s = match key {
+                crate::game::gameplay::HoldToExitKey::Start => {
+                    Some("Continue holding &START; to give up")
                 }
-            } else if let Some(at) = state.hold_to_exit_aborted_at {
-                let alpha = (1.0 - at.elapsed().as_secs_f32() / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
-                Some(("Don't go back!", alpha))
-            } else {
-                None
+                crate::game::gameplay::HoldToExitKey::Back => {
+                    Some("Continue holding &BACK; to give up")
+                }
             };
+            let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
+            s.map(|text| (text.to_string(), alpha))
+        } else if let Some(exit) = &state.exit_transition {
+            let t = exit.started_at.elapsed().as_secs_f32();
+            match exit.kind {
+                crate::game::gameplay::ExitTransitionKind::Out => {
+                    let alpha = (1.0 - t / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
+                    Some(("Continue holding &START; to give up".to_string(), alpha))
+                }
+                crate::game::gameplay::ExitTransitionKind::Cancel => {
+                    Some(("Continue holding &BACK; to give up".to_string(), 1.0))
+                }
+            }
+        } else if let Some(at) = state.hold_to_exit_aborted_at {
+            let alpha = (1.0 - at.elapsed().as_secs_f32() / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
+            Some(("Don't go back!".to_string(), alpha))
+        } else {
+            None
+        };
 
         if let Some((text, alpha)) = msg
             && alpha > 0.0
@@ -544,6 +874,20 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 z(1000)
             ));
         }
+    }
+
+    let lobby_snapshot = crate::game::online::lobbies::snapshot();
+    if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
+        actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
+            screen_name: "ScreenGameplay",
+            joined,
+            active_color_index: state.active_color_index,
+            x: screen_width() - 280.0,
+            y: 70.0,
+            width: 264.0,
+            z: 995,
+            show_song_info: false,
+        }));
     }
 
     // Fade-to-black when giving up / backing out (Simply Love parity).

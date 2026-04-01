@@ -5401,8 +5401,8 @@ impl App {
                         .cloned(),
                 ));
                 self.state.screens.gameplay_state = Some(gs);
-                if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
-                    crate::game::gameplay::start_stage_music(gs);
+                if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+                    crate::screens::gameplay::on_enter(gs);
                 }
                 if let Some(course) = self.state.session.course_run.as_mut() {
                     course.next_stage_index = course.next_stage_index.saturating_add(1);
