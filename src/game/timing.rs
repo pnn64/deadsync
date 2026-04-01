@@ -112,6 +112,81 @@ pub fn classify_offset_s(offset_s: f32, profile: &TimingProfile) -> (JudgeGrade,
 }
 
 #[inline(always)]
+pub fn classify_offset_s_with_disabled_windows(
+    offset_s: f32,
+    profile: &TimingProfile,
+    disabled_windows: &[bool; 5],
+) -> Option<(JudgeGrade, TimingWindow)> {
+    let abs = offset_s.abs();
+    if !disabled_windows[0]
+        && let Some(w0) = profile.fa_plus_window_s
+        && abs <= w0
+    {
+        return Some((JudgeGrade::Fantastic, TimingWindow::W0));
+    }
+
+    let checks = [
+        (
+            disabled_windows[0],
+            profile.windows_s[0],
+            JudgeGrade::Fantastic,
+            TimingWindow::W1,
+        ),
+        (
+            disabled_windows[1],
+            profile.windows_s[1],
+            JudgeGrade::Excellent,
+            TimingWindow::W2,
+        ),
+        (
+            disabled_windows[2],
+            profile.windows_s[2],
+            JudgeGrade::Great,
+            TimingWindow::W3,
+        ),
+        (
+            disabled_windows[3],
+            profile.windows_s[3],
+            JudgeGrade::Decent,
+            TimingWindow::W4,
+        ),
+        (
+            disabled_windows[4],
+            profile.windows_s[4],
+            JudgeGrade::WayOff,
+            TimingWindow::W5,
+        ),
+    ];
+    for (disabled, window_s, grade, window) in checks {
+        if !disabled && abs <= window_s {
+            return Some((grade, window));
+        }
+    }
+    None
+}
+
+#[inline(always)]
+pub fn largest_enabled_tap_window_s(
+    profile: &TimingProfile,
+    disabled_windows: &[bool; 5],
+) -> Option<f32> {
+    let windows = profile.windows_s;
+    let ordered = [
+        (disabled_windows[4], windows[4]),
+        (disabled_windows[3], windows[3]),
+        (disabled_windows[2], windows[2]),
+        (disabled_windows[1], windows[1]),
+        (disabled_windows[0], windows[0]),
+    ];
+    for (disabled, window_s) in ordered {
+        if !disabled {
+            return Some(window_s);
+        }
+    }
+    None
+}
+
+#[inline(always)]
 pub fn note_row_to_beat(row: i32) -> f32 {
     row as f32 / ROWS_PER_BEAT as f32
 }
@@ -1671,5 +1746,36 @@ mod tests {
         assert!(!timing.is_warp_at_beat(14.0));
         assert!(timing.is_warp_at_beat(14.125));
         assert!(!timing.is_judgable_at_beat(14.125));
+    }
+
+    #[test]
+    fn disabled_top_windows_demote_perfect_hits_to_greats() {
+        let profile = TimingProfile::default_itg_with_fa_plus();
+        let disabled = [true, true, false, false, false];
+
+        let judged = classify_offset_s_with_disabled_windows(0.0, &profile, &disabled)
+            .expect("great window should still accept perfect offsets");
+
+        assert_eq!(judged, (JudgeGrade::Great, TimingWindow::W3));
+    }
+
+    #[test]
+    fn disabled_bottom_windows_turn_outer_w4_hits_into_misses() {
+        let profile = TimingProfile::default_itg_with_fa_plus();
+        let disabled = [false, false, false, true, true];
+        let offset = (profile.windows_s[2] + profile.windows_s[3]) * 0.5;
+
+        assert!(classify_offset_s_with_disabled_windows(offset, &profile, &disabled).is_none());
+    }
+
+    #[test]
+    fn largest_enabled_tap_window_tracks_disabled_way_offs() {
+        let profile = TimingProfile::default_itg_with_fa_plus();
+        let disabled = [false, false, false, false, true];
+
+        let largest =
+            largest_enabled_tap_window_s(&profile, &disabled).expect("great or better stays on");
+
+        assert!((largest - profile.windows_s[3]).abs() <= f32::EPSILON);
     }
 }

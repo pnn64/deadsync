@@ -15,7 +15,8 @@ use crate::game::parsing::noteskin::{self, ModelMeshCache, Noteskin, Style};
 use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::timing::{
-    BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile, classify_offset_s,
+    BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile,
+    classify_offset_s_with_disabled_windows, largest_enabled_tap_window_s,
 };
 use crate::game::{
     profile::{self, TimingTickMode as TickMode},
@@ -784,36 +785,16 @@ fn crossed_mine_bounds(mine_times: &[f32], prev_time: f32, current_time: f32) ->
 }
 
 #[inline(always)]
-fn collect_pressed_row_judge_indices(
-    notes: &[Note],
-    row_note_indices: &[usize; MAX_COLS],
+fn collect_edge_judge_indices(
     row_note_count: usize,
     lead_note_index: usize,
-    mut lane_is_down: impl FnMut(usize) -> bool,
 ) -> Option<([usize; MAX_COLS], usize)> {
     if row_note_count == 0 {
         return None;
     }
-    if row_note_count > 1 {
-        for &idx in &row_note_indices[..row_note_count] {
-            if !lane_is_down(notes[idx].column) {
-                return None;
-            }
-        }
-    }
-
     let mut judge_indices = [usize::MAX; MAX_COLS];
-    let mut judge_count = 0usize;
-    judge_indices[judge_count] = lead_note_index;
-    judge_count += 1;
-    for &idx in &row_note_indices[..row_note_count] {
-        if idx == lead_note_index {
-            continue;
-        }
-        judge_indices[judge_count] = idx;
-        judge_count += 1;
-    }
-    Some((judge_indices, judge_count))
+    judge_indices[0] = lead_note_index;
+    Some((judge_indices, 1))
 }
 
 #[inline(always)]
@@ -3475,6 +3456,7 @@ pub struct ActiveComboMilestone {
 #[derive(Clone, Debug)]
 pub struct ActiveHold {
     pub note_index: usize,
+    pub start_time: f32,
     pub end_time: f32,
     pub note_type: NoteType,
     pub let_go: bool,
@@ -4399,6 +4381,9 @@ pub struct State {
 
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
+    pub tap_miss_held_window: Vec<bool>,
+    pending_missed_hold_feedback: Vec<bool>,
+    pending_missed_hold_indices: Vec<usize>,
 
     pub players: [PlayerRuntime; MAX_PLAYERS],
     pub hold_judgments: [Option<HoldJudgmentRenderInfo>; MAX_COLS],
@@ -7318,6 +7303,9 @@ pub fn init(
         tap_row_hold_roll_flags,
         decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
         hold_decay_active: vec![false; notes_len],
+        tap_miss_held_window: vec![false; notes_len],
+        pending_missed_hold_feedback: vec![false; notes_len],
+        pending_missed_hold_indices: Vec::new(),
         players,
         hold_judgments: Default::default(),
         is_in_freeze: false,
@@ -7653,6 +7641,47 @@ pub fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
         return 10.0;
     }
     default_fa_plus_window_s(state) * 1000.0
+}
+
+#[inline(always)]
+fn player_disabled_timing_windows(state: &State, player_idx: usize) -> [bool; 5] {
+    if player_idx >= state.num_players {
+        return profile::TimingWindowsOption::default().disabled_windows();
+    }
+    state.player_profiles[player_idx]
+        .timing_windows
+        .disabled_windows()
+}
+
+#[inline(always)]
+fn timing_profile_for_player(state: &State, player_idx: usize) -> TimingProfile {
+    let mut timing_profile = state.timing_profile;
+    timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player_idx));
+    timing_profile
+}
+
+#[inline(always)]
+fn player_largest_tap_window_s(state: &State, player_idx: usize) -> f32 {
+    let timing_profile = timing_profile_for_player(state, player_idx);
+    largest_enabled_tap_window_s(
+        &timing_profile,
+        &player_disabled_timing_windows(state, player_idx),
+    )
+    .unwrap_or(timing_profile.windows_s[2])
+}
+
+#[inline(always)]
+fn classify_player_tap_offset_s(
+    state: &State,
+    player_idx: usize,
+    offset_s: f32,
+) -> Option<(JudgeGrade, TimingWindow)> {
+    let timing_profile = timing_profile_for_player(state, player_idx);
+    classify_offset_s_with_disabled_windows(
+        offset_s,
+        &timing_profile,
+        &player_disabled_timing_windows(state, player_idx),
+    )
 }
 
 #[inline(always)]
@@ -8417,7 +8446,10 @@ fn refresh_roll_life_on_step(state: &mut State, column: usize) {
     let Some(active) = state.active_holds[column].as_mut() else {
         return;
     };
-    if !matches!(active.note_type, NoteType::Roll) || active.let_go {
+    if !matches!(active.note_type, NoteType::Roll)
+        || active.let_go
+        || state.current_music_time < active.start_time
+    {
         return;
     }
     let Some(note) = state.notes.get_mut(active.note_index) else {
@@ -8426,7 +8458,7 @@ fn refresh_roll_life_on_step(state: &mut State, column: usize) {
     let Some(hold) = note.hold.as_mut() else {
         return;
     };
-    if hold.result == Some(HoldResult::LetGo) {
+    if matches!(hold.result, Some(HoldResult::LetGo | HoldResult::Missed)) {
         return;
     }
     active.life = MAX_HOLD_LIFE;
@@ -8485,8 +8517,9 @@ fn update_active_holds(
                 };
                 let pressed = inputs[column];
                 active.is_pressed = pressed;
+                let body_started = current_time >= active.start_time;
 
-                if !active.let_go && active.life > 0.0 {
+                if body_started && !active.let_go && active.life > 0.0 {
                     advance_hold_last_held(
                         hold,
                         timing,
@@ -8496,7 +8529,7 @@ fn update_active_holds(
                     );
                 }
 
-                if !active.let_go {
+                if body_started && !active.let_go {
                     let window = match active.note_type {
                         NoteType::Hold => TIMING_WINDOW_SECONDS_HOLD,
                         NoteType::Roll => TIMING_WINDOW_SECONDS_ROLL,
@@ -8815,8 +8848,6 @@ fn render_provisional_early_rescore_feedback(
 }
 
 pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool {
-    let windows = state.timing_profile.windows_s;
-    let way_off_window = windows[4];
     let mine_window = state.timing_profile.mine_window_s;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
@@ -8830,6 +8861,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
     let (col_start, col_end) = player_col_range(state, player);
+    let way_off_window = player_largest_tap_window_s(state, player);
     let way_off_window_music = way_off_window * rate;
     let mine_window_music = mine_window * rate;
     let search_window_music = way_off_window_music.max(mine_window_music);
@@ -8904,28 +8936,22 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             };
             let row_rescore_track_count =
                 count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
-            let mut row_note_indices = [usize::MAX; MAX_COLS];
-            let mut row_note_count = 0usize;
-            for &idx in &row_entry.nonmine_note_indices {
-                let row_note = &state.notes[idx];
-                if row_note.column < col_start
-                    || row_note.column >= col_end
-                    || row_note.result.is_some()
-                    || row_note.note_type == NoteType::Lift
-                {
-                    continue;
-                }
-                if row_note_count < MAX_COLS {
-                    row_note_indices[row_note_count] = idx;
-                    row_note_count += 1;
-                }
-            }
-            if row_note_count == 0 {
-                return false;
-            }
-            let mut timing_profile = state.timing_profile;
-            timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
-            let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
+            let row_note_count = row_entry
+                .nonmine_note_indices
+                .iter()
+                .filter(|&&idx| {
+                    let row_note = &state.notes[idx];
+                    row_note.column >= col_start
+                        && row_note.column < col_end
+                        && row_note.result.is_none()
+                        && row_note.note_type != NoteType::Lift
+                })
+                .count();
+            let Some((grade, window)) =
+                classify_player_tap_offset_s(state, player, time_error_real)
+            else {
+                return mine_hit_on_press;
+            };
             let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
                 (
                     state.song_offset_seconds,
@@ -9000,6 +9026,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             }
                             state.active_holds[note_col] = Some(ActiveHold {
                                 note_index,
+                                start_time: row_note_time,
                                 end_time,
                                 note_type: state.notes[note_index].note_type,
                                 let_go: false,
@@ -9062,6 +9089,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     }
                     state.active_holds[note_col] = Some(ActiveHold {
                         note_index,
+                        start_time: row_note_time,
                         end_time,
                         note_type: state.notes[note_index].note_type,
                         let_go: false,
@@ -9072,13 +9100,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 return true;
             }
 
-            let Some((judge_indices, judge_count)) = collect_pressed_row_judge_indices(
-                &state.notes,
-                &row_note_indices,
-                row_note_count,
-                note_index,
-                |row_note_col| lane_is_pressed(state, row_note_col),
-            ) else {
+            let Some((judge_indices, judge_count)) =
+                collect_edge_judge_indices(row_note_count, note_index)
+            else {
                 return false;
             };
 
@@ -9087,6 +9111,10 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 let row_note_time = state.note_time_cache[idx];
                 let te_music = current_time - row_note_time;
                 let te_real = te_music / rate;
+                let Some((grade, window)) = classify_player_tap_offset_s(state, player, te_real)
+                else {
+                    continue;
+                };
                 let judgment = Judgment {
                     time_error_ms: te_real * 1000.0,
                     grade,
@@ -9126,6 +9154,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     }
                     state.active_holds[note_col] = Some(ActiveHold {
                         note_index: idx,
+                        start_time: row_note_time,
                         end_time,
                         note_type: state.notes[idx].note_type,
                         let_go: false,
@@ -9144,8 +9173,6 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
 /// Judge lift notes on button release. Mirrors tap judging's per-note path but
 /// only matches NoteType::Lift.
 pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool {
-    let windows = state.timing_profile.windows_s;
-    let way_off_window = windows[4];
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -9157,6 +9184,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
+    let way_off_window = player_largest_tap_window_s(state, player);
     let way_off_window_music = way_off_window * rate;
     let search_start_time = current_time - way_off_window_music;
     let search_end_time = current_time + way_off_window_music;
@@ -9201,9 +9229,9 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
         return false;
     }
 
-    let mut timing_profile = state.timing_profile;
-    timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player));
-    let (grade, window) = classify_offset_s(time_error_real, &timing_profile);
+    let Some((grade, window)) = classify_player_tap_offset_s(state, player, time_error_real) else {
+        return false;
+    };
     let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
         (
             state.song_offset_seconds,
@@ -10459,6 +10487,106 @@ fn decay_let_go_hold_life(state: &mut State) {
 }
 
 #[inline(always)]
+fn queue_missed_hold_feedback(state: &mut State, note_index: usize) {
+    if note_index >= state.pending_missed_hold_feedback.len()
+        || state.pending_missed_hold_feedback[note_index]
+    {
+        return;
+    }
+    state.pending_missed_hold_feedback[note_index] = true;
+    state.pending_missed_hold_indices.push(note_index);
+}
+
+#[inline(always)]
+fn emit_pending_missed_hold_feedback(state: &mut State, current_time: f32) {
+    let mut i = 0usize;
+    while i < state.pending_missed_hold_indices.len() {
+        let note_index = state.pending_missed_hold_indices[i];
+        let Some(end_time) = state.hold_end_time_cache.get(note_index).and_then(|t| *t) else {
+            state.pending_missed_hold_feedback[note_index] = false;
+            state.pending_missed_hold_indices.swap_remove(i);
+            continue;
+        };
+        if current_time < end_time {
+            i += 1;
+            continue;
+        }
+        state.pending_missed_hold_feedback[note_index] = false;
+        if let Some(note) = state.notes.get(note_index)
+            && note
+                .hold
+                .as_ref()
+                .is_some_and(|hold| hold.result == Some(HoldResult::Missed))
+        {
+            let column = note.column;
+            if column < state.num_cols {
+                state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
+                    result: HoldResult::Missed,
+                    triggered_at: Instant::now(),
+                });
+            }
+        }
+        state.pending_missed_hold_indices.swap_remove(i);
+    }
+}
+
+#[inline(always)]
+fn note_tracks_held_miss(note_type: NoteType) -> bool {
+    matches!(note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll)
+}
+
+#[inline(always)]
+fn track_held_miss_windows(state: &mut State, inputs: &[bool; MAX_COLS], music_time_sec: f32) {
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    for player in 0..state.num_players {
+        let largest_window = player_largest_tap_window_s(state, player);
+        if largest_window <= 0.0 {
+            continue;
+        }
+        let future_cutoff_time = music_time_sec + largest_window * rate;
+        let (col_start, col_end) = player_col_range(state, player);
+        let (note_start, note_end) = player_note_range(state, player);
+        let mut seen_tracks = [false; MAX_COLS];
+        let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
+        while cursor < note_end {
+            let note_time = state.note_time_cache[cursor];
+            if note_time > future_cutoff_time {
+                break;
+            }
+            let note = &state.notes[cursor];
+            if !note.can_be_judged
+                || note.result.is_some()
+                || note.column < col_start
+                || note.column >= col_end
+                || !note_tracks_held_miss(note.note_type)
+            {
+                cursor += 1;
+                continue;
+            }
+            let local_track = note.column - col_start;
+            if seen_tracks[local_track] {
+                cursor += 1;
+                continue;
+            }
+            let offset_s = ((note_time - music_time_sec) / rate).abs();
+            if offset_s > largest_window {
+                cursor += 1;
+                continue;
+            }
+            seen_tracks[local_track] = true;
+            if inputs[note.column] {
+                state.tap_miss_held_window[cursor] = true;
+            }
+            cursor += 1;
+        }
+    }
+}
+
+#[inline(always)]
 fn tick_visual_effects(state: &mut State, delta_time: f32) {
     for col in 0..state.num_cols {
         if lane_is_pressed(state, col) {
@@ -10671,14 +10799,13 @@ fn spawn_lookahead_arrows(state: &mut State, music_time_sec: f32) {
 
 #[inline(always)]
 fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
-    let way_off_window = state.timing_profile.windows_s[4];
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
         1.0
     };
-    let cutoff_time = way_off_window.mul_add(-rate, music_time_sec);
     for player in 0..state.num_players {
+        let cutoff_time = player_largest_tap_window_s(state, player).mul_add(-rate, music_time_sec);
         let (note_start, note_end) = player_note_range(state, player);
         let should_score_miss = state.score_missed_holds_rolls[player];
         let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
@@ -10701,7 +10828,11 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
             {
                 let time_err_music = music_time_sec - note_time;
                 let time_err_real = time_err_music / rate;
-                let miss_because_held = (col < state.num_cols) && lane_is_pressed(state, col);
+                let miss_because_held = state
+                    .tap_miss_held_window
+                    .get(cursor)
+                    .copied()
+                    .unwrap_or(false);
                 let miss = Judgment {
                     time_error_ms: time_err_real * 1000.0,
                     grade: JudgeGrade::Miss,
@@ -10711,12 +10842,16 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 let judgment = state.notes[cursor].early_result.clone().unwrap_or(miss);
                 let judgment_grade = judgment.grade;
                 let judgment_time_error_ms = judgment.time_error_ms;
+                let mut queue_missed_feedback = false;
                 if judgment_grade == JudgeGrade::Miss
                     && let Some(hold) = state.notes[cursor].hold.as_mut()
                     && hold.result != Some(HoldResult::Held)
                 {
                     if should_score_miss {
                         hold.result = Some(HoldResult::LetGo);
+                    } else {
+                        hold.result = Some(HoldResult::Missed);
+                        queue_missed_feedback = true;
                     }
                     begin_hold_life_decay(
                         hold,
@@ -10725,6 +10860,9 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                         cursor,
                         music_time_sec,
                     );
+                }
+                if queue_missed_feedback {
+                    queue_missed_hold_feedback(state, cursor);
                 }
                 state.notes[cursor].result = Some(judgment);
                 if log::log_enabled!(log::Level::Debug) {
@@ -11211,6 +11349,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
                 try_hit_crossed_mines_while_held(state, col, previous_music_time, music_time_sec);
         }
     }
+    track_held_miss_windows(state, &current_inputs, music_time_sec);
     state.prev_inputs = current_inputs;
     if let Some(started) = held_mines_started {
         phase_timings.held_mines_us = elapsed_us_since(started);
@@ -11232,6 +11371,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         None
     };
     decay_let_go_hold_life(state);
+    emit_pending_missed_hold_feedback(state, music_time_sec);
     if let Some(started) = hold_decay_started {
         phase_timings.hold_decay_us = elapsed_us_since(started);
     }
@@ -11411,7 +11551,7 @@ mod tests {
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
         TickMode, advance_hold_last_held, apply_mines_insert, arrow_time_window_bounds,
         build_assist_clap_rows, build_attack_mask_windows_for_player, build_row_grids,
-        collect_pressed_row_judge_indices, count_rescore_tracks_on_row, crossed_mine_bounds,
+        collect_edge_judge_indices, count_rescore_tracks_on_row, crossed_mine_bounds,
         enforce_max_simultaneous_notes, find_arrow_index, frame_stable_display_music_time,
         input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
         lane_release_finished, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
@@ -11727,40 +11867,13 @@ mod tests {
     }
 
     #[test]
-    fn pressed_row_judge_indices_reject_partial_jump_press() {
-        let row_index = 48usize;
-        let notes = vec![
-            test_note(0, row_index, NoteType::Tap),
-            test_note(1, row_index, NoteType::Tap),
-        ];
-        let mut row_note_indices = [usize::MAX; MAX_COLS];
-        row_note_indices[0] = 0;
-        row_note_indices[1] = 1;
+    fn edge_judge_indices_only_use_the_triggering_note_on_jumps() {
+        let (judge_indices, judge_count) = collect_edge_judge_indices(2, 1)
+            .expect("jump rows should still judge the triggering note");
 
-        assert!(
-            collect_pressed_row_judge_indices(&notes, &row_note_indices, 2, 0, |col| col == 0)
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn pressed_row_judge_indices_accept_full_jump_press_and_keep_lead_first() {
-        let row_index = 48usize;
-        let notes = vec![
-            test_note(0, row_index, NoteType::Tap),
-            test_note(1, row_index, NoteType::Tap),
-        ];
-        let mut row_note_indices = [usize::MAX; MAX_COLS];
-        row_note_indices[0] = 0;
-        row_note_indices[1] = 1;
-
-        let (judge_indices, judge_count) =
-            collect_pressed_row_judge_indices(&notes, &row_note_indices, 2, 1, |_| true)
-                .expect("all jump lanes down should judge the full row");
-
-        assert_eq!(judge_count, 2);
+        assert_eq!(judge_count, 1);
         assert_eq!(judge_indices[0], 1);
-        assert_eq!(judge_indices[1], 0);
+        assert_eq!(judge_indices[1], usize::MAX);
     }
 
     #[test]

@@ -465,6 +465,7 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "HideEarlyDecentWayOffFlash={}\n",
         i32::from(options.hide_early_dw_flash)
     ));
+    content.push_str(&format!("TimingWindows={}\n", options.timing_windows));
     content.push_str(&format!(
         "HideTargets={}\n",
         i32::from(options.hide_targets)
@@ -984,6 +985,10 @@ fn load_player_options(
         .get(section, "HideEarlyDecentWayOffFlash")
         .and_then(|s| s.parse::<u8>().ok())
         .map_or(options.hide_early_dw_flash, |v| v != 0);
+    options.timing_windows = profile_conf
+        .get(section, "TimingWindows")
+        .and_then(|s| TimingWindowsOption::from_str(&s).ok())
+        .unwrap_or(options.timing_windows);
     options.hide_targets = profile_conf
         .get(section, "HideTargets")
         .and_then(|s| s.parse::<u8>().ok())
@@ -1399,6 +1404,56 @@ pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
         CUSTOM_FANTASTIC_WINDOW_MAX_MS
     } else {
         ms
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TimingWindowsOption {
+    #[default]
+    None,
+    WayOffs,
+    DecentsAndWayOffs,
+    FantasticsAndExcellents,
+}
+
+impl TimingWindowsOption {
+    #[inline(always)]
+    pub const fn disabled_windows(self) -> [bool; 5] {
+        match self {
+            Self::None => [false; 5],
+            Self::WayOffs => [false, false, false, false, true],
+            Self::DecentsAndWayOffs => [false, false, false, true, true],
+            Self::FantasticsAndExcellents => [true, true, false, false, false],
+        }
+    }
+}
+
+impl FromStr for TimingWindowsOption {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "way offs" | "wayoffs" => Ok(Self::WayOffs),
+            "decents + way offs" | "decents+wayoffs" | "decents and way offs" => {
+                Ok(Self::DecentsAndWayOffs)
+            }
+            "fantastics + excellents" | "fantastics+excellents" | "fantastics and excellents" => {
+                Ok(Self::FantasticsAndExcellents)
+            }
+            other => Err(format!("'{other}' is not a valid TimingWindows setting")),
+        }
+    }
+}
+
+impl core::fmt::Display for TimingWindowsOption {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::WayOffs => write!(f, "Way Offs"),
+            Self::DecentsAndWayOffs => write!(f, "Decents + Way Offs"),
+            Self::FantasticsAndExcellents => write!(f, "Fantastics + Excellents"),
+        }
     }
 }
 
@@ -1960,6 +2015,7 @@ pub struct PlayerOptionsData {
     pub rescore_early_hits: bool,
     pub hide_early_dw_judgments: bool,
     pub hide_early_dw_flash: bool,
+    pub timing_windows: TimingWindowsOption,
     pub show_fa_plus_window: bool,
     pub show_ex_score: bool,
     pub show_hard_ex_score: bool,
@@ -2042,6 +2098,7 @@ fn default_player_options() -> PlayerOptionsData {
         rescore_early_hits: true,
         hide_early_dw_judgments: false,
         hide_early_dw_flash: false,
+        timing_windows: TimingWindowsOption::default(),
         show_fa_plus_window: false,
         show_ex_score: false,
         show_hard_ex_score: false,
@@ -2154,6 +2211,7 @@ pub struct Profile {
     // Visual behavior for early Decent/Way Off hits (Simply Love semantics).
     pub hide_early_dw_judgments: bool,
     pub hide_early_dw_flash: bool,
+    pub timing_windows: TimingWindowsOption,
     // FA+ visual options (Simply Love semantics).
     // These do not change core timing semantics; they only affect HUD/UX.
     pub show_fa_plus_window: bool,
@@ -2304,6 +2362,7 @@ impl Default for Profile {
             rescore_early_hits: player_options.rescore_early_hits,
             hide_early_dw_judgments: player_options.hide_early_dw_judgments,
             hide_early_dw_flash: player_options.hide_early_dw_flash,
+            timing_windows: player_options.timing_windows,
             show_fa_plus_window: player_options.show_fa_plus_window,
             show_ex_score: player_options.show_ex_score,
             show_hard_ex_score: player_options.show_hard_ex_score,
@@ -2422,6 +2481,7 @@ impl Profile {
             rescore_early_hits: self.rescore_early_hits,
             hide_early_dw_judgments: self.hide_early_dw_judgments,
             hide_early_dw_flash: self.hide_early_dw_flash,
+            timing_windows: self.timing_windows,
             show_fa_plus_window: self.show_fa_plus_window,
             show_ex_score: self.show_ex_score,
             show_hard_ex_score: self.show_hard_ex_score,
@@ -2504,6 +2564,7 @@ impl Profile {
         self.rescore_early_hits = options.rescore_early_hits;
         self.hide_early_dw_judgments = options.hide_early_dw_judgments;
         self.hide_early_dw_flash = options.hide_early_dw_flash;
+        self.timing_windows = options.timing_windows;
         self.show_fa_plus_window = options.show_fa_plus_window;
         self.show_ex_score = options.show_ex_score;
         self.show_hard_ex_score = options.show_hard_ex_score;
@@ -4030,7 +4091,7 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 mod tests {
     use super::{
         DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LastPlayed, PlayStyle, Profile,
-        parse_groovestats_is_pad_player,
+        TimingWindowsOption, parse_groovestats_is_pad_player,
     };
 
     #[test]
@@ -4140,18 +4201,25 @@ mod tests {
         let mut profile = Profile::default();
         profile.mini_percent = 18;
         profile.show_ex_score = true;
+        profile.timing_windows = TimingWindowsOption::WayOffs;
         profile.store_current_player_options(PlayStyle::Single);
 
         profile.mini_percent = 62;
         profile.show_ex_score = false;
+        profile.timing_windows = TimingWindowsOption::FantasticsAndExcellents;
         profile.store_current_player_options(PlayStyle::Double);
 
         profile.apply_player_options_for_style(PlayStyle::Single);
         assert_eq!(profile.mini_percent, 18);
         assert!(profile.show_ex_score);
+        assert_eq!(profile.timing_windows, TimingWindowsOption::WayOffs);
 
         profile.apply_player_options_for_style(PlayStyle::Double);
         assert_eq!(profile.mini_percent, 62);
         assert!(!profile.show_ex_score);
+        assert_eq!(
+            profile.timing_windows,
+            TimingWindowsOption::FantasticsAndExcellents
+        );
     }
 }

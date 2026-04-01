@@ -167,6 +167,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
         let end_time = state.hold_end_time_cache[note_index].unwrap_or(time + 1.0);
         state.active_holds[column] = Some(ActiveHold {
             note_index,
+            start_time: state.note_time_cache[note_index],
             end_time,
             note_type,
             let_go: false,

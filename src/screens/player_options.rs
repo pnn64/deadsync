@@ -2117,6 +2117,15 @@ fn apply_profile_defaults(
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Rescore Early Hits") {
         row.selected_choice_index[player_idx] = if profile.rescore_early_hits { 1 } else { 0 };
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Timing Windows") {
+        row.selected_choice_index[player_idx] = match profile.timing_windows {
+            crate::game::profile::TimingWindowsOption::None => 0,
+            crate::game::profile::TimingWindowsOption::WayOffs => 1,
+            crate::game::profile::TimingWindowsOption::DecentsAndWayOffs => 2,
+            crate::game::profile::TimingWindowsOption::FantasticsAndExcellents => 3,
+        }
+        .min(row.choices.len().saturating_sub(1));
+    }
     if profile.track_early_judgments {
         results_extras_active_mask |= 1u8 << 0;
     }
@@ -3799,6 +3808,17 @@ fn change_choice_for_player(
         state.player_profiles[player_idx].rescore_early_hits = enabled;
         if should_persist {
             crate::game::profile::update_rescore_early_hits_for_side(persist_side, enabled);
+        }
+    } else if row_name == "Timing Windows" {
+        let setting = match row.selected_choice_index[player_idx] {
+            1 => crate::game::profile::TimingWindowsOption::WayOffs,
+            2 => crate::game::profile::TimingWindowsOption::DecentsAndWayOffs,
+            3 => crate::game::profile::TimingWindowsOption::FantasticsAndExcellents,
+            _ => crate::game::profile::TimingWindowsOption::None,
+        };
+        state.player_profiles[player_idx].timing_windows = setting;
+        if should_persist {
+            crate::game::profile::update_timing_windows_for_side(persist_side, setting);
         }
     } else if row_name == ROW_CUSTOM_FANTASTIC_WINDOW {
         let enabled = row.selected_choice_index[player_idx] == 1;

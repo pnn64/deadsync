@@ -3510,8 +3510,8 @@ pub fn build(
             // Prepare static/dynamic Y positions for the hold body
             // Head Y: dynamic if actively held or let go, otherwise static cache
             let mut head_beat = note.beat;
-            let is_head_dynamic =
-                hold.let_go_started_at.is_some() || hold.result == Some(HoldResult::LetGo);
+            let is_head_dynamic = hold.let_go_started_at.is_some()
+                || matches!(hold.result, Some(HoldResult::LetGo | HoldResult::Missed));
 
             if is_head_dynamic {
                 head_beat =
@@ -6318,6 +6318,7 @@ pub fn build(
         let frame_index = match render_info.result {
             HoldResult::Held => 0,
             HoldResult::LetGo => 1,
+            HoldResult::Missed => 1,
         } as u32;
         if let Some(texture) = hold_judgment_texture {
             let hold_judgment_y = sm_scale(
@@ -6403,6 +6404,7 @@ mod tests {
     fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
         let active = ActiveHold {
             note_index: 42,
+            start_time: 100.0,
             end_time: 12.0,
             note_type: NoteType::Hold,
             let_go: false,
@@ -6418,6 +6420,7 @@ mod tests {
     fn hold_head_render_flags_switch_to_active_at_receptor() {
         let mut active = ActiveHold {
             note_index: 42,
+            start_time: 100.0,
             end_time: 12.0,
             note_type: NoteType::Hold,
             let_go: false,
@@ -6439,6 +6442,7 @@ mod tests {
     fn hold_head_render_flags_require_engaged_life_state() {
         let exhausted = ActiveHold {
             note_index: 7,
+            start_time: 100.0,
             end_time: 8.0,
             note_type: NoteType::Roll,
             let_go: false,
@@ -6447,6 +6451,7 @@ mod tests {
         };
         let let_go = ActiveHold {
             note_index: 7,
+            start_time: 100.0,
             end_time: 8.0,
             note_type: NoteType::Roll,
             let_go: true,

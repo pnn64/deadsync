@@ -14,6 +14,7 @@ pub enum NoteType {
 pub enum HoldResult {
     Held,
     LetGo,
+    Missed,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

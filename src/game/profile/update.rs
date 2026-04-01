@@ -2,12 +2,12 @@ use super::{
     AttackMode, BackgroundFilter, ComboColors, ComboFont, ComboMode, DataVisualizations,
     ErrorBarTrim, HideLightType, HoldJudgmentGraphic, JudgmentGraphic, LifeMeterType,
     MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorScoreType, NoteSkin, Perspective,
-    PlayStyle, PlayerSide, ScrollOption, ScrollSpeedSetting, TargetScoreSetting, TurnOption,
-    clamp_custom_fantastic_window_ms, error_bar_style_from_mask, error_bar_text_from_mask,
-    lock_profiles, normalize_accel_effects_mask, normalize_appearance_effects_mask,
-    normalize_error_bar_mask, normalize_holds_mask, normalize_insert_mask, normalize_remove_mask,
-    normalize_visual_effects_mask, save_profile_ini_for_side, save_profile_stats_for_side,
-    session_side_is_guest, side_ix,
+    PlayStyle, PlayerSide, ScrollOption, ScrollSpeedSetting, TargetScoreSetting,
+    TimingWindowsOption, TurnOption, clamp_custom_fantastic_window_ms, error_bar_style_from_mask,
+    error_bar_text_from_mask, lock_profiles, normalize_accel_effects_mask,
+    normalize_appearance_effects_mask, normalize_error_bar_mask, normalize_holds_mask,
+    normalize_insert_mask, normalize_remove_mask, normalize_visual_effects_mask,
+    save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;
@@ -350,6 +350,18 @@ pub fn update_early_dw_options_for_side(side: PlayerSide, hide_judgments: bool, 
         }
         profile.hide_early_dw_judgments = hide_judgments;
         profile.hide_early_dw_flash = hide_flash;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_timing_windows_for_side(side: PlayerSide, setting: TimingWindowsOption) {
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.timing_windows == setting {
+            return;
+        }
+        profile.timing_windows = setting;
     }
     save_profile_ini_for_side(side);
 }
