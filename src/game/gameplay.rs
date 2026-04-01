@@ -42,7 +42,15 @@ pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 pub const MAX_COLS: usize = 8;
 pub const MAX_PLAYERS: usize = 2;
+// Match Simply Love ITG / FA+: repeated negative life events add a 5-hit lock
+// back up to a 10-hit ceiling before life can regenerate again.
 const REGEN_COMBO_AFTER_MISS: u32 = 5;
+const MAX_REGEN_COMBO_AFTER_MISS: u32 = 10;
+// Simply Love enables HarshHotLifePenalty, so negative events from a full bar
+// should cost at least 10% life.
+const HOT_LIFE_MIN_NEGATIVE_DELTA: f32 = -0.10;
+// ITGmania _fallback and Simply Love keep mine hits from incrementing miss combo.
+const MINE_HIT_INCREMENTS_MISS_COMBO: bool = false;
 // In SM, life regeneration is tied to LifePercentChangeHeld. Simply Love sets
 // TimingWindowSecondsHold to 0.32s, so mirror that grace window. Reference:
 // itgmania/Themes/Simply Love/Scripts/SL_Init.lua
@@ -5898,13 +5906,21 @@ fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32)
     let old_life = p.life;
 
     let mut final_delta = delta;
-    if final_delta > 0.0 {
+    if old_life >= 1.0 && final_delta < 0.0 {
+        final_delta = final_delta.min(HOT_LIFE_MIN_NEGATIVE_DELTA);
+    }
+    if final_delta >= 0.0 {
         if p.combo_after_miss > 0 {
-            final_delta = 0.0;
             p.combo_after_miss -= 1;
+            if p.combo_after_miss > 0 {
+                final_delta = 0.0;
+            }
         }
     } else if final_delta < 0.0 {
-        p.combo_after_miss = REGEN_COMBO_AFTER_MISS;
+        let stacked_lock = p.combo_after_miss.saturating_add(REGEN_COMBO_AFTER_MISS);
+        p.combo_after_miss = p
+            .combo_after_miss
+            .max(stacked_lock.min(MAX_REGEN_COMBO_AFTER_MISS));
     }
 
     let mut new_life = (p.life + final_delta).clamp(0.0, 1.0);
@@ -8051,6 +8067,100 @@ fn trigger_combo_milestone(p: &mut PlayerRuntime, kind: ComboMilestoneKind) {
     }
 }
 
+#[inline(always)]
+const fn combo_continues_on_grade(grade: JudgeGrade) -> bool {
+    matches!(
+        grade,
+        JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+    )
+}
+
+#[inline(always)]
+const fn combo_increments_miss_combo(grade: JudgeGrade) -> bool {
+    matches!(grade, JudgeGrade::Miss)
+}
+
+#[inline(always)]
+fn clear_full_combo_state(p: &mut PlayerRuntime) {
+    if p.full_combo_grade.is_some() {
+        p.first_fc_attempt_broken = true;
+    }
+    p.full_combo_grade = None;
+}
+
+#[inline(always)]
+fn break_combo_state(p: &mut PlayerRuntime, miss_combo_delta: u32) {
+    p.combo = 0;
+    if miss_combo_delta > 0 {
+        p.miss_combo = p.miss_combo.saturating_add(miss_combo_delta);
+    }
+    clear_full_combo_state(p);
+    p.current_combo_grade = None;
+}
+
+#[inline(always)]
+fn apply_successful_row_combo_state(
+    p: &mut PlayerRuntime,
+    final_grade: JudgeGrade,
+    row_combo_count: u32,
+) {
+    p.miss_combo = 0;
+    p.combo = p.combo.saturating_add(row_combo_count);
+    let combo = p.combo;
+    if combo > 0 && combo.is_multiple_of(1000) {
+        trigger_combo_milestone(p, ComboMilestoneKind::Thousand);
+        trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
+    } else if combo > 0 && combo.is_multiple_of(100) {
+        trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
+    }
+    if !p.first_fc_attempt_broken {
+        let new_grade = if let Some(current_fc_grade) = &p.full_combo_grade {
+            final_grade.max(*current_fc_grade)
+        } else {
+            final_grade
+        };
+        p.full_combo_grade = Some(new_grade);
+    }
+    let current_combo_grade = if let Some(curr_grade) = p.current_combo_grade {
+        final_grade.max(curr_grade)
+    } else {
+        final_grade
+    };
+    p.current_combo_grade = Some(current_combo_grade);
+}
+
+#[inline(always)]
+fn apply_row_combo_state(
+    p: &mut PlayerRuntime,
+    final_grade: JudgeGrade,
+    row_combo_count: u32,
+    miss_combo_count: u32,
+) {
+    if combo_continues_on_grade(final_grade) {
+        apply_successful_row_combo_state(p, final_grade, row_combo_count);
+        return;
+    }
+
+    let miss_combo_delta = if combo_increments_miss_combo(final_grade) {
+        miss_combo_count
+    } else {
+        0
+    };
+    break_combo_state(p, miss_combo_delta);
+}
+
+#[inline(always)]
+fn apply_mine_hit_combo_state(p: &mut PlayerRuntime) {
+    if MINE_HIT_INCREMENTS_MISS_COMBO {
+        break_combo_state(p, 1);
+    }
+}
+
+#[inline(always)]
+fn apply_hold_success_combo_state(_p: &mut PlayerRuntime) {
+    // ITG dance/pump scoring does not let Held / Roll Held reset miss combo.
+}
+
 fn handle_mine_hit(
     state: &mut State,
     column: usize,
@@ -8095,13 +8205,7 @@ fn handle_mine_hit(
                 state.players[player].mines_hit_for_score.saturating_add(1);
             updated_scoring = true;
         }
-        state.players[player].combo = 0;
-        state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
-        if state.players[player].full_combo_grade.is_some() {
-            state.players[player].first_fc_attempt_broken = true;
-        }
-        state.players[player].full_combo_grade = None;
-        state.players[player].current_combo_grade = None;
+        apply_mine_hit_combo_state(&mut state.players[player]);
     }
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
@@ -8267,13 +8371,7 @@ fn hit_mine_timebased(
                 state.players[player].mines_hit_for_score.saturating_add(1);
             updated_scoring = true;
         }
-        state.players[player].combo = 0;
-        state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
-        if state.players[player].full_combo_grade.is_some() {
-            state.players[player].first_fc_attempt_broken = true;
-        }
-        state.players[player].full_combo_grade = None;
-        state.players[player].current_combo_grade = None;
+        apply_mine_hit_combo_state(&mut state.players[player]);
     }
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
@@ -8345,14 +8443,10 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
         update_itg_grade_totals(&mut state.players[player]);
     }
     if !scoring_blocked {
-        if state.players[player].full_combo_grade.is_some() {
-            state.players[player].first_fc_attempt_broken = true;
-        }
-        state.players[player].full_combo_grade = None;
         if COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO {
-            state.players[player].combo = 0;
-            state.players[player].miss_combo = state.players[player].miss_combo.saturating_add(1);
-            state.players[player].current_combo_grade = None;
+            break_combo_state(&mut state.players[player], 1);
+        } else {
+            clear_full_combo_state(&mut state.players[player]);
         }
     }
     state.receptor_glow_timers[column] = 0.0;
@@ -8433,7 +8527,7 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
         update_itg_grade_totals(&mut state.players[player]);
     }
     if !scoring_blocked {
-        state.players[player].miss_combo = 0;
+        apply_hold_success_combo_state(&mut state.players[player]);
     }
     trigger_tap_explosion(state, column, JudgeGrade::Excellent);
     state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
@@ -10113,7 +10207,6 @@ fn finalize_row_judgment(
 ) {
     let (col_start, col_end) = player_col_range(state, player);
     let mut row_has_miss = false;
-    let mut row_has_successful_hit = false;
     let mut row_has_wayoff = false;
     let mut player_row_note_count = 0u32;
     let row_notes = &state.row_entries[row_entry_index].nonmine_note_indices;
@@ -10128,10 +10221,6 @@ fn finalize_row_judgment(
             player_row_note_count = player_row_note_count.saturating_add(1);
             row_has_miss |= judgment.grade == JudgeGrade::Miss;
             row_has_wayoff |= judgment.grade == JudgeGrade::WayOff;
-            row_has_successful_hit |= matches!(
-                judgment.grade,
-                JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-            );
             Some(judgment)
         }))
         .cloned()
@@ -10167,43 +10256,7 @@ fn finalize_row_judgment(
             judged_at: Instant::now(),
         });
     }
-    if row_has_successful_hit {
-        p.miss_combo = 0;
-    }
-    if row_has_miss {
-        p.miss_combo = p.miss_combo.saturating_add(1);
-    }
-    if row_has_miss || matches!(final_grade, JudgeGrade::Decent | JudgeGrade::WayOff) {
-        p.combo = 0;
-        if p.full_combo_grade.is_some() {
-            p.first_fc_attempt_broken = true;
-        }
-        p.full_combo_grade = None;
-        p.current_combo_grade = None;
-    } else {
-        p.combo = p.combo.saturating_add(player_row_note_count);
-        let combo = p.combo;
-        if combo > 0 && combo.is_multiple_of(1000) {
-            trigger_combo_milestone(p, ComboMilestoneKind::Thousand);
-            trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
-        } else if combo > 0 && combo.is_multiple_of(100) {
-            trigger_combo_milestone(p, ComboMilestoneKind::Hundred);
-        }
-        if !p.first_fc_attempt_broken {
-            let new_grade = if let Some(current_fc_grade) = &p.full_combo_grade {
-                final_grade.max(*current_fc_grade)
-            } else {
-                final_grade
-            };
-            p.full_combo_grade = Some(new_grade);
-        }
-        let current_combo_grade = if let Some(curr_grade) = p.current_combo_grade {
-            final_grade.max(curr_grade)
-        } else {
-            final_grade
-        };
-        p.current_combo_grade = Some(current_combo_grade);
-    }
+    apply_row_combo_state(p, final_grade, player_row_note_count, 1);
     if !row_has_miss && !row_has_wayoff {
         let notes_on_row_count = player_row_note_count as usize;
         let carried_holds_down: usize = state.active_holds[col_start..col_end]
@@ -12009,6 +12062,116 @@ mod tests {
     #[test]
     fn immediate_hold_let_go_does_not_break_combo_by_default() {
         assert!(!COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO);
+    }
+
+    #[test]
+    fn mine_hits_preserve_combo_when_miss_combo_metric_is_disabled() {
+        let mut player = super::init_player_runtime();
+        player.combo = 50;
+        player.miss_combo = 3;
+        player.full_combo_grade = Some(JudgeGrade::Great);
+        player.current_combo_grade = Some(JudgeGrade::Great);
+
+        super::apply_mine_hit_combo_state(&mut player);
+
+        assert_eq!(player.combo, 50);
+        assert_eq!(player.miss_combo, 3);
+        assert_eq!(player.full_combo_grade, Some(JudgeGrade::Great));
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Great));
+        assert!(!player.first_fc_attempt_broken);
+    }
+
+    #[test]
+    fn hold_success_preserves_existing_miss_combo() {
+        let mut player = super::init_player_runtime();
+        player.miss_combo = 4;
+
+        super::apply_hold_success_combo_state(&mut player);
+
+        assert_eq!(player.miss_combo, 4);
+    }
+
+    #[test]
+    fn successful_rows_clear_miss_combo_and_extend_combo() {
+        let mut player = super::init_player_runtime();
+        player.combo = 20;
+        player.miss_combo = 4;
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Great, 2, 1);
+
+        assert_eq!(player.combo, 22);
+        assert_eq!(player.miss_combo, 0);
+        assert_eq!(player.full_combo_grade, Some(JudgeGrade::Great));
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Great));
+    }
+
+    #[test]
+    fn decent_rows_break_combo_without_clearing_existing_miss_combo() {
+        let mut player = super::init_player_runtime();
+        player.combo = 20;
+        player.miss_combo = 4;
+        player.full_combo_grade = Some(JudgeGrade::Great);
+        player.current_combo_grade = Some(JudgeGrade::Great);
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Decent, 2, 1);
+
+        assert_eq!(player.combo, 0);
+        assert_eq!(player.miss_combo, 4);
+        assert!(player.full_combo_grade.is_none());
+        assert!(player.current_combo_grade.is_none());
+        assert!(player.first_fc_attempt_broken);
+    }
+
+    #[test]
+    fn miss_rows_increment_existing_miss_combo() {
+        let mut player = super::init_player_runtime();
+        player.combo = 20;
+        player.miss_combo = 4;
+
+        super::apply_row_combo_state(&mut player, JudgeGrade::Miss, 2, 1);
+
+        assert_eq!(player.combo, 0);
+        assert_eq!(player.miss_combo, 5);
+    }
+
+    #[test]
+    fn zero_life_events_burn_down_regen_lock() {
+        let mut player = super::init_player_runtime();
+        player.life = 0.5;
+        player.combo_after_miss = super::REGEN_COMBO_AFTER_MISS;
+
+        for _ in 0..super::REGEN_COMBO_AFTER_MISS {
+            super::apply_life_change(&mut player, 0.0, super::LIFE_DECENT);
+        }
+
+        assert_eq!(player.combo_after_miss, 0);
+        assert!((player.life - 0.5).abs() <= 1e-6);
+
+        super::apply_life_change(&mut player, 0.0, super::LIFE_GREAT);
+
+        assert!((player.life - 0.504).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn repeated_negative_life_events_stack_regen_lock_to_maximum() {
+        let mut player = super::init_player_runtime();
+        player.combo_after_miss = super::REGEN_COMBO_AFTER_MISS;
+
+        super::apply_life_change(&mut player, 0.0, super::LIFE_HIT_MINE);
+        assert_eq!(player.combo_after_miss, super::MAX_REGEN_COMBO_AFTER_MISS);
+
+        super::apply_life_change(&mut player, 0.0, super::LIFE_HIT_MINE);
+        assert_eq!(player.combo_after_miss, super::MAX_REGEN_COMBO_AFTER_MISS);
+    }
+
+    #[test]
+    fn hot_life_penalty_clamps_negative_events_to_ten_percent() {
+        let mut player = super::init_player_runtime();
+        player.life = 1.0;
+
+        super::apply_life_change(&mut player, 0.0, super::LIFE_HIT_MINE);
+
+        assert!((player.life - 0.9).abs() <= 1e-6);
     }
 
     #[test]
