@@ -90,6 +90,8 @@ const DISPLAY_MODS_WARNING_H: f32 = 30.0;
 const DISPLAY_MODS_WARNING_ZOOM: f32 = 1.5;
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
+const ERROR_BAR_TEXT_EARLY_RGBA: [f32; 4] = color::rgba_hex("#066af4");
+const ERROR_BAR_TEXT_LATE_RGBA: [f32; 4] = color::rgba_hex("#ff5a4e");
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COMBO_PREWARM_CAP: u32 = 2048;
 const MEASURE_PREWARM_CAP: i32 = 64;
@@ -6059,11 +6061,16 @@ pub fn build(
             if (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age) {
                 let x = if text.early { -40.0 } else { 40.0 };
                 let s = if text.early { "EARLY" } else { "LATE" };
+                let c = if text.early {
+                    ERROR_BAR_TEXT_EARLY_RGBA
+                } else {
+                    ERROR_BAR_TEXT_LATE_RGBA
+                };
                 hud_actors.push(act!(text:
                     font("wendy"): settext(s):
                     align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
                     zoom(0.25): shadowlength(1.0):
-                    diffuse(1.0, 1.0, 1.0, 1.0):
+                    diffuse(c[0], c[1], c[2], c[3]):
                     z(error_bar_text_z)
                 ));
             }
