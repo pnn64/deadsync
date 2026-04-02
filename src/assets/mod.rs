@@ -23,9 +23,11 @@ use self::textures::ascii_ci_hash;
 #[cfg(test)]
 pub(crate) use self::textures::parse_texture_resolution_hint;
 pub use self::textures::{
-    TexMeta, TextureHints, canonical_texture_key, open_image_fallback, parse_sprite_sheet_dims,
-    parse_texture_hints, register_generated_texture, register_texture_dims, sprite_sheet_dims,
-    texture_dims, texture_source_dims_from_real, texture_source_frame_dims_from_real,
+    TexMeta, TextureChoice, TextureHints, canonical_texture_key, hold_judgment_texture_choices,
+    judgment_texture_choices, open_image_fallback, parse_sprite_sheet_dims, parse_texture_hints,
+    register_generated_texture, register_texture_dims, resolve_texture_choice, sprite_sheet_dims,
+    strip_sprite_hints, texture_dims, texture_source_dims_from_real,
+    texture_source_frame_dims_from_real,
 };
 
 #[derive(Debug)]

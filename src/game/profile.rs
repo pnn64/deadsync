@@ -681,11 +681,11 @@ fn load_player_options(
     options.hold_judgment_graphic = profile_conf
         .get(section, "HoldJudgmentGraphic")
         .and_then(|s| HoldJudgmentGraphic::from_str(&s).ok())
-        .unwrap_or(options.hold_judgment_graphic);
+        .unwrap_or_else(|| options.hold_judgment_graphic.clone());
     options.judgment_graphic = profile_conf
         .get(section, "JudgmentGraphic")
         .and_then(|s| JudgmentGraphic::from_str(&s).ok())
-        .unwrap_or(options.judgment_graphic);
+        .unwrap_or_else(|| options.judgment_graphic.clone());
     options.combo_font = profile_conf
         .get(section, "ComboFont")
         .and_then(|s| ComboFont::from_str(&s).ok())
@@ -1178,127 +1178,354 @@ impl core::fmt::Display for BackgroundFilter {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum HoldJudgmentGraphic {
-    #[default]
-    Love,
-    Mute,
-    ITG2,
-    None,
+fn normalize_graphic_key(
+    raw: &str,
+    folder: &str,
+    stock_aliases: &[(&str, &str)],
+) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("graphic setting was empty".to_string());
+    }
+    if trimmed.eq_ignore_ascii_case("none") {
+        return Ok("None".to_string());
+    }
+
+    let basename = Path::new(trimmed)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(trimmed)
+        .trim();
+    if basename.eq_ignore_ascii_case("none") {
+        return Ok("None".to_string());
+    }
+
+    let normalized = basename.to_ascii_lowercase();
+    if let Some((_, key)) = stock_aliases
+        .iter()
+        .find(|(alias, _)| alias.eq_ignore_ascii_case(&normalized))
+    {
+        return Ok((*key).to_string());
+    }
+
+    Ok(format!("{folder}/{basename}"))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HoldJudgmentGraphic(String);
+
+impl HoldJudgmentGraphic {
+    pub const DEFAULT_KEY: &'static str = "hold_judgements/Love 1x2 (doubleres).png";
+
+    const STOCK_ALIASES: &'static [(&'static str, &'static str)] = &[
+        ("love", Self::DEFAULT_KEY),
+        ("love 1x2 (doubleres).png", Self::DEFAULT_KEY),
+        (
+            "hold_judgements/love 1x2 (doubleres).png",
+            Self::DEFAULT_KEY,
+        ),
+        ("mute", "hold_judgements/mute 1x2 (doubleres).png"),
+        (
+            "mute 1x2 (doubleres).png",
+            "hold_judgements/mute 1x2 (doubleres).png",
+        ),
+        (
+            "hold_judgements/mute 1x2 (doubleres).png",
+            "hold_judgements/mute 1x2 (doubleres).png",
+        ),
+        ("itg2", "hold_judgements/ITG2 1x2 (doubleres).png"),
+        (
+            "itg2 1x2 (doubleres).png",
+            "hold_judgements/ITG2 1x2 (doubleres).png",
+        ),
+        (
+            "hold_judgements/itg2 1x2 (doubleres).png",
+            "hold_judgements/ITG2 1x2 (doubleres).png",
+        ),
+    ];
+
+    #[inline(always)]
+    pub fn new(raw: &str) -> Self {
+        Self(
+            normalize_graphic_key(raw, "hold_judgements", Self::STOCK_ALIASES)
+                .unwrap_or_else(|_| Self::DEFAULT_KEY.to_string()),
+        )
+    }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[inline(always)]
+    pub fn is_none(&self) -> bool {
+        self.0.eq_ignore_ascii_case("None")
+    }
+
+    #[inline(always)]
+    pub fn texture_key(&self) -> Option<&str> {
+        (!self.is_none()).then_some(self.as_str())
+    }
+}
+
+impl Default for HoldJudgmentGraphic {
+    fn default() -> Self {
+        Self(Self::DEFAULT_KEY.to_string())
+    }
 }
 
 impl FromStr for HoldJudgmentGraphic {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_lowercase().as_str() {
-            "love" => Ok(Self::Love),
-            "mute" => Ok(Self::Mute),
-            "itg2" => Ok(Self::ITG2),
-            "none" => Ok(Self::None),
-            other => Err(format!(
-                "'{other}' is not a valid HoldJudgmentGraphic setting"
-            )),
-        }
+        normalize_graphic_key(s, "hold_judgements", Self::STOCK_ALIASES).map(Self)
     }
 }
 
 impl core::fmt::Display for HoldJudgmentGraphic {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Love => write!(f, "Love"),
-            Self::Mute => write!(f, "mute"),
-            Self::ITG2 => write!(f, "ITG2"),
-            Self::None => write!(f, "None"),
-        }
+        f.write_str(&self.0)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum JudgmentGraphic {
-    Bebas,
-    Censored,
-    Chromatic,
-    Code,
-    ComicSans,
-    Emoticon,
-    Focus,
-    Grammar,
-    GrooveNights,
-    ITG2,
-    #[default]
-    Love,
-    LoveChroma,
-    Miso,
-    Papyrus,
-    Rainbowmatic,
-    Roboto,
-    Shift,
-    Tactics,
-    Wendy,
-    WendyChroma,
-    None,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JudgmentGraphic(String);
+
+impl JudgmentGraphic {
+    pub const DEFAULT_KEY: &'static str = "judgements/Love 2x7 (doubleres).png";
+
+    const STOCK_ALIASES: &'static [(&'static str, &'static str)] = &[
+        ("bebas", "judgements/Bebas 2x7 (doubleres).png"),
+        (
+            "bebas 2x7 (doubleres).png",
+            "judgements/Bebas 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/bebas 2x7 (doubleres).png",
+            "judgements/Bebas 2x7 (doubleres).png",
+        ),
+        ("censored", "judgements/Censored 1x7 (doubleres).png"),
+        (
+            "censored 1x7 (doubleres).png",
+            "judgements/Censored 1x7 (doubleres).png",
+        ),
+        (
+            "judgements/censored 1x7 (doubleres).png",
+            "judgements/Censored 1x7 (doubleres).png",
+        ),
+        ("chromatic", "judgements/Chromatic 2x7 (doubleres).png"),
+        (
+            "chromatic 2x7 (doubleres).png",
+            "judgements/Chromatic 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/chromatic 2x7 (doubleres).png",
+            "judgements/Chromatic 2x7 (doubleres).png",
+        ),
+        ("code", "judgements/Code 2x7 (doubleres).png"),
+        (
+            "code 2x7 (doubleres).png",
+            "judgements/Code 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/code 2x7 (doubleres).png",
+            "judgements/Code 2x7 (doubleres).png",
+        ),
+        ("comic sans", "judgements/Comic Sans 2x7 (doubleres).png"),
+        ("comicsans", "judgements/Comic Sans 2x7 (doubleres).png"),
+        (
+            "comic sans 2x7 (doubleres).png",
+            "judgements/Comic Sans 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/comic sans 2x7 (doubleres).png",
+            "judgements/Comic Sans 2x7 (doubleres).png",
+        ),
+        ("emoticon", "judgements/Emoticon 2x7 (doubleres).png"),
+        (
+            "emoticon 2x7 (doubleres).png",
+            "judgements/Emoticon 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/emoticon 2x7 (doubleres).png",
+            "judgements/Emoticon 2x7 (doubleres).png",
+        ),
+        ("focus", "judgements/Focus 2x7 (doubleres).png"),
+        (
+            "focus 2x7 (doubleres).png",
+            "judgements/Focus 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/focus 2x7 (doubleres).png",
+            "judgements/Focus 2x7 (doubleres).png",
+        ),
+        ("grammar", "judgements/Grammar 2x7 (doubleres).png"),
+        (
+            "grammar 2x7 (doubleres).png",
+            "judgements/Grammar 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/grammar 2x7 (doubleres).png",
+            "judgements/Grammar 2x7 (doubleres).png",
+        ),
+        (
+            "groovenights",
+            "judgements/GrooveNights 2x7 (doubleres).png",
+        ),
+        (
+            "groove nights",
+            "judgements/GrooveNights 2x7 (doubleres).png",
+        ),
+        (
+            "groovenights 2x7 (doubleres).png",
+            "judgements/GrooveNights 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/groovenights 2x7 (doubleres).png",
+            "judgements/GrooveNights 2x7 (doubleres).png",
+        ),
+        ("itg2", "judgements/ITG2 2x7 (doubleres).png"),
+        (
+            "itg2 2x7 (doubleres).png",
+            "judgements/ITG2 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/itg2 2x7 (doubleres).png",
+            "judgements/ITG2 2x7 (doubleres).png",
+        ),
+        ("love", Self::DEFAULT_KEY),
+        ("love 2x7 (doubleres).png", Self::DEFAULT_KEY),
+        ("judgements/love 2x7 (doubleres).png", Self::DEFAULT_KEY),
+        ("love chroma", "judgements/Love Chroma 2x7 (doubleres).png"),
+        ("lovechroma", "judgements/Love Chroma 2x7 (doubleres).png"),
+        (
+            "love chroma 2x7 (doubleres).png",
+            "judgements/Love Chroma 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/love chroma 2x7 (doubleres).png",
+            "judgements/Love Chroma 2x7 (doubleres).png",
+        ),
+        ("miso", "judgements/Miso 2x7 (doubleres).png"),
+        (
+            "miso 2x7 (doubleres).png",
+            "judgements/Miso 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/miso 2x7 (doubleres).png",
+            "judgements/Miso 2x7 (doubleres).png",
+        ),
+        ("papyrus", "judgements/Papyrus 2x7 (doubleres).png"),
+        (
+            "papyrus 2x7 (doubleres).png",
+            "judgements/Papyrus 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/papyrus 2x7 (doubleres).png",
+            "judgements/Papyrus 2x7 (doubleres).png",
+        ),
+        (
+            "rainbowmatic",
+            "judgements/Rainbowmatic 2x7 (doubleres).png",
+        ),
+        (
+            "rainbowmatic 2x7 (doubleres).png",
+            "judgements/Rainbowmatic 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/rainbowmatic 2x7 (doubleres).png",
+            "judgements/Rainbowmatic 2x7 (doubleres).png",
+        ),
+        ("roboto", "judgements/Roboto 2x7 (doubleres).png"),
+        (
+            "roboto 2x7 (doubleres).png",
+            "judgements/Roboto 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/roboto 2x7 (doubleres).png",
+            "judgements/Roboto 2x7 (doubleres).png",
+        ),
+        ("shift", "judgements/Shift 2x7 (doubleres).png"),
+        (
+            "shift 2x7 (doubleres).png",
+            "judgements/Shift 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/shift 2x7 (doubleres).png",
+            "judgements/Shift 2x7 (doubleres).png",
+        ),
+        ("tactics", "judgements/Tactics 2x7 (doubleres).png"),
+        (
+            "tactics 2x7 (doubleres).png",
+            "judgements/Tactics 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/tactics 2x7 (doubleres).png",
+            "judgements/Tactics 2x7 (doubleres).png",
+        ),
+        ("wendy", "judgements/Wendy 2x7 (doubleres).png"),
+        (
+            "wendy 2x7 (doubleres).png",
+            "judgements/Wendy 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/wendy 2x7 (doubleres).png",
+            "judgements/Wendy 2x7 (doubleres).png",
+        ),
+        (
+            "wendy chroma",
+            "judgements/Wendy Chroma 2x7 (doubleres).png",
+        ),
+        ("wendychroma", "judgements/Wendy Chroma 2x7 (doubleres).png"),
+        (
+            "wendy chroma 2x7 (doubleres).png",
+            "judgements/Wendy Chroma 2x7 (doubleres).png",
+        ),
+        (
+            "judgements/wendy chroma 2x7 (doubleres).png",
+            "judgements/Wendy Chroma 2x7 (doubleres).png",
+        ),
+    ];
+
+    #[inline(always)]
+    pub fn new(raw: &str) -> Self {
+        Self(
+            normalize_graphic_key(raw, "judgements", Self::STOCK_ALIASES)
+                .unwrap_or_else(|_| Self::DEFAULT_KEY.to_string()),
+        )
+    }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[inline(always)]
+    pub fn is_none(&self) -> bool {
+        self.0.eq_ignore_ascii_case("None")
+    }
+
+    #[inline(always)]
+    pub fn texture_key(&self) -> Option<&str> {
+        (!self.is_none()).then_some(self.as_str())
+    }
+}
+
+impl Default for JudgmentGraphic {
+    fn default() -> Self {
+        Self(Self::DEFAULT_KEY.to_string())
+    }
 }
 
 impl FromStr for JudgmentGraphic {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let v = s.trim().to_lowercase();
-        match v.as_str() {
-            "bebas" => Ok(Self::Bebas),
-            "censored" => Ok(Self::Censored),
-            "chromatic" => Ok(Self::Chromatic),
-            "code" => Ok(Self::Code),
-            "comic sans" => Ok(Self::ComicSans),
-            "comicsans" => Ok(Self::ComicSans),
-            "emoticon" => Ok(Self::Emoticon),
-            "focus" => Ok(Self::Focus),
-            "grammar" => Ok(Self::Grammar),
-            "groovenights" => Ok(Self::GrooveNights),
-            "groove nights" => Ok(Self::GrooveNights),
-            "itg2" => Ok(Self::ITG2),
-            "love" => Ok(Self::Love),
-            "love chroma" => Ok(Self::LoveChroma),
-            "lovechroma" => Ok(Self::LoveChroma),
-            "miso" => Ok(Self::Miso),
-            "papyrus" => Ok(Self::Papyrus),
-            "rainbowmatic" => Ok(Self::Rainbowmatic),
-            "roboto" => Ok(Self::Roboto),
-            "shift" => Ok(Self::Shift),
-            "tactics" => Ok(Self::Tactics),
-            "wendy" => Ok(Self::Wendy),
-            "wendy chroma" => Ok(Self::WendyChroma),
-            "wendychroma" => Ok(Self::WendyChroma),
-            "none" => Ok(Self::None),
-            other => Err(format!("'{other}' is not a valid JudgmentGraphic setting")),
-        }
+        normalize_graphic_key(s, "judgements", Self::STOCK_ALIASES).map(Self)
     }
 }
 
 impl core::fmt::Display for JudgmentGraphic {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Bebas => write!(f, "Bebas"),
-            Self::Censored => write!(f, "Censored"),
-            Self::Chromatic => write!(f, "Chromatic"),
-            Self::Code => write!(f, "Code"),
-            Self::ComicSans => write!(f, "Comic Sans"),
-            Self::Emoticon => write!(f, "Emoticon"),
-            Self::Focus => write!(f, "Focus"),
-            Self::Grammar => write!(f, "Grammar"),
-            Self::GrooveNights => write!(f, "GrooveNights"),
-            Self::ITG2 => write!(f, "ITG2"),
-            Self::Love => write!(f, "Love"),
-            Self::LoveChroma => write!(f, "Love Chroma"),
-            Self::Miso => write!(f, "Miso"),
-            Self::Papyrus => write!(f, "Papyrus"),
-            Self::Rainbowmatic => write!(f, "Rainbowmatic"),
-            Self::Roboto => write!(f, "Roboto"),
-            Self::Shift => write!(f, "Shift"),
-            Self::Tactics => write!(f, "Tactics"),
-            Self::Wendy => write!(f, "Wendy"),
-            Self::WendyChroma => write!(f, "Wendy Chroma"),
-            Self::None => write!(f, "None"),
-        }
+        f.write_str(&self.0)
     }
 }
 
@@ -2335,8 +2562,8 @@ impl Default for Profile {
             groovestats_username: String::new(),
             arrowcloud_api_key: String::new(),
             background_filter: player_options.background_filter,
-            hold_judgment_graphic: player_options.hold_judgment_graphic,
-            judgment_graphic: player_options.judgment_graphic,
+            hold_judgment_graphic: player_options.hold_judgment_graphic.clone(),
+            judgment_graphic: player_options.judgment_graphic.clone(),
             combo_font: player_options.combo_font,
             combo_colors: player_options.combo_colors,
             combo_mode: player_options.combo_mode,
@@ -2458,8 +2685,8 @@ impl Profile {
     pub fn current_player_options(&self) -> PlayerOptionsData {
         PlayerOptionsData {
             background_filter: self.background_filter,
-            hold_judgment_graphic: self.hold_judgment_graphic,
-            judgment_graphic: self.judgment_graphic,
+            hold_judgment_graphic: self.hold_judgment_graphic.clone(),
+            judgment_graphic: self.judgment_graphic.clone(),
             combo_font: self.combo_font,
             combo_colors: self.combo_colors,
             combo_mode: self.combo_mode,
@@ -2541,8 +2768,8 @@ impl Profile {
 
     fn apply_player_options(&mut self, options: &PlayerOptionsData) {
         self.background_filter = options.background_filter;
-        self.hold_judgment_graphic = options.hold_judgment_graphic;
-        self.judgment_graphic = options.judgment_graphic;
+        self.hold_judgment_graphic = options.hold_judgment_graphic.clone();
+        self.judgment_graphic = options.judgment_graphic.clone();
         self.combo_font = options.combo_font;
         self.combo_colors = options.combo_colors;
         self.combo_mode = options.combo_mode;

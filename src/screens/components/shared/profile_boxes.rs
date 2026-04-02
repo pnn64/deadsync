@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::AssetManager;
+use crate::assets::{self, AssetManager};
 use crate::config::dirs;
 use crate::engine::audio;
 use crate::engine::gfx::BlendMode;
@@ -1461,38 +1461,11 @@ fn push_scroller_frame(
             }
         }
 
-        let judgment_texture = selected.and_then(|c| match c.judgment {
-            profile::JudgmentGraphic::Love => Some("judgements/Love 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::LoveChroma => {
-                Some("judgements/Love Chroma 2x7 (doubleres).png")
-            }
-            profile::JudgmentGraphic::Rainbowmatic => {
-                Some("judgements/Rainbowmatic 2x7 (doubleres).png")
-            }
-            profile::JudgmentGraphic::GrooveNights => {
-                Some("judgements/GrooveNights 2x7 (doubleres).png")
-            }
-            profile::JudgmentGraphic::Emoticon => Some("judgements/Emoticon 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Censored => Some("judgements/Censored 1x7 (doubleres).png"),
-            profile::JudgmentGraphic::Chromatic => Some("judgements/Chromatic 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::ITG2 => Some("judgements/ITG2 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Bebas => Some("judgements/Bebas 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Code => Some("judgements/Code 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::ComicSans => {
-                Some("judgements/Comic Sans 2x7 (doubleres).png")
-            }
-            profile::JudgmentGraphic::Focus => Some("judgements/Focus 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Grammar => Some("judgements/Grammar 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Miso => Some("judgements/Miso 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Papyrus => Some("judgements/Papyrus 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Roboto => Some("judgements/Roboto 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Shift => Some("judgements/Shift 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Tactics => Some("judgements/Tactics 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::Wendy => Some("judgements/Wendy 2x7 (doubleres).png"),
-            profile::JudgmentGraphic::WendyChroma => {
-                Some("judgements/Wendy Chroma 2x7 (doubleres).png")
-            }
-            profile::JudgmentGraphic::None => None,
+        let judgment_texture = selected.and_then(|c| {
+            assets::resolve_texture_choice(
+                c.judgment.texture_key(),
+                assets::judgment_texture_choices(),
+            )
         });
 
         if let Some(texture) = judgment_texture {

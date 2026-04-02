@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::AssetManager;
+use crate::assets::{self, AssetManager};
 use crate::engine::audio;
 use crate::engine::gfx::BlendMode;
 use crate::engine::input::{InputEvent, VirtualAction};
@@ -981,29 +981,10 @@ fn build_main_rows(
         },
         Row {
             name: "Judgment Font".to_string(),
-            choices: vec![
-                "Love".to_string(),
-                "Love Chroma".to_string(),
-                "Rainbowmatic".to_string(),
-                "GrooveNights".to_string(),
-                "Emoticon".to_string(),
-                "Censored".to_string(),
-                "Chromatic".to_string(),
-                "ITG2".to_string(),
-                "Bebas".to_string(),
-                "Code".to_string(),
-                "Comic Sans".to_string(),
-                "Focus".to_string(),
-                "Grammar".to_string(),
-                "Miso".to_string(),
-                "Papyrus".to_string(),
-                "Roboto".to_string(),
-                "Shift".to_string(),
-                "Tactics".to_string(),
-                "Wendy".to_string(),
-                "Wendy Chroma".to_string(),
-                "None".to_string(),
-            ],
+            choices: assets::judgment_texture_choices()
+                .iter()
+                .map(|choice| choice.label.clone())
+                .collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Pick your judgment font.".to_string()],
             choice_difficulty_indices: None,
@@ -1029,12 +1010,10 @@ fn build_main_rows(
         },
         Row {
             name: "Hold Judgment".to_string(),
-            choices: vec![
-                "Love".to_string(),
-                "mute".to_string(),
-                "ITG2".to_string(),
-                "None".to_string(),
-            ],
+            choices: assets::hold_judgment_texture_choices()
+                .iter()
+                .map(|choice| choice.label.clone())
+                .collect(),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Change the judgment graphics displayed for hold notes.".to_string()],
             choice_difficulty_indices: None,
@@ -1777,29 +1756,14 @@ fn apply_profile_defaults(
     }
     // Initialize Judgment Font row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Font") {
-        row.selected_choice_index[player_idx] = match profile.judgment_graphic {
-            crate::game::profile::JudgmentGraphic::Love => 0,
-            crate::game::profile::JudgmentGraphic::LoveChroma => 1,
-            crate::game::profile::JudgmentGraphic::Rainbowmatic => 2,
-            crate::game::profile::JudgmentGraphic::GrooveNights => 3,
-            crate::game::profile::JudgmentGraphic::Emoticon => 4,
-            crate::game::profile::JudgmentGraphic::Censored => 5,
-            crate::game::profile::JudgmentGraphic::Chromatic => 6,
-            crate::game::profile::JudgmentGraphic::ITG2 => 7,
-            crate::game::profile::JudgmentGraphic::Bebas => 8,
-            crate::game::profile::JudgmentGraphic::Code => 9,
-            crate::game::profile::JudgmentGraphic::ComicSans => 10,
-            crate::game::profile::JudgmentGraphic::Focus => 11,
-            crate::game::profile::JudgmentGraphic::Grammar => 12,
-            crate::game::profile::JudgmentGraphic::Miso => 13,
-            crate::game::profile::JudgmentGraphic::Papyrus => 14,
-            crate::game::profile::JudgmentGraphic::Roboto => 15,
-            crate::game::profile::JudgmentGraphic::Shift => 16,
-            crate::game::profile::JudgmentGraphic::Tactics => 17,
-            crate::game::profile::JudgmentGraphic::Wendy => 18,
-            crate::game::profile::JudgmentGraphic::WendyChroma => 19,
-            crate::game::profile::JudgmentGraphic::None => 20,
-        };
+        row.selected_choice_index[player_idx] = assets::judgment_texture_choices()
+            .iter()
+            .position(|choice| {
+                choice
+                    .key
+                    .eq_ignore_ascii_case(profile.judgment_graphic.as_str())
+            })
+            .unwrap_or(0);
     }
     // Initialize NoteSkin row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteSkin") {
@@ -1868,12 +1832,14 @@ fn apply_profile_defaults(
     }
     // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Hold Judgment") {
-        row.selected_choice_index[player_idx] = match profile.hold_judgment_graphic {
-            crate::game::profile::HoldJudgmentGraphic::Love => 0,
-            crate::game::profile::HoldJudgmentGraphic::Mute => 1,
-            crate::game::profile::HoldJudgmentGraphic::ITG2 => 2,
-            crate::game::profile::HoldJudgmentGraphic::None => 3,
-        };
+        row.selected_choice_index[player_idx] = assets::hold_judgment_texture_choices()
+            .iter()
+            .position(|choice| {
+                choice
+                    .key
+                    .eq_ignore_ascii_case(profile.hold_judgment_graphic.as_str())
+            })
+            .unwrap_or(0);
     }
     // Initialize Mini row from profile (range -100..150, stored as percent).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Mini") {
@@ -4088,33 +4054,16 @@ fn change_choice_for_player(
             crate::game::profile::update_measure_lines_for_side(persist_side, setting);
         }
     } else if row_name == "Judgment Font" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::JudgmentGraphic::Love,
-            1 => crate::game::profile::JudgmentGraphic::LoveChroma,
-            2 => crate::game::profile::JudgmentGraphic::Rainbowmatic,
-            3 => crate::game::profile::JudgmentGraphic::GrooveNights,
-            4 => crate::game::profile::JudgmentGraphic::Emoticon,
-            5 => crate::game::profile::JudgmentGraphic::Censored,
-            6 => crate::game::profile::JudgmentGraphic::Chromatic,
-            7 => crate::game::profile::JudgmentGraphic::ITG2,
-            8 => crate::game::profile::JudgmentGraphic::Bebas,
-            9 => crate::game::profile::JudgmentGraphic::Code,
-            10 => crate::game::profile::JudgmentGraphic::ComicSans,
-            11 => crate::game::profile::JudgmentGraphic::Focus,
-            12 => crate::game::profile::JudgmentGraphic::Grammar,
-            13 => crate::game::profile::JudgmentGraphic::Miso,
-            14 => crate::game::profile::JudgmentGraphic::Papyrus,
-            15 => crate::game::profile::JudgmentGraphic::Roboto,
-            16 => crate::game::profile::JudgmentGraphic::Shift,
-            17 => crate::game::profile::JudgmentGraphic::Tactics,
-            18 => crate::game::profile::JudgmentGraphic::Wendy,
-            19 => crate::game::profile::JudgmentGraphic::WendyChroma,
-            20 => crate::game::profile::JudgmentGraphic::None,
-            _ => crate::game::profile::JudgmentGraphic::Love,
-        };
+        let setting = assets::judgment_texture_choices()
+            .get(row.selected_choice_index[player_idx])
+            .map(|choice| crate::game::profile::JudgmentGraphic::new(&choice.key))
+            .unwrap_or_default();
         state.player_profiles[player_idx].judgment_graphic = setting;
         if should_persist {
-            crate::game::profile::update_judgment_graphic_for_side(persist_side, setting);
+            crate::game::profile::update_judgment_graphic_for_side(
+                persist_side,
+                state.player_profiles[player_idx].judgment_graphic.clone(),
+            );
         }
     } else if row_name == "Combo Font" {
         let setting = match row.selected_choice_index[player_idx] {
@@ -4162,16 +4111,18 @@ fn change_choice_for_player(
             crate::game::profile::update_carry_combo_between_songs_for_side(persist_side, enabled);
         }
     } else if row_name == "Hold Judgment" {
-        let setting = match row.selected_choice_index[player_idx] {
-            0 => crate::game::profile::HoldJudgmentGraphic::Love,
-            1 => crate::game::profile::HoldJudgmentGraphic::Mute,
-            2 => crate::game::profile::HoldJudgmentGraphic::ITG2,
-            3 => crate::game::profile::HoldJudgmentGraphic::None,
-            _ => crate::game::profile::HoldJudgmentGraphic::Love,
-        };
+        let setting = assets::hold_judgment_texture_choices()
+            .get(row.selected_choice_index[player_idx])
+            .map(|choice| crate::game::profile::HoldJudgmentGraphic::new(&choice.key))
+            .unwrap_or_default();
         state.player_profiles[player_idx].hold_judgment_graphic = setting;
         if should_persist {
-            crate::game::profile::update_hold_judgment_graphic_for_side(persist_side, setting);
+            crate::game::profile::update_hold_judgment_graphic_for_side(
+                persist_side,
+                state.player_profiles[player_idx]
+                    .hold_judgment_graphic
+                    .clone(),
+            );
         }
     } else if row_name == "NoteSkin" {
         let setting_name = row
@@ -7133,33 +7084,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     // Add previews for the selected value on each side.
                     if row.name == "Judgment Font" {
-                        let texture_for = |text: &str| -> Option<&'static str> {
-                            match text {
-                            "Love" => Some("judgements/Love 2x7 (doubleres).png"),
-                            "Love Chroma" => Some("judgements/Love Chroma 2x7 (doubleres).png"),
-                            "Rainbowmatic" => Some("judgements/Rainbowmatic 2x7 (doubleres).png"),
-                            "GrooveNights" => Some("judgements/GrooveNights 2x7 (doubleres).png"),
-                            "Emoticon" => Some("judgements/Emoticon 2x7 (doubleres).png"),
-                            "Censored" => Some("judgements/Censored 1x7 (doubleres).png"),
-                            "Chromatic" => Some("judgements/Chromatic 2x7 (doubleres).png"),
-                            "ITG2" => Some("judgements/ITG2 2x7 (doubleres).png"),
-                            "Bebas" => Some("judgements/Bebas 2x7 (doubleres).png"),
-                            "Code" => Some("judgements/Code 2x7 (doubleres).png"),
-                            "Comic Sans" => Some("judgements/Comic Sans 2x7 (doubleres).png"),
-                            "Focus" => Some("judgements/Focus 2x7 (doubleres).png"),
-                            "Grammar" => Some("judgements/Grammar 2x7 (doubleres).png"),
-                            "Miso" => Some("judgements/Miso 2x7 (doubleres).png"),
-                            "Papyrus" => Some("judgements/Papyrus 2x7 (doubleres).png"),
-                            "Roboto" => Some("judgements/Roboto 2x7 (doubleres).png"),
-                            "Shift" => Some("judgements/Shift 2x7 (doubleres).png"),
-                            "Tactics" => Some("judgements/Tactics 2x7 (doubleres).png"),
-                            "Wendy" => Some("judgements/Wendy 2x7 (doubleres).png"),
-                            "Wendy Chroma" => Some("judgements/Wendy Chroma 2x7 (doubleres).png"),
-                            "None" => None,
-                            _ => None,
-                            }
+                        let texture_for = |player_idx: usize| -> Option<&str> {
+                            assets::judgment_texture_choices()
+                                .get(row.selected_choice_index[player_idx])
+                                .and_then(|choice| {
+                                    assets::resolve_texture_choice(
+                                        (!choice.key.eq_ignore_ascii_case("None"))
+                                            .then_some(choice.key.as_str()),
+                                        assets::judgment_texture_choices(),
+                                    )
+                                })
                         };
-                        if let Some(texture) = texture_for(choice_text.as_str()) {
+                        if let Some(texture) = texture_for(primary_player_idx) {
                             actors.push(act!(sprite(texture):
                                 align(0.5, 0.5):
                                 xy(preview_x_for(primary_player_idx), current_row_y):
@@ -7169,8 +7105,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 z(102)
                             ));
                         }
-                        if show_p2 && primary_player_idx != P2
-                            && let Some(texture) = texture_for(p2_text.as_str())
+                        if show_p2
+                            && primary_player_idx != P2
+                            && let Some(texture) = texture_for(P2)
                         {
                             actors.push(act!(sprite(texture):
                                 align(0.5, 0.5):
@@ -7184,14 +7121,16 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     // Add hold judgment preview for "Hold Judgment" row showing both frames (Held and Let Go)
                     if row.name == "Hold Judgment" {
-                        let texture_for = |text: &str| -> Option<&'static str> {
-                            match text {
-                            "Love" => Some("hold_judgements/Love 1x2 (doubleres).png"),
-                            "mute" => Some("hold_judgements/mute 1x2 (doubleres).png"),
-                            "ITG2" => Some("hold_judgements/ITG2 1x2 (doubleres).png"),
-                            "None" => None,
-                            _ => None,
-                            }
+                        let texture_for = |player_idx: usize| -> Option<&str> {
+                            assets::hold_judgment_texture_choices()
+                                .get(row.selected_choice_index[player_idx])
+                                .and_then(|choice| {
+                                    assets::resolve_texture_choice(
+                                        (!choice.key.eq_ignore_ascii_case("None"))
+                                            .then_some(choice.key.as_str()),
+                                        assets::hold_judgment_texture_choices(),
+                                    )
+                                })
                         };
                         let draw_hold_preview = |texture: &str, center_x: f32, actors: &mut Vec<Actor>| {
                             let zoom = 0.225;
@@ -7216,11 +7155,12 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                 z(102)
                             ));
                         };
-                        if let Some(texture) = texture_for(choice_text.as_str()) {
+                        if let Some(texture) = texture_for(primary_player_idx) {
                             draw_hold_preview(texture, preview_x_for(primary_player_idx), &mut actors);
                         }
-                        if show_p2 && primary_player_idx != P2
-                            && let Some(texture) = texture_for(p2_text.as_str())
+                        if show_p2
+                            && primary_player_idx != P2
+                            && let Some(texture) = texture_for(P2)
                         {
                             draw_hold_preview(texture, preview_x_for(P2), &mut actors);
                         }

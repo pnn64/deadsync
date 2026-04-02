@@ -6,8 +6,8 @@ use log::{debug, warn};
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    path::Path,
-    sync::{Arc, Mutex, RwLock, mpsc},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock, RwLock, mpsc},
 };
 
 use super::AssetError;
@@ -32,6 +32,23 @@ pub struct TextureHints {
     pub sampler_wrap: Option<SamplerWrap>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TextureChoice {
+    pub key: String,
+    pub label: String,
+}
+
+#[derive(Clone, Debug)]
+struct DiscoveredTexture {
+    key: String,
+    label: String,
+    source_path: String,
+}
+
+static JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
+static HOLD_JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
+const NONE_TEXTURE_CHOICE_KEY: &str = "None";
+
 impl TextureHints {
     #[inline(always)]
     pub fn is_default(&self) -> bool {
@@ -46,6 +63,205 @@ impl TextureHints {
             mipmaps: self.mipmaps.unwrap_or(false),
         }
     }
+}
+
+fn absolute_or_self(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+    std::env::current_dir()
+        .map(|cwd| cwd.join(path))
+        .unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn graphics_roots(folder: &str) -> Vec<PathBuf> {
+    let dirs = dirs::app_dirs();
+    let mut roots = Vec::with_capacity(3);
+    if !dirs.portable {
+        let data_root = dirs.data_dir.join("assets").join("graphics").join(folder);
+        if data_root.is_dir() {
+            roots.push(data_root);
+        }
+    }
+
+    let cwd_root = Path::new("assets").join("graphics").join(folder);
+    if cwd_root.is_dir() {
+        let cwd_root = absolute_or_self(&cwd_root);
+        if !roots.iter().any(|root| root == &cwd_root) {
+            roots.push(cwd_root);
+        }
+    }
+
+    let exe_root = dirs.exe_dir.join("assets").join("graphics").join(folder);
+    if exe_root.is_dir() && !roots.iter().any(|root| root == &exe_root) {
+        roots.push(exe_root);
+    }
+    roots
+}
+
+fn has_multiframe_hint(filename: &str) -> bool {
+    let bytes = filename.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] != b' ' {
+            i += 1;
+            continue;
+        }
+        let mut left = i + 1;
+        while left < bytes.len() && bytes[left].is_ascii_digit() {
+            left += 1;
+        }
+        if left == i + 1 || left >= bytes.len() || !matches!(bytes[left], b'x' | b'X') {
+            i += 1;
+            continue;
+        }
+        let mut right = left + 1;
+        while right < bytes.len() && bytes[right].is_ascii_digit() {
+            right += 1;
+        }
+        if right > left + 1 {
+            return Path::new(filename)
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.as_bytes().iter().all(u8::is_ascii_alphabetic));
+        }
+        i = right;
+    }
+    false
+}
+
+pub fn strip_sprite_hints(name: &str) -> String {
+    let file_name = Path::new(name)
+        .file_name()
+        .and_then(|file| file.to_str())
+        .unwrap_or(name);
+    let without_ext = file_name
+        .rsplit_once('.')
+        .map_or(file_name, |(stem, _)| stem);
+    let bytes = without_ext.as_bytes();
+    let mut out = String::with_capacity(without_ext.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b' ' {
+            let mut left = i + 1;
+            while left < bytes.len() && bytes[left].is_ascii_digit() {
+                left += 1;
+            }
+            if left > i + 1 && left < bytes.len() && matches!(bytes[left], b'x' | b'X') {
+                let mut right = left + 1;
+                while right < bytes.len() && bytes[right].is_ascii_digit() {
+                    right += 1;
+                }
+                if right > left + 1 {
+                    i = right;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out.replace(" (doubleres)", "").trim().to_string()
+}
+
+fn discover_graphic_textures(folder: &str, love_first: bool) -> Vec<DiscoveredTexture> {
+    let mut discovered = Vec::new();
+    let mut seen_keys = HashSet::new();
+    for root in graphics_roots(folder) {
+        let Ok(entries) = fs::read_dir(&root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !has_multiframe_hint(file_name) {
+                continue;
+            }
+            let key = format!("{folder}/{file_name}");
+            if !seen_keys.insert(key.to_ascii_lowercase()) {
+                continue;
+            }
+            let label = strip_sprite_hints(file_name);
+            if label.eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY) {
+                continue;
+            }
+            discovered.push(DiscoveredTexture {
+                key,
+                label,
+                source_path: absolute_or_self(&path).to_string_lossy().replace('\\', "/"),
+            });
+        }
+    }
+    discovered.sort_by(|a, b| {
+        let a_love = love_first && a.label.eq_ignore_ascii_case("Love");
+        let b_love = love_first && b.label.eq_ignore_ascii_case("Love");
+        match (a_love, b_love) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a
+                .label
+                .to_ascii_lowercase()
+                .cmp(&b.label.to_ascii_lowercase()),
+        }
+    });
+    discovered
+}
+
+fn texture_choices_from_discovered(
+    folder: &str,
+    love_first: bool,
+    include_none: bool,
+) -> Vec<TextureChoice> {
+    let mut choices: Vec<TextureChoice> = discover_graphic_textures(folder, love_first)
+        .into_iter()
+        .map(|texture| TextureChoice {
+            key: texture.key,
+            label: texture.label,
+        })
+        .collect();
+    if include_none {
+        choices.push(TextureChoice {
+            key: NONE_TEXTURE_CHOICE_KEY.to_string(),
+            label: NONE_TEXTURE_CHOICE_KEY.to_string(),
+        });
+    }
+    choices
+}
+
+pub fn judgment_texture_choices() -> &'static [TextureChoice] {
+    JUDGMENT_TEXTURE_CHOICES
+        .get_or_init(|| texture_choices_from_discovered("judgements", true, true))
+        .as_slice()
+}
+
+pub fn hold_judgment_texture_choices() -> &'static [TextureChoice] {
+    HOLD_JUDGMENT_TEXTURE_CHOICES
+        .get_or_init(|| texture_choices_from_discovered("hold_judgements", false, true))
+        .as_slice()
+}
+
+pub fn resolve_texture_choice<'a>(
+    requested: Option<&str>,
+    choices: &'a [TextureChoice],
+) -> Option<&'a str> {
+    requested
+        .and_then(|key| {
+            choices
+                .iter()
+                .find(|choice| choice.key.eq_ignore_ascii_case(key))
+                .map(|choice| choice.key.as_str())
+        })
+        .or_else(|| {
+            choices
+                .iter()
+                .find(|choice| !choice.key.eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY))
+                .map(|choice| choice.key.as_str())
+        })
 }
 
 #[inline(always)]
@@ -412,6 +628,12 @@ pub(crate) fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, 
     }
 }
 
+fn append_graphic_textures(list: &mut Vec<(String, String)>, folder: &str, love_first: bool) {
+    for texture in discover_graphic_textures(folder, love_first) {
+        list.push((texture.key, texture.source_path));
+    }
+}
+
 pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
     let bytes = filename.as_bytes();
     let mut dims: Option<(u32, u32)> = None;
@@ -656,98 +878,6 @@ impl AssetManager {
                 "_fallback/banner12.png".to_string(),
             ),
             (
-                "judgements/Love 2x7 (doubleres).png".to_string(),
-                "judgements/Love 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Love Chroma 2x7 (doubleres).png".to_string(),
-                "judgements/Love Chroma 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Rainbowmatic 2x7 (doubleres).png".to_string(),
-                "judgements/Rainbowmatic 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/GrooveNights 2x7 (doubleres).png".to_string(),
-                "judgements/GrooveNights 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Emoticon 2x7 (doubleres).png".to_string(),
-                "judgements/Emoticon 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Censored 1x7 (doubleres).png".to_string(),
-                "judgements/Censored 1x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Chromatic 2x7 (doubleres).png".to_string(),
-                "judgements/Chromatic 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/ITG2 2x7 (doubleres).png".to_string(),
-                "judgements/ITG2 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Bebas 2x7 (doubleres).png".to_string(),
-                "judgements/Bebas 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Code 2x7 (doubleres).png".to_string(),
-                "judgements/Code 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Comic Sans 2x7 (doubleres).png".to_string(),
-                "judgements/Comic Sans 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Focus 2x7 (doubleres).png".to_string(),
-                "judgements/Focus 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Grammar 2x7 (doubleres).png".to_string(),
-                "judgements/Grammar 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Miso 2x7 (doubleres).png".to_string(),
-                "judgements/Miso 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Papyrus 2x7 (doubleres).png".to_string(),
-                "judgements/Papyrus 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Roboto 2x7 (doubleres).png".to_string(),
-                "judgements/Roboto 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Shift 2x7 (doubleres).png".to_string(),
-                "judgements/Shift 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Tactics 2x7 (doubleres).png".to_string(),
-                "judgements/Tactics 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Wendy 2x7 (doubleres).png".to_string(),
-                "judgements/Wendy 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "judgements/Wendy Chroma 2x7 (doubleres).png".to_string(),
-                "judgements/Wendy Chroma 2x7 (doubleres).png".to_string(),
-            ),
-            (
-                "hold_judgements/Love 1x2 (doubleres).png".to_string(),
-                "hold_judgements/Love 1x2 (doubleres).png".to_string(),
-            ),
-            (
-                "hold_judgements/mute 1x2 (doubleres).png".to_string(),
-                "hold_judgements/mute 1x2 (doubleres).png".to_string(),
-            ),
-            (
-                "hold_judgements/ITG2 1x2 (doubleres).png".to_string(),
-                "hold_judgements/ITG2 1x2 (doubleres).png".to_string(),
-            ),
-            (
                 "grades/grades 1x19.png".to_string(),
                 "grades/grades 1x19.png".to_string(),
             ),
@@ -789,6 +919,8 @@ impl AssetManager {
         }
 
         append_noteskins_pngs_recursive(&mut textures_to_load, "noteskins");
+        append_graphic_textures(&mut textures_to_load, "judgements", true);
+        append_graphic_textures(&mut textures_to_load, "hold_judgements", false);
 
         #[inline(always)]
         fn decode_rgba(

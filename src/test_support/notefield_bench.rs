@@ -71,8 +71,8 @@ pub fn fixture() -> NotefieldBenchFixture {
     let mut player_profiles = [profile::Profile::default(), profile::Profile::default()];
     player_profiles[0].noteskin = profile::NoteSkin::new(profile::NoteSkin::CEL_NAME);
     player_profiles[0].scroll_speed = ScrollSpeedSetting::CMod(620.0);
-    player_profiles[0].judgment_graphic = profile::JudgmentGraphic::Wendy;
-    player_profiles[0].hold_judgment_graphic = profile::HoldJudgmentGraphic::Love;
+    player_profiles[0].judgment_graphic = profile::JudgmentGraphic::new("Wendy");
+    player_profiles[0].hold_judgment_graphic = profile::HoldJudgmentGraphic::new("Love");
     player_profiles[0].hide_combo = false;
     player_profiles[0].column_cues = true;
     player_profiles[0].error_bar = profile::ErrorBarStyle::Colorful;

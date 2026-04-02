@@ -1,4 +1,5 @@
 use crate::act;
+use crate::assets;
 use crate::engine::gfx::{BlendMode, MeshMode, TexturedMeshVertex};
 use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
@@ -1398,7 +1399,38 @@ fn split_15_10ms_active(profile: &profile::Profile, judgment: &Judgment) -> bool
 }
 
 #[inline(always)]
-fn tap_judgment_rows(profile: &profile::Profile, judgment: &Judgment) -> (usize, Option<usize>) {
+fn resolved_judgment_texture(profile: &profile::Profile) -> Option<&str> {
+    assets::resolve_texture_choice(
+        profile.judgment_graphic.texture_key(),
+        assets::judgment_texture_choices(),
+    )
+}
+
+#[inline(always)]
+fn resolved_hold_judgment_texture(profile: &profile::Profile) -> Option<&str> {
+    assets::resolve_texture_choice(
+        profile.hold_judgment_graphic.texture_key(),
+        assets::hold_judgment_texture_choices(),
+    )
+}
+
+#[inline(always)]
+fn tap_judgment_rows(
+    profile: &profile::Profile,
+    judgment: &Judgment,
+    frame_rows: usize,
+) -> (usize, Option<usize>) {
+    if frame_rows < 7 {
+        return match judgment.grade {
+            JudgeGrade::Fantastic => (0, None),
+            JudgeGrade::Excellent => (1, None),
+            JudgeGrade::Great => (2, None),
+            JudgeGrade::Decent => (3, None),
+            JudgeGrade::WayOff => (4, None),
+            JudgeGrade::Miss => (5, None),
+        };
+    }
+
     match judgment.grade {
         JudgeGrade::Fantastic => {
             if split_15_10ms_active(profile, judgment) {
@@ -1538,10 +1570,7 @@ fn zmod_layout_ys(
     }
     let has_error_bar = error_bar_mask != 0;
     if has_error_bar {
-        if matches!(
-            profile.judgment_graphic,
-            crate::game::profile::JudgmentGraphic::None
-        ) {
+        if resolved_judgment_texture(profile).is_none() {
             // Error bar replaces judgment; no top/bottom adjustment.
         } else if profile.error_bar_up {
             top_y -= 15.0;
@@ -2495,12 +2524,7 @@ pub fn build(
     play_style: profile::PlayStyle,
     center_1player_notefield: bool,
 ) -> (Vec<Actor>, f32) {
-    let hold_judgment_texture: Option<&str> = match profile.hold_judgment_graphic {
-        profile::HoldJudgmentGraphic::Love => Some("hold_judgements/Love 1x2 (doubleres).png"),
-        profile::HoldJudgmentGraphic::Mute => Some("hold_judgements/mute 1x2 (doubleres).png"),
-        profile::HoldJudgmentGraphic::ITG2 => Some("hold_judgements/ITG2 1x2 (doubleres).png"),
-        profile::HoldJudgmentGraphic::None => None,
-    };
+    let hold_judgment_texture = resolved_hold_judgment_texture(profile);
 
     // --- Playfield Positioning (1:1 with Simply Love) ---
     // In P2-only single-player, we still have a single player runtime (index 0),
@@ -5560,10 +5584,7 @@ pub fn build(
     let show_error_bar_highlight = (error_bar_mask & profile::ERROR_BAR_BIT_HIGHLIGHT) != 0;
     let show_error_bar_average = (error_bar_mask & profile::ERROR_BAR_BIT_AVERAGE) != 0;
     let show_error_bar = error_bar_mask != 0;
-    let (error_bar_y, error_bar_max_h) = if matches!(
-        profile.judgment_graphic,
-        crate::game::profile::JudgmentGraphic::None
-    ) {
+    let (error_bar_y, error_bar_max_h) = if resolved_judgment_texture(profile).is_none() {
         (judgment_y, 30.0_f32)
     } else if profile.error_bar_up {
         (judgment_y - ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
@@ -6250,10 +6271,8 @@ pub fn build(
 
     // Judgment Sprite (tap judgments)
     if !blind_active && let Some(render_info) = &p.last_judgment {
-        if matches!(profile.judgment_graphic, profile::JudgmentGraphic::None) {
-            // Player chose to hide tap judgment graphics.
-            // Still keep life/score effects; only suppress the visual sprite.
-        } else {
+        if let Some(judgment_texture) = resolved_judgment_texture(profile) {
+            let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(judgment_texture);
             let judgment = &render_info.judgment;
             let elapsed = render_info.judged_at.elapsed().as_secs_f32();
             if elapsed < 0.9 {
@@ -6269,51 +6288,12 @@ pub fn build(
                     0.75 * (1.0 - ease_t)
                 } * judgment_zoom_mod;
                 let offset_sec = judgment.time_error_ms / 1000.0;
-                let (frame_row, overlay_row) = tap_judgment_rows(profile, judgment);
+                let (frame_row, overlay_row) =
+                    tap_judgment_rows(profile, judgment, frame_rows as usize);
                 let frame_offset = if offset_sec < 0.0 { 0 } else { 1 };
-                let columns = match profile.judgment_graphic {
-                    profile::JudgmentGraphic::Censored => 1,
-                    _ => 2,
-                };
+                let columns = frame_cols.max(1) as usize;
                 let col_index = if columns > 1 { frame_offset } else { 0 };
                 let linear_index = (frame_row * columns + col_index) as u32;
-                let judgment_texture = match profile.judgment_graphic {
-                    profile::JudgmentGraphic::Bebas => "judgements/Bebas 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Censored => "judgements/Censored 1x7 (doubleres).png",
-                    profile::JudgmentGraphic::Chromatic => {
-                        "judgements/Chromatic 2x7 (doubleres).png"
-                    }
-                    profile::JudgmentGraphic::Code => "judgements/Code 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::ComicSans => {
-                        "judgements/Comic Sans 2x7 (doubleres).png"
-                    }
-                    profile::JudgmentGraphic::Emoticon => "judgements/Emoticon 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Focus => "judgements/Focus 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Grammar => "judgements/Grammar 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::GrooveNights => {
-                        "judgements/GrooveNights 2x7 (doubleres).png"
-                    }
-                    profile::JudgmentGraphic::ITG2 => "judgements/ITG2 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Love => "judgements/Love 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::LoveChroma => {
-                        "judgements/Love Chroma 2x7 (doubleres).png"
-                    }
-                    profile::JudgmentGraphic::Miso => "judgements/Miso 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Papyrus => "judgements/Papyrus 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Rainbowmatic => {
-                        "judgements/Rainbowmatic 2x7 (doubleres).png"
-                    }
-                    profile::JudgmentGraphic::Roboto => "judgements/Roboto 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Shift => "judgements/Shift 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Tactics => "judgements/Tactics 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::Wendy => "judgements/Wendy 2x7 (doubleres).png",
-                    profile::JudgmentGraphic::WendyChroma => {
-                        "judgements/Wendy Chroma 2x7 (doubleres).png"
-                    }
-                    profile::JudgmentGraphic::None => {
-                        unreachable!("JudgmentGraphic::None is filtered above")
-                    }
-                };
                 let rot_deg = if profile.judgment_tilt && judgment.grade != JudgeGrade::Miss {
                     let abs_sec = offset_sec.abs().min(0.050);
                     let dir = if offset_sec < 0.0 { 1.0 } else { -1.0 };
@@ -6892,7 +6872,7 @@ mod tests {
             ..profile::Profile::default()
         };
         let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
-        assert_eq!(tap_judgment_rows(&profile, &judgment), (0, Some(1)));
+        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, Some(1)));
     }
 
     #[test]
@@ -6902,7 +6882,7 @@ mod tests {
             ..profile::Profile::default()
         };
         let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
-        assert_eq!(tap_judgment_rows(&profile, &judgment), (0, None));
+        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, None));
     }
 
     #[test]
@@ -6912,7 +6892,7 @@ mod tests {
             ..profile::Profile::default()
         };
         let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
-        assert_eq!(tap_judgment_rows(&profile, &judgment), (0, None));
+        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, None));
     }
 
     #[test]
@@ -6925,7 +6905,25 @@ mod tests {
             ..profile::Profile::default()
         };
         let judgment = fantastic_judgment(TimingWindow::W1, 14.0);
-        assert_eq!(tap_judgment_rows(&profile, &judgment), (1, None));
+        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (1, None));
+    }
+
+    #[test]
+    fn tap_judgment_rows_keep_six_row_assets_unsplit() {
+        let profile = profile::Profile {
+            show_fa_plus_window: true,
+            split_15_10ms: true,
+            ..profile::Profile::default()
+        };
+        let fantastic = fantastic_judgment(TimingWindow::W0, 12.0);
+        let excellent = Judgment {
+            grade: JudgeGrade::Excellent,
+            time_error_ms: 18.0,
+            window: Some(TimingWindow::W1),
+            miss_because_held: false,
+        };
+        assert_eq!(tap_judgment_rows(&profile, &fantastic, 6), (0, None));
+        assert_eq!(tap_judgment_rows(&profile, &excellent, 6), (1, None));
     }
 
     #[test]
