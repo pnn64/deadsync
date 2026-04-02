@@ -3991,6 +3991,7 @@ pub struct PlayerRuntime {
     pub first_fc_attempt_broken: bool,
     pub judgment_counts: judgment::JudgeCounts,
     pub scoring_counts: judgment::JudgeCounts,
+    pub provisional_scoring_counts: judgment::JudgeCounts,
     pub last_judgment: Option<JudgmentRenderInfo>,
 
     pub life: f32,
@@ -4097,6 +4098,7 @@ fn init_player_runtime() -> PlayerRuntime {
         first_fc_attempt_broken: false,
         judgment_counts: [0; judgment::JUDGE_GRADE_COUNT],
         scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
+        provisional_scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
         last_judgment: None,
         life: 0.5,
         combo_after_miss: 0,
@@ -7950,6 +7952,44 @@ fn update_itg_grade_totals(p: &mut PlayerRuntime) {
     );
 }
 
+#[inline(always)]
+fn add_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
+    let grade_ix = display_judge_ix(grade);
+    p.provisional_scoring_counts[grade_ix] =
+        p.provisional_scoring_counts[grade_ix].saturating_add(1);
+}
+
+#[inline(always)]
+fn remove_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
+    let grade_ix = display_judge_ix(grade);
+    p.provisional_scoring_counts[grade_ix] =
+        p.provisional_scoring_counts[grade_ix].saturating_sub(1);
+}
+
+#[inline(always)]
+fn register_provisional_early_result(
+    state: &mut State,
+    player: usize,
+    note_index: usize,
+    judgment: Judgment,
+) {
+    if state.notes[note_index].early_result.is_some() {
+        return;
+    }
+    add_provisional_early_score(&mut state.players[player], judgment.grade);
+    state.notes[note_index].early_result = Some(judgment);
+}
+
+#[inline(always)]
+fn set_final_note_result(state: &mut State, player: usize, note_index: usize, judgment: Judgment) {
+    if state.notes[note_index].result.is_none()
+        && let Some(early) = state.notes[note_index].early_result.as_ref()
+    {
+        remove_provisional_early_score(&mut state.players[player], early.grade);
+    }
+    state.notes[note_index].result = Some(judgment);
+}
+
 const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
     match grade {
         JudgeGrade::Fantastic => Some("W1"),
@@ -9073,7 +9113,12 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                             window: Some(window),
                             miss_because_held: false,
                         };
-                        state.notes[note_index].early_result = Some(judgment.clone());
+                        register_provisional_early_result(
+                            state,
+                            player,
+                            note_index,
+                            judgment.clone(),
+                        );
                         let life_delta = judge_life_delta(grade);
                         {
                             let p = &mut state.players[player];
@@ -9148,7 +9193,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     miss_because_held: false,
                 };
                 error_bar_register_tap(state, player, &judgment, current_time);
-                state.notes[note_index].result = Some(judgment);
+                set_final_note_result(state, player, note_index, judgment.clone());
 
                 log_timing_hit_detail(
                     timing_hit_log,
@@ -9216,7 +9261,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     miss_because_held: false,
                 };
                 error_bar_register_tap(state, player, &judgment, current_time);
-                state.notes[idx].result = Some(judgment);
+                set_final_note_result(state, player, idx, judgment.clone());
 
                 log_timing_hit_detail(
                     timing_hit_log,
@@ -9364,7 +9409,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
                     window: Some(window),
                     miss_because_held: false,
                 };
-                state.notes[note_index].early_result = Some(judgment.clone());
+                register_provisional_early_result(state, player, note_index, judgment.clone());
                 let life_delta = judge_life_delta(grade);
                 if !scoring_blocked {
                     let p = &mut state.players[player];
@@ -9419,7 +9464,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
     if !scoring_blocked {
         error_bar_register_tap(state, player, &judgment, current_time);
     }
-    state.notes[note_index].result = Some(judgment);
+    set_final_note_result(state, player, note_index, judgment.clone());
 
     log_timing_hit_detail(
         timing_hit_log,
@@ -10917,7 +10962,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
                 if queue_missed_feedback {
                     queue_missed_hold_feedback(state, cursor);
                 }
-                state.notes[cursor].result = Some(judgment);
+                set_final_note_result(state, player, cursor, judgment);
                 if log::log_enabled!(log::Level::Debug) {
                     let song_offset_s = state.song_offset_seconds;
                     let global_offset_s = state.global_offset_seconds;
@@ -11602,18 +11647,18 @@ mod tests {
         Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock,
         GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
-        TickMode, advance_hold_last_held, apply_mines_insert, arrow_time_window_bounds,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_row_grids,
-        collect_edge_judge_indices, count_rescore_tracks_on_row, crossed_mine_bounds,
-        enforce_max_simultaneous_notes, find_arrow_index, frame_stable_display_music_time,
-        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
-        lane_release_finished, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
-        parse_attack_mods, partition_notes_before_time,
+        TickMode, add_provisional_early_score, advance_hold_last_held, apply_mines_insert,
+        arrow_time_window_bounds, build_assist_clap_rows, build_attack_mask_windows_for_player,
+        build_row_grids, collect_edge_judge_indices, count_rescore_tracks_on_row,
+        crossed_mine_bounds, enforce_max_simultaneous_notes, find_arrow_index,
+        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_press_started, lane_release_finished, mine_window_bounds,
+        music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
-        replay_edge_cap, row_entry_for_cached_row, score_missed_holds_and_rolls,
-        score_valid_for_chart, scored_hold_totals_with_carry, stage_music_cut, step_calories,
-        suppress_final_bad_rescore_visual, tick_mode_status_line, turn_option_bits,
-        update_lane_count,
+        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
+        score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
+        stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
+        turn_option_bits, update_lane_count,
     };
     use crate::engine::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
@@ -12183,6 +12228,40 @@ mod tests {
             false,
             JudgeGrade::Decent
         ));
+    }
+
+    #[test]
+    fn provisional_early_score_counts_round_trip() {
+        let mut player = super::init_player_runtime();
+        add_provisional_early_score(&mut player, JudgeGrade::WayOff);
+        add_provisional_early_score(&mut player, JudgeGrade::Decent);
+        add_provisional_early_score(&mut player, JudgeGrade::WayOff);
+
+        assert_eq!(
+            player.provisional_scoring_counts
+                [crate::game::judgment::judge_grade_ix(JudgeGrade::Decent)],
+            1
+        );
+        assert_eq!(
+            player.provisional_scoring_counts
+                [crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)],
+            2
+        );
+
+        remove_provisional_early_score(&mut player, JudgeGrade::WayOff);
+        remove_provisional_early_score(&mut player, JudgeGrade::WayOff);
+        remove_provisional_early_score(&mut player, JudgeGrade::WayOff);
+
+        assert_eq!(
+            player.provisional_scoring_counts
+                [crate::game::judgment::judge_grade_ix(JudgeGrade::Decent)],
+            1
+        );
+        assert_eq!(
+            player.provisional_scoring_counts
+                [crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)],
+            0
+        );
     }
 
     #[test]

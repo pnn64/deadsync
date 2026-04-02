@@ -75,8 +75,7 @@ pub fn build_agent(config: AgentConfig) -> ureq::Agent {
 
 // Reuse a single process-wide agent so score submits and leaderboard requests share
 // one connection pool instead of opening fresh sockets/TLS sessions per request.
-static DEFAULT_AGENT: LazyLock<ureq::Agent> =
-    LazyLock::new(|| build_agent(AgentConfig::default()));
+static DEFAULT_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| build_agent(AgentConfig::default()));
 
 pub fn get_agent() -> ureq::Agent {
     DEFAULT_AGENT.clone()

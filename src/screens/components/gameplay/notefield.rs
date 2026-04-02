@@ -1974,8 +1974,47 @@ fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] 
 }
 
 #[inline(always)]
-fn scoring_count(p: &PlayerRuntime, grade: JudgeGrade) -> u32 {
-    p.scoring_counts[crate::game::judgment::judge_grade_ix(grade)]
+fn scoring_count(
+    scoring_counts: &crate::game::judgment::JudgeCounts,
+    provisional_counts: &crate::game::judgment::JudgeCounts,
+    grade: JudgeGrade,
+) -> u32 {
+    let grade_ix = crate::game::judgment::judge_grade_ix(grade);
+    scoring_counts[grade_ix].saturating_add(provisional_counts[grade_ix])
+}
+
+#[inline(always)]
+fn actual_grade_points_with_provisional(
+    actual_dp: i32,
+    provisional_counts: &crate::game::judgment::JudgeCounts,
+) -> i32 {
+    actual_dp
+        .saturating_add(
+            crate::game::judgment::calculate_itg_grade_points_from_counts(
+                provisional_counts,
+                0,
+                0,
+                0,
+            ),
+        )
+        .max(0)
+}
+
+#[inline(always)]
+fn add_provisional_early_bad_counts_to_ex_score(
+    mut data: crate::game::judgment::ExScoreData,
+    provisional_counts: &crate::game::judgment::JudgeCounts,
+) -> crate::game::judgment::ExScoreData {
+    let decent = provisional_counts[crate::game::judgment::judge_grade_ix(JudgeGrade::Decent)];
+    let way_off = provisional_counts[crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)];
+    let miss = provisional_counts[crate::game::judgment::judge_grade_ix(JudgeGrade::Miss)];
+    data.counts.w4 = data.counts.w4.saturating_add(decent);
+    data.counts.w5 = data.counts.w5.saturating_add(way_off);
+    data.counts.miss = data.counts.miss.saturating_add(miss);
+    data.counts_10ms.w4 = data.counts_10ms.w4.saturating_add(decent);
+    data.counts_10ms.w5 = data.counts_10ms.w5.saturating_add(way_off);
+    data.counts_10ms.miss = data.counts_10ms.miss.saturating_add(miss);
+    data
 }
 
 /// Compute predictive kept/lost/pace percentages for ITG scoring.
@@ -2021,12 +2060,13 @@ fn zmod_mini_indicator_progress(
     player_idx: usize,
     score_type: profile::MiniIndicatorScoreType,
 ) -> MiniIndicatorProgress {
-    let w1 = scoring_count(p, JudgeGrade::Fantastic);
-    let w2 = scoring_count(p, JudgeGrade::Excellent);
-    let w3 = scoring_count(p, JudgeGrade::Great);
-    let w4 = scoring_count(p, JudgeGrade::Decent);
-    let w5 = scoring_count(p, JudgeGrade::WayOff);
-    let miss = scoring_count(p, JudgeGrade::Miss);
+    let provisional = &p.provisional_scoring_counts;
+    let w1 = scoring_count(&p.scoring_counts, provisional, JudgeGrade::Fantastic);
+    let w2 = scoring_count(&p.scoring_counts, provisional, JudgeGrade::Excellent);
+    let w3 = scoring_count(&p.scoring_counts, provisional, JudgeGrade::Great);
+    let w4 = scoring_count(&p.scoring_counts, provisional, JudgeGrade::Decent);
+    let w5 = scoring_count(&p.scoring_counts, provisional, JudgeGrade::WayOff);
+    let miss = scoring_count(&p.scoring_counts, provisional, JudgeGrade::Miss);
 
     let let_go = p
         .holds_let_go_for_score
@@ -2050,7 +2090,7 @@ fn zmod_mini_indicator_progress(
         .saturating_mul(HOLD_SCORE_HELD);
 
     let possible_dp = state.possible_grade_points[player_idx].max(1);
-    let actual_dp = p.earned_grade_points.max(0);
+    let actual_dp = actual_grade_points_with_provisional(p.earned_grade_points, provisional);
 
     // Compute predictive percents for the active score type.
     let (kept_percent, lost_percent, pace_percent, white_count) = match score_type {
@@ -2060,7 +2100,10 @@ fn zmod_mini_indicator_progress(
             (kept, lost, pace, 0)
         }
         profile::MiniIndicatorScoreType::Ex | profile::MiniIndicatorScoreType::HardEx => {
-            let score = crate::game::gameplay::display_ex_score_data(state, player_idx);
+            let score = add_provisional_early_bad_counts_to_ex_score(
+                crate::game::gameplay::display_ex_score_data(state, player_idx),
+                provisional,
+            );
             let white_count = score.counts.w1;
             if score_type == profile::MiniIndicatorScoreType::Ex {
                 let (kept, lost, pace) =
@@ -6376,15 +6419,20 @@ pub fn build(
 mod tests {
     use super::{
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
+        actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
         hud_y, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha,
-        note_slot_base_size, note_world_z, note_x_extra, offset_center, push_transform_parts,
-        receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tipsy_y_extra,
-        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
+        note_slot_base_size, note_world_z, note_x_extra, offset_center, predictive_itg_percents,
+        push_transform_parts, receptor_row_center, tap_judgment_rows, tap_part_for_note_type,
+        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
+        zmod_subtractive_counter_state,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
-    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use crate::game::judgment::{
+        ExScoreData, JUDGE_GRADE_COUNT, JudgeGrade, Judgment, TimingWindow, ex_score_percent,
+        predictive_ex_score_percents,
+    };
     use crate::game::note::NoteType;
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
@@ -6878,6 +6926,33 @@ mod tests {
         };
         let judgment = fantastic_judgment(TimingWindow::W1, 14.0);
         assert_eq!(tap_judgment_rows(&profile, &judgment), (1, None));
+    }
+
+    #[test]
+    fn provisional_early_wayoff_counts_toward_predictive_ex_loss() {
+        let score = ExScoreData {
+            total_steps: 100,
+            ..ExScoreData::default()
+        };
+        let base = predictive_ex_score_percents(&score);
+        let mut provisional = [0u32; JUDGE_GRADE_COUNT];
+        provisional[crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)] = 1;
+        let adjusted = add_provisional_early_bad_counts_to_ex_score(score, &provisional);
+
+        assert_eq!(base, (100.0, 0.0, 0.0));
+        assert_eq!(predictive_ex_score_percents(&adjusted), (99.0, 1.0, 0.0));
+        assert_eq!(ex_score_percent(&adjusted), 0.0);
+    }
+
+    #[test]
+    fn provisional_early_wayoff_counts_toward_predictive_itg_loss() {
+        let mut provisional = [0u32; JUDGE_GRADE_COUNT];
+        provisional[crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)] = 1;
+        let actual = actual_grade_points_with_provisional(0, &provisional);
+        let (kept, lost, pace) = predictive_itg_percents(5, 100, actual);
+
+        assert_eq!(actual, 0);
+        assert_eq!((kept, lost, pace), (95.0, 5.0, 0.0));
     }
 
     #[test]
