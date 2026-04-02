@@ -475,7 +475,6 @@ const BACK_OUT_FADE_DELAY_SECONDS: f32 = 0.1;
 const BACK_OUT_FADE_SECONDS: f32 = 0.4;
 const AUTOPLAY_TAP_RELEASE_SECONDS: f32 = 0.005;
 const AUTOPLAY_HOLD_RELEASE_SECONDS: f32 = 0.001;
-const AUTOPLAY_OFFSET_EPSILON_SECONDS: f32 = 0.000_001;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 pub const AUTOSYNC_OFFSET_SAMPLE_COUNT: usize = 24;
 const AUTOSYNC_STDDEV_MAX_SECONDS: f32 = 0.03;
@@ -960,11 +959,6 @@ impl TurnRng {
         } else {
             (self.next_u32() as usize) % upper_exclusive
         }
-    }
-
-    #[inline(always)]
-    fn next_f32_unit(&mut self) -> f32 {
-        (self.next_u32() as f32) * (1.0 / 4_294_967_296.0)
     }
 
     fn shuffle<T>(&mut self, slice: &mut [T]) {
@@ -4558,9 +4552,7 @@ pub struct State {
     gamepad_lane_counts: [u8; MAX_COLS],
     lane_pressed_since: [Option<f32>; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
-    autoplay_rng: TurnRng,
     autoplay_cursor: [usize; MAX_PLAYERS],
-    autoplay_pending_row: [Option<(usize, f32)>; MAX_PLAYERS],
     autoplay_lane_state: [bool; MAX_COLS],
     autoplay_hold_release_time: [Option<f32>; MAX_COLS],
     tick_mode: TickMode,
@@ -5514,32 +5506,22 @@ pub fn display_clock_health(state: &State) -> DisplayClockHealth {
 
 #[inline(always)]
 fn autoplay_blocks_scoring(state: &State) -> bool {
-    state.autoplay_enabled && !state.replay_mode
+    live_autoplay_enabled(state)
 }
 
 #[inline(always)]
-fn autoplay_tap_offset_s(state: &mut State) -> f32 {
-    let w1 = state
-        .timing_profile
-        .windows_s
-        .first()
-        .copied()
-        .unwrap_or(0.0)
-        .max(0.0);
-    if w1 <= 0.0 {
-        return 0.0;
-    }
+const fn live_autoplay_enabled_from_flags(autoplay_enabled: bool, replay_mode: bool) -> bool {
+    autoplay_enabled && !replay_mode
+}
 
-    let mut offset = (state.autoplay_rng.next_f32_unit() * 2.0 - 1.0) * w1;
-    if offset.abs() < AUTOPLAY_OFFSET_EPSILON_SECONDS {
-        let sign = if state.autoplay_rng.next_u32() & 1 == 0 {
-            -1.0
-        } else {
-            1.0
-        };
-        offset = sign * AUTOPLAY_OFFSET_EPSILON_SECONDS.min(w1);
-    }
-    offset
+#[inline(always)]
+fn live_autoplay_enabled(state: &State) -> bool {
+    live_autoplay_enabled_from_flags(state.autoplay_enabled, state.replay_mode)
+}
+
+#[inline(always)]
+const fn active_hold_counts_as_pressed(live_autoplay: bool, lane_pressed: bool) -> bool {
+    live_autoplay || lane_pressed
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -7479,9 +7461,7 @@ pub fn init(
         gamepad_lane_counts: [0; MAX_COLS],
         lane_pressed_since: [None; MAX_COLS],
         pending_edges: VecDeque::with_capacity(pending_edges_capacity),
-        autoplay_rng: TurnRng::new(song_seed ^ 0xA0A7_0F8A_1A2B_3C4D),
         autoplay_cursor: note_range_start,
-        autoplay_pending_row: [None; MAX_PLAYERS],
         autoplay_lane_state: [false; MAX_COLS],
         autoplay_hold_release_time: [None; MAX_COLS],
         tick_mode: profile::get_session_timing_tick_mode(),
@@ -8686,6 +8666,7 @@ fn update_active_holds(
     current_time: f32,
     delta_time: f32,
 ) {
+    let live_autoplay = live_autoplay_enabled(state);
     for (column, _) in inputs.iter().enumerate().take(state.active_holds.len()) {
         let player = player_for_col(state, column);
         let timing = &state.timing_players[player];
@@ -8702,7 +8683,11 @@ fn update_active_holds(
                     *active_opt = None;
                     continue;
                 };
-                let pressed = inputs[column];
+                // ITG autoplay keeps non-human hold sustain separate from the
+                // cabinet's physical held-panel state, so live autoplay should
+                // never decay an already-active hold because a synthetic lane
+                // edge was released or never existed.
+                let pressed = active_hold_counts_as_pressed(live_autoplay, inputs[column]);
                 active.is_pressed = pressed;
                 let body_started = current_time >= active.start_time;
 
@@ -9658,7 +9643,6 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
         state.pending_edges.clear();
         state.autoplay_lane_state = [false; MAX_COLS];
         state.autoplay_hold_release_time = [None; MAX_COLS];
-        state.autoplay_pending_row = [None; MAX_PLAYERS];
         for player in 0..state.num_players {
             let (note_start, note_end) = player_note_range(state, player);
             state.autoplay_cursor[player] = state.next_tap_miss_cursor[player]
@@ -9690,7 +9674,6 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
     for t in &mut state.autoplay_hold_release_time {
         *t = None;
     }
-    state.autoplay_pending_row = [None; MAX_PLAYERS];
 }
 
 fn run_autoplay(state: &mut State, now_music_time: f32) {
@@ -9704,7 +9687,6 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
         while cursor < note_end {
             while cursor < note_end && state.notes[cursor].result.is_some() {
                 cursor += 1;
-                state.autoplay_pending_row[player] = None;
             }
             if cursor >= note_end {
                 break;
@@ -9716,14 +9698,9 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
                 row_end += 1;
             }
             let row_time = state.note_time_cache[cursor];
-            let row_event_time = match state.autoplay_pending_row[player] {
-                Some((pending_cursor, pending_time)) if pending_cursor == cursor => pending_time,
-                _ => {
-                    let sampled = row_time + autoplay_tap_offset_s(state);
-                    state.autoplay_pending_row[player] = Some((cursor, sampled));
-                    sampled
-                }
-            };
+            // ITGmania autoplay steps crossed rows immediately and scores them as
+            // W1; it does not add synthetic timing jitter on top of the row time.
+            let row_event_time = row_time;
             if row_event_time > now_music_time {
                 break;
             }
@@ -9809,7 +9786,6 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
                 state.autoplay_lane_state[col] = false;
             }
 
-            state.autoplay_pending_row[player] = None;
             cursor = row_end;
         }
         state.autoplay_cursor[player] = cursor;
@@ -11410,17 +11386,17 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         phase_timings.pre_notes_us = elapsed_us_since(started);
     }
 
-    if state.current_music_time >= state.music_end_time {
-        debug!("Music end time reached. Transitioning to evaluation.");
-        state.song_completed_naturally = true;
-        finalize_update_trace(
-            state,
-            delta_time,
-            music_time_sec,
-            frame_trace_started,
-            phase_timings,
-        );
-        return GameplayAction::Navigate(GameplayExit::Complete);
+    let spawn_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    // Judgment runs through the live arrow lists, so make sure the current
+    // frame's due rows are spawned before autoplay or input edges try to hit
+    // stop/warp notes that may appear exactly on the frame they become due.
+    spawn_lookahead_arrows(state, music_time_sec);
+    if let Some(started) = spawn_started {
+        phase_timings.spawn_arrows_us = elapsed_us_since(started);
     }
 
     let autoplay_started = if trace_enabled {
@@ -11461,10 +11437,18 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         lane_is_pressed(state, i)
     });
     let prev_inputs = state.prev_inputs;
-    for (col, (now_down, was_down)) in current_inputs.iter().copied().zip(prev_inputs).enumerate() {
-        if now_down && was_down {
-            let _ =
-                try_hit_crossed_mines_while_held(state, col, previous_music_time, music_time_sec);
+    if !live_autoplay_enabled(state) {
+        for (col, (now_down, was_down)) in
+            current_inputs.iter().copied().zip(prev_inputs).enumerate()
+        {
+            if now_down && was_down {
+                let _ = try_hit_crossed_mines_while_held(
+                    state,
+                    col,
+                    previous_music_time,
+                    music_time_sec,
+                );
+            }
         }
     }
     track_held_miss_windows(state, &current_inputs, music_time_sec);
@@ -11502,16 +11486,6 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     tick_visual_effects(state, delta_time);
     if let Some(started) = visuals_started {
         phase_timings.visuals_us = elapsed_us_since(started);
-    }
-
-    let spawn_started = if trace_enabled {
-        Some(Instant::now())
-    } else {
-        None
-    };
-    spawn_lookahead_arrows(state, music_time_sec);
-    if let Some(started) = spawn_started {
-        phase_timings.spawn_arrows_us = elapsed_us_since(started);
     }
 
     let mine_avoid_started = if trace_enabled {
@@ -11572,6 +11546,22 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     update_danger_fx(state);
     if let Some(started) = danger_started {
         phase_timings.danger_us = elapsed_us_since(started);
+    }
+
+    // Match ITG's end-of-song ordering: resolve the frame's late taps, hold
+    // ends, and misses before leaving gameplay, otherwise the last frame can
+    // cut to evaluation before final judgments land.
+    if state.current_music_time >= state.music_end_time {
+        debug!("Music end time reached. Transitioning to evaluation.");
+        state.song_completed_naturally = true;
+        finalize_update_trace(
+            state,
+            delta_time,
+            music_time_sec,
+            frame_trace_started,
+            phase_timings,
+        );
+        return GameplayAction::Navigate(GameplayExit::Complete);
     }
 
     if matches!(
@@ -11667,20 +11657,21 @@ mod tests {
         Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock,
         GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
-        TickMode, add_provisional_early_score, advance_hold_last_held, apply_mines_insert,
-        arrow_time_window_bounds, build_assist_clap_rows, build_attack_mask_windows_for_player,
-        build_row_grids, closest_lane_note, collect_edge_judge_indices,
-        count_rescore_tracks_on_row, crossed_mine_bounds, enforce_max_simultaneous_notes,
-        find_arrow_index, frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
+        TickMode, active_hold_counts_as_pressed, add_provisional_early_score,
+        advance_hold_last_held, apply_mines_insert, arrow_time_window_bounds,
+        build_assist_clap_rows, build_attack_mask_windows_for_player, build_row_grids,
+        closest_lane_note, collect_edge_judge_indices, count_rescore_tracks_on_row,
+        crossed_mine_bounds, enforce_max_simultaneous_notes, find_arrow_index,
+        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
-        lane_release_finished, late_note_resolution_window_s, max_step_distance_seconds,
-        mine_window_bounds, music_time_from_song_clock, next_tick_mode, parse_attack_mods,
-        partition_notes_before_time, player_draw_scale_for_tilt_with_visual_mask,
-        recent_step_tracks, recompute_player_totals, remove_provisional_early_score,
-        replay_edge_cap, row_entry_for_cached_row, score_missed_holds_and_rolls,
-        score_valid_for_chart, scored_hold_totals_with_carry, stage_music_cut, step_calories,
-        suppress_final_bad_rescore_visual, tick_mode_status_line, turn_option_bits,
-        update_lane_count,
+        lane_release_finished, late_note_resolution_window_s, live_autoplay_enabled_from_flags,
+        max_step_distance_seconds, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
+        parse_attack_mods, partition_notes_before_time,
+        player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
+        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
+        score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
+        stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
+        turn_option_bits, update_lane_count,
     };
     use crate::engine::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
@@ -11906,6 +11897,21 @@ mod tests {
             glow_edges,
             vec![(true, false), (false, false), (false, false), (false, true)]
         );
+    }
+
+    #[test]
+    fn live_autoplay_helper_excludes_replays() {
+        assert!(live_autoplay_enabled_from_flags(true, false));
+        assert!(!live_autoplay_enabled_from_flags(true, true));
+        assert!(!live_autoplay_enabled_from_flags(false, false));
+    }
+
+    #[test]
+    fn live_autoplay_forces_active_hold_pressed_state() {
+        assert!(active_hold_counts_as_pressed(true, false));
+        assert!(active_hold_counts_as_pressed(true, true));
+        assert!(active_hold_counts_as_pressed(false, true));
+        assert!(!active_hold_counts_as_pressed(false, false));
     }
 
     #[test]
