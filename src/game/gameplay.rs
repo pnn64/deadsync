@@ -473,8 +473,6 @@ const GIVE_UP_OUT_FADE_SECONDS: f32 = 1.0;
 const BACK_OUT_TOTAL_SECONDS: f32 = BACK_OUT_FADE_DELAY_SECONDS + BACK_OUT_FADE_SECONDS;
 const BACK_OUT_FADE_DELAY_SECONDS: f32 = 0.1;
 const BACK_OUT_FADE_SECONDS: f32 = 0.4;
-const AUTOPLAY_TAP_RELEASE_SECONDS: f32 = 0.005;
-const AUTOPLAY_HOLD_RELEASE_SECONDS: f32 = 0.001;
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 pub const AUTOSYNC_OFFSET_SAMPLE_COUNT: usize = 24;
 const AUTOSYNC_STDDEV_MAX_SECONDS: f32 = 0.03;
@@ -4553,8 +4551,6 @@ pub struct State {
     lane_pressed_since: [Option<f32>; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
     autoplay_cursor: [usize; MAX_PLAYERS],
-    autoplay_lane_state: [bool; MAX_COLS],
-    autoplay_hold_release_time: [Option<f32>; MAX_COLS],
     tick_mode: TickMode,
     assist_clap_rows: Vec<usize>,
     assist_clap_cursor: usize,
@@ -5522,6 +5518,26 @@ fn live_autoplay_enabled(state: &State) -> bool {
 #[inline(always)]
 const fn active_hold_counts_as_pressed(live_autoplay: bool, lane_pressed: bool) -> bool {
     live_autoplay || lane_pressed
+}
+
+#[inline(always)]
+fn settle_due_autoplay_active_holds(state: &mut State, cutoff_time: f32) {
+    for column in 0..state.num_cols {
+        let Some(active) = state.active_holds[column].as_ref() else {
+            continue;
+        };
+        if active.end_time > cutoff_time {
+            continue;
+        }
+        let note_index = active.note_index;
+        let hold_succeeded = !active.let_go && active.life > 0.0;
+        state.active_holds[column] = None;
+        if hold_succeeded {
+            handle_hold_success(state, column, note_index);
+        } else {
+            handle_hold_let_go(state, column, note_index);
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -7462,8 +7478,6 @@ pub fn init(
         lane_pressed_since: [None; MAX_COLS],
         pending_edges: VecDeque::with_capacity(pending_edges_capacity),
         autoplay_cursor: note_range_start,
-        autoplay_lane_state: [false; MAX_COLS],
-        autoplay_hold_release_time: [None; MAX_COLS],
         tick_mode: profile::get_session_timing_tick_mode(),
         assist_clap_rows,
         assist_clap_cursor: 0,
@@ -9076,7 +9090,11 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             }
             return false;
         }
-        let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
+        let mine_hit_on_press = if live_autoplay_enabled(state) {
+            false
+        } else {
+            try_hit_mine_while_held(state, column, current_time)
+        };
         if !lane_edge_matches_note_type(true, note_type) {
             return mine_hit_on_press;
         }
@@ -9328,7 +9346,11 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         }
         return mine_hit_on_press;
     }
-    try_hit_mine_while_held(state, column, current_time)
+    if live_autoplay_enabled(state) {
+        false
+    } else {
+        try_hit_mine_while_held(state, column, current_time)
+    }
 }
 
 /// Judge lift notes on button release. Mirrors tap judging's per-note path but
@@ -9641,8 +9663,6 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
         state.receptor_glow_lift_start_alpha = [0.0; MAX_COLS];
         state.receptor_glow_lift_start_zoom = [1.0; MAX_COLS];
         state.pending_edges.clear();
-        state.autoplay_lane_state = [false; MAX_COLS];
-        state.autoplay_hold_release_time = [None; MAX_COLS];
         for player in 0..state.num_players {
             let (note_start, note_end) = player_note_range(state, player);
             state.autoplay_cursor[player] = state.next_tap_miss_cursor[player]
@@ -9654,26 +9674,7 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
     }
 
     debug!("Autoplay disabled (F8).");
-    for col in 0..state.num_cols {
-        if !state.autoplay_lane_state[col] {
-            continue;
-        }
-        let Some(lane) = lane_from_column(col) else {
-            continue;
-        };
-        push_input_edge(
-            state,
-            InputSource::Keyboard,
-            lane,
-            false,
-            now_music_time,
-            false,
-        );
-        state.autoplay_lane_state[col] = false;
-    }
-    for t in &mut state.autoplay_hold_release_time {
-        *t = None;
-    }
+    let _ = now_music_time;
 }
 
 fn run_autoplay(state: &mut State, now_music_time: f32) {
@@ -9704,8 +9705,9 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
             if row_event_time > now_music_time {
                 break;
             }
-
-            let mut tap_releases: [Option<f32>; MAX_COLS] = [None; MAX_COLS];
+            // Finalize any already-ended autoplay holds before a new warped
+            // row on the same lane can replace the active hold slot.
+            settle_due_autoplay_active_holds(state, row_event_time);
             for idx in cursor..row_end {
                 let (result_is_some, is_fake, can_be_judged, note_type, col) = {
                     let note = &state.notes[idx];
@@ -9728,83 +9730,22 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
                 if col >= state.num_cols {
                     continue;
                 }
-                let Some(lane) = lane_from_column(col) else {
-                    continue;
-                };
-
-                if !state.autoplay_lane_state[col] {
-                    push_input_edge(
-                        state,
-                        InputSource::Keyboard,
-                        lane,
-                        true,
-                        row_event_time,
-                        false,
-                    );
-                    state.autoplay_lane_state[col] = true;
-                }
 
                 state.autoplay_used = true;
                 match note_type {
-                    NoteType::Hold => {
-                        let end_time = state.hold_end_time_cache[idx].unwrap_or(row_time);
-                        let release_at = end_time + AUTOPLAY_HOLD_RELEASE_SECONDS;
-                        match state.autoplay_hold_release_time[col] {
-                            Some(prev) => {
-                                if release_at > prev {
-                                    state.autoplay_hold_release_time[col] = Some(release_at);
-                                }
-                            }
-                            None => state.autoplay_hold_release_time[col] = Some(release_at),
-                        }
-                    }
                     NoteType::Lift => {
-                        tap_releases[col] = Some(row_event_time);
+                        let _ = judge_a_lift(state, col, row_event_time);
                     }
-                    NoteType::Roll | NoteType::Tap => {
-                        tap_releases[col] = Some(row_event_time + AUTOPLAY_TAP_RELEASE_SECONDS);
+                    NoteType::Tap | NoteType::Hold | NoteType::Roll => {
+                        let _ = judge_a_tap(state, col, row_event_time);
                     }
-                    _ => {}
+                    NoteType::Mine | NoteType::Fake => {}
                 }
-            }
-
-            for (col, release_at) in tap_releases.into_iter().enumerate() {
-                if release_at.is_none() || !state.autoplay_lane_state[col] {
-                    continue;
-                }
-                let Some(lane) = lane_from_column(col) else {
-                    continue;
-                };
-                push_input_edge(
-                    state,
-                    InputSource::Keyboard,
-                    lane,
-                    false,
-                    release_at.unwrap_or(row_event_time),
-                    false,
-                );
-                state.autoplay_lane_state[col] = false;
             }
 
             cursor = row_end;
         }
         state.autoplay_cursor[player] = cursor;
-    }
-
-    for col in 0..state.num_cols {
-        let Some(release_at) = state.autoplay_hold_release_time[col] else {
-            continue;
-        };
-        if now_music_time < release_at {
-            continue;
-        }
-        if state.autoplay_lane_state[col]
-            && let Some(lane) = lane_from_column(col)
-        {
-            push_input_edge(state, InputSource::Keyboard, lane, false, release_at, false);
-        }
-        state.autoplay_lane_state[col] = false;
-        state.autoplay_hold_release_time[col] = None;
     }
 
     let mut roll_cols = [usize::MAX; MAX_COLS];
