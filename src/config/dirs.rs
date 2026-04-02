@@ -148,9 +148,13 @@ pub fn app_dirs() -> &'static AppDirs {
     &APP_DIRS
 }
 
+fn cache_dir_under(root: &std::path::Path) -> PathBuf {
+    root.join("cache")
+}
+
 #[cfg(any(windows, test))]
 fn native_cache_dir_for_data_dir(data_dir: &std::path::Path) -> PathBuf {
-    data_dir.join("cache")
+    cache_dir_under(data_dir)
 }
 
 impl AppDirs {
@@ -186,17 +190,22 @@ impl AppDirs {
         }
     }
 
+    fn portable_layout(exe_dir: PathBuf) -> Self {
+        let cache_dir = cache_dir_under(&exe_dir);
+        Self {
+            data_dir: exe_dir.clone(),
+            cache_dir,
+            exe_dir,
+            portable: true,
+        }
+    }
+
     fn resolve() -> Self {
         let exe_path = std::env::current_exe().expect("cannot determine exe path");
         let exe_dir = Self::runtime_root_from_exe_path(&exe_path);
 
         if Self::has_portable_marker(&exe_dir) {
-            return Self {
-                data_dir: exe_dir.clone(),
-                cache_dir: exe_dir.clone(),
-                exe_dir,
-                portable: true,
-            };
+            return Self::portable_layout(exe_dir);
         }
 
         #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -206,7 +215,7 @@ impl AppDirs {
                 .expect("cannot determine home directory");
             let data_dir = home_dir.join(".deadsync");
             Self {
-                cache_dir: data_dir.join("cache"),
+                cache_dir: cache_dir_under(&data_dir),
                 data_dir,
                 exe_dir,
                 portable: false,
@@ -291,7 +300,6 @@ pub fn maybe_migrate_from_exe_dir() {
 
     warn!("Migration complete. Original files were NOT deleted.");
 }
-
 fn copy_item(src: &std::path::Path, dst: &std::path::Path) {
     if let Some(parent) = dst.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
@@ -388,6 +396,16 @@ mod tests {
         assert_eq!(
             AppDirs::runtime_root_from_exe_path(&exe_path),
             PathBuf::from("/tmp/deadsync/bin")
+        );
+    }
+
+    #[test]
+    fn portable_layout_keeps_song_cache_under_cache_dir() {
+        let dirs = AppDirs::portable_layout(PathBuf::from("/tmp/deadsync-portable"));
+        assert_eq!(dirs.songs_dir(), Path::new("/tmp/deadsync-portable/songs"));
+        assert_eq!(
+            dirs.song_cache_dir(),
+            Path::new("/tmp/deadsync-portable/cache/songs")
         );
     }
 }
