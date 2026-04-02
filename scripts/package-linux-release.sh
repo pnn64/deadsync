@@ -61,6 +61,7 @@ mkdir -p "${stage_dir}"
 cp "${bin_path}" "${stage_dir}/deadsync"
 cp -r assets songs courses "${stage_dir}/"
 cp README.md LICENSE "${stage_dir}/"
+: > "${stage_dir}/portable.txt"
 
 tar -C "${dist_dir}" -czf "${archive_path}" deadsync
 
