@@ -951,6 +951,11 @@ impl TurnRng {
     }
 
     #[inline(always)]
+    fn next_f32_unit(&mut self) -> f32 {
+        (self.next_u32() as f32) * (1.0 / 4_294_967_296.0)
+    }
+
+    #[inline(always)]
     fn gen_range(&mut self, upper_exclusive: usize) -> usize {
         if upper_exclusive <= 1 {
             0
@@ -4550,6 +4555,7 @@ pub struct State {
     gamepad_lane_counts: [u8; MAX_COLS],
     lane_pressed_since: [Option<f32>; MAX_COLS],
     pending_edges: VecDeque<InputEdge>,
+    autoplay_rng: TurnRng,
     autoplay_cursor: [usize; MAX_PLAYERS],
     tick_mode: TickMode,
     assist_clap_rows: Vec<usize>,
@@ -5538,6 +5544,59 @@ fn settle_due_autoplay_active_holds(state: &mut State, cutoff_time: f32) {
             handle_hold_let_go(state, column, note_index);
         }
     }
+}
+
+#[inline(always)]
+fn random_range_f32(rng: &mut TurnRng, min: f32, max: f32) -> f32 {
+    if !min.is_finite() || !max.is_finite() {
+        return 0.0;
+    }
+    if max <= min {
+        return min;
+    }
+    min + (max - min) * rng.next_f32_unit()
+}
+
+#[inline(always)]
+fn autoplay_random_offset_s_for_window(
+    rng: &mut TurnRng,
+    timing_profile: TimingProfile,
+    window: TimingWindow,
+) -> f32 {
+    let w0 = timing_profile.fa_plus_window_s.unwrap_or(0.0);
+    let (inner, outer) = match window {
+        TimingWindow::W0 => (0.0, w0),
+        TimingWindow::W1 => (w0, timing_profile.windows_s[0]),
+        TimingWindow::W2 => (timing_profile.windows_s[0], timing_profile.windows_s[1]),
+        TimingWindow::W3 => (timing_profile.windows_s[1], timing_profile.windows_s[2]),
+        TimingWindow::W4 => (timing_profile.windows_s[2], timing_profile.windows_s[3]),
+        TimingWindow::W5 => (timing_profile.windows_s[3], timing_profile.windows_s[4]),
+    };
+    if !outer.is_finite() || outer <= 0.0 {
+        return 0.0;
+    }
+    if !inner.is_finite() || inner <= 0.0 || inner >= outer {
+        return random_range_f32(rng, -outer, outer);
+    }
+    if rng.next_u32() & 1 == 0 {
+        random_range_f32(rng, -outer, -inner)
+    } else {
+        random_range_f32(rng, inner, outer)
+    }
+}
+
+#[inline(always)]
+fn live_autoplay_judgment_offset_s(
+    state: &mut State,
+    player_idx: usize,
+    window: TimingWindow,
+    measured_offset_s: f32,
+) -> f32 {
+    if !live_autoplay_enabled(state) {
+        return measured_offset_s;
+    }
+    let timing_profile = timing_profile_for_player(state, player_idx);
+    autoplay_random_offset_s_for_window(&mut state.autoplay_rng, timing_profile, window)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -7477,6 +7536,7 @@ pub fn init(
         gamepad_lane_counts: [0; MAX_COLS],
         lane_pressed_since: [None; MAX_COLS],
         pending_edges: VecDeque::with_capacity(pending_edges_capacity),
+        autoplay_rng: TurnRng::new(song_seed ^ 0xA17F_0FF5_EED5_1EED),
         autoplay_cursor: note_range_start,
         tick_mode: profile::get_session_timing_tick_mode(),
         assist_clap_rows,
@@ -9226,8 +9286,11 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     return true;
                 }
 
+                let judgment_time_error_s =
+                    live_autoplay_judgment_offset_s(state, player, window, te_real);
+                let judgment_event_time = row_note_time + judgment_time_error_s * rate;
                 let judgment = Judgment {
-                    time_error_ms: te_real * 1000.0,
+                    time_error_ms: judgment_time_error_s * 1000.0,
                     grade,
                     window: Some(window),
                     miss_because_held: false,
@@ -9245,7 +9308,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     song_offset_s,
                     global_offset_s,
                     row_note_time,
-                    current_time,
+                    judgment_event_time,
                     state.current_music_time,
                     rate,
                     lead_in_s,
@@ -9294,8 +9357,11 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 else {
                     continue;
                 };
+                let judgment_time_error_s =
+                    live_autoplay_judgment_offset_s(state, player, window, te_real);
+                let judgment_event_time = row_note_time + judgment_time_error_s * rate;
                 let judgment = Judgment {
-                    time_error_ms: te_real * 1000.0,
+                    time_error_ms: judgment_time_error_s * 1000.0,
                     grade,
                     window: Some(window),
                     miss_because_held: false,
@@ -9313,7 +9379,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     song_offset_s,
                     global_offset_s,
                     row_note_time,
-                    current_time,
+                    judgment_event_time,
                     state.current_music_time,
                     rate,
                     lead_in_s,
@@ -9487,8 +9553,11 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
         }
     }
 
+    let judgment_time_error_s =
+        live_autoplay_judgment_offset_s(state, player, window, time_error_real);
+    let judgment_event_time = note_time + judgment_time_error_s * rate;
     let judgment = Judgment {
-        time_error_ms: time_error_real * 1000.0,
+        time_error_ms: judgment_time_error_s * 1000.0,
         grade,
         window: Some(window),
         miss_because_held: false,
@@ -9508,7 +9577,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
         song_offset_s,
         global_offset_s,
         note_time,
-        current_time,
+        judgment_event_time,
         state.current_music_time,
         rate,
         lead_in_s,
@@ -9699,15 +9768,12 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
                 row_end += 1;
             }
             let row_time = state.note_time_cache[cursor];
-            // ITGmania autoplay steps crossed rows immediately and scores them as
-            // W1; it does not add synthetic timing jitter on top of the row time.
-            let row_event_time = row_time;
-            if row_event_time > now_music_time {
+            if row_time > now_music_time {
                 break;
             }
             // Finalize any already-ended autoplay holds before a new warped
             // row on the same lane can replace the active hold slot.
-            settle_due_autoplay_active_holds(state, row_event_time);
+            settle_due_autoplay_active_holds(state, row_time);
             for idx in cursor..row_end {
                 let (result_is_some, is_fake, can_be_judged, note_type, col) = {
                     let note = &state.notes[idx];
@@ -9734,10 +9800,10 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
                 state.autoplay_used = true;
                 match note_type {
                     NoteType::Lift => {
-                        let _ = judge_a_lift(state, col, row_event_time);
+                        let _ = judge_a_lift(state, col, row_time);
                     }
                     NoteType::Tap | NoteType::Hold | NoteType::Roll => {
-                        let _ = judge_a_tap(state, col, row_event_time);
+                        let _ = judge_a_tap(state, col, row_time);
                     }
                     NoteType::Mine | NoteType::Fake => {}
                 }
@@ -11598,16 +11664,16 @@ mod tests {
         Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock,
         GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
-        TickMode, active_hold_counts_as_pressed, add_provisional_early_score,
+        TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
         advance_hold_last_held, apply_mines_insert, arrow_time_window_bounds,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_row_grids,
-        closest_lane_note, collect_edge_judge_indices, count_rescore_tracks_on_row,
-        crossed_mine_bounds, enforce_max_simultaneous_notes, find_arrow_index,
-        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
-        lane_release_finished, late_note_resolution_window_s, live_autoplay_enabled_from_flags,
-        max_step_distance_seconds, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
-        parse_attack_mods, partition_notes_before_time,
+        autoplay_random_offset_s_for_window, build_assist_clap_rows,
+        build_attack_mask_windows_for_player, build_row_grids, closest_lane_note,
+        collect_edge_judge_indices, count_rescore_tracks_on_row, crossed_mine_bounds,
+        enforce_max_simultaneous_notes, find_arrow_index, frame_stable_display_music_time,
+        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
+        lane_press_started, lane_release_finished, late_note_resolution_window_s,
+        live_autoplay_enabled_from_flags, max_step_distance_seconds, mine_window_bounds,
+        music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
         score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
@@ -11616,7 +11682,7 @@ mod tests {
     };
     use crate::engine::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
-    use crate::game::judgment::{JudgeGrade, Judgment};
+    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{HoldData, Note, NoteType};
     use crate::game::profile;
     use crate::game::timing::{
@@ -11853,6 +11919,31 @@ mod tests {
         assert!(active_hold_counts_as_pressed(true, true));
         assert!(active_hold_counts_as_pressed(false, true));
         assert!(!active_hold_counts_as_pressed(false, false));
+    }
+
+    #[test]
+    fn autoplay_random_offset_w1_uses_full_window_without_fa_plus() {
+        let mut rng = TurnRng::new(1);
+        let mut profile = TimingProfile::default_itg_with_fa_plus();
+        profile.fa_plus_window_s = None;
+        let outer = profile.windows_s[0];
+        for _ in 0..32 {
+            let offset = autoplay_random_offset_s_for_window(&mut rng, profile, TimingWindow::W1);
+            assert!(offset.abs() <= outer);
+        }
+    }
+
+    #[test]
+    fn autoplay_random_offset_w1_excludes_w0_band_when_enabled() {
+        let mut rng = TurnRng::new(2);
+        let profile = TimingProfile::default_itg_with_fa_plus();
+        let inner = profile.fa_plus_window_s.expect("default profile has W0");
+        let outer = profile.windows_s[0];
+        for _ in 0..32 {
+            let offset = autoplay_random_offset_s_for_window(&mut rng, profile, TimingWindow::W1);
+            assert!(offset.abs() >= inner);
+            assert!(offset.abs() <= outer);
+        }
     }
 
     #[test]

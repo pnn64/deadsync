@@ -520,8 +520,8 @@ fn compute_column_judgments(
 #[cfg(test)]
 mod tests {
     use super::{
-        EvalPane, combined_submit_footer_text, compute_column_judgments, eval_pane_shift,
-        submit_footer_lines,
+        EvalPane, combined_submit_footer_text, compute_column_judgments, eval_grade_for_result,
+        eval_pane_shift, stage_in_stinger_texture_key, submit_footer_lines,
     };
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{Note, NoteType};
@@ -695,6 +695,30 @@ mod tests {
         assert_eq!(
             eval_pane_shift(cycle[0], -1, true, true, true),
             cycle[cycle.len() - 1]
+        );
+    }
+
+    #[test]
+    fn stage_in_stinger_uses_failed_text_for_disqualified_runs() {
+        assert_eq!(
+            stage_in_stinger_texture_key(false, true),
+            Some("evaluation/failed.png")
+        );
+    }
+
+    #[test]
+    fn stage_in_stinger_keeps_failed_text_when_failed() {
+        assert_eq!(
+            stage_in_stinger_texture_key(true, true),
+            Some("evaluation/failed.png")
+        );
+    }
+
+    #[test]
+    fn eval_grade_for_result_forces_failed_on_disqualification() {
+        assert_eq!(
+            eval_grade_for_result(false, true, true, 1.0),
+            scores::Grade::Failed
         );
     }
 }
@@ -1010,11 +1034,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 .flatten();
             let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
 
-            let mut grade = if p.is_failing || !gs.song_completed_naturally {
-                scores::Grade::Failed
-            } else {
-                scores::score_to_grade(score_percent * 10000.0)
-            };
+            let mut grade = eval_grade_for_result(
+                p.is_failing,
+                gs.song_completed_naturally,
+                disqualified,
+                score_percent,
+            );
 
             // Per-window counts for the FA+ pane should always reflect all tap
             // judgments that occurred (including after failure), matching the
@@ -1600,6 +1625,20 @@ fn stage_score_10000(score_percent: f64) -> f64 {
 }
 
 #[inline(always)]
+fn eval_grade_for_result(
+    is_failing: bool,
+    song_completed_naturally: bool,
+    disqualified: bool,
+    score_percent: f64,
+) -> scores::Grade {
+    if is_failing || !song_completed_naturally || disqualified {
+        scores::Grade::Failed
+    } else {
+        scores::score_to_grade(score_percent * 10000.0)
+    }
+}
+
+#[inline(always)]
 fn find_machine_record_highlight_rank(
     entries: &[scores::LeaderboardEntry],
     initials: &str,
@@ -1660,28 +1699,37 @@ fn all_joined_players_failed(state: &State) -> bool {
     any
 }
 
+#[inline(always)]
+const fn stage_in_stinger_texture_key(failed: bool, disqualified: bool) -> Option<&'static str> {
+    if failed || disqualified {
+        Some("evaluation/failed.png")
+    } else {
+        Some("evaluation/cleared.png")
+    }
+}
+
 fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
     if state.screen_elapsed > EVAL_STAGE_IN_TOTAL_SECONDS {
         return vec![];
     }
 
     let failed = all_joined_players_failed(state);
-    let texture_key = if failed {
-        "evaluation/failed.png"
-    } else {
-        "evaluation/cleared.png"
-    };
-
-    vec![
-        act!(quad:
-            align(0.0, 0.0): xy(0.0, 0.0):
-            zoomto(screen_width(), screen_height()):
-            diffuse(0.0, 0.0, 0.0, 1.0): z(1250):
-            sleep(EVAL_STAGE_IN_BLACK_DELAY_SECONDS):
-            linear(EVAL_STAGE_IN_BLACK_FADE_SECONDS): alpha(0.0):
-            linear(0.0): visible(false)
-        ),
-        act!(sprite(texture_key):
+    let disqualified = state
+        .score_info
+        .iter()
+        .flatten()
+        .any(|score| score.disqualified);
+    let texture_key = stage_in_stinger_texture_key(failed, disqualified);
+    let mut actors = vec![act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, 1.0): z(1250):
+        sleep(EVAL_STAGE_IN_BLACK_DELAY_SECONDS):
+        linear(EVAL_STAGE_IN_BLACK_FADE_SECONDS): alpha(0.0):
+        linear(0.0): visible(false)
+    )];
+    if let Some(texture_key) = texture_key {
+        actors.push(act!(sprite(texture_key):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
             zoom(0.8):
@@ -1691,8 +1739,9 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
             sleep(EVAL_STAGE_IN_TEXT_HOLD_SECONDS):
             decelerate(EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS): alpha(0.0):
             linear(0.0): visible(false)
-        ),
-    ]
+        ));
+    }
+    actors
 }
 
 #[inline(always)]
