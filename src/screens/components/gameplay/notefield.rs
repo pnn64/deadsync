@@ -2148,7 +2148,7 @@ fn zmod_mini_indicator_progress(
         }
         profile::MiniIndicatorScoreType::Ex | profile::MiniIndicatorScoreType::HardEx => {
             let score = add_provisional_early_bad_counts_to_ex_score(
-                crate::game::gameplay::display_ex_score_data(state, player_idx),
+                crate::game::gameplay::display_scored_ex_score_data(state, player_idx),
                 provisional,
             );
             let white_count = score.counts.w1;

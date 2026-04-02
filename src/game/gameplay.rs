@@ -4032,6 +4032,17 @@ fn health_state_for_player(p: &PlayerRuntime) -> HealthState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct ExScoreInputs {
+    counts: crate::game::timing::WindowCounts,
+    counts_10ms: crate::game::timing::WindowCounts,
+    holds_held_for_score: u32,
+    holds_let_go_for_score: u32,
+    rolls_held_for_score: u32,
+    rolls_let_go_for_score: u32,
+    mines_hit_for_score: u32,
+}
+
 #[derive(Clone, Debug)]
 pub struct PlayerRuntime {
     pub combo: u32,
@@ -4064,6 +4075,7 @@ pub struct PlayerRuntime {
     pub mines_hit_for_score: u32,
     pub mines_avoided: u32,
     hands_holding_count_for_stats: i32,
+    failed_ex_score_inputs: Option<ExScoreInputs>,
 
     pub life_history: Vec<(f32, f32)>, // (time, life_value)
 
@@ -4168,6 +4180,7 @@ fn init_player_runtime() -> PlayerRuntime {
         mines_hit_for_score: 0,
         mines_avoided: 0,
         hands_holding_count_for_stats: 0,
+        failed_ex_score_inputs: None,
         life_history: Vec::with_capacity(10000),
         error_bar_mono_ticks: [None; 15],
         error_bar_mono_next: 0,
@@ -8006,33 +8019,53 @@ fn scored_hold_totals_with_carry(
     (held_total, resolved_total)
 }
 
-pub(crate) fn display_ex_score_data(state: &State, player_idx: usize) -> judgment::ExScoreData {
-    if player_idx >= state.num_players {
-        return judgment::ExScoreData::default();
-    }
+#[inline(always)]
+fn live_ex_score_inputs(state: &State, player_idx: usize) -> ExScoreInputs {
     let player = &state.players[player_idx];
+    ExScoreInputs {
+        counts: display_window_counts(state, player_idx, None),
+        counts_10ms: display_window_counts_10ms(state, player_idx),
+        holds_held_for_score: player.holds_held_for_score,
+        holds_let_go_for_score: player.holds_let_go_for_score,
+        rolls_held_for_score: player.rolls_held_for_score,
+        rolls_let_go_for_score: player.rolls_let_go_for_score,
+        mines_hit_for_score: player.mines_hit_for_score,
+    }
+}
+
+#[inline(always)]
+fn effective_ex_score_inputs(player: &PlayerRuntime, live: ExScoreInputs) -> ExScoreInputs {
+    player.failed_ex_score_inputs.unwrap_or(live)
+}
+
+#[inline(always)]
+fn ex_score_data_from_inputs(
+    state: &State,
+    player_idx: usize,
+    inputs: ExScoreInputs,
+) -> judgment::ExScoreData {
     let carry = display_carry_for_player(state, player_idx);
     let totals = display_totals_for_player(state, player_idx);
     let (holds_held, holds_resolved) = scored_hold_totals_with_carry(
-        player.holds_held_for_score,
-        player.holds_let_go_for_score,
+        inputs.holds_held_for_score,
+        inputs.holds_let_go_for_score,
         carry.holds_held_for_score,
         carry.holds_let_go_for_score,
     );
     let (rolls_held, rolls_resolved) = scored_hold_totals_with_carry(
-        player.rolls_held_for_score,
-        player.rolls_let_go_for_score,
+        inputs.rolls_held_for_score,
+        inputs.rolls_let_go_for_score,
         carry.rolls_held_for_score,
         carry.rolls_let_go_for_score,
     );
     judgment::ExScoreData {
-        counts: display_window_counts(state, player_idx, None),
-        counts_10ms: display_window_counts_10ms(state, player_idx),
+        counts: inputs.counts,
+        counts_10ms: inputs.counts_10ms,
         holds_held,
         holds_resolved,
         rolls_held,
         rolls_resolved,
-        mines_hit: player
+        mines_hit: inputs
             .mines_hit_for_score
             .saturating_add(carry.mines_hit_for_score),
         total_steps: totals.total_steps,
@@ -8042,12 +8075,44 @@ pub(crate) fn display_ex_score_data(state: &State, player_idx: usize) -> judgmen
     }
 }
 
+#[inline(always)]
+fn capture_failed_ex_score_inputs(state: &mut State, player_idx: usize) {
+    if player_idx >= state.num_players || player_idx >= MAX_PLAYERS {
+        return;
+    }
+    let live = live_ex_score_inputs(state, player_idx);
+    let player = &mut state.players[player_idx];
+    if player.fail_time.is_none() || player.failed_ex_score_inputs.is_some() {
+        return;
+    }
+    player.failed_ex_score_inputs = Some(live);
+}
+
+pub(crate) fn display_ex_score_data(state: &State, player_idx: usize) -> judgment::ExScoreData {
+    if player_idx >= state.num_players {
+        return judgment::ExScoreData::default();
+    }
+    ex_score_data_from_inputs(state, player_idx, live_ex_score_inputs(state, player_idx))
+}
+
+pub(crate) fn display_scored_ex_score_data(
+    state: &State,
+    player_idx: usize,
+) -> judgment::ExScoreData {
+    if player_idx >= state.num_players {
+        return judgment::ExScoreData::default();
+    }
+    let live = live_ex_score_inputs(state, player_idx);
+    let player = &state.players[player_idx];
+    ex_score_data_from_inputs(state, player_idx, effective_ex_score_inputs(player, live))
+}
+
 pub fn display_ex_score_percent(state: &State, player_idx: usize) -> f64 {
-    judgment::ex_score_percent(&display_ex_score_data(state, player_idx))
+    judgment::ex_score_percent(&display_scored_ex_score_data(state, player_idx))
 }
 
 pub fn display_hard_ex_score_percent(state: &State, player_idx: usize) -> f64 {
-    judgment::hard_ex_score_percent(&display_ex_score_data(state, player_idx))
+    judgment::hard_ex_score_percent(&display_scored_ex_score_data(state, player_idx))
 }
 
 fn update_itg_grade_totals(p: &mut PlayerRuntime) {
@@ -8347,6 +8412,7 @@ fn handle_mine_hit(
             state.current_music_time,
             LIFE_HIT_MINE,
         );
+        capture_failed_ex_score_inputs(state, player);
         if !is_state_dead(state, player) {
             state.players[player].mines_hit_for_score =
                 state.players[player].mines_hit_for_score.saturating_add(1);
@@ -8513,6 +8579,7 @@ fn hit_mine_timebased(
             state.current_music_time,
             LIFE_HIT_MINE,
         );
+        capture_failed_ex_score_inputs(state, player);
         if !is_state_dead(state, player) {
             state.players[player].mines_hit_for_score =
                 state.players[player].mines_hit_for_score.saturating_add(1);
@@ -8585,6 +8652,7 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
             state.current_music_time,
             LIFE_LET_GO,
         );
+        capture_failed_ex_score_inputs(state, player);
     }
     if updated_possible_scoring && !is_state_dead(state, player) {
         update_itg_grade_totals(&mut state.players[player]);
@@ -8669,6 +8737,7 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
             state.current_music_time,
             LIFE_HELD,
         );
+        capture_failed_ex_score_inputs(state, player);
     }
     if updated_scoring {
         update_itg_grade_totals(&mut state.players[player]);
@@ -9226,6 +9295,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                                 apply_life_change(p, state.current_music_time, life_delta);
                             }
                         }
+                        if !scoring_blocked {
+                            capture_failed_ex_score_inputs(state, player);
+                        }
                         render_provisional_early_rescore_feedback(
                             state,
                             player,
@@ -9512,6 +9584,7 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
                 if !scoring_blocked {
                     let p = &mut state.players[player];
                     apply_life_change(p, state.current_music_time, life_delta);
+                    capture_failed_ex_score_inputs(state, player);
                 }
                 render_provisional_early_rescore_feedback(
                     state,
@@ -10292,45 +10365,50 @@ fn finalize_row_judgment(
         }
         return;
     }
-    let p = &mut state.players[player];
-    let grade_ix = display_judge_ix(final_grade);
-    p.judgment_counts[grade_ix] = p.judgment_counts[grade_ix].saturating_add(1);
-    if !is_player_dead(p) {
-        p.scoring_counts[grade_ix] = p.scoring_counts[grade_ix].saturating_add(1);
-        update_itg_grade_totals(p);
-    }
-    let life_delta = judge_life_delta(final_grade);
-    if !skip_life_change {
-        apply_life_change(p, state.current_music_time, life_delta);
-    }
-    if !suppress_final_early_bad_visual {
-        p.last_judgment = Some(JudgmentRenderInfo {
-            judgment: final_judgment,
-            judged_at: Instant::now(),
-        });
-    }
-    apply_row_combo_state(p, final_grade, player_row_note_count, 1);
-    if !row_has_miss && !row_has_wayoff {
-        let notes_on_row_count = player_row_note_count as usize;
-        let carried_holds_down: usize = state.active_holds[col_start..col_end]
-            .iter()
-            .filter_map(|a| a.as_ref())
-            .filter(|a| active_hold_is_engaged(a))
-            .filter(|a| {
-                let note = &state.notes[a.note_index];
-                if note.row_index >= row_index {
-                    return false;
-                }
-                if let Some(h) = note.hold.as_ref() {
-                    h.last_held_row_index >= row_index
-                } else {
-                    false
-                }
-            })
-            .count();
-        if notes_on_row_count + carried_holds_down >= 3 {
-            p.hands_achieved = p.hands_achieved.saturating_add(1);
+    {
+        let p = &mut state.players[player];
+        let grade_ix = display_judge_ix(final_grade);
+        p.judgment_counts[grade_ix] = p.judgment_counts[grade_ix].saturating_add(1);
+        if !is_player_dead(p) {
+            p.scoring_counts[grade_ix] = p.scoring_counts[grade_ix].saturating_add(1);
+            update_itg_grade_totals(p);
         }
+        let life_delta = judge_life_delta(final_grade);
+        if !skip_life_change {
+            apply_life_change(p, state.current_music_time, life_delta);
+        }
+        if !suppress_final_early_bad_visual {
+            p.last_judgment = Some(JudgmentRenderInfo {
+                judgment: final_judgment,
+                judged_at: Instant::now(),
+            });
+        }
+        apply_row_combo_state(p, final_grade, player_row_note_count, 1);
+        if !row_has_miss && !row_has_wayoff {
+            let notes_on_row_count = player_row_note_count as usize;
+            let carried_holds_down: usize = state.active_holds[col_start..col_end]
+                .iter()
+                .filter_map(|a| a.as_ref())
+                .filter(|a| active_hold_is_engaged(a))
+                .filter(|a| {
+                    let note = &state.notes[a.note_index];
+                    if note.row_index >= row_index {
+                        return false;
+                    }
+                    if let Some(h) = note.hold.as_ref() {
+                        h.last_held_row_index >= row_index
+                    } else {
+                        false
+                    }
+                })
+                .count();
+            if notes_on_row_count + carried_holds_down >= 3 {
+                p.hands_achieved = p.hands_achieved.saturating_add(1);
+            }
+        }
+    }
+    if !skip_life_change {
+        capture_failed_ex_score_inputs(state, player);
     }
 }
 
@@ -12338,6 +12416,77 @@ mod tests {
                 [crate::game::judgment::judge_grade_ix(JudgeGrade::WayOff)],
             0
         );
+    }
+
+    #[test]
+    fn effective_ex_score_inputs_use_live_values_before_fail() {
+        let player = super::init_player_runtime();
+        let live = super::ExScoreInputs {
+            counts: crate::game::timing::WindowCounts {
+                w1: 3,
+                ..crate::game::timing::WindowCounts::default()
+            },
+            counts_10ms: crate::game::timing::WindowCounts {
+                w0: 2,
+                ..crate::game::timing::WindowCounts::default()
+            },
+            holds_held_for_score: 4,
+            holds_let_go_for_score: 1,
+            rolls_held_for_score: 2,
+            rolls_let_go_for_score: 1,
+            mines_hit_for_score: 5,
+        };
+
+        let selected = super::effective_ex_score_inputs(&player, live);
+
+        assert_eq!(selected.counts.w1, 3);
+        assert_eq!(selected.counts_10ms.w0, 2);
+        assert_eq!(selected.holds_held_for_score, 4);
+        assert_eq!(selected.mines_hit_for_score, 5);
+    }
+
+    #[test]
+    fn effective_ex_score_inputs_freeze_on_fail_snapshot() {
+        let mut player = super::init_player_runtime();
+        player.failed_ex_score_inputs = Some(super::ExScoreInputs {
+            counts: crate::game::timing::WindowCounts {
+                w2: 7,
+                ..crate::game::timing::WindowCounts::default()
+            },
+            counts_10ms: crate::game::timing::WindowCounts {
+                w0: 1,
+                ..crate::game::timing::WindowCounts::default()
+            },
+            holds_held_for_score: 6,
+            holds_let_go_for_score: 2,
+            rolls_held_for_score: 4,
+            rolls_let_go_for_score: 1,
+            mines_hit_for_score: 3,
+        });
+        let live = super::ExScoreInputs {
+            counts: crate::game::timing::WindowCounts {
+                w2: 9,
+                ..crate::game::timing::WindowCounts::default()
+            },
+            counts_10ms: crate::game::timing::WindowCounts {
+                w0: 5,
+                ..crate::game::timing::WindowCounts::default()
+            },
+            holds_held_for_score: 10,
+            holds_let_go_for_score: 4,
+            rolls_held_for_score: 8,
+            rolls_let_go_for_score: 2,
+            mines_hit_for_score: 7,
+        };
+
+        let selected = super::effective_ex_score_inputs(&player, live);
+
+        assert_eq!(selected.counts.w2, 7);
+        assert_eq!(selected.counts_10ms.w0, 1);
+        assert_eq!(selected.holds_held_for_score, 6);
+        assert_eq!(selected.holds_let_go_for_score, 2);
+        assert_eq!(selected.rolls_held_for_score, 4);
+        assert_eq!(selected.mines_hit_for_score, 3);
     }
 
     #[test]
