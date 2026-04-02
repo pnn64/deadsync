@@ -968,15 +968,23 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
             }
         }
         Err(err) => {
+            let status = err.status;
             for player in &job.players {
                 groovestats_update_submit_ui_status_if_token(
                     player.side,
                     player.chart_hash.as_str(),
                     player.token,
-                    err.status,
+                    status,
+                );
+                warn!(
+                    "{} submit failed for {:?} ({}) status={:?}: {}",
+                    online::groovestats_service_name(),
+                    player.side,
+                    player.chart_hash,
+                    status,
+                    err.message
                 );
             }
-            warn!("{}", err.message);
         }
     });
 }

@@ -732,8 +732,8 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
                         err.status,
                     );
                     warn!(
-                        "ArrowCloud submit failed for {:?} ({}) : {}",
-                        job.side, job.payload.hash, err.message
+                        "ArrowCloud submit failed for {:?} ({}) status={:?}: {}",
+                        job.side, job.payload.hash, err.status, err.message
                     );
                 }
             }
