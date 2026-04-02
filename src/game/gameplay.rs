@@ -455,6 +455,8 @@ const MAX_HOLD_LIFE: f32 = 1.0;
 const INITIAL_HOLD_LIFE: f32 = 1.0;
 const TIMING_WINDOW_SECONDS_HOLD: f32 = 0.32;
 const TIMING_WINDOW_SECONDS_ROLL: f32 = 0.35;
+// ITG's MaxInputLatencySeconds preference defaults to 0.0.
+const MAX_INPUT_LATENCY_SECONDS: f32 = 0.0;
 // ITGmania _fallback defaults this off, and Simply Love relies on that dance parity.
 const COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO: bool = false;
 
@@ -3325,19 +3327,35 @@ fn compute_end_times(
     }
 
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
-    let mut max_window = timing_profile
-        .windows_s
-        .iter()
-        .copied()
-        .fold(0.0_f32, f32::max);
-    max_window = max_window.max(timing_profile.mine_window_s);
-    max_window = max_window.max(TIMING_WINDOW_SECONDS_HOLD);
-    max_window = max_window.max(TIMING_WINDOW_SECONDS_ROLL);
-
-    let max_step_distance = rate * max_window;
+    let max_step_distance = max_step_distance_seconds(&timing_profile, rate);
     let notes_end_time = last_judgable_second + max_step_distance;
     let music_end_time = last_relevant_second + max_step_distance;
     (notes_end_time, music_end_time)
+}
+
+#[inline(always)]
+fn late_note_resolution_window_s(timing_profile: &TimingProfile) -> f32 {
+    // Mirror ITG's shared late-resolution window from Player::GetMaxStepDistanceSeconds():
+    // late taps, missed hold heads, and avoided mines all wait for the largest
+    // relevant gameplay window instead of resolving on their own local window.
+    timing_profile
+        .windows_s
+        .iter()
+        .copied()
+        .fold(0.0_f32, f32::max)
+        .max(timing_profile.mine_window_s)
+        .max(TIMING_WINDOW_SECONDS_HOLD)
+        .max(TIMING_WINDOW_SECONDS_ROLL)
+}
+
+#[inline(always)]
+fn max_step_distance_seconds(timing_profile: &TimingProfile, rate: f32) -> f32 {
+    let rate = if rate.is_finite() && rate > 0.0 {
+        rate
+    } else {
+        1.0
+    };
+    rate * late_note_resolution_window_s(timing_profile) + MAX_INPUT_LATENCY_SECONDS
 }
 
 #[inline(always)]
@@ -10775,13 +10793,8 @@ fn mine_avoid_log_enabled() -> bool {
 
 #[inline(always)]
 fn apply_time_based_mine_avoidance(state: &mut State, music_time_sec: f32) {
-    let mine_window = state.timing_profile.mine_window_s;
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
-    let cutoff_time = mine_window.mul_add(-rate, music_time_sec);
+    let cutoff_time =
+        music_time_sec - max_step_distance_seconds(&state.timing_profile, state.music_rate);
     let log_mine_avoid = mine_avoid_log_enabled();
     for player in 0..state.num_players {
         let mines_len = state.mine_note_ix[player].len();
@@ -10902,8 +10915,8 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_sec: f32) {
     } else {
         1.0
     };
+    let cutoff_time = music_time_sec - max_step_distance_seconds(&state.timing_profile, rate);
     for player in 0..state.num_players {
-        let cutoff_time = player_largest_tap_window_s(state, player).mul_add(-rate, music_time_sec);
         let (note_start, note_end) = player_note_range(state, player);
         let should_score_miss = state.score_missed_holds_rolls[player];
         let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
@@ -11652,7 +11665,8 @@ mod tests {
         build_row_grids, collect_edge_judge_indices, count_rescore_tracks_on_row,
         crossed_mine_bounds, enforce_max_simultaneous_notes, find_arrow_index,
         frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_press_started, lane_release_finished, mine_window_bounds,
+        lane_edge_judges_tap, lane_press_started, lane_release_finished,
+        late_note_resolution_window_s, max_step_distance_seconds, mine_window_bounds,
         music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
@@ -11665,7 +11679,9 @@ mod tests {
     use crate::game::judgment::{JudgeGrade, Judgment};
     use crate::game::note::{HoldData, Note, NoteType};
     use crate::game::profile;
-    use crate::game::timing::{ROWS_PER_BEAT, StopSegment, TimingData, TimingSegments};
+    use crate::game::timing::{
+        ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile, TimingSegments,
+    };
     use rssp::{TechCounts, stats::ArrowStats};
     use std::time::{Duration, Instant};
 
@@ -12107,6 +12123,20 @@ mod tests {
     #[test]
     fn immediate_hold_let_go_does_not_break_combo_by_default() {
         assert!(!COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO);
+    }
+
+    #[test]
+    fn late_note_resolution_window_matches_itg_max_step_distance_window() {
+        let timing_profile = TimingProfile::default_itg_with_fa_plus();
+
+        assert!((late_note_resolution_window_s(&timing_profile) - 0.35).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn max_step_distance_scales_with_music_rate() {
+        let timing_profile = TimingProfile::default_itg_with_fa_plus();
+
+        assert!((max_step_distance_seconds(&timing_profile, 1.5) - 0.525).abs() <= 1e-6);
     }
 
     #[test]
