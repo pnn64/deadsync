@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
+use std::sync::LazyLock;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -72,8 +73,13 @@ pub fn build_agent(config: AgentConfig) -> ureq::Agent {
         .into()
 }
 
+// Reuse a single process-wide agent so score submits and leaderboard requests share
+// one connection pool instead of opening fresh sockets/TLS sessions per request.
+static DEFAULT_AGENT: LazyLock<ureq::Agent> =
+    LazyLock::new(|| build_agent(AgentConfig::default()));
+
 pub fn get_agent() -> ureq::Agent {
-    build_agent(AgentConfig::default())
+    DEFAULT_AGENT.clone()
 }
 
 pub fn get_json<T>(url: &str) -> Result<T, NetworkError>
