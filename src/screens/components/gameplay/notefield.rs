@@ -940,6 +940,12 @@ fn note_alpha(y_no_reverse: f32, elapsed: f32, mini: f32, appearance: Appearance
 }
 
 #[inline(always)]
+fn note_glow(y_no_reverse: f32, elapsed: f32, mini: f32, appearance: AppearanceEffects) -> f32 {
+    let percent_visible = note_alpha(y_no_reverse, elapsed, mini, appearance);
+    sm_scale((percent_visible - 0.5).abs(), 0.0, 0.5, 1.3, 0.0).max(0.0)
+}
+
+#[inline(always)]
 fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
     let num_cols = col_offsets.len();
     if num_cols == 0 {
@@ -1126,6 +1132,11 @@ fn hold_strip_row_from_positions(
 }
 
 #[inline(always)]
+const fn hold_glow_color(alpha: f32) -> [f32; 4] {
+    [1.0, 1.0, 1.0, alpha]
+}
+
+#[inline(always)]
 fn push_hold_strip_quad(
     out: &mut Vec<TexturedMeshVertex>,
     top: [TexturedMeshVertex; 2],
@@ -1135,7 +1146,12 @@ fn push_hold_strip_quad(
 }
 
 #[inline(always)]
-fn hold_strip_actor(texture: Arc<str>, vertices: Arc<[TexturedMeshVertex]>, z: i16) -> Actor {
+fn hold_strip_actor(
+    texture: Arc<str>,
+    vertices: Arc<[TexturedMeshVertex]>,
+    blend: BlendMode,
+    z: i16,
+) -> Actor {
     Actor::TexturedMesh {
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
@@ -1148,7 +1164,7 @@ fn hold_strip_actor(texture: Arc<str>, vertices: Arc<[TexturedMeshVertex]>, z: i
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         visible: true,
-        blend: BlendMode::Alpha,
+        blend,
         z,
     }
 }
@@ -2505,7 +2521,12 @@ fn hold_head_render_flags(
 ) -> (bool, bool) {
     let reached_receptor = current_beat >= note_beat;
     let engaged = reached_receptor && active_state.map(active_hold_is_engaged).unwrap_or(false);
-    let use_active = engaged && active_state.map(|h| h.is_pressed).unwrap_or(false);
+    // ITG keeps rolls on their active art for the full initiated hold span,
+    // even between taps; regular holds only stay active while the lane is held.
+    let use_active = engaged
+        && active_state
+            .map(|h| matches!(h.note_type, NoteType::Roll) || h.is_pressed)
+            .unwrap_or(false);
     (engaged, use_active)
 }
 
@@ -3940,6 +3961,12 @@ pub fn build(
                                     mini,
                                     appearance,
                                 );
+                                let segment_glow = note_glow(
+                                    segment_center_travel + tipsy_y_for_col(local_col),
+                                    elapsed_screen,
+                                    mini,
+                                    appearance,
+                                );
                                 if segment_alpha > f32::EPSILON {
                                     let segment_center_x = lane_center_x_from_adjusted_travel(
                                         local_col,
@@ -3970,6 +3997,20 @@ pub fn build(
                                         ),
                                         world_z_for_adjusted_travel(segment_center_travel),
                                     ));
+                                    if segment_glow > f32::EPSILON {
+                                        actors.push(actor_with_world_z(
+                                            act!(sprite(body_slot.texture_key_shared()):
+                                                align(0.5, 0.5):
+                                                xy(segment_center_x, segment_center_screen):
+                                                setsize(body_width, segment_size):
+                                                rotationz(0.0):
+                                                customtexturerect(u0, v0, u1, v1):
+                                                diffuse(1.0, 1.0, 1.0, segment_glow):
+                                                z(Z_HOLD_GLOW)
+                                            ),
+                                            world_z_for_adjusted_travel(segment_center_travel),
+                                        ));
+                                    }
                                 }
 
                                 phase = next_phase;
@@ -3984,6 +4025,8 @@ pub fn build(
                             let use_body_mesh =
                                 body_slot.model.is_none() && visual.bumpy <= f32::EPSILON;
                             let mut body_mesh_vertices =
+                                use_body_mesh.then(|| Vec::with_capacity(96));
+                            let mut body_glow_vertices =
                                 use_body_mesh.then(|| Vec::with_capacity(96));
                             let mut prev_body_row: Option<[[f32; 2]; 2]> = None;
 
@@ -4061,6 +4104,12 @@ pub fn build(
                                         mini,
                                         appearance,
                                     );
+                                    let slice_glow = note_glow(
+                                        slice_center_travel + tipsy_y_for_col(local_col),
+                                        elapsed_screen,
+                                        mini,
+                                        appearance,
+                                    );
                                     if slice_alpha <= f32::EPSILON {
                                         prev_body_row = None;
                                         slice_top = slice_bottom;
@@ -4120,6 +4169,18 @@ pub fn build(
                                             mini,
                                             appearance,
                                         );
+                                        let top_glow = note_glow(
+                                            slice_top_travel + tipsy_y_for_col(local_col),
+                                            elapsed_screen,
+                                            mini,
+                                            appearance,
+                                        );
+                                        let bottom_glow = note_glow(
+                                            slice_bottom_travel + tipsy_y_for_col(local_col),
+                                            elapsed_screen,
+                                            mini,
+                                            appearance,
+                                        );
                                         let slice_forward = [
                                             slice_bottom_x - slice_top_x,
                                             slice_bottom - slice_top,
@@ -4173,6 +4234,32 @@ pub fn build(
                                             ],
                                         );
                                         push_hold_strip_quad(mesh_vertices, top_row, bottom_row);
+                                        if let Some(glow_vertices) = body_glow_vertices.as_mut()
+                                            && (top_glow > f32::EPSILON
+                                                || bottom_glow > f32::EPSILON)
+                                        {
+                                            let top_glow_row = hold_strip_row_from_positions(
+                                                top_row[0].pos,
+                                                top_row[1].pos,
+                                                u0,
+                                                u1,
+                                                slice_v0,
+                                                hold_glow_color(top_glow),
+                                            );
+                                            let bottom_glow_row = hold_strip_row_from_positions(
+                                                bottom_row[0].pos,
+                                                bottom_row[1].pos,
+                                                u0,
+                                                u1,
+                                                slice_v1,
+                                                hold_glow_color(bottom_glow),
+                                            );
+                                            push_hold_strip_quad(
+                                                glow_vertices,
+                                                top_glow_row,
+                                                bottom_glow_row,
+                                            );
+                                        }
                                         body_tail_row =
                                             Some([bottom_row[0].pos, bottom_row[1].pos]);
                                         prev_body_row =
@@ -4195,6 +4282,20 @@ pub fn build(
                                             ),
                                             slice_world_z,
                                         ));
+                                        if slice_glow > f32::EPSILON {
+                                            actors.push(actor_with_world_z(
+                                                act!(sprite(body_slot.texture_key_shared()):
+                                                    align(0.5, 0.5):
+                                                    xy(slice_center[0], slice_center[1]):
+                                                    setsize(body_width, slice_height):
+                                                    rotationz(slice_rotation):
+                                                    customtexturerect(u0, slice_v0, u1, slice_v1):
+                                                    diffuse(1.0, 1.0, 1.0, slice_glow):
+                                                    z(Z_HOLD_GLOW)
+                                                ),
+                                                slice_world_z,
+                                            ));
+                                        }
                                     }
                                     slice_top = slice_bottom;
                                 }
@@ -4209,7 +4310,18 @@ pub fn build(
                                 actors.push(hold_strip_actor(
                                     body_slot.texture_key_shared(),
                                     Arc::from(vertices),
+                                    BlendMode::Alpha,
                                     Z_HOLD_BODY as i16,
+                                ));
+                            }
+                            if let Some(vertices) = body_glow_vertices
+                                && !vertices.is_empty()
+                            {
+                                actors.push(hold_strip_actor(
+                                    body_slot.texture_key_shared(),
+                                    Arc::from(vertices),
+                                    BlendMode::Alpha,
+                                    Z_HOLD_GLOW as i16,
                                 ));
                             }
                         }
@@ -4274,6 +4386,12 @@ pub fn build(
                             mini,
                             appearance,
                         );
+                        let cap_glow = note_glow(
+                            cap_center_travel + tipsy_y_for_col(local_col),
+                            elapsed_screen,
+                            mini,
+                            appearance,
+                        );
                         if cap_alpha <= f32::EPSILON {
                             continue;
                         }
@@ -4305,6 +4423,18 @@ pub fn build(
                                 appearance,
                             );
                             let bottom_alpha = note_alpha(
+                                cap_bottom_travel + tipsy_y_for_col(local_col),
+                                elapsed_screen,
+                                mini,
+                                appearance,
+                            );
+                            let top_glow = note_glow(
+                                cap_top_travel + tipsy_y_for_col(local_col),
+                                elapsed_screen,
+                                mini,
+                                appearance,
+                            );
+                            let bottom_glow = note_glow(
                                 cap_bottom_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
@@ -4364,8 +4494,39 @@ pub fn build(
                             actors.push(hold_strip_actor(
                                 cap_slot.texture_key_shared(),
                                 Arc::from(cap_vertices),
+                                BlendMode::Alpha,
                                 Z_HOLD_CAP as i16,
                             ));
+                            if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
+                                let top_glow_row = hold_strip_row_from_positions(
+                                    top_row[0].pos,
+                                    top_row[1].pos,
+                                    u0,
+                                    u1,
+                                    v0,
+                                    hold_glow_color(top_glow),
+                                );
+                                let bottom_glow_row = hold_strip_row_from_positions(
+                                    bottom_row[0].pos,
+                                    bottom_row[1].pos,
+                                    u0,
+                                    u1,
+                                    v1,
+                                    hold_glow_color(bottom_glow),
+                                );
+                                let mut cap_glow_vertices = Vec::with_capacity(6);
+                                push_hold_strip_quad(
+                                    &mut cap_glow_vertices,
+                                    top_glow_row,
+                                    bottom_glow_row,
+                                );
+                                actors.push(hold_strip_actor(
+                                    cap_slot.texture_key_shared(),
+                                    Arc::from(cap_glow_vertices),
+                                    BlendMode::Alpha,
+                                    Z_HOLD_GLOW as i16,
+                                ));
+                            }
                         } else {
                             let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
                             let cap_rotation = cap_path_rotation
@@ -4387,6 +4548,20 @@ pub fn build(
                                 ),
                                 cap_world_z,
                             ));
+                            if cap_glow > f32::EPSILON {
+                                actors.push(actor_with_world_z(
+                                    act!(sprite(cap_slot.texture_key_shared()):
+                                        align(0.5, 0.5):
+                                        xy(cap_center_xy[0], cap_center_xy[1]):
+                                        setsize(cap_width, cap_draw_height):
+                                        customtexturerect(u0, v0, u1, v1):
+                                        diffuse(1.0, 1.0, 1.0, cap_glow):
+                                        rotationz(cap_rotation):
+                                        z(Z_HOLD_GLOW)
+                                    ),
+                                    cap_world_z,
+                                ));
+                            }
                         }
                     }
                 }
@@ -4467,6 +4642,12 @@ pub fn build(
                             mini,
                             appearance,
                         );
+                        let cap_glow = note_glow(
+                            cap_center_travel + tipsy_y_for_col(local_col),
+                            elapsed_screen,
+                            mini,
+                            appearance,
+                        );
                         if cap_alpha <= f32::EPSILON {
                             continue;
                         }
@@ -4503,6 +4684,18 @@ pub fn build(
                                 appearance,
                             );
                             let bottom_alpha = note_alpha(
+                                cap_bottom_travel + tipsy_y_for_col(local_col),
+                                elapsed_screen,
+                                mini,
+                                appearance,
+                            );
+                            let top_glow = note_glow(
+                                cap_top_travel + tipsy_y_for_col(local_col),
+                                elapsed_screen,
+                                mini,
+                                appearance,
+                            );
+                            let bottom_glow = note_glow(
                                 cap_bottom_travel + tipsy_y_for_col(local_col),
                                 elapsed_screen,
                                 mini,
@@ -4559,8 +4752,39 @@ pub fn build(
                             actors.push(hold_strip_actor(
                                 cap_slot.texture_key_shared(),
                                 Arc::from(cap_vertices),
+                                BlendMode::Alpha,
                                 Z_HOLD_CAP as i16,
                             ));
+                            if top_glow > f32::EPSILON || bottom_glow > f32::EPSILON {
+                                let top_glow_row = hold_strip_row_from_positions(
+                                    top_row[0].pos,
+                                    top_row[1].pos,
+                                    u0,
+                                    u1,
+                                    v0,
+                                    hold_glow_color(top_glow),
+                                );
+                                let bottom_glow_row = hold_strip_row_from_positions(
+                                    bottom_row[0].pos,
+                                    bottom_row[1].pos,
+                                    u0,
+                                    u1,
+                                    v1,
+                                    hold_glow_color(bottom_glow),
+                                );
+                                let mut cap_glow_vertices = Vec::with_capacity(6);
+                                push_hold_strip_quad(
+                                    &mut cap_glow_vertices,
+                                    top_glow_row,
+                                    bottom_glow_row,
+                                );
+                                actors.push(hold_strip_actor(
+                                    cap_slot.texture_key_shared(),
+                                    Arc::from(cap_glow_vertices),
+                                    BlendMode::Alpha,
+                                    Z_HOLD_GLOW as i16,
+                                ));
+                            }
                         } else {
                             let cap_world_z = world_z_for_adjusted_travel(cap_center_travel);
                             actors.push(actor_with_world_z(
@@ -4580,6 +4804,20 @@ pub fn build(
                                 ),
                                 cap_world_z,
                             ));
+                            if cap_glow > f32::EPSILON {
+                                actors.push(actor_with_world_z(
+                                    act!(sprite(cap_slot.texture_key_shared()):
+                                        align(0.5, 0.5):
+                                        xy(cap_center_xy[0], cap_center_xy[1]):
+                                        setsize(cap_width, cap_draw_height):
+                                        customtexturerect(u0, v0, u1, v1):
+                                        diffuse(1.0, 1.0, 1.0, cap_glow):
+                                        rotationz(cap_rotation):
+                                        z(Z_HOLD_GLOW)
+                                    ),
+                                    cap_world_z,
+                                ));
+                            }
                         }
                     }
                 }
@@ -6471,6 +6709,22 @@ mod tests {
             hold_head_render_flags(Some(&active), 100.0, 100.0);
         assert!(engaged_released);
         assert!(!use_active_released);
+    }
+
+    #[test]
+    fn roll_head_render_flags_stay_active_between_taps() {
+        let active = ActiveHold {
+            note_index: 42,
+            start_time: 100.0,
+            end_time: 12.0,
+            note_type: NoteType::Roll,
+            let_go: false,
+            is_pressed: false,
+            life: 1.0,
+        };
+        let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
+        assert!(engaged);
+        assert!(use_active);
     }
 
     #[test]
