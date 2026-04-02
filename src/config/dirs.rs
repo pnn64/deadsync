@@ -154,6 +154,10 @@ fn native_cache_dir_for_data_dir(data_dir: &std::path::Path) -> PathBuf {
 }
 
 impl AppDirs {
+    fn has_portable_marker(dir: &std::path::Path) -> bool {
+        dir.join("portable.txt").exists() || dir.join("portable.ini").exists()
+    }
+
     fn runtime_root_from_exe_path(exe_path: &std::path::Path) -> PathBuf {
         let exe_dir = exe_path
             .parent()
@@ -172,7 +176,7 @@ impl AppDirs {
         };
         let parent = parent.to_path_buf();
         let looks_like_bundle_root = parent.join("assets").is_dir()
-            || parent.join("portable.txt").exists()
+            || Self::has_portable_marker(&parent)
             || parent.join("songs").is_dir()
             || parent.join("courses").is_dir();
         if looks_like_bundle_root {
@@ -186,7 +190,7 @@ impl AppDirs {
         let exe_path = std::env::current_exe().expect("cannot determine exe path");
         let exe_dir = Self::runtime_root_from_exe_path(&exe_path);
 
-        if exe_dir.join("portable.txt").exists() {
+        if Self::has_portable_marker(&exe_dir) {
             return Self {
                 data_dir: exe_dir.clone(),
                 cache_dir: exe_dir.clone(),
@@ -351,6 +355,27 @@ mod tests {
         let exe_path = root.join("target/debug/deps/deadsync-test");
         let expected = root.join("target/debug");
         std::fs::create_dir_all(expected.join("assets")).expect("create mock assets dir");
+
+        assert_eq!(AppDirs::runtime_root_from_exe_path(&exe_path), expected);
+
+        std::fs::remove_dir_all(root).expect("cleanup mock target dir");
+    }
+
+    #[test]
+    fn runtime_root_uses_parent_profile_dir_for_cargo_test_binaries_with_portable_ini() {
+        let unique = format!(
+            "deadsync-dirs-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time before unix epoch")
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(unique);
+        let exe_path = root.join("target/debug/deps/deadsync-test");
+        let expected = root.join("target/debug");
+        std::fs::create_dir_all(&expected).expect("create mock target dir");
+        std::fs::write(expected.join("portable.ini"), "").expect("create portable.ini");
 
         assert_eq!(AppDirs::runtime_root_from_exe_path(&exe_path), expected);
 
