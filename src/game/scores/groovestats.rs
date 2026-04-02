@@ -1,9 +1,10 @@
 use super::{
     GROOVESTATS_CHART_HASH_VERSION, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_REASON_COUNT,
     GROOVESTATS_SUBMIT_MAX_ENTRIES, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
-    GS_INVALID_REMOVE_MASK, ItlEventProgress, cache_gs_score_from_leaderboard, compact_f32_text,
-    de_i32_from_string_or_number, de_string_from_string_or_number, de_u32_from_string_or_number,
-    gameplay_side_for_player, itl, log_body_snippet, submit_record_banner, submit_side_ix,
+    GS_INVALID_REMOVE_MASK, ItlEventProgress, cache_gs_score_from_leaderboard,
+    cache_player_leaderboard_submit_response, compact_f32_text, de_i32_from_string_or_number,
+    de_string_from_string_or_number, de_u32_from_string_or_number, gameplay_side_for_player, itl,
+    log_body_snippet, submit_record_banner, submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -957,6 +958,13 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                         player_response.gs_leaderboard.as_slice(),
                     );
                 }
+                cache_player_leaderboard_submit_response(
+                    player.side,
+                    player.chart_hash.as_str(),
+                    player.username.as_str(),
+                    player.show_ex_score,
+                    player_response,
+                );
                 itl::handle_submit_player_unlocks(player, player_response);
                 debug!(
                     "{} submit succeeded for {:?} ({}) result='{}'",

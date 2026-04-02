@@ -1988,6 +1988,168 @@ struct FetchedPlayerLeaderboards {
 }
 
 #[inline(always)]
+fn leaderboard_pane_key_eq(a: &LeaderboardPane, b: &LeaderboardPane) -> bool {
+    a.is_ex == b.is_ex && a.name.eq_ignore_ascii_case(b.name.as_str())
+}
+
+fn player_leaderboard_data_from_submit_response(
+    response: &GrooveStatsSubmitApiPlayer,
+    username: &str,
+    show_ex_score: bool,
+    existing: Option<&PlayerLeaderboardData>,
+) -> PlayerLeaderboardData {
+    let mut panes = Vec::with_capacity(existing.map_or(4, |data| data.panes.len() + 2));
+    if show_ex_score {
+        push_leaderboard_pane(
+            &mut panes,
+            "GrooveStats",
+            response.ex_leaderboard.clone(),
+            true,
+        );
+        push_leaderboard_pane(
+            &mut panes,
+            "GrooveStats",
+            response.gs_leaderboard.clone(),
+            false,
+        );
+    } else {
+        push_leaderboard_pane(
+            &mut panes,
+            "GrooveStats",
+            response.gs_leaderboard.clone(),
+            false,
+        );
+        push_leaderboard_pane(
+            &mut panes,
+            "GrooveStats",
+            response.ex_leaderboard.clone(),
+            true,
+        );
+    }
+
+    if let Some(itl) = response.itl.as_ref()
+        && !itl.itl_leaderboard.is_empty()
+    {
+        let name = if itl.name.trim().is_empty() {
+            "ITL"
+        } else {
+            itl.name.as_str()
+        };
+        push_leaderboard_pane(&mut panes, name, itl.itl_leaderboard.clone(), true);
+    }
+
+    if let Some(existing) = existing {
+        for pane in &existing.panes {
+            if panes
+                .iter()
+                .any(|existing_pane| leaderboard_pane_key_eq(existing_pane, pane))
+            {
+                continue;
+            }
+            panes.push(pane.clone());
+        }
+    }
+
+    let itl_self_score = response
+        .itl
+        .as_ref()
+        .and_then(|itl| leaderboard_self_score_10000(itl.itl_leaderboard.as_slice(), username))
+        .or(existing.and_then(|data| data.itl_self_score));
+
+    PlayerLeaderboardData {
+        panes,
+        itl_self_score,
+    }
+}
+
+fn player_leaderboard_cache_key_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    show_ex_score: bool,
+) -> Option<PlayerLeaderboardCacheKey> {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() {
+        return None;
+    }
+
+    let cfg = crate::config::get();
+    if !cfg.enable_groovestats {
+        return None;
+    }
+
+    let side_profile = profile::get_for_side(side);
+    let gs_api_key = side_profile.groovestats_api_key.trim();
+    if gs_api_key.is_empty() {
+        return None;
+    }
+
+    let arrowcloud_api_key = side_profile.arrowcloud_api_key.trim().to_string();
+    let include_arrowcloud = cfg.enable_arrowcloud
+        && !arrowcloud_api_key.is_empty()
+        && matches!(
+            online::get_arrowcloud_status(),
+            online::ArrowCloudConnectionStatus::Connected
+        );
+
+    Some(PlayerLeaderboardCacheKey {
+        chart_hash: chart_hash.to_string(),
+        api_key: gs_api_key.to_string(),
+        arrowcloud_api_key,
+        include_arrowcloud,
+        show_ex_score,
+    })
+}
+
+fn cache_player_leaderboard_submit_response(
+    side: profile::PlayerSide,
+    chart_hash: &str,
+    username: &str,
+    show_ex_score: bool,
+    response: &GrooveStatsSubmitApiPlayer,
+) {
+    let Some(key) = player_leaderboard_cache_key_for_side(chart_hash, side, show_ex_score) else {
+        return;
+    };
+
+    let refreshed_at = Instant::now();
+    let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+    let existing = cache.by_key.get(&key).and_then(|entry| match &entry.value {
+        PlayerLeaderboardCacheValue::Ready(data) => Some(data.clone()),
+        PlayerLeaderboardCacheValue::Error(_) => None,
+    });
+    let data = player_leaderboard_data_from_submit_response(
+        response,
+        username,
+        show_ex_score,
+        existing.as_ref(),
+    );
+    let ready_for_key =
+        !key.include_arrowcloud || data.panes.iter().any(LeaderboardPane::is_arrowcloud);
+
+    cache.by_key.insert(
+        key,
+        PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(data),
+            max_entries: if ready_for_key {
+                GROOVESTATS_SUBMIT_MAX_ENTRIES
+            } else {
+                0
+            },
+            refreshed_at,
+            retry_after: None,
+        },
+    );
+}
+
+#[inline(always)]
+fn should_keep_newer_player_leaderboard_entry(
+    entry: Option<&PlayerLeaderboardCacheEntry>,
+    request_started_at: Instant,
+) -> bool {
+    entry.is_some_and(|entry| entry.refreshed_at > request_started_at)
+}
+
+#[inline(always)]
 fn leaderboard_self_entry<'a>(
     entries: &'a [LeaderboardApiEntry],
     username: &str,
@@ -2447,6 +2609,7 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
 
     if should_spawn {
         std::thread::spawn(move || {
+            let request_started_at = Instant::now();
             let fetched = fetch_player_leaderboards_internal(
                 &key.chart_hash,
                 &key.api_key,
@@ -2465,6 +2628,12 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
 
             match fetched {
                 Ok(fetched) => {
+                    if should_keep_newer_player_leaderboard_entry(
+                        cache.by_key.get(&key),
+                        request_started_at,
+                    ) {
+                        return;
+                    }
                     if fetched.itl_self_found {
                         itl::set_cached_online_self_score(
                             persistent_profile_id.as_deref(),
@@ -2492,6 +2661,12 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
                     );
                 }
                 Err(error) => {
+                    if should_keep_newer_player_leaderboard_entry(
+                        cache.by_key.get(&key),
+                        request_started_at,
+                    ) {
+                        return;
+                    }
                     if let Some(entry) = cache.by_key.get_mut(&key)
                         && matches!(entry.value, PlayerLeaderboardCacheValue::Ready(_))
                     {
@@ -3705,6 +3880,124 @@ mod tests {
             Some(&stale_error),
             5,
             false
+        ));
+    }
+
+    #[test]
+    fn submit_response_leaderboard_merge_preserves_non_gs_panes() {
+        let existing = PlayerLeaderboardData {
+            panes: vec![
+                LeaderboardPane {
+                    name: "GrooveStats".to_string(),
+                    entries: vec![LeaderboardEntry {
+                        rank: 99,
+                        name: "stale".to_string(),
+                        machine_tag: None,
+                        score: 9000.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: false,
+                        is_fail: false,
+                    }],
+                    is_ex: false,
+                    disabled: false,
+                },
+                LeaderboardPane {
+                    name: "ArrowCloud".to_string(),
+                    entries: vec![LeaderboardEntry {
+                        rank: 1,
+                        name: "cloud".to_string(),
+                        machine_tag: None,
+                        score: 9876.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: false,
+                        is_fail: false,
+                    }],
+                    is_ex: false,
+                    disabled: false,
+                },
+            ],
+            itl_self_score: Some(8123),
+        };
+        let response = GrooveStatsSubmitApiPlayer {
+            chart_hash: "deadbeef".to_string(),
+            result: "improved".to_string(),
+            gs_leaderboard: vec![LeaderboardApiEntry {
+                rank: 2,
+                name: "PerfectTaste".to_string(),
+                machine_tag: None,
+                score: 9950.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: true,
+                is_fail: false,
+                comments: None,
+            }],
+            ex_leaderboard: vec![LeaderboardApiEntry {
+                rank: 1,
+                name: "PerfectTaste".to_string(),
+                machine_tag: None,
+                score: 9988.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: true,
+                is_fail: false,
+                comments: None,
+            }],
+            rpg: None,
+            itl: None,
+        };
+
+        let merged = player_leaderboard_data_from_submit_response(
+            &response,
+            "PerfectTaste",
+            true,
+            Some(&existing),
+        );
+
+        assert_eq!(
+            merged
+                .panes
+                .iter()
+                .filter(|pane| pane.is_groovestats())
+                .count(),
+            2
+        );
+        assert!(merged.panes[0].is_groovestats() && merged.panes[0].is_ex);
+        assert!(merged.panes.iter().any(LeaderboardPane::is_arrowcloud));
+        assert_eq!(merged.itl_self_score, Some(8123));
+    }
+
+    #[test]
+    fn newer_player_leaderboard_entry_blocks_older_fetch_result() {
+        let newer_entry = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                itl_self_score: None,
+            }),
+            max_entries: 0,
+            refreshed_at: Instant::now(),
+            retry_after: None,
+        };
+        let older_request_started_at = Instant::now() - Duration::from_millis(1);
+        assert!(should_keep_newer_player_leaderboard_entry(
+            Some(&newer_entry),
+            older_request_started_at,
+        ));
+
+        let older_entry = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                itl_self_score: None,
+            }),
+            max_entries: 0,
+            refreshed_at: Instant::now() - Duration::from_secs(1),
+            retry_after: None,
+        };
+        assert!(!should_keep_newer_player_leaderboard_entry(
+            Some(&older_entry),
+            Instant::now(),
         ));
     }
 }
