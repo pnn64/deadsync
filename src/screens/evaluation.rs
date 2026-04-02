@@ -519,7 +519,10 @@ fn compute_column_judgments(
 
 #[cfg(test)]
 mod tests {
-    use super::{combined_submit_footer_text, compute_column_judgments, submit_footer_lines};
+    use super::{
+        EvalPane, combined_submit_footer_text, compute_column_judgments, eval_pane_shift,
+        submit_footer_lines,
+    };
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{Note, NoteType};
     use crate::game::online;
@@ -634,6 +637,66 @@ mod tests {
         assert_eq!(lines.len(), 1);
         assert_eq!(&*lines[0], "Submitting ...");
     }
+
+    #[test]
+    fn eval_pane_shift_uses_single_cycle_order() {
+        let cycle = [
+            EvalPane::Standard,
+            EvalPane::FaPlus,
+            EvalPane::Column,
+            EvalPane::MachineRecords,
+            EvalPane::QrCode,
+            EvalPane::GrooveStats,
+            EvalPane::ArrowCloud,
+            EvalPane::Timing,
+            EvalPane::TimingEx,
+        ];
+
+        for window in cycle.windows(2) {
+            assert_eq!(eval_pane_shift(window[0], 1, false, true, true), window[1]);
+            assert_eq!(eval_pane_shift(window[1], -1, false, true, true), window[0]);
+        }
+
+        assert_eq!(
+            eval_pane_shift(cycle[cycle.len() - 1], 1, false, true, true),
+            cycle[0]
+        );
+        assert_eq!(
+            eval_pane_shift(cycle[0], -1, false, true, true),
+            cycle[cycle.len() - 1]
+        );
+    }
+
+    #[test]
+    fn eval_pane_shift_keeps_hard_ex_cycle_symmetric() {
+        let cycle = [
+            EvalPane::Standard,
+            EvalPane::FaPlus,
+            EvalPane::HardEx,
+            EvalPane::Column,
+            EvalPane::MachineRecords,
+            EvalPane::QrCode,
+            EvalPane::GrooveStats,
+            EvalPane::ArrowCloud,
+            EvalPane::Timing,
+            EvalPane::TimingEx,
+            EvalPane::TimingHardEx,
+        ];
+
+        for window in cycle.windows(2) {
+            assert_eq!(eval_pane_shift(window[0], 1, true, true, true), window[1]);
+            assert_eq!(eval_pane_shift(window[1], -1, true, true, true), window[0]);
+        }
+
+        assert_eq!(
+            eval_pane_shift(cycle[cycle.len() - 1], 1, true, true, true),
+            cycle[0]
+        );
+        assert_eq!(
+            eval_pane_shift(cycle[0], -1, true, true, true),
+            cycle[cycle.len() - 1]
+        );
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -661,138 +724,78 @@ const fn eval_pane_default_for(show_fa_plus_pane: bool) -> EvalPane {
 }
 
 #[inline(always)]
-fn eval_pane_next(
-    pane: EvalPane,
-    has_hard_ex: bool,
-    has_online_panes: bool,
-    has_gs: bool,
-    has_arrowcloud: bool,
-) -> EvalPane {
-    // Order (per user parity request):
-    // ITG -> EX -> H.EX -> Arrow breakdown -> Machine -> (QR) -> GS -> AC -> Timing -> Timing EX -> Timing H.EX -> ITG
-    let has_gs = has_online_panes && has_gs;
-    let has_arrowcloud = has_online_panes && has_arrowcloud;
-    match pane {
-        EvalPane::Standard => EvalPane::FaPlus,
-        EvalPane::FaPlus => {
-            if has_hard_ex {
-                EvalPane::HardEx
-            } else {
-                EvalPane::Column
-            }
-        }
-        EvalPane::HardEx => {
-            if has_hard_ex {
-                EvalPane::Column
-            } else {
-                EvalPane::Standard
-            }
-        }
-        EvalPane::Column => EvalPane::MachineRecords,
-        EvalPane::MachineRecords => {
-            if ENABLE_GS_QR_PANE && has_gs {
-                EvalPane::QrCode
-            } else if has_gs {
-                EvalPane::GrooveStats
-            } else if has_arrowcloud {
-                EvalPane::ArrowCloud
-            } else {
-                EvalPane::Timing
-            }
-        }
-        EvalPane::QrCode => {
-            if has_gs {
-                EvalPane::GrooveStats
-            } else if has_arrowcloud {
-                EvalPane::ArrowCloud
-            } else {
-                EvalPane::Timing
-            }
-        }
-        EvalPane::GrooveStats => {
-            if has_arrowcloud {
-                EvalPane::ArrowCloud
-            } else {
-                EvalPane::Timing
-            }
-        }
-        EvalPane::ArrowCloud => EvalPane::Timing,
-        EvalPane::Timing => EvalPane::TimingEx,
-        EvalPane::TimingEx => {
-            if has_hard_ex {
-                EvalPane::TimingHardEx
-            } else {
-                EvalPane::Standard
-            }
-        }
-        EvalPane::TimingHardEx => EvalPane::Standard,
-    }
+fn eval_has_gs_pane(has_online_panes: bool) -> bool {
+    has_online_panes && crate::config::get().enable_groovestats
 }
 
 #[inline(always)]
-fn eval_pane_prev(
+fn eval_has_arrowcloud_pane(has_online_panes: bool, side: profile::PlayerSide) -> bool {
+    if !has_online_panes {
+        return false;
+    }
+
+    let cfg = crate::config::get();
+    if !cfg.enable_groovestats || !cfg.enable_arrowcloud {
+        return false;
+    }
+
+    let side_profile = profile::get_for_side(side);
+    !side_profile.groovestats_api_key.trim().is_empty()
+        && !side_profile.arrowcloud_api_key.trim().is_empty()
+        && matches!(
+            online::get_arrowcloud_status(),
+            online::ArrowCloudConnectionStatus::Connected
+        )
+}
+
+#[inline(always)]
+fn eval_pane_cycle(has_hard_ex: bool, has_gs: bool, has_arrowcloud: bool) -> Vec<EvalPane> {
+    let mut panes = Vec::with_capacity(11);
+    panes.push(EvalPane::Standard);
+    panes.push(EvalPane::FaPlus);
+    if has_hard_ex {
+        panes.push(EvalPane::HardEx);
+    }
+    panes.push(EvalPane::Column);
+    panes.push(EvalPane::MachineRecords);
+    if ENABLE_GS_QR_PANE && has_gs {
+        panes.push(EvalPane::QrCode);
+    }
+    if has_gs {
+        panes.push(EvalPane::GrooveStats);
+    }
+    if has_arrowcloud {
+        panes.push(EvalPane::ArrowCloud);
+    }
+    panes.push(EvalPane::Timing);
+    panes.push(EvalPane::TimingEx);
+    if has_hard_ex {
+        panes.push(EvalPane::TimingHardEx);
+    }
+    panes
+}
+
+#[inline(always)]
+fn eval_pane_shift(
     pane: EvalPane,
+    dir: i32,
     has_hard_ex: bool,
-    has_online_panes: bool,
     has_gs: bool,
     has_arrowcloud: bool,
 ) -> EvalPane {
-    let has_gs = has_online_panes && has_gs;
-    let has_arrowcloud = has_online_panes && has_arrowcloud;
-    match pane {
-        EvalPane::Standard => {
-            if has_hard_ex {
-                EvalPane::TimingHardEx
-            } else {
-                EvalPane::TimingEx
-            }
-        }
-        EvalPane::TimingHardEx => EvalPane::TimingEx,
-        EvalPane::TimingEx => EvalPane::Timing,
-        EvalPane::Timing => {
-            if has_arrowcloud {
-                EvalPane::ArrowCloud
-            } else if has_gs {
-                if ENABLE_GS_QR_PANE {
-                    EvalPane::QrCode
-                } else {
-                    EvalPane::GrooveStats
-                }
-            } else {
-                EvalPane::MachineRecords
-            }
-        }
-        EvalPane::ArrowCloud => {
-            if has_gs {
-                EvalPane::GrooveStats
-            } else {
-                EvalPane::MachineRecords
-            }
-        }
-        EvalPane::GrooveStats => {
-            if ENABLE_GS_QR_PANE && has_gs {
-                EvalPane::QrCode
-            } else {
-                EvalPane::MachineRecords
-            }
-        }
-        EvalPane::QrCode => EvalPane::MachineRecords,
-        EvalPane::MachineRecords => EvalPane::Column,
-        EvalPane::Column => {
-            if has_hard_ex {
-                EvalPane::HardEx
-            } else {
-                EvalPane::FaPlus
-            }
-        }
-        EvalPane::HardEx => {
-            if has_hard_ex {
-                EvalPane::FaPlus
-            } else {
-                EvalPane::Standard
-            }
-        }
-        EvalPane::FaPlus => EvalPane::Standard,
+    let panes = eval_pane_cycle(has_hard_ex, has_gs, has_arrowcloud);
+    let Some(cur_idx) = panes.iter().position(|&candidate| candidate == pane) else {
+        return panes.first().copied().unwrap_or(EvalPane::Standard);
+    };
+    let step = if dir >= 0 { 1 } else { -1 };
+    let next_idx = (cur_idx as i32 + step).rem_euclid(panes.len() as i32) as usize;
+    panes[next_idx]
+}
+
+#[inline(always)]
+fn warm_eval_leaderboards(has_online_panes: bool, chart_hash: &str, side: profile::PlayerSide) {
+    if has_online_panes {
+        let _ = scores::get_or_fetch_player_leaderboards_for_side(chart_hash, side, GS_RECORD_ROWS);
     }
 }
 
@@ -1942,64 +1945,29 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         } else {
             profile::get_session_player_side()
         };
-        let leaderboard_snapshot = if has_online_panes {
-            scores::get_or_fetch_player_leaderboards_for_side(
-                &si.chart.short_hash,
-                gs_side,
-                GS_RECORD_ROWS,
-            )
-        } else {
-            None
-        };
-        let has_gs = crate::config::get().enable_groovestats;
-        let has_arrowcloud = leaderboard_snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.data.as_ref())
-            .is_some_and(|data| {
-                data.panes
-                    .iter()
-                    .any(scores::LeaderboardPane::is_arrowcloud)
-            });
+        warm_eval_leaderboards(has_online_panes, &si.chart.short_hash, gs_side);
+        let has_gs = eval_has_gs_pane(has_online_panes);
+        let has_arrowcloud = eval_has_arrowcloud_pane(has_online_panes, gs_side);
 
-        state.active_pane[controller_idx] = if dir >= 0 {
-            eval_pane_next(
-                state.active_pane[controller_idx],
-                has_hard_ex,
-                has_online_panes,
-                has_gs,
-                has_arrowcloud,
-            )
-        } else {
-            eval_pane_prev(
-                state.active_pane[controller_idx],
-                has_hard_ex,
-                has_online_panes,
-                has_gs,
-                has_arrowcloud,
-            )
-        };
+        state.active_pane[controller_idx] = eval_pane_shift(
+            state.active_pane[controller_idx],
+            dir,
+            has_hard_ex,
+            has_gs,
+            has_arrowcloud,
+        );
 
         // Don't allow duplicate panes in single/double.
         if play_style != profile::PlayStyle::Versus {
             let other_idx = 1 - controller_idx;
             if state.active_pane[controller_idx] == state.active_pane[other_idx] {
-                state.active_pane[controller_idx] = if dir >= 0 {
-                    eval_pane_next(
-                        state.active_pane[controller_idx],
-                        has_hard_ex,
-                        has_online_panes,
-                        has_gs,
-                        has_arrowcloud,
-                    )
-                } else {
-                    eval_pane_prev(
-                        state.active_pane[controller_idx],
-                        has_hard_ex,
-                        has_online_panes,
-                        has_gs,
-                        has_arrowcloud,
-                    )
-                };
+                state.active_pane[controller_idx] = eval_pane_shift(
+                    state.active_pane[controller_idx],
+                    dir,
+                    has_hard_ex,
+                    has_gs,
+                    has_arrowcloud,
+                );
             }
         }
     };
