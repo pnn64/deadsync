@@ -787,11 +787,46 @@ fn arrow_time_window_bounds(
 }
 
 #[inline(always)]
+fn closest_lane_note(
+    arrows: &[Arrow],
+    notes: &[Note],
+    note_times: &[f32],
+    current_time: f32,
+    search_start_idx: usize,
+    search_end_idx: usize,
+) -> Option<(usize, usize, f32)> {
+    let mut best: Option<(usize, usize, f32)> = None;
+    for (offset, arrow) in arrows[search_start_idx..search_end_idx].iter().enumerate() {
+        let idx = search_start_idx + offset;
+        let note_index = arrow.note_index;
+        let note = &notes[note_index];
+        if note.result.is_some() || !note.can_be_judged || note.is_fake {
+            continue;
+        }
+        let abs_err_music = (current_time - note_times[note_index]).abs();
+        match best {
+            Some((_, _, best_err)) if abs_err_music >= best_err => {}
+            _ => best = Some((idx, note_index, abs_err_music)),
+        }
+    }
+    best
+}
+
+#[inline(always)]
 fn crossed_mine_bounds(mine_times: &[f32], prev_time: f32, current_time: f32) -> (usize, usize) {
     (
         mine_times.partition_point(|&t| t <= prev_time),
         mine_times.partition_point(|&t| t <= current_time),
     )
+}
+
+#[inline(always)]
+const fn lane_edge_matches_note_type(pressed: bool, note_type: NoteType) -> bool {
+    match note_type {
+        NoteType::Tap | NoteType::Hold | NoteType::Roll => pressed,
+        NoteType::Lift => !pressed,
+        NoteType::Mine | NoteType::Fake => false,
+    }
 }
 
 #[inline(always)]
@@ -9026,33 +9061,14 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         search_start_time,
         search_end_time,
     );
-    let mut best: Option<(usize, usize, f32)> = None;
-    for (offset, arrow) in col_arrows[search_start_idx..search_end_idx]
-        .iter()
-        .enumerate()
-    {
-        let idx = search_start_idx + offset;
-        let note_index = arrow.note_index;
-        let n = &state.notes[note_index];
-        if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type == NoteType::Lift {
-            continue;
-        }
-        let note_time = state.note_time_cache[note_index];
-        let abs_err_music = (current_time - note_time).abs();
-        let window_music = if matches!(n.note_type, NoteType::Mine) {
-            mine_window_music
-        } else {
-            way_off_window_music
-        };
-        if abs_err_music <= window_music {
-            match best {
-                Some((_, _, best_err)) if abs_err_music >= best_err => {}
-                _ => best = Some((idx, note_index, abs_err_music)),
-            }
-        }
-    }
-
-    if let Some((arrow_list_index, note_index, _)) = best {
+    if let Some((arrow_list_index, note_index, _)) = closest_lane_note(
+        col_arrows,
+        &state.notes,
+        &state.note_time_cache,
+        current_time,
+        search_start_idx,
+        search_end_idx,
+    ) {
         let note_row_index = state.notes[note_index].row_index;
         let note_type = state.notes[note_index].note_type;
         let note_time = state.note_time_cache[note_index];
@@ -9076,6 +9092,9 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
             return false;
         }
         let mine_hit_on_press = try_hit_mine_while_held(state, column, current_time);
+        if !lane_edge_matches_note_type(true, note_type) {
+            return mine_hit_on_press;
+        }
 
         if abs_time_error <= way_off_window {
             let Some(row_entry) = row_entry_for_cached_row(
@@ -9352,31 +9371,19 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
         search_start_time,
         search_end_time,
     );
-
-    let mut best: Option<(usize, usize, f32)> = None;
-    for (offset, arrow) in col_arrows[search_start_idx..search_end_idx]
-        .iter()
-        .enumerate()
-    {
-        let idx = search_start_idx + offset;
-        let note_index = arrow.note_index;
-        let n = &state.notes[note_index];
-        if n.result.is_some() || !n.can_be_judged || n.is_fake || n.note_type != NoteType::Lift {
-            continue;
-        }
-        let note_time = state.note_time_cache[note_index];
-        let abs_err_music = (current_time - note_time).abs();
-        if abs_err_music <= way_off_window_music {
-            match best {
-                Some((_, _, best_err)) if abs_err_music >= best_err => {}
-                _ => best = Some((idx, note_index, abs_err_music)),
-            }
-        }
-    }
-
-    let Some((_arrow_list_index, note_index, _)) = best else {
+    let Some((_arrow_list_index, note_index, _)) = closest_lane_note(
+        col_arrows,
+        &state.notes,
+        &state.note_time_cache,
+        current_time,
+        search_start_idx,
+        search_end_idx,
+    ) else {
         return false;
     };
+    if !lane_edge_matches_note_type(false, state.notes[note_index].note_type) {
+        return false;
+    }
 
     let note_time = state.note_time_cache[note_index];
     let time_error_music = current_time - note_time;
@@ -11662,17 +11669,18 @@ mod tests {
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
         TickMode, add_provisional_early_score, advance_hold_last_held, apply_mines_insert,
         arrow_time_window_bounds, build_assist_clap_rows, build_attack_mask_windows_for_player,
-        build_row_grids, collect_edge_judge_indices, count_rescore_tracks_on_row,
-        crossed_mine_bounds, enforce_max_simultaneous_notes, find_arrow_index,
-        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_press_started, lane_release_finished,
-        late_note_resolution_window_s, max_step_distance_seconds, mine_window_bounds,
-        music_time_from_song_clock, next_tick_mode, parse_attack_mods, partition_notes_before_time,
-        player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
-        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
-        score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
-        stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
-        turn_option_bits, update_lane_count,
+        build_row_grids, closest_lane_note, collect_edge_judge_indices,
+        count_rescore_tracks_on_row, crossed_mine_bounds, enforce_max_simultaneous_notes,
+        find_arrow_index, frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
+        lane_release_finished, late_note_resolution_window_s, max_step_distance_seconds,
+        mine_window_bounds, music_time_from_song_clock, next_tick_mode, parse_attack_mods,
+        partition_notes_before_time, player_draw_scale_for_tilt_with_visual_mask,
+        recent_step_tracks, recompute_player_totals, remove_provisional_early_score,
+        replay_edge_cap, row_entry_for_cached_row, score_missed_holds_and_rolls,
+        score_valid_for_chart, scored_hold_totals_with_carry, stage_music_cut, step_calories,
+        suppress_final_bad_rescore_visual, tick_mode_status_line, turn_option_bits,
+        update_lane_count,
     };
     use crate::engine::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
@@ -12617,6 +12625,68 @@ mod tests {
             arrow_time_window_bounds(&arrows, &note_times, 1.5, 2.0),
             (1, 3)
         );
+    }
+
+    #[test]
+    fn closest_lane_note_keeps_nearer_lift_visible_to_press_edges() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Lift),
+            test_note(0, 49, NoteType::Tap),
+        ];
+        let arrows = [
+            Arrow {
+                beat: notes[0].beat,
+                note_type: NoteType::Lift,
+                note_index: 0,
+            },
+            Arrow {
+                beat: notes[1].beat,
+                note_type: NoteType::Tap,
+                note_index: 1,
+            },
+        ];
+        let note_times = [1.000_f32, 1.012_f32];
+        let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 0.9, 1.1);
+        let (_, note_index, _) =
+            closest_lane_note(&arrows, &notes, &note_times, 1.004, start_idx, end_idx)
+                .expect("expected a closest note");
+
+        assert_eq!(note_index, 0);
+        assert!(!lane_edge_matches_note_type(
+            true,
+            notes[note_index].note_type
+        ));
+    }
+
+    #[test]
+    fn closest_lane_note_keeps_nearer_tap_visible_to_release_edges() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Tap),
+            test_note(0, 49, NoteType::Lift),
+        ];
+        let arrows = [
+            Arrow {
+                beat: notes[0].beat,
+                note_type: NoteType::Tap,
+                note_index: 0,
+            },
+            Arrow {
+                beat: notes[1].beat,
+                note_type: NoteType::Lift,
+                note_index: 1,
+            },
+        ];
+        let note_times = [1.000_f32, 1.012_f32];
+        let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 0.9, 1.1);
+        let (_, note_index, _) =
+            closest_lane_note(&arrows, &notes, &note_times, 1.004, start_idx, end_idx)
+                .expect("expected a closest note");
+
+        assert_eq!(note_index, 0);
+        assert!(!lane_edge_matches_note_type(
+            false,
+            notes[note_index].note_type
+        ));
     }
 
     #[test]
