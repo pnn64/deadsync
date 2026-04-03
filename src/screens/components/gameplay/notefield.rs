@@ -5835,9 +5835,15 @@ pub fn build(
     let (error_bar_y, error_bar_max_h) = if resolved_judgment_texture(profile).is_none() {
         (judgment_y + error_bar_extra_y, 30.0_f32)
     } else if profile.error_bar_up {
-        (judgment_y - ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y, 10.0_f32)
+        (
+            judgment_y - ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y,
+            10.0_f32,
+        )
     } else {
-        (judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y, 10.0_f32)
+        (
+            judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y,
+            10.0_f32,
+        )
     };
     let error_bar_x = playfield_center_x + error_bar_extra_x;
     let mut average_bar_y = 0.0_f32;
@@ -5988,11 +5994,11 @@ pub fn build(
                             }
                             for sx in [-1.0_f32, 1.0_f32] {
                                 hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(error_bar_x + sx * offset, error_bar_y):
-                                zoomto(1.0, bar_h):
-                                diffuse(1.0, 1.0, 1.0, line_alpha):
-                                z(error_bar_line_z)
-                            ));
+                                    align(0.5, 0.5): xy(error_bar_x + sx * offset, error_bar_y):
+                                    zoomto(1.0, bar_h):
+                                    diffuse(1.0, 1.0, 1.0, line_alpha):
+                                    z(error_bar_line_z)
+                                ));
                             }
                         }
                     }

@@ -656,24 +656,12 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "NoteFieldOffsetY={}\n",
         options.note_field_offset_y
     ));
-    content.push_str(&format!(
-        "JudgmentOffsetX={}\n",
-        options.judgment_offset_x
-    ));
-    content.push_str(&format!(
-        "JudgmentOffsetY={}\n",
-        options.judgment_offset_y
-    ));
+    content.push_str(&format!("JudgmentOffsetX={}\n", options.judgment_offset_x));
+    content.push_str(&format!("JudgmentOffsetY={}\n", options.judgment_offset_y));
     content.push_str(&format!("ComboOffsetX={}\n", options.combo_offset_x));
     content.push_str(&format!("ComboOffsetY={}\n", options.combo_offset_y));
-    content.push_str(&format!(
-        "ErrorBarOffsetX={}\n",
-        options.error_bar_offset_x
-    ));
-    content.push_str(&format!(
-        "ErrorBarOffsetY={}\n",
-        options.error_bar_offset_y
-    ));
+    content.push_str(&format!("ErrorBarOffsetX={}\n", options.error_bar_offset_x));
+    content.push_str(&format!("ErrorBarOffsetY={}\n", options.error_bar_offset_y));
     content.push_str(&format!("VisualDelayMs={}\n", options.visual_delay_ms));
     content.push('\n');
 }

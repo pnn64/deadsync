@@ -198,8 +198,12 @@ fn init_row_tweens(
     let bottom_pos = (VISIBLE_ROWS as f32) - 0.5;
     let measure_counter_anchor_visible_idx =
         parent_anchor_visible_index(rows, ROW_MEASURE_COUNTER, visibility);
+    let judgment_font_anchor_visible_idx =
+        parent_anchor_visible_index(rows, ROW_JUDGMENT_FONT, visibility);
     let judgment_tilt_anchor_visible_idx =
         parent_anchor_visible_index(rows, ROW_JUDGMENT_TILT, visibility);
+    let combo_font_anchor_visible_idx =
+        parent_anchor_visible_index(rows, ROW_COMBO_FONT, visibility);
     let error_bar_anchor_visible_idx = parent_anchor_visible_index(rows, ROW_ERROR_BAR, visibility);
     let hide_anchor_visible_idx = parent_anchor_visible_index(rows, ROW_HIDE, visibility);
 
@@ -216,7 +220,9 @@ fn init_row_tweens(
                 rows.get(i)
                     .and_then(|row| match conditional_row_parent(row.name.as_str()) {
                         Some(ROW_MEASURE_COUNTER) => measure_counter_anchor_visible_idx,
+                        Some(ROW_JUDGMENT_FONT) => judgment_font_anchor_visible_idx,
                         Some(ROW_JUDGMENT_TILT) => judgment_tilt_anchor_visible_idx,
+                        Some(ROW_COMBO_FONT) => combo_font_anchor_visible_idx,
                         Some(ROW_ERROR_BAR) => error_bar_anchor_visible_idx,
                         Some(ROW_HIDE) => hide_anchor_visible_idx,
                         _ => None,
@@ -2846,12 +2852,20 @@ fn session_persisted_player_idx() -> usize {
 const ROW_MEASURE_COUNTER: &str = "Measure Counter";
 const ROW_MEASURE_COUNTER_LOOKAHEAD: &str = "Measure Counter Lookahead";
 const ROW_MEASURE_COUNTER_OPTIONS: &str = "Measure Counter Options";
+const ROW_JUDGMENT_FONT: &str = "Judgment Font";
+const ROW_JUDGMENT_OFFSET_X: &str = "Judgment Offset X";
+const ROW_JUDGMENT_OFFSET_Y: &str = "Judgment Offset Y";
 const ROW_JUDGMENT_TILT: &str = "Judgment Tilt";
 const ROW_JUDGMENT_TILT_INTENSITY: &str = "Judgment Tilt Intensity";
 const ROW_JUDGMENT_BACK: &str = "Judgment Behind Arrows";
+const ROW_COMBO_FONT: &str = "Combo Font";
+const ROW_COMBO_OFFSET_X: &str = "Combo Offset X";
+const ROW_COMBO_OFFSET_Y: &str = "Combo Offset Y";
 const ROW_ERROR_BAR: &str = "Error Bar";
 const ROW_ERROR_BAR_TRIM: &str = "Error Bar Trim";
 const ROW_ERROR_BAR_OPTIONS: &str = "Error Bar Options";
+const ROW_ERROR_BAR_OFFSET_X: &str = "Error Bar Offset X";
+const ROW_ERROR_BAR_OFFSET_Y: &str = "Error Bar Offset Y";
 const ROW_CUSTOM_FANTASTIC_WINDOW: &str = "Custom Blue Fantastic Window";
 const ROW_CUSTOM_FANTASTIC_WINDOW_MS: &str = "Custom Blue Fantastic Window (ms)";
 const ROW_CARRY_COMBO: &str = "Carry Combo";
@@ -2866,7 +2880,9 @@ const ROW_INDICATOR_SCORE_TYPE: &str = "Indicator Score Type";
 #[derive(Clone, Copy, Debug)]
 struct RowVisibility {
     show_measure_counter_children: bool,
+    show_judgment_offsets: bool,
     show_judgment_tilt_intensity: bool,
+    show_combo_offsets: bool,
     show_error_bar_children: bool,
     show_custom_fantastic_window_ms: bool,
     show_density_graph_background: bool,
@@ -2880,10 +2896,20 @@ fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
     if row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS {
         return visibility.show_measure_counter_children;
     }
+    if row_name == ROW_JUDGMENT_OFFSET_X || row_name == ROW_JUDGMENT_OFFSET_Y {
+        return visibility.show_judgment_offsets;
+    }
     if row_name == ROW_JUDGMENT_TILT_INTENSITY {
         return visibility.show_judgment_tilt_intensity;
     }
-    if row_name == ROW_ERROR_BAR_TRIM || row_name == ROW_ERROR_BAR_OPTIONS {
+    if row_name == ROW_COMBO_OFFSET_X || row_name == ROW_COMBO_OFFSET_Y {
+        return visibility.show_combo_offsets;
+    }
+    if row_name == ROW_ERROR_BAR_TRIM
+        || row_name == ROW_ERROR_BAR_OPTIONS
+        || row_name == ROW_ERROR_BAR_OFFSET_X
+        || row_name == ROW_ERROR_BAR_OFFSET_Y
+    {
         return visibility.show_error_bar_children;
     }
     if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
@@ -2912,10 +2938,20 @@ fn conditional_row_parent(row_name: &str) -> Option<&'static str> {
     if row_name == ROW_MEASURE_COUNTER_LOOKAHEAD || row_name == ROW_MEASURE_COUNTER_OPTIONS {
         return Some(ROW_MEASURE_COUNTER);
     }
+    if row_name == ROW_JUDGMENT_OFFSET_X || row_name == ROW_JUDGMENT_OFFSET_Y {
+        return Some(ROW_JUDGMENT_FONT);
+    }
     if row_name == ROW_JUDGMENT_TILT_INTENSITY {
         return Some(ROW_JUDGMENT_TILT);
     }
-    if row_name == ROW_ERROR_BAR_TRIM || row_name == ROW_ERROR_BAR_OPTIONS {
+    if row_name == ROW_COMBO_OFFSET_X || row_name == ROW_COMBO_OFFSET_Y {
+        return Some(ROW_COMBO_FONT);
+    }
+    if row_name == ROW_ERROR_BAR_TRIM
+        || row_name == ROW_ERROR_BAR_OPTIONS
+        || row_name == ROW_ERROR_BAR_OFFSET_X
+        || row_name == ROW_ERROR_BAR_OFFSET_Y
+    {
         return Some(ROW_ERROR_BAR);
     }
     if row_name == ROW_CUSTOM_FANTASTIC_WINDOW_MS {
@@ -2954,6 +2990,23 @@ fn measure_counter_children_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) 
     !any_active
 }
 
+fn judgment_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = rows.iter().find(|r| r.name == ROW_JUDGMENT_FONT) else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        match row.choices.get(choice_idx) {
+            Some(choice) if choice.eq_ignore_ascii_case("None") => {}
+            _ => return true,
+        }
+    }
+    !any_active
+}
+
 #[inline(always)]
 fn judgment_tilt_intensity_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
     let Some(row) = rows.iter().find(|r| r.name == ROW_JUDGMENT_TILT) else {
@@ -2966,6 +3019,23 @@ fn judgment_tilt_intensity_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -
         let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
         if choice_idx != 0 {
             return true;
+        }
+    }
+    !any_active
+}
+
+fn combo_offsets_visible(rows: &[Row], active: [bool; PLAYER_SLOTS]) -> bool {
+    let Some(row) = rows.iter().find(|r| r.name == ROW_COMBO_FONT) else {
+        return true;
+    };
+    let max_choice = row.choices.len().saturating_sub(1);
+    let mut any_active = false;
+    for player_idx in active_player_indices(active) {
+        any_active = true;
+        let choice_idx = row.selected_choice_index[player_idx].min(max_choice);
+        match row.choices.get(choice_idx) {
+            Some(choice) if choice.eq_ignore_ascii_case("None") => {}
+            _ => return true,
         }
     }
     !any_active
@@ -3070,7 +3140,9 @@ fn row_visibility(
 ) -> RowVisibility {
     RowVisibility {
         show_measure_counter_children: measure_counter_children_visible(rows, active),
+        show_judgment_offsets: judgment_offsets_visible(rows, active),
         show_judgment_tilt_intensity: judgment_tilt_intensity_visible(rows, active),
+        show_combo_offsets: combo_offsets_visible(rows, active),
         show_error_bar_children: error_bar_children_visible(active, error_bar_active_mask),
         show_custom_fantastic_window_ms: custom_fantastic_window_ms_visible(rows, active),
         show_density_graph_background: density_graph_background_visible(rows, active),
@@ -4197,7 +4269,7 @@ fn change_choice_for_player(
         if should_persist {
             crate::game::profile::update_measure_lines_for_side(persist_side, setting);
         }
-    } else if row_name == "Judgment Font" {
+    } else if row_name == ROW_JUDGMENT_FONT {
         let setting = assets::judgment_texture_choices()
             .get(row.selected_choice_index[player_idx])
             .map(|choice| crate::game::profile::JudgmentGraphic::new(&choice.key))
@@ -4209,7 +4281,8 @@ fn change_choice_for_player(
                 state.player_profiles[player_idx].judgment_graphic.clone(),
             );
         }
-    } else if row_name == "Combo Font" {
+        visibility_changed = true;
+    } else if row_name == ROW_COMBO_FONT {
         let setting = match row.selected_choice_index[player_idx] {
             0 => crate::game::profile::ComboFont::Wendy,
             1 => crate::game::profile::ComboFont::ArialRounded,
@@ -4225,6 +4298,7 @@ fn change_choice_for_player(
         if should_persist {
             crate::game::profile::update_combo_font_for_side(persist_side, setting);
         }
+        visibility_changed = true;
     } else if row_name == "Combo Colors" {
         let setting = match row.selected_choice_index[player_idx] {
             0 => crate::game::profile::ComboColors::Glow,
@@ -7738,9 +7812,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SpeedMod, sync_profile_scroll_speed};
+    use super::{
+        ROW_COMBO_FONT, ROW_COMBO_OFFSET_X, ROW_ERROR_BAR_OFFSET_X, ROW_JUDGMENT_FONT,
+        ROW_JUDGMENT_OFFSET_X, Row, SpeedMod, is_row_visible, row_visibility,
+        sync_profile_scroll_speed,
+    };
     use crate::game::profile::Profile;
     use crate::game::scroll::ScrollSpeedSetting;
+
+    fn test_row(name: &str, choices: &[&str], selected_choice_index: [usize; 2]) -> Row {
+        Row {
+            name: name.to_string(),
+            choices: choices.iter().map(ToString::to_string).collect(),
+            selected_choice_index,
+            help: Vec::new(),
+            choice_difficulty_indices: None,
+        }
+    }
 
     #[test]
     fn sync_profile_scroll_speed_matches_speed_mod() {
@@ -7772,5 +7860,52 @@ mod tests {
             },
         );
         assert_eq!(profile.scroll_speed, ScrollSpeedSetting::CMod(600.0));
+    }
+
+    #[test]
+    fn error_bar_offsets_hide_with_empty_error_bar_mask() {
+        let rows = vec![
+            test_row("Error Bar", &["Colorful"], [0, 0]),
+            test_row(ROW_ERROR_BAR_OFFSET_X, &["0"], [0, 0]),
+        ];
+        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0]);
+        assert!(!is_row_visible(&rows, 1, visibility));
+
+        let visibility = row_visibility(&rows, [true, false], [0, 0], [1, 0]);
+        assert!(is_row_visible(&rows, 1, visibility));
+    }
+
+    #[test]
+    fn judgment_offsets_hide_when_judgment_font_is_none() {
+        let rows = vec![
+            test_row(ROW_JUDGMENT_FONT, &["Love", "None"], [1, 0]),
+            test_row(ROW_JUDGMENT_OFFSET_X, &["0"], [0, 0]),
+        ];
+        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0]);
+        assert!(!is_row_visible(&rows, 1, visibility));
+
+        let rows = vec![
+            test_row(ROW_JUDGMENT_FONT, &["Love", "None"], [0, 0]),
+            test_row(ROW_JUDGMENT_OFFSET_X, &["0"], [0, 0]),
+        ];
+        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0]);
+        assert!(is_row_visible(&rows, 1, visibility));
+    }
+
+    #[test]
+    fn combo_offsets_hide_when_all_active_players_use_none_font() {
+        let rows = vec![
+            test_row(ROW_COMBO_FONT, &["Wendy", "None"], [1, 1]),
+            test_row(ROW_COMBO_OFFSET_X, &["0"], [0, 0]),
+        ];
+        let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0]);
+        assert!(!is_row_visible(&rows, 1, visibility));
+
+        let rows = vec![
+            test_row(ROW_COMBO_FONT, &["Wendy", "None"], [1, 0]),
+            test_row(ROW_COMBO_OFFSET_X, &["0"], [0, 0]),
+        ];
+        let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0]);
+        assert!(is_row_visible(&rows, 1, visibility));
     }
 }
