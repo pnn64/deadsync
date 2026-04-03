@@ -744,6 +744,134 @@ fn row_entry_for_cached_row<'a>(
 }
 
 #[inline(always)]
+fn completed_row_final_judgment<'a>(
+    notes: &'a [Note],
+    row_entry: &RowEntry,
+    col_start: usize,
+    col_end: usize,
+) -> Option<&'a Judgment> {
+    let mut row_judgments: [Option<&Judgment>; MAX_COLS] = [None; MAX_COLS];
+    let mut row_judgment_count = 0usize;
+    let mut has_player_notes = false;
+
+    for &note_index in &row_entry.nonmine_note_indices {
+        let note = &notes[note_index];
+        if note.column < col_start || note.column >= col_end {
+            continue;
+        }
+        has_player_notes = true;
+        let judgment = note.result.as_ref()?;
+        debug_assert!(row_judgment_count < row_judgments.len());
+        row_judgments[row_judgment_count] = Some(judgment);
+        row_judgment_count += 1;
+    }
+
+    if !has_player_notes {
+        return None;
+    }
+
+    judgment::aggregate_row_final_judgment(
+        row_judgments[..row_judgment_count]
+            .iter()
+            .filter_map(|judgment| *judgment),
+    )
+}
+
+#[inline(always)]
+const fn row_final_grade_hides_note(grade: JudgeGrade) -> bool {
+    // deadsync's gameplay ruleset is ITG timing with optional FA+ visual
+    // overlays, so match Simply Love ITG's MinTNSToHideNotes=W3 behavior.
+    matches!(
+        grade,
+        JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+    )
+}
+
+#[inline(always)]
+fn completed_row_flash_note_indices_and_grade(
+    notes: &[Note],
+    row_entry: &RowEntry,
+    col_start: usize,
+    col_end: usize,
+) -> Option<([usize; MAX_COLS], usize, JudgeGrade)> {
+    let Some(final_judgment) = completed_row_final_judgment(notes, row_entry, col_start, col_end)
+    else {
+        return None;
+    };
+
+    let mut out = [usize::MAX; MAX_COLS];
+    let mut len = 0usize;
+    for &note_index in &row_entry.nonmine_note_indices {
+        let note = &notes[note_index];
+        if note.column < col_start || note.column >= col_end {
+            continue;
+        }
+        debug_assert!(len < out.len());
+        out[len] = note_index;
+        len += 1;
+    }
+    Some((out, len, final_judgment.grade))
+}
+
+#[inline(always)]
+fn completed_row_hidden_note_indices(
+    notes: &[Note],
+    row_entry: &RowEntry,
+    col_start: usize,
+    col_end: usize,
+) -> ([usize; MAX_COLS], usize) {
+    let Some((note_indices, note_count, final_grade)) =
+        completed_row_flash_note_indices_and_grade(notes, row_entry, col_start, col_end)
+    else {
+        return ([usize::MAX; MAX_COLS], 0);
+    };
+    if !row_final_grade_hides_note(final_grade) {
+        return ([usize::MAX; MAX_COLS], 0);
+    }
+    (note_indices, note_count)
+}
+
+#[inline(always)]
+fn hide_completed_row_arrows(state: &mut State, player: usize, row_index: usize) {
+    let (col_start, col_end) = player_col_range(state, player);
+    let (hide_note_indices, hide_count) = {
+        let Some(row_entry) =
+            row_entry_for_cached_row(&state.row_entries, &state.row_map_cache[player], row_index)
+        else {
+            return;
+        };
+        completed_row_hidden_note_indices(&state.notes, row_entry, col_start, col_end)
+    };
+
+    for &note_index in &hide_note_indices[..hide_count] {
+        let column = state.notes[note_index].column;
+        if let Some(pos) = find_arrow_index(&state.arrows[column], note_index) {
+            state.arrows[column].remove(pos);
+        }
+    }
+}
+
+#[inline(always)]
+fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_index: usize) {
+    let (col_start, col_end) = player_col_range(state, player);
+    let Some((flash_note_indices, flash_count, flash_grade)) = ({
+        let Some(row_entry) =
+            row_entry_for_cached_row(&state.row_entries, &state.row_map_cache[player], row_index)
+        else {
+            return;
+        };
+        completed_row_flash_note_indices_and_grade(&state.notes, row_entry, col_start, col_end)
+    }) else {
+        return;
+    };
+
+    for &note_index in &flash_note_indices[..flash_count] {
+        let column = state.notes[note_index].column;
+        trigger_tap_explosion(state, column, flash_grade);
+    }
+}
+
+#[inline(always)]
 fn count_rescore_tracks_on_row(
     notes: &[Note],
     row_entry: &RowEntry,
@@ -8259,53 +8387,6 @@ fn trigger_tap_explosion(state: &mut State, column: usize, grade: JudgeGrade) {
     }
 }
 
-#[inline(always)]
-fn collect_row_tap_explosion_columns(
-    notes: &[Note],
-    row_entry: &RowEntry,
-    col_start: usize,
-    col_end: usize,
-) -> ([usize; MAX_COLS], usize) {
-    let mut columns = [usize::MAX; MAX_COLS];
-    let mut count = 0usize;
-    let mut i = 0usize;
-    while i < row_entry.nonmine_note_indices.len() {
-        let note_index = row_entry.nonmine_note_indices[i];
-        let column = notes[note_index].column;
-        if column >= col_start && column < col_end {
-            debug_assert!(count < MAX_COLS);
-            if count >= MAX_COLS {
-                break;
-            }
-            columns[count] = column;
-            count += 1;
-        }
-        i += 1;
-    }
-    (columns, count)
-}
-
-#[inline(always)]
-fn trigger_row_tap_explosions(
-    state: &mut State,
-    row_entry_index: usize,
-    col_start: usize,
-    col_end: usize,
-    grade: JudgeGrade,
-) {
-    let (columns, count) = collect_row_tap_explosion_columns(
-        &state.notes,
-        &state.row_entries[row_entry_index],
-        col_start,
-        col_end,
-    );
-    let mut i = 0usize;
-    while i < count {
-        trigger_tap_explosion(state, columns[i], grade);
-        i += 1;
-    }
-}
-
 fn trigger_mine_explosion(state: &mut State, column: usize) {
     state.mine_explosions[column] = Some(ActiveMineExplosion { elapsed: 0.0 });
     if state.play_mine_sounds {
@@ -9433,10 +9514,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     lead_in_s,
                 );
 
-                let col_arrows = &mut state.arrows[note_col];
-                if let Some(pos) = find_arrow_index(col_arrows, note_index) {
-                    col_arrows.remove(pos);
-                }
+                trigger_completed_row_tap_explosions(state, player, note_row_index);
+                hide_completed_row_arrows(state, player, note_row_index);
                 trigger_receptor_glow_pulse(state, note_col);
                 if let Some(end_time) = state.hold_end_time_cache[note_index]
                     && matches!(
@@ -9503,10 +9582,8 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                     lead_in_s,
                 );
 
-                let col_arrows = &mut state.arrows[note_col];
-                if let Some(pos) = find_arrow_index(col_arrows, idx) {
-                    col_arrows.remove(pos);
-                }
+                trigger_completed_row_tap_explosions(state, player, note_row_index);
+                hide_completed_row_arrows(state, player, note_row_index);
                 trigger_receptor_glow_pulse(state, note_col);
                 if let Some(end_time) = state.hold_end_time_cache[idx]
                     && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
@@ -9701,10 +9778,8 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
         lead_in_s,
     );
 
-    let col_arrows = &mut state.arrows[note_col];
-    if let Some(pos) = find_arrow_index(col_arrows, note_index) {
-        col_arrows.remove(pos);
-    }
+    trigger_completed_row_tap_explosions(state, player, note_row_index);
+    hide_completed_row_arrows(state, player, note_row_index);
     trigger_receptor_glow_pulse(state, note_col);
     true
 }
@@ -10405,7 +10480,6 @@ fn finalize_row_judgment(
         suppress_final_bad_rescore_visual(skip_life_change, final_grade);
     if scoring_blocked {
         if !suppress_final_early_bad_visual {
-            trigger_row_tap_explosions(state, row_entry_index, col_start, col_end, final_grade);
             set_last_judgment(state, player, final_judgment);
         }
         return;
@@ -10421,6 +10495,12 @@ fn finalize_row_judgment(
         let life_delta = judge_life_delta(final_grade);
         if !skip_life_change {
             apply_life_change(p, state.current_music_time, life_delta);
+        }
+        if !suppress_final_early_bad_visual {
+            p.last_judgment = Some(JudgmentRenderInfo {
+                judgment: final_judgment,
+                judged_at: Instant::now(),
+            });
         }
         apply_row_combo_state(p, final_grade, player_row_note_count, 1);
         if !row_has_miss && !row_has_wayoff {
@@ -10445,13 +10525,6 @@ fn finalize_row_judgment(
                 p.hands_achieved = p.hands_achieved.saturating_add(1);
             }
         }
-    }
-    if !suppress_final_early_bad_visual {
-        trigger_row_tap_explosions(state, row_entry_index, col_start, col_end, final_grade);
-        state.players[player].last_judgment = Some(JudgmentRenderInfo {
-            judgment: final_judgment,
-            judged_at: Instant::now(),
-        });
     }
     if !skip_life_change {
         capture_failed_ex_score_inputs(state, player);
@@ -11183,6 +11256,8 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
             effective_scroll_speed_for_player(state, player)
         }
     });
+    let player_col_ranges: [(usize, usize); MAX_PLAYERS] =
+        std::array::from_fn(|player| player_col_range(state, player));
 
     let beatmod_multiplier: [f32; MAX_PLAYERS] =
         std::array::from_fn(|player| match effective_scroll_speed[player] {
@@ -11243,6 +11318,7 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         } else {
             (col_idx / cols_per_player).min(num_players.saturating_sub(1))
         };
+        let (player_col_start, player_col_end) = player_col_ranges[player];
         let cull_time = player_cull_time[player];
         let curr_disp_beat = player_curr_disp_beat[player];
         let scroll_speed = effective_scroll_speed[player];
@@ -11275,10 +11351,25 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                     } else if note.is_fake {
                         true
                     } else {
-                        let Some(judgment) = note.result.as_ref() else {
+                        let Some(_judgment) = note.result.as_ref() else {
                             return true;
                         };
-                        if judgment.grade != JudgeGrade::Miss {
+                        let Some(row_entry) = row_entry_for_cached_row(
+                            &state.row_entries,
+                            &state.row_map_cache[player],
+                            note.row_index,
+                        ) else {
+                            return true;
+                        };
+                        let Some(final_judgment) = completed_row_final_judgment(
+                            &state.notes,
+                            row_entry,
+                            player_col_start,
+                            player_col_end,
+                        ) else {
+                            return true;
+                        };
+                        if row_final_grade_hides_note(final_judgment.grade) {
                             return false;
                         }
                         false
@@ -11320,10 +11411,25 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                             }
                         }
                     } else if !note.is_fake {
-                        let Some(judgment) = note.result.as_ref() else {
+                        let Some(_judgment) = note.result.as_ref() else {
                             return true;
                         };
-                        if judgment.grade != JudgeGrade::Miss {
+                        let Some(row_entry) = row_entry_for_cached_row(
+                            &state.row_entries,
+                            &state.row_map_cache[player],
+                            note.row_index,
+                        ) else {
+                            return true;
+                        };
+                        let Some(final_judgment) = completed_row_final_judgment(
+                            &state.notes,
+                            row_entry,
+                            player_col_start,
+                            player_col_end,
+                        ) else {
+                            return true;
+                        };
+                        if row_final_grade_hides_note(final_judgment.grade) {
                             return false;
                         }
                     }
@@ -11792,18 +11898,20 @@ mod tests {
         advance_hold_last_held, apply_mines_insert, arrow_time_window_bounds,
         autoplay_random_offset_s_for_window, build_assist_clap_rows,
         build_attack_mask_windows_for_player, build_row_grids, closest_lane_note,
-        collect_edge_judge_indices, collect_row_tap_explosion_columns, count_rescore_tracks_on_row,
-        crossed_mine_bounds, enforce_max_simultaneous_notes, find_arrow_index,
-        frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
+        collect_edge_judge_indices, completed_row_final_judgment,
+        completed_row_flash_note_indices_and_grade, completed_row_hidden_note_indices,
+        count_rescore_tracks_on_row, crossed_mine_bounds, enforce_max_simultaneous_notes,
+        find_arrow_index, frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
         lane_release_finished, late_note_resolution_window_s, live_autoplay_enabled_from_flags,
         max_step_distance_seconds, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
         parse_attack_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
-        score_missed_holds_and_rolls, score_valid_for_chart, scored_hold_totals_with_carry,
-        stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
-        turn_option_bits, update_lane_count,
+        row_final_grade_hides_note, score_missed_holds_and_rolls, score_valid_for_chart,
+        scored_hold_totals_with_carry, stage_music_cut, step_calories,
+        suppress_final_bad_rescore_visual, tick_mode_status_line, turn_option_bits,
+        update_lane_count,
     };
     use crate::engine::input::InputSource;
     use crate::game::chart::{ChartData, StaminaCounts};
@@ -11858,6 +11966,23 @@ mod tests {
         note.result = Some(Judgment {
             time_error_ms: 0.0,
             grade: JudgeGrade::Great,
+            window: None,
+            miss_because_held: false,
+        });
+        note
+    }
+
+    fn note_with_judgment(
+        column: usize,
+        row_index: usize,
+        note_type: NoteType,
+        grade: JudgeGrade,
+        time_error_ms: f32,
+    ) -> Note {
+        let mut note = test_note(column, row_index, note_type);
+        note.result = Some(Judgment {
+            time_error_ms,
+            grade,
             window: None,
             miss_because_held: false,
         });
@@ -12152,6 +12277,147 @@ mod tests {
     }
 
     #[test]
+    fn completed_row_final_judgment_waits_for_full_jump() {
+        let row_index = 48usize;
+        let notes = vec![
+            note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
+            test_note(1, row_index, NoteType::Tap),
+        ];
+        let row_entry = RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        };
+
+        assert!(completed_row_final_judgment(&notes, &row_entry, 0, 4).is_none());
+    }
+
+    #[test]
+    fn completed_row_final_judgment_uses_last_hit_on_jump() {
+        let row_index = 48usize;
+        let notes = vec![
+            note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
+            note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Excellent, 8.0),
+        ];
+        let row_entry = RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        };
+
+        let judgment = completed_row_final_judgment(&notes, &row_entry, 0, 4)
+            .expect("completed jump should have a final row judgment");
+
+        assert_eq!(judgment.grade, JudgeGrade::Excellent);
+        assert!(row_final_grade_hides_note(judgment.grade));
+    }
+
+    #[test]
+    fn completed_row_final_judgment_keeps_w4_w5_rows_visible() {
+        let row_index = 48usize;
+        let decent_notes = vec![
+            note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
+            note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Decent, 96.0),
+        ];
+        let wayoff_notes = vec![
+            note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
+            note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::WayOff, 140.0),
+        ];
+        let row_entry = RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        };
+
+        let decent = completed_row_final_judgment(&decent_notes, &row_entry, 0, 4)
+            .expect("completed row should produce a final Decent");
+        let wayoff = completed_row_final_judgment(&wayoff_notes, &row_entry, 0, 4)
+            .expect("completed row should produce a final Way Off");
+
+        assert_eq!(decent.grade, JudgeGrade::Decent);
+        assert_eq!(wayoff.grade, JudgeGrade::WayOff);
+        assert!(!row_final_grade_hides_note(decent.grade));
+        assert!(!row_final_grade_hides_note(wayoff.grade));
+    }
+
+    #[test]
+    fn completed_row_hidden_note_indices_wait_for_full_jump() {
+        let row_index = 48usize;
+        let notes = vec![
+            note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
+            test_note(1, row_index, NoteType::Tap),
+        ];
+        let row_entry = RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        };
+
+        let (_, hide_count) = completed_row_hidden_note_indices(&notes, &row_entry, 0, 4);
+        assert_eq!(hide_count, 0);
+    }
+
+    #[test]
+    fn completed_row_hidden_note_indices_hide_whole_jump_on_great_or_better() {
+        let row_index = 48usize;
+        let notes = vec![
+            note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
+            note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Excellent, 8.0),
+        ];
+        let row_entry = RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        };
+
+        let (hide_indices, hide_count) =
+            completed_row_hidden_note_indices(&notes, &row_entry, 0, 4);
+
+        assert_eq!(hide_count, 2);
+        assert_eq!(hide_indices[0], 0);
+        assert_eq!(hide_indices[1], 1);
+    }
+
+    #[test]
+    fn completed_row_hidden_note_indices_keep_w4_w5_rows_visible() {
+        let row_index = 48usize;
+        let notes = vec![
+            note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
+            note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Decent, 96.0),
+        ];
+        let row_entry = RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        };
+
+        let (_, hide_count) = completed_row_hidden_note_indices(&notes, &row_entry, 0, 4);
+        assert_eq!(hide_count, 0);
+    }
+
+    #[test]
+    fn completed_row_flash_note_indices_use_final_jump_grade_for_all_lanes() {
+        let row_index = 2002usize;
+        let notes = vec![
+            note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Decent, -96.0),
+            note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Great, 42.0),
+        ];
+        let row_entry = RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0, 1],
+        };
+
+        let (flash_indices, flash_count, flash_grade) =
+            completed_row_flash_note_indices_and_grade(&notes, &row_entry, 0, 4)
+                .expect("completed jump should flash every lane with the final row grade");
+
+        assert_eq!(flash_grade, JudgeGrade::Great);
+        assert_eq!(flash_count, 2);
+        assert_eq!(flash_indices[0], 0);
+        assert_eq!(flash_indices[1], 1);
+
+        let (hide_indices, hide_count) =
+            completed_row_hidden_note_indices(&notes, &row_entry, 0, 4);
+        assert_eq!(hide_count, 2);
+        assert_eq!(hide_indices[0], 0);
+        assert_eq!(hide_indices[1], 1);
+    }
+
+    #[test]
     fn edge_judge_indices_only_use_the_triggering_note_on_jumps() {
         let (judge_indices, judge_count) = collect_edge_judge_indices(2, 1)
             .expect("jump rows should still judge the triggering note");
@@ -12159,48 +12425,6 @@ mod tests {
         assert_eq!(judge_count, 1);
         assert_eq!(judge_indices[0], 1);
         assert_eq!(judge_indices[1], usize::MAX);
-    }
-
-    #[test]
-    fn row_tap_explosion_columns_cover_all_notes_on_row() {
-        let row_index = 48usize;
-        let notes = vec![
-            test_note(0, row_index, NoteType::Tap),
-            test_note(2, row_index, NoteType::Hold),
-            test_note(3, row_index, NoteType::Lift),
-        ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1, 2],
-        };
-
-        let (columns, count) = collect_row_tap_explosion_columns(&notes, &row_entry, 0, 4);
-
-        assert_eq!(count, 3);
-        assert_eq!(&columns[..count], &[0, 2, 3]);
-    }
-
-    #[test]
-    fn row_tap_explosion_columns_stay_within_player_range() {
-        let row_index = 48usize;
-        let notes = vec![
-            test_note(0, row_index, NoteType::Tap),
-            test_note(1, row_index, NoteType::Tap),
-            test_note(4, row_index, NoteType::Tap),
-            test_note(5, row_index, NoteType::Tap),
-        ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1, 2, 3],
-        };
-
-        let (p1_columns, p1_count) = collect_row_tap_explosion_columns(&notes, &row_entry, 0, 4);
-        let (p2_columns, p2_count) = collect_row_tap_explosion_columns(&notes, &row_entry, 4, 8);
-
-        assert_eq!(p1_count, 2);
-        assert_eq!(&p1_columns[..p1_count], &[0, 1]);
-        assert_eq!(p2_count, 2);
-        assert_eq!(&p2_columns[..p2_count], &[4, 5]);
     }
 
     #[test]
