@@ -44,7 +44,7 @@ pub(super) fn should_auto_screenshot_eval(eval: &evaluation::State, mask: u8) ->
     }
     for info in eval.score_info.iter().flatten() {
         let is_fail = info.fail_time.is_some();
-        let is_pb = info.personal_record_highlight_rank.is_some();
+        let is_pb = info.personal_record_highlight_rank == Some(1);
         let is_quad = matches!(info.grade, scores::Grade::Tier01);
         let is_quint = matches!(info.grade, scores::Grade::Quint);
         if (mask & crate::config::AUTO_SS_PBS) != 0 && is_pb {
@@ -53,7 +53,7 @@ pub(super) fn should_auto_screenshot_eval(eval: &evaluation::State, mask: u8) ->
         if (mask & crate::config::AUTO_SS_FAILS) != 0 && is_fail {
             return true;
         }
-        if (mask & crate::config::AUTO_SS_CLEARS) != 0 && !is_fail && !is_pb {
+        if (mask & crate::config::AUTO_SS_CLEARS) != 0 && !is_fail {
             return true;
         }
         if (mask & crate::config::AUTO_SS_QUADS) != 0 && is_quad {
