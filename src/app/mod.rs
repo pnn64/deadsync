@@ -1646,6 +1646,30 @@ fn format_offset_tag_value(value: f32) -> String {
     format!("{v:.3}")
 }
 
+#[inline(always)]
+fn replace_song_arc_if_same_simfile(
+    current_song: &mut Arc<crate::game::song::SongData>,
+    updated_song: &Arc<crate::game::song::SongData>,
+) -> bool {
+    if current_song.simfile_path != updated_song.simfile_path {
+        return false;
+    }
+    *current_song = updated_song.clone();
+    true
+}
+
+#[inline(always)]
+fn can_reuse_quick_restart_payload(
+    current_song: &crate::game::song::SongData,
+    current_chart_hashes: [&str; 2],
+    next_song: &crate::game::song::SongData,
+    next_chart_hashes: [&str; 2],
+) -> bool {
+    current_song.simfile_path == next_song.simfile_path
+        && (current_song.offset - next_song.offset).abs() < 0.000_001_f32
+        && current_chart_hashes == next_chart_hashes
+}
+
 fn rewrite_simfile_offset_tags(
     simfile_bytes: &[u8],
     delta: f32,
@@ -2806,7 +2830,10 @@ impl App {
                 change.simfile_path.as_path(),
                 change.delta_seconds,
             )?;
-            let _ = song_loading::reload_song_in_cache(change.simfile_path.as_path())?;
+            let updated_song = song_loading::reload_song_in_cache(change.simfile_path.as_path())?;
+            if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
+                let _ = replace_song_arc_if_same_simfile(&mut po_state.song, &updated_song);
+            }
             saved_files += 1;
             if first_saved_path.is_none() {
                 first_saved_path = Some(change.simfile_path.as_path());
@@ -5205,9 +5232,15 @@ impl App {
                             .gameplay_state
                             .as_ref()
                             .filter(|current| {
-                                current.song.simfile_path == song_arc.simfile_path
-                                    && current.charts[0].short_hash == charts[0].short_hash
-                                    && current.charts[1].short_hash == charts[1].short_hash
+                                can_reuse_quick_restart_payload(
+                                    current.song.as_ref(),
+                                    [
+                                        current.charts[0].short_hash.as_str(),
+                                        current.charts[1].short_hash.as_str(),
+                                    ],
+                                    song_arc.as_ref(),
+                                    [charts[0].short_hash.as_str(), charts[1].short_hash.as_str()],
+                                )
                             })
                             .map(|current| current.gameplay_charts.clone())
                     } else {
@@ -6271,6 +6304,77 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::{
+        chart::{ChartData, StaminaCounts},
+        song::SongData,
+    };
+
+    fn test_chart(hash: &str) -> ChartData {
+        ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: "Hard".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 9,
+            step_artist: String::new(),
+            short_hash: hash.to_string(),
+            stats: rssp::stats::ArrowStats::default(),
+            tech_counts: rssp::TechCounts::default(),
+            mines_nonfake: 0,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: false,
+            has_significant_timing_changes: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+        }
+    }
+
+    fn test_song(path: &str, offset: f32, hashes: [&str; 2]) -> SongData {
+        SongData {
+            simfile_path: PathBuf::from(path),
+            title: "Song".to_string(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+            normalized_bpms: "120.000".to_string(),
+            music_length_seconds: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: vec![test_chart(hashes[0]), test_chart(hashes[1])],
+        }
+    }
 
     #[test]
     fn foreground_input_requires_focus_and_surface() {
@@ -6278,5 +6382,51 @@ mod tests {
         assert!(!foreground_input_active(false, true));
         assert!(!foreground_input_active(true, false));
         assert!(!foreground_input_active(false, false));
+    }
+
+    #[test]
+    fn replace_song_arc_if_same_simfile_swaps_in_reloaded_song() {
+        let mut current = Arc::new(test_song("Songs/Test/song.ssc", 0.0, ["a", "b"]));
+        let updated = Arc::new(test_song("Songs/Test/song.ssc", -0.003, ["a", "b"]));
+
+        assert!(replace_song_arc_if_same_simfile(&mut current, &updated));
+        assert!(Arc::ptr_eq(&current, &updated));
+        assert!((current.offset + 0.003).abs() < 0.000_001_f32);
+    }
+
+    #[test]
+    fn replace_song_arc_if_same_simfile_ignores_other_song() {
+        let original = Arc::new(test_song("Songs/Test/a.ssc", 0.0, ["a", "b"]));
+        let mut current = original.clone();
+        let updated = Arc::new(test_song("Songs/Test/b.ssc", -0.003, ["a", "b"]));
+
+        assert!(!replace_song_arc_if_same_simfile(&mut current, &updated));
+        assert!(Arc::ptr_eq(&current, &original));
+    }
+
+    #[test]
+    fn quick_restart_payload_reuse_rejects_song_offset_mismatch() {
+        let current_song = test_song("Songs/Test/song.ssc", 0.0, ["a", "b"]);
+        let updated_song = test_song("Songs/Test/song.ssc", -0.003, ["a", "b"]);
+
+        assert!(!can_reuse_quick_restart_payload(
+            &current_song,
+            ["a", "b"],
+            &updated_song,
+            ["a", "b"],
+        ));
+    }
+
+    #[test]
+    fn quick_restart_payload_reuse_accepts_identical_song_and_charts() {
+        let current_song = test_song("Songs/Test/song.ssc", -0.003, ["a", "b"]);
+        let next_song = test_song("Songs/Test/song.ssc", -0.003, ["a", "b"]);
+
+        assert!(can_reuse_quick_restart_payload(
+            &current_song,
+            ["a", "b"],
+            &next_song,
+            ["a", "b"],
+        ));
     }
 }
