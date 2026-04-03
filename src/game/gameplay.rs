@@ -915,12 +915,13 @@ fn arrow_time_window_bounds(
 fn closest_lane_note(
     arrows: &[Arrow],
     notes: &[Note],
-    current_row: usize,
+    note_times: &[f32],
+    current_time: f32,
     search_start_idx: usize,
     search_end_idx: usize,
-) -> Option<(usize, usize, usize)> {
-    let mut best: Option<(usize, usize, usize)> = None;
-    let mut best_row_index = 0usize;
+) -> Option<(usize, usize, f32)> {
+    let mut best: Option<(usize, usize, f32)> = None;
+    let mut best_signed_err = 0.0_f32;
     for (offset, arrow) in arrows[search_start_idx..search_end_idx].iter().enumerate() {
         let idx = search_start_idx + offset;
         let note_index = arrow.note_index;
@@ -928,16 +929,18 @@ fn closest_lane_note(
         if note.result.is_some() || !note.can_be_judged || note.is_fake {
             continue;
         }
-        let row_delta = note.row_index.abs_diff(current_row);
+        let signed_err_music = current_time - note_times[note_index];
+        let abs_err_music = signed_err_music.abs();
         match best {
-            Some((_, _, best_delta))
-                if row_delta > best_delta
-                    || (row_delta == best_delta && note.row_index <= best_row_index) => {}
+            Some((_, _, best_err))
+                if abs_err_music > best_err
+                    || (abs_err_music == best_err && signed_err_music >= best_signed_err) => {}
             _ => {
-                // ITGmania's GetClosestNote() chooses the nearest row first, and
-                // breaks exact prev/next ties toward the future row.
-                best = Some((idx, note_index, row_delta));
-                best_row_index = note.row_index;
+                // ITGmania's GetClosestNote() breaks exact prev/next ties toward
+                // the future note. In our signed error convention that means the
+                // smaller signed error wins when absolute distance is identical.
+                best = Some((idx, note_index, abs_err_music));
+                best_signed_err = signed_err_music;
             }
         }
     }
@@ -9326,12 +9329,11 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         search_start_time,
         search_end_time,
     );
-    let current_row =
-        beat_to_note_row_index(state.timing_players[player].get_beat_for_time(current_time));
     if let Some((arrow_list_index, note_index, _)) = closest_lane_note(
         col_arrows,
         &state.notes,
-        current_row,
+        &state.note_time_cache,
+        current_time,
         search_start_idx,
         search_end_idx,
     ) {
@@ -9648,12 +9650,11 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
         search_start_time,
         search_end_time,
     );
-    let current_row =
-        beat_to_note_row_index(state.timing_players[player].get_beat_for_time(current_time));
     let Some((_arrow_list_index, note_index, _)) = closest_lane_note(
         col_arrows,
         &state.notes,
-        current_row,
+        &state.note_time_cache,
+        current_time,
         search_start_idx,
         search_end_idx,
     ) else {
@@ -13389,8 +13390,9 @@ mod tests {
         ];
         let note_times = [1.000_f32, 1.012_f32];
         let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 0.9, 1.1);
-        let (_, note_index, _) = closest_lane_note(&arrows, &notes, 48, start_idx, end_idx)
-            .expect("expected a closest note");
+        let (_, note_index, _) =
+            closest_lane_note(&arrows, &notes, &note_times, 1.004, start_idx, end_idx)
+                .expect("expected a closest note");
 
         assert_eq!(note_index, 0);
         assert!(!lane_edge_matches_note_type(
@@ -13419,8 +13421,9 @@ mod tests {
         ];
         let note_times = [1.000_f32, 1.012_f32];
         let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 0.9, 1.1);
-        let (_, note_index, _) = closest_lane_note(&arrows, &notes, 48, start_idx, end_idx)
-            .expect("expected a closest note");
+        let (_, note_index, _) =
+            closest_lane_note(&arrows, &notes, &note_times, 1.004, start_idx, end_idx)
+                .expect("expected a closest note");
 
         assert_eq!(note_index, 0);
         assert!(!lane_edge_matches_note_type(
@@ -13433,7 +13436,7 @@ mod tests {
     fn closest_lane_note_breaks_exact_tie_toward_future_note() {
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
-            test_note(0, 50, NoteType::Tap),
+            test_note(0, 49, NoteType::Tap),
         ];
         let arrows = [
             Arrow {
@@ -13449,15 +13452,16 @@ mod tests {
         ];
         let note_times = [1.000_f32, 1.020_f32];
         let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 0.9, 1.1);
-        let (_, note_index, row_delta) = closest_lane_note(&arrows, &notes, 49, start_idx, end_idx)
-            .expect("expected an equidistant closest note");
+        let (_, note_index, abs_err) =
+            closest_lane_note(&arrows, &notes, &note_times, 1.010, start_idx, end_idx)
+                .expect("expected an equidistant closest note");
 
         assert_eq!(note_index, 1);
-        assert_eq!(row_delta, 1);
+        assert!((abs_err - 0.010).abs() <= 1e-6);
     }
 
     #[test]
-    fn closest_lane_note_prefers_nearer_row_over_nearer_time() {
+    fn closest_lane_note_prefers_nearer_time_over_nearer_row() {
         let notes = vec![
             test_note(0, 48, NoteType::Tap),
             test_note(0, 60, NoteType::Tap),
@@ -13474,13 +13478,14 @@ mod tests {
                 note_index: 1,
             },
         ];
-        let note_times = [1.040_f32, 1.020_f32];
+        let note_times = [1.020_f32, 1.040_f32];
         let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 1.0, 1.1);
-        let (_, note_index, row_delta) = closest_lane_note(&arrows, &notes, 50, start_idx, end_idx)
-            .expect("expected the nearer row to win");
+        let (_, note_index, abs_err) =
+            closest_lane_note(&arrows, &notes, &note_times, 1.030, start_idx, end_idx)
+                .expect("expected the nearer note in time to win");
 
         assert_eq!(note_index, 0);
-        assert_eq!(row_delta, 2);
+        assert!((abs_err - 0.010).abs() <= 1e-6);
     }
 
     #[test]
