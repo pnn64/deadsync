@@ -524,6 +524,84 @@ pub fn update_notefield_offset_y_for_side(side: PlayerSide, offset: i32) {
     save_profile_ini_for_side(side);
 }
 
+pub fn update_judgment_offset_x_for_side(side: PlayerSide, offset: i32) {
+    let clamped = offset.clamp(-100, 100);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.judgment_offset_x == clamped {
+            return;
+        }
+        profile.judgment_offset_x = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_judgment_offset_y_for_side(side: PlayerSide, offset: i32) {
+    let clamped = offset.clamp(-100, 100);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.judgment_offset_y == clamped {
+            return;
+        }
+        profile.judgment_offset_y = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_combo_offset_x_for_side(side: PlayerSide, offset: i32) {
+    let clamped = offset.clamp(-100, 100);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.combo_offset_x == clamped {
+            return;
+        }
+        profile.combo_offset_x = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_combo_offset_y_for_side(side: PlayerSide, offset: i32) {
+    let clamped = offset.clamp(-100, 100);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.combo_offset_y == clamped {
+            return;
+        }
+        profile.combo_offset_y = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_error_bar_offset_x_for_side(side: PlayerSide, offset: i32) {
+    let clamped = offset.clamp(-100, 100);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.error_bar_offset_x == clamped {
+            return;
+        }
+        profile.error_bar_offset_x = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
+pub fn update_error_bar_offset_y_for_side(side: PlayerSide, offset: i32) {
+    let clamped = offset.clamp(-100, 100);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.error_bar_offset_y == clamped {
+            return;
+        }
+        profile.error_bar_offset_y = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_mini_percent_for_side(side: PlayerSide, percent: i32) {
     // Mirror Simply Love's range: -100% to +150%.
     let clamped = percent.clamp(-100, 150);

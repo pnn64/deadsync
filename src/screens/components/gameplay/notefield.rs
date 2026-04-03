@@ -2615,6 +2615,12 @@ pub fn build(
     };
     let notefield_offset_x = offset_sign * (profile.note_field_offset_x.clamp(0, 50) as f32);
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
+    let judgment_extra_x = profile.judgment_offset_x.clamp(-100, 100) as f32;
+    let judgment_extra_y = profile.judgment_offset_y.clamp(-100, 100) as f32;
+    let combo_extra_x = profile.combo_offset_x.clamp(-100, 100) as f32;
+    let combo_extra_y = profile.combo_offset_y.clamp(-100, 100) as f32;
+    let error_bar_extra_x = profile.error_bar_offset_x.clamp(-100, 100) as f32;
+    let error_bar_extra_y = profile.error_bar_offset_y.clamp(-100, 100) as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
     let centered_one_side = state.num_players == 1
@@ -2689,14 +2695,16 @@ pub fn build(
         receptor_y_centered + 95.0,
         hud_reverse,
         centered_percent,
-    );
+    ) + judgment_extra_y;
+    let judgment_x = playfield_center_x + judgment_extra_x;
     let combo_y_base = hud_y(
         screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y,
         screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y,
         receptor_y_centered + 155.0,
         hud_reverse,
         centered_percent,
-    );
+    ) + combo_extra_y;
+    let combo_x = playfield_center_x + combo_extra_x;
     let zmod_layout = zmod_layout_ys(profile, judgment_y, combo_y_base, hud_reverse);
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
     // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0); deadsync currently supports Mini.
@@ -5736,7 +5744,7 @@ pub fn build(
             if let Some(font_name) = combo_font_name {
                 hud_actors.push(act!(text:
                     font(font_name): settext(cached_int_u32(p.miss_combo)):
-                    align(0.5, 0.5): xy(playfield_center_x, combo_y):
+                    align(0.5, 0.5): xy(combo_x, combo_y):
                     zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
                     diffuse(1.0, 0.0, 0.0, 1.0):
                     z(90)
@@ -5809,7 +5817,7 @@ pub fn build(
             if let Some(font_name) = combo_font_name {
                 hud_actors.push(act!(text:
                     font(font_name): settext(cached_int_u32(p.combo)):
-                    align(0.5, 0.5): xy(playfield_center_x, combo_y):
+                    align(0.5, 0.5): xy(combo_x, combo_y):
                     zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
                     diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
                     z(90)
@@ -5825,12 +5833,13 @@ pub fn build(
     let show_error_bar_average = (error_bar_mask & profile::ERROR_BAR_BIT_AVERAGE) != 0;
     let show_error_bar = error_bar_mask != 0;
     let (error_bar_y, error_bar_max_h) = if resolved_judgment_texture(profile).is_none() {
-        (judgment_y, 30.0_f32)
+        (judgment_y + error_bar_extra_y, 30.0_f32)
     } else if profile.error_bar_up {
-        (judgment_y - ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
+        (judgment_y - ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y, 10.0_f32)
     } else {
-        (judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT, 10.0_f32)
+        (judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y, 10.0_f32)
     };
+    let error_bar_x = playfield_center_x + error_bar_extra_x;
     let mut average_bar_y = 0.0_f32;
     for y in column_receptor_ys.iter().take(num_cols) {
         average_bar_y += *y;
@@ -5946,7 +5955,7 @@ pub fn build(
                     };
                     if bg_alpha > 0.0 {
                         hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
+                            align(0.5, 0.5): xy(error_bar_x, error_bar_y):
                             zoomto(ERROR_BAR_WIDTH_MONOCHROME + 2.0, bar_h + 2.0):
                             diffuse(0.0, 0.0, 0.0, bg_alpha):
                             z(error_bar_bg_z)
@@ -5954,7 +5963,7 @@ pub fn build(
                     }
 
                     hud_actors.push(act!(quad:
-                        align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
+                        align(0.5, 0.5): xy(error_bar_x, error_bar_y):
                         zoomto(2.0, bar_h):
                         diffuse(0.5, 0.5, 0.5, 1.0):
                         z(error_bar_band_z)
@@ -5979,7 +5988,7 @@ pub fn build(
                             }
                             for sx in [-1.0_f32, 1.0_f32] {
                                 hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(playfield_center_x + sx * offset, error_bar_y):
+                                align(0.5, 0.5): xy(error_bar_x + sx * offset, error_bar_y):
                                 zoomto(1.0, bar_h):
                                 diffuse(1.0, 1.0, 1.0, line_alpha):
                                 z(error_bar_line_z)
@@ -6005,13 +6014,13 @@ pub fn build(
                         let x_off = ERROR_BAR_WIDTH_MONOCHROME * 0.25;
                         hud_actors.push(act!(text:
                             font("game"): settext("Early"):
-                            align(0.5, 0.5): xy(playfield_center_x - x_off, error_bar_y):
+                            align(0.5, 0.5): xy(error_bar_x - x_off, error_bar_y):
                             zoom(0.7): diffuse(1.0, 1.0, 1.0, label_alpha):
                             z(error_bar_text_z)
                         ));
                         hud_actors.push(act!(text:
                             font("game"): settext("Late"):
-                            align(0.5, 0.5): xy(playfield_center_x + x_off, error_bar_y):
+                            align(0.5, 0.5): xy(error_bar_x + x_off, error_bar_y):
                             zoom(0.7): diffuse(1.0, 1.0, 1.0, label_alpha):
                             z(error_bar_text_z)
                         ));
@@ -6040,7 +6049,7 @@ pub fn build(
                                 profile.show_fa_plus_window,
                             );
                             hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
+                                align(0.5, 0.5): xy(error_bar_x + x, error_bar_y):
                                 zoomto(ERROR_BAR_TICK_WIDTH, bar_h):
                                 diffuse(c[0], c[1], c[2], alpha):
                                 z(error_bar_tick_z)
@@ -6073,7 +6082,7 @@ pub fn build(
 
                     if bar_visible && wscale.is_finite() && wscale > 0.0 {
                         hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
+                            align(0.5, 0.5): xy(error_bar_x, error_bar_y):
                             zoomto(ERROR_BAR_WIDTH_COLORFUL + 4.0, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
                             diffuse(0.0, 0.0, 0.0, 1.0):
                             z(error_bar_bg_z)
@@ -6098,13 +6107,13 @@ pub fn build(
                             let cx_early = -0.5 * (lastx + x);
                             let cx_late = 0.5 * (lastx + x);
                             hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(playfield_center_x + cx_early, error_bar_y):
+                                align(0.5, 0.5): xy(error_bar_x + cx_early, error_bar_y):
                                 zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
                                 diffuse(c[0], c[1], c[2], 1.0):
                                 z(error_bar_band_z)
                             ));
                             hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(playfield_center_x + cx_late, error_bar_y):
+                                align(0.5, 0.5): xy(error_bar_x + cx_late, error_bar_y):
                                 zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
                                 diffuse(c[0], c[1], c[2], 1.0):
                                 z(error_bar_band_z)
@@ -6133,7 +6142,7 @@ pub fn build(
                                 continue;
                             }
                             hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
+                            align(0.5, 0.5): xy(error_bar_x + x, error_bar_y):
                             zoomto(ERROR_BAR_TICK_WIDTH, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
                             z(error_bar_line_z)
@@ -6166,7 +6175,7 @@ pub fn build(
 
                     if bar_visible && wscale.is_finite() && wscale > 0.0 {
                         hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(playfield_center_x, error_bar_y):
+                            align(0.5, 0.5): xy(error_bar_x, error_bar_y):
                             zoomto(ERROR_BAR_WIDTH_COLORFUL + 4.0, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
                             diffuse(0.0, 0.0, 0.0, 1.0):
                             z(error_bar_bg_z)
@@ -6203,13 +6212,13 @@ pub fn build(
                             let cx_early = -0.5 * (lastx + x);
                             let cx_late = 0.5 * (lastx + x);
                             hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(playfield_center_x + cx_early, error_bar_y):
+                                align(0.5, 0.5): xy(error_bar_x + cx_early, error_bar_y):
                                 zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
                                 diffuse(c[0], c[1], c[2], early_a):
                                 z(error_bar_band_z)
                             ));
                             hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(playfield_center_x + cx_late, error_bar_y):
+                                align(0.5, 0.5): xy(error_bar_x + cx_late, error_bar_y):
                                 zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
                                 diffuse(c[0], c[1], c[2], late_a):
                                 z(error_bar_band_z)
@@ -6238,7 +6247,7 @@ pub fn build(
                                 continue;
                             }
                             hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
+                            align(0.5, 0.5): xy(error_bar_x + x, error_bar_y):
                             zoomto(ERROR_BAR_TICK_WIDTH, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
                             z(error_bar_line_z)
@@ -6282,7 +6291,7 @@ pub fn build(
                                 continue;
                             }
                             hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(playfield_center_x + x, average_bar_y):
+                            align(0.5, 0.5): xy(error_bar_x + x, average_bar_y):
                             zoomto(ERROR_BAR_TICK_WIDTH, tick_h):
                             diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
                             z(error_bar_line_z)
@@ -6306,7 +6315,7 @@ pub fn build(
                 };
                 hud_actors.push(act!(text:
                     font("wendy"): settext(s):
-                    align(0.5, 0.5): xy(playfield_center_x + x, error_bar_y):
+                    align(0.5, 0.5): xy(error_bar_x + x, error_bar_y):
                     zoom(0.25): shadowlength(1.0):
                     diffuse(c[0], c[1], c[2], c[3]):
                     z(error_bar_text_z)
@@ -6547,13 +6556,13 @@ pub fn build(
                     0.0
                 };
                 hud_actors.push(act!(sprite(judgment_texture):
-                    align(0.5, 0.5): xy(playfield_center_x, judgment_y):
+                    align(0.5, 0.5): xy(judgment_x, judgment_y):
                     z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
                 ));
                 if let Some(overlay_row) = overlay_row {
                     let overlay_index = (overlay_row * columns + col_index) as u32;
                     hud_actors.push(act!(sprite(judgment_texture):
-                        align(0.5, 0.5): xy(playfield_center_x, judgment_y):
+                        align(0.5, 0.5): xy(judgment_x, judgment_y):
                         z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
                         diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
                     ));
@@ -6603,7 +6612,7 @@ pub fn build(
                 .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
             hud_actors.push(act!(sprite(texture):
                 align(0.5, 0.5):
-                xy(playfield_center_x + column_offset, hold_judgment_y):
+                xy(judgment_x + column_offset, hold_judgment_y):
                 z(195):
                 setstate(frame_index):
                 zoom(zoom):
