@@ -915,12 +915,12 @@ fn arrow_time_window_bounds(
 fn closest_lane_note(
     arrows: &[Arrow],
     notes: &[Note],
-    note_times: &[f32],
-    current_time: f32,
+    current_row: usize,
     search_start_idx: usize,
     search_end_idx: usize,
-) -> Option<(usize, usize, f32)> {
-    let mut best: Option<(usize, usize, f32)> = None;
+) -> Option<(usize, usize, usize)> {
+    let mut best: Option<(usize, usize, usize)> = None;
+    let mut best_row_index = 0usize;
     for (offset, arrow) in arrows[search_start_idx..search_end_idx].iter().enumerate() {
         let idx = search_start_idx + offset;
         let note_index = arrow.note_index;
@@ -928,10 +928,17 @@ fn closest_lane_note(
         if note.result.is_some() || !note.can_be_judged || note.is_fake {
             continue;
         }
-        let abs_err_music = (current_time - note_times[note_index]).abs();
+        let row_delta = note.row_index.abs_diff(current_row);
         match best {
-            Some((_, _, best_err)) if abs_err_music >= best_err => {}
-            _ => best = Some((idx, note_index, abs_err_music)),
+            Some((_, _, best_delta))
+                if row_delta > best_delta
+                    || (row_delta == best_delta && note.row_index <= best_row_index) => {}
+            _ => {
+                // ITGmania's GetClosestNote() chooses the nearest row first, and
+                // breaks exact prev/next ties toward the future row.
+                best = Some((idx, note_index, row_delta));
+                best_row_index = note.row_index;
+            }
         }
     }
     best
@@ -4540,6 +4547,7 @@ pub struct State {
     display_clock: FrameStableDisplayClock,
     pub note_spawn_cursor: [usize; MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
+    judged_row_finalized: [Vec<bool>; MAX_PLAYERS],
     pub arrows: [Vec<Arrow>; MAX_COLS],
     pub note_time_cache: Vec<f32>,
     pub note_display_beat_cache: Vec<f32>,
@@ -7528,6 +7536,7 @@ pub fn init(
         display_clock: FrameStableDisplayClock::new(init_music_time),
         note_spawn_cursor: note_range_start,
         judged_row_cursor: [0; MAX_PLAYERS],
+        judged_row_finalized: std::array::from_fn(|_| vec![false; row_entries.len()]),
         arrows: std::array::from_fn(|col| {
             let cap = arrow_capacity[col];
             if cap == 0 {
@@ -9317,11 +9326,12 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
         search_start_time,
         search_end_time,
     );
+    let current_row =
+        beat_to_note_row_index(state.timing_players[player].get_beat_for_time(current_time));
     if let Some((arrow_list_index, note_index, _)) = closest_lane_note(
         col_arrows,
         &state.notes,
-        &state.note_time_cache,
-        current_time,
+        current_row,
         search_start_idx,
         search_end_idx,
     ) {
@@ -9638,11 +9648,12 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time: f32) -> bool
         search_start_time,
         search_end_time,
     );
+    let current_row =
+        beat_to_note_row_index(state.timing_players[player].get_beat_for_time(current_time));
     let Some((_arrow_list_index, note_index, _)) = closest_lane_note(
         col_arrows,
         &state.notes,
-        &state.note_time_cache,
-        current_time,
+        current_row,
         search_start_idx,
         search_end_idx,
     ) else {
@@ -10531,49 +10542,156 @@ fn finalize_row_judgment(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlayerRowScanState {
+    NoNotes,
+    BeyondLookahead,
+    Pending,
+    Ready {
+        row_index: usize,
+        skip_life_change: bool,
+    },
+    Finalized,
+}
+
+#[inline(always)]
+fn player_row_scan_state(
+    notes: &[Note],
+    row_entries: &[RowEntry],
+    note_time_cache: &[f32],
+    row_finalized: &[bool],
+    row_entry_index: usize,
+    col_start: usize,
+    col_end: usize,
+    lookahead_time: f32,
+) -> PlayerRowScanState {
+    let row_entry = &row_entries[row_entry_index];
+    let mut has_notes_on_row = false;
+    let mut is_row_complete = true;
+    let mut skip_life_change = false;
+    let row_len = row_entry.nonmine_note_indices.len();
+    let mut i = 0;
+    while i < row_len {
+        let note_index = row_entry.nonmine_note_indices[i];
+        let note = &notes[note_index];
+        if note.column >= col_start && note.column < col_end {
+            has_notes_on_row = true;
+            if note.result.is_none() {
+                is_row_complete = false;
+                break;
+            }
+            skip_life_change |= note.early_result.is_some();
+        }
+        i += 1;
+    }
+
+    if !has_notes_on_row {
+        return PlayerRowScanState::NoNotes;
+    }
+    if row_finalized.get(row_entry_index).copied().unwrap_or(false) {
+        return PlayerRowScanState::Finalized;
+    }
+    let row_time = note_time_cache[row_entry.nonmine_note_indices[0]];
+    if row_time > lookahead_time {
+        return PlayerRowScanState::BeyondLookahead;
+    }
+    if !is_row_complete {
+        return PlayerRowScanState::Pending;
+    }
+    PlayerRowScanState::Ready {
+        row_index: row_entry.row_index,
+        skip_life_change,
+    }
+}
+
+#[inline(always)]
+fn next_ready_row_in_lookahead<F>(
+    start: usize,
+    row_count: usize,
+    mut row_state: F,
+) -> Option<(usize, usize, bool)>
+where
+    F: FnMut(usize) -> PlayerRowScanState,
+{
+    let mut row_entry_index = start;
+    while row_entry_index < row_count {
+        match row_state(row_entry_index) {
+            PlayerRowScanState::BeyondLookahead => break,
+            PlayerRowScanState::Ready {
+                row_index,
+                skip_life_change,
+            } => return Some((row_entry_index, row_index, skip_life_change)),
+            PlayerRowScanState::NoNotes
+            | PlayerRowScanState::Pending
+            | PlayerRowScanState::Finalized => {}
+        }
+        row_entry_index += 1;
+    }
+    None
+}
+
+#[inline(always)]
+fn advance_judged_row_cursor<F>(cursor: usize, row_count: usize, mut row_state: F) -> usize
+where
+    F: FnMut(usize) -> PlayerRowScanState,
+{
+    let mut next_cursor = cursor;
+    while next_cursor < row_count {
+        match row_state(next_cursor) {
+            PlayerRowScanState::NoNotes | PlayerRowScanState::Finalized => {
+                next_cursor += 1;
+            }
+            PlayerRowScanState::BeyondLookahead
+            | PlayerRowScanState::Pending
+            | PlayerRowScanState::Ready { .. } => break,
+        }
+    }
+    next_cursor
+}
+
 fn update_judged_rows(state: &mut State) {
+    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+    let lookahead_time =
+        state.current_music_time + max_step_distance_seconds(&state.timing_profile, rate);
     for player in 0..state.num_players {
         let (col_start, col_end) = player_col_range(state, player);
-        loop {
-            let cursor = state.judged_row_cursor[player];
-            if cursor >= state.row_entries.len() {
-                break;
-            }
-
-            let row_index = state.row_entries[cursor].row_index;
-            let row_len = state.row_entries[cursor].nonmine_note_indices.len();
-            let mut has_notes_on_row = false;
-            let mut is_row_complete = true;
-            let mut skip_life_change = false;
-            let mut i = 0;
-            while i < row_len {
-                let note_index = state.row_entries[cursor].nonmine_note_indices[i];
-                let note = &state.notes[note_index];
-                if note.column < col_start || note.column >= col_end {
-                    i += 1;
-                    continue;
-                }
-                has_notes_on_row = true;
-                if note.result.is_none() {
-                    is_row_complete = false;
-                    break;
-                }
-                skip_life_change |= note.early_result.is_some();
-                i += 1;
-            }
-
-            if !has_notes_on_row {
-                state.judged_row_cursor[player] += 1;
-                continue;
-            }
-
-            if is_row_complete {
-                finalize_row_judgment(state, player, row_index, cursor, skip_life_change);
-                state.judged_row_cursor[player] += 1;
-            } else {
-                break;
-            }
+        let row_count = state.row_entries.len();
+        let mut scan_start = state.judged_row_cursor[player];
+        while let Some((row_entry_index, row_index, skip_life_change)) =
+            next_ready_row_in_lookahead(scan_start, row_count, |idx| {
+                player_row_scan_state(
+                    &state.notes,
+                    &state.row_entries,
+                    &state.note_time_cache,
+                    &state.judged_row_finalized[player],
+                    idx,
+                    col_start,
+                    col_end,
+                    lookahead_time,
+                )
+            })
+        {
+            finalize_row_judgment(state, player, row_index, row_entry_index, skip_life_change);
+            state.judged_row_finalized[player][row_entry_index] = true;
+            scan_start = row_entry_index + 1;
         }
+        state.judged_row_cursor[player] =
+            advance_judged_row_cursor(state.judged_row_cursor[player], row_count, |idx| {
+                player_row_scan_state(
+                    &state.notes,
+                    &state.row_entries,
+                    &state.note_time_cache,
+                    &state.judged_row_finalized[player],
+                    idx,
+                    col_start,
+                    col_end,
+                    lookahead_time,
+                )
+            });
     }
 }
 
@@ -11735,6 +11853,19 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         phase_timings.mine_avoid_us = elapsed_us_since(started);
     }
 
+    let judged_rows_started = if trace_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    // ITGmania resolves already-complete rows before it promotes overdue notes
+    // to misses, so a later completed row can still score on the current frame
+    // even if an earlier row times out immediately afterward.
+    update_judged_rows(state);
+    if let Some(started) = judged_rows_started {
+        phase_timings.judged_rows_us = elapsed_us_since(started);
+    }
+
     let tap_miss_started = if trace_enabled {
         Some(Instant::now())
     } else {
@@ -11753,16 +11884,6 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     cull_scrolled_out_arrows(state, music_time_sec);
     if let Some(started) = cull_started {
         phase_timings.cull_us = elapsed_us_since(started);
-    }
-
-    let judged_rows_started = if trace_enabled {
-        Some(Instant::now())
-    } else {
-        None
-    };
-    update_judged_rows(state);
-    if let Some(started) = judged_rows_started {
-        phase_timings.judged_rows_us = elapsed_us_since(started);
     }
 
     let density_started = if trace_enabled {
@@ -11895,8 +12016,8 @@ mod tests {
         GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
         TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
-        advance_hold_last_held, apply_mines_insert, arrow_time_window_bounds,
-        autoplay_random_offset_s_for_window, build_assist_clap_rows,
+        advance_hold_last_held, advance_judged_row_cursor, apply_mines_insert,
+        arrow_time_window_bounds, autoplay_random_offset_s_for_window, build_assist_clap_rows,
         build_attack_mask_windows_for_player, build_row_grids, closest_lane_note,
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_grade, completed_row_hidden_note_indices,
@@ -11904,9 +12025,10 @@ mod tests {
         find_arrow_index, frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
         lane_release_finished, late_note_resolution_window_s, live_autoplay_enabled_from_flags,
-        max_step_distance_seconds, mine_window_bounds, music_time_from_song_clock, next_tick_mode,
-        parse_attack_mods, partition_notes_before_time,
-        player_draw_scale_for_tilt_with_visual_mask, recent_step_tracks, recompute_player_totals,
+        max_step_distance_seconds, mine_window_bounds, music_time_from_song_clock,
+        next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
+        partition_notes_before_time, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, recent_step_tracks, recompute_player_totals,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
         row_final_grade_hides_note, score_missed_holds_and_rolls, score_valid_for_chart,
         scored_hold_totals_with_carry, stage_music_cut, step_calories,
@@ -12274,6 +12396,126 @@ mod tests {
 
         assert_eq!(p1.nonmine_note_indices, vec![0, 1]);
         assert_eq!(p2.nonmine_note_indices, vec![2, 3]);
+    }
+
+    #[test]
+    fn judged_row_scan_finds_later_ready_row_past_pending_middle_row() {
+        let row1 = 48usize;
+        let row2 = 96usize;
+        let row3 = 144usize;
+        let notes = vec![
+            note_with_judgment(0, row1, NoteType::Tap, JudgeGrade::Great, -8.0),
+            note_with_judgment(2, row1, NoteType::Tap, JudgeGrade::Great, 8.0),
+            note_with_judgment(1, row2, NoteType::Tap, JudgeGrade::Great, -8.0),
+            test_note(3, row2, NoteType::Tap),
+            note_with_judgment(0, row3, NoteType::Tap, JudgeGrade::Great, -6.0),
+            note_with_judgment(2, row3, NoteType::Tap, JudgeGrade::Excellent, 4.0),
+        ];
+        let row_entries = vec![
+            RowEntry {
+                row_index: row1,
+                nonmine_note_indices: vec![0, 1],
+            },
+            RowEntry {
+                row_index: row2,
+                nonmine_note_indices: vec![2, 3],
+            },
+            RowEntry {
+                row_index: row3,
+                nonmine_note_indices: vec![4, 5],
+            },
+        ];
+        let note_time_cache = vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0];
+        let mut row_finalized = vec![false; row_entries.len()];
+        row_finalized[0] = true;
+
+        let cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
+            player_row_scan_state(
+                &notes,
+                &row_entries,
+                &note_time_cache,
+                &row_finalized,
+                idx,
+                0,
+                4,
+                3.5,
+            )
+        });
+        assert_eq!(cursor, 1);
+
+        let ready = next_ready_row_in_lookahead(cursor, row_entries.len(), |idx| {
+            player_row_scan_state(
+                &notes,
+                &row_entries,
+                &note_time_cache,
+                &row_finalized,
+                idx,
+                0,
+                4,
+                3.5,
+            )
+        });
+        assert_eq!(ready, Some((2, row3, false)));
+    }
+
+    #[test]
+    fn judged_row_cursor_stays_on_earliest_pending_row_until_it_finishes() {
+        let row1 = 48usize;
+        let row2 = 96usize;
+        let row3 = 144usize;
+        let notes = vec![
+            note_with_judgment(0, row1, NoteType::Tap, JudgeGrade::Great, -8.0),
+            note_with_judgment(2, row1, NoteType::Tap, JudgeGrade::Great, 8.0),
+            note_with_judgment(1, row2, NoteType::Tap, JudgeGrade::Great, -8.0),
+            test_note(3, row2, NoteType::Tap),
+            note_with_judgment(0, row3, NoteType::Tap, JudgeGrade::Great, -6.0),
+            note_with_judgment(2, row3, NoteType::Tap, JudgeGrade::Excellent, 4.0),
+        ];
+        let row_entries = vec![
+            RowEntry {
+                row_index: row1,
+                nonmine_note_indices: vec![0, 1],
+            },
+            RowEntry {
+                row_index: row2,
+                nonmine_note_indices: vec![2, 3],
+            },
+            RowEntry {
+                row_index: row3,
+                nonmine_note_indices: vec![4, 5],
+            },
+        ];
+        let note_time_cache = vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0];
+        let mut row_finalized = vec![true, false, true];
+
+        let pending_cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
+            player_row_scan_state(
+                &notes,
+                &row_entries,
+                &note_time_cache,
+                &row_finalized,
+                idx,
+                0,
+                4,
+                3.5,
+            )
+        });
+        assert_eq!(pending_cursor, 1);
+
+        row_finalized[1] = true;
+        let advanced_cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
+            player_row_scan_state(
+                &notes,
+                &row_entries,
+                &note_time_cache,
+                &row_finalized,
+                idx,
+                0,
+                4,
+                3.5,
+            )
+        });
+        assert_eq!(advanced_cursor, 3);
     }
 
     #[test]
@@ -13147,9 +13389,8 @@ mod tests {
         ];
         let note_times = [1.000_f32, 1.012_f32];
         let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 0.9, 1.1);
-        let (_, note_index, _) =
-            closest_lane_note(&arrows, &notes, &note_times, 1.004, start_idx, end_idx)
-                .expect("expected a closest note");
+        let (_, note_index, _) = closest_lane_note(&arrows, &notes, 48, start_idx, end_idx)
+            .expect("expected a closest note");
 
         assert_eq!(note_index, 0);
         assert!(!lane_edge_matches_note_type(
@@ -13178,15 +13419,68 @@ mod tests {
         ];
         let note_times = [1.000_f32, 1.012_f32];
         let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 0.9, 1.1);
-        let (_, note_index, _) =
-            closest_lane_note(&arrows, &notes, &note_times, 1.004, start_idx, end_idx)
-                .expect("expected a closest note");
+        let (_, note_index, _) = closest_lane_note(&arrows, &notes, 48, start_idx, end_idx)
+            .expect("expected a closest note");
 
         assert_eq!(note_index, 0);
         assert!(!lane_edge_matches_note_type(
             false,
             notes[note_index].note_type
         ));
+    }
+
+    #[test]
+    fn closest_lane_note_breaks_exact_tie_toward_future_note() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Tap),
+            test_note(0, 50, NoteType::Tap),
+        ];
+        let arrows = [
+            Arrow {
+                beat: notes[0].beat,
+                note_type: NoteType::Tap,
+                note_index: 0,
+            },
+            Arrow {
+                beat: notes[1].beat,
+                note_type: NoteType::Tap,
+                note_index: 1,
+            },
+        ];
+        let note_times = [1.000_f32, 1.020_f32];
+        let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 0.9, 1.1);
+        let (_, note_index, row_delta) = closest_lane_note(&arrows, &notes, 49, start_idx, end_idx)
+            .expect("expected an equidistant closest note");
+
+        assert_eq!(note_index, 1);
+        assert_eq!(row_delta, 1);
+    }
+
+    #[test]
+    fn closest_lane_note_prefers_nearer_row_over_nearer_time() {
+        let notes = vec![
+            test_note(0, 48, NoteType::Tap),
+            test_note(0, 60, NoteType::Tap),
+        ];
+        let arrows = [
+            Arrow {
+                beat: notes[0].beat,
+                note_type: NoteType::Tap,
+                note_index: 0,
+            },
+            Arrow {
+                beat: notes[1].beat,
+                note_type: NoteType::Tap,
+                note_index: 1,
+            },
+        ];
+        let note_times = [1.040_f32, 1.020_f32];
+        let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 1.0, 1.1);
+        let (_, note_index, row_delta) = closest_lane_note(&arrows, &notes, 50, start_idx, end_idx)
+            .expect("expected the nearer row to win");
+
+        assert_eq!(note_index, 0);
+        assert_eq!(row_delta, 2);
     }
 
     #[test]
