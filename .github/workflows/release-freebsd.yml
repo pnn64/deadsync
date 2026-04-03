@@ -1,0 +1,102 @@
+name: release-freebsd
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (example: v0.2.22)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (example: v0.2.22)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on:
+      - self-hosted
+      - Linux
+    env:
+      CARGO_TERM_COLOR: always
+      FREEBSD_RELEASE_HOST: ${{ vars.FREEBSD_RELEASE_HOST || '192.168.1.54' }}
+      FREEBSD_RELEASE_USER: ${{ vars.FREEBSD_RELEASE_USER || 'root' }}
+      FREEBSD_RELEASE_PORT: ${{ vars.FREEBSD_RELEASE_PORT || '22' }}
+      FREEBSD_RELEASE_REMOTE_DIR: ${{ vars.FREEBSD_RELEASE_REMOTE_DIR || '/tmp/deadsync-release' }}
+      FREEBSD_RELEASE_SSH_OPTS: ${{ vars.FREEBSD_RELEASE_SSH_OPTS || '-o BatchMode=yes -o StrictHostKeyChecking=accept-new' }}
+      FREEBSD_RELEASE_ARCH: x86_64
+      FREEBSD_RELEASE_TARGET: x86_64-unknown-freebsd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "workflow_call" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          tag="${tag#refs/tags/}"
+          if [ -z "${tag}" ]; then
+            echo "Release tag is required." >&2
+            exit 1
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify SSH tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ssh >/dev/null
+          command -v scp >/dev/null
+          command -v tar >/dev/null
+
+      - name: Build release on FreeBSD host
+        shell: bash
+        run: |
+          bash scripts/build-freebsd-release-remote.sh \
+            "${{ steps.tag.outputs.tag }}" \
+            "${FREEBSD_RELEASE_ARCH}" \
+            "${FREEBSD_RELEASE_TARGET}"
+
+      - name: Package FreeBSD release
+        id: package
+        shell: bash
+        run: |
+          bash scripts/package-freebsd-release.sh \
+            "${{ steps.tag.outputs.tag }}" \
+            "${FREEBSD_RELEASE_ARCH}" \
+            "${FREEBSD_RELEASE_TARGET}"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadsync-freebsd-${{ steps.tag.outputs.tag }}-${{ env.FREEBSD_RELEASE_ARCH }}
+          if-no-files-found: error
+          path: ${{ steps.package.outputs.archive }}
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: ${{ steps.package.outputs.archive }}
+          generate_release_notes: true
+          prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
+          fail_on_unmatched_files: true

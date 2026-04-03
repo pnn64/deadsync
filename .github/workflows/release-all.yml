@@ -31,3 +31,9 @@ jobs:
     with:
       tag: ${{ inputs.tag }}
     secrets: inherit
+
+  release-freebsd:
+    uses: ./.github/workflows/release-freebsd.yml
+    with:
+      tag: ${{ inputs.tag }}
+    secrets: inherit
