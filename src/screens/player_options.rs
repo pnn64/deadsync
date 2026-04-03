@@ -5741,6 +5741,27 @@ fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     };
 }
 
+fn focus_exit_row(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx: usize) {
+    if state.rows.is_empty() {
+        return;
+    }
+    state.selected_row[player_idx.min(PLAYER_SLOTS - 1)] = state.rows.len().saturating_sub(1);
+    sync_selected_rows_with_visibility(state, active);
+}
+
+#[inline(always)]
+fn finish_start_without_action(
+    state: &mut State,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+    should_focus_exit: bool,
+) -> Option<ScreenAction> {
+    if should_focus_exit {
+        focus_exit_row(state, active, player_idx);
+    }
+    None
+}
+
 fn handle_nav_event(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -5789,82 +5810,83 @@ fn handle_start_event(
         return None;
     }
     let row_index = state.selected_row[player_idx].min(num_rows.saturating_sub(1));
+    let should_focus_exit = state.current_pane == OptionsPane::Main && row_index + 1 < num_rows;
     let row = state.rows.get(row_index)?;
     let row_name = row.name.clone();
     if row_supports_inline_nav(row) {
         let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
         if changed && !row_toggles_with_start(row_name.as_str()) {
             change_choice_for_player(state, asset_manager, player_idx, 0);
-            return None;
+            return finish_start_without_action(state, active, player_idx, should_focus_exit);
         }
     }
     if row_name == "Scroll" {
         toggle_scroll_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Hide" {
         toggle_hide_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Insert" {
         toggle_insert_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Remove" {
         toggle_remove_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Holds" {
         toggle_holds_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Accel" {
         toggle_accel_effects_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Effect" {
         toggle_visual_effects_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Appearance" {
         toggle_appearance_effects_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Life Bar Options" {
         toggle_life_bar_options_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Gameplay Extras" {
         toggle_gameplay_extras_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Gameplay Extras (More)" {
         toggle_gameplay_extras_more_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == ROW_RESULTS_EXTRAS {
         toggle_results_extras_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Error Bar" {
         toggle_error_bar_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Error Bar Options" {
         toggle_error_bar_options_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Measure Counter Options" {
         toggle_measure_counter_options_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "FA+ Options" {
         toggle_fa_plus_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_name == "Early Decent/Way Off Options" {
         toggle_early_dw_row(state, player_idx);
-        return None;
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
     }
     if row_index == num_rows.saturating_sub(1)
         && let Some(what_comes_next_row) = state.rows.get(num_rows.saturating_sub(2))
@@ -5873,8 +5895,12 @@ fn handle_start_event(
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
         if let Some(choice) = what_comes_next_row.choices.get(choice_idx) {
             match choice.as_str() {
-                "Gameplay" => return Some(ScreenAction::Navigate(Screen::Gameplay)),
+                "Gameplay" => {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    return Some(ScreenAction::Navigate(Screen::Gameplay));
+                }
                 c if c == choose_different_screen_label(state.return_screen) => {
+                    audio::play_sfx("assets/sounds/start.ogg");
                     return Some(ScreenAction::Navigate(state.return_screen));
                 }
                 "Advanced Modifiers" => switch_to_pane(state, OptionsPane::Advanced),
@@ -5884,7 +5910,7 @@ fn handle_start_event(
             }
         }
     }
-    None
+    finish_start_without_action(state, active, player_idx, should_focus_exit)
 }
 
 pub fn handle_input(
