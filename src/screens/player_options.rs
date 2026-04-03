@@ -990,6 +990,20 @@ fn build_main_rows(
             choice_difficulty_indices: None,
         },
         Row {
+            name: "Judgment Offset X".to_string(),
+            choices: (-100..=100).map(|v| v.to_string()).collect(),
+            selected_choice_index: [100; PLAYER_SLOTS],
+            help: vec!["Adjust the horizontal position of the judgment display.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Judgment Offset Y".to_string(),
+            choices: (-100..=100).map(|v| v.to_string()).collect(),
+            selected_choice_index: [100; PLAYER_SLOTS],
+            help: vec!["Adjust the vertical position of the judgment display.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
             name: "Combo Font".to_string(),
             choices: vec![
                 "Wendy".to_string(),
@@ -1006,6 +1020,20 @@ fn build_main_rows(
                 "Choose the font to count your combo. This font will also be used".to_string(),
                 "for the Measure Counter if that is enabled.".to_string(),
             ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Combo Offset X".to_string(),
+            choices: (-100..=100).map(|v| v.to_string()).collect(),
+            selected_choice_index: [100; PLAYER_SLOTS],
+            help: vec!["Adjust the horizontal position of the combo counter.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Combo Offset Y".to_string(),
+            choices: (-100..=100).map(|v| v.to_string()).collect(),
+            selected_choice_index: [100; PLAYER_SLOTS],
+            help: vec!["Adjust the vertical position of the combo counter.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -1375,6 +1403,20 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
                 "Adjust where the error bar appears and whether it shows multiple tick marks."
                     .to_string(),
             ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Error Bar Offset X".to_string(),
+            choices: (-100..=100).map(|v| v.to_string()).collect(),
+            selected_choice_index: [100; PLAYER_SLOTS],
+            help: vec!["Adjust the horizontal position of the error bar.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "Error Bar Offset Y".to_string(),
+            choices: (-100..=100).map(|v| v.to_string()).collect(),
+            selected_choice_index: [100; PLAYER_SLOTS],
+            help: vec!["Adjust the vertical position of the error bar.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
@@ -1870,6 +1912,54 @@ fn apply_profile_defaults(
     // Initialize NoteField Offset Y from profile (-50..50)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "NoteField Offset Y") {
         let val = profile.note_field_offset_y.clamp(-50, 50);
+        let val_str = val.to_string();
+        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
+    // Initialize Judgment Offset X from profile (-100..100)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Offset X") {
+        let val = profile.judgment_offset_x.clamp(-100, 100);
+        let val_str = val.to_string();
+        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
+    // Initialize Judgment Offset Y from profile (-100..100)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Offset Y") {
+        let val = profile.judgment_offset_y.clamp(-100, 100);
+        let val_str = val.to_string();
+        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
+    // Initialize Combo Offset X from profile (-100..100)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Offset X") {
+        let val = profile.combo_offset_x.clamp(-100, 100);
+        let val_str = val.to_string();
+        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
+    // Initialize Combo Offset Y from profile (-100..100)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Offset Y") {
+        let val = profile.combo_offset_y.clamp(-100, 100);
+        let val_str = val.to_string();
+        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
+    // Initialize Error Bar Offset X from profile (-100..100)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Offset X") {
+        let val = profile.error_bar_offset_x.clamp(-100, 100);
+        let val_str = val.to_string();
+        if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
+    // Initialize Error Bar Offset Y from profile (-100..100)
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Offset Y") {
+        let val = profile.error_bar_offset_y.clamp(-100, 100);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
             row.selected_choice_index[player_idx] = idx;
@@ -3915,6 +4005,60 @@ fn change_choice_for_player(
             state.player_profiles[player_idx].note_field_offset_y = raw;
             if should_persist {
                 crate::game::profile::update_notefield_offset_y_for_side(persist_side, raw);
+            }
+        }
+    } else if row_name == "Judgment Offset X" {
+        if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
+            && let Ok(raw) = choice.parse::<i32>()
+        {
+            state.player_profiles[player_idx].judgment_offset_x = raw;
+            if should_persist {
+                crate::game::profile::update_judgment_offset_x_for_side(persist_side, raw);
+            }
+        }
+    } else if row_name == "Judgment Offset Y" {
+        if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
+            && let Ok(raw) = choice.parse::<i32>()
+        {
+            state.player_profiles[player_idx].judgment_offset_y = raw;
+            if should_persist {
+                crate::game::profile::update_judgment_offset_y_for_side(persist_side, raw);
+            }
+        }
+    } else if row_name == "Combo Offset X" {
+        if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
+            && let Ok(raw) = choice.parse::<i32>()
+        {
+            state.player_profiles[player_idx].combo_offset_x = raw;
+            if should_persist {
+                crate::game::profile::update_combo_offset_x_for_side(persist_side, raw);
+            }
+        }
+    } else if row_name == "Combo Offset Y" {
+        if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
+            && let Ok(raw) = choice.parse::<i32>()
+        {
+            state.player_profiles[player_idx].combo_offset_y = raw;
+            if should_persist {
+                crate::game::profile::update_combo_offset_y_for_side(persist_side, raw);
+            }
+        }
+    } else if row_name == "Error Bar Offset X" {
+        if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
+            && let Ok(raw) = choice.parse::<i32>()
+        {
+            state.player_profiles[player_idx].error_bar_offset_x = raw;
+            if should_persist {
+                crate::game::profile::update_error_bar_offset_x_for_side(persist_side, raw);
+            }
+        }
+    } else if row_name == "Error Bar Offset Y" {
+        if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
+            && let Ok(raw) = choice.parse::<i32>()
+        {
+            state.player_profiles[player_idx].error_bar_offset_y = raw;
+            if should_persist {
+                crate::game::profile::update_error_bar_offset_y_for_side(persist_side, raw);
             }
         }
     } else if row_name == "Visual Delay" {

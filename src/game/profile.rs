@@ -656,6 +656,24 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "NoteFieldOffsetY={}\n",
         options.note_field_offset_y
     ));
+    content.push_str(&format!(
+        "JudgmentOffsetX={}\n",
+        options.judgment_offset_x
+    ));
+    content.push_str(&format!(
+        "JudgmentOffsetY={}\n",
+        options.judgment_offset_y
+    ));
+    content.push_str(&format!("ComboOffsetX={}\n", options.combo_offset_x));
+    content.push_str(&format!("ComboOffsetY={}\n", options.combo_offset_y));
+    content.push_str(&format!(
+        "ErrorBarOffsetX={}\n",
+        options.error_bar_offset_x
+    ));
+    content.push_str(&format!(
+        "ErrorBarOffsetY={}\n",
+        options.error_bar_offset_y
+    ));
     content.push_str(&format!("VisualDelayMs={}\n", options.visual_delay_ms));
     content.push('\n');
 }
@@ -726,6 +744,30 @@ fn load_player_options(
         .get(section, "NoteFieldOffsetY")
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or(options.note_field_offset_y);
+    options.judgment_offset_x = profile_conf
+        .get(section, "JudgmentOffsetX")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.judgment_offset_x);
+    options.judgment_offset_y = profile_conf
+        .get(section, "JudgmentOffsetY")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.judgment_offset_y);
+    options.combo_offset_x = profile_conf
+        .get(section, "ComboOffsetX")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.combo_offset_x);
+    options.combo_offset_y = profile_conf
+        .get(section, "ComboOffsetY")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.combo_offset_y);
+    options.error_bar_offset_x = profile_conf
+        .get(section, "ErrorBarOffsetX")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.error_bar_offset_x);
+    options.error_bar_offset_y = profile_conf
+        .get(section, "ErrorBarOffsetY")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(options.error_bar_offset_y);
     options.visual_delay_ms = profile_conf
         .get(section, "VisualDelayMs")
         .or_else(|| profile_conf.get(section, "VisualDelay"))
@@ -2296,6 +2338,12 @@ pub struct PlayerOptionsData {
     pub perspective: Perspective,
     pub note_field_offset_x: i32,
     pub note_field_offset_y: i32,
+    pub judgment_offset_x: i32,
+    pub judgment_offset_y: i32,
+    pub combo_offset_x: i32,
+    pub combo_offset_y: i32,
+    pub error_bar_offset_x: i32,
+    pub error_bar_offset_y: i32,
     pub visual_delay_ms: i32,
 }
 
@@ -2379,6 +2427,12 @@ fn default_player_options() -> PlayerOptionsData {
         perspective: Perspective::default(),
         note_field_offset_x: 0,
         note_field_offset_y: 0,
+        judgment_offset_x: 0,
+        judgment_offset_y: 0,
+        combo_offset_x: 0,
+        combo_offset_y: 0,
+        error_bar_offset_x: 0,
+        error_bar_offset_y: 0,
         visual_delay_ms: 0,
     }
 }
@@ -2516,6 +2570,14 @@ pub struct Profile {
     // Y is applied directly to the notefield and related HUD,
     // positive values move everything down.
     pub note_field_offset_y: i32,
+    // Independent HUD element offsets in logical pixels.
+    // Positive X = right, positive Y = down.
+    pub judgment_offset_x: i32,
+    pub judgment_offset_y: i32,
+    pub combo_offset_x: i32,
+    pub combo_offset_y: i32,
+    pub error_bar_offset_x: i32,
+    pub error_bar_offset_y: i32,
     // Per-player visual delay (Simply Love semantics). Stored in milliseconds.
     // Negative values shift arrows upwards; positive values shift them down.
     pub visual_delay_ms: i32,
@@ -2643,6 +2705,12 @@ impl Default for Profile {
             perspective: player_options.perspective,
             note_field_offset_x: player_options.note_field_offset_x,
             note_field_offset_y: player_options.note_field_offset_y,
+            judgment_offset_x: player_options.judgment_offset_x,
+            judgment_offset_y: player_options.judgment_offset_y,
+            combo_offset_x: player_options.combo_offset_x,
+            combo_offset_y: player_options.combo_offset_y,
+            error_bar_offset_x: player_options.error_bar_offset_x,
+            error_bar_offset_y: player_options.error_bar_offset_y,
             visual_delay_ms: player_options.visual_delay_ms,
             player_options_singles: player_options.clone(),
             player_options_doubles: player_options,
@@ -2762,6 +2830,12 @@ impl Profile {
             perspective: self.perspective,
             note_field_offset_x: self.note_field_offset_x,
             note_field_offset_y: self.note_field_offset_y,
+            judgment_offset_x: self.judgment_offset_x,
+            judgment_offset_y: self.judgment_offset_y,
+            combo_offset_x: self.combo_offset_x,
+            combo_offset_y: self.combo_offset_y,
+            error_bar_offset_x: self.error_bar_offset_x,
+            error_bar_offset_y: self.error_bar_offset_y,
             visual_delay_ms: self.visual_delay_ms,
         }
     }
@@ -2845,6 +2919,12 @@ impl Profile {
         self.perspective = options.perspective;
         self.note_field_offset_x = options.note_field_offset_x;
         self.note_field_offset_y = options.note_field_offset_y;
+        self.judgment_offset_x = options.judgment_offset_x;
+        self.judgment_offset_y = options.judgment_offset_y;
+        self.combo_offset_x = options.combo_offset_x;
+        self.combo_offset_y = options.combo_offset_y;
+        self.error_bar_offset_x = options.error_bar_offset_x;
+        self.error_bar_offset_y = options.error_bar_offset_y;
         self.visual_delay_ms = options.visual_delay_ms;
     }
 
