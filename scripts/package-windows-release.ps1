@@ -42,7 +42,7 @@ foreach ($dir in 'assets', 'songs', 'courses') {
 
 $distDir     = 'dist'
 $pkgName     = "deadsync-$Tag-$Arch-windows"
-$stageDir    = Join-Path $distDir 'deadsync'
+$stageDir    = Join-Path $distDir 'DeadSync'
 $archivePath = Join-Path $distDir "$pkgName.zip"
 
 if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
@@ -54,6 +54,7 @@ Copy-Item 'songs'        -Destination $stageDir -Recurse
 Copy-Item 'courses'      -Destination $stageDir -Recurse
 Copy-Item 'README.md'    -Destination $stageDir
 Copy-Item 'LICENSE'      -Destination $stageDir
+New-Item -ItemType File -Path (Join-Path $stageDir 'portable.txt') -Force | Out-Null
 
 if (Test-Path $archivePath) { Remove-Item $archivePath -Force }
 Compress-Archive -Path $stageDir -DestinationPath $archivePath
