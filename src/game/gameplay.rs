@@ -3696,8 +3696,11 @@ pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
 }
 
 #[inline(always)]
-const fn column_cue_is_mine(note_type: NoteType) -> Option<bool> {
-    match note_type {
+const fn column_cue_is_mine(note: &Note) -> Option<bool> {
+    if note.is_fake {
+        return None;
+    }
+    match note.note_type {
         NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll => Some(false),
         NoteType::Mine => Some(true),
         NoteType::Fake => None,
@@ -3728,7 +3731,7 @@ fn build_column_cues_for_player(
             let note = &notes[i];
             if note.column >= col_start
                 && note.column < col_end
-                && let Some(is_mine) = column_cue_is_mine(note.note_type)
+                && let Some(is_mine) = column_cue_is_mine(note)
             {
                 if !has_row_time {
                     row_time = note_time_cache[i];
@@ -12134,8 +12137,8 @@ mod tests {
         TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
         advance_hold_last_held, advance_hold_life, advance_judged_row_cursor, apply_mines_insert,
         arrow_time_window_bounds, autoplay_random_offset_s_for_window, build_assist_clap_rows,
-        build_attack_mask_windows_for_player, build_row_grids, closest_lane_note,
-        collect_edge_judge_indices, completed_row_final_judgment,
+        build_attack_mask_windows_for_player, build_column_cues_for_player, build_row_grids,
+        closest_lane_note, collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_grade, completed_row_hidden_note_indices,
         count_rescore_tracks_on_row, crossed_mine_bounds, enforce_max_simultaneous_notes,
         finalized_row_outcome_for_cached_row, find_arrow_index, frame_stable_display_music_time,
@@ -13754,5 +13757,32 @@ mod tests {
 
         assert_eq!(recent_step_tracks(&pressed_since, 0, 4, 10.0), 2);
         assert_eq!(recent_step_tracks(&pressed_since, 4, 8, 10.0), 1);
+    }
+
+    #[test]
+    fn column_cues_ignore_notes_marked_fake_by_timing() {
+        let mut fake_note = test_note(1, 96, NoteType::Tap);
+        fake_note.is_fake = true;
+        fake_note.can_be_judged = false;
+
+        let notes = vec![
+            test_note(0, 48, NoteType::Tap),
+            fake_note,
+            test_note(2, 192, NoteType::Tap),
+        ];
+        let note_time_cache = [1.0_f32, 2.0_f32, 4.0_f32];
+
+        let cues =
+            build_column_cues_for_player(&notes, (0, notes.len()), &note_time_cache, 0, 4, 0.0);
+
+        assert_eq!(cues.len(), 2);
+        assert!((cues[0].start_time - 0.0).abs() <= 1e-6);
+        assert!((cues[0].duration - 1.0).abs() <= 1e-6);
+        assert_eq!(cues[0].columns.len(), 1);
+        assert_eq!(cues[0].columns[0].column, 0);
+        assert!((cues[1].start_time - 1.0).abs() <= 1e-6);
+        assert!((cues[1].duration - 3.0).abs() <= 1e-6);
+        assert_eq!(cues[1].columns.len(), 1);
+        assert_eq!(cues[1].columns[0].column, 2);
     }
 }
