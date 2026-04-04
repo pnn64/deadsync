@@ -6698,6 +6698,7 @@ mod tests {
             let_go: false,
             is_pressed: true,
             life: 1.0,
+            last_update_time: 100.0,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 99.99, 100.0);
         assert!(!engaged);
@@ -6714,6 +6715,7 @@ mod tests {
             let_go: false,
             is_pressed: true,
             life: 1.0,
+            last_update_time: 100.0,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
         assert!(engaged);
@@ -6736,6 +6738,7 @@ mod tests {
             let_go: false,
             is_pressed: false,
             life: 1.0,
+            last_update_time: 100.0,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
         assert!(engaged);
@@ -6752,6 +6755,7 @@ mod tests {
             let_go: false,
             is_pressed: true,
             life: 0.0,
+            last_update_time: 100.0,
         };
         let let_go = ActiveHold {
             note_index: 7,
@@ -6761,6 +6765,7 @@ mod tests {
             let_go: true,
             is_pressed: true,
             life: 1.0,
+            last_update_time: 100.0,
         };
         assert_eq!(
             hold_head_render_flags(Some(&exhausted), 200.0, 100.0),

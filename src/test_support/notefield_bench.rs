@@ -173,6 +173,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
             let_go: false,
             is_pressed: true,
             life: 1.0,
+            last_update_time: time,
         });
     }
 

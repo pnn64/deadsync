@@ -3687,6 +3687,7 @@ pub struct ActiveHold {
     pub let_go: bool,
     pub is_pressed: bool,
     pub life: f32,
+    pub last_update_time: f32,
 }
 
 #[inline(always)]
@@ -5717,12 +5718,13 @@ fn settle_due_autoplay_active_holds(state: &mut State, cutoff_time: f32) {
             continue;
         }
         let note_index = active.note_index;
+        let end_time = active.end_time;
         let hold_succeeded = !active.let_go && active.life > 0.0;
         state.active_holds[column] = None;
         if hold_succeeded {
             handle_hold_success(state, column, note_index);
         } else {
-            handle_hold_let_go(state, column, note_index);
+            handle_hold_let_go(state, column, note_index, end_time);
         }
     }
 }
@@ -8774,7 +8776,7 @@ fn hit_mine_timebased(
     true
 }
 
-fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
+fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize, let_go_time: f32) {
     let player = player_for_col(state, column);
     let scoring_blocked = autoplay_blocks_scoring(state);
     let mut updated_possible_scoring = false;
@@ -8788,7 +8790,7 @@ fn handle_hold_let_go(state: &mut State, column: usize, note_index: usize) {
             &mut state.hold_decay_active,
             &mut state.decaying_hold_indices,
             note_index,
-            state.current_music_time,
+            let_go_time,
         );
     }
     if !scoring_blocked && !is_state_dead(state, player) {
@@ -8851,6 +8853,219 @@ fn begin_hold_life_decay(
     if note_index < hold_decay_active.len() && !hold_decay_active[note_index] {
         hold_decay_active[note_index] = true;
         decaying_hold_indices.push(note_index);
+    }
+}
+
+#[inline(always)]
+const fn hold_window_seconds(note_type: NoteType) -> f32 {
+    match note_type {
+        NoteType::Roll => TIMING_WINDOW_SECONDS_ROLL,
+        _ => TIMING_WINDOW_SECONDS_HOLD,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct HoldLifeAdvance {
+    life_after: f32,
+    zero_elapsed_music_s: Option<f32>,
+}
+
+#[inline(always)]
+fn advance_hold_life(
+    note_type: NoteType,
+    life: f32,
+    pressed: bool,
+    music_elapsed_s: f32,
+    music_rate: f32,
+) -> HoldLifeAdvance {
+    let life = life.clamp(0.0, MAX_HOLD_LIFE);
+    if !music_elapsed_s.is_finite() || music_elapsed_s <= f32::EPSILON {
+        return HoldLifeAdvance {
+            life_after: life,
+            zero_elapsed_music_s: None,
+        };
+    }
+    if matches!(note_type, NoteType::Hold) && pressed {
+        return HoldLifeAdvance {
+            life_after: MAX_HOLD_LIFE,
+            zero_elapsed_music_s: None,
+        };
+    }
+
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    let window = hold_window_seconds(note_type);
+    if !window.is_finite() || window <= 0.0 {
+        return HoldLifeAdvance {
+            life_after: 0.0,
+            zero_elapsed_music_s: Some(0.0),
+        };
+    }
+
+    let real_elapsed_s = music_elapsed_s / rate;
+    let life_drop = real_elapsed_s / window;
+    if life_drop < life {
+        return HoldLifeAdvance {
+            life_after: (life - life_drop).max(0.0),
+            zero_elapsed_music_s: None,
+        };
+    }
+
+    HoldLifeAdvance {
+        life_after: 0.0,
+        zero_elapsed_music_s: Some((life * window * rate).clamp(0.0, music_elapsed_s)),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ActiveHoldResolution {
+    LetGo { note_index: usize, time: f32 },
+    Success { note_index: usize },
+}
+
+#[inline(always)]
+fn resolve_active_hold(state: &mut State, column: usize, resolution: ActiveHoldResolution) {
+    match resolution {
+        ActiveHoldResolution::LetGo { note_index, time } => {
+            handle_hold_let_go(state, column, note_index, time);
+        }
+        ActiveHoldResolution::Success { note_index } => {
+            handle_hold_success(state, column, note_index);
+        }
+    }
+}
+
+#[inline(always)]
+fn start_active_hold(
+    state: &mut State,
+    column: usize,
+    note_index: usize,
+    start_time: f32,
+    end_time: f32,
+    current_time: f32,
+) {
+    if let Some(hold) = state.notes[note_index].hold.as_mut() {
+        hold.life = MAX_HOLD_LIFE;
+        hold.let_go_started_at = None;
+        hold.let_go_starting_life = 0.0;
+    }
+    state.active_holds[column] = Some(ActiveHold {
+        note_index,
+        start_time,
+        end_time,
+        note_type: state.notes[note_index].note_type,
+        let_go: false,
+        is_pressed: true,
+        life: MAX_HOLD_LIFE,
+        last_update_time: current_time,
+    });
+}
+
+#[inline(always)]
+fn sync_active_hold_pressed_state(state: &mut State, column: usize, lane_pressed: bool) {
+    let live_autoplay = live_autoplay_enabled(state);
+    let Some(active) = state.active_holds[column].as_mut() else {
+        return;
+    };
+    active.is_pressed = active_hold_counts_as_pressed(live_autoplay, lane_pressed);
+}
+
+#[inline(always)]
+fn integrate_active_hold_to_time(state: &mut State, column: usize, target_time: f32) {
+    if column >= state.num_cols || !target_time.is_finite() {
+        return;
+    }
+
+    let player = player_for_col(state, column);
+    let timing = state.timing_players[player].clone();
+    let music_rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
+        state.music_rate
+    } else {
+        1.0
+    };
+
+    let mut resolution = None;
+    let clear_active = {
+        let (active_holds, notes) = (&mut state.active_holds, &mut state.notes);
+        let Some(active) = active_holds[column].as_mut() else {
+            return;
+        };
+        let note_index = active.note_index;
+        if let Some(note) = notes.get_mut(note_index) {
+            if let Some(hold) = note.hold.as_mut() {
+                let from_time = active.last_update_time;
+                let final_time = target_time.max(from_time).min(active.end_time);
+                let note_start_row = note.row_index;
+                let note_start_beat = note.beat;
+
+                if !active.let_go && active.life <= 0.0 {
+                    active.let_go = true;
+                    resolution = Some(ActiveHoldResolution::LetGo {
+                        note_index,
+                        time: from_time.max(active.start_time),
+                    });
+                } else if final_time > from_time && !active.let_go {
+                    let body_from = from_time.max(active.start_time);
+                    let body_to = final_time.max(active.start_time);
+                    if body_to > body_from && active.life > 0.0 {
+                        let advance = advance_hold_life(
+                            active.note_type,
+                            active.life,
+                            active.is_pressed,
+                            body_to - body_from,
+                            music_rate,
+                        );
+                        let progress_time = match advance.zero_elapsed_music_s {
+                            Some(zero_elapsed_music_s) => body_from + zero_elapsed_music_s,
+                            None => body_to,
+                        };
+                        if progress_time > body_from && progress_time.is_finite() {
+                            let current_beat = timing.get_beat_for_time(progress_time);
+                            advance_hold_last_held(
+                                hold,
+                                &timing,
+                                current_beat,
+                                note_start_row,
+                                note_start_beat,
+                            );
+                        }
+                        active.life = advance.life_after;
+                        hold.life = active.life;
+                        if let Some(zero_elapsed_music_s) = advance.zero_elapsed_music_s {
+                            active.let_go = true;
+                            resolution = Some(ActiveHoldResolution::LetGo {
+                                note_index,
+                                time: body_from + zero_elapsed_music_s,
+                            });
+                        }
+                    }
+                    active.last_update_time = final_time;
+                }
+
+                if !active.let_go {
+                    hold.let_go_started_at = None;
+                    hold.let_go_starting_life = 0.0;
+                }
+                if resolution.is_none() && !active.let_go && final_time >= active.end_time {
+                    resolution = Some(ActiveHoldResolution::Success { note_index });
+                }
+                resolution.is_some() || active.let_go
+            } else {
+                true
+            }
+        } else {
+            true
+        }
+    };
+
+    if clear_active {
+        state.active_holds[column] = None;
+    }
+    if let Some(resolution) = resolution {
+        resolve_active_hold(state, column, resolution);
     }
 }
 
@@ -8921,13 +9136,14 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
     });
 }
 
-fn refresh_roll_life_on_step(state: &mut State, column: usize) {
+fn refresh_roll_life_on_step(state: &mut State, column: usize, event_time: f32) {
     let Some(active) = state.active_holds[column].as_mut() else {
         return;
     };
     if !matches!(active.note_type, NoteType::Roll)
         || active.let_go
-        || state.current_music_time < active.start_time
+        || !event_time.is_finite()
+        || event_time < active.start_time
     {
         return;
     }
@@ -8941,6 +9157,7 @@ fn refresh_roll_life_on_step(state: &mut State, column: usize) {
         return;
     }
     active.life = MAX_HOLD_LIFE;
+    active.last_update_time = active.last_update_time.max(event_time.min(active.end_time));
     hold.life = MAX_HOLD_LIFE;
     hold.let_go_started_at = None;
     hold.let_go_starting_life = 0.0;
@@ -8972,108 +9189,10 @@ fn advance_hold_last_held(
     hold.last_held_beat = prev_beat.max(current_beat);
 }
 
-fn update_active_holds(
-    state: &mut State,
-    inputs: &[bool; MAX_COLS],
-    current_time: f32,
-    delta_time: f32,
-) {
-    let live_autoplay = live_autoplay_enabled(state);
-    for (column, _) in inputs.iter().enumerate().take(state.active_holds.len()) {
-        let player = player_for_col(state, column);
-        let timing = &state.timing_players[player];
-        let current_beat = timing.get_beat_for_time(current_time);
-        let mut handle_let_go = None;
-        let mut handle_success = None;
-        {
-            let active_opt = &mut state.active_holds[column];
-            if let Some(active) = active_opt {
-                let note_index = active.note_index;
-                let note_start_row = state.notes[note_index].row_index;
-                let note_start_beat = state.notes[note_index].beat;
-                let Some(hold) = state.notes[note_index].hold.as_mut() else {
-                    *active_opt = None;
-                    continue;
-                };
-                // ITG autoplay keeps non-human hold sustain separate from the
-                // cabinet's physical held-panel state, so live autoplay should
-                // never decay an already-active hold because a synthetic lane
-                // edge was released or never existed.
-                let pressed = active_hold_counts_as_pressed(live_autoplay, inputs[column]);
-                active.is_pressed = pressed;
-                let body_started = current_time >= active.start_time;
-
-                if body_started && !active.let_go && active.life > 0.0 {
-                    advance_hold_last_held(
-                        hold,
-                        timing,
-                        current_beat,
-                        note_start_row,
-                        note_start_beat,
-                    );
-                }
-
-                if body_started && !active.let_go {
-                    let window = match active.note_type {
-                        NoteType::Hold => TIMING_WINDOW_SECONDS_HOLD,
-                        NoteType::Roll => TIMING_WINDOW_SECONDS_ROLL,
-                        _ => TIMING_WINDOW_SECONDS_HOLD,
-                    };
-                    match active.note_type {
-                        NoteType::Hold => {
-                            if pressed {
-                                active.life = MAX_HOLD_LIFE;
-                            } else if window > 0.0 {
-                                active.life -= delta_time / window;
-                            } else {
-                                active.life = 0.0;
-                            }
-                        }
-                        NoteType::Roll => {
-                            if window > 0.0 {
-                                active.life -= delta_time / window;
-                            } else {
-                                active.life = 0.0;
-                            }
-                        }
-                        _ => {
-                            if window > 0.0 {
-                                active.life -= delta_time / window;
-                            } else {
-                                active.life = 0.0;
-                            }
-                        }
-                    }
-                    active.life = active.life.clamp(0.0, MAX_HOLD_LIFE);
-                }
-                hold.life = active.life;
-                hold.let_go_started_at = None;
-                hold.let_go_starting_life = 0.0;
-
-                if !active.let_go && active.life <= 0.0 {
-                    active.let_go = true;
-                    handle_let_go = Some((column, note_index));
-                }
-
-                if current_time >= active.end_time {
-                    if !active.let_go && active.life > 0.0 {
-                        handle_success = Some((column, note_index));
-                    } else if !active.let_go {
-                        active.let_go = true;
-                        handle_let_go = Some((column, note_index));
-                    }
-                    *active_opt = None;
-                } else if active.let_go {
-                    *active_opt = None;
-                }
-            }
-        }
-        if let Some((column, note_index)) = handle_let_go {
-            handle_hold_let_go(state, column, note_index);
-        }
-        if let Some((column, note_index)) = handle_success {
-            handle_hold_success(state, column, note_index);
-        }
+fn update_active_holds(state: &mut State, inputs: &[bool; MAX_COLS], current_time: f32) {
+    for (column, lane_pressed) in inputs.iter().copied().enumerate().take(state.num_cols) {
+        sync_active_hold_pressed_state(state, column, lane_pressed);
+        integrate_active_hold_to_time(state, column, current_time);
     }
 }
 
@@ -9501,18 +9620,14 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                                 NoteType::Hold | NoteType::Roll
                             )
                         {
-                            if let Some(hold) = state.notes[note_index].hold.as_mut() {
-                                hold.life = MAX_HOLD_LIFE;
-                            }
-                            state.active_holds[note_col] = Some(ActiveHold {
+                            start_active_hold(
+                                state,
+                                note_col,
                                 note_index,
-                                start_time: row_note_time,
+                                row_note_time,
                                 end_time,
-                                note_type: state.notes[note_index].note_type,
-                                let_go: false,
-                                is_pressed: true,
-                                life: MAX_HOLD_LIFE,
-                            });
+                                current_time,
+                            );
                         }
                     }
                     return true;
@@ -9564,18 +9679,14 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                         NoteType::Hold | NoteType::Roll
                     )
                 {
-                    if let Some(hold) = state.notes[note_index].hold.as_mut() {
-                        hold.life = MAX_HOLD_LIFE;
-                    }
-                    state.active_holds[note_col] = Some(ActiveHold {
+                    start_active_hold(
+                        state,
+                        note_col,
                         note_index,
-                        start_time: row_note_time,
+                        row_note_time,
                         end_time,
-                        note_type: state.notes[note_index].note_type,
-                        let_go: false,
-                        is_pressed: true,
-                        life: MAX_HOLD_LIFE,
-                    });
+                        current_time,
+                    );
                 }
                 return true;
             }
@@ -9629,18 +9740,7 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time: f32) -> bool 
                 if let Some(end_time) = state.hold_end_time_cache[idx]
                     && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
                 {
-                    if let Some(hold) = state.notes[idx].hold.as_mut() {
-                        hold.life = MAX_HOLD_LIFE;
-                    }
-                    state.active_holds[note_col] = Some(ActiveHold {
-                        note_index: idx,
-                        start_time: row_note_time,
-                        end_time,
-                        note_type: state.notes[idx].note_type,
-                        let_go: false,
-                        is_pressed: true,
-                        life: MAX_HOLD_LIFE,
-                    });
+                    start_active_hold(state, note_col, idx, row_note_time, end_time, current_time);
                 }
             }
             return true;
@@ -10060,7 +10160,7 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
         }
     }
     for col in roll_cols.into_iter().take(roll_count) {
-        refresh_roll_life_on_step(state, col);
+        refresh_roll_life_on_step(state, col, now_music_time);
     }
 }
 
@@ -10755,6 +10855,9 @@ fn process_input_edges(
             edge.event_music_time =
                 music_time_from_song_clock(song_clock, edge.captured_at, edge.captured_host_nanos);
         }
+        if edge.event_music_time.is_finite() {
+            integrate_active_hold_to_time(state, lane_idx, edge.event_music_time);
+        }
         if edge.record_replay && edge.event_music_time.is_finite() {
             state.replay_edges.push(RecordedLaneEdge {
                 lane_index: lane_idx as u8,
@@ -10818,6 +10921,7 @@ fn process_input_edges(
 
         let press_started = lane_press_started(edge.pressed, was_down, is_down);
         let release_finished = lane_release_finished(edge.pressed, was_down, is_down);
+        sync_active_hold_pressed_state(state, lane_idx, is_down);
 
         if press_started {
             state.lane_pressed_since[lane_idx] = Some(edge.event_music_time);
@@ -10852,10 +10956,10 @@ fn process_input_edges(
             };
             if trace_enabled {
                 let started = Instant::now();
-                refresh_roll_life_on_step(state, lane_idx);
+                refresh_roll_life_on_step(state, lane_idx, event_music_time);
                 add_elapsed_us(&mut phase_timings.input_roll_us, started);
             } else {
-                refresh_roll_life_on_step(state, lane_idx);
+                refresh_roll_life_on_step(state, lane_idx, event_music_time);
             }
             if hit_note {
                 if state.tick_mode == TickMode::Hit {
@@ -11829,7 +11933,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     } else {
         None
     };
-    update_active_holds(state, &current_inputs, music_time_sec, delta_time);
+    update_active_holds(state, &current_inputs, music_time_sec);
     if let Some(started) = active_holds_started {
         phase_timings.active_holds_us = elapsed_us_since(started);
     }
@@ -12028,7 +12132,7 @@ mod tests {
         GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
         TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
-        advance_hold_last_held, advance_judged_row_cursor, apply_mines_insert,
+        advance_hold_last_held, advance_hold_life, advance_judged_row_cursor, apply_mines_insert,
         arrow_time_window_bounds, autoplay_random_offset_s_for_window, build_assist_clap_rows,
         build_attack_mask_windows_for_player, build_row_grids, closest_lane_note,
         collect_edge_judge_indices, completed_row_final_judgment,
@@ -12303,6 +12407,48 @@ mod tests {
         assert!(active_hold_counts_as_pressed(true, true));
         assert!(active_hold_counts_as_pressed(false, true));
         assert!(!active_hold_counts_as_pressed(false, false));
+    }
+
+    #[test]
+    fn hold_life_advance_keeps_pressed_holds_full() {
+        let advanced = advance_hold_life(NoteType::Hold, 0.25, true, 0.2, 1.0);
+        assert_eq!(
+            advanced,
+            super::HoldLifeAdvance {
+                life_after: super::MAX_HOLD_LIFE,
+                zero_elapsed_music_s: None,
+            }
+        );
+    }
+
+    #[test]
+    fn hold_life_advance_reports_exact_zero_cross_time() {
+        let advanced = advance_hold_life(NoteType::Hold, 0.25, false, 0.2, 1.0);
+        assert_eq!(advanced.life_after, 0.0);
+        let zero_elapsed = advanced
+            .zero_elapsed_music_s
+            .expect("hold should cross zero");
+        assert!((zero_elapsed - 0.08).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hold_life_advance_split_intervals_match_single_interval() {
+        let whole = advance_hold_life(NoteType::Hold, 1.0, false, 0.16, 1.0);
+        let first = advance_hold_life(NoteType::Hold, 1.0, false, 0.05, 1.0);
+        let split = advance_hold_life(NoteType::Hold, first.life_after, false, 0.11, 1.0);
+
+        assert!((whole.life_after - split.life_after).abs() <= 1e-6);
+        assert_eq!(whole.zero_elapsed_music_s, split.zero_elapsed_music_s);
+    }
+
+    #[test]
+    fn roll_life_advance_scales_zero_cross_with_music_rate() {
+        let advanced = advance_hold_life(NoteType::Roll, 0.5, false, 0.4, 2.0);
+        assert_eq!(advanced.life_after, 0.0);
+        let zero_elapsed = advanced
+            .zero_elapsed_music_s
+            .expect("roll should cross zero");
+        assert!((zero_elapsed - 0.35).abs() <= 1e-6);
     }
 
     #[test]
