@@ -1552,6 +1552,14 @@ struct ZmodLayoutYs {
     subtractive_scoring_y: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct HudLayoutYs {
+    judgment_y: f32,
+    error_bar_y: f32,
+    error_bar_max_h: f32,
+    zmod_layout: ZmodLayoutYs,
+}
+
 #[inline(always)]
 fn hud_y(
     normal_y: f32,
@@ -1634,6 +1642,40 @@ fn zmod_layout_ys(
         combo_y,
         measure_counter_y,
         subtractive_scoring_y,
+    }
+}
+
+#[inline(always)]
+fn hud_layout_ys(
+    profile: &crate::game::profile::Profile,
+    judgment_y_base: f32,
+    combo_y_base: f32,
+    reverse: bool,
+    judgment_extra_y: f32,
+    combo_extra_y: f32,
+    error_bar_extra_y: f32,
+) -> HudLayoutYs {
+    let mut zmod_layout = zmod_layout_ys(profile, judgment_y_base, combo_y_base, reverse);
+    zmod_layout.combo_y += combo_extra_y;
+    let judgment_y = judgment_y_base + judgment_extra_y;
+    let (error_bar_y, error_bar_max_h) = if resolved_judgment_texture(profile).is_none() {
+        (judgment_y_base + error_bar_extra_y, 30.0_f32)
+    } else if profile.error_bar_up {
+        (
+            judgment_y_base - ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y,
+            10.0_f32,
+        )
+    } else {
+        (
+            judgment_y_base + ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y,
+            10.0_f32,
+        )
+    };
+    HudLayoutYs {
+        judgment_y,
+        error_bar_y,
+        error_bar_max_h,
+        zmod_layout,
     }
 }
 
@@ -2701,23 +2743,33 @@ pub fn build(
     let mini = effective_mini_value(profile, visual, mini_percent);
     let reverse_scroll = state.reverse_scroll[player_idx];
     let hud_reverse = column_reverse_percent[0] >= 0.999_9;
-    let judgment_y = hud_y(
+    let judgment_y_base = hud_y(
         screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y,
         screen_center_y() + TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y,
         receptor_y_centered + 95.0,
         hud_reverse,
         centered_percent,
-    ) + judgment_extra_y;
-    let judgment_x = playfield_center_x + judgment_extra_x;
+    );
     let combo_y_base = hud_y(
         screen_center_y() + COMBO_OFFSET_FROM_CENTER + notefield_offset_y,
         screen_center_y() - COMBO_OFFSET_FROM_CENTER + notefield_offset_y,
         receptor_y_centered + 155.0,
         hud_reverse,
         centered_percent,
-    ) + combo_extra_y;
+    );
+    let hud_layout = hud_layout_ys(
+        profile,
+        judgment_y_base,
+        combo_y_base,
+        hud_reverse,
+        judgment_extra_y,
+        combo_extra_y,
+        error_bar_extra_y,
+    );
+    let judgment_y = hud_layout.judgment_y;
+    let zmod_layout = hud_layout.zmod_layout;
+    let judgment_x = playfield_center_x + judgment_extra_x;
     let combo_x = playfield_center_x + combo_extra_x;
-    let zmod_layout = zmod_layout_ys(profile, judgment_y, combo_y_base, hud_reverse);
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
     // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0); deadsync currently supports Mini.
     let judgment_zoom_mod = mini_judgment_zoom(mini);
@@ -5844,19 +5896,8 @@ pub fn build(
     let show_error_bar_highlight = (error_bar_mask & profile::ERROR_BAR_BIT_HIGHLIGHT) != 0;
     let show_error_bar_average = (error_bar_mask & profile::ERROR_BAR_BIT_AVERAGE) != 0;
     let show_error_bar = error_bar_mask != 0;
-    let (error_bar_y, error_bar_max_h) = if resolved_judgment_texture(profile).is_none() {
-        (judgment_y + error_bar_extra_y, 30.0_f32)
-    } else if profile.error_bar_up {
-        (
-            judgment_y - ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y,
-            10.0_f32,
-        )
-    } else {
-        (
-            judgment_y + ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y,
-            10.0_f32,
-        )
-    };
+    let error_bar_y = hud_layout.error_bar_y;
+    let error_bar_max_h = hud_layout.error_bar_max_h;
     let error_bar_x = playfield_center_x + error_bar_extra_x;
     let mut average_bar_y = 0.0_f32;
     for y in column_receptor_ys.iter().take(num_cols) {
@@ -6674,11 +6715,11 @@ mod tests {
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
-        hud_y, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha,
-        note_slot_base_size, note_world_z, note_x_extra, offset_center, predictive_itg_percents,
-        push_transform_parts, receptor_row_center, tap_judgment_rows, tap_part_for_note_type,
-        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
-        zmod_subtractive_counter_state,
+        hud_layout_ys, hud_y, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
+        note_alpha, note_slot_base_size, note_world_z, note_x_extra, offset_center,
+        predictive_itg_percents, push_transform_parts, receptor_row_center, tap_judgment_rows,
+        tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits,
+        turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::judgment::{
@@ -7155,6 +7196,35 @@ mod tests {
         let centered_y = 300.0;
         assert!((hud_y(normal_y, reverse_y, centered_y, false, 0.3) - 160.0).abs() <= 1e-6);
         assert!((hud_y(normal_y, reverse_y, centered_y, true, 0.3) - 230.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hud_layout_offsets_apply_independently() {
+        let profile = profile::Profile {
+            error_bar_active_mask: profile::ERROR_BAR_BIT_MONOCHROME,
+            ..profile::Profile::default()
+        };
+        let base = hud_layout_ys(&profile, 100.0, 160.0, false, 0.0, 0.0, 0.0);
+        let moved_judgment = hud_layout_ys(&profile, 100.0, 160.0, false, 25.0, 0.0, 0.0);
+        assert_eq!(moved_judgment.judgment_y, 125.0);
+        assert_eq!(moved_judgment.zmod_layout.combo_y, base.zmod_layout.combo_y);
+        assert_eq!(moved_judgment.error_bar_y, base.error_bar_y);
+
+        let moved_combo = hud_layout_ys(&profile, 100.0, 160.0, false, 0.0, -30.0, 0.0);
+        assert_eq!(moved_combo.judgment_y, base.judgment_y);
+        assert_eq!(
+            moved_combo.zmod_layout.combo_y,
+            base.zmod_layout.combo_y - 30.0
+        );
+        assert_eq!(moved_combo.error_bar_y, base.error_bar_y);
+
+        let moved_error_bar = hud_layout_ys(&profile, 100.0, 160.0, false, 0.0, 0.0, 18.0);
+        assert_eq!(moved_error_bar.judgment_y, base.judgment_y);
+        assert_eq!(
+            moved_error_bar.zmod_layout.combo_y,
+            base.zmod_layout.combo_y
+        );
+        assert_eq!(moved_error_bar.error_bar_y, base.error_bar_y + 18.0);
     }
 
     #[test]
