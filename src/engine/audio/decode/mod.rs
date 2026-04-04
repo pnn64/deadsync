@@ -4,7 +4,6 @@ pub(crate) mod ogg_vorbis;
 pub(crate) mod opus;
 pub(crate) mod wav;
 
-use lewton::inside_ogg::OggStreamReader;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -18,7 +17,7 @@ pub(crate) struct OpenFile {
 pub(crate) enum Reader {
     Flac(flac::Reader),
     Mp3(mp3::Reader<BufReader<File>>),
-    Ogg(OggStreamReader<BufReader<File>>),
+    Ogg(ogg_vorbis::Reader),
     Opus(opus::Reader),
     Wav(wav::Reader),
 }
@@ -30,7 +29,7 @@ impl Reader {
         match self {
             Self::Flac(reader) => reader.read_dec_packet_itl(),
             Self::Mp3(reader) => reader.read_dec_packet_itl(),
-            Self::Ogg(reader) => Ok(reader.read_dec_packet_itl()?),
+            Self::Ogg(reader) => reader.read_dec_packet_itl(),
             Self::Opus(reader) => reader.read_dec_packet_itl(),
             Self::Wav(reader) => reader.read_dec_packet_itl(),
         }
@@ -43,10 +42,7 @@ impl Reader {
         match self {
             Self::Flac(reader) => reader.seek_frame(frame),
             Self::Mp3(reader) => reader.seek_frame(frame),
-            Self::Ogg(reader) => {
-                reader.seek_absgp_pg(frame)?;
-                Ok(())
-            }
+            Self::Ogg(reader) => reader.seek_frame(frame),
             Self::Opus(reader) => reader.seek_frame(frame),
             Self::Wav(reader) => reader.seek_frame(frame),
         }
