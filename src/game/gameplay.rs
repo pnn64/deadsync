@@ -729,15 +729,44 @@ fn counts_for_early_rescore(note_type: NoteType) -> bool {
 }
 
 #[inline(always)]
+fn row_entry_index_for_cached_row(row_map_cache: &[u32], row_index: usize) -> Option<usize> {
+    let pos = *row_map_cache.get(row_index)?;
+    if pos == u32::MAX {
+        return None;
+    }
+    Some(pos as usize)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FinalizedRowOutcome {
+    final_grade: JudgeGrade,
+}
+
+#[inline(always)]
+fn finalized_row_outcome_for_entry(
+    row_outcomes: &[Option<FinalizedRowOutcome>],
+    row_entry_index: usize,
+) -> Option<FinalizedRowOutcome> {
+    row_outcomes.get(row_entry_index).copied().flatten()
+}
+
+#[inline(always)]
+fn finalized_row_outcome_for_cached_row(
+    row_map_cache: &[u32],
+    row_outcomes: &[Option<FinalizedRowOutcome>],
+    row_index: usize,
+) -> Option<FinalizedRowOutcome> {
+    let row_entry_index = row_entry_index_for_cached_row(row_map_cache, row_index)?;
+    finalized_row_outcome_for_entry(row_outcomes, row_entry_index)
+}
+
+#[inline(always)]
 fn row_entry_for_cached_row<'a>(
     row_entries: &'a [RowEntry],
     row_map_cache: &[u32],
     row_index: usize,
 ) -> Option<&'a RowEntry> {
-    let pos = *row_map_cache.get(row_index)?;
-    if pos == u32::MAX {
-        return None;
-    }
+    let pos = row_entry_index_for_cached_row(row_map_cache, row_index)?;
     let row_entry = row_entries.get(pos as usize)?;
     debug_assert_eq!(row_entry.row_index, row_index);
     Some(row_entry)
@@ -4550,7 +4579,7 @@ pub struct State {
     display_clock: FrameStableDisplayClock,
     pub note_spawn_cursor: [usize; MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
-    judged_row_finalized: [Vec<bool>; MAX_PLAYERS],
+    finalized_row_outcomes: [Vec<Option<FinalizedRowOutcome>>; MAX_PLAYERS],
     pub arrows: [Vec<Arrow>; MAX_COLS],
     pub note_time_cache: Vec<f32>,
     pub note_display_beat_cache: Vec<f32>,
@@ -7539,7 +7568,7 @@ pub fn init(
         display_clock: FrameStableDisplayClock::new(init_music_time),
         note_spawn_cursor: note_range_start,
         judged_row_cursor: [0; MAX_PLAYERS],
-        judged_row_finalized: std::array::from_fn(|_| vec![false; row_entries.len()]),
+        finalized_row_outcomes: std::array::from_fn(|_| vec![None; row_entries.len()]),
         arrows: std::array::from_fn(|col| {
             let cap = arrow_capacity[col];
             if cap == 0 {
@@ -10487,6 +10516,8 @@ fn finalize_row_judgment(
     let scoring_blocked = autoplay_blocks_scoring(state);
     apply_autosync_for_row_hits(state, row_entry_index, col_start, col_end);
     let final_grade = final_judgment.grade;
+    state.finalized_row_outcomes[player][row_entry_index] =
+        Some(FinalizedRowOutcome { final_grade });
     record_display_window_counts(state, player, &final_judgment);
     let suppress_final_early_bad_visual =
         suppress_final_bad_rescore_visual(skip_life_change, final_grade);
@@ -10560,7 +10591,7 @@ fn player_row_scan_state(
     notes: &[Note],
     row_entries: &[RowEntry],
     note_time_cache: &[f32],
-    row_finalized: &[bool],
+    row_outcomes: &[Option<FinalizedRowOutcome>],
     row_entry_index: usize,
     col_start: usize,
     col_end: usize,
@@ -10589,7 +10620,7 @@ fn player_row_scan_state(
     if !has_notes_on_row {
         return PlayerRowScanState::NoNotes;
     }
-    if row_finalized.get(row_entry_index).copied().unwrap_or(false) {
+    if finalized_row_outcome_for_entry(row_outcomes, row_entry_index).is_some() {
         return PlayerRowScanState::Finalized;
     }
     let row_time = note_time_cache[row_entry.nonmine_note_indices[0]];
@@ -10668,7 +10699,7 @@ fn update_judged_rows(state: &mut State) {
                     &state.notes,
                     &state.row_entries,
                     &state.note_time_cache,
-                    &state.judged_row_finalized[player],
+                    &state.finalized_row_outcomes[player],
                     idx,
                     col_start,
                     col_end,
@@ -10677,7 +10708,6 @@ fn update_judged_rows(state: &mut State) {
             })
         {
             finalize_row_judgment(state, player, row_index, row_entry_index, skip_life_change);
-            state.judged_row_finalized[player][row_entry_index] = true;
             scan_start = row_entry_index + 1;
         }
         state.judged_row_cursor[player] =
@@ -10686,7 +10716,7 @@ fn update_judged_rows(state: &mut State) {
                     &state.notes,
                     &state.row_entries,
                     &state.note_time_cache,
-                    &state.judged_row_finalized[player],
+                    &state.finalized_row_outcomes[player],
                     idx,
                     col_start,
                     col_end,
@@ -11375,8 +11405,6 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
             effective_scroll_speed_for_player(state, player)
         }
     });
-    let player_col_ranges: [(usize, usize); MAX_PLAYERS] =
-        std::array::from_fn(|player| player_col_range(state, player));
 
     let beatmod_multiplier: [f32; MAX_PLAYERS] =
         std::array::from_fn(|player| match effective_scroll_speed[player] {
@@ -11437,7 +11465,6 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
         } else {
             (col_idx / cols_per_player).min(num_players.saturating_sub(1))
         };
-        let (player_col_start, player_col_end) = player_col_ranges[player];
         let cull_time = player_cull_time[player];
         let curr_disp_beat = player_curr_disp_beat[player];
         let scroll_speed = effective_scroll_speed[player];
@@ -11473,22 +11500,14 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         let Some(_judgment) = note.result.as_ref() else {
                             return true;
                         };
-                        let Some(row_entry) = row_entry_for_cached_row(
-                            &state.row_entries,
+                        let Some(finalized_row) = finalized_row_outcome_for_cached_row(
                             &state.row_map_cache[player],
+                            &state.finalized_row_outcomes[player],
                             note.row_index,
                         ) else {
                             return true;
                         };
-                        let Some(final_judgment) = completed_row_final_judgment(
-                            &state.notes,
-                            row_entry,
-                            player_col_start,
-                            player_col_end,
-                        ) else {
-                            return true;
-                        };
-                        if row_final_grade_hides_note(final_judgment.grade) {
+                        if row_final_grade_hides_note(finalized_row.final_grade) {
                             return false;
                         }
                         false
@@ -11533,22 +11552,14 @@ fn cull_scrolled_out_arrows(state: &mut State, music_time_sec: f32) {
                         let Some(_judgment) = note.result.as_ref() else {
                             return true;
                         };
-                        let Some(row_entry) = row_entry_for_cached_row(
-                            &state.row_entries,
+                        let Some(finalized_row) = finalized_row_outcome_for_cached_row(
                             &state.row_map_cache[player],
+                            &state.finalized_row_outcomes[player],
                             note.row_index,
                         ) else {
                             return true;
                         };
-                        let Some(final_judgment) = completed_row_final_judgment(
-                            &state.notes,
-                            row_entry,
-                            player_col_start,
-                            player_col_end,
-                        ) else {
-                            return true;
-                        };
-                        if row_final_grade_hides_note(final_judgment.grade) {
+                        if row_final_grade_hides_note(finalized_row.final_grade) {
                             return false;
                         }
                     }
@@ -12013,7 +12024,7 @@ fn update_danger_fx(state: &mut State) {
 #[cfg(test)]
 mod tests {
     use super::{
-        Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FrameStableDisplayClock,
+        Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FinalizedRowOutcome, FrameStableDisplayClock,
         GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
         TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
@@ -12023,11 +12034,11 @@ mod tests {
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_grade, completed_row_hidden_note_indices,
         count_rescore_tracks_on_row, crossed_mine_bounds, enforce_max_simultaneous_notes,
-        find_arrow_index, frame_stable_display_music_time, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
-        lane_release_finished, late_note_resolution_window_s, live_autoplay_enabled_from_flags,
-        max_step_distance_seconds, mine_window_bounds, music_time_from_song_clock,
-        next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
+        finalized_row_outcome_for_cached_row, find_arrow_index, frame_stable_display_music_time,
+        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
+        lane_press_started, lane_release_finished, late_note_resolution_window_s,
+        live_autoplay_enabled_from_flags, max_step_distance_seconds, mine_window_bounds,
+        music_time_from_song_clock, next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
         partition_notes_before_time, player_draw_scale_for_tilt_with_visual_mask,
         player_row_scan_state, recent_step_tracks, recompute_player_totals,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
@@ -12400,6 +12411,22 @@ mod tests {
     }
 
     #[test]
+    fn finalized_row_outcome_lookup_uses_row_map_cache() {
+        let row_index = 48usize;
+        let mut row_map_cache = vec![u32::MAX; row_index + 1];
+        row_map_cache[row_index] = 0;
+        let row_outcomes = vec![Some(FinalizedRowOutcome {
+            final_grade: JudgeGrade::Great,
+        })];
+
+        let outcome =
+            finalized_row_outcome_for_cached_row(&row_map_cache, &row_outcomes, row_index)
+                .expect("expected cached finalized row outcome");
+
+        assert_eq!(outcome.final_grade, JudgeGrade::Great);
+    }
+
+    #[test]
     fn judged_row_scan_finds_later_ready_row_past_pending_middle_row() {
         let row1 = 48usize;
         let row2 = 96usize;
@@ -12427,15 +12454,17 @@ mod tests {
             },
         ];
         let note_time_cache = vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0];
-        let mut row_finalized = vec![false; row_entries.len()];
-        row_finalized[0] = true;
+        let mut row_outcomes = vec![None; row_entries.len()];
+        row_outcomes[0] = Some(FinalizedRowOutcome {
+            final_grade: JudgeGrade::Great,
+        });
 
         let cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
             player_row_scan_state(
                 &notes,
                 &row_entries,
                 &note_time_cache,
-                &row_finalized,
+                &row_outcomes,
                 idx,
                 0,
                 4,
@@ -12449,7 +12478,7 @@ mod tests {
                 &notes,
                 &row_entries,
                 &note_time_cache,
-                &row_finalized,
+                &row_outcomes,
                 idx,
                 0,
                 4,
@@ -12487,14 +12516,22 @@ mod tests {
             },
         ];
         let note_time_cache = vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0];
-        let mut row_finalized = vec![true, false, true];
+        let mut row_outcomes = vec![
+            Some(FinalizedRowOutcome {
+                final_grade: JudgeGrade::Great,
+            }),
+            None,
+            Some(FinalizedRowOutcome {
+                final_grade: JudgeGrade::Great,
+            }),
+        ];
 
         let pending_cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
             player_row_scan_state(
                 &notes,
                 &row_entries,
                 &note_time_cache,
-                &row_finalized,
+                &row_outcomes,
                 idx,
                 0,
                 4,
@@ -12503,13 +12540,15 @@ mod tests {
         });
         assert_eq!(pending_cursor, 1);
 
-        row_finalized[1] = true;
+        row_outcomes[1] = Some(FinalizedRowOutcome {
+            final_grade: JudgeGrade::Great,
+        });
         let advanced_cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
             player_row_scan_state(
                 &notes,
                 &row_entries,
                 &note_time_cache,
-                &row_finalized,
+                &row_outcomes,
                 idx,
                 0,
                 4,
@@ -13478,14 +13517,14 @@ mod tests {
                 note_index: 1,
             },
         ];
-        let note_times = [1.020_f32, 1.040_f32];
+        let note_times = [1.020_f32, 1.028_f32];
         let (start_idx, end_idx) = arrow_time_window_bounds(&arrows, &note_times, 1.0, 1.1);
         let (_, note_index, abs_err) =
             closest_lane_note(&arrows, &notes, &note_times, 1.030, start_idx, end_idx)
                 .expect("expected the nearer note in time to win");
 
-        assert_eq!(note_index, 0);
-        assert!((abs_err - 0.010).abs() <= 1e-6);
+        assert_eq!(note_index, 1);
+        assert!((abs_err - 0.002).abs() <= 1e-6);
     }
 
     #[test]
