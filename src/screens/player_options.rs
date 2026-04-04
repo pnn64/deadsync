@@ -40,12 +40,21 @@ const INLINE_SPACING: f32 = 15.75;
 const TILT_INTENSITY_MIN: f32 = 0.05;
 const TILT_INTENSITY_MAX: f32 = 10.00;
 const TILT_INTENSITY_STEP: f32 = 0.05;
+const HUD_OFFSET_MIN: i32 = crate::game::profile::HUD_OFFSET_MIN;
+const HUD_OFFSET_MAX: i32 = crate::game::profile::HUD_OFFSET_MAX;
+const HUD_OFFSET_ZERO_INDEX: usize = (-HUD_OFFSET_MIN) as usize;
 
 // Match Simply Love / ScreenOptions defaults.
 const VISIBLE_ROWS: usize = 10;
 const ROW_START_OFFSET: f32 = -164.0;
 const ROW_HEIGHT: f32 = 33.0;
 const TITLE_BG_WIDTH: f32 = 127.0;
+
+fn hud_offset_choices() -> Vec<String> {
+    (HUD_OFFSET_MIN..=HUD_OFFSET_MAX)
+        .map(|v| v.to_string())
+        .collect()
+}
 
 #[derive(Clone, Copy, Debug)]
 struct RowWindow {
@@ -997,15 +1006,15 @@ fn build_main_rows(
         },
         Row {
             name: "Judgment Offset X".to_string(),
-            choices: (-100..=100).map(|v| v.to_string()).collect(),
-            selected_choice_index: [100; PLAYER_SLOTS],
+            choices: hud_offset_choices(),
+            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
             help: vec!["Adjust the horizontal position of the judgment display.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
             name: "Judgment Offset Y".to_string(),
-            choices: (-100..=100).map(|v| v.to_string()).collect(),
-            selected_choice_index: [100; PLAYER_SLOTS],
+            choices: hud_offset_choices(),
+            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
             help: vec!["Adjust the vertical position of the judgment display.".to_string()],
             choice_difficulty_indices: None,
         },
@@ -1030,15 +1039,15 @@ fn build_main_rows(
         },
         Row {
             name: "Combo Offset X".to_string(),
-            choices: (-100..=100).map(|v| v.to_string()).collect(),
-            selected_choice_index: [100; PLAYER_SLOTS],
+            choices: hud_offset_choices(),
+            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
             help: vec!["Adjust the horizontal position of the combo counter.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
             name: "Combo Offset Y".to_string(),
-            choices: (-100..=100).map(|v| v.to_string()).collect(),
-            selected_choice_index: [100; PLAYER_SLOTS],
+            choices: hud_offset_choices(),
+            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
             help: vec!["Adjust the vertical position of the combo counter.".to_string()],
             choice_difficulty_indices: None,
         },
@@ -1413,15 +1422,15 @@ fn build_advanced_rows(return_screen: Screen) -> Vec<Row> {
         },
         Row {
             name: "Error Bar Offset X".to_string(),
-            choices: (-100..=100).map(|v| v.to_string()).collect(),
-            selected_choice_index: [100; PLAYER_SLOTS],
+            choices: hud_offset_choices(),
+            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
             help: vec!["Adjust the horizontal position of the error bar.".to_string()],
             choice_difficulty_indices: None,
         },
         Row {
             name: "Error Bar Offset Y".to_string(),
-            choices: (-100..=100).map(|v| v.to_string()).collect(),
-            selected_choice_index: [100; PLAYER_SLOTS],
+            choices: hud_offset_choices(),
+            selected_choice_index: [HUD_OFFSET_ZERO_INDEX; PLAYER_SLOTS],
             help: vec!["Adjust the vertical position of the error bar.".to_string()],
             choice_difficulty_indices: None,
         },
@@ -1923,49 +1932,57 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    // Initialize Judgment Offset X from profile (-100..100)
+    // Initialize Judgment Offset X from profile (HUD offset range)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Offset X") {
-        let val = profile.judgment_offset_x.clamp(-100, 100);
+        let val = profile
+            .judgment_offset_x
+            .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    // Initialize Judgment Offset Y from profile (-100..100)
+    // Initialize Judgment Offset Y from profile (HUD offset range)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Offset Y") {
-        let val = profile.judgment_offset_y.clamp(-100, 100);
+        let val = profile
+            .judgment_offset_y
+            .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    // Initialize Combo Offset X from profile (-100..100)
+    // Initialize Combo Offset X from profile (HUD offset range)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Offset X") {
-        let val = profile.combo_offset_x.clamp(-100, 100);
+        let val = profile.combo_offset_x.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    // Initialize Combo Offset Y from profile (-100..100)
+    // Initialize Combo Offset Y from profile (HUD offset range)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Offset Y") {
-        let val = profile.combo_offset_y.clamp(-100, 100);
+        let val = profile.combo_offset_y.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    // Initialize Error Bar Offset X from profile (-100..100)
+    // Initialize Error Bar Offset X from profile (HUD offset range)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Offset X") {
-        let val = profile.error_bar_offset_x.clamp(-100, 100);
+        let val = profile
+            .error_bar_offset_x
+            .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
             row.selected_choice_index[player_idx] = idx;
         }
     }
-    // Initialize Error Bar Offset Y from profile (-100..100)
+    // Initialize Error Bar Offset Y from profile (HUD offset range)
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Error Bar Offset Y") {
-        let val = profile.error_bar_offset_y.clamp(-100, 100);
+        let val = profile
+            .error_bar_offset_y
+            .clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
         let val_str = val.to_string();
         if let Some(idx) = row.choices.iter().position(|c| c == &val_str) {
             row.selected_choice_index[player_idx] = idx;
@@ -7839,9 +7856,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ROW_COMBO_FONT, ROW_COMBO_OFFSET_X, ROW_ERROR_BAR_OFFSET_X, ROW_JUDGMENT_FONT,
-        ROW_JUDGMENT_OFFSET_X, Row, SpeedMod, is_row_visible, row_visibility,
-        sync_profile_scroll_speed,
+        HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, ROW_COMBO_FONT, ROW_COMBO_OFFSET_X,
+        ROW_ERROR_BAR_OFFSET_X, ROW_JUDGMENT_FONT, ROW_JUDGMENT_OFFSET_X, Row, SpeedMod,
+        hud_offset_choices, is_row_visible, row_visibility, sync_profile_scroll_speed,
     };
     use crate::game::profile::Profile;
     use crate::game::scroll::ScrollSpeedSetting;
@@ -7933,5 +7950,17 @@ mod tests {
         ];
         let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0]);
         assert!(is_row_visible(&rows, 1, visibility));
+    }
+
+    #[test]
+    fn hud_offset_choices_cover_full_range() {
+        let choices = hud_offset_choices();
+        assert_eq!(choices.first().map(String::as_str), Some("-250"));
+        assert_eq!(
+            choices.get(HUD_OFFSET_ZERO_INDEX).map(String::as_str),
+            Some("0")
+        );
+        assert_eq!(choices.last().map(String::as_str), Some("250"));
+        assert_eq!(choices.len() as i32, HUD_OFFSET_MAX - HUD_OFFSET_MIN + 1);
     }
 }

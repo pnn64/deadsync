@@ -1,13 +1,14 @@
 use super::{
     AttackMode, BackgroundFilter, ComboColors, ComboFont, ComboMode, DataVisualizations,
-    ErrorBarTrim, HideLightType, HoldJudgmentGraphic, JudgmentGraphic, LifeMeterType,
-    MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorScoreType, NoteSkin, Perspective,
-    PlayStyle, PlayerSide, ScrollOption, ScrollSpeedSetting, TargetScoreSetting,
-    TimingWindowsOption, TurnOption, clamp_custom_fantastic_window_ms, error_bar_style_from_mask,
-    error_bar_text_from_mask, lock_profiles, normalize_accel_effects_mask,
-    normalize_appearance_effects_mask, normalize_error_bar_mask, normalize_holds_mask,
-    normalize_insert_mask, normalize_remove_mask, normalize_visual_effects_mask,
-    save_profile_ini_for_side, save_profile_stats_for_side, session_side_is_guest, side_ix,
+    ErrorBarTrim, HUD_OFFSET_MAX, HUD_OFFSET_MIN, HideLightType, HoldJudgmentGraphic,
+    JudgmentGraphic, LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator,
+    MiniIndicatorScoreType, NoteSkin, Perspective, PlayStyle, PlayerSide, ScrollOption,
+    ScrollSpeedSetting, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    clamp_custom_fantastic_window_ms, error_bar_style_from_mask, error_bar_text_from_mask,
+    lock_profiles, normalize_accel_effects_mask, normalize_appearance_effects_mask,
+    normalize_error_bar_mask, normalize_holds_mask, normalize_insert_mask, normalize_remove_mask,
+    normalize_visual_effects_mask, save_profile_ini_for_side, save_profile_stats_for_side,
+    session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;
@@ -525,7 +526,7 @@ pub fn update_notefield_offset_y_for_side(side: PlayerSide, offset: i32) {
 }
 
 pub fn update_judgment_offset_x_for_side(side: PlayerSide, offset: i32) {
-    let clamped = offset.clamp(-100, 100);
+    let clamped = offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -538,7 +539,7 @@ pub fn update_judgment_offset_x_for_side(side: PlayerSide, offset: i32) {
 }
 
 pub fn update_judgment_offset_y_for_side(side: PlayerSide, offset: i32) {
-    let clamped = offset.clamp(-100, 100);
+    let clamped = offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -551,7 +552,7 @@ pub fn update_judgment_offset_y_for_side(side: PlayerSide, offset: i32) {
 }
 
 pub fn update_combo_offset_x_for_side(side: PlayerSide, offset: i32) {
-    let clamped = offset.clamp(-100, 100);
+    let clamped = offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -564,7 +565,7 @@ pub fn update_combo_offset_x_for_side(side: PlayerSide, offset: i32) {
 }
 
 pub fn update_combo_offset_y_for_side(side: PlayerSide, offset: i32) {
-    let clamped = offset.clamp(-100, 100);
+    let clamped = offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -577,7 +578,7 @@ pub fn update_combo_offset_y_for_side(side: PlayerSide, offset: i32) {
 }
 
 pub fn update_error_bar_offset_x_for_side(side: PlayerSide, offset: i32) {
-    let clamped = offset.clamp(-100, 100);
+    let clamped = offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -590,7 +591,7 @@ pub fn update_error_bar_offset_x_for_side(side: PlayerSide, offset: i32) {
 }
 
 pub fn update_error_bar_offset_y_for_side(side: PlayerSide, offset: i32) {
-    let clamped = offset.clamp(-100, 100);
+    let clamped = offset.clamp(HUD_OFFSET_MIN, HUD_OFFSET_MAX);
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];

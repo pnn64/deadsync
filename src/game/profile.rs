@@ -17,6 +17,9 @@ pub use update::*;
 
 pub const DEFAULT_WEIGHT_POUNDS: i32 = 120;
 pub const DEFAULT_BIRTH_YEAR: i32 = 1995;
+// Shared player-option HUD offset range, in logical pixels.
+pub const HUD_OFFSET_MIN: i32 = -250;
+pub const HUD_OFFSET_MAX: i32 = 250;
 
 #[inline(always)]
 const fn clamp_weight_pounds(weight_pounds: i32) -> i32 {

@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.259"
+version = "0.3.260"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."

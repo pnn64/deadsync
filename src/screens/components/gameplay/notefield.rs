@@ -2615,12 +2615,24 @@ pub fn build(
     };
     let notefield_offset_x = offset_sign * (profile.note_field_offset_x.clamp(0, 50) as f32);
     let notefield_offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
-    let judgment_extra_x = profile.judgment_offset_x.clamp(-100, 100) as f32;
-    let judgment_extra_y = profile.judgment_offset_y.clamp(-100, 100) as f32;
-    let combo_extra_x = profile.combo_offset_x.clamp(-100, 100) as f32;
-    let combo_extra_y = profile.combo_offset_y.clamp(-100, 100) as f32;
-    let error_bar_extra_x = profile.error_bar_offset_x.clamp(-100, 100) as f32;
-    let error_bar_extra_y = profile.error_bar_offset_y.clamp(-100, 100) as f32;
+    let judgment_extra_x = profile
+        .judgment_offset_x
+        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+    let judgment_extra_y = profile
+        .judgment_offset_y
+        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+    let combo_extra_x = profile
+        .combo_offset_x
+        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+    let combo_extra_y = profile
+        .combo_offset_y
+        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+    let error_bar_extra_x = profile
+        .error_bar_offset_x
+        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
+    let error_bar_extra_y = profile
+        .error_bar_offset_y
+        .clamp(profile::HUD_OFFSET_MIN, profile::HUD_OFFSET_MAX) as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
     let centered_one_side = state.num_players == 1
