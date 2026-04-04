@@ -6657,6 +6657,13 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                     .cached_chart_ix_p2
                     .map(|ix| song.charts[ix].short_hash.as_str());
 
+                if show_select_music_leaderboards {
+                    maybe_refresh_select_music_leaderboard(
+                        &mut state.last_refreshed_leaderboard_hash_p2,
+                        profile::PlayerSide::P2,
+                        desired_hash_p2,
+                    );
+                }
                 if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
                     return ScreenAction::RequestDensityGraph {
@@ -6672,13 +6679,6 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                             }
                         }),
                     };
-                }
-                if show_select_music_leaderboards {
-                    maybe_refresh_select_music_leaderboard(
-                        &mut state.last_refreshed_leaderboard_hash_p2,
-                        profile::PlayerSide::P2,
-                        desired_hash_p2,
-                    );
                 }
             } else {
                 state.displayed_chart_p2 = None;
