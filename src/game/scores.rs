@@ -1685,6 +1685,19 @@ pub struct LeaderboardEntry {
     pub is_fail: bool,
 }
 
+#[inline(always)]
+pub fn leaderboard_rank_for_score(entries: &[LeaderboardEntry], score_percent: f64) -> Option<u32> {
+    if !score_percent.is_finite() {
+        return None;
+    }
+    let target = (score_percent * 10000.0).round();
+    let higher_scores = entries
+        .iter()
+        .filter(|entry| entry.score - target > 0.5)
+        .count();
+    Some((higher_scores as u32).saturating_add(1))
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ReplayEdge {
     pub event_music_time: f32,
@@ -3999,5 +4012,74 @@ mod tests {
             Some(&older_entry),
             Instant::now(),
         ));
+    }
+
+    #[test]
+    fn leaderboard_rank_for_score_does_not_require_name_match() {
+        let entries = vec![
+            LeaderboardEntry {
+                rank: 1,
+                name: "AAA".to_string(),
+                machine_tag: None,
+                score: 9999.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+            },
+            LeaderboardEntry {
+                rank: 2,
+                name: "BBB".to_string(),
+                machine_tag: None,
+                score: 9750.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+            },
+        ];
+        assert_eq!(leaderboard_rank_for_score(&entries, 0.975), Some(2));
+    }
+
+    #[test]
+    fn leaderboard_rank_for_score_places_current_run_ahead_of_equal_scores() {
+        let entries = vec![
+            LeaderboardEntry {
+                rank: 1,
+                name: "AAA".to_string(),
+                machine_tag: None,
+                score: 9999.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+            },
+            LeaderboardEntry {
+                rank: 2,
+                name: "BBB".to_string(),
+                machine_tag: None,
+                score: 9750.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+            },
+            LeaderboardEntry {
+                rank: 3,
+                name: "CCC".to_string(),
+                machine_tag: None,
+                score: 9750.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: false,
+                is_fail: false,
+            },
+        ];
+        assert_eq!(leaderboard_rank_for_score(&entries, 0.975), Some(2));
+    }
+
+    #[test]
+    fn leaderboard_rank_for_score_rejects_non_finite_scores() {
+        assert_eq!(leaderboard_rank_for_score(&[], f64::NAN), None);
     }
 }

@@ -1000,21 +1000,15 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     .insert(gs.charts[player_idx].short_hash.clone(), records.clone());
                 records
             };
-            let machine_record_highlight_rank = find_machine_record_highlight_rank(
-                machine_records.as_slice(),
-                &prof.player_initials,
-                score_percent,
-            );
+            let machine_record_highlight_rank =
+                scores::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
             let personal_records = scores::get_personal_leaderboard_local_for_side(
                 &gs.charts[player_idx].short_hash,
                 side,
                 usize::MAX,
             );
-            let personal_record_highlight_rank = find_machine_record_highlight_rank(
-                personal_records.as_slice(),
-                &prof.player_initials,
-                score_percent,
-            );
+            let personal_record_highlight_rank =
+                scores::leaderboard_rank_for_score(personal_records.as_slice(), score_percent);
             let score_valid = gs.score_valid[player_idx] && !gs.autoplay_used;
             // Simply Love's "Disqualified" label is driven by PlayerStageStats:IsDisqualified(),
             // not by our broader local ranking-validity heuristics.
@@ -1620,11 +1614,6 @@ fn eval_player_color_rgba(side: profile::PlayerSide, active_color_index: i32) ->
 }
 
 #[inline(always)]
-fn stage_score_10000(score_percent: f64) -> f64 {
-    (score_percent * 10000.0).round()
-}
-
-#[inline(always)]
 fn eval_grade_for_result(
     is_failing: bool,
     song_completed_naturally: bool,
@@ -1636,28 +1625,6 @@ fn eval_grade_for_result(
     } else {
         scores::score_to_grade(score_percent * 10000.0)
     }
-}
-
-#[inline(always)]
-fn find_machine_record_highlight_rank(
-    entries: &[scores::LeaderboardEntry],
-    initials: &str,
-    score_percent: f64,
-) -> Option<u32> {
-    if initials.trim().is_empty() {
-        return None;
-    }
-    let target = stage_score_10000(score_percent);
-    for entry in entries {
-        if entry.name != initials {
-            continue;
-        }
-        if (entry.score - target).abs() > 0.5 {
-            continue;
-        }
-        return Some(entry.rank.max(1));
-    }
-    None
 }
 
 fn all_joined_players_failed(state: &State) -> bool {

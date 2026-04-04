@@ -1311,22 +1311,6 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
     })
 }
 
-#[inline(always)]
-fn highlight_rank_for_initials(
-    entries: &[scores::LeaderboardEntry],
-    initials: &str,
-    score_percent: f64,
-) -> Option<u32> {
-    if initials.trim().is_empty() {
-        return None;
-    }
-    let target = (score_percent * 10000.0).round();
-    entries
-        .iter()
-        .find(|entry| entry.name == initials && (entry.score - target).abs() <= 0.5)
-        .map(|entry| entry.rank.max(1))
-}
-
 fn score_info_from_stage(
     stage: &stage_stats::StageSummary,
     side: profile::PlayerSide,
@@ -1349,17 +1333,10 @@ fn score_info_from_stage(
     let machine_records = scores::get_machine_leaderboard_local(chart_hash, usize::MAX);
     let personal_records =
         scores::get_personal_leaderboard_local_for_side(chart_hash, side, usize::MAX);
-    let initials = profile::get_for_side(side).player_initials;
-    let machine_record_highlight_rank = highlight_rank_for_initials(
-        machine_records.as_slice(),
-        initials.as_str(),
-        player.score_percent,
-    );
-    let personal_record_highlight_rank = highlight_rank_for_initials(
-        personal_records.as_slice(),
-        initials.as_str(),
-        player.score_percent,
-    );
+    let machine_record_highlight_rank =
+        scores::leaderboard_rank_for_score(machine_records.as_slice(), player.score_percent);
+    let personal_record_highlight_rank =
+        scores::leaderboard_rank_for_score(personal_records.as_slice(), player.score_percent);
     let earned_machine_record =
         player.score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
     let earned_top2_personal =
