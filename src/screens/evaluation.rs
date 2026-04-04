@@ -2049,7 +2049,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         VirtualAction::p1_back
         | VirtualAction::p1_start
         | VirtualAction::p2_back
-        | VirtualAction::p2_start => ScreenAction::Navigate(return_target),
+        | VirtualAction::p2_start => {
+            if return_target == Screen::SelectMusic {
+                crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+            }
+            ScreenAction::Navigate(return_target)
+        }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             shift_pane_for(profile::PlayerSide::P1, 1);
             ScreenAction::None
