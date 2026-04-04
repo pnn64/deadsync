@@ -658,11 +658,34 @@ fn receptor_glow_duration_for_col(state: &State, col: usize) -> f32 {
     } else {
         (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
     };
-    state.noteskin[player]
+    state.receptor_noteskin[player]
         .as_ref()
         .map(|ns| ns.receptor_glow_behavior.duration)
         .filter(|d| *d > f32::EPSILON)
+        .or_else(|| {
+            state.noteskin[player]
+                .as_ref()
+                .map(|ns| ns.receptor_glow_behavior.duration)
+                .filter(|d| *d > f32::EPSILON)
+        })
         .unwrap_or(RECEPTOR_GLOW_DURATION)
+}
+
+#[inline(always)]
+fn receptor_glow_behavior_noteskin(state: &State, player: usize) -> Option<&Noteskin> {
+    state.receptor_noteskin[player]
+        .as_deref()
+        .or_else(|| state.noteskin[player].as_deref())
+}
+
+#[inline(always)]
+fn tap_explosion_noteskin_for_player(state: &State, player: usize) -> Option<&Noteskin> {
+    if state.player_profiles[player].tap_explosion_noteskin_hidden() {
+        return None;
+    }
+    state.tap_explosion_noteskin[player]
+        .as_deref()
+        .or_else(|| state.noteskin[player].as_deref())
 }
 
 #[inline(always)]
@@ -672,8 +695,7 @@ fn receptor_glow_behavior_for_col(state: &State, col: usize) -> noteskin::Recept
     } else {
         (col / state.cols_per_player).min(state.num_players.saturating_sub(1))
     };
-    state.noteskin[player]
-        .as_ref()
+    receptor_glow_behavior_noteskin(state, player)
         .map(|ns| ns.receptor_glow_behavior)
         .unwrap_or_default()
 }
@@ -4678,6 +4700,8 @@ pub struct State {
     active_attack_mini_percent: [Option<f32>; MAX_PLAYERS],
     pub noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
     pub mine_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
+    pub receptor_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
+    pub tap_explosion_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS],
     pub active_color_index: i32,
     pub player_color: [f32; 4],
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -6750,6 +6774,29 @@ pub fn init(
             .ok()
             .or_else(|| noteskin[player].clone())
     });
+    let receptor_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if player >= num_players {
+            return None;
+        }
+        let skin = player_profiles[player]
+            .resolved_receptor_noteskin()
+            .to_string();
+        noteskin::load_itg_skin_cached(&style, &skin)
+            .ok()
+            .or_else(|| noteskin[player].clone())
+    });
+    let tap_explosion_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            if player >= num_players {
+                return None;
+            }
+            let Some(skin) = player_profiles[player].resolved_tap_explosion_noteskin() else {
+                return None;
+            };
+            noteskin::load_itg_skin_cached(&style, skin.as_str())
+                .ok()
+                .or_else(|| noteskin[player].clone())
+        });
     let notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS] =
         std::array::from_fn(|player| {
             RefCell::new(if player < num_players {
@@ -7668,6 +7715,8 @@ pub fn init(
         active_attack_mini_percent: [None; MAX_PLAYERS],
         noteskin,
         mine_noteskin,
+        receptor_noteskin,
+        tap_explosion_noteskin,
         active_color_index,
         player_color: color::decorative_rgba(player_color_index),
         scroll_speed,
@@ -8431,7 +8480,7 @@ fn trigger_tap_explosion(state: &mut State, column: usize, grade: JudgeGrade) {
         return;
     };
     let player = player_for_col(state, column);
-    let spawn_window = state.noteskin[player].as_ref().and_then(|ns| {
+    let spawn_window = tap_explosion_noteskin_for_player(state, player).and_then(|ns| {
         if ns.tap_explosions.contains_key(window_key) {
             Some(window_key.to_string())
         } else {
@@ -11194,21 +11243,23 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
     }
     let num_players = state.num_players;
     let cols_per_player = state.cols_per_player;
-    for (col, explosion) in state.tap_explosions.iter_mut().enumerate() {
-        if let Some(active) = explosion {
+    for col in 0..state.tap_explosions.len() {
+        let Some((window, elapsed)) = state.tap_explosions[col].as_mut().map(|active| {
             active.elapsed += delta_time;
-            let player = if num_players <= 1 || cols_per_player == 0 {
-                0
-            } else {
-                (col / cols_per_player).min(num_players.saturating_sub(1))
-            };
-            let lifetime = state.noteskin[player]
-                .as_ref()
-                .and_then(|ns| ns.tap_explosions.get(&active.window))
-                .map_or(0.0, |explosion| explosion.animation.duration());
-            if lifetime <= 0.0 || active.elapsed >= lifetime {
-                *explosion = None;
-            }
+            (active.window.clone(), active.elapsed)
+        }) else {
+            continue;
+        };
+        let player = if num_players <= 1 || cols_per_player == 0 {
+            0
+        } else {
+            (col / cols_per_player).min(num_players.saturating_sub(1))
+        };
+        let lifetime = tap_explosion_noteskin_for_player(state, player)
+            .and_then(|ns| ns.tap_explosions.get(&window))
+            .map_or(0.0, |explosion| explosion.animation.duration());
+        if lifetime <= 0.0 || elapsed >= lifetime {
+            state.tap_explosions[col] = None;
         }
     }
     for (col, explosion) in state.mine_explosions.iter_mut().enumerate() {

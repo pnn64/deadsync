@@ -35,6 +35,7 @@ const CURSOR_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 // Simply Love [ScreenOptions] uses RowOnCommand/RowOffCommand with linear,0.2.
 const PANE_FADE_SECONDS: f32 = 0.2;
+const TAP_EXPLOSION_PREVIEW_SPEED: f32 = 0.7;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
 const TILT_INTENSITY_MIN: f32 = 0.05;
@@ -266,6 +267,7 @@ const PLAYER_SLOTS: usize = 2;
 const P1: usize = 0;
 const P2: usize = 1;
 const MATCH_NOTESKIN_LABEL: &str = "Same as NoteSkin";
+const NO_TAP_EXPLOSION_LABEL: &str = "None";
 
 #[inline(always)]
 fn active_player_indices(active: [bool; PLAYER_SLOTS]) -> impl Iterator<Item = usize> {
@@ -451,6 +453,8 @@ pub struct State {
     noteskin_cache: HashMap<String, Arc<Noteskin>>,
     noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
     mine_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
+    receptor_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
+    tap_explosion_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
     preview_time: f32,
     preview_beat: f32,
     help_anim_time: [f32; PLAYER_SLOTS],
@@ -689,9 +693,21 @@ fn discover_noteskin_names() -> Vec<String> {
     noteskin::discover_itg_skins("dance")
 }
 
-fn build_mine_noteskin_choices(noteskin_names: &[String]) -> Vec<String> {
+fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<String> {
     let mut choices = Vec::with_capacity(noteskin_names.len() + 1);
     choices.push(MATCH_NOTESKIN_LABEL.to_string());
+    if noteskin_names.is_empty() {
+        choices.push(crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
+    } else {
+        choices.extend(noteskin_names.iter().cloned());
+    }
+    choices
+}
+
+fn build_tap_explosion_noteskin_choices(noteskin_names: &[String]) -> Vec<String> {
+    let mut choices = Vec::with_capacity(noteskin_names.len() + 2);
+    choices.push(MATCH_NOTESKIN_LABEL.to_string());
+    choices.push(NO_TAP_EXPLOSION_LABEL.to_string());
     if noteskin_names.is_empty() {
         choices.push(crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
     } else {
@@ -711,6 +727,16 @@ fn build_noteskin_cache(
         }
     }
     cache
+}
+
+fn push_noteskin_name_once(names: &mut Vec<String>, skin: &crate::game::profile::NoteSkin) {
+    if skin.is_none_choice() {
+        return;
+    }
+    let skin_name = skin.as_str().to_string();
+    if !names.iter().any(|name| name == &skin_name) {
+        names.push(skin_name);
+    }
 }
 
 fn cached_noteskin(
@@ -777,14 +803,14 @@ fn cached_or_load_noteskin_exact(
     Some(loaded)
 }
 
-fn resolved_mine_noteskin_preview(
+fn resolved_noteskin_override_preview(
     cache: &mut HashMap<String, Arc<Noteskin>>,
     noteskin: &crate::game::profile::NoteSkin,
-    mine_noteskin: Option<&crate::game::profile::NoteSkin>,
+    override_noteskin: Option<&crate::game::profile::NoteSkin>,
     cols_per_player: usize,
 ) -> Option<Arc<Noteskin>> {
-    if let Some(mine_noteskin) = mine_noteskin
-        && let Some(ns) = cached_or_load_noteskin_exact(cache, mine_noteskin, cols_per_player)
+    if let Some(override_noteskin) = override_noteskin
+        && let Some(ns) = cached_or_load_noteskin_exact(cache, override_noteskin, cols_per_player)
     {
         return Some(ns);
     }
@@ -792,19 +818,48 @@ fn resolved_mine_noteskin_preview(
     cached_or_load_noteskin(cache, noteskin, cols_per_player)
 }
 
+fn resolved_tap_explosion_preview(
+    cache: &mut HashMap<String, Arc<Noteskin>>,
+    noteskin: &crate::game::profile::NoteSkin,
+    tap_explosion_noteskin: Option<&crate::game::profile::NoteSkin>,
+    cols_per_player: usize,
+) -> Option<Arc<Noteskin>> {
+    if tap_explosion_noteskin.is_some_and(crate::game::profile::NoteSkin::is_none_choice) {
+        return None;
+    }
+
+    resolved_noteskin_override_preview(cache, noteskin, tap_explosion_noteskin, cols_per_player)
+}
+
 fn sync_noteskin_previews_for_player(state: &mut State, player_idx: usize) {
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let noteskin_setting = state.player_profiles[player_idx].noteskin.clone();
     let mine_noteskin_setting = state.player_profiles[player_idx].mine_noteskin.clone();
+    let receptor_noteskin_setting = state.player_profiles[player_idx].receptor_noteskin.clone();
+    let tap_explosion_noteskin_setting = state.player_profiles[player_idx]
+        .tap_explosion_noteskin
+        .clone();
     state.noteskin[player_idx] = cached_or_load_noteskin(
         &mut state.noteskin_cache,
         &noteskin_setting,
         cols_per_player,
     );
-    state.mine_noteskin[player_idx] = resolved_mine_noteskin_preview(
+    state.mine_noteskin[player_idx] = resolved_noteskin_override_preview(
         &mut state.noteskin_cache,
         &noteskin_setting,
         mine_noteskin_setting.as_ref(),
+        cols_per_player,
+    );
+    state.receptor_noteskin[player_idx] = resolved_noteskin_override_preview(
+        &mut state.noteskin_cache,
+        &noteskin_setting,
+        receptor_noteskin_setting.as_ref(),
+        cols_per_player,
+    );
+    state.tap_explosion_noteskin[player_idx] = resolved_tap_explosion_preview(
+        &mut state.noteskin_cache,
+        &noteskin_setting,
+        tap_explosion_noteskin_setting.as_ref(),
         cols_per_player,
     );
 }
@@ -989,9 +1044,27 @@ fn build_main_rows(
         },
         Row {
             name: "MineSkin".to_string(),
-            choices: build_mine_noteskin_choices(noteskin_names),
+            choices: build_noteskin_override_choices(noteskin_names),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Change mine graphics independently from the main noteskin.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "ReceptorSkin".to_string(),
+            choices: build_noteskin_override_choices(noteskin_names),
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Change receptor graphics independently from the main noteskin.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "TapExplosionSkin".to_string(),
+            choices: build_tap_explosion_noteskin_choices(noteskin_names),
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Change tap explosion graphics independently from the main noteskin.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -1852,6 +1925,48 @@ fn apply_profile_defaults(
             },
         );
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "ReceptorSkin") {
+        row.selected_choice_index[player_idx] = profile.receptor_noteskin.as_ref().map_or_else(
+            || {
+                row.choices
+                    .iter()
+                    .position(|c| c == MATCH_NOTESKIN_LABEL)
+                    .unwrap_or(0)
+            },
+            |receptor_noteskin| {
+                row.choices
+                    .iter()
+                    .position(|c| c.eq_ignore_ascii_case(receptor_noteskin.as_str()))
+                    .or_else(|| row.choices.iter().position(|c| c == MATCH_NOTESKIN_LABEL))
+                    .unwrap_or(0)
+            },
+        );
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "TapExplosionSkin") {
+        row.selected_choice_index[player_idx] =
+            profile.tap_explosion_noteskin.as_ref().map_or_else(
+                || {
+                    row.choices
+                        .iter()
+                        .position(|c| c == MATCH_NOTESKIN_LABEL)
+                        .unwrap_or(0)
+                },
+                |tap_explosion_noteskin| {
+                    if tap_explosion_noteskin.is_none_choice() {
+                        row.choices
+                            .iter()
+                            .position(|c| c == NO_TAP_EXPLOSION_LABEL)
+                            .unwrap_or(0)
+                    } else {
+                        row.choices
+                            .iter()
+                            .position(|c| c.eq_ignore_ascii_case(tap_explosion_noteskin.as_str()))
+                            .or_else(|| row.choices.iter().position(|c| c == MATCH_NOTESKIN_LABEL))
+                            .unwrap_or(0)
+                    }
+                },
+            );
+    }
     // Initialize Combo Font row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Font") {
         row.selected_choice_index[player_idx] = match profile.combo_font {
@@ -2682,17 +2797,15 @@ pub fn init(
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];
     for profile in &player_profiles {
-        let name = profile.noteskin.as_str().to_string();
-        if !initial_noteskin_names.iter().any(|n| n == &name) {
-            initial_noteskin_names.push(name);
+        push_noteskin_name_once(&mut initial_noteskin_names, &profile.noteskin);
+        if let Some(skin) = profile.mine_noteskin.as_ref() {
+            push_noteskin_name_once(&mut initial_noteskin_names, skin);
         }
-        if let Some(mine_name) = profile
-            .mine_noteskin
-            .as_ref()
-            .map(|skin| skin.as_str().to_string())
-            && !initial_noteskin_names.iter().any(|n| n == &mine_name)
-        {
-            initial_noteskin_names.push(mine_name);
+        if let Some(skin) = profile.receptor_noteskin.as_ref() {
+            push_noteskin_name_once(&mut initial_noteskin_names, skin);
+        }
+        if let Some(skin) = profile.tap_explosion_noteskin.as_ref() {
+            push_noteskin_name_once(&mut initial_noteskin_names, skin);
         }
     }
     let mut noteskin_cache = build_noteskin_cache(cols_per_player, &initial_noteskin_names);
@@ -2704,13 +2817,31 @@ pub fn init(
         )
     });
     let mine_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] = std::array::from_fn(|i| {
-        resolved_mine_noteskin_preview(
+        resolved_noteskin_override_preview(
             &mut noteskin_cache,
             &player_profiles[i].noteskin,
             player_profiles[i].mine_noteskin.as_ref(),
             cols_per_player,
         )
     });
+    let receptor_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] =
+        std::array::from_fn(|i| {
+            resolved_noteskin_override_preview(
+                &mut noteskin_cache,
+                &player_profiles[i].noteskin,
+                player_profiles[i].receptor_noteskin.as_ref(),
+                cols_per_player,
+            )
+        });
+    let tap_explosion_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] =
+        std::array::from_fn(|i| {
+            resolved_tap_explosion_preview(
+                &mut noteskin_cache,
+                &player_profiles[i].noteskin,
+                player_profiles[i].tap_explosion_noteskin.as_ref(),
+                cols_per_player,
+            )
+        });
     let active = session_active_players();
     let row_tweens = init_row_tweens(
         &rows,
@@ -2778,6 +2909,8 @@ pub fn init(
         noteskin_cache,
         noteskin: noteskin_previews,
         mine_noteskin: mine_noteskin_previews,
+        receptor_noteskin: receptor_noteskin_previews,
+        tap_explosion_noteskin: tap_explosion_noteskin_previews,
         preview_time: 0.0,
         preview_beat: 0.0,
         help_anim_time: [0.0; PLAYER_SLOTS],
@@ -4387,6 +4520,44 @@ fn change_choice_for_player(
             .clone_from(&setting);
         if should_persist {
             crate::game::profile::update_mine_noteskin_for_side(persist_side, setting);
+        }
+        sync_noteskin_previews_for_player(state, player_idx);
+    } else if row_name == "ReceptorSkin" {
+        let selected = row
+            .choices
+            .get(row.selected_choice_index[player_idx])
+            .map(String::as_str)
+            .unwrap_or(MATCH_NOTESKIN_LABEL);
+        let setting = if selected == MATCH_NOTESKIN_LABEL {
+            None
+        } else {
+            Some(crate::game::profile::NoteSkin::new(selected))
+        };
+        state.player_profiles[player_idx]
+            .receptor_noteskin
+            .clone_from(&setting);
+        if should_persist {
+            crate::game::profile::update_receptor_noteskin_for_side(persist_side, setting);
+        }
+        sync_noteskin_previews_for_player(state, player_idx);
+    } else if row_name == "TapExplosionSkin" {
+        let selected = row
+            .choices
+            .get(row.selected_choice_index[player_idx])
+            .map(String::as_str)
+            .unwrap_or(MATCH_NOTESKIN_LABEL);
+        let setting = if selected == MATCH_NOTESKIN_LABEL {
+            None
+        } else if selected == NO_TAP_EXPLOSION_LABEL {
+            Some(crate::game::profile::NoteSkin::none_choice())
+        } else {
+            Some(crate::game::profile::NoteSkin::new(selected))
+        };
+        state.player_profiles[player_idx]
+            .tap_explosion_noteskin
+            .clone_from(&setting);
+        if should_persist {
+            crate::game::profile::update_tap_explosion_noteskin_for_side(persist_side, setting);
         }
         sync_noteskin_previews_for_player(state, player_idx);
     } else if row_name == "Stepchart"
@@ -7349,11 +7520,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             assets::judgment_texture_choices()
                                 .get(row.selected_choice_index[player_idx])
                                 .and_then(|choice| {
-                                    assets::resolve_texture_choice(
-                                        (!choice.key.eq_ignore_ascii_case("None"))
-                                            .then_some(choice.key.as_str()),
-                                        assets::judgment_texture_choices(),
-                                    )
+                                    if choice.key.eq_ignore_ascii_case("None") {
+                                        None
+                                    } else {
+                                        assets::resolve_texture_choice(
+                                            Some(choice.key.as_str()),
+                                            assets::judgment_texture_choices(),
+                                        )
+                                    }
                                 })
                         };
                         if let Some(texture) = texture_for(primary_player_idx) {
@@ -7386,11 +7560,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             assets::hold_judgment_texture_choices()
                                 .get(row.selected_choice_index[player_idx])
                                 .and_then(|choice| {
-                                    assets::resolve_texture_choice(
-                                        (!choice.key.eq_ignore_ascii_case("None"))
-                                            .then_some(choice.key.as_str()),
-                                        assets::hold_judgment_texture_choices(),
-                                    )
+                                    if choice.key.eq_ignore_ascii_case("None") {
+                                        None
+                                    } else {
+                                        assets::resolve_texture_choice(
+                                            Some(choice.key.as_str()),
+                                            assets::hold_judgment_texture_choices(),
+                                        )
+                                    }
                                 })
                         };
                         let draw_hold_preview = |texture: &str, center_x: f32, actors: &mut Vec<Actor>| {
@@ -7428,7 +7605,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     // Match ITGmania themes that show four directional noteskin preview arrows
                     // with explicit quant offsets: Left/Down/Up/Right and 0/1/3/2 quant indices.
-                    if row.name == "NoteSkin" || row.name == "MineSkin" {
+                    if row.name == "NoteSkin"
+                        || row.name == "MineSkin"
+                        || row.name == "ReceptorSkin"
+                        || row.name == "TapExplosionSkin"
+                    {
                         const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
                         const PREVIEW_SCALE: f32 = 0.45;
                         const PREVIEW_ARROWS: [(usize, f32, f32); 4] = [
@@ -7694,6 +7875,165 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     draw_mine_slot(primary_slot, a, 107, actors);
                                 }
                             };
+                        let draw_receptor_preview =
+                            |receptor_ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
+                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                let receptor_color =
+                                    receptor_ns.receptor_pulse.color_for_beat(state.preview_beat);
+                                let color = [
+                                    receptor_color[0],
+                                    receptor_color[1],
+                                    receptor_color[2],
+                                    receptor_color[3] * a,
+                                ];
+                                for (col, _, x_mult) in PREVIEW_ARROWS {
+                                    let Some(receptor_slot) = receptor_ns.receptor_off.get(col) else {
+                                        continue;
+                                    };
+                                    let frame = receptor_slot
+                                        .frame_index(state.preview_time, state.preview_beat);
+                                    let uv = receptor_slot
+                                        .uv_for_frame_at(frame, state.preview_time);
+                                    let logical = receptor_slot.logical_size();
+                                    let width = logical[0].max(1.0);
+                                    let height = logical[1].max(1.0);
+                                    let scale = if height > f32::EPSILON {
+                                        target_height / height
+                                    } else {
+                                        PREVIEW_SCALE
+                                    };
+                                    let size = [width * scale, target_height];
+                                    let center = [center_x + x_mult * target_height, current_row_y];
+                                    if let Some(model_actor) = noteskin_model_actor(
+                                        receptor_slot,
+                                        center,
+                                        size,
+                                        uv,
+                                        -receptor_slot.def.rotation_deg as f32,
+                                        state.preview_time,
+                                        state.preview_beat,
+                                        color,
+                                        BlendMode::Alpha,
+                                        106,
+                                    ) {
+                                        actors.push(model_actor);
+                                    } else {
+                                        actors.push(act!(sprite(receptor_slot.texture_key_shared()):
+                                            align(0.5, 0.5):
+                                            xy(center[0], center[1]):
+                                            setsize(size[0], size[1]):
+                                            rotationz(-receptor_slot.def.rotation_deg as f32):
+                                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                            diffuse(color[0], color[1], color[2], color[3]):
+                                            z(106)
+                                        ));
+                                    }
+                                }
+                            };
+                        let draw_tap_explosion_preview = |explosion_ns: &Noteskin,
+                                                          receptor_ns: &Noteskin,
+                                                          center_x: f32,
+                                                          actors: &mut Vec<Actor>| {
+                            let preview_time = state.preview_time * TAP_EXPLOSION_PREVIEW_SPEED;
+                            let preview_beat = state.preview_beat * TAP_EXPLOSION_PREVIEW_SPEED;
+                            let Some(explosion) = explosion_ns
+                                .tap_explosions
+                                .get("W1")
+                                .or_else(|| explosion_ns.tap_explosions.values().next())
+                            else {
+                                return;
+                            };
+                            let duration = explosion.animation.duration();
+                            let anim_time = if duration > f32::EPSILON {
+                                preview_time.rem_euclid(duration)
+                            } else {
+                                0.0
+                            };
+                            let explosion_visual = explosion.animation.state_at(anim_time);
+                            if !explosion_visual.visible {
+                                return;
+                            }
+                            let slot = &explosion.slot;
+                            let beat_for_anim = if slot.source.is_beat_based() {
+                                anim_time.max(0.0)
+                            } else {
+                                preview_beat
+                            };
+                            let frame = slot.frame_index(anim_time, beat_for_anim);
+                            let uv_elapsed = if slot.model.is_some() {
+                                anim_time
+                            } else {
+                                preview_time
+                            };
+                            let uv = slot.uv_for_frame_at(frame, uv_elapsed);
+                            let logical = slot.logical_size();
+                            let width = logical[0].max(1.0);
+                            let height = logical[1].max(1.0);
+                            let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                            let scale = if height > f32::EPSILON {
+                                target_height / height
+                            } else {
+                                PREVIEW_SCALE
+                            };
+                            let size = [width * scale, target_height];
+                            let rotation_deg = receptor_ns
+                                .receptor_off
+                                .first()
+                                .map(|slot| slot.def.rotation_deg as f32)
+                                .unwrap_or(0.0);
+                            let color = [
+                                explosion_visual.diffuse[0],
+                                explosion_visual.diffuse[1],
+                                explosion_visual.diffuse[2],
+                                explosion_visual.diffuse[3] * a,
+                            ];
+                            let blend = if explosion.animation.blend_add {
+                                BlendMode::Add
+                            } else {
+                                BlendMode::Alpha
+                            };
+                            if let Some(model_actor) = noteskin_model_actor(
+                                slot,
+                                [center_x, current_row_y],
+                                [
+                                    size[0] * explosion_visual.zoom.max(0.0),
+                                    size[1] * explosion_visual.zoom.max(0.0),
+                                ],
+                                uv,
+                                -rotation_deg,
+                                anim_time,
+                                beat_for_anim,
+                                color,
+                                blend,
+                                107,
+                            ) {
+                                actors.push(model_actor);
+                            } else if matches!(blend, BlendMode::Add) {
+                                actors.push(act!(sprite(slot.texture_key_shared()):
+                                    align(0.5, 0.5):
+                                    xy(center_x, current_row_y):
+                                    setsize(size[0], size[1]):
+                                    zoom(explosion_visual.zoom):
+                                    rotationz(-rotation_deg):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(add):
+                                    z(107)
+                                ));
+                            } else {
+                                actors.push(act!(sprite(slot.texture_key_shared()):
+                                    align(0.5, 0.5):
+                                    xy(center_x, current_row_y):
+                                    setsize(size[0], size[1]):
+                                    zoom(explosion_visual.zoom):
+                                    rotationz(-rotation_deg):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(normal):
+                                    z(107)
+                                ));
+                            }
+                        };
                         if row.name == "NoteSkin" {
                             if let Some(ns) = state.noteskin[primary_player_idx].as_ref() {
                                 draw_noteskin_preview(
@@ -7724,6 +8064,62 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     .or_else(|| state.noteskin[P2].as_deref())
                             {
                                 draw_mine_preview(mine_ns, preview_x_for(P2), &mut actors);
+                            }
+                        } else if row.name == "ReceptorSkin" {
+                            if let Some(receptor_ns) = state.receptor_noteskin[primary_player_idx]
+                                .as_deref()
+                                .or_else(|| state.noteskin[primary_player_idx].as_deref())
+                            {
+                                draw_receptor_preview(
+                                    receptor_ns,
+                                    preview_x_for(primary_player_idx),
+                                    &mut actors,
+                                );
+                            }
+                            if show_p2
+                                && primary_player_idx != P2
+                                && let Some(receptor_ns) = state.receptor_noteskin[P2]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[P2].as_deref())
+                            {
+                                draw_receptor_preview(receptor_ns, preview_x_for(P2), &mut actors);
+                            }
+                        } else if row.name == "TapExplosionSkin" {
+                            if !state.player_profiles[primary_player_idx]
+                                .tap_explosion_noteskin_hidden()
+                                && let Some(explosion_ns) = state.tap_explosion_noteskin
+                                    [primary_player_idx]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[primary_player_idx].as_deref())
+                            {
+                                let receptor_ns = state.receptor_noteskin[primary_player_idx]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[primary_player_idx].as_deref())
+                                    .unwrap_or(explosion_ns);
+                                draw_tap_explosion_preview(
+                                    explosion_ns,
+                                    receptor_ns,
+                                    preview_x_for(primary_player_idx),
+                                    &mut actors,
+                                );
+                            }
+                            if show_p2
+                                && primary_player_idx != P2
+                                && !state.player_profiles[P2].tap_explosion_noteskin_hidden()
+                                && let Some(explosion_ns) = state.tap_explosion_noteskin[P2]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[P2].as_deref())
+                            {
+                                let receptor_ns = state.receptor_noteskin[P2]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[P2].as_deref())
+                                    .unwrap_or(explosion_ns);
+                                draw_tap_explosion_preview(
+                                    explosion_ns,
+                                    receptor_ns,
+                                    preview_x_for(P2),
+                                    &mut actors,
+                                );
                             }
                         }
                     }

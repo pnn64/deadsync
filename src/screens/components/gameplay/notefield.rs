@@ -2779,6 +2779,14 @@ pub fn build(
 
     if let Some(ns) = &state.noteskin[player_idx] {
         let mine_ns = state.mine_noteskin[player_idx].as_deref().unwrap_or(ns);
+        let receptor_ns = state.receptor_noteskin[player_idx].as_deref().unwrap_or(ns);
+        let tap_explosion_ns = if profile.tap_explosion_noteskin_hidden() {
+            None
+        } else {
+            state.tap_explosion_noteskin[player_idx]
+                .as_deref()
+                .or_else(|| state.noteskin[player_idx].as_deref())
+        };
         let timing = &state.timing_players[player_idx];
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
         let scale_sprite = |size: [i32; 2]| -> [f32; 2] {
@@ -3229,7 +3237,7 @@ pub fn build(
                 } else {
                     1.0
                 };
-                let receptor_slot = &ns.receptor_off[i];
+                let receptor_slot = &receptor_ns.receptor_off[i];
                 let receptor_frame =
                     receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                 let receptor_uv =
@@ -3238,7 +3246,7 @@ pub fn build(
                 // so receptor and overlay keep their authored ratio (e.g. 64 vs 74 in
                 // dance/default) instead of being normalized to arrow height.
                 let receptor_size = scale_explosion(logical_slot_size(receptor_slot));
-                let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
+                let receptor_color = receptor_ns.receptor_pulse.color_for_beat(current_beat);
                 let alpha = receptor_color[3] * receptor_alpha;
                 if alpha > f32::EPSILON {
                     actors.push(act!(sprite(receptor_slot.texture_key_shared()):
@@ -3289,7 +3297,7 @@ pub fn build(
                 if hold_size[0] <= f32::EPSILON || hold_size[1] <= f32::EPSILON {
                     continue;
                 }
-                let receptor_rotation = ns
+                let receptor_rotation = receptor_ns
                     .receptor_off
                     .get(i)
                     .map(|slot| slot.def.rotation_deg as f32)
@@ -3390,7 +3398,10 @@ pub fn build(
             if !profile.hide_targets
                 && receptor_alpha > f32::EPSILON
                 && let Some((alpha, zoom)) = receptor_glow_visual_for_col(state, col)
-                && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
+                && let Some(glow_slot) = receptor_ns
+                    .receptor_glow
+                    .get(i)
+                    .and_then(|slot| slot.as_ref())
             {
                 let alpha = alpha * receptor_alpha;
                 if alpha > f32::EPSILON {
@@ -3399,7 +3410,7 @@ pub fn build(
                     let glow_uv =
                         glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
                     let glow_size = scale_explosion(logical_slot_size(glow_slot));
-                    let behavior = ns.receptor_glow_behavior;
+                    let behavior = receptor_ns.receptor_glow_behavior;
                     let width = glow_size[0] * zoom;
                     let height = glow_size[1] * zoom;
                     if behavior.blend_add {
@@ -3435,7 +3446,8 @@ pub fn build(
             .enumerate()
         {
             if let Some(active) = active_opt.as_ref()
-                && let Some(explosion) = ns.tap_explosions.get(&active.window)
+                && let Some(tap_explosion_ns) = tap_explosion_ns
+                && let Some(explosion) = tap_explosion_ns.tap_explosions.get(&active.window)
             {
                 let receptor_y_lane = column_receptor_ys[i];
                 let receptor_center = receptor_row_center(
@@ -3463,7 +3475,7 @@ pub fn build(
                 if !explosion_visual.visible {
                     continue;
                 }
-                let rotation_deg = ns
+                let rotation_deg = receptor_ns
                     .receptor_off
                     .get(i)
                     .map(|slot| slot.def.rotation_deg)

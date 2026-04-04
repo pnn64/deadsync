@@ -1445,6 +1445,20 @@ fn prewarm_gameplay_assets(
             }
         });
     }
+    for noteskin in state.receptor_noteskin.iter().flatten() {
+        noteskin.for_each_texture_key(|key| {
+            if seen.insert(key.to_owned()) {
+                assets.ensure_texture_for_key(backend, key);
+            }
+        });
+    }
+    for noteskin in state.tap_explosion_noteskin.iter().flatten() {
+        noteskin.for_each_texture_key(|key| {
+            if seen.insert(key.to_owned()) {
+                assets.ensure_texture_for_key(backend, key);
+            }
+        });
+    }
     if let Some(path) = state.song.background_path.as_ref() {
         let key = path.to_string_lossy().into_owned();
         if seen.insert(key) {
