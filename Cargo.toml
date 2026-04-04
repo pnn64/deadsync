@@ -79,7 +79,7 @@ directories = "6.0.0"
 # Song cache
 bincode = "2.0.1"
 twox-hash = "2.1.2"
-tokio = { version = "1.50.0", features = ["rt"] }
+tokio = { version = "1.51.0", features = ["rt"] }
 bitflags = "2.11.0"
 
 # DirectX + Input (Windows)
@@ -143,7 +143,7 @@ libloading = "0.9.0"
 pipewire = { version = "0.9.2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-coreaudio = { package = "coreaudio-rs", version = "0.14.0" }
+coreaudio = { package = "coreaudio-rs", version = "0.14.1" }
 mach2 = "0.6.0"
 objc2 = { version = "0.6.4", features = ["relax-sign-encoding"] }
 objc2-app-kit = "0.3.2"
