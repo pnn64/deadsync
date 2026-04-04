@@ -3897,6 +3897,20 @@ fn player_side_for_index(
 }
 
 #[inline(always)]
+const fn single_runtime_player_is_p2(
+    play_style: profile::PlayStyle,
+    session_side: profile::PlayerSide,
+) -> bool {
+    matches!(
+        (play_style, session_side),
+        (
+            profile::PlayStyle::Single | profile::PlayStyle::Double,
+            profile::PlayerSide::P2
+        )
+    )
+}
+
+#[inline(always)]
 const fn side_index(side: profile::PlayerSide) -> usize {
     match side {
         profile::PlayerSide::P1 => 0,
@@ -6693,6 +6707,7 @@ pub fn init(
 
     let play_style = profile::get_session_play_style();
     let player_side = profile::get_session_player_side();
+    let p2_runtime_player = single_runtime_player_is_p2(play_style, player_side);
     let (cols_per_player, num_players, num_cols) = match play_style {
         profile::PlayStyle::Single => (4, 1, 4),
         profile::PlayStyle::Double => (8, 1, 8),
@@ -6701,19 +6716,18 @@ pub fn init(
     let replay_edges = replay_edges.unwrap_or_default();
     let mut charts = charts;
     let mut gameplay_charts = gameplay_charts;
-    if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
+    if p2_runtime_player {
         scroll_speed[0] = scroll_speed[1];
         player_profiles[0] = player_profiles[1].clone();
         charts[0] = charts[1].clone();
         gameplay_charts[0] = gameplay_charts[1].clone();
         combo_carry[0] = combo_carry[1];
     }
-    let player_color_index =
-        if play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2 {
-            active_color_index - 2
-        } else {
-            active_color_index
-        };
+    let player_color_index = if p2_runtime_player {
+        active_color_index - 2
+    } else {
+        active_color_index
+    };
 
     let style = Style {
         num_cols: cols_per_player,
@@ -9946,10 +9960,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
         abort_hold_to_exit(state, ev.timestamp);
         return GameplayAction::None;
     }
-    let is_p2_single = profile::get_session_play_style() == profile::PlayStyle::Single
-        && profile::get_session_player_side() == profile::PlayerSide::P2;
+    let p2_runtime_player = single_runtime_player_is_p2(
+        profile::get_session_play_style(),
+        profile::get_session_player_side(),
+    );
     match ev.action {
-        VirtualAction::p1_start if !is_p2_single => {
+        VirtualAction::p1_start if !p2_runtime_player => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(HoldToExitKey::Start);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -9958,7 +9974,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
                 abort_hold_to_exit(state, ev.timestamp);
             }
         }
-        VirtualAction::p2_start if is_p2_single => {
+        VirtualAction::p2_start if p2_runtime_player => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(HoldToExitKey::Start);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -9967,7 +9983,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
                 abort_hold_to_exit(state, ev.timestamp);
             }
         }
-        VirtualAction::p1_back if !is_p2_single => {
+        VirtualAction::p1_back if !p2_runtime_player => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(HoldToExitKey::Back);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -9976,7 +9992,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
                 abort_hold_to_exit(state, ev.timestamp);
             }
         }
-        VirtualAction::p2_back if is_p2_single => {
+        VirtualAction::p2_back if p2_runtime_player => {
             if ev.pressed {
                 state.hold_to_exit_key = Some(HoldToExitKey::Back);
                 state.hold_to_exit_start = Some(ev.timestamp);
@@ -12132,7 +12148,7 @@ fn update_danger_fx(state: &mut State) {
 mod tests {
     use super::{
         Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FinalizedRowOutcome, FrameStableDisplayClock,
-        GAMEPLAY_INPUT_BACKLOG_WARN, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
+        GAMEPLAY_INPUT_BACKLOG_WARN, HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
         TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
         advance_hold_last_held, advance_hold_life, advance_judged_row_cursor, apply_mines_insert,
@@ -12142,28 +12158,70 @@ mod tests {
         completed_row_flash_note_indices_and_grade, completed_row_hidden_note_indices,
         count_rescore_tracks_on_row, crossed_mine_bounds, enforce_max_simultaneous_notes,
         finalized_row_outcome_for_cached_row, find_arrow_index, frame_stable_display_music_time,
-        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
-        lane_press_started, lane_release_finished, late_note_resolution_window_s,
-        live_autoplay_enabled_from_flags, max_step_distance_seconds, mine_window_bounds,
-        music_time_from_song_clock, next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
-        partition_notes_before_time, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, recent_step_tracks, recompute_player_totals,
-        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
-        row_final_grade_hides_note, score_missed_holds_and_rolls, score_valid_for_chart,
-        scored_hold_totals_with_carry, stage_music_cut, step_calories,
-        suppress_final_bad_rescore_visual, tick_mode_status_line, turn_option_bits,
-        update_lane_count,
+        handle_input, input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap,
+        lane_edge_matches_note_type, lane_press_started, lane_release_finished,
+        late_note_resolution_window_s, live_autoplay_enabled_from_flags, max_step_distance_seconds,
+        mine_window_bounds, music_time_from_song_clock, next_ready_row_in_lookahead,
+        next_tick_mode, parse_attack_mods, partition_notes_before_time,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
+        recompute_player_totals, remove_provisional_early_score, replay_edge_cap,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_missed_holds_and_rolls,
+        score_valid_for_chart, scored_hold_totals_with_carry, single_runtime_player_is_p2,
+        stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
+        turn_option_bits, update_lane_count,
     };
-    use crate::engine::input::InputSource;
-    use crate::game::chart::{ChartData, StaminaCounts};
+    use crate::engine::input::{InputEvent, InputSource, VirtualAction};
+    use crate::engine::present::color;
+    use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{HoldData, Note, NoteType};
+    use crate::game::parsing::notes::ParsedNote;
     use crate::game::profile;
+    use crate::game::song::SongData;
     use crate::game::timing::{
         ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile, TimingSegments,
     };
     use rssp::{TechCounts, stats::ArrowStats};
+    use std::path::PathBuf;
+    use std::sync::{Arc, LazyLock, Mutex};
     use std::time::{Duration, Instant};
+
+    static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    struct SessionRestore {
+        play_style: profile::PlayStyle,
+        player_side: profile::PlayerSide,
+        p1_joined: bool,
+        p2_joined: bool,
+    }
+
+    impl Drop for SessionRestore {
+        fn drop(&mut self) {
+            profile::set_session_play_style(self.play_style);
+            profile::set_session_player_side(self.player_side);
+            profile::set_session_joined(self.p1_joined, self.p2_joined);
+        }
+    }
+
+    fn with_session<R>(
+        play_style: profile::PlayStyle,
+        player_side: profile::PlayerSide,
+        p1_joined: bool,
+        p2_joined: bool,
+        f: impl FnOnce() -> R,
+    ) -> R {
+        let _lock = SESSION_TEST_LOCK.lock().expect("session test lock");
+        let _restore = SessionRestore {
+            play_style: profile::get_session_play_style(),
+            player_side: profile::get_session_player_side(),
+            p1_joined: profile::is_session_side_joined(profile::PlayerSide::P1),
+            p2_joined: profile::is_session_side_joined(profile::PlayerSide::P2),
+        };
+        profile::set_session_play_style(play_style);
+        profile::set_session_player_side(player_side);
+        profile::set_session_joined(p1_joined, p2_joined);
+        f()
+    }
 
     fn test_row_to_beat(last_row: usize) -> Vec<f32> {
         (0..=last_row)
@@ -12228,6 +12286,243 @@ mod tests {
             miss_because_held: false,
         });
         note
+    }
+
+    fn gameplay_regression_chart() -> ChartData {
+        ChartData {
+            chart_type: "dance-double".to_string(),
+            difficulty: "Challenge".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 12,
+            step_artist: String::new(),
+            short_hash: "double-p2-regression".to_string(),
+            stats: ArrowStats {
+                total_arrows: 2,
+                left: 0,
+                down: 0,
+                up: 0,
+                right: 0,
+                total_steps: 2,
+                jumps: 0,
+                hands: 0,
+                mines: 0,
+                holds: 0,
+                rolls: 0,
+                lifts: 0,
+                fakes: 0,
+                holding: 0,
+            },
+            tech_counts: TechCounts::default(),
+            mines_nonfake: 0,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 2.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks: false,
+            has_significant_timing_changes: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 150.0,
+            max_bpm: 150.0,
+        }
+    }
+
+    fn gameplay_regression_song() -> SongData {
+        SongData {
+            simfile_path: PathBuf::from("songs/Tests/double-p2-regression.ssc"),
+            title: "Double P2 Regression".to_string(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: "Tests".to_string(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: "150".to_string(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 150.0,
+            max_bpm: 150.0,
+            normalized_bpms: "0.000=150.000".to_string(),
+            music_length_seconds: 60.0,
+            total_length_seconds: 60,
+            precise_last_second_seconds: 60.0,
+            charts: vec![gameplay_regression_chart()],
+        }
+    }
+
+    fn gameplay_regression_payload() -> GameplayChartData {
+        let parsed_notes = vec![
+            ParsedNote {
+                row_index: 48,
+                column: 0,
+                note_type: NoteType::Tap,
+                tail_row_index: None,
+            },
+            ParsedNote {
+                row_index: 96,
+                column: 7,
+                note_type: NoteType::Tap,
+                tail_row_index: None,
+            },
+        ];
+        let row_to_beat = test_row_to_beat(96);
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 150.0)],
+            ..TimingSegments::default()
+        };
+        let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &row_to_beat);
+        GameplayChartData {
+            notes: Vec::new(),
+            parsed_notes,
+            row_to_beat,
+            timing_segments,
+            timing,
+            chart_attacks: None,
+        }
+    }
+
+    fn regression_state(player_profiles: [profile::Profile; MAX_PLAYERS]) -> super::State {
+        let song = Arc::new(gameplay_regression_song());
+        let chart = Arc::new(song.charts[0].clone());
+        let charts = [chart.clone(), chart];
+        let gameplay_chart = Arc::new(gameplay_regression_payload());
+        let gameplay_charts = [gameplay_chart.clone(), gameplay_chart];
+        super::init(
+            song,
+            charts,
+            gameplay_charts,
+            5,
+            1.0,
+            [
+                player_profiles[0].scroll_speed,
+                player_profiles[1].scroll_speed,
+            ],
+            player_profiles,
+            None,
+            None,
+            None,
+            Arc::from("TEST"),
+            None,
+            None,
+            None,
+            [0; MAX_PLAYERS],
+        )
+    }
+
+    fn test_input_event(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            pressed: true,
+            source: InputSource::Keyboard,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
+
+    #[test]
+    fn single_runtime_p2_helper_includes_double() {
+        assert!(!single_runtime_player_is_p2(
+            profile::PlayStyle::Single,
+            profile::PlayerSide::P1
+        ));
+        assert!(single_runtime_player_is_p2(
+            profile::PlayStyle::Single,
+            profile::PlayerSide::P2
+        ));
+        assert!(!single_runtime_player_is_p2(
+            profile::PlayStyle::Double,
+            profile::PlayerSide::P1
+        ));
+        assert!(single_runtime_player_is_p2(
+            profile::PlayStyle::Double,
+            profile::PlayerSide::P2
+        ));
+        assert!(!single_runtime_player_is_p2(
+            profile::PlayStyle::Versus,
+            profile::PlayerSide::P2
+        ));
+    }
+
+    #[test]
+    fn gameplay_init_uses_p2_modifiers_for_double_p2() {
+        with_session(
+            profile::PlayStyle::Double,
+            profile::PlayerSide::P2,
+            false,
+            true,
+            || {
+                let mut p1 = profile::Profile::default();
+                p1.display_name = "P1 runtime".to_string();
+                p1.scroll_speed = ScrollSpeedSetting::XMod(1.5);
+                p1.perspective = profile::Perspective::Overhead;
+                p1.judgment_graphic = profile::JudgmentGraphic::new("Love");
+
+                let mut p2 = profile::Profile::default();
+                p2.display_name = "P2 runtime".to_string();
+                p2.scroll_speed = ScrollSpeedSetting::CMod(777.0);
+                p2.perspective = profile::Perspective::Space;
+                p2.judgment_graphic = profile::JudgmentGraphic::new("Bebas");
+
+                let state = regression_state([p1, p2.clone()]);
+
+                assert_eq!(state.num_players, 1);
+                assert_eq!(state.scroll_speed[0], ScrollSpeedSetting::CMod(777.0));
+                assert_eq!(state.player_profiles[0].display_name, "P2 runtime");
+                assert_eq!(
+                    state.player_profiles[0].perspective,
+                    profile::Perspective::Space
+                );
+                assert_eq!(
+                    state.player_profiles[0].judgment_graphic,
+                    p2.judgment_graphic
+                );
+                assert_eq!(state.player_color, color::decorative_rgba(3));
+            },
+        );
+    }
+
+    #[test]
+    fn gameplay_handle_input_uses_p2_menu_buttons_for_double_p2() {
+        with_session(
+            profile::PlayStyle::Double,
+            profile::PlayerSide::P2,
+            false,
+            true,
+            || {
+                let state_profiles = [profile::Profile::default(), profile::Profile::default()];
+                let mut state = regression_state(state_profiles);
+
+                handle_input(&mut state, &test_input_event(VirtualAction::p1_start));
+                assert_eq!(state.hold_to_exit_key, None);
+
+                handle_input(&mut state, &test_input_event(VirtualAction::p2_start));
+                assert_eq!(state.hold_to_exit_key, Some(HoldToExitKey::Start));
+                assert!(state.hold_to_exit_start.is_some());
+            },
+        );
     }
 
     #[test]
