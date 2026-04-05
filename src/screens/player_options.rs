@@ -18,6 +18,7 @@ use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
+use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -474,6 +475,8 @@ pub struct State {
     cursor_t: [f32; PLAYER_SLOTS],
     row_tweens: Vec<RowTween>,
     pane_transition: PaneTransition,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    menu_lr_undo: [i8; PLAYER_SLOTS],
 }
 
 // Format music rate like Simply Love wants:
@@ -2928,6 +2931,8 @@ pub fn init(
         cursor_t: [1.0; PLAYER_SLOTS],
         row_tweens,
         pane_transition: PaneTransition::None,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo: [0; PLAYER_SLOTS],
     }
 }
 
@@ -5983,6 +5988,29 @@ fn handle_nav_event(
     }
 }
 
+#[inline(always)]
+fn clear_nav_hold(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    state.nav_key_held_direction[idx] = None;
+    state.nav_key_held_since[idx] = None;
+    state.nav_key_last_scrolled_at[idx] = None;
+}
+
+#[inline(always)]
+fn undo_three_key_nav(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+    undo: i8,
+) {
+    match undo {
+        1 => move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Down),
+        -1 => move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up),
+        _ => {}
+    }
+}
+
 fn handle_start_event(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -6001,7 +6029,9 @@ fn handle_start_event(
     let should_focus_exit = state.current_pane == OptionsPane::Main && row_index + 1 < num_rows;
     let row = state.rows.get(row_index)?;
     let row_name = row.name.clone();
-    if row_supports_inline_nav(row) {
+    let row_supports_inline = row_supports_inline_nav(row);
+    let row_has_choices = !row.choices.is_empty();
+    if row_supports_inline {
         let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
         if changed && !row_toggles_with_start(row_name.as_str()) {
             change_choice_for_player(state, asset_manager, player_idx, 0);
@@ -6098,6 +6128,13 @@ fn handle_start_event(
             }
         }
     }
+    if screen_input::dedicated_three_key_nav_enabled()
+        && row_index + 1 < num_rows
+        && row_has_choices
+    {
+        apply_choice_delta(state, asset_manager, player_idx, 1);
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
+    }
     finish_start_without_action(state, active, player_idx, should_focus_exit)
 }
 
@@ -6107,7 +6144,39 @@ pub fn handle_input(
     ev: &InputEvent,
 ) -> ScreenAction {
     let active = session_active_players();
+    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
+    if screen_input::dedicated_three_key_nav_enabled() {
+        match ev.action {
+            VirtualAction::p1_left | VirtualAction::p1_menu_left if !ev.pressed => {
+                state.menu_lr_undo[P1] = 0;
+                handle_nav_event(state, asset_manager, active, P1, NavDirection::Up, false);
+                return ScreenAction::None;
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right if !ev.pressed => {
+                state.menu_lr_undo[P1] = 0;
+                handle_nav_event(state, asset_manager, active, P1, NavDirection::Down, false);
+                return ScreenAction::None;
+            }
+            VirtualAction::p2_left | VirtualAction::p2_menu_left if !ev.pressed => {
+                state.menu_lr_undo[P2] = 0;
+                handle_nav_event(state, asset_manager, active, P2, NavDirection::Up, false);
+                return ScreenAction::None;
+            }
+            VirtualAction::p2_right | VirtualAction::p2_menu_right if !ev.pressed => {
+                state.menu_lr_undo[P2] = 0;
+                handle_nav_event(state, asset_manager, active, P2, NavDirection::Down, false);
+                return ScreenAction::None;
+            }
+            _ => {}
+        }
+    }
     if state.pane_transition.is_active() {
+        if let Some((side, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
+            let player_idx = screen_input::player_side_ix(side);
+            if active[player_idx] {
+                return ScreenAction::Navigate(state.return_screen);
+            }
+        }
         return match ev.action {
             VirtualAction::p1_back if ev.pressed && active[P1] => {
                 ScreenAction::Navigate(state.return_screen)
@@ -6116,6 +6185,58 @@ pub fn handle_input(
                 ScreenAction::Navigate(state.return_screen)
             }
             _ => ScreenAction::None,
+        };
+    }
+    if let Some((side, nav)) = three_key_action {
+        let player_idx = screen_input::player_side_ix(side);
+        if !active[player_idx] {
+            return ScreenAction::None;
+        }
+        return match nav {
+            screen_input::ThreeKeyMenuAction::Prev => {
+                handle_nav_event(
+                    state,
+                    asset_manager,
+                    active,
+                    player_idx,
+                    NavDirection::Up,
+                    true,
+                );
+                state.menu_lr_undo[player_idx] = 1;
+                ScreenAction::None
+            }
+            screen_input::ThreeKeyMenuAction::Next => {
+                handle_nav_event(
+                    state,
+                    asset_manager,
+                    active,
+                    player_idx,
+                    NavDirection::Down,
+                    true,
+                );
+                state.menu_lr_undo[player_idx] = -1;
+                ScreenAction::None
+            }
+            screen_input::ThreeKeyMenuAction::Confirm => {
+                state.menu_lr_undo[player_idx] = 0;
+                clear_nav_hold(state, player_idx);
+                if let Some(action) = handle_start_event(state, asset_manager, active, player_idx) {
+                    return action;
+                }
+                ScreenAction::None
+            }
+            screen_input::ThreeKeyMenuAction::Cancel => {
+                undo_three_key_nav(
+                    state,
+                    asset_manager,
+                    active,
+                    player_idx,
+                    state.menu_lr_undo[player_idx],
+                );
+                state.menu_lr_undo[player_idx] = 0;
+                clear_nav_hold(state, player_idx);
+                ScreenAction::Navigate(state.return_screen)
+            }
         };
     }
     match ev.action {

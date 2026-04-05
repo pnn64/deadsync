@@ -10,6 +10,7 @@ use crate::screens::components::shared::heart_bg;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
 };
+use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
@@ -141,6 +142,8 @@ pub struct State {
     name_entry: Option<NameEntryState>,
     profile_menu: Option<ProfileMenuState>,
     delete_confirm: Option<DeleteConfirmState>,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    menu_lr_undo: i8,
 }
 
 pub fn init() -> State {
@@ -157,6 +160,8 @@ pub fn init() -> State {
         name_entry: None,
         profile_menu: None,
         delete_confirm: None,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo: 0,
     }
 }
 
@@ -533,7 +538,139 @@ fn cancel_delete_confirm(state: &mut State) {
     reset_nav_hold(state);
 }
 
+#[inline(always)]
+fn activate_selected_row(state: &mut State) -> ScreenAction {
+    let total = state.rows.len();
+    if total == 0 {
+        return ScreenAction::None;
+    }
+    let sel = state.selected.min(total - 1);
+    let start_row = state.rows[sel].kind.clone();
+    match start_row {
+        RowKind::CreateNew => {
+            begin_name_entry_create(state);
+            ScreenAction::None
+        }
+        RowKind::Exit => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::Navigate(Screen::Options)
+        }
+        RowKind::Profile { id, display_name } => {
+            begin_profile_menu(state, &id, &display_name);
+            audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::None
+        }
+    }
+}
+
+#[inline(always)]
+fn undo_nav_move(state: &mut State, undo: i8) {
+    match undo {
+        1 => move_selected(state, NavDirection::Down),
+        -1 => move_selected(state, NavDirection::Up),
+        _ => {}
+    }
+}
+
+#[inline(always)]
+fn undo_profile_menu_move(state: &mut State, undo: i8) {
+    match undo {
+        1 => move_profile_menu_selected(state, NavDirection::Down),
+        -1 => move_profile_menu_selected(state, NavDirection::Up),
+        _ => {}
+    }
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
+    if screen_input::dedicated_three_key_nav_enabled() {
+        match ev.action {
+            VirtualAction::p1_left | VirtualAction::p1_menu_left if !ev.pressed => {
+                state.menu_lr_undo = 0;
+                on_nav_release(state, NavDirection::Up);
+                return ScreenAction::None;
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right if !ev.pressed => {
+                state.menu_lr_undo = 0;
+                on_nav_release(state, NavDirection::Down);
+                return ScreenAction::None;
+            }
+            _ => {}
+        }
+        if let Some((side, nav)) = three_key_action {
+            if side != profile::PlayerSide::P1 {
+                return ScreenAction::None;
+            }
+            if state.name_entry.is_some() {
+                match nav {
+                    screen_input::ThreeKeyMenuAction::Confirm => confirm_name_entry(state),
+                    screen_input::ThreeKeyMenuAction::Cancel => cancel_name_entry(state),
+                    _ => {}
+                }
+                return ScreenAction::None;
+            }
+            if state.delete_confirm.is_some() {
+                match nav {
+                    screen_input::ThreeKeyMenuAction::Confirm => confirm_delete(state),
+                    screen_input::ThreeKeyMenuAction::Cancel => cancel_delete_confirm(state),
+                    _ => {}
+                }
+                return ScreenAction::None;
+            }
+            if state.profile_menu.is_some() {
+                return match nav {
+                    screen_input::ThreeKeyMenuAction::Prev => {
+                        move_profile_menu_selected(state, NavDirection::Up);
+                        on_nav_press(state, NavDirection::Up);
+                        state.menu_lr_undo = 1;
+                        audio::play_sfx("assets/sounds/change.ogg");
+                        ScreenAction::None
+                    }
+                    screen_input::ThreeKeyMenuAction::Next => {
+                        move_profile_menu_selected(state, NavDirection::Down);
+                        on_nav_press(state, NavDirection::Down);
+                        state.menu_lr_undo = -1;
+                        audio::play_sfx("assets/sounds/change.ogg");
+                        ScreenAction::None
+                    }
+                    screen_input::ThreeKeyMenuAction::Confirm => {
+                        state.menu_lr_undo = 0;
+                        confirm_profile_menu(state);
+                        ScreenAction::None
+                    }
+                    screen_input::ThreeKeyMenuAction::Cancel => {
+                        undo_profile_menu_move(state, state.menu_lr_undo);
+                        state.menu_lr_undo = 0;
+                        cancel_profile_menu(state);
+                        ScreenAction::None
+                    }
+                };
+            }
+            return match nav {
+                screen_input::ThreeKeyMenuAction::Prev => {
+                    move_selected(state, NavDirection::Up);
+                    on_nav_press(state, NavDirection::Up);
+                    state.menu_lr_undo = 1;
+                    ScreenAction::None
+                }
+                screen_input::ThreeKeyMenuAction::Next => {
+                    move_selected(state, NavDirection::Down);
+                    on_nav_press(state, NavDirection::Down);
+                    state.menu_lr_undo = -1;
+                    ScreenAction::None
+                }
+                screen_input::ThreeKeyMenuAction::Confirm => {
+                    state.menu_lr_undo = 0;
+                    activate_selected_row(state)
+                }
+                screen_input::ThreeKeyMenuAction::Cancel => {
+                    undo_nav_move(state, state.menu_lr_undo);
+                    state.menu_lr_undo = 0;
+                    ScreenAction::Navigate(Screen::Options)
+                }
+            };
+        }
+    }
     if state.name_entry.is_some() {
         match ev.action {
             VirtualAction::p1_start if ev.pressed => confirm_name_entry(state),
@@ -588,25 +725,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
         }
         VirtualAction::p1_start if ev.pressed => {
-            let total = state.rows.len();
-            if total == 0 {
-                return ScreenAction::None;
-            }
-            let sel = state.selected.min(total - 1);
-            let start_row = state.rows[sel].kind.clone();
-            match start_row {
-                RowKind::CreateNew => {
-                    begin_name_entry_create(state);
-                }
-                RowKind::Exit => {
-                    audio::play_sfx("assets/sounds/start.ogg");
-                    return ScreenAction::Navigate(Screen::Options);
-                }
-                RowKind::Profile { id, display_name } => {
-                    begin_profile_menu(state, &id, &display_name);
-                    audio::play_sfx("assets/sounds/start.ogg");
-                }
-            }
+            return activate_selected_row(state);
         }
         _ => {}
     }

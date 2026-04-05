@@ -459,6 +459,7 @@ fn screen_action_hash(action: ScreenAction) -> u64 {
         ScreenAction::NavigateNoFade(screen) => 0x2000 | screen as u64,
         ScreenAction::Exit => 0x3000,
         ScreenAction::SelectProfiles { .. } => 0x4000,
+        ScreenAction::RequestScreenshot(_) => 0x4800,
         ScreenAction::RequestBanner(_) => 0x5000,
         ScreenAction::RequestCdTitle(_) => 0x6000,
         ScreenAction::RequestDensityGraph { .. } => 0x7000,

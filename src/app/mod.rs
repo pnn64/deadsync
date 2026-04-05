@@ -2602,6 +2602,11 @@ impl App {
                 }
                 Vec::new()
             }
+            ScreenAction::RequestScreenshot(side) => {
+                self.state.shell.screenshot_pending = true;
+                self.state.shell.screenshot_request_side = side;
+                Vec::new()
+            }
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
             ScreenAction::RequestCdTitle(path_opt) => vec![Command::SetCdTitle(path_opt)],
             ScreenAction::RequestDensityGraph { slot, chart_opt } => {

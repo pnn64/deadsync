@@ -26,6 +26,7 @@ use crate::game::scroll::ScrollSpeedSetting;
 use crate::game::song::SongData;
 use crate::game::timing as timing_stats;
 use crate::screens::gameplay;
+use crate::screens::input as screen_input;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -885,6 +886,8 @@ pub struct State {
     itl_overlay_page: [usize; MAX_PLAYERS],
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    menu_lr_undo: [i8; MAX_PLAYERS],
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
@@ -1355,6 +1358,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         itl_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo: [0; MAX_PLAYERS],
     }
 }
 
@@ -1417,6 +1422,8 @@ pub fn init_from_score_info(
         itl_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo: [0; MAX_PLAYERS],
     }
 }
 
@@ -1848,6 +1855,20 @@ fn barely_marker_sample(si: &ScoreInfo) -> Option<(f32, f32)> {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    let chord_side = if crate::config::get().three_key_navigation {
+        state.menu_lr_chord.update(ev)
+    } else {
+        None
+    };
+    let side_idx = |side: profile::PlayerSide| match side {
+        profile::PlayerSide::P1 => 0,
+        profile::PlayerSide::P2 => 1,
+    };
+    if !ev.pressed
+        && let Some(side) = screen_input::menu_lr_side(ev.action)
+    {
+        state.menu_lr_undo[side_idx(side)] = 0;
+    }
     if evaluation_lobby_lock_text().is_some() {
         match ev.action {
             VirtualAction::p1_start => {
@@ -1876,10 +1897,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     }
     if state.itl_overlay_visible {
         let play_style = profile::get_session_play_style();
-        let side_idx = |side: profile::PlayerSide| match side {
-            profile::PlayerSide::P1 => 0,
-            profile::PlayerSide::P2 => 1,
-        };
         let mut shift_itl_page = |controller: profile::PlayerSide, dir: i32| {
             let player_idx = if play_style == profile::PlayStyle::Versus {
                 side_idx(controller)
@@ -1887,22 +1904,32 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 0
             };
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
-                return;
+                return false;
             };
             if si.side != controller {
-                return;
+                return false;
             }
             let Some(progress) = state.itl_progress.get(player_idx).and_then(|p| p.as_ref()) else {
-                return;
+                return false;
             };
             let page_count = progress.overlay_pages.len();
             if page_count <= 1 {
-                return;
+                return false;
             }
+            let old_page = state.itl_overlay_page[player_idx];
             state.itl_overlay_page[player_idx] = (state.itl_overlay_page[player_idx] as i32 + dir)
                 .rem_euclid(page_count as i32)
                 as usize;
+            state.itl_overlay_page[player_idx] != old_page
         };
+        if let Some(side) = chord_side {
+            let undo = state.menu_lr_undo[side_idx(side)];
+            state.menu_lr_undo[side_idx(side)] = 0;
+            if undo != 0 {
+                let _ = shift_itl_page(side, i32::from(undo));
+            }
+            return ScreenAction::RequestScreenshot(Some(side));
+        }
         return match ev.action {
             VirtualAction::p1_back
             | VirtualAction::p1_start
@@ -1912,19 +1939,39 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ScreenAction::None
             }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-                shift_itl_page(profile::PlayerSide::P1, -1);
+                state.menu_lr_undo[side_idx(profile::PlayerSide::P1)] =
+                    if shift_itl_page(profile::PlayerSide::P1, -1) {
+                        1
+                    } else {
+                        0
+                    };
                 ScreenAction::None
             }
             VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-                shift_itl_page(profile::PlayerSide::P1, 1);
+                state.menu_lr_undo[side_idx(profile::PlayerSide::P1)] =
+                    if shift_itl_page(profile::PlayerSide::P1, 1) {
+                        -1
+                    } else {
+                        0
+                    };
                 ScreenAction::None
             }
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-                shift_itl_page(profile::PlayerSide::P2, -1);
+                state.menu_lr_undo[side_idx(profile::PlayerSide::P2)] =
+                    if shift_itl_page(profile::PlayerSide::P2, -1) {
+                        1
+                    } else {
+                        0
+                    };
                 ScreenAction::None
             }
             VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-                shift_itl_page(profile::PlayerSide::P2, 1);
+                state.menu_lr_undo[side_idx(profile::PlayerSide::P2)] =
+                    if shift_itl_page(profile::PlayerSide::P2, 1) {
+                        -1
+                    } else {
+                        0
+                    };
                 ScreenAction::None
             }
             _ => ScreenAction::None,
@@ -1937,10 +1984,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     };
 
     let play_style = profile::get_session_play_style();
-    let side_idx = |side: profile::PlayerSide| match side {
-        profile::PlayerSide::P1 => 0,
-        profile::PlayerSide::P2 => 1,
-    };
     let player_idx_for_controller = |controller: profile::PlayerSide| {
         if play_style == profile::PlayStyle::Versus {
             side_idx(controller)
@@ -1952,8 +1995,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         let controller_idx = side_idx(controller);
         let player_idx = player_idx_for_controller(controller);
         let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
-            return;
+            return false;
         };
+        let old_pane = state.active_pane[controller_idx];
         let has_hard_ex = si.show_hard_ex_score;
         let has_online_panes = state.allow_online_panes;
         let gs_side = if play_style == profile::PlayStyle::Versus {
@@ -1986,6 +2030,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 );
             }
         }
+        state.active_pane[controller_idx] != old_pane
     };
     let mut shift_graph_for = |controller: profile::PlayerSide, dir: i32| {
         let controller_idx = side_idx(controller);
@@ -2011,6 +2056,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.active_graph[other_idx] = state.active_graph[controller_idx];
         }
     };
+    if let Some(side) = chord_side {
+        let undo = state.menu_lr_undo[side_idx(side)];
+        state.menu_lr_undo[side_idx(side)] = 0;
+        if undo != 0 {
+            let _ = shift_pane_for(side, i32::from(undo));
+        }
+        return ScreenAction::RequestScreenshot(Some(side));
+    }
 
     match ev.action {
         VirtualAction::p1_back
@@ -2023,11 +2076,21 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::Navigate(return_target)
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-            shift_pane_for(profile::PlayerSide::P1, 1);
+            state.menu_lr_undo[side_idx(profile::PlayerSide::P1)] =
+                if shift_pane_for(profile::PlayerSide::P1, 1) {
+                    -1
+                } else {
+                    0
+                };
             ScreenAction::None
         }
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-            shift_pane_for(profile::PlayerSide::P1, -1);
+            state.menu_lr_undo[side_idx(profile::PlayerSide::P1)] =
+                if shift_pane_for(profile::PlayerSide::P1, -1) {
+                    1
+                } else {
+                    0
+                };
             ScreenAction::None
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
@@ -2039,11 +2102,21 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-            shift_pane_for(profile::PlayerSide::P2, 1);
+            state.menu_lr_undo[side_idx(profile::PlayerSide::P2)] =
+                if shift_pane_for(profile::PlayerSide::P2, 1) {
+                    -1
+                } else {
+                    0
+                };
             ScreenAction::None
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-            shift_pane_for(profile::PlayerSide::P2, -1);
+            state.menu_lr_undo[side_idx(profile::PlayerSide::P2)] =
+                if shift_pane_for(profile::PlayerSide::P2, -1) {
+                    1
+                } else {
+                    0
+                };
             ScreenAction::None
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {

@@ -9,8 +9,10 @@ use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::engine::space::{screen_height, screen_width, widescale};
+use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
+use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
@@ -184,6 +186,13 @@ pub const fn active_slot_prev(slot: ActiveSlot) -> ActiveSlot {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum ThreeKeyFocus {
+    #[default]
+    Row,
+    Slot,
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
@@ -208,6 +217,10 @@ pub struct State {
     capture_row: Option<usize>,
     capture_slot: Option<ActiveSlot>,
     capture_pulse_t: f32,
+    three_key_focus: ThreeKeyFocus,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    menu_lr_undo_row: i8,
+    menu_lr_undo_slot: Option<ActiveSlot>,
 }
 
 pub fn init() -> State {
@@ -230,6 +243,10 @@ pub fn init() -> State {
         capture_row: None,
         capture_slot: None,
         capture_pulse_t: 0.0,
+        three_key_focus: ThreeKeyFocus::Row,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo_row: 0,
+        menu_lr_undo_slot: None,
     }
 }
 
@@ -294,11 +311,49 @@ fn move_selection(state: &mut State, dir: NavDirection) {
     };
     if new != old {
         state.selected_row = new;
+        state.three_key_focus = ThreeKeyFocus::Row;
+        state.menu_lr_undo_slot = None;
         // Reset row tween; update() will compute from_y based on layout.
         state.cursor_row_anim_t = 0.0;
         state.cursor_row_anim_from_row = Some(old);
         audio::play_sfx("assets/sounds/change.ogg");
     }
+}
+
+#[inline(always)]
+fn set_active_slot(state: &mut State, new_slot: ActiveSlot) {
+    let old_slot = state.active_slot;
+    if new_slot == old_slot {
+        return;
+    }
+    state.active_slot = new_slot;
+    state.slot_anim_from = old_slot;
+    state.slot_anim_to = new_slot;
+    state.slot_anim_t = 0.0;
+}
+
+#[inline(always)]
+fn begin_capture(state: &mut State) {
+    state.capture_active = true;
+    state.capture_row = Some(state.selected_row);
+    state.capture_slot = Some(state.active_slot);
+    state.capture_pulse_t = 0.0;
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+    state.nav_key_last_scrolled_at = None;
+    state.menu_lr_undo_row = 0;
+    state.menu_lr_undo_slot = None;
+}
+
+#[inline(always)]
+fn cancel_capture(state: &mut State) {
+    state.capture_active = false;
+    state.capture_row = None;
+    state.capture_slot = None;
+    state.capture_pulse_t = 0.0;
+    state.three_key_focus = ThreeKeyFocus::Row;
+    state.menu_lr_undo_row = 0;
+    state.menu_lr_undo_slot = None;
 }
 
 pub fn update(state: &mut State, dt: f32) {
@@ -444,7 +499,9 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                 audio::play_sfx("assets/sounds/change_value.ogg");
 
                 if crate::config::get().only_dedicated_menu_buttons
-                    && !crate::engine::input::any_player_has_dedicated_menu_buttons()
+                    && !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
+                        crate::config::get().three_key_navigation,
+                    )
                 {
                     crate::config::update_only_dedicated_menu_buttons(false);
                 }
@@ -452,10 +509,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         }
 
         // Any captured key ends capture.
-        state.capture_active = false;
-        state.capture_row = None;
-        state.capture_slot = None;
-        state.capture_pulse_t = 0.0;
+        cancel_capture(state);
 
         return ScreenAction::None;
     }
@@ -480,27 +534,13 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         }
         KeyCode::ArrowLeft => {
             if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
-                let old_slot = state.active_slot;
-                let new_slot = active_slot_prev(state.active_slot);
-                if new_slot != old_slot {
-                    state.active_slot = new_slot;
-                    state.slot_anim_from = old_slot;
-                    state.slot_anim_to = new_slot;
-                    state.slot_anim_t = 0.0;
-                }
+                set_active_slot(state, active_slot_prev(state.active_slot));
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
         KeyCode::ArrowRight => {
             if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
-                let old_slot = state.active_slot;
-                let new_slot = active_slot_next(state.active_slot);
-                if new_slot != old_slot {
-                    state.active_slot = new_slot;
-                    state.slot_anim_from = old_slot;
-                    state.slot_anim_to = new_slot;
-                    state.slot_anim_t = 0.0;
-                }
+                set_active_slot(state, active_slot_next(state.active_slot));
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
@@ -511,13 +551,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                     return ScreenAction::Navigate(Screen::Options);
                 }
                 if state.selected_row < NUM_MAPPING_ROWS {
-                    state.capture_active = true;
-                    state.capture_row = Some(state.selected_row);
-                    state.capture_slot = Some(state.active_slot);
-                    state.capture_pulse_t = 0.0;
-                    state.nav_key_held_direction = None;
-                    state.nav_key_held_since = None;
-                    state.nav_key_last_scrolled_at = None;
+                    begin_capture(state);
                     audio::play_sfx("assets/sounds/change_value.ogg");
                 }
             }
@@ -589,7 +623,9 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
             audio::play_sfx("assets/sounds/change_value.ogg");
 
             if crate::config::get().only_dedicated_menu_buttons
-                && !crate::engine::input::any_player_has_dedicated_menu_buttons()
+                && !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
+                    crate::config::get().three_key_navigation,
+                )
             {
                 crate::config::update_only_dedicated_menu_buttons(false);
             }
@@ -597,20 +633,116 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     }
 
     // Any captured pad input ends capture.
-    state.capture_active = false;
-    state.capture_row = None;
-    state.capture_slot = None;
-    state.capture_pulse_t = 0.0;
+    cancel_capture(state);
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     // While capturing, lock navigation and only allow backing out
     // of the screen; candidate keys are handled in handle_raw_key_event.
     if state.capture_active {
+        if let Some((profile::PlayerSide::P1, screen_input::ThreeKeyMenuAction::Cancel)) =
+            three_key_action
+        {
+            cancel_capture(state);
+            audio::play_sfx("assets/sounds/change.ogg");
+            return ScreenAction::None;
+        }
         if ev.action == VirtualAction::p1_back && ev.pressed {
             return ScreenAction::Navigate(Screen::Options);
         }
         return ScreenAction::None;
+    }
+
+    if screen_input::dedicated_three_key_nav_enabled() {
+        match ev.action {
+            VirtualAction::p1_left | VirtualAction::p1_menu_left
+                if !ev.pressed && matches!(state.three_key_focus, ThreeKeyFocus::Row) =>
+            {
+                state.menu_lr_undo_row = 0;
+                on_nav_release(state, NavDirection::Up);
+                return ScreenAction::None;
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right
+                if !ev.pressed && matches!(state.three_key_focus, ThreeKeyFocus::Row) =>
+            {
+                state.menu_lr_undo_row = 0;
+                on_nav_release(state, NavDirection::Down);
+                return ScreenAction::None;
+            }
+            _ => {}
+        }
+        if let Some((side, nav)) = three_key_action {
+            if side != crate::game::profile::PlayerSide::P1 {
+                return ScreenAction::None;
+            }
+            return match nav {
+                screen_input::ThreeKeyMenuAction::Prev => {
+                    if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
+                        move_selection(state, NavDirection::Up);
+                        on_nav_press(state, NavDirection::Up);
+                        state.menu_lr_undo_row = 1;
+                    } else if state.selected_row < NUM_MAPPING_ROWS {
+                        let prev_slot = state.active_slot;
+                        set_active_slot(state, active_slot_prev(state.active_slot));
+                        state.menu_lr_undo_slot = Some(prev_slot);
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                    }
+                    ScreenAction::None
+                }
+                screen_input::ThreeKeyMenuAction::Next => {
+                    if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
+                        move_selection(state, NavDirection::Down);
+                        on_nav_press(state, NavDirection::Down);
+                        state.menu_lr_undo_row = -1;
+                    } else if state.selected_row < NUM_MAPPING_ROWS {
+                        let prev_slot = state.active_slot;
+                        set_active_slot(state, active_slot_next(state.active_slot));
+                        state.menu_lr_undo_slot = Some(prev_slot);
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                    }
+                    ScreenAction::None
+                }
+                screen_input::ThreeKeyMenuAction::Confirm => {
+                    state.menu_lr_undo_row = 0;
+                    if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
+                        if state.selected_row == NUM_MAPPING_ROWS {
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            ScreenAction::Navigate(Screen::Options)
+                        } else {
+                            state.three_key_focus = ThreeKeyFocus::Slot;
+                            state.menu_lr_undo_slot = None;
+                            audio::play_sfx("assets/sounds/start.ogg");
+                            ScreenAction::None
+                        }
+                    } else if state.selected_row < NUM_MAPPING_ROWS {
+                        begin_capture(state);
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        ScreenAction::None
+                    } else {
+                        ScreenAction::None
+                    }
+                }
+                screen_input::ThreeKeyMenuAction::Cancel => {
+                    if matches!(state.three_key_focus, ThreeKeyFocus::Slot) {
+                        if let Some(prev_slot) = state.menu_lr_undo_slot.take() {
+                            set_active_slot(state, prev_slot);
+                        }
+                        state.three_key_focus = ThreeKeyFocus::Row;
+                        audio::play_sfx("assets/sounds/change.ogg");
+                        ScreenAction::None
+                    } else {
+                        match state.menu_lr_undo_row {
+                            1 => move_selection(state, NavDirection::Down),
+                            -1 => move_selection(state, NavDirection::Up),
+                            _ => {}
+                        }
+                        state.menu_lr_undo_row = 0;
+                        ScreenAction::Navigate(Screen::Options)
+                    }
+                }
+            };
+        }
     }
 
     // Outside of capture, navigation on this screen is strictly keyboard-only.
@@ -642,27 +774,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         VirtualAction::p1_menu_left => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
-                let old_slot = state.active_slot;
-                let new_slot = active_slot_prev(state.active_slot);
-                if new_slot != old_slot {
-                    state.active_slot = new_slot;
-                    state.slot_anim_from = old_slot;
-                    state.slot_anim_to = new_slot;
-                    state.slot_anim_t = 0.0;
-                }
+                set_active_slot(state, active_slot_prev(state.active_slot));
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
         VirtualAction::p1_menu_right => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
-                let old_slot = state.active_slot;
-                let new_slot = active_slot_next(state.active_slot);
-                if new_slot != old_slot {
-                    state.active_slot = new_slot;
-                    state.slot_anim_from = old_slot;
-                    state.slot_anim_to = new_slot;
-                    state.slot_anim_t = 0.0;
-                }
+                set_active_slot(state, active_slot_next(state.active_slot));
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }
@@ -674,14 +792,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
             // Begin capture on the currently focused slot in this row.
             if state.selected_row < NUM_MAPPING_ROWS {
-                state.capture_active = true;
-                state.capture_row = Some(state.selected_row);
-                state.capture_slot = Some(state.active_slot);
-                state.capture_pulse_t = 0.0;
-                // Stop any held navigation so the list does not keep scrolling.
-                state.nav_key_held_direction = None;
-                state.nav_key_held_since = None;
-                state.nav_key_last_scrolled_at = None;
+                begin_capture(state);
                 audio::play_sfx("assets/sounds/change_value.ogg");
             }
         }

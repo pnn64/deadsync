@@ -14,6 +14,7 @@ use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{banner as shared_banner, heart_bg, screen_bar};
+use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use chrono::Local;
 use std::collections::HashSet;
@@ -29,6 +30,8 @@ pub struct State {
     bg: heart_bg::State,
     pub page: usize,
     pub elapsed: f32,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    menu_lr_undo: [i8; 2],
 }
 
 pub fn init() -> State {
@@ -37,6 +40,8 @@ pub fn init() -> State {
         bg: heart_bg::State::new(),
         page: 1,
         elapsed: 0.0,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo: [0; 2],
     }
 }
 
@@ -44,11 +49,48 @@ pub fn update(state: &mut State, dt: f32) {
     state.elapsed = (state.elapsed + dt).max(0.0);
 }
 
+#[inline(always)]
+const fn side_ix(side: profile::PlayerSide) -> usize {
+    match side {
+        profile::PlayerSide::P1 => 0,
+        profile::PlayerSide::P2 => 1,
+    }
+}
+
+#[inline(always)]
+fn shift_page(state: &mut State, num_stages: usize, dir: i32) -> bool {
+    let pages = pages_for(num_stages);
+    let old_page = state.page;
+    if dir < 0 {
+        if pages > 1 && state.page > 1 {
+            state.page = state.page.saturating_sub(1).max(1);
+        }
+    } else if pages > 1 {
+        state.page = (state.page + 1).min(pages.max(1));
+    }
+    state.page != old_page
+}
+
 pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> ScreenAction {
+    let chord_side = if crate::config::get().three_key_navigation {
+        state.menu_lr_chord.update(ev)
+    } else {
+        None
+    };
     if !ev.pressed {
+        if let Some(side) = screen_input::menu_lr_side(ev.action) {
+            state.menu_lr_undo[side_ix(side)] = 0;
+        }
         return ScreenAction::None;
     }
-
+    if let Some(side) = chord_side {
+        let undo = state.menu_lr_undo[side_ix(side)];
+        state.menu_lr_undo[side_ix(side)] = 0;
+        if undo != 0 {
+            let _ = shift_page(state, num_stages, i32::from(undo));
+        }
+        return ScreenAction::RequestScreenshot(Some(side));
+    }
     match ev.action {
         VirtualAction::p1_back
         | VirtualAction::p1_start
@@ -62,9 +104,14 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         | VirtualAction::p2_menu_left
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_up => {
-            let pages = pages_for(num_stages);
-            if pages > 1 && state.page > 1 {
-                state.page = state.page.saturating_sub(1).max(1);
+            if let Some(side) = screen_input::menu_lr_side(ev.action) {
+                state.menu_lr_undo[side_ix(side)] = if shift_page(state, num_stages, -1) {
+                    1
+                } else {
+                    0
+                };
+            } else {
+                let _ = shift_page(state, num_stages, -1);
             }
             ScreenAction::None
         }
@@ -76,9 +123,14 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         | VirtualAction::p2_menu_right
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_down => {
-            let pages = pages_for(num_stages);
-            if pages > 1 {
-                state.page = (state.page + 1).min(pages.max(1));
+            if let Some(side) = screen_input::menu_lr_side(ev.action) {
+                state.menu_lr_undo[side_ix(side)] = if shift_page(state, num_stages, 1) {
+                    -1
+                } else {
+                    0
+                };
+            } else {
+                let _ = shift_page(state, num_stages, 1);
             }
             ScreenAction::None
         }
