@@ -1,6 +1,6 @@
 [package]
 name = "deadsync"
-version = "0.3.271"
+version = "0.3.272"
 authors = ["Patrik Nilsson <perfecttaste@pm.me>"]
 edition = "2024"
 description = "A competitive SM/ITG engine focused on perfect sync and performance."
@@ -41,8 +41,8 @@ qrcodegen = "1.8.0"
 mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
 
 # rssp and null-or-die
-rssp = { git = "https://github.com/pnn64/rssp", rev = "4fd9fcb" }
-null-or-die = { git = "https://github.com/pnn64/null-or-die", rev = "0cb4f15" }
+rssp = { git = "https://github.com/pnn64/rssp", rev = "ac9cd58" }
+null-or-die = { git = "https://github.com/pnn64/null-or-die", rev = "f0f5d01" }
 
 # Software renderer
 softbuffer = "0.4.8"
