@@ -1238,6 +1238,17 @@ fn mini_judgment_zoom(mini: f32) -> f32 {
 }
 
 #[inline(always)]
+fn hallway_judgment_zoom(perspective_tilt: f32, perspective_skew: f32) -> f32 {
+    // ITGmania's hallway draw path applies an extra 0.9x shrink to the notefield
+    // during the perspective pass, but the judgment actor keeps its original zoom.
+    // Mirror that apparent larger hallway judgment here for the HUD sprite path.
+    if perspective_tilt >= -f32::EPSILON || perspective_skew.abs() > f32::EPSILON {
+        return 1.0;
+    }
+    1.0 / (1.0 - 0.1 * (-perspective_tilt).clamp(0.0, 1.0)).max(0.000_001)
+}
+
+#[inline(always)]
 fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
     let fmt_float = |v: f32| -> String {
         let s = cached_fmt2_f32(v);
@@ -2772,7 +2783,8 @@ pub fn build(
     let combo_x = playfield_center_x + combo_extra_x;
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
     // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0); deadsync currently supports Mini.
-    let judgment_zoom_mod = mini_judgment_zoom(mini);
+    let judgment_zoom_mod =
+        mini_judgment_zoom(mini) * hallway_judgment_zoom(perspective.tilt, perspective.skew);
     let effect_height = field_effect_height(perspective.tilt);
     let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
     let blind_active = visibility.blind > f32::EPSILON;
@@ -6726,12 +6738,12 @@ mod tests {
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
-        clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
-        hud_layout_ys, hud_y, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
-        note_alpha, note_slot_base_size, note_world_z, note_x_extra, offset_center,
-        predictive_itg_percents, push_transform_parts, receptor_row_center, tap_judgment_rows,
-        tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits,
-        turn_option_name, zmod_subtractive_counter_state,
+        clipped_hold_body_bounds, hallway_judgment_zoom, hold_head_render_flags, hold_segment_pose,
+        hold_tail_cap_bounds, hud_layout_ys, hud_y, let_go_head_beat,
+        maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size, note_world_z,
+        note_x_extra, offset_center, predictive_itg_percents, push_transform_parts,
+        receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tipsy_y_extra,
+        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::judgment::{
@@ -7252,6 +7264,19 @@ mod tests {
             base.zmod_layout.combo_y
         );
         assert_eq!(moved_error_bar.error_bar_y, base.error_bar_y + 18.0);
+    }
+
+    #[test]
+    fn hallway_judgment_zoom_only_boosts_hallway_tilt() {
+        assert!((hallway_judgment_zoom(0.0, 0.0) - 1.0).abs() <= 1e-6);
+        assert!((hallway_judgment_zoom(-1.0, 1.0) - 1.0).abs() <= 1e-6);
+        assert!((hallway_judgment_zoom(1.0, 0.0) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hallway_judgment_zoom_matches_itgmania_hallway_quirk() {
+        let zoom = hallway_judgment_zoom(-1.0, 0.0);
+        assert!((zoom - (1.0 / 0.9)).abs() <= 1e-6);
     }
 
     #[test]
