@@ -30,8 +30,13 @@ pub(crate) struct OpenFile {
     pub sample_rate_hz: u32,
 }
 
+enum Inner {
+    File(OggStreamReader<BufReader<File>>),
+    Memory(OggStreamReader<Cursor<Vec<u8>>>),
+}
+
 pub(crate) struct Reader {
-    inner: OggStreamReader<BufReader<File>>,
+    inner: Inner,
     channels: usize,
     pending: Option<Vec<i16>>,
     cursor_frames: u64,
@@ -46,9 +51,41 @@ pub(crate) fn path_is_ogg_vorbis(path: &Path) -> bool {
 
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
     let file = File::open(path)?;
-    let inner = OggStreamReader::new(BufReader::new(file))?;
-    let channels = inner.ident_hdr.audio_channels.max(1) as usize;
-    let sample_rate_hz = inner.ident_hdr.audio_sample_rate;
+    match OggStreamReader::new(BufReader::new(file)) {
+        Ok(inner) => opened_from_inner(Inner::File(inner)),
+        Err(open_err) => {
+            let file = File::open(path)
+                .map_err(|e| format!("Cannot reopen file after OGG open failure: {e}"))?;
+            // SAFETY: the mapping is read-only, tied to the lifetime of `file`, and this
+            // function never mutates the file descriptor while the map is live.
+            let mmap =
+                unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {e}"))?;
+            let Some(stream) = vorbis_stream_info(&mmap) else {
+                return Err(open_err.into());
+            };
+            let pages = extract_logical_stream(&mmap, stream.serial).ok_or_else(|| {
+                format!(
+                    "Could not extract Vorbis logical stream from '{}'",
+                    path.display()
+                )
+            })?;
+            let inner = OggStreamReader::new(Cursor::new(pages))?;
+            opened_from_inner(Inner::Memory(inner))
+        }
+    }
+}
+
+fn opened_from_inner(inner: Inner) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
+    let (channels, sample_rate_hz) = match &inner {
+        Inner::File(reader) => (
+            reader.ident_hdr.audio_channels.max(1) as usize,
+            reader.ident_hdr.audio_sample_rate,
+        ),
+        Inner::Memory(reader) => (
+            reader.ident_hdr.audio_channels.max(1) as usize,
+            reader.ident_hdr.audio_sample_rate,
+        ),
+    };
     Ok(OpenFile {
         reader: Reader {
             inner,
@@ -71,7 +108,7 @@ impl Reader {
                 .saturating_add((packet.len() / self.channels) as u64);
             return Ok(Some(packet));
         }
-        let Some(packet) = self.inner.read_dec_packet_itl()? else {
+        let Some(packet) = self.read_packet()? else {
             return Ok(None);
         };
         self.cursor_frames = self
@@ -84,7 +121,7 @@ impl Reader {
         &mut self,
         target_frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.inner.seek_absgp_pg(target_frame)?;
+        self.seek_absgp_pg(target_frame)?;
         self.pending = None;
 
         // After `seek_absgp_pg`, lewton resets its internal `cur_absgp` to
@@ -96,12 +133,12 @@ impl Reader {
         let calibrated_absgp: u64;
 
         loop {
-            let Some(pkt) = self.inner.read_dec_packet_itl()? else {
+            let Some(pkt) = self.read_packet()? else {
                 self.cursor_frames = target_frame;
                 return Ok(());
             };
             stashed.push(pkt);
-            if let Some(absgp) = self.inner.get_last_absgp() {
+            if let Some(absgp) = self.last_absgp() {
                 calibrated_absgp = absgp;
                 break;
             }
@@ -152,7 +189,7 @@ impl Reader {
         // From here, lewton's cur_absgp is calibrated and increments
         // correctly with each decoded packet.
         while self.cursor_frames < target_frame {
-            let Some(pkt) = self.inner.read_dec_packet_itl()? else {
+            let Some(pkt) = self.read_packet()? else {
                 return Ok(());
             };
             let pkt_frames = (pkt.len() / self.channels) as u64;
@@ -169,6 +206,35 @@ impl Reader {
         }
 
         Ok(())
+    }
+
+    #[inline(always)]
+    fn read_packet(
+        &mut self,
+    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+        match &mut self.inner {
+            Inner::File(reader) => Ok(reader.read_dec_packet_itl()?),
+            Inner::Memory(reader) => Ok(reader.read_dec_packet_itl()?),
+        }
+    }
+
+    #[inline(always)]
+    fn seek_absgp_pg(
+        &mut self,
+        target_frame: u64,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        match &mut self.inner {
+            Inner::File(reader) => Ok(reader.seek_absgp_pg(target_frame)?),
+            Inner::Memory(reader) => Ok(reader.seek_absgp_pg(target_frame)?),
+        }
+    }
+
+    #[inline(always)]
+    fn last_absgp(&self) -> Option<u64> {
+        match &self.inner {
+            Inner::File(reader) => reader.get_last_absgp(),
+            Inner::Memory(reader) => reader.get_last_absgp(),
+        }
     }
 }
 
@@ -279,6 +345,23 @@ fn parse_page_header(data: &[u8], pos: usize) -> Option<OggPageHeader> {
         header_end,
         body_end,
     })
+}
+
+fn extract_logical_stream(data: &[u8], serial: u32) -> Option<Vec<u8>> {
+    let mut pos = 0usize;
+    let mut stream = Vec::new();
+    while pos + OGG_PAGE_HEADER_LEN <= data.len() {
+        if !has_ogg_page_header(data, pos) {
+            pos += 1;
+            continue;
+        }
+        let page = parse_page_header(data, pos)?;
+        if page.serial == serial {
+            stream.extend_from_slice(&data[pos..page.body_end]);
+        }
+        pos = page.body_end;
+    }
+    (!stream.is_empty()).then_some(stream)
 }
 
 fn find_last_granule_backwards(data: &[u8], serial: u32) -> Result<u64, String> {
