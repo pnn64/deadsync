@@ -170,6 +170,7 @@ fn music_decoder_thread_loop(
     let out_ch = ENGINE.device_channels;
     let out_hz = ENGINE.device_sample_rate;
     let queued_music_map = QUEUED_MUSIC_MAP_SEGS.clone();
+    let is_ogg_stream = matches!(&reader, decode::Reader::Ogg(_));
 
     debug!(
         "Music decode start: {:?} ({} ch @ {} Hz) -> output {} ch @ {} Hz (rate x{}).",
@@ -222,11 +223,24 @@ fn music_decoder_thread_loop(
 
         let start_frame_f = (cut.start_sec * f64::from(in_hz)).max(0.0);
         let start_floor = start_frame_f.floor() as u64;
-        let mut seek_ok = true;
-        if start_floor > 0 {
+        // Lewton can fail on seeks that land inside the first few OGG pages.
+        // Decoding and dropping <1s from the start is cheap and avoids those
+        // false preview failures.
+        let bypass_seek = is_ogg_stream && start_floor < u64::from(in_hz);
+        let mut seek_ok = false;
+        if start_floor > 0 && !bypass_seek {
             let seek_frame = start_floor.saturating_sub(internal::PREROLL_IN_FRAMES);
-            if reader.seek_frame(seek_frame).is_err() {
-                seek_ok = false;
+            match reader.seek_frame(seek_frame) {
+                Ok(()) => seek_ok = true,
+                Err(e) => {
+                    warn!(
+                        "Music seek failed for {path:?} at frame {seek_frame}; restarting from start: {e}"
+                    );
+                    let reopened = decode::open_file(&path)?;
+                    debug_assert_eq!(reopened.channels, in_ch);
+                    debug_assert_eq!(reopened.sample_rate_hz, in_hz);
+                    reader = reopened.reader;
+                }
             }
         }
 

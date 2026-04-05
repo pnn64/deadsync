@@ -1,11 +1,28 @@
 use lewton::inside_ogg::OggStreamReader;
 use memmap2::Mmap;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::path::Path;
 
 const OGG_PAGE_HEADER_LEN: usize = 27;
 const OGG_SCAN_CHUNK_BYTES: usize = 64 * 1024;
+const OGG_SERIAL_OFFSET: usize = 14;
+
+#[derive(Clone, Copy)]
+struct VorbisStreamInfo {
+    serial: u32,
+    sample_rate_hz: f64,
+}
+
+#[derive(Clone, Copy)]
+struct OggPageHeader {
+    serial: u32,
+    granule: u64,
+    continued: bool,
+    header_end: usize,
+    body_end: usize,
+}
 
 pub(crate) struct OpenFile {
     pub reader: Reader,
@@ -160,18 +177,14 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
     // SAFETY: the mapping is read-only, tied to the lifetime of `file`, and this
     // function never mutates the file descriptor while the map is live.
     let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("Memory-map failed: {e}"))?;
-    let sample_rate_hz = sample_rate_hz(&mmap)?;
-    let total_samples = find_last_granule_backwards(&mmap)?;
-    Ok((total_samples as f64 / sample_rate_hz) as f32)
-}
-
-fn sample_rate_hz(data: &[u8]) -> Result<f64, String> {
-    match sample_rate_hz_lewton(data) {
-        Ok(rate) => Ok(rate),
-        Err(lewton_err) => sample_rate_hz_ident_packet(data).ok_or_else(|| {
+    let stream = vorbis_stream_info(&mmap).ok_or_else(|| match sample_rate_hz_lewton(&mmap) {
+        Ok(_) => "fallback OGG ident parse failed".to_string(),
+        Err(lewton_err) => {
             format!("lewton header error: {lewton_err}; fallback OGG ident parse failed")
-        }),
-    }
+        }
+    })?;
+    let total_samples = find_last_granule_backwards(&mmap, stream.serial)?;
+    Ok((total_samples as f64 / stream.sample_rate_hz) as f32)
 }
 
 fn sample_rate_hz_lewton(data: &[u8]) -> Result<f64, String> {
@@ -184,53 +197,95 @@ fn sample_rate_hz_lewton(data: &[u8]) -> Result<f64, String> {
     Ok(f64::from(rate))
 }
 
-fn sample_rate_hz_ident_packet(data: &[u8]) -> Option<f64> {
-    const MIN_RATE_HZ: u32 = 8_000;
-    const MAX_RATE_HZ: u32 = 384_000;
-
+fn vorbis_stream_info(data: &[u8]) -> Option<VorbisStreamInfo> {
+    // OGG files may contain cover art or other logical streams before the
+    // Vorbis stream. Track packets per serial and find the first completed
+    // Vorbis ident packet instead of assuming the first BOS packet is audio.
+    let mut packets: HashMap<u32, Vec<u8>> = HashMap::new();
     let mut pos = 0usize;
-    let mut packet = Vec::with_capacity(64);
     while pos + OGG_PAGE_HEADER_LEN <= data.len() {
-        if &data[pos..pos + 4] != b"OggS" {
+        if !has_ogg_page_header(data, pos) {
             pos += 1;
             continue;
         }
-        let seg_count = data[pos + 26] as usize;
-        let header_end = pos.checked_add(OGG_PAGE_HEADER_LEN + seg_count)?;
-        if header_end > data.len() {
-            return None;
+        let page = parse_page_header(data, pos)?;
+        let seg_table = &data[pos + OGG_PAGE_HEADER_LEN..page.header_end];
+        let packet = packets.entry(page.serial).or_default();
+        if !page.continued {
+            packet.clear();
         }
-        let seg_table = &data[pos + OGG_PAGE_HEADER_LEN..header_end];
-        let mut body_pos = header_end;
+        let mut body_pos = page.header_end;
         for &seg_len_u8 in seg_table {
             let seg_len = seg_len_u8 as usize;
             let seg_end = body_pos.checked_add(seg_len)?;
-            if seg_end > data.len() {
-                return None;
-            }
             packet.extend_from_slice(&data[body_pos..seg_end]);
             body_pos = seg_end;
             if seg_len < 255 {
-                if packet.len() < 16 || packet[0] != 0x01 || &packet[1..7] != b"vorbis" {
-                    return None;
+                if let Some(sample_rate_hz) = sample_rate_hz_ident_packet(packet) {
+                    return Some(VorbisStreamInfo {
+                        serial: page.serial,
+                        sample_rate_hz,
+                    });
                 }
-                let rate = u32::from_le_bytes(packet[12..16].try_into().ok()?);
-                if !(MIN_RATE_HZ..=MAX_RATE_HZ).contains(&rate) {
-                    return None;
-                }
-                return Some(f64::from(rate));
+                packet.clear();
             }
         }
-        pos = body_pos;
+        pos = page.body_end;
     }
     None
 }
 
-fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {
+fn sample_rate_hz_ident_packet(packet: &[u8]) -> Option<f64> {
+    const MIN_RATE_HZ: u32 = 8_000;
+    const MAX_RATE_HZ: u32 = 384_000;
+
+    if packet.len() < 16 || packet[0] != 0x01 || &packet[1..7] != b"vorbis" {
+        return None;
+    }
+    let rate = u32::from_le_bytes(packet[12..16].try_into().ok()?);
+    if !(MIN_RATE_HZ..=MAX_RATE_HZ).contains(&rate) {
+        return None;
+    }
+    Some(f64::from(rate))
+}
+
+fn parse_page_header(data: &[u8], pos: usize) -> Option<OggPageHeader> {
+    if pos + OGG_PAGE_HEADER_LEN > data.len() || !has_ogg_page_header(data, pos) {
+        return None;
+    }
+    let seg_count = data[pos + 26] as usize;
+    let header_end = pos.checked_add(OGG_PAGE_HEADER_LEN + seg_count)?;
+    if header_end > data.len() {
+        return None;
+    }
+    let body_len = data[pos + OGG_PAGE_HEADER_LEN..header_end]
+        .iter()
+        .map(|&len| len as usize)
+        .sum::<usize>();
+    let body_end = header_end.checked_add(body_len)?;
+    if body_end > data.len() {
+        return None;
+    }
+    let serial = u32::from_le_bytes(
+        data[pos + OGG_SERIAL_OFFSET..pos + OGG_SERIAL_OFFSET + 4]
+            .try_into()
+            .ok()?,
+    );
+    let granule = u64::from_le_bytes(data[pos + 6..pos + 14].try_into().ok()?);
+    Some(OggPageHeader {
+        serial,
+        granule,
+        continued: data[pos + 5] & 0x01 != 0,
+        header_end,
+        body_end,
+    })
+}
+
+fn find_last_granule_backwards(data: &[u8], serial: u32) -> Result<u64, String> {
     let mut pos = data.len();
     while pos >= OGG_PAGE_HEADER_LEN {
         let start = pos.saturating_sub(OGG_SCAN_CHUNK_BYTES);
-        if let Some(granule) = find_last_chunk_granule(&data[start..pos]) {
+        if let Some(granule) = find_last_chunk_granule(&data[start..pos], serial) {
             return Ok(granule);
         }
         if start == 0 {
@@ -238,21 +293,23 @@ fn find_last_granule_backwards(data: &[u8]) -> Result<u64, String> {
         }
         pos = start + OGG_PAGE_HEADER_LEN - 1;
     }
-    Err("No valid granule position found".into())
+    Err("No valid granule position found for Vorbis stream".into())
 }
 
-fn find_last_chunk_granule(chunk: &[u8]) -> Option<u64> {
+fn find_last_chunk_granule(chunk: &[u8], serial: u32) -> Option<u64> {
     if chunk.len() < OGG_PAGE_HEADER_LEN {
         return None;
     }
+    let serial = serial.to_le_bytes();
     let mut i = chunk.len() - OGG_PAGE_HEADER_LEN;
     loop {
-        if has_ogg_page_header(chunk, i) {
-            let mut granule_bytes = [0; 8];
-            granule_bytes.copy_from_slice(&chunk[i + 6..i + 14]);
-            let granule = u64::from_le_bytes(granule_bytes);
-            if granule != u64::MAX {
-                return Some(granule);
+        if has_ogg_page_header(chunk, i)
+            && chunk.get(i + OGG_SERIAL_OFFSET..i + OGG_SERIAL_OFFSET + 4)
+                == Some(serial.as_slice())
+        {
+            let page = parse_page_header(chunk, i)?;
+            if page.granule != u64::MAX {
+                return Some(page.granule);
             }
         }
         if i == 0 {
