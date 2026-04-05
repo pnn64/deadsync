@@ -8,9 +8,16 @@ const OGG_PAGE_HEADER_LEN: usize = 27;
 const OGG_SCAN_CHUNK_BYTES: usize = 64 * 1024;
 
 pub(crate) struct OpenFile {
-    pub reader: OggStreamReader<BufReader<File>>,
+    pub reader: Reader,
     pub channels: usize,
     pub sample_rate_hz: u32,
+}
+
+pub(crate) struct Reader {
+    inner: OggStreamReader<BufReader<File>>,
+    channels: usize,
+    pending: Option<Vec<i16>>,
+    cursor_frames: u64,
 }
 
 #[inline(always)]
@@ -22,12 +29,130 @@ pub(crate) fn path_is_ogg_vorbis(path: &Path) -> bool {
 
 pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
     let file = File::open(path)?;
-    let reader = OggStreamReader::new(BufReader::new(file))?;
+    let inner = OggStreamReader::new(BufReader::new(file))?;
+    let channels = inner.ident_hdr.audio_channels.max(1) as usize;
+    let sample_rate_hz = inner.ident_hdr.audio_sample_rate;
     Ok(OpenFile {
-        channels: reader.ident_hdr.audio_channels as usize,
-        sample_rate_hz: reader.ident_hdr.audio_sample_rate,
-        reader,
+        reader: Reader {
+            inner,
+            channels,
+            pending: None,
+            cursor_frames: 0,
+        },
+        channels,
+        sample_rate_hz,
     })
+}
+
+impl Reader {
+    pub(crate) fn read_dec_packet_itl(
+        &mut self,
+    ) -> Result<Option<Vec<i16>>, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(packet) = self.pending.take() {
+            self.cursor_frames = self
+                .cursor_frames
+                .saturating_add((packet.len() / self.channels) as u64);
+            return Ok(Some(packet));
+        }
+        let Some(packet) = self.inner.read_dec_packet_itl()? else {
+            return Ok(None);
+        };
+        self.cursor_frames = self
+            .cursor_frames
+            .saturating_add((packet.len() / self.channels) as u64);
+        Ok(Some(packet))
+    }
+
+    pub(crate) fn seek_frame(
+        &mut self,
+        target_frame: u64,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.inner.seek_absgp_pg(target_frame)?;
+        self.pending = None;
+
+        // After `seek_absgp_pg`, lewton resets its internal `cur_absgp` to
+        // None.  It only becomes Some again after we read the last packet on
+        // the first page (`last_in_page`).  Stash all packets until that
+        // calibration point so we can compute their absolute positions via
+        // backward traversal from the page's absgp.
+        let mut stashed: Vec<Vec<i16>> = Vec::new();
+        let calibrated_absgp: u64;
+
+        loop {
+            let Some(pkt) = self.inner.read_dec_packet_itl()? else {
+                self.cursor_frames = target_frame;
+                return Ok(());
+            };
+            stashed.push(pkt);
+            if let Some(absgp) = self.inner.get_last_absgp() {
+                calibrated_absgp = absgp;
+                break;
+            }
+        }
+
+        // Assign positions to stashed packets by walking backwards from
+        // `calibrated_absgp` (the page's end granule).
+        let mut positions: Vec<(u64, u64)> = Vec::with_capacity(stashed.len());
+        let mut pos = calibrated_absgp;
+        for pkt in stashed.iter().rev() {
+            let frames = (pkt.len() / self.channels) as u64;
+            let start = pos.saturating_sub(frames);
+            positions.push((start, frames));
+            pos = start;
+        }
+        positions.reverse();
+
+        let page_start = positions.first().map_or(calibrated_absgp, |&(s, _)| s);
+        self.cursor_frames = page_start;
+
+        // Replay stashed packets, discarding/trimming to reach target.
+        for (i, &(pkt_start, pkt_frames)) in positions.iter().enumerate() {
+            if pkt_frames == 0 {
+                continue; // Skip warmup packets with no decoded audio.
+            }
+            if pkt_start >= target_frame {
+                // This packet is entirely at or past the target — stash it
+                // for the next read_dec_packet_itl call.
+                self.pending = Some(stashed.into_iter().nth(i).unwrap());
+                self.cursor_frames = target_frame;
+                return Ok(());
+            }
+            if pkt_start + pkt_frames > target_frame {
+                // Target is within this packet — trim leading samples.
+                let skip = (target_frame - pkt_start) as usize;
+                let drop_samples = skip * self.channels;
+                let pkt = &stashed[i];
+                if drop_samples < pkt.len() {
+                    self.pending = Some(pkt[drop_samples..].to_vec());
+                }
+                self.cursor_frames = target_frame;
+                return Ok(());
+            }
+            self.cursor_frames = pkt_start + pkt_frames;
+        }
+
+        // Target is beyond this page — continue reading forward.
+        // From here, lewton's cur_absgp is calibrated and increments
+        // correctly with each decoded packet.
+        while self.cursor_frames < target_frame {
+            let Some(pkt) = self.inner.read_dec_packet_itl()? else {
+                return Ok(());
+            };
+            let pkt_frames = (pkt.len() / self.channels) as u64;
+            let remaining = (target_frame - self.cursor_frames) as usize;
+            if remaining < pkt_frames as usize {
+                let drop_samples = remaining * self.channels;
+                if drop_samples < pkt.len() {
+                    self.pending = Some(pkt[drop_samples..].to_vec());
+                }
+                self.cursor_frames = target_frame;
+                return Ok(());
+            }
+            self.cursor_frames += pkt_frames;
+        }
+
+        Ok(())
+    }
 }
 
 pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
