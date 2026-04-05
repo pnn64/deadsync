@@ -404,8 +404,8 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     for mine_ix in &mut state.mine_note_ix {
         mine_ix.clear();
     }
-    for mine_time in &mut state.mine_note_time {
-        mine_time.clear();
+    for mine_time_ns in &mut state.mine_note_time_ns {
+        mine_time_ns.clear();
     }
     for hold in &mut state.active_holds {
         *hold = None;

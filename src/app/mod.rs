@@ -5119,6 +5119,7 @@ impl App {
                         pressed: e.pressed,
                         source: e.source,
                         event_music_time: e.event_music_time,
+                        event_music_time_ns: i64::MIN,
                     })
                     .collect::<Vec<_>>()
             });

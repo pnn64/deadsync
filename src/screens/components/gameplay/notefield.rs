@@ -6758,12 +6758,15 @@ mod tests {
         let active = ActiveHold {
             note_index: 42,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 12.0,
+            end_time_ns: 12_000_000_000,
             note_type: NoteType::Hold,
             let_go: false,
             is_pressed: true,
             life: 1.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 99.99, 100.0);
         assert!(!engaged);
@@ -6775,12 +6778,15 @@ mod tests {
         let mut active = ActiveHold {
             note_index: 42,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 12.0,
+            end_time_ns: 12_000_000_000,
             note_type: NoteType::Hold,
             let_go: false,
             is_pressed: true,
             life: 1.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
         assert!(engaged);
@@ -6798,12 +6804,15 @@ mod tests {
         let active = ActiveHold {
             note_index: 42,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 12.0,
+            end_time_ns: 12_000_000_000,
             note_type: NoteType::Roll,
             let_go: false,
             is_pressed: false,
             life: 1.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
         assert!(engaged);
@@ -6815,22 +6824,28 @@ mod tests {
         let exhausted = ActiveHold {
             note_index: 7,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 8.0,
+            end_time_ns: 8_000_000_000,
             note_type: NoteType::Roll,
             let_go: false,
             is_pressed: true,
             life: 0.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         let let_go = ActiveHold {
             note_index: 7,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 8.0,
+            end_time_ns: 8_000_000_000,
             note_type: NoteType::Roll,
             let_go: true,
             is_pressed: true,
             life: 1.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         assert_eq!(
             hold_head_render_flags(Some(&exhausted), 200.0, 100.0),
