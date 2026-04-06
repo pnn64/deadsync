@@ -3543,9 +3543,10 @@ fn row_selects_on_focus_move(row_name: &str) -> bool {
 fn row_allows_arcade_next_row(state: &State, row_idx: usize) -> bool {
     arcade_options_navigation_active()
         && pane_uses_arcade_next_row(state.current_pane)
-        && state.rows.get(row_idx).is_some_and(|row| {
-            !row.name.is_empty() && (row_supports_inline_nav(row) || row.choices.len() > 1)
-        })
+        && state
+            .rows
+            .get(row_idx)
+            .is_some_and(|row| !row.name.is_empty() && row_supports_inline_nav(row))
 }
 
 #[inline(always)]
@@ -3558,12 +3559,16 @@ fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> bool {
     state.rows.get(row_idx).is_some_and(row_supports_inline_nav)
 }
 
-fn inline_choice_centers(choices: &[String], asset_manager: &AssetManager) -> Vec<f32> {
+fn inline_choice_centers(
+    choices: &[String],
+    asset_manager: &AssetManager,
+    left_x: f32,
+) -> Vec<f32> {
     if choices.is_empty() {
         return Vec::new();
     }
     let mut centers: Vec<f32> = Vec::with_capacity(choices.len());
-    let mut x = widescale(162.0, 176.0);
+    let mut x = left_x;
     let zoom = 0.835_f32;
     for text in choices {
         let (draw_w, _) = measure_option_text(asset_manager, text, zoom);
@@ -3584,7 +3589,11 @@ fn focused_inline_choice_index(
     if !row_supports_inline_nav(row) {
         return None;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
+    let centers = inline_choice_centers(
+        &row.choices,
+        asset_manager,
+        inline_choice_left_x_for_row(state, row_idx),
+    );
     if centers.is_empty() {
         return None;
     }
@@ -3620,7 +3629,11 @@ fn move_inline_focus(
     if !row_supports_inline_nav(row) {
         return false;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
+    let centers = inline_choice_centers(
+        &row.choices,
+        asset_manager,
+        inline_choice_left_x_for_row(state, row_idx),
+    );
     if centers.is_empty() {
         return false;
     }
@@ -3708,7 +3721,11 @@ fn sync_inline_intent_from_row(
     if !row_supports_inline_nav(row) {
         return;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
+    let centers = inline_choice_centers(
+        &row.choices,
+        asset_manager,
+        inline_choice_left_x_for_row(state, row_idx),
+    );
     if centers.is_empty() {
         return;
     }
@@ -3733,7 +3750,11 @@ fn apply_inline_intent_to_row(
     if !row_supports_inline_nav(row) {
         return;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
+    let centers = inline_choice_centers(
+        &row.choices,
+        asset_manager,
+        inline_choice_left_x_for_row(state, row_idx),
+    );
     if centers.is_empty() {
         return;
     }
@@ -3807,6 +3828,26 @@ fn inline_choice_left_x() -> f32 {
 }
 
 #[inline(always)]
+fn arcade_inline_choice_shift_x() -> f32 {
+    widescale(6.0, 8.0)
+}
+
+#[inline(always)]
+fn arcade_next_row_gap_x() -> f32 {
+    widescale(5.0, 6.0)
+}
+
+#[inline(always)]
+fn inline_choice_left_x_for_row(state: &State, row_idx: usize) -> f32 {
+    inline_choice_left_x()
+        + if row_allows_arcade_next_row(state, row_idx) {
+            arcade_inline_choice_shift_x()
+        } else {
+            0.0
+        }
+}
+
+#[inline(always)]
 fn arcade_next_row_visible(state: &State, row_idx: usize) -> bool {
     row_allows_arcade_next_row(state, row_idx)
 }
@@ -3819,9 +3860,14 @@ fn arcade_row_focuses_next_row(state: &State, player_idx: usize, row_idx: usize)
         && state.selected_row[idx] == row_idx
 }
 
-fn arcade_next_row_layout(asset_manager: &AssetManager, zoom: f32) -> (f32, f32, f32) {
+fn arcade_next_row_layout(
+    state: &State,
+    row_idx: usize,
+    asset_manager: &AssetManager,
+    zoom: f32,
+) -> (f32, f32, f32) {
     let (draw_w, draw_h) = measure_option_text(asset_manager, ARCADE_NEXT_ROW_TEXT, zoom);
-    let left_x = inline_choice_left_x() - draw_w - INLINE_SPACING;
+    let left_x = inline_choice_left_x_for_row(state, row_idx) - draw_w - arcade_next_row_gap_x();
     (left_x, draw_w, draw_h)
 }
 
@@ -3901,7 +3947,7 @@ fn cursor_dest_for_player(
             return None;
         }
         let spacing = INLINE_SPACING;
-        let choice_inner_left = inline_choice_left_x();
+        let choice_inner_left = inline_choice_left_x_for_row(state, row_idx);
         let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
         let mut text_h: f32 = 16.0;
         asset_manager.with_fonts(|all_fonts| {
@@ -3924,7 +3970,8 @@ fn cursor_dest_for_player(
             return None;
         }
         if arcade_row_focuses_next_row(state, player_idx, row_idx) {
-            let (left_x, draw_w, draw_h) = arcade_next_row_layout(asset_manager, value_zoom);
+            let (left_x, draw_w, draw_h) =
+                arcade_next_row_layout(state, row_idx, asset_manager, value_zoom);
             let mut size_t = draw_w / width_ref;
             if !size_t.is_finite() {
                 size_t = 0.0;
@@ -6919,7 +6966,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // ItemsLongRowP1X = WideScale(_screen.cx-100, _screen.cx-130) from Simply Love metrics
         // ItemsStartX = WideScale(146, 160) from Simply Love metrics
         let choice_inner_left = if show_all_choices_inline {
-            inline_choice_left_x()
+            inline_choice_left_x_for_row(state, item_idx)
         } else {
             screen_center_x() + widescale(-100.0, -130.0) // ItemsLongRowP1X for single-choice rows
         };
@@ -6987,8 +7034,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // The active option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
             let spacing = 15.75;
-            let next_row_item =
-                show_arcade_next_row.then(|| arcade_next_row_layout(asset_manager, value_zoom));
+            let next_row_item = show_arcade_next_row
+                .then(|| arcade_next_row_layout(state, item_idx, asset_manager, value_zoom));
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
             let mut text_h: f32 = 16.0;
             asset_manager.with_fonts(|all_fonts| {
