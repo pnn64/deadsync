@@ -165,15 +165,22 @@ fn prime_visible_window(state: &mut gameplay::State) {
     {
         let column = state.notes[note_index].column;
         let end_time = state.hold_end_time_cache[note_index].unwrap_or(time + 1.0);
+        let start_time_ns =
+            (state.note_time_cache[note_index] as f64 * 1_000_000_000.0).round() as i64;
+        let end_time_ns = (end_time as f64 * 1_000_000_000.0).round() as i64;
+        let time_ns = (time as f64 * 1_000_000_000.0).round() as i64;
         state.active_holds[column] = Some(ActiveHold {
             note_index,
             start_time: state.note_time_cache[note_index],
+            start_time_ns,
             end_time,
+            end_time_ns,
             note_type,
             let_go: false,
             is_pressed: true,
             life: 1.0,
             last_update_time: time,
+            last_update_time_ns: time_ns,
         });
     }
 

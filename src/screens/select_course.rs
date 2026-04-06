@@ -17,6 +17,7 @@ use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
     shared::{banner as shared_banner, gs_scorebox, heart_bg, mode_pads, timers},
 };
+use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -218,6 +219,13 @@ enum OutPromptState {
     EnteringOptions { elapsed: f32 },
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum ThreeKeyFocus {
+    #[default]
+    Wheel,
+    Rating,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum ExitPromptState {
     None,
@@ -256,6 +264,9 @@ pub struct State {
     last_rating_nav_time_p1: Option<Instant>,
     last_rating_nav_dir_p2: Option<PadDir>,
     last_rating_nav_time_p2: Option<Instant>,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    menu_lr_undo: i8,
+    three_key_focus: ThreeKeyFocus,
 }
 
 #[inline(always)]
@@ -1204,6 +1215,9 @@ pub fn init() -> State {
         last_rating_nav_time_p1: None,
         last_rating_nav_dir_p2: None,
         last_rating_nav_time_p2: None,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo: 0,
+        three_key_focus: ThreeKeyFocus::Wheel,
     };
     rebuild_displayed_entries(&mut state);
     state
@@ -1382,6 +1396,48 @@ fn handle_rating_dir(
     ScreenAction::None
 }
 
+#[inline(always)]
+fn clear_wheel_hold(state: &mut State) {
+    state.nav_key_held_direction = None;
+    state.nav_key_held_since = None;
+}
+
+#[inline(always)]
+fn selected_course_has_multiple_ratings(state: &State) -> bool {
+    selected_course_meta(state)
+        .map(|meta| meta.ratings.iter().filter(|r| r.is_some()).count() > 1)
+        .unwrap_or(false)
+}
+
+fn shift_selected_course_rating(state: &mut State, delta: isize) -> bool {
+    if delta == 0 {
+        return false;
+    }
+    let Some(meta) = selected_course_meta(state) else {
+        return false;
+    };
+    let available = meta.ratings.iter().filter(|r| r.is_some()).count();
+    if available <= 1 {
+        return false;
+    }
+    let current = selected_course_rating_index(state, &meta);
+    let next = if delta < 0 {
+        (0..current).rev().find(|&idx| meta.ratings[idx].is_some())
+    } else {
+        ((current + 1)..meta.ratings.len()).find(|&idx| meta.ratings[idx].is_some())
+    };
+    let Some(next) = next else {
+        return false;
+    };
+    set_selected_course_rating_index(state, &meta, next);
+    audio::play_sfx(if delta < 0 {
+        "assets/sounds/easier.ogg"
+    } else {
+        "assets/sounds/harder.ogg"
+    });
+    true
+}
+
 pub fn handle_confirm(state: &mut State) -> ScreenAction {
     if state.out_prompt != OutPromptState::None {
         return ScreenAction::None;
@@ -1392,6 +1448,8 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
     }
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
+    state.menu_lr_undo = 0;
+    state.three_key_focus = ThreeKeyFocus::Wheel;
 
     match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(_)) => {
@@ -1404,13 +1462,81 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
+    if screen_input::dedicated_three_key_nav_enabled()
+        && matches!(state.three_key_focus, ThreeKeyFocus::Wheel)
+    {
+        match ev.action {
+            VirtualAction::p1_left
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p2_left
+            | VirtualAction::p2_menu_left
+                if !ev.pressed =>
+            {
+                state.menu_lr_undo = 0;
+                return handle_wheel_dir(state, PadDir::Left, false, ev.timestamp);
+            }
+            VirtualAction::p1_right
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_right
+            | VirtualAction::p2_menu_right
+                if !ev.pressed =>
+            {
+                state.menu_lr_undo = 0;
+                return handle_wheel_dir(state, PadDir::Right, false, ev.timestamp);
+            }
+            _ => {}
+        }
+    }
     if state.exit_prompt != ExitPromptState::None {
+        if let Some((_, nav)) = three_key_action {
+            return match nav {
+                screen_input::ThreeKeyMenuAction::Prev | screen_input::ThreeKeyMenuAction::Next => {
+                    let ExitPromptState::Active {
+                        active_choice,
+                        switch_from,
+                        switch_elapsed,
+                        ..
+                    } = &mut state.exit_prompt
+                    else {
+                        return ScreenAction::None;
+                    };
+                    let prev = *active_choice;
+                    *active_choice = 1 - prev;
+                    *switch_from = Some(prev);
+                    *switch_elapsed = 0.0;
+                    audio::play_sfx("assets/sounds/change.ogg");
+                    ScreenAction::None
+                }
+                screen_input::ThreeKeyMenuAction::Cancel => {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    state.exit_prompt = ExitPromptState::None;
+                    ScreenAction::None
+                }
+                screen_input::ThreeKeyMenuAction::Confirm => {
+                    let ExitPromptState::Active { active_choice, .. } = state.exit_prompt else {
+                        return ScreenAction::None;
+                    };
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    state.exit_prompt = ExitPromptState::None;
+                    if active_choice == 1 {
+                        ScreenAction::Navigate(Screen::Menu)
+                    } else {
+                        ScreenAction::None
+                    }
+                }
+            };
+        }
         return handle_exit_prompt_input(state, ev);
     }
 
     if state.out_prompt != OutPromptState::None {
-        if ev.pressed
-            && matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start)
+        let start_pressed = matches!(
+            three_key_action,
+            Some((_, screen_input::ThreeKeyMenuAction::Confirm))
+        ) || (ev.pressed
+            && matches!(ev.action, VirtualAction::p1_start | VirtualAction::p2_start));
+        if start_pressed
             && matches!(
                 state.out_prompt,
                 OutPromptState::PressStartForOptions { .. }
@@ -1420,6 +1546,73 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
         }
         return ScreenAction::None;
+    }
+
+    if screen_input::dedicated_three_key_nav_enabled() {
+        if let Some((_, nav)) = three_key_action {
+            return match nav {
+                screen_input::ThreeKeyMenuAction::Prev => {
+                    if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
+                        state.menu_lr_undo = if shift_selected_course_rating(state, -1) {
+                            1
+                        } else {
+                            0
+                        };
+                        ScreenAction::None
+                    } else {
+                        state.menu_lr_undo = 1;
+                        handle_wheel_dir(state, PadDir::Left, true, ev.timestamp)
+                    }
+                }
+                screen_input::ThreeKeyMenuAction::Next => {
+                    if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
+                        state.menu_lr_undo = if shift_selected_course_rating(state, 1) {
+                            -1
+                        } else {
+                            0
+                        };
+                        ScreenAction::None
+                    } else {
+                        state.menu_lr_undo = -1;
+                        handle_wheel_dir(state, PadDir::Right, true, ev.timestamp)
+                    }
+                }
+                screen_input::ThreeKeyMenuAction::Confirm => {
+                    state.menu_lr_undo = 0;
+                    if matches!(state.three_key_focus, ThreeKeyFocus::Wheel)
+                        && selected_course_has_multiple_ratings(state)
+                    {
+                        clear_wheel_hold(state);
+                        state.three_key_focus = ThreeKeyFocus::Rating;
+                        audio::play_sfx("assets/sounds/start.ogg");
+                        ScreenAction::None
+                    } else {
+                        state.three_key_focus = ThreeKeyFocus::Wheel;
+                        handle_confirm(state)
+                    }
+                }
+                screen_input::ThreeKeyMenuAction::Cancel => {
+                    if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
+                        if state.menu_lr_undo != 0 {
+                            let _ =
+                                shift_selected_course_rating(state, -(state.menu_lr_undo as isize));
+                            state.menu_lr_undo = 0;
+                        }
+                        state.three_key_focus = ThreeKeyFocus::Wheel;
+                        audio::play_sfx("assets/sounds/change.ogg");
+                        ScreenAction::None
+                    } else {
+                        if state.menu_lr_undo != 0 {
+                            music_wheel_change(state, state.menu_lr_undo as isize);
+                            state.menu_lr_undo = 0;
+                        }
+                        clear_wheel_hold(state);
+                        begin_exit_prompt(state);
+                        ScreenAction::None
+                    }
+                }
+            };
+        }
     }
 
     let play_style = profile::get_session_play_style();
@@ -1597,6 +1790,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if state.selected_index != state.prev_selected_index {
         state.prev_selected_index = state.selected_index;
         state.time_since_selection_change = 0.0;
+        state.menu_lr_undo = 0;
+        state.three_key_focus = ThreeKeyFocus::Wheel;
         state.last_rating_nav_dir_p1 = None;
         state.last_rating_nav_time_p1 = None;
         state.last_rating_nav_dir_p2 = None;
@@ -2430,6 +2625,8 @@ fn begin_exit_prompt(state: &mut State) {
         switch_from: None,
         switch_elapsed: 0.0,
     };
+    state.menu_lr_undo = 0;
+    state.three_key_focus = ThreeKeyFocus::Wheel;
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
 }

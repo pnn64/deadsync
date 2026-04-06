@@ -29,7 +29,7 @@ pub struct HoldData {
     pub end_beat: f32,
     pub result: Option<HoldResult>,
     pub life: f32,
-    pub let_go_started_at: Option<f32>,
+    pub let_go_started_at: Option<i64>,
     pub let_go_starting_life: f32,
     pub last_held_row_index: usize,
     pub last_held_beat: f32,

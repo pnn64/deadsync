@@ -497,11 +497,22 @@ static OUTPUT_TIMING_SANITY_FAILURES: AtomicU64 = AtomicU64::new(0);
 static OUTPUT_TIMING_UNDERRUNS: AtomicU64 = AtomicU64::new(0);
 
 const MUSIC_POS_MAP_BACKLOG_FRAMES: i64 = 80_000;
+const NANOS_PER_SECOND: f64 = 1_000_000_000.0;
+
+#[inline(always)]
+fn music_nanos_from_seconds(seconds: f64) -> i64 {
+    if !seconds.is_finite() {
+        return 0;
+    }
+    let nanos = (seconds * NANOS_PER_SECOND).round();
+    nanos.clamp(i64::MIN as f64, i64::MAX as f64) as i64
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct MusicStreamClockSnapshot {
     pub stream_seconds: f32,
     pub music_seconds: f32,
+    pub music_nanos: i64,
     pub music_seconds_per_second: f32,
     pub has_music_mapping: bool,
     pub valid_at: Instant,
@@ -1124,22 +1135,15 @@ pub fn get_music_stream_position_seconds() -> f32 {
     get_music_stream_clock_snapshot().stream_seconds
 }
 
-/// Returns the current stream position and the `Instant` it is valid for.
-pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
-    let sample_rate = ENGINE.device_sample_rate.max(1);
-    let has_started = MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire);
-    if !has_started {
-        return MusicStreamClockSnapshot {
-            stream_seconds: 0.0,
-            music_seconds: 0.0,
-            music_seconds_per_second: 1.0,
-            has_music_mapping: false,
-            valid_at: Instant::now(),
-            valid_at_host_nanos: 0,
-        };
-    }
-    let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
-    let (valid_at, at_nanos, source, window) = load_callback_clock_snapshot_now();
+#[inline(always)]
+fn music_stream_clock_snapshot_at_nanos(
+    sample_rate: u32,
+    start: u64,
+    valid_at: Instant,
+    at_nanos: u64,
+    source: CallbackClockSource,
+    window: CallbackClockWindow,
+) -> MusicStreamClockSnapshot {
     let stream_frames = stream_position_frames_from_window(sample_rate, start, at_nanos, window);
     let stream_seconds = (stream_frames / sample_rate as f64) as f32;
     let (music_seconds, music_seconds_per_second, has_music_mapping) =
@@ -1150,6 +1154,7 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
     MusicStreamClockSnapshot {
         stream_seconds,
         music_seconds,
+        music_nanos: music_nanos_from_seconds(music_seconds as f64),
         music_seconds_per_second,
         has_music_mapping,
         valid_at,
@@ -1162,6 +1167,56 @@ pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
             CallbackClockSource::Instant => at_nanos,
         },
     }
+}
+
+#[inline(always)]
+fn music_stream_clock_snapshot_at_host_nanos(host_nanos: u64) -> Option<MusicStreamClockSnapshot> {
+    if host_nanos == 0 || !MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire) {
+        return None;
+    }
+    let sample_rate = ENGINE.device_sample_rate.max(1);
+    let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
+    let (valid_at, _, source, window) = load_callback_clock_snapshot_now();
+    #[cfg(windows)]
+    if !matches!(source, CallbackClockSource::Qpc) {
+        return None;
+    }
+    Some(music_stream_clock_snapshot_at_nanos(
+        sample_rate,
+        start,
+        valid_at,
+        host_nanos,
+        source,
+        window,
+    ))
+}
+
+/// Returns the current stream position and the `Instant` it is valid for.
+pub fn get_music_stream_clock_snapshot() -> MusicStreamClockSnapshot {
+    let sample_rate = ENGINE.device_sample_rate.max(1);
+    let has_started = MUSIC_TRACK_HAS_STARTED.load(Ordering::Acquire);
+    if !has_started {
+        return MusicStreamClockSnapshot {
+            stream_seconds: 0.0,
+            music_seconds: 0.0,
+            music_nanos: 0,
+            music_seconds_per_second: 1.0,
+            has_music_mapping: false,
+            valid_at: Instant::now(),
+            valid_at_host_nanos: 0,
+        };
+    }
+    let start = MUSIC_TRACK_START_FRAME.load(Ordering::Acquire);
+    let (valid_at, at_nanos, source, window) = load_callback_clock_snapshot_now();
+    music_stream_clock_snapshot_at_nanos(sample_rate, start, valid_at, at_nanos, source, window)
+}
+
+pub fn get_music_stream_position_nanos() -> i64 {
+    get_music_stream_clock_snapshot().music_nanos
+}
+
+pub fn get_music_stream_position_nanos_at_host_nanos(host_nanos: u64) -> Option<i64> {
+    music_stream_clock_snapshot_at_host_nanos(host_nanos).map(|snapshot| snapshot.music_nanos)
 }
 
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {

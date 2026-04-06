@@ -36,6 +36,7 @@ require_cmd git
 require_cmd ssh
 require_cmd scp
 require_cmd tar
+require_cmd sed
 
 ssh_cmd=(ssh "${ssh_opts[@]}" -p "${port}" "${user}@${host}")
 scp_cmd=(scp "${ssh_opts[@]}" -P "${port}")
@@ -44,16 +45,40 @@ remote_bin="target/${target}/release/deadsync"
 local_bin_dir="target/${target}/release"
 local_bin="${local_bin_dir}/deadsync"
 
+shell_sq() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+ssh_run() {
+  local script cmd
+  script="set -eu
+export PATH=\"\$HOME/.cargo/bin:\$PATH\"
+if [ -f \"\$HOME/.cargo/env\" ]; then
+  . \"\$HOME/.cargo/env\"
+fi
+${1}"
+  cmd="$(shell_sq "${script}")"
+  "${ssh_cmd[@]}" "/bin/sh -lc ${cmd}"
+}
+
+remote_dir_q="$(shell_sq "${remote_dir}")"
+target_q="$(shell_sq "${target}")"
+term_color_q="$(shell_sq "${CARGO_TERM_COLOR:-always}")"
+
 cleanup() {
-  "${ssh_cmd[@]}" "rm -rf '${remote_dir}'" >/dev/null 2>&1 || true
+  ssh_run "rm -rf ${remote_dir_q}" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
 echo "Verifying FreeBSD builder ${user}@${host}:${port}"
-"${ssh_cmd[@]}" "uname -srm && command -v cargo >/dev/null && command -v tar >/dev/null && command -v git >/dev/null"
+ssh_run "uname -srm
+command -v cargo >/dev/null
+command -v tar >/dev/null
+command -v git >/dev/null"
 
 echo "Preparing remote workspace ${remote_dir}"
-"${ssh_cmd[@]}" "rm -rf '${remote_dir}' && mkdir -p '${remote_dir}'"
+ssh_run "rm -rf ${remote_dir_q}
+mkdir -p ${remote_dir_q}"
 
 echo "Uploading source snapshot"
 tar \
@@ -64,10 +89,11 @@ tar \
   --exclude='./songs' \
   --exclude='./courses' \
   --exclude='./.codex' \
-  -cf - . | "${ssh_cmd[@]}" "tar -xf - -C '${remote_dir}'"
+  -cf - . | ssh_run "tar -xf - -C ${remote_dir_q}"
 
 echo "Building ${arch} (${target}) on FreeBSD"
-"${ssh_cmd[@]}" "cd '${remote_dir}' && CARGO_TERM_COLOR='${CARGO_TERM_COLOR:-always}' cargo build --release --locked --target '${target}'"
+ssh_run "cd ${remote_dir_q}
+CARGO_TERM_COLOR=${term_color_q} cargo build --release --locked --target ${target_q}"
 
 mkdir -p "${local_bin_dir}"
 echo "Downloading ${remote_bin}"

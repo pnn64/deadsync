@@ -715,6 +715,44 @@ fn groovestats_final_result_counts_as_rescore_target(j: &judgment::Judgment) -> 
     )
 }
 
+#[inline(always)]
+fn groovestats_warn_submit_skip(side: profile::PlayerSide, chart_hash: &str, reason: &str) {
+    warn!(
+        "Skipping {} submit for {:?} ({}): {}.",
+        online::groovestats_service_name(),
+        side,
+        chart_hash,
+        reason
+    );
+}
+
+#[inline(always)]
+fn groovestats_player_can_submit(gs: &gameplay::State, player_idx: usize) -> bool {
+    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) {
+        return false;
+    }
+    let profile = &gs.player_profiles[player_idx];
+    let chart = gs.charts[player_idx].as_ref();
+    if groovestats_submit_invalid_reason(chart, gs.song.has_lua, profile, gs.music_rate).is_some() {
+        return false;
+    }
+    if !profile.groovestats_is_pad_player || profile.groovestats_api_key.trim().is_empty() {
+        return false;
+    }
+    !gs.players[player_idx].is_failing && gs.song_completed_naturally
+}
+
+fn groovestats_warn_submit_skip_for_eligible_players(gs: &gameplay::State, reason: &str) {
+    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        if !groovestats_player_can_submit(gs, player_idx) {
+            continue;
+        }
+        let side = gameplay_side_for_player(gs, player_idx);
+        let chart_hash = gs.charts[player_idx].short_hash.as_str();
+        groovestats_warn_submit_skip(side, chart_hash, reason);
+    }
+}
+
 fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> GrooveStatsRescoreCounts {
     let (start, end) = gs.note_ranges[player_idx];
     let mut counts = GrooveStatsRescoreCounts::default();
@@ -1071,17 +1109,22 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         return;
     }
 
-    let online::ConnectionStatus::Connected(services) = online::get_status() else {
-        debug!(
-            "Skipping {} submit: service connection is not ready.",
-            online::groovestats_service_name()
-        );
+    let status = online::get_status();
+    let online::ConnectionStatus::Connected(services) = status else {
+        let reason = match status {
+            online::ConnectionStatus::Pending => "service connection is pending".to_string(),
+            online::ConnectionStatus::Error(error) => {
+                format!("service connection error: {error}")
+            }
+            online::ConnectionStatus::Connected(_) => unreachable!(),
+        };
+        groovestats_warn_submit_skip_for_eligible_players(gs, reason.as_str());
         return;
     };
     if !services.auto_submit {
-        debug!(
-            "Skipping {} submit: auto-submit is not enabled by the service.",
-            online::groovestats_service_name()
+        groovestats_warn_submit_skip_for_eligible_players(
+            gs,
+            "auto-submit is not enabled by the service",
         );
         return;
     }
@@ -1104,49 +1147,43 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         };
         let profile = &gs.player_profiles[player_idx];
         let chart = gs.charts[player_idx].as_ref();
+        let chart_hash = chart.short_hash.as_str();
+        let passed = !gs.players[player_idx].is_failing && gs.song_completed_naturally;
 
         if let Some(reason) =
             groovestats_submit_invalid_reason(chart, gs.song.has_lua, profile, gs.music_rate)
         {
-            debug!(
-                "Skipping {} submit for {:?} ({}): {}.",
-                online::groovestats_service_name(),
-                side,
-                chart.short_hash,
-                reason
-            );
+            groovestats_warn_submit_skip(side, chart_hash, reason.as_str());
             continue;
         }
         if !profile.groovestats_is_pad_player {
-            debug!(
-                "Skipping {} submit for {:?} ({}): profile is not marked as a pad player.",
-                online::groovestats_service_name(),
-                side,
-                chart.short_hash
-            );
+            groovestats_warn_submit_skip(side, chart_hash, "profile is not marked as a pad player");
             continue;
         }
         if profile.groovestats_api_key.trim().is_empty() {
+            if passed {
+                groovestats_warn_submit_skip(side, chart_hash, "profile is missing API key");
+            }
             continue;
         }
-        let passed = !gs.players[player_idx].is_failing && gs.song_completed_naturally;
         if !passed {
             debug!(
                 "Skipping {} submit for {:?} ({}): song was not passed.",
                 online::groovestats_service_name(),
                 side,
-                chart.short_hash
+                chart_hash
             );
             continue;
         }
 
         let Some(payload) = groovestats_payload_for_player(gs, player_idx) else {
+            groovestats_warn_submit_skip(side, chart_hash, "failed to build submit payload");
             continue;
         };
         groovestats_store_submit_retry(GrooveStatsSubmitRetryEntry {
             side,
             slot,
-            chart_hash: chart.short_hash.clone(),
+            chart_hash: chart_hash.to_string(),
             username: profile.groovestats_username.trim().to_string(),
             profile_name: profile.display_name.clone(),
             profile_id: profile::active_local_profile_id_for_side(side),
@@ -1158,15 +1195,15 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         let token = groovestats_next_submit_ui_token();
         groovestats_set_submit_ui_status(
             side,
-            chart.short_hash.as_str(),
+            chart_hash,
             token,
             GrooveStatsSubmitUiStatus::Submitting,
         );
-        groovestats_arm_submit_event_ui(side, chart.short_hash.as_str(), token);
+        groovestats_arm_submit_event_ui(side, chart_hash, token);
         players.push(GrooveStatsSubmitPlayerJob {
             side,
             slot,
-            chart_hash: chart.short_hash.clone(),
+            chart_hash: chart_hash.to_string(),
             username: profile.groovestats_username.trim().to_string(),
             profile_name: profile.display_name.clone(),
             profile_id: profile::active_local_profile_id_for_side(side),
@@ -1178,7 +1215,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             format!("x-api-key-player-{slot}"),
             profile.groovestats_api_key.trim().to_string(),
         ));
-        query.push((format!("chartHashP{slot}"), chart.short_hash.clone()));
+        query.push((format!("chartHashP{slot}"), chart_hash.to_string()));
         body.insert(
             format!("player{slot}"),
             serde_json::to_value(payload).expect("serialize GrooveStats submit payload"),

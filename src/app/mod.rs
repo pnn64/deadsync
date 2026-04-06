@@ -1445,6 +1445,20 @@ fn prewarm_gameplay_assets(
             }
         });
     }
+    for noteskin in state.receptor_noteskin.iter().flatten() {
+        noteskin.for_each_texture_key(|key| {
+            if seen.insert(key.to_owned()) {
+                assets.ensure_texture_for_key(backend, key);
+            }
+        });
+    }
+    for noteskin in state.tap_explosion_noteskin.iter().flatten() {
+        noteskin.for_each_texture_key(|key| {
+            if seen.insert(key.to_owned()) {
+                assets.ensure_texture_for_key(backend, key);
+            }
+        });
+    }
     if let Some(path) = state.song.background_path.as_ref() {
         let key = path.to_string_lossy().into_owned();
         if seen.insert(key) {
@@ -2586,6 +2600,11 @@ impl App {
                     // avoid redundant eager init here.
                     self.handle_navigation_action(CurrentScreen::SelectColor);
                 }
+                Vec::new()
+            }
+            ScreenAction::RequestScreenshot(side) => {
+                self.state.shell.screenshot_pending = true;
+                self.state.shell.screenshot_request_side = side;
                 Vec::new()
             }
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
@@ -5105,6 +5124,7 @@ impl App {
                         pressed: e.pressed,
                         source: e.source,
                         event_music_time: e.event_music_time,
+                        event_music_time_ns: i64::MIN,
                     })
                     .collect::<Vec<_>>()
             });

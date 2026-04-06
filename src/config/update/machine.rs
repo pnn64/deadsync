@@ -1,5 +1,19 @@
 use super::*;
 
+#[inline(always)]
+fn dedicated_menu_buttons_supported(three_key_navigation: bool) -> bool {
+    crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation)
+}
+
+#[inline(always)]
+const fn dedicated_menu_navigation_label(three_key_navigation: bool) -> &'static str {
+    if three_key_navigation {
+        "Three Key Menu"
+    } else {
+        "Five Key Menu"
+    }
+}
+
 pub fn update_input_debounce_seconds(seconds: f32) {
     let seconds = seconds.clamp(0.0, 0.2);
     {
@@ -13,14 +27,55 @@ pub fn update_input_debounce_seconds(seconds: f32) {
     save_without_keymaps();
 }
 
-pub fn update_only_dedicated_menu_buttons(enabled: bool) {
+pub fn update_arcade_options_navigation(enabled: bool) {
     {
         let mut cfg = lock_config();
+        if cfg.arcade_options_navigation == enabled {
+            return;
+        }
+        cfg.arcade_options_navigation = enabled;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_three_key_navigation(enabled: bool) {
+    let dedicated = {
+        let mut cfg = lock_config();
+        if cfg.three_key_navigation == enabled {
+            return;
+        }
+        cfg.three_key_navigation = enabled;
+        if cfg.only_dedicated_menu_buttons && !dedicated_menu_buttons_supported(enabled) {
+            warn!(
+                "three_key_navigation changed to {} but no player has the required dedicated menu buttons mapped — disabling dedicated-only menu navigation.",
+                dedicated_menu_navigation_label(enabled)
+            );
+            cfg.only_dedicated_menu_buttons = false;
+        }
+        cfg.only_dedicated_menu_buttons
+    };
+    crate::engine::input::set_only_dedicated_menu_buttons(dedicated);
+    save_without_keymaps();
+}
+
+pub fn update_only_dedicated_menu_buttons(enabled: bool) {
+    let enabled = {
+        let mut cfg = lock_config();
+        let enabled = if enabled && !dedicated_menu_buttons_supported(cfg.three_key_navigation) {
+            warn!(
+                "only_dedicated_menu_buttons requires dedicated menu buttons for {} mode, but no player has the required bindings mapped — leaving gameplay button fallback enabled.",
+                dedicated_menu_navigation_label(cfg.three_key_navigation)
+            );
+            false
+        } else {
+            enabled
+        };
         if cfg.only_dedicated_menu_buttons == enabled {
             return;
         }
         cfg.only_dedicated_menu_buttons = enabled;
-    }
+        enabled
+    };
     crate::engine::input::set_only_dedicated_menu_buttons(enabled);
     save_without_keymaps();
 }

@@ -820,7 +820,7 @@ impl TimingData {
     }
 
     /// Shift song timing by adjusting beat0 offset in seconds.
-    /// Positive `delta_seconds` moves note times later.
+    /// Positive `delta_seconds` moves note times earlier.
     #[inline(always)]
     pub fn shift_song_offset_seconds(&mut self, delta_seconds: f32) {
         if delta_seconds.abs() < f32::EPSILON {

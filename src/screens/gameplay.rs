@@ -858,10 +858,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let Some(ns) = state.noteskin[player_idx].as_ref() else {
             return 256.0;
         };
+        let receptor_ns = state.receptor_noteskin[player_idx].as_deref().unwrap_or(ns);
         let cols = state
             .cols_per_player
             .min(ns.column_xs.len())
-            .min(ns.receptor_off.len());
+            .min(receptor_ns.receptor_off.len());
         if cols == 0 {
             return 256.0;
         }
@@ -876,7 +877,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         // SL parity (GetNotefieldWidth): layout width is style/lane based and must
         // not shrink/grow with Mini (field zoom).
         let target_arrow_px = 64.0;
-        let size = ns.receptor_off[0].size();
+        let size = receptor_ns.receptor_off[0].size();
         let w = size[0].max(0) as f32;
         let h = size[1].max(0) as f32;
         let arrow_w = if h > 0.0 && target_arrow_px > 0.0 {

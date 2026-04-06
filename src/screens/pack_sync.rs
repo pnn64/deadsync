@@ -10,6 +10,7 @@ use crate::engine::space::{
 use crate::game::chart::ChartData;
 use crate::screens::SongOffsetSyncChange;
 use crate::screens::components::shared::loading_bar;
+use crate::screens::input as screen_input;
 use null_or_die::{BiasStreamCfg, BiasStreamEvent, GraphOrientation};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -93,6 +94,13 @@ enum OverlayPhase {
     Review,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum ThreeKeyFocus {
+    #[default]
+    Rows,
+    Choice,
+}
+
 pub(crate) struct OverlayStateData {
     pack_name: String,
     rows: Vec<RowState>,
@@ -104,6 +112,8 @@ pub(crate) struct OverlayStateData {
     cancel: Arc<AtomicBool>,
     current_row: Option<usize>,
     rx: mpsc::Receiver<WorkerMsg>,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    three_key_focus: ThreeKeyFocus,
 }
 
 pub(crate) enum OverlayState {
@@ -601,6 +611,8 @@ pub(crate) fn begin(state: &mut OverlayState, pack_name: String, targets: Vec<Ta
         cancel,
         current_row: None,
         rx,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        three_key_focus: ThreeKeyFocus::Rows,
     });
     true
 }
@@ -617,6 +629,12 @@ pub(crate) fn handle_input(
     state: &mut OverlayState,
     ev: &InputEvent,
 ) -> crate::screens::ScreenAction {
+    let three_key_action = {
+        let OverlayState::Visible(overlay) = state else {
+            return crate::screens::ScreenAction::None;
+        };
+        screen_input::three_key_menu_action(&mut overlay.menu_lr_chord, ev)
+    };
     if !ev.pressed {
         return crate::screens::ScreenAction::None;
     }
@@ -631,106 +649,185 @@ pub(crate) fn handle_input(
         let OverlayState::Visible(overlay) = state else {
             return crate::screens::ScreenAction::None;
         };
-        match overlay.phase {
-            OverlayPhase::Running => match ev.action {
-                VirtualAction::p1_up
-                | VirtualAction::p1_menu_up
-                | VirtualAction::p2_up
-                | VirtualAction::p2_menu_up => {
-                    if shift(overlay, -1) {
-                        play_change = true;
+        if screen_input::dedicated_three_key_nav_enabled()
+            && let Some((_, nav)) = three_key_action
+        {
+            match overlay.phase {
+                OverlayPhase::Running => match nav {
+                    screen_input::ThreeKeyMenuAction::Prev => {
+                        if shift(overlay, -1) {
+                            play_change = true;
+                        }
+                    }
+                    screen_input::ThreeKeyMenuAction::Next => {
+                        if shift(overlay, 1) {
+                            play_change = true;
+                        }
+                    }
+                    screen_input::ThreeKeyMenuAction::Confirm
+                    | screen_input::ThreeKeyMenuAction::Cancel => {
+                        close_overlay = true;
+                        play_start = true;
+                    }
+                },
+                OverlayPhase::Review => {
+                    if matches!(overlay.three_key_focus, ThreeKeyFocus::Rows) {
+                        match nav {
+                            screen_input::ThreeKeyMenuAction::Prev => {
+                                if shift(overlay, -1) {
+                                    play_change = true;
+                                }
+                            }
+                            screen_input::ThreeKeyMenuAction::Next => {
+                                if shift(overlay, 1) {
+                                    play_change = true;
+                                }
+                            }
+                            screen_input::ThreeKeyMenuAction::Confirm => {
+                                if can_save(overlay) {
+                                    overlay.three_key_focus = ThreeKeyFocus::Choice;
+                                    play_change = true;
+                                } else {
+                                    close_overlay = true;
+                                    play_start = true;
+                                }
+                            }
+                            screen_input::ThreeKeyMenuAction::Cancel => {
+                                close_overlay = true;
+                                play_start = true;
+                            }
+                        }
+                    } else {
+                        match nav {
+                            screen_input::ThreeKeyMenuAction::Prev => {
+                                if can_save(overlay) && !overlay.yes_selected {
+                                    overlay.yes_selected = true;
+                                    play_change = true;
+                                }
+                            }
+                            screen_input::ThreeKeyMenuAction::Next => {
+                                if can_save(overlay) && overlay.yes_selected {
+                                    overlay.yes_selected = false;
+                                    play_change = true;
+                                }
+                            }
+                            screen_input::ThreeKeyMenuAction::Confirm => {
+                                if can_save(overlay) && overlay.yes_selected {
+                                    apply_changes = Some(collect_changes(overlay));
+                                }
+                                close_overlay = true;
+                                play_start = true;
+                            }
+                            screen_input::ThreeKeyMenuAction::Cancel => {
+                                overlay.three_key_focus = ThreeKeyFocus::Rows;
+                                play_change = true;
+                            }
+                        }
                     }
                 }
-                VirtualAction::p1_down
-                | VirtualAction::p1_menu_down
-                | VirtualAction::p2_down
-                | VirtualAction::p2_menu_down => {
-                    if shift(overlay, 1) {
-                        play_change = true;
+            }
+        } else {
+            match overlay.phase {
+                OverlayPhase::Running => match ev.action {
+                    VirtualAction::p1_up
+                    | VirtualAction::p1_menu_up
+                    | VirtualAction::p2_up
+                    | VirtualAction::p2_menu_up => {
+                        if shift(overlay, -1) {
+                            play_change = true;
+                        }
                     }
-                }
-                VirtualAction::p1_left
-                | VirtualAction::p1_menu_left
-                | VirtualAction::p2_left
-                | VirtualAction::p2_menu_left => {
-                    if shift(overlay, -page_delta) {
-                        play_change = true;
+                    VirtualAction::p1_down
+                    | VirtualAction::p1_menu_down
+                    | VirtualAction::p2_down
+                    | VirtualAction::p2_menu_down => {
+                        if shift(overlay, 1) {
+                            play_change = true;
+                        }
                     }
-                }
-                VirtualAction::p1_right
-                | VirtualAction::p1_menu_right
-                | VirtualAction::p2_right
-                | VirtualAction::p2_menu_right => {
-                    if shift(overlay, page_delta) {
-                        play_change = true;
+                    VirtualAction::p1_left
+                    | VirtualAction::p1_menu_left
+                    | VirtualAction::p2_left
+                    | VirtualAction::p2_menu_left => {
+                        if shift(overlay, -page_delta) {
+                            play_change = true;
+                        }
                     }
-                }
-                VirtualAction::p1_start
-                | VirtualAction::p2_start
-                | VirtualAction::p1_back
-                | VirtualAction::p2_back
-                | VirtualAction::p1_select
-                | VirtualAction::p2_select => {
-                    close_overlay = true;
-                    play_start = true;
-                }
-                _ => {}
-            },
-            OverlayPhase::Review => match ev.action {
-                VirtualAction::p1_up
-                | VirtualAction::p1_menu_up
-                | VirtualAction::p2_up
-                | VirtualAction::p2_menu_up => {
-                    if shift(overlay, -1) {
-                        play_change = true;
+                    VirtualAction::p1_right
+                    | VirtualAction::p1_menu_right
+                    | VirtualAction::p2_right
+                    | VirtualAction::p2_menu_right => {
+                        if shift(overlay, page_delta) {
+                            play_change = true;
+                        }
                     }
-                }
-                VirtualAction::p1_down
-                | VirtualAction::p1_menu_down
-                | VirtualAction::p2_down
-                | VirtualAction::p2_menu_down => {
-                    if shift(overlay, 1) {
-                        play_change = true;
+                    VirtualAction::p1_start
+                    | VirtualAction::p2_start
+                    | VirtualAction::p1_back
+                    | VirtualAction::p2_back
+                    | VirtualAction::p1_select
+                    | VirtualAction::p2_select => {
+                        close_overlay = true;
+                        play_start = true;
                     }
-                }
-                VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => {
-                    if shift(overlay, -page_delta) {
-                        play_change = true;
+                    _ => {}
+                },
+                OverlayPhase::Review => match ev.action {
+                    VirtualAction::p1_up
+                    | VirtualAction::p1_menu_up
+                    | VirtualAction::p2_up
+                    | VirtualAction::p2_menu_up => {
+                        if shift(overlay, -1) {
+                            play_change = true;
+                        }
                     }
-                }
-                VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => {
-                    if shift(overlay, page_delta) {
-                        play_change = true;
+                    VirtualAction::p1_down
+                    | VirtualAction::p1_menu_down
+                    | VirtualAction::p2_down
+                    | VirtualAction::p2_menu_down => {
+                        if shift(overlay, 1) {
+                            play_change = true;
+                        }
                     }
-                }
-                VirtualAction::p1_left | VirtualAction::p2_left => {
-                    if can_save(overlay) && !overlay.yes_selected {
-                        overlay.yes_selected = true;
-                        play_change = true;
+                    VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => {
+                        if shift(overlay, -page_delta) {
+                            play_change = true;
+                        }
                     }
-                }
-                VirtualAction::p1_right | VirtualAction::p2_right => {
-                    if can_save(overlay) && overlay.yes_selected {
-                        overlay.yes_selected = false;
-                        play_change = true;
+                    VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => {
+                        if shift(overlay, page_delta) {
+                            play_change = true;
+                        }
                     }
-                }
-                VirtualAction::p1_start | VirtualAction::p2_start => {
-                    if can_save(overlay) && overlay.yes_selected {
-                        apply_changes = Some(collect_changes(overlay));
+                    VirtualAction::p1_left | VirtualAction::p2_left => {
+                        if can_save(overlay) && !overlay.yes_selected {
+                            overlay.yes_selected = true;
+                            play_change = true;
+                        }
                     }
-                    close_overlay = true;
-                    play_start = true;
-                }
-                VirtualAction::p1_back
-                | VirtualAction::p2_back
-                | VirtualAction::p1_select
-                | VirtualAction::p2_select => {
-                    close_overlay = true;
-                    play_start = true;
-                }
-                _ => {}
-            },
+                    VirtualAction::p1_right | VirtualAction::p2_right => {
+                        if can_save(overlay) && overlay.yes_selected {
+                            overlay.yes_selected = false;
+                            play_change = true;
+                        }
+                    }
+                    VirtualAction::p1_start | VirtualAction::p2_start => {
+                        if can_save(overlay) && overlay.yes_selected {
+                            apply_changes = Some(collect_changes(overlay));
+                        }
+                        close_overlay = true;
+                        play_start = true;
+                    }
+                    VirtualAction::p1_back
+                    | VirtualAction::p2_back
+                    | VirtualAction::p1_select
+                    | VirtualAction::p2_select => {
+                        close_overlay = true;
+                        play_start = true;
+                    }
+                    _ => {}
+                },
+            }
         }
     }
 
@@ -1010,12 +1107,14 @@ fn poll_overlay(overlay: &mut OverlayStateData) {
             Ok(WorkerMsg::Finished) => {
                 overlay.phase = OverlayPhase::Review;
                 overlay.current_row = None;
+                overlay.three_key_focus = ThreeKeyFocus::Rows;
                 break;
             }
             Err(mpsc::TryRecvError::Empty) => break,
             Err(mpsc::TryRecvError::Disconnected) => {
                 overlay.phase = OverlayPhase::Review;
                 overlay.current_row = None;
+                overlay.three_key_focus = ThreeKeyFocus::Rows;
                 break;
             }
         }
