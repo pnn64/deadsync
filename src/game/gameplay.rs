@@ -10794,13 +10794,12 @@ fn apply_song_offset_delta(state: &mut State, delta: f32) -> bool {
         return false;
     }
 
-    let timing_shift_seconds = old_offset - new_offset;
     mutate_timing_arc(&mut state.timing, |timing| {
-        timing.shift_song_offset_seconds(timing_shift_seconds)
+        timing.shift_song_offset_seconds(delta)
     });
     for timing in &mut state.timing_players {
         mutate_timing_arc(timing, |timing| {
-            timing.shift_song_offset_seconds(timing_shift_seconds)
+            timing.shift_song_offset_seconds(delta)
         });
     }
     refresh_timing_after_offset_change(state);
@@ -12452,7 +12451,8 @@ mod tests {
         REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
         TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
         advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
-        apply_mines_insert, arrow_time_window_bounds_ns, autoplay_random_offset_s_for_window,
+        apply_global_offset_delta, apply_mines_insert, apply_song_offset_delta,
+        arrow_time_window_bounds_ns, autoplay_random_offset_s_for_window,
         build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
         build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
         completed_row_final_judgment, completed_row_flash_note_indices_and_grade,
@@ -12824,6 +12824,27 @@ mod tests {
                 assert!(state.hold_to_exit_start.is_some());
             },
         );
+    }
+
+    #[test]
+    fn positive_song_offset_delta_moves_notes_earlier_like_global_offset() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut song_state = regression_state(profiles.clone());
+        let mut global_state = regression_state(profiles);
+
+        let song_before = song_state.note_time_cache[0];
+        let global_before = global_state.note_time_cache[0];
+
+        assert!(apply_song_offset_delta(&mut song_state, 0.010));
+        assert!(apply_global_offset_delta(&mut global_state, 0.010));
+
+        let song_after = song_state.note_time_cache[0];
+        let global_after = global_state.note_time_cache[0];
+
+        assert!((song_state.song_offset_seconds - 0.010).abs() <= 1e-6);
+        assert!((global_state.global_offset_seconds - 0.010).abs() <= 1e-6);
+        assert!((song_before - song_after - 0.010).abs() <= 1e-6);
+        assert!((global_before - global_after - 0.010).abs() <= 1e-6);
     }
 
     #[test]
