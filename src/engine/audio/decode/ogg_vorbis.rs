@@ -67,7 +67,16 @@ impl Reader {
         &mut self,
         target_frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.inner.seek_absgp_pg(target_frame)?;
+        // Seek *before* the target so the Vorbis decoder's overlap
+        // state (PreviousWindowRight) is fully primed by the time we
+        // reach `target_frame`.  After `seek_absgp_pg` the first
+        // decoded packet is a warmup that produces 0 output frames;
+        // if the target falls inside that warmup gap the audio we
+        // deliver would start late.  A preroll of one maximum block
+        // guarantees the gap is behind us.
+        let preroll_frames = 1u64 << self.inner.ident_hdr.blocksize_1;
+        let seek_pos = target_frame.saturating_sub(preroll_frames);
+        self.inner.seek_absgp_pg(seek_pos)?;
         self.pending = None;
 
         // After `seek_absgp_pg`, lewton resets its internal `cur_absgp` to
