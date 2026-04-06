@@ -57,6 +57,7 @@ const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
 const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
 const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
+const AUTO_SUBMIT_RECORD_TEXT_Y_WITH_LOCAL_RECORDS: f32 = 28.0;
 const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
 const AUTO_SUBMIT_RECORD_TEXT_PERIOD: f32 = 3.0;
 const SUBMIT_STATUS_CHECK_GLYPH: &str = "✔";
@@ -3269,11 +3270,18 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 } else {
                     screen_center_x() + 225.0
                 };
+                let has_local_record_text = si.machine_record_highlight_rank.is_some()
+                    || si.personal_record_highlight_rank.is_some();
+                let y = if has_local_record_text {
+                    AUTO_SUBMIT_RECORD_TEXT_Y_WITH_LOCAL_RECORDS
+                } else {
+                    AUTO_SUBMIT_RECORD_TEXT_Y
+                };
                 actors.push(act!(text:
                     font("wendy"):
                     settext(cached_str_ref(submit_record_text(banner))):
                     align(0.5, 0.5):
-                    xy(x, AUTO_SUBMIT_RECORD_TEXT_Y):
+                    xy(x, y):
                     zoom(AUTO_SUBMIT_RECORD_TEXT_ZOOM):
                     z(121):
                     diffuse(1.0, 1.0, 1.0, 1.0):
