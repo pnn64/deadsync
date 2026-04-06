@@ -1770,12 +1770,19 @@ enum PlayerLeaderboardCacheValue {
     Error(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PlayerLeaderboardCacheSource {
+    Fetch,
+    SubmitResponse,
+}
+
 #[derive(Debug, Clone)]
 struct PlayerLeaderboardCacheEntry {
     value: PlayerLeaderboardCacheValue,
     max_entries: usize,
     refreshed_at: Instant,
     retry_after: Option<Instant>,
+    source: PlayerLeaderboardCacheSource,
 }
 
 #[derive(Default)]
@@ -2005,6 +2012,78 @@ fn leaderboard_pane_key_eq(a: &LeaderboardPane, b: &LeaderboardPane) -> bool {
     a.is_ex == b.is_ex && a.name.eq_ignore_ascii_case(b.name.as_str())
 }
 
+#[inline(always)]
+fn same_leaderboard_identity(a: &LeaderboardEntry, b: &LeaderboardEntry) -> bool {
+    let a_name = a.name.trim();
+    let b_name = b.name.trim();
+    if a_name.is_empty() || b_name.is_empty() || !a_name.eq_ignore_ascii_case(b_name) {
+        return false;
+    }
+    match (a.machine_tag.as_deref(), b.machine_tag.as_deref()) {
+        (Some(a_tag), Some(b_tag)) if !a_tag.trim().is_empty() && !b_tag.trim().is_empty() => {
+            a_tag.eq_ignore_ascii_case(b_tag)
+        }
+        _ => true,
+    }
+}
+
+fn merge_submit_pane_entries(
+    pane: &mut LeaderboardPane,
+    username: &str,
+    existing: &LeaderboardPane,
+) {
+    if pane.entries.is_empty() || existing.entries.is_empty() {
+        return;
+    }
+
+    let username = username.trim();
+    if !username.is_empty()
+        && !pane.entries.iter().any(|entry| entry.is_self)
+        && let Some(entry) = pane
+            .entries
+            .iter_mut()
+            .find(|entry| entry.name.eq_ignore_ascii_case(username))
+    {
+        entry.is_self = true;
+    }
+
+    for existing_entry in &existing.entries {
+        if let Some(entry) = pane
+            .entries
+            .iter_mut()
+            .find(|entry| same_leaderboard_identity(entry, existing_entry))
+        {
+            entry.is_self |= existing_entry.is_self;
+            entry.is_rival |= existing_entry.is_rival;
+        }
+    }
+
+    if !pane.entries.iter().any(|entry| entry.is_self)
+        && let Some(existing_self) = existing.entries.iter().find(|entry| entry.is_self)
+    {
+        pane.entries.push(existing_self.clone());
+    }
+
+    for existing_rival in existing.entries.iter().filter(|entry| entry.is_rival) {
+        if pane
+            .entries
+            .iter()
+            .any(|entry| same_leaderboard_identity(entry, existing_rival))
+        {
+            continue;
+        }
+        pane.entries.push(existing_rival.clone());
+    }
+
+    pane.entries.sort_by(|a, b| {
+        a.rank.cmp(&b.rank).then_with(|| {
+            a.name
+                .to_ascii_lowercase()
+                .cmp(&b.name.to_ascii_lowercase())
+        })
+    });
+}
+
 fn player_leaderboard_data_from_submit_response(
     response: &GrooveStatsSubmitApiPlayer,
     username: &str,
@@ -2052,6 +2131,15 @@ fn player_leaderboard_data_from_submit_response(
     }
 
     if let Some(existing) = existing {
+        for pane in &mut panes {
+            if let Some(existing_pane) = existing
+                .panes
+                .iter()
+                .find(|existing_pane| leaderboard_pane_key_eq(existing_pane, pane))
+            {
+                merge_submit_pane_entries(pane, username, existing_pane);
+            }
+        }
         for pane in &existing.panes {
             if panes
                 .iter()
@@ -2136,20 +2224,18 @@ fn cache_player_leaderboard_submit_response(
         show_ex_score,
         existing.as_ref(),
     );
-    let ready_for_key =
-        !key.include_arrowcloud || data.panes.iter().any(LeaderboardPane::is_arrowcloud);
 
     cache.by_key.insert(
         key,
         PlayerLeaderboardCacheEntry {
             value: PlayerLeaderboardCacheValue::Ready(data),
-            max_entries: if ready_for_key {
-                GROOVESTATS_SUBMIT_MAX_ENTRIES
-            } else {
-                0
-            },
+            // Submit responses are provisional snapshots: they are useful for
+            // immediate UI updates, but they may omit self/rival rows that the
+            // full leaderboard fetch returns. Force the next read to refresh.
+            max_entries: 0,
             refreshed_at,
             retry_after: None,
+            source: PlayerLeaderboardCacheSource::SubmitResponse,
         },
     );
 }
@@ -2159,7 +2245,10 @@ fn should_keep_newer_player_leaderboard_entry(
     entry: Option<&PlayerLeaderboardCacheEntry>,
     request_started_at: Instant,
 ) -> bool {
-    entry.is_some_and(|entry| entry.refreshed_at > request_started_at)
+    entry.is_some_and(|entry| {
+        entry.source != PlayerLeaderboardCacheSource::SubmitResponse
+            && entry.refreshed_at > request_started_at
+    })
 }
 
 #[inline(always)]
@@ -2670,6 +2759,7 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
                             max_entries: requested_max_entries,
                             refreshed_at: refresh_finished_at,
                             retry_after: None,
+                            source: PlayerLeaderboardCacheSource::Fetch,
                         },
                     );
                 }
@@ -2687,6 +2777,7 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
                         entry.refreshed_at = refresh_finished_at;
                         entry.retry_after =
                             Some(refresh_finished_at + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL);
+                        entry.source = PlayerLeaderboardCacheSource::Fetch;
                     } else {
                         cache.by_key.insert(
                             key,
@@ -2697,6 +2788,7 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
                                 retry_after: Some(
                                     refresh_finished_at + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
                                 ),
+                                source: PlayerLeaderboardCacheSource::Fetch,
                             },
                         );
                     }
@@ -3845,6 +3937,7 @@ mod tests {
             max_entries: 5,
             refreshed_at: Instant::now(),
             retry_after: None,
+            source: PlayerLeaderboardCacheSource::Fetch,
         };
         assert!(!should_fetch_player_leaderboard_entry(
             Some(&ready),
@@ -3871,6 +3964,7 @@ mod tests {
             max_entries: 5,
             refreshed_at: Instant::now(),
             retry_after: Some(Instant::now() + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL),
+            source: PlayerLeaderboardCacheSource::Fetch,
         };
         assert!(!should_fetch_player_leaderboard_entry(
             Some(&cooled_down_ready),
@@ -3888,6 +3982,7 @@ mod tests {
             max_entries: 5,
             refreshed_at: Instant::now() - PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
             retry_after: Some(Instant::now() - Duration::from_millis(1)),
+            source: PlayerLeaderboardCacheSource::Fetch,
         };
         assert!(should_fetch_player_leaderboard_entry(
             Some(&stale_error),
@@ -3983,6 +4078,104 @@ mod tests {
     }
 
     #[test]
+    fn submit_response_leaderboard_merge_preserves_self_and_rivals() {
+        let existing = PlayerLeaderboardData {
+            panes: vec![LeaderboardPane {
+                name: "GrooveStats".to_string(),
+                entries: vec![
+                    LeaderboardEntry {
+                        rank: 1,
+                        name: "World".to_string(),
+                        machine_tag: Some("WLD".to_string()),
+                        score: 9999.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: false,
+                        is_fail: false,
+                    },
+                    LeaderboardEntry {
+                        rank: 4,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: Some("ME".to_string()),
+                        score: 9910.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: true,
+                        is_fail: false,
+                    },
+                    LeaderboardEntry {
+                        rank: 7,
+                        name: "RivalA".to_string(),
+                        machine_tag: Some("RIV".to_string()),
+                        score: 9820.0,
+                        date: String::new(),
+                        is_rival: true,
+                        is_self: false,
+                        is_fail: false,
+                    },
+                ],
+                is_ex: false,
+                disabled: false,
+            }],
+            itl_self_score: None,
+        };
+        let response = GrooveStatsSubmitApiPlayer {
+            chart_hash: "deadbeef".to_string(),
+            result: "improved".to_string(),
+            gs_leaderboard: vec![
+                LeaderboardApiEntry {
+                    rank: 1,
+                    name: "World".to_string(),
+                    machine_tag: Some("WLD".to_string()),
+                    score: 9999.0,
+                    date: String::new(),
+                    is_rival: false,
+                    is_self: false,
+                    is_fail: false,
+                    comments: None,
+                },
+                LeaderboardApiEntry {
+                    rank: 3,
+                    name: "PerfectTaste".to_string(),
+                    machine_tag: Some("ME".to_string()),
+                    score: 9940.0,
+                    date: String::new(),
+                    is_rival: false,
+                    is_self: false,
+                    is_fail: false,
+                    comments: None,
+                },
+            ],
+            ex_leaderboard: Vec::new(),
+            rpg: None,
+            itl: None,
+        };
+
+        let merged = player_leaderboard_data_from_submit_response(
+            &response,
+            "PerfectTaste",
+            false,
+            Some(&existing),
+        );
+        let pane = merged
+            .panes
+            .iter()
+            .find(|pane| pane.is_groovestats() && !pane.is_ex)
+            .expect("merged GS pane");
+
+        assert!(
+            pane.entries
+                .iter()
+                .any(|entry| entry.name == "PerfectTaste" && entry.rank == 3 && entry.is_self)
+        );
+        assert!(
+            pane.entries
+                .iter()
+                .any(|entry| entry.name == "RivalA" && entry.is_rival)
+        );
+    }
+
+    #[test]
     fn newer_player_leaderboard_entry_blocks_older_fetch_result() {
         let newer_entry = PlayerLeaderboardCacheEntry {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
@@ -3992,6 +4185,7 @@ mod tests {
             max_entries: 0,
             refreshed_at: Instant::now(),
             retry_after: None,
+            source: PlayerLeaderboardCacheSource::Fetch,
         };
         let older_request_started_at = Instant::now() - Duration::from_millis(1);
         assert!(should_keep_newer_player_leaderboard_entry(
@@ -4007,10 +4201,30 @@ mod tests {
             max_entries: 0,
             refreshed_at: Instant::now() - Duration::from_secs(1),
             retry_after: None,
+            source: PlayerLeaderboardCacheSource::Fetch,
         };
         assert!(!should_keep_newer_player_leaderboard_entry(
             Some(&older_entry),
             Instant::now(),
+        ));
+    }
+
+    #[test]
+    fn provisional_submit_cache_does_not_block_authoritative_fetch() {
+        let provisional = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                itl_self_score: None,
+            }),
+            max_entries: 0,
+            refreshed_at: Instant::now(),
+            retry_after: None,
+            source: PlayerLeaderboardCacheSource::SubmitResponse,
+        };
+
+        assert!(!should_keep_newer_player_leaderboard_entry(
+            Some(&provisional),
+            Instant::now() - Duration::from_millis(1),
         ));
     }
 

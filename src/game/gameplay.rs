@@ -10798,9 +10798,7 @@ fn apply_song_offset_delta(state: &mut State, delta: f32) -> bool {
         timing.shift_song_offset_seconds(delta)
     });
     for timing in &mut state.timing_players {
-        mutate_timing_arc(timing, |timing| {
-            timing.shift_song_offset_seconds(delta)
-        });
+        mutate_timing_arc(timing, |timing| timing.shift_song_offset_seconds(delta));
     }
     refresh_timing_after_offset_change(state);
     state.song_offset_seconds = new_offset;
@@ -12452,24 +12450,24 @@ mod tests {
         TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
         advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
         apply_global_offset_delta, apply_mines_insert, apply_song_offset_delta,
-        arrow_time_window_bounds_ns, autoplay_random_offset_s_for_window,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
-        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
-        completed_row_final_judgment, completed_row_flash_note_indices_and_grade,
-        completed_row_hidden_note_indices, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
-        enforce_max_simultaneous_notes, finalized_row_outcome_for_cached_row, find_arrow_index,
-        frame_stable_display_music_time, handle_input, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
-        lane_release_finished, late_note_resolution_window_s, live_autoplay_enabled_from_flags,
-        max_step_distance_seconds, mine_window_bounds_ns, music_time_from_song_clock,
-        next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
-        partition_notes_before_time, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, recent_step_tracks, recompute_player_totals,
-        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
-        row_final_grade_hides_note, score_missed_holds_and_rolls, score_valid_for_chart,
-        scored_hold_totals_with_carry, single_runtime_player_is_p2, song_time_ns_from_seconds,
-        song_time_ns_to_seconds, stage_music_cut, step_calories, suppress_final_bad_rescore_visual,
-        tick_mode_status_line, turn_option_bits, update_lane_count,
+        arrow_time_window_bounds_ns, autoplay_random_offset_s_for_window, build_assist_clap_rows,
+        build_attack_mask_windows_for_player, build_column_cues_for_player, build_row_grids,
+        closest_lane_note_ns, collect_edge_judge_indices, completed_row_final_judgment,
+        completed_row_flash_note_indices_and_grade, completed_row_hidden_note_indices,
+        count_rescore_tracks_on_row, crossed_mine_bounds_ns, enforce_max_simultaneous_notes,
+        finalized_row_outcome_for_cached_row, find_arrow_index, frame_stable_display_music_time,
+        handle_input, input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap,
+        lane_edge_matches_note_type, lane_press_started, lane_release_finished,
+        late_note_resolution_window_s, live_autoplay_enabled_from_flags, max_step_distance_seconds,
+        mine_window_bounds_ns, music_time_from_song_clock, next_ready_row_in_lookahead,
+        next_tick_mode, parse_attack_mods, partition_notes_before_time,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
+        recompute_player_totals, remove_provisional_early_score, replay_edge_cap,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_missed_holds_and_rolls,
+        score_valid_for_chart, scored_hold_totals_with_carry, single_runtime_player_is_p2,
+        song_time_ns_from_seconds, song_time_ns_to_seconds, stage_music_cut, step_calories,
+        suppress_final_bad_rescore_visual, tick_mode_status_line, turn_option_bits,
+        update_lane_count,
     };
     use crate::engine::input::{InputEvent, InputSource, VirtualAction};
     use crate::engine::present::color;
