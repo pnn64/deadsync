@@ -290,6 +290,12 @@ fn push_saved_options(
     );
     push_bool(
         content,
+        "ArcadeOptionsNavigation",
+        cfg.arcade_options_navigation,
+    );
+    push_bool(content, "ThreeKeyNavigation", cfg.three_key_navigation);
+    push_bool(
+        content,
         "OnlyDedicatedMenuButtons",
         cfg.only_dedicated_menu_buttons,
     );

@@ -138,6 +138,65 @@ const fn arrowcloud_can_retry_submit(status: ArrowCloudSubmitUiStatus) -> bool {
 }
 
 #[inline(always)]
+fn arrowcloud_status_from_error_message(message: &str) -> ArrowCloudSubmitUiStatus {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("timeout") || lower.contains("timed out") {
+        ArrowCloudSubmitUiStatus::TimedOut
+    } else {
+        ArrowCloudSubmitUiStatus::SubmitFailed
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_warn_submit_skip(side: profile::PlayerSide, chart_hash: &str, reason: &str) {
+    warn!(
+        "Skipping ArrowCloud submit for {:?} ({}): {}.",
+        side, chart_hash, reason
+    );
+}
+
+#[inline(always)]
+fn arrowcloud_player_can_submit(gs: &gameplay::State, player_idx: usize) -> bool {
+    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) || !gs.score_valid[player_idx] {
+        return false;
+    }
+    if gs.player_profiles[player_idx]
+        .arrowcloud_api_key
+        .trim()
+        .is_empty()
+    {
+        return false;
+    }
+    !gs.players[player_idx].is_failing && gs.song_completed_naturally
+}
+
+fn arrowcloud_mark_submit_status_for_eligible_players(
+    gs: &gameplay::State,
+    status: ArrowCloudSubmitUiStatus,
+) {
+    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        if !arrowcloud_player_can_submit(gs, player_idx) {
+            continue;
+        }
+        let side = gameplay_side_for_player(gs, player_idx);
+        let chart_hash = gs.charts[player_idx].short_hash.as_str();
+        let token = arrowcloud_next_submit_ui_token();
+        arrowcloud_set_submit_ui_status(side, chart_hash, token, status);
+    }
+}
+
+fn arrowcloud_warn_submit_skip_for_eligible_players(gs: &gameplay::State, reason: &str) {
+    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
+        if !arrowcloud_player_can_submit(gs, player_idx) {
+            continue;
+        }
+        let side = gameplay_side_for_player(gs, player_idx);
+        let chart_hash = gs.charts[player_idx].short_hash.as_str();
+        arrowcloud_warn_submit_skip(side, chart_hash, reason);
+    }
+}
+
+#[inline(always)]
 fn arrowcloud_store_submit_retry(entry: ArrowCloudSubmitRetryEntry) {
     let hash = entry.payload.hash.trim();
     if hash.is_empty() {
@@ -663,13 +722,8 @@ fn submit_arrowcloud_payload(
         .send_json(payload)
         .map_err(|e| {
             let msg = format!("network error: {e}");
-            let lower = msg.to_ascii_lowercase();
             ArrowCloudSubmitError {
-                status: if lower.contains("timeout") || lower.contains("timed out") {
-                    ArrowCloudSubmitUiStatus::TimedOut
-                } else {
-                    ArrowCloudSubmitUiStatus::SubmitFailed
-                },
+                status: arrowcloud_status_from_error_message(msg.as_str()),
                 message: msg,
             }
         })?;
@@ -766,7 +820,14 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         return;
     }
     if let online::ArrowCloudConnectionStatus::Error(msg) = online::get_arrowcloud_status() {
-        warn!("Skipping ArrowCloud submit due to connection status error: {msg}");
+        arrowcloud_mark_submit_status_for_eligible_players(
+            gs,
+            arrowcloud_status_from_error_message(msg.as_str()),
+        );
+        arrowcloud_warn_submit_skip_for_eligible_players(
+            gs,
+            format!("connection status error: {msg}").as_str(),
+        );
         return;
     }
 
@@ -781,11 +842,17 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         }
 
         let side = gameplay_side_for_player(gs, player_idx);
+        let chart_hash = gs.charts[player_idx].short_hash.as_str();
+        let passed = !gs.players[player_idx].is_failing && gs.song_completed_naturally;
         let api_key = gs.player_profiles[player_idx].arrowcloud_api_key.trim();
         if api_key.is_empty() {
+            if passed {
+                arrowcloud_warn_submit_skip(side, chart_hash, "profile is missing API key");
+            }
             continue;
         }
         let Some(payload) = arrowcloud_payload_for_player(gs, player_idx) else {
+            arrowcloud_warn_submit_skip(side, chart_hash, "failed to build submit payload");
             continue;
         };
         if !payload.passed {
@@ -983,5 +1050,21 @@ mod tests {
         assert!(arrowcloud_can_retry_submit(
             ArrowCloudSubmitUiStatus::TimedOut
         ));
+    }
+
+    #[test]
+    fn arrowcloud_error_message_maps_timeout_status() {
+        assert_eq!(
+            arrowcloud_status_from_error_message("Timed Out"),
+            ArrowCloudSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            arrowcloud_status_from_error_message("network error: timed out while connecting"),
+            ArrowCloudSubmitUiStatus::TimedOut
+        );
+        assert_eq!(
+            arrowcloud_status_from_error_message("Machine Offline"),
+            ArrowCloudSubmitUiStatus::SubmitFailed
+        );
     }
 }

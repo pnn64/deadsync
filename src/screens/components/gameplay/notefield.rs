@@ -1238,6 +1238,17 @@ fn mini_judgment_zoom(mini: f32) -> f32 {
 }
 
 #[inline(always)]
+fn hallway_judgment_zoom(perspective_tilt: f32, perspective_skew: f32) -> f32 {
+    // ITGmania's hallway draw path applies an extra 0.9x shrink to the notefield
+    // during the perspective pass, but the judgment actor keeps its original zoom.
+    // Mirror that apparent larger hallway judgment here for the HUD sprite path.
+    if perspective_tilt >= -f32::EPSILON || perspective_skew.abs() > f32::EPSILON {
+        return 1.0;
+    }
+    1.0 / (1.0 - 0.1 * (-perspective_tilt).clamp(0.0, 1.0)).max(0.000_001)
+}
+
+#[inline(always)]
 fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
     let fmt_float = |v: f32| -> String {
         let s = cached_fmt2_f32(v);
@@ -2772,13 +2783,22 @@ pub fn build(
     let combo_x = playfield_center_x + combo_extra_x;
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
     // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0); deadsync currently supports Mini.
-    let judgment_zoom_mod = mini_judgment_zoom(mini);
+    let judgment_zoom_mod =
+        mini_judgment_zoom(mini) * hallway_judgment_zoom(perspective.tilt, perspective.skew);
     let effect_height = field_effect_height(perspective.tilt);
     let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
     let blind_active = visibility.blind > f32::EPSILON;
 
     if let Some(ns) = &state.noteskin[player_idx] {
         let mine_ns = state.mine_noteskin[player_idx].as_deref().unwrap_or(ns);
+        let receptor_ns = state.receptor_noteskin[player_idx].as_deref().unwrap_or(ns);
+        let tap_explosion_ns = if profile.tap_explosion_noteskin_hidden() {
+            None
+        } else {
+            state.tap_explosion_noteskin[player_idx]
+                .as_deref()
+                .or_else(|| state.noteskin[player_idx].as_deref())
+        };
         let timing = &state.timing_players[player_idx];
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
         let scale_sprite = |size: [i32; 2]| -> [f32; 2] {
@@ -3229,7 +3249,7 @@ pub fn build(
                 } else {
                     1.0
                 };
-                let receptor_slot = &ns.receptor_off[i];
+                let receptor_slot = &receptor_ns.receptor_off[i];
                 let receptor_frame =
                     receptor_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                 let receptor_uv =
@@ -3238,7 +3258,7 @@ pub fn build(
                 // so receptor and overlay keep their authored ratio (e.g. 64 vs 74 in
                 // dance/default) instead of being normalized to arrow height.
                 let receptor_size = scale_explosion(logical_slot_size(receptor_slot));
-                let receptor_color = ns.receptor_pulse.color_for_beat(current_beat);
+                let receptor_color = receptor_ns.receptor_pulse.color_for_beat(current_beat);
                 let alpha = receptor_color[3] * receptor_alpha;
                 if alpha > f32::EPSILON {
                     actors.push(act!(sprite(receptor_slot.texture_key_shared()):
@@ -3289,7 +3309,7 @@ pub fn build(
                 if hold_size[0] <= f32::EPSILON || hold_size[1] <= f32::EPSILON {
                     continue;
                 }
-                let receptor_rotation = ns
+                let receptor_rotation = receptor_ns
                     .receptor_off
                     .get(i)
                     .map(|slot| slot.def.rotation_deg as f32)
@@ -3390,7 +3410,10 @@ pub fn build(
             if !profile.hide_targets
                 && receptor_alpha > f32::EPSILON
                 && let Some((alpha, zoom)) = receptor_glow_visual_for_col(state, col)
-                && let Some(glow_slot) = ns.receptor_glow.get(i).and_then(|slot| slot.as_ref())
+                && let Some(glow_slot) = receptor_ns
+                    .receptor_glow
+                    .get(i)
+                    .and_then(|slot| slot.as_ref())
             {
                 let alpha = alpha * receptor_alpha;
                 if alpha > f32::EPSILON {
@@ -3399,7 +3422,7 @@ pub fn build(
                     let glow_uv =
                         glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen);
                     let glow_size = scale_explosion(logical_slot_size(glow_slot));
-                    let behavior = ns.receptor_glow_behavior;
+                    let behavior = receptor_ns.receptor_glow_behavior;
                     let width = glow_size[0] * zoom;
                     let height = glow_size[1] * zoom;
                     if behavior.blend_add {
@@ -3435,7 +3458,8 @@ pub fn build(
             .enumerate()
         {
             if let Some(active) = active_opt.as_ref()
-                && let Some(explosion) = ns.tap_explosions.get(&active.window)
+                && let Some(tap_explosion_ns) = tap_explosion_ns
+                && let Some(explosion) = tap_explosion_ns.tap_explosions.get(&active.window)
             {
                 let receptor_y_lane = column_receptor_ys[i];
                 let receptor_center = receptor_row_center(
@@ -3463,7 +3487,7 @@ pub fn build(
                 if !explosion_visual.visible {
                     continue;
                 }
-                let rotation_deg = ns
+                let rotation_deg = receptor_ns
                     .receptor_off
                     .get(i)
                     .map(|slot| slot.def.rotation_deg)
@@ -6714,12 +6738,12 @@ mod tests {
         MiniIndicatorProgress, TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR,
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
-        clipped_hold_body_bounds, hold_head_render_flags, hold_segment_pose, hold_tail_cap_bounds,
-        hud_layout_ys, hud_y, let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped,
-        note_alpha, note_slot_base_size, note_world_z, note_x_extra, offset_center,
-        predictive_itg_percents, push_transform_parts, receptor_row_center, tap_judgment_rows,
-        tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg, turn_option_bits,
-        turn_option_name, zmod_subtractive_counter_state,
+        clipped_hold_body_bounds, hallway_judgment_zoom, hold_head_render_flags, hold_segment_pose,
+        hold_tail_cap_bounds, hud_layout_ys, hud_y, let_go_head_beat,
+        maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size, note_world_z,
+        note_x_extra, offset_center, predictive_itg_percents, push_transform_parts,
+        receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tipsy_y_extra,
+        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::judgment::{
@@ -6746,12 +6770,15 @@ mod tests {
         let active = ActiveHold {
             note_index: 42,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 12.0,
+            end_time_ns: 12_000_000_000,
             note_type: NoteType::Hold,
             let_go: false,
             is_pressed: true,
             life: 1.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 99.99, 100.0);
         assert!(!engaged);
@@ -6763,12 +6790,15 @@ mod tests {
         let mut active = ActiveHold {
             note_index: 42,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 12.0,
+            end_time_ns: 12_000_000_000,
             note_type: NoteType::Hold,
             let_go: false,
             is_pressed: true,
             life: 1.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
         assert!(engaged);
@@ -6786,12 +6816,15 @@ mod tests {
         let active = ActiveHold {
             note_index: 42,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 12.0,
+            end_time_ns: 12_000_000_000,
             note_type: NoteType::Roll,
             let_go: false,
             is_pressed: false,
             life: 1.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
         assert!(engaged);
@@ -6803,22 +6836,28 @@ mod tests {
         let exhausted = ActiveHold {
             note_index: 7,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 8.0,
+            end_time_ns: 8_000_000_000,
             note_type: NoteType::Roll,
             let_go: false,
             is_pressed: true,
             life: 0.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         let let_go = ActiveHold {
             note_index: 7,
             start_time: 100.0,
+            start_time_ns: 100_000_000_000,
             end_time: 8.0,
+            end_time_ns: 8_000_000_000,
             note_type: NoteType::Roll,
             let_go: true,
             is_pressed: true,
             life: 1.0,
             last_update_time: 100.0,
+            last_update_time_ns: 100_000_000_000,
         };
         assert_eq!(
             hold_head_render_flags(Some(&exhausted), 200.0, 100.0),
@@ -7225,6 +7264,19 @@ mod tests {
             base.zmod_layout.combo_y
         );
         assert_eq!(moved_error_bar.error_bar_y, base.error_bar_y + 18.0);
+    }
+
+    #[test]
+    fn hallway_judgment_zoom_only_boosts_hallway_tilt() {
+        assert!((hallway_judgment_zoom(0.0, 0.0) - 1.0).abs() <= 1e-6);
+        assert!((hallway_judgment_zoom(-1.0, 1.0) - 1.0).abs() <= 1e-6);
+        assert!((hallway_judgment_zoom(1.0, 0.0) - 1.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hallway_judgment_zoom_matches_itgmania_hallway_quirk() {
+        let zoom = hallway_judgment_zoom(-1.0, 0.0);
+        assert!((zoom - (1.0 / 0.9)).abs() <= 1e-6);
     }
 
     #[test]

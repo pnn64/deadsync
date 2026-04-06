@@ -404,8 +404,8 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     for mine_ix in &mut state.mine_note_ix {
         mine_ix.clear();
     }
-    for mine_time in &mut state.mine_note_time {
-        mine_time.clear();
+    for mine_time_ns in &mut state.mine_note_time_ns {
+        mine_time_ns.clear();
     }
     for hold in &mut state.active_holds {
         *hold = None;
@@ -459,6 +459,7 @@ fn screen_action_hash(action: ScreenAction) -> u64 {
         ScreenAction::NavigateNoFade(screen) => 0x2000 | screen as u64,
         ScreenAction::Exit => 0x3000,
         ScreenAction::SelectProfiles { .. } => 0x4000,
+        ScreenAction::RequestScreenshot(_) => 0x4800,
         ScreenAction::RequestBanner(_) => 0x5000,
         ScreenAction::RequestCdTitle(_) => 0x6000,
         ScreenAction::RequestDensityGraph { .. } => 0x7000,

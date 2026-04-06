@@ -33,10 +33,9 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-// Keep this at 1 throughout alpha, even if the serialized song payload changes.
-// Old caches already fall back on decode/schema mismatch. Start bumping this only
-// once we have a public beta/release and want explicit cache-version invalidation.
-const SONG_CACHE_VERSION: u8 = 1;
+// Bump this when song-cache semantics change in ways the source hash cannot
+// detect. This release recomputes cached music lengths for affected OGGs.
+const SONG_CACHE_VERSION: u8 = 2;
 const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE2";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---

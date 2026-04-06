@@ -93,9 +93,19 @@ fn load_runtime_state(conf: &SimpleIni) {
 
 fn apply_input_runtime_state() {
     let mut dedicated = get().only_dedicated_menu_buttons;
-    if dedicated && !crate::engine::input::any_player_has_dedicated_menu_buttons() {
+    let three_key_navigation = get().three_key_navigation;
+    if dedicated
+        && !crate::engine::input::any_player_has_dedicated_menu_buttons_for_mode(
+            three_key_navigation,
+        )
+    {
         warn!(
-            "only_dedicated_menu_buttons is enabled but no player has dedicated menu buttons mapped — disabling."
+            "only_dedicated_menu_buttons is enabled but no player has the required dedicated menu buttons mapped for {} mode — disabling.",
+            if three_key_navigation {
+                "Three Key Menu"
+            } else {
+                "Five Key Menu"
+            }
         );
         dedicated = false;
         lock_config().only_dedicated_menu_buttons = false;

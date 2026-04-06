@@ -4202,16 +4202,31 @@ fn update_overlay_nav_hold(state: &mut State) {
 }
 
 #[inline(always)]
+const fn steps_index_for_side(
+    play_style: profile::PlayStyle,
+    side: profile::PlayerSide,
+    selected_steps_index: usize,
+    p2_selected_steps_index: usize,
+) -> usize {
+    match (play_style, side) {
+        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => p2_selected_steps_index,
+        _ => selected_steps_index,
+    }
+}
+
+#[inline(always)]
 fn selected_chart_hash_for_side(
     state: &State,
     song: &SongData,
     side: profile::PlayerSide,
 ) -> Option<String> {
     let target_chart_type = profile::get_session_play_style().chart_type();
-    let steps_index = match (profile::get_session_play_style(), side) {
-        (profile::PlayStyle::Versus, profile::PlayerSide::P2) => state.p2_selected_steps_index,
-        _ => state.selected_steps_index,
-    };
+    let steps_index = steps_index_for_side(
+        profile::get_session_play_style(),
+        side,
+        state.selected_steps_index,
+        state.p2_selected_steps_index,
+    );
     chart_for_steps_index(song, target_chart_type, steps_index).map(|c| c.short_hash.clone())
 }
 
@@ -6657,6 +6672,13 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                     .cached_chart_ix_p2
                     .map(|ix| song.charts[ix].short_hash.as_str());
 
+                if show_select_music_leaderboards {
+                    maybe_refresh_select_music_leaderboard(
+                        &mut state.last_refreshed_leaderboard_hash_p2,
+                        profile::PlayerSide::P2,
+                        desired_hash_p2,
+                    );
+                }
                 if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
                     return ScreenAction::RequestDensityGraph {
@@ -6672,13 +6694,6 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                             }
                         }),
                     };
-                }
-                if show_select_music_leaderboards {
-                    maybe_refresh_select_music_leaderboard(
-                        &mut state.last_refreshed_leaderboard_hash_p2,
-                        profile::PlayerSide::P2,
-                        desired_hash_p2,
-                    );
                 }
             } else {
                 state.displayed_chart_p2 = None;
@@ -8014,46 +8029,48 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         let both_gs_versus = is_versus && p1_gs && p2_gs;
         let force_step_pane =
             cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
-        let mut push_scorebox = |side: profile::PlayerSide,
-                                 steps_idx: usize,
-                                 center_x: f32,
-                                 center_y: f32,
-                                 zoom: f32,
-                                 z_boost: i16| {
-            let chart_hash =
-                if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
-                    match selected_entry {
-                        Some(MusicWheelEntry::Song(song)) => {
-                            chart_for_steps_index(song, target_chart_type, steps_idx)
-                                .map(|c| c.short_hash.as_str())
+        let mut push_scorebox =
+            |side: profile::PlayerSide, center_x: f32, center_y: f32, zoom: f32, z_boost: i16| {
+                let steps_idx = steps_index_for_side(
+                    play_style,
+                    side,
+                    state.selected_steps_index,
+                    state.p2_selected_steps_index,
+                );
+                let chart_hash =
+                    if allow_gs_fetch && cfg.show_select_music_scorebox && scorebox_cycle_enabled {
+                        match selected_entry {
+                            Some(MusicWheelEntry::Song(song)) => {
+                                chart_for_steps_index(song, target_chart_type, steps_idx)
+                                    .map(|c| c.short_hash.as_str())
+                            }
+                            _ => None,
                         }
-                        _ => None,
-                    }
+                    } else {
+                        None
+                    };
+                let scorebox = gs_scorebox::select_music_scorebox_actors(
+                    side,
+                    chart_hash,
+                    cfg.show_select_music_scorebox && scorebox_cycle_enabled,
+                    center_x,
+                    center_y,
+                    zoom,
+                    state.selection_animation_timer,
+                );
+                if z_boost == 0 || scorebox.is_empty() {
+                    actors.extend(scorebox);
                 } else {
-                    None
-                };
-            let scorebox = gs_scorebox::select_music_scorebox_actors(
-                side,
-                chart_hash,
-                cfg.show_select_music_scorebox && scorebox_cycle_enabled,
-                center_x,
-                center_y,
-                zoom,
-                state.selection_animation_timer,
-            );
-            if z_boost == 0 || scorebox.is_empty() {
-                actors.extend(scorebox);
-            } else {
-                actors.push(Actor::Frame {
-                    align: [0.0, 0.0],
-                    offset: [0.0, 0.0],
-                    size: [SizeSpec::Fill, SizeSpec::Fill],
-                    background: None,
-                    z: z_boost,
-                    children: scorebox,
-                });
-            }
-        };
+                    actors.push(Actor::Frame {
+                        align: [0.0, 0.0],
+                        offset: [0.0, 0.0],
+                        size: [SizeSpec::Fill, SizeSpec::Fill],
+                        background: None,
+                        z: z_boost,
+                        children: scorebox,
+                    });
+                }
+            };
         let pane_scorebox_zoom = widescale(0.60, 0.64);
         let pane_scorebox_width = 162.0 * pane_scorebox_zoom;
         let pane_scorebox_center_y = pane_layout.pane_top + pane_layout.pane_height * 0.5;
@@ -8066,7 +8083,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if is_versus {
                 push_scorebox(
                     profile::PlayerSide::P1,
-                    state.selected_steps_index,
                     pane_box_center_x(screen_width() * 0.25 - 5.0),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
@@ -8074,7 +8090,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 );
                 push_scorebox(
                     profile::PlayerSide::P2,
-                    state.p2_selected_steps_index,
                     pane_box_center_x(screen_width() * 0.75 + 5.0),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
@@ -8083,7 +8098,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else if is_p2_single {
                 push_scorebox(
                     profile::PlayerSide::P2,
-                    state.p2_selected_steps_index,
                     pane_box_center_x(screen_width() * 0.75 + 5.0),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
@@ -8092,7 +8106,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 push_scorebox(
                     profile::PlayerSide::P1,
-                    state.selected_steps_index,
                     pane_box_center_x(screen_width() * 0.25 - 5.0),
                     pane_scorebox_center_y,
                     pane_scorebox_zoom,
@@ -8104,7 +8117,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             if incumbent == profile::PlayerSide::P2 {
                 push_scorebox(
                     profile::PlayerSide::P2,
-                    state.p2_selected_steps_index,
                     scorebox_center_p1,
                     scorebox_center_y_above_pane,
                     scorebox_zoom,
@@ -8112,7 +8124,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 );
                 push_scorebox(
                     profile::PlayerSide::P1,
-                    state.selected_steps_index,
                     scorebox_center_p2,
                     scorebox_center_y_above_pane,
                     scorebox_zoom,
@@ -8121,7 +8132,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 push_scorebox(
                     profile::PlayerSide::P1,
-                    state.selected_steps_index,
                     scorebox_center_p1,
                     scorebox_center_y_above_pane,
                     scorebox_zoom,
@@ -8129,7 +8139,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 );
                 push_scorebox(
                     profile::PlayerSide::P2,
-                    state.p2_selected_steps_index,
                     scorebox_center_p2,
                     scorebox_center_y_above_pane,
                     scorebox_zoom,
@@ -8139,7 +8148,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else if is_p2_single {
             push_scorebox(
                 profile::PlayerSide::P2,
-                state.p2_selected_steps_index,
                 scorebox_center_p1,
                 scorebox_center_y_above_pane,
                 scorebox_zoom,
@@ -8148,7 +8156,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         } else {
             push_scorebox(
                 profile::PlayerSide::P1,
-                state.selected_steps_index,
                 scorebox_center_p1,
                 scorebox_center_y_p1_single,
                 scorebox_zoom,
@@ -8583,9 +8590,10 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
 mod tests {
     use super::{
         PREVIEW_DELAY_SECONDS, WheelSortMode, build_displayed_entries, init_placeholder,
-        reset_preview_after_gameplay, sync_low_confidence_warning,
+        reset_preview_after_gameplay, steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
+    use crate::game::profile;
     use crate::game::song::SongData;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -8698,5 +8706,21 @@ mod tests {
                 super::MusicWheelEntry::PackHeader { name, .. } if name == "Pack B"
             )
         }));
+    }
+
+    #[test]
+    fn steps_index_for_side_uses_primary_slot_for_single_p2() {
+        assert_eq!(
+            steps_index_for_side(profile::PlayStyle::Single, profile::PlayerSide::P2, 3, 5),
+            3
+        );
+    }
+
+    #[test]
+    fn steps_index_for_side_uses_p2_slot_for_versus_p2() {
+        assert_eq!(
+            steps_index_for_side(profile::PlayStyle::Versus, profile::PlayerSide::P2, 3, 5),
+            5
+        );
     }
 }

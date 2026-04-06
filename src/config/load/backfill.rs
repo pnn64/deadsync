@@ -62,6 +62,7 @@ const OPTION_KEYS: &[&str] = &[
     "ShowStatsMode",
     "SmoothHistogram",
     "InputDebounceTime",
+    "ThreeKeyNavigation",
     "OnlyDedicatedMenuButtons",
     "AssistTickVolume",
     "SFXVolume",

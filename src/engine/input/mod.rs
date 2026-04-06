@@ -414,6 +414,10 @@ pub struct InputEdge {
     // carry a concrete value; live gameplay fills this in from the audio clock
     // snapshot at judgment time.
     pub event_music_time: f32,
+    // Integer song time for the same event, in nanoseconds. Gameplay uses this
+    // for judgment-critical comparisons when the audio clock can provide a
+    // host-aligned conversion at capture time.
+    pub event_music_time_ns: i64,
 }
 
 // Removed legacy per-key state helpers in favor of virtual action mapping.
@@ -738,20 +742,58 @@ pub fn set_only_dedicated_menu_buttons(enabled: bool) {
     ONLY_DEDICATED_MENU_BUTTONS.store(enabled, Ordering::Relaxed);
 }
 
+#[inline(always)]
+fn player_has_action_set(actions: &[VirtualAction]) -> bool {
+    with_keymap(|km| {
+        actions
+            .iter()
+            .all(|action| km.binding_at(*action, 0).is_some())
+    })
+}
+
+/// Returns `true` if at least one player has dedicated left/right menu buttons
+/// plus Start bound.
+pub fn any_player_has_three_key_menu_buttons() -> bool {
+    player_has_action_set(&[
+        VirtualAction::p1_menu_left,
+        VirtualAction::p1_menu_right,
+        VirtualAction::p1_start,
+    ]) || player_has_action_set(&[
+        VirtualAction::p2_menu_left,
+        VirtualAction::p2_menu_right,
+        VirtualAction::p2_start,
+    ])
+}
+
 /// Returns `true` if at least one player has all four dedicated menu
 /// directional buttons (menu_up, menu_down, menu_left, menu_right) bound.
+pub fn any_player_has_four_way_menu_buttons() -> bool {
+    player_has_action_set(&[
+        VirtualAction::p1_menu_up,
+        VirtualAction::p1_menu_down,
+        VirtualAction::p1_menu_left,
+        VirtualAction::p1_menu_right,
+    ]) || player_has_action_set(&[
+        VirtualAction::p2_menu_up,
+        VirtualAction::p2_menu_down,
+        VirtualAction::p2_menu_left,
+        VirtualAction::p2_menu_right,
+    ])
+}
+
+#[inline(always)]
+pub fn any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation: bool) -> bool {
+    if three_key_navigation {
+        any_player_has_three_key_menu_buttons()
+    } else {
+        any_player_has_four_way_menu_buttons()
+    }
+}
+
+/// Compatibility wrapper for existing five-key dedicated menu checks.
+#[inline(always)]
 pub fn any_player_has_dedicated_menu_buttons() -> bool {
-    with_keymap(|km| {
-        let p1 = km.binding_at(VirtualAction::p1_menu_up, 0).is_some()
-            && km.binding_at(VirtualAction::p1_menu_down, 0).is_some()
-            && km.binding_at(VirtualAction::p1_menu_left, 0).is_some()
-            && km.binding_at(VirtualAction::p1_menu_right, 0).is_some();
-        let p2 = km.binding_at(VirtualAction::p2_menu_up, 0).is_some()
-            && km.binding_at(VirtualAction::p2_menu_down, 0).is_some()
-            && km.binding_at(VirtualAction::p2_menu_left, 0).is_some()
-            && km.binding_at(VirtualAction::p2_menu_right, 0).is_some();
-        p1 || p2
-    })
+    any_player_has_four_way_menu_buttons()
 }
 
 #[inline(always)]
@@ -1502,6 +1544,31 @@ mod tests {
             ),
         ];
         assert_events_eq(&actual, &expected);
+    }
+
+    #[test]
+    fn dedicated_menu_button_capabilities_distinguish_three_key_from_four_way() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_menu_left,
+            &[InputBinding::Key(KeyCode::KeyA)],
+        );
+        km.bind(
+            VirtualAction::p1_menu_right,
+            &[InputBinding::Key(KeyCode::KeyD)],
+        );
+        km.bind(
+            VirtualAction::p1_start,
+            &[InputBinding::Key(KeyCode::Enter)],
+        );
+        set_keymap(km);
+
+        assert!(any_player_has_three_key_menu_buttons());
+        assert!(!any_player_has_four_way_menu_buttons());
+        assert!(any_player_has_dedicated_menu_buttons_for_mode(true));
+        assert!(!any_player_has_dedicated_menu_buttons_for_mode(false));
     }
 
     #[test]

@@ -218,6 +218,12 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_bool(
         content,
+        "ArcadeOptionsNavigation",
+        default.arcade_options_navigation,
+    );
+    push_bool(content, "ThreeKeyNavigation", default.three_key_navigation);
+    push_bool(
+        content,
         "OnlyDedicatedMenuButtons",
         default.only_dedicated_menu_buttons,
     );

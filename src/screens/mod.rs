@@ -25,7 +25,7 @@ use std::path::PathBuf;
 
 use crate::config::DisplayMode;
 use crate::engine::gfx::{BackendType, PresentModePolicy};
-use crate::game::profile::ActiveProfile;
+use crate::game::profile::{ActiveProfile, PlayerSide};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DensityGraphSlot {
@@ -61,6 +61,7 @@ pub enum ScreenAction {
         p1: ActiveProfile,
         p2: ActiveProfile,
     },
+    RequestScreenshot(Option<PlayerSide>),
     RequestBanner(Option<PathBuf>),
     RequestCdTitle(Option<PathBuf>),
     RequestDensityGraph {

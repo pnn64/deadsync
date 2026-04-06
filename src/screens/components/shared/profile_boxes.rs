@@ -16,6 +16,7 @@ use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{heart_bg, screen_bar};
+use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -118,6 +119,8 @@ pub struct State {
     p2_join_pulse_t: f32,
     p1_shake_t: f32,
     p2_shake_t: f32,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    menu_lr_undo: [i8; 2],
 }
 
 struct NoteskinCache {
@@ -403,6 +406,8 @@ pub fn init() -> State {
         p2_join_pulse_t: JOIN_PULSE_DURATION,
         p1_shake_t: SHAKE_DUR,
         p2_shake_t: SHAKE_DUR,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo: [0; 2],
     };
     state.p1_preview_noteskin = preview_noteskin_for_choice(
         &mut state.noteskin_cache,
@@ -511,9 +516,124 @@ fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
     audio::play_sfx("assets/sounds/boom.ogg");
 }
 
+#[inline(always)]
+const fn side_ix(side: profile::PlayerSide) -> usize {
+    match side {
+        profile::PlayerSide::P1 => 0,
+        profile::PlayerSide::P2 => 1,
+    }
+}
+
+fn shift_choice(state: &mut State, side: profile::PlayerSide, dir: i32, play_sound: bool) -> bool {
+    let (joined, ready, selected_index, preview_slot) = match side {
+        profile::PlayerSide::P1 => (
+            state.p1_joined,
+            state.p1_ready,
+            &mut state.p1_selected_index,
+            &mut state.p1_preview_noteskin,
+        ),
+        profile::PlayerSide::P2 => (
+            state.p2_joined,
+            state.p2_ready,
+            &mut state.p2_selected_index,
+            &mut state.p2_preview_noteskin,
+        ),
+    };
+    if !joined || ready {
+        return false;
+    }
+    let old_index = *selected_index;
+    if dir < 0 {
+        if *selected_index > 0 {
+            *selected_index -= 1;
+        }
+    } else if *selected_index + 1 < state.choices.len() {
+        *selected_index += 1;
+    }
+    if *selected_index == old_index {
+        return false;
+    }
+    *preview_slot =
+        preview_noteskin_for_choice(&mut state.noteskin_cache, &state.choices, *selected_index);
+    if play_sound {
+        audio::play_sfx("assets/sounds/change.ogg");
+    }
+    true
+}
+
+fn handle_cancel(state: &mut State, side: profile::PlayerSide) -> ScreenAction {
+    match side {
+        profile::PlayerSide::P1 => {
+            if state.p1_joined && state.p1_ready {
+                state.p1_ready = false;
+                audio::play_sfx("assets/sounds/unjoin.ogg");
+                return ScreenAction::None;
+            }
+            if state.p1_joined {
+                state.p1_joined = false;
+                state.p1_ready = false;
+                audio::play_sfx("assets/sounds/unjoin.ogg");
+                return ScreenAction::None;
+            }
+            if state.p2_joined {
+                return ScreenAction::None;
+            }
+            state.exit_anim = true;
+            let _ = exit_anim_t(true);
+            if profile::fast_profile_switch_from_select_music() {
+                profile::set_fast_profile_switch_from_select_music(false);
+                return ScreenAction::Navigate(Screen::SelectMusic);
+            }
+            ScreenAction::Navigate(Screen::Menu)
+        }
+        profile::PlayerSide::P2 => {
+            if state.p2_joined && state.p2_ready {
+                state.p2_ready = false;
+                audio::play_sfx("assets/sounds/unjoin.ogg");
+                return ScreenAction::None;
+            }
+            if state.p2_joined {
+                state.p2_joined = false;
+                state.p2_ready = false;
+                audio::play_sfx("assets/sounds/unjoin.ogg");
+                return ScreenAction::None;
+            }
+            if state.p1_joined {
+                return ScreenAction::None;
+            }
+            state.exit_anim = true;
+            let _ = exit_anim_t(true);
+            if profile::fast_profile_switch_from_select_music() {
+                profile::set_fast_profile_switch_from_select_music(false);
+                return ScreenAction::Navigate(Screen::SelectMusic);
+            }
+            ScreenAction::Navigate(Screen::Menu)
+        }
+    }
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed || state.exit_anim {
+    let chord_side = if crate::config::get().three_key_navigation {
+        state.menu_lr_chord.update(ev)
+    } else {
+        None
+    };
+    if !ev.pressed {
+        if let Some(side) = screen_input::menu_lr_side(ev.action) {
+            state.menu_lr_undo[side_ix(side)] = 0;
+        }
         return ScreenAction::None;
+    }
+    if state.exit_anim {
+        return ScreenAction::None;
+    }
+    if let Some(side) = chord_side {
+        let undo = state.menu_lr_undo[side_ix(side)];
+        state.menu_lr_undo[side_ix(side)] = 0;
+        if undo != 0 {
+            let _ = shift_choice(state, side, i32::from(undo), false);
+        }
+        return handle_cancel(state, side);
     }
 
     match ev.action {
@@ -521,36 +641,24 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p1_menu_up
         | VirtualAction::p1_left
         | VirtualAction::p1_menu_left => {
-            if !state.p1_joined || state.p1_ready {
-                return ScreenAction::None;
-            }
-            if state.p1_selected_index > 0 {
-                state.p1_selected_index -= 1;
-                state.p1_preview_noteskin = preview_noteskin_for_choice(
-                    &mut state.noteskin_cache,
-                    &state.choices,
-                    state.p1_selected_index,
-                );
-                audio::play_sfx("assets/sounds/change.ogg");
-            }
+            state.menu_lr_undo[side_ix(profile::PlayerSide::P1)] =
+                if shift_choice(state, profile::PlayerSide::P1, -1, true) {
+                    1
+                } else {
+                    0
+                };
             ScreenAction::None
         }
         VirtualAction::p1_down
         | VirtualAction::p1_menu_down
         | VirtualAction::p1_right
         | VirtualAction::p1_menu_right => {
-            if !state.p1_joined || state.p1_ready {
-                return ScreenAction::None;
-            }
-            if state.p1_selected_index + 1 < state.choices.len() {
-                state.p1_selected_index += 1;
-                state.p1_preview_noteskin = preview_noteskin_for_choice(
-                    &mut state.noteskin_cache,
-                    &state.choices,
-                    state.p1_selected_index,
-                );
-                audio::play_sfx("assets/sounds/change.ogg");
-            }
+            state.menu_lr_undo[side_ix(profile::PlayerSide::P1)] =
+                if shift_choice(state, profile::PlayerSide::P1, 1, true) {
+                    -1
+                } else {
+                    0
+                };
             ScreenAction::None
         }
         VirtualAction::p1_start => {
@@ -602,62 +710,30 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p1_back | VirtualAction::p1_select => {
-            if state.p1_joined && state.p1_ready {
-                state.p1_ready = false;
-                audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ScreenAction::None;
-            }
-            if state.p1_joined {
-                state.p1_joined = false;
-                state.p1_ready = false;
-                audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ScreenAction::None;
-            }
-            if state.p2_joined {
-                return ScreenAction::None;
-            }
-            state.exit_anim = true;
-            let _ = exit_anim_t(true);
-            if profile::fast_profile_switch_from_select_music() {
-                profile::set_fast_profile_switch_from_select_music(false);
-                return ScreenAction::Navigate(Screen::SelectMusic);
-            }
-            ScreenAction::Navigate(Screen::Menu)
+            handle_cancel(state, profile::PlayerSide::P1)
         }
         VirtualAction::p2_up
         | VirtualAction::p2_menu_up
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
-            if !state.p2_joined || state.p2_ready {
-                return ScreenAction::None;
-            }
-            if state.p2_selected_index > 0 {
-                state.p2_selected_index -= 1;
-                state.p2_preview_noteskin = preview_noteskin_for_choice(
-                    &mut state.noteskin_cache,
-                    &state.choices,
-                    state.p2_selected_index,
-                );
-                audio::play_sfx("assets/sounds/change.ogg");
-            }
+            state.menu_lr_undo[side_ix(profile::PlayerSide::P2)] =
+                if shift_choice(state, profile::PlayerSide::P2, -1, true) {
+                    1
+                } else {
+                    0
+                };
             ScreenAction::None
         }
         VirtualAction::p2_down
         | VirtualAction::p2_menu_down
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
-            if !state.p2_joined || state.p2_ready {
-                return ScreenAction::None;
-            }
-            if state.p2_selected_index + 1 < state.choices.len() {
-                state.p2_selected_index += 1;
-                state.p2_preview_noteskin = preview_noteskin_for_choice(
-                    &mut state.noteskin_cache,
-                    &state.choices,
-                    state.p2_selected_index,
-                );
-                audio::play_sfx("assets/sounds/change.ogg");
-            }
+            state.menu_lr_undo[side_ix(profile::PlayerSide::P2)] =
+                if shift_choice(state, profile::PlayerSide::P2, 1, true) {
+                    -1
+                } else {
+                    0
+                };
             ScreenAction::None
         }
         VirtualAction::p2_start => {
@@ -709,27 +785,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             ScreenAction::None
         }
         VirtualAction::p2_back | VirtualAction::p2_select => {
-            if state.p2_joined && state.p2_ready {
-                state.p2_ready = false;
-                audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ScreenAction::None;
-            }
-            if state.p2_joined {
-                state.p2_joined = false;
-                state.p2_ready = false;
-                audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ScreenAction::None;
-            }
-            if state.p1_joined {
-                return ScreenAction::None;
-            }
-            state.exit_anim = true;
-            let _ = exit_anim_t(true);
-            if profile::fast_profile_switch_from_select_music() {
-                profile::set_fast_profile_switch_from_select_music(false);
-                return ScreenAction::Navigate(Screen::SelectMusic);
-            }
-            ScreenAction::Navigate(Screen::Menu)
+            handle_cancel(state, profile::PlayerSide::P2)
         }
         _ => ScreenAction::None,
     }

@@ -18,6 +18,7 @@ use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
+use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,6 +36,7 @@ const CURSOR_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 const ROW_TWEEN_SECONDS: f32 = SL_OPTION_ROW_TWEEN_SECONDS;
 // Simply Love [ScreenOptions] uses RowOnCommand/RowOffCommand with linear,0.2.
 const PANE_FADE_SECONDS: f32 = 0.2;
+const TAP_EXPLOSION_PREVIEW_SPEED: f32 = 0.7;
 // Spacing between inline items in OptionRows (pixels at current zoom)
 const INLINE_SPACING: f32 = 15.75;
 const TILT_INTENSITY_MIN: f32 = 0.05;
@@ -266,6 +268,7 @@ const PLAYER_SLOTS: usize = 2;
 const P1: usize = 0;
 const P2: usize = 1;
 const MATCH_NOTESKIN_LABEL: &str = "Same as NoteSkin";
+const NO_TAP_EXPLOSION_LABEL: &str = "None";
 
 #[inline(always)]
 fn active_player_indices(active: [bool; PLAYER_SLOTS]) -> impl Iterator<Item = usize> {
@@ -446,11 +449,14 @@ pub struct State {
     pub nav_key_held_since: [Option<Instant>; PLAYER_SLOTS],
     pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
     inline_choice_x: [f32; PLAYER_SLOTS],
+    arcade_row_focus: [bool; PLAYER_SLOTS],
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
     noteskin_names: Vec<String>,
     noteskin_cache: HashMap<String, Arc<Noteskin>>,
     noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
     mine_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
+    receptor_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
+    tap_explosion_noteskin: [Option<Arc<Noteskin>>; PLAYER_SLOTS],
     preview_time: f32,
     preview_beat: f32,
     help_anim_time: [f32; PLAYER_SLOTS],
@@ -470,6 +476,8 @@ pub struct State {
     cursor_t: [f32; PLAYER_SLOTS],
     row_tweens: Vec<RowTween>,
     pane_transition: PaneTransition,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    menu_lr_undo: [i8; PLAYER_SLOTS],
 }
 
 // Format music rate like Simply Love wants:
@@ -689,9 +697,21 @@ fn discover_noteskin_names() -> Vec<String> {
     noteskin::discover_itg_skins("dance")
 }
 
-fn build_mine_noteskin_choices(noteskin_names: &[String]) -> Vec<String> {
+fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<String> {
     let mut choices = Vec::with_capacity(noteskin_names.len() + 1);
     choices.push(MATCH_NOTESKIN_LABEL.to_string());
+    if noteskin_names.is_empty() {
+        choices.push(crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
+    } else {
+        choices.extend(noteskin_names.iter().cloned());
+    }
+    choices
+}
+
+fn build_tap_explosion_noteskin_choices(noteskin_names: &[String]) -> Vec<String> {
+    let mut choices = Vec::with_capacity(noteskin_names.len() + 2);
+    choices.push(MATCH_NOTESKIN_LABEL.to_string());
+    choices.push(NO_TAP_EXPLOSION_LABEL.to_string());
     if noteskin_names.is_empty() {
         choices.push(crate::game::profile::NoteSkin::DEFAULT_NAME.to_string());
     } else {
@@ -711,6 +731,16 @@ fn build_noteskin_cache(
         }
     }
     cache
+}
+
+fn push_noteskin_name_once(names: &mut Vec<String>, skin: &crate::game::profile::NoteSkin) {
+    if skin.is_none_choice() {
+        return;
+    }
+    let skin_name = skin.as_str().to_string();
+    if !names.iter().any(|name| name == &skin_name) {
+        names.push(skin_name);
+    }
 }
 
 fn cached_noteskin(
@@ -777,14 +807,14 @@ fn cached_or_load_noteskin_exact(
     Some(loaded)
 }
 
-fn resolved_mine_noteskin_preview(
+fn resolved_noteskin_override_preview(
     cache: &mut HashMap<String, Arc<Noteskin>>,
     noteskin: &crate::game::profile::NoteSkin,
-    mine_noteskin: Option<&crate::game::profile::NoteSkin>,
+    override_noteskin: Option<&crate::game::profile::NoteSkin>,
     cols_per_player: usize,
 ) -> Option<Arc<Noteskin>> {
-    if let Some(mine_noteskin) = mine_noteskin
-        && let Some(ns) = cached_or_load_noteskin_exact(cache, mine_noteskin, cols_per_player)
+    if let Some(override_noteskin) = override_noteskin
+        && let Some(ns) = cached_or_load_noteskin_exact(cache, override_noteskin, cols_per_player)
     {
         return Some(ns);
     }
@@ -792,19 +822,48 @@ fn resolved_mine_noteskin_preview(
     cached_or_load_noteskin(cache, noteskin, cols_per_player)
 }
 
+fn resolved_tap_explosion_preview(
+    cache: &mut HashMap<String, Arc<Noteskin>>,
+    noteskin: &crate::game::profile::NoteSkin,
+    tap_explosion_noteskin: Option<&crate::game::profile::NoteSkin>,
+    cols_per_player: usize,
+) -> Option<Arc<Noteskin>> {
+    if tap_explosion_noteskin.is_some_and(crate::game::profile::NoteSkin::is_none_choice) {
+        return None;
+    }
+
+    resolved_noteskin_override_preview(cache, noteskin, tap_explosion_noteskin, cols_per_player)
+}
+
 fn sync_noteskin_previews_for_player(state: &mut State, player_idx: usize) {
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let noteskin_setting = state.player_profiles[player_idx].noteskin.clone();
     let mine_noteskin_setting = state.player_profiles[player_idx].mine_noteskin.clone();
+    let receptor_noteskin_setting = state.player_profiles[player_idx].receptor_noteskin.clone();
+    let tap_explosion_noteskin_setting = state.player_profiles[player_idx]
+        .tap_explosion_noteskin
+        .clone();
     state.noteskin[player_idx] = cached_or_load_noteskin(
         &mut state.noteskin_cache,
         &noteskin_setting,
         cols_per_player,
     );
-    state.mine_noteskin[player_idx] = resolved_mine_noteskin_preview(
+    state.mine_noteskin[player_idx] = resolved_noteskin_override_preview(
         &mut state.noteskin_cache,
         &noteskin_setting,
         mine_noteskin_setting.as_ref(),
+        cols_per_player,
+    );
+    state.receptor_noteskin[player_idx] = resolved_noteskin_override_preview(
+        &mut state.noteskin_cache,
+        &noteskin_setting,
+        receptor_noteskin_setting.as_ref(),
+        cols_per_player,
+    );
+    state.tap_explosion_noteskin[player_idx] = resolved_tap_explosion_preview(
+        &mut state.noteskin_cache,
+        &noteskin_setting,
+        tap_explosion_noteskin_setting.as_ref(),
         cols_per_player,
     );
 }
@@ -989,9 +1048,27 @@ fn build_main_rows(
         },
         Row {
             name: "MineSkin".to_string(),
-            choices: build_mine_noteskin_choices(noteskin_names),
+            choices: build_noteskin_override_choices(noteskin_names),
             selected_choice_index: [0; PLAYER_SLOTS],
             help: vec!["Change mine graphics independently from the main noteskin.".to_string()],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "ReceptorSkin".to_string(),
+            choices: build_noteskin_override_choices(noteskin_names),
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Change receptor graphics independently from the main noteskin.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: "TapExplosionSkin".to_string(),
+            choices: build_tap_explosion_noteskin_choices(noteskin_names),
+            selected_choice_index: [0; PLAYER_SLOTS],
+            help: vec![
+                "Change tap explosion graphics independently from the main noteskin.".to_string(),
+            ],
             choice_difficulty_indices: None,
         },
         Row {
@@ -1852,6 +1929,48 @@ fn apply_profile_defaults(
             },
         );
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "ReceptorSkin") {
+        row.selected_choice_index[player_idx] = profile.receptor_noteskin.as_ref().map_or_else(
+            || {
+                row.choices
+                    .iter()
+                    .position(|c| c == MATCH_NOTESKIN_LABEL)
+                    .unwrap_or(0)
+            },
+            |receptor_noteskin| {
+                row.choices
+                    .iter()
+                    .position(|c| c.eq_ignore_ascii_case(receptor_noteskin.as_str()))
+                    .or_else(|| row.choices.iter().position(|c| c == MATCH_NOTESKIN_LABEL))
+                    .unwrap_or(0)
+            },
+        );
+    }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == "TapExplosionSkin") {
+        row.selected_choice_index[player_idx] =
+            profile.tap_explosion_noteskin.as_ref().map_or_else(
+                || {
+                    row.choices
+                        .iter()
+                        .position(|c| c == MATCH_NOTESKIN_LABEL)
+                        .unwrap_or(0)
+                },
+                |tap_explosion_noteskin| {
+                    if tap_explosion_noteskin.is_none_choice() {
+                        row.choices
+                            .iter()
+                            .position(|c| c == NO_TAP_EXPLOSION_LABEL)
+                            .unwrap_or(0)
+                    } else {
+                        row.choices
+                            .iter()
+                            .position(|c| c.eq_ignore_ascii_case(tap_explosion_noteskin.as_str()))
+                            .or_else(|| row.choices.iter().position(|c| c == MATCH_NOTESKIN_LABEL))
+                            .unwrap_or(0)
+                    }
+                },
+            );
+    }
     // Initialize Combo Font row from profile setting
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Combo Font") {
         row.selected_choice_index[player_idx] = match profile.combo_font {
@@ -2682,17 +2801,15 @@ pub fn init(
     let cols_per_player = noteskin_cols_per_player(crate::game::profile::get_session_play_style());
     let mut initial_noteskin_names = vec![crate::game::profile::NoteSkin::DEFAULT_NAME.to_string()];
     for profile in &player_profiles {
-        let name = profile.noteskin.as_str().to_string();
-        if !initial_noteskin_names.iter().any(|n| n == &name) {
-            initial_noteskin_names.push(name);
+        push_noteskin_name_once(&mut initial_noteskin_names, &profile.noteskin);
+        if let Some(skin) = profile.mine_noteskin.as_ref() {
+            push_noteskin_name_once(&mut initial_noteskin_names, skin);
         }
-        if let Some(mine_name) = profile
-            .mine_noteskin
-            .as_ref()
-            .map(|skin| skin.as_str().to_string())
-            && !initial_noteskin_names.iter().any(|n| n == &mine_name)
-        {
-            initial_noteskin_names.push(mine_name);
+        if let Some(skin) = profile.receptor_noteskin.as_ref() {
+            push_noteskin_name_once(&mut initial_noteskin_names, skin);
+        }
+        if let Some(skin) = profile.tap_explosion_noteskin.as_ref() {
+            push_noteskin_name_once(&mut initial_noteskin_names, skin);
         }
     }
     let mut noteskin_cache = build_noteskin_cache(cols_per_player, &initial_noteskin_names);
@@ -2704,13 +2821,31 @@ pub fn init(
         )
     });
     let mine_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] = std::array::from_fn(|i| {
-        resolved_mine_noteskin_preview(
+        resolved_noteskin_override_preview(
             &mut noteskin_cache,
             &player_profiles[i].noteskin,
             player_profiles[i].mine_noteskin.as_ref(),
             cols_per_player,
         )
     });
+    let receptor_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] =
+        std::array::from_fn(|i| {
+            resolved_noteskin_override_preview(
+                &mut noteskin_cache,
+                &player_profiles[i].noteskin,
+                player_profiles[i].receptor_noteskin.as_ref(),
+                cols_per_player,
+            )
+        });
+    let tap_explosion_noteskin_previews: [Option<Arc<Noteskin>>; PLAYER_SLOTS] =
+        std::array::from_fn(|i| {
+            resolved_tap_explosion_preview(
+                &mut noteskin_cache,
+                &player_profiles[i].noteskin,
+                player_profiles[i].tap_explosion_noteskin.as_ref(),
+                cols_per_player,
+            )
+        });
     let active = session_active_players();
     let row_tweens = init_row_tweens(
         &rows,
@@ -2773,11 +2908,14 @@ pub fn init(
         nav_key_held_since: [None; PLAYER_SLOTS],
         nav_key_last_scrolled_at: [None; PLAYER_SLOTS],
         inline_choice_x: [f32::NAN; PLAYER_SLOTS],
+        arcade_row_focus: [true; PLAYER_SLOTS],
         player_profiles,
         noteskin_names,
         noteskin_cache,
         noteskin: noteskin_previews,
         mine_noteskin: mine_noteskin_previews,
+        receptor_noteskin: receptor_noteskin_previews,
+        tap_explosion_noteskin: tap_explosion_noteskin_previews,
         preview_time: 0.0,
         preview_beat: 0.0,
         help_anim_time: [0.0; PLAYER_SLOTS],
@@ -2795,6 +2933,8 @@ pub fn init(
         cursor_t: [1.0; PLAYER_SLOTS],
         row_tweens,
         pane_transition: PaneTransition::None,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo: [0; PLAYER_SLOTS],
     }
 }
 
@@ -2852,6 +2992,17 @@ fn session_active_players() -> [bool; PLAYER_SLOTS] {
 }
 
 #[inline(always)]
+fn arcade_options_navigation_active() -> bool {
+    crate::config::get().arcade_options_navigation
+        && !screen_input::dedicated_three_key_nav_enabled()
+}
+
+#[inline(always)]
+const fn pane_uses_arcade_next_row(pane: OptionsPane) -> bool {
+    !matches!(pane, OptionsPane::Main)
+}
+
+#[inline(always)]
 fn session_persisted_player_idx() -> usize {
     let play_style = crate::game::profile::get_session_play_style();
     let side = crate::game::profile::get_session_player_side();
@@ -2893,6 +3044,7 @@ const ROW_COMBO_COLOR_MODE: &str = "Combo Color Mode";
 const ROW_LIFEMETER_TYPE: &str = "LifeMeter Type";
 const ROW_LIFE_BAR_OPTIONS: &str = "Life Bar Options";
 const ROW_INDICATOR_SCORE_TYPE: &str = "Indicator Score Type";
+const ARCADE_NEXT_ROW_TEXT: &str = "▼";
 
 #[derive(Clone, Copy, Debug)]
 struct RowVisibility {
@@ -3387,12 +3539,36 @@ fn row_selects_on_focus_move(row_name: &str) -> bool {
     row_name == "Stepchart"
 }
 
-fn inline_choice_centers(choices: &[String], asset_manager: &AssetManager) -> Vec<f32> {
+#[inline(always)]
+fn row_allows_arcade_next_row(state: &State, row_idx: usize) -> bool {
+    arcade_options_navigation_active()
+        && pane_uses_arcade_next_row(state.current_pane)
+        && state
+            .rows
+            .get(row_idx)
+            .is_some_and(|row| !row.name.is_empty() && row_supports_inline_nav(row))
+}
+
+#[inline(always)]
+fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> bool {
+    if !arcade_options_navigation_active() || !pane_uses_arcade_next_row(state.current_pane) {
+        return false;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
+    state.rows.get(row_idx).is_some_and(row_supports_inline_nav)
+}
+
+fn inline_choice_centers(
+    choices: &[String],
+    asset_manager: &AssetManager,
+    left_x: f32,
+) -> Vec<f32> {
     if choices.is_empty() {
         return Vec::new();
     }
     let mut centers: Vec<f32> = Vec::with_capacity(choices.len());
-    let mut x = widescale(162.0, 176.0);
+    let mut x = left_x;
     let zoom = 0.835_f32;
     for text in choices {
         let (draw_w, _) = measure_option_text(asset_manager, text, zoom);
@@ -3413,7 +3589,11 @@ fn focused_inline_choice_index(
     if !row_supports_inline_nav(row) {
         return None;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
+    let centers = inline_choice_centers(
+        &row.choices,
+        asset_manager,
+        inline_choice_left_x_for_row(state, row_idx),
+    );
     if centers.is_empty() {
         return None;
     }
@@ -3449,9 +3629,41 @@ fn move_inline_focus(
     if !row_supports_inline_nav(row) {
         return false;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
+    let centers = inline_choice_centers(
+        &row.choices,
+        asset_manager,
+        inline_choice_left_x_for_row(state, row_idx),
+    );
     if centers.is_empty() {
         return false;
+    }
+    if row_allows_arcade_next_row(state, row_idx) {
+        if state.arcade_row_focus[idx] {
+            if delta <= 0 {
+                return false;
+            }
+            state.arcade_row_focus[idx] = false;
+            state.inline_choice_x[idx] = centers[0];
+            return true;
+        }
+        let Some(current_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx)
+        else {
+            return false;
+        };
+        if delta < 0 {
+            if current_idx == 0 {
+                state.arcade_row_focus[idx] = true;
+                state.inline_choice_x[idx] = f32::NAN;
+                return true;
+            }
+            state.inline_choice_x[idx] = centers[current_idx - 1];
+            return true;
+        }
+        if current_idx + 1 >= centers.len() {
+            return false;
+        }
+        state.inline_choice_x[idx] = centers[current_idx + 1];
+        return true;
     }
     let Some(current_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
         return false;
@@ -3499,13 +3711,21 @@ fn sync_inline_intent_from_row(
     row_idx: usize,
 ) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
+    if row_allows_arcade_next_row(state, row_idx) && state.arcade_row_focus[idx] {
+        state.inline_choice_x[idx] = f32::NAN;
+        return;
+    }
     let Some(row) = state.rows.get(row_idx) else {
         return;
     };
     if !row_supports_inline_nav(row) {
         return;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
+    let centers = inline_choice_centers(
+        &row.choices,
+        asset_manager,
+        inline_choice_left_x_for_row(state, row_idx),
+    );
     if centers.is_empty() {
         return;
     }
@@ -3520,13 +3740,21 @@ fn apply_inline_intent_to_row(
     row_idx: usize,
 ) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
+    if row_allows_arcade_next_row(state, row_idx) && state.arcade_row_focus[idx] {
+        state.inline_choice_x[idx] = f32::NAN;
+        return;
+    }
     let Some(row) = state.rows.get(row_idx) else {
         return;
     };
     if !row_supports_inline_nav(row) {
         return;
     }
-    let centers = inline_choice_centers(&row.choices, asset_manager);
+    let centers = inline_choice_centers(
+        &row.choices,
+        asset_manager,
+        inline_choice_left_x_for_row(state, row_idx),
+    );
     if centers.is_empty() {
         return;
     }
@@ -3568,6 +3796,7 @@ fn move_selection_vertical(
     }
     if let Some(next_row) = next_visible_row(&state.rows, current_row, dir, visibility) {
         state.selected_row[idx] = next_row;
+        state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, next_row);
         apply_inline_intent_to_row(state, asset_manager, idx, next_row);
     }
 }
@@ -3591,6 +3820,55 @@ fn measure_option_text(asset_manager: &AssetManager, text: &str, zoom: f32) -> (
         });
     });
     (out_w, out_h)
+}
+
+#[inline(always)]
+fn inline_choice_left_x() -> f32 {
+    widescale(162.0, 176.0)
+}
+
+#[inline(always)]
+fn arcade_inline_choice_shift_x() -> f32 {
+    widescale(6.0, 8.0)
+}
+
+#[inline(always)]
+fn arcade_next_row_gap_x() -> f32 {
+    widescale(5.0, 6.0)
+}
+
+#[inline(always)]
+fn inline_choice_left_x_for_row(state: &State, row_idx: usize) -> f32 {
+    inline_choice_left_x()
+        + if row_allows_arcade_next_row(state, row_idx) {
+            arcade_inline_choice_shift_x()
+        } else {
+            0.0
+        }
+}
+
+#[inline(always)]
+fn arcade_next_row_visible(state: &State, row_idx: usize) -> bool {
+    row_allows_arcade_next_row(state, row_idx)
+}
+
+#[inline(always)]
+fn arcade_row_focuses_next_row(state: &State, player_idx: usize, row_idx: usize) -> bool {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    row_allows_arcade_next_row(state, row_idx)
+        && state.arcade_row_focus[idx]
+        && state.selected_row[idx] == row_idx
+}
+
+fn arcade_next_row_layout(
+    state: &State,
+    row_idx: usize,
+    asset_manager: &AssetManager,
+    zoom: f32,
+) -> (f32, f32, f32) {
+    let (draw_w, draw_h) = measure_option_text(asset_manager, ARCADE_NEXT_ROW_TEXT, zoom);
+    let left_x = inline_choice_left_x_for_row(state, row_idx) - draw_w - arcade_next_row_gap_x();
+    (left_x, draw_w, draw_h)
 }
 
 fn cursor_dest_for_player(
@@ -3669,7 +3947,7 @@ fn cursor_dest_for_player(
             return None;
         }
         let spacing = INLINE_SPACING;
-        let choice_inner_left = widescale(162.0, 176.0);
+        let choice_inner_left = inline_choice_left_x_for_row(state, row_idx);
         let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
         let mut text_h: f32 = 16.0;
         asset_manager.with_fonts(|all_fonts| {
@@ -3690,6 +3968,23 @@ fn cursor_dest_for_player(
         });
         if widths.is_empty() {
             return None;
+        }
+        if arcade_row_focuses_next_row(state, player_idx, row_idx) {
+            let (left_x, draw_w, draw_h) =
+                arcade_next_row_layout(state, row_idx, asset_manager, value_zoom);
+            let mut size_t = draw_w / width_ref;
+            if !size_t.is_finite() {
+                size_t = 0.0;
+            }
+            size_t = size_t.clamp(0.0, 1.0);
+            let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
+            let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+            if pad_x > max_pad_by_spacing {
+                pad_x = max_pad_by_spacing;
+            }
+            let ring_w = draw_w + pad_x * 2.0;
+            let ring_h = draw_h + pad_y * 2.0;
+            return Some((draw_w.mul_add(0.5, left_x), y, ring_w, ring_h));
         }
 
         let focus_idx = focused_inline_choice_index(state, asset_manager, player_idx, row_idx)
@@ -3725,7 +4020,9 @@ fn cursor_dest_for_player(
         center_x = screen_center_x().mul_add(2.0, -center_x);
     }
 
-    let display_text = if row.name == "Speed Mod" {
+    let display_text = if arcade_row_focuses_next_row(state, player_idx, row_idx) {
+        ARCADE_NEXT_ROW_TEXT.to_string()
+    } else if row.name == "Speed Mod" {
         match state.speed_mod[player_idx].mod_type.as_str() {
             "X" => format!("{:.2}x", state.speed_mod[player_idx].value),
             "C" => format!("C{}", state.speed_mod[player_idx].value as i32),
@@ -4389,6 +4686,44 @@ fn change_choice_for_player(
             crate::game::profile::update_mine_noteskin_for_side(persist_side, setting);
         }
         sync_noteskin_previews_for_player(state, player_idx);
+    } else if row_name == "ReceptorSkin" {
+        let selected = row
+            .choices
+            .get(row.selected_choice_index[player_idx])
+            .map(String::as_str)
+            .unwrap_or(MATCH_NOTESKIN_LABEL);
+        let setting = if selected == MATCH_NOTESKIN_LABEL {
+            None
+        } else {
+            Some(crate::game::profile::NoteSkin::new(selected))
+        };
+        state.player_profiles[player_idx]
+            .receptor_noteskin
+            .clone_from(&setting);
+        if should_persist {
+            crate::game::profile::update_receptor_noteskin_for_side(persist_side, setting);
+        }
+        sync_noteskin_previews_for_player(state, player_idx);
+    } else if row_name == "TapExplosionSkin" {
+        let selected = row
+            .choices
+            .get(row.selected_choice_index[player_idx])
+            .map(String::as_str)
+            .unwrap_or(MATCH_NOTESKIN_LABEL);
+        let setting = if selected == MATCH_NOTESKIN_LABEL {
+            None
+        } else if selected == NO_TAP_EXPLOSION_LABEL {
+            Some(crate::game::profile::NoteSkin::none_choice())
+        } else {
+            Some(crate::game::profile::NoteSkin::new(selected))
+        };
+        state.player_profiles[player_idx]
+            .tap_explosion_noteskin
+            .clone_from(&setting);
+        if should_persist {
+            crate::game::profile::update_tap_explosion_noteskin_for_side(persist_side, setting);
+        }
+        sync_noteskin_previews_for_player(state, player_idx);
     } else if row_name == "Stepchart"
         && let Some(diff_indices) = &row.choice_difficulty_indices
         && let Some(&difficulty_idx) = diff_indices.get(row.selected_choice_index[player_idx])
@@ -4476,10 +4811,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
                 );
             }
             NavDirection::Left => {
-                apply_choice_delta(state, asset_manager, player_idx, -1);
+                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
+                    apply_choice_delta(state, asset_manager, player_idx, -1);
+                }
             }
             NavDirection::Right => {
-                apply_choice_delta(state, asset_manager, player_idx, 1);
+                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
+                    apply_choice_delta(state, asset_manager, player_idx, 1);
+                }
             }
         }
         state.nav_key_last_scrolled_at[player_idx] = Some(now);
@@ -5718,6 +6057,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.selected_row = [0; PLAYER_SLOTS];
     state.prev_selected_row = [0; PLAYER_SLOTS];
     state.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
+    state.arcade_row_focus = [false; PLAYER_SLOTS];
     state.cursor_initialized = [false; PLAYER_SLOTS];
     state.cursor_from_x = [0.0; PLAYER_SLOTS];
     state.cursor_from_y = [0.0; PLAYER_SLOTS];
@@ -5737,6 +6077,9 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         state.hide_active_mask,
         state.error_bar_active_mask,
     );
+    state.arcade_row_focus = std::array::from_fn(|player_idx| {
+        row_allows_arcade_next_row(state, state.selected_row[player_idx])
+    });
 }
 
 fn switch_to_pane(state: &mut State, pane: OptionsPane) {
@@ -5762,7 +6105,9 @@ fn focus_exit_row(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx: u
     if state.rows.is_empty() {
         return;
     }
-    state.selected_row[player_idx.min(PLAYER_SLOTS - 1)] = state.rows.len().saturating_sub(1);
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    state.selected_row[idx] = state.rows.len().saturating_sub(1);
+    state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, state.selected_row[idx]);
     sync_selected_rows_with_visibility(state, active);
 }
 
@@ -5803,12 +6148,159 @@ fn handle_nav_event(
                 player_idx,
                 NavDirection::Down,
             ),
-            NavDirection::Left => apply_choice_delta(state, asset_manager, player_idx, -1),
-            NavDirection::Right => apply_choice_delta(state, asset_manager, player_idx, 1),
+            NavDirection::Left => {
+                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
+                    apply_choice_delta(state, asset_manager, player_idx, -1);
+                    if arcade_row_uses_choice_focus(state, player_idx) {
+                        state.arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
+                    }
+                }
+            }
+            NavDirection::Right => {
+                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
+                    apply_choice_delta(state, asset_manager, player_idx, 1);
+                    if arcade_row_uses_choice_focus(state, player_idx) {
+                        state.arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
+                    }
+                }
+            }
         }
         on_nav_press(state, player_idx, dir);
     } else {
         on_nav_release(state, player_idx, dir);
+    }
+}
+
+#[inline(always)]
+fn clear_nav_hold(state: &mut State, player_idx: usize) {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    state.nav_key_held_direction[idx] = None;
+    state.nav_key_held_since[idx] = None;
+    state.nav_key_last_scrolled_at[idx] = None;
+}
+
+fn move_arcade_horizontal_focus(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    delta: isize,
+) -> bool {
+    if delta == 0 || state.rows.is_empty() {
+        return false;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
+    let Some(row) = state.rows.get(row_idx) else {
+        return false;
+    };
+    let row_supports_inline = row_supports_inline_nav(row);
+    let num_choices = row.choices.len();
+    let current_choice = row
+        .selected_choice_index
+        .get(idx)
+        .copied()
+        .unwrap_or(0)
+        .min(num_choices.saturating_sub(1));
+    if !row_allows_arcade_next_row(state, row_idx) {
+        return false;
+    }
+    if row_supports_inline {
+        apply_choice_delta(state, asset_manager, idx, delta);
+        return true;
+    }
+    if num_choices <= 1 {
+        return false;
+    }
+    if state.arcade_row_focus[idx] {
+        if delta < 0 {
+            return false;
+        }
+        state.arcade_row_focus[idx] = false;
+        if current_choice == 0 {
+            audio::play_sfx("assets/sounds/change_value.ogg");
+        } else {
+            change_choice_for_player(state, asset_manager, idx, -(current_choice as isize));
+        }
+        return true;
+    }
+    if delta < 0 {
+        if current_choice == 0 {
+            state.arcade_row_focus[idx] = true;
+            audio::play_sfx("assets/sounds/change_value.ogg");
+            return true;
+        }
+        change_choice_for_player(state, asset_manager, idx, -1);
+        return true;
+    }
+    if current_choice + 1 >= num_choices {
+        return false;
+    }
+    change_choice_for_player(state, asset_manager, idx, 1);
+    true
+}
+
+fn handle_arcade_prev_event(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+) {
+    if !active[player_idx] || state.rows.is_empty() {
+        return;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let prev_row = state.selected_row[idx];
+    clear_nav_hold(state, player_idx);
+    move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up);
+    if state.selected_row[idx] != prev_row {
+        audio::play_sfx("assets/sounds/prev_row.ogg");
+        state.help_anim_time[idx] = 0.0;
+        state.prev_selected_row[idx] = state.selected_row[idx];
+    }
+}
+
+fn handle_arcade_start_event(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+) -> Option<ScreenAction> {
+    if !active[player_idx] {
+        return None;
+    }
+    sync_selected_rows_with_visibility(state, active);
+    let num_rows = state.rows.len();
+    if num_rows == 0 {
+        return None;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx].min(num_rows.saturating_sub(1));
+    if row_index + 1 == num_rows {
+        state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
+        return handle_start_event(state, asset_manager, active, idx);
+    }
+    if arcade_row_uses_choice_focus(state, idx) && !state.arcade_row_focus[idx] {
+        let action = handle_start_event(state, asset_manager, active, idx);
+        state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
+        return action;
+    }
+    move_selection_vertical(state, asset_manager, active, idx, NavDirection::Down);
+    state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, state.selected_row[idx]);
+    None
+}
+
+#[inline(always)]
+fn undo_three_key_nav(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+    undo: i8,
+) {
+    match undo {
+        1 => move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Down),
+        -1 => move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up),
+        _ => {}
     }
 }
 
@@ -5830,7 +6322,9 @@ fn handle_start_event(
     let should_focus_exit = state.current_pane == OptionsPane::Main && row_index + 1 < num_rows;
     let row = state.rows.get(row_index)?;
     let row_name = row.name.clone();
-    if row_supports_inline_nav(row) {
+    let row_supports_inline = row_supports_inline_nav(row);
+    let row_has_choices = !row.choices.is_empty();
+    if row_supports_inline {
         let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
         if changed && !row_toggles_with_start(row_name.as_str()) {
             change_choice_for_player(state, asset_manager, player_idx, 0);
@@ -5927,6 +6421,13 @@ fn handle_start_event(
             }
         }
     }
+    if screen_input::dedicated_three_key_nav_enabled()
+        && row_index + 1 < num_rows
+        && row_has_choices
+    {
+        apply_choice_delta(state, asset_manager, player_idx, 1);
+        return finish_start_without_action(state, active, player_idx, should_focus_exit);
+    }
     finish_start_without_action(state, active, player_idx, should_focus_exit)
 }
 
@@ -5936,7 +6437,42 @@ pub fn handle_input(
     ev: &InputEvent,
 ) -> ScreenAction {
     let active = session_active_players();
+    if arcade_options_navigation_active() {
+        screen_input::track_menu_lr_chord(&mut state.menu_lr_chord, ev);
+    }
+    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
+    if screen_input::dedicated_three_key_nav_enabled() {
+        match ev.action {
+            VirtualAction::p1_left | VirtualAction::p1_menu_left if !ev.pressed => {
+                state.menu_lr_undo[P1] = 0;
+                handle_nav_event(state, asset_manager, active, P1, NavDirection::Up, false);
+                return ScreenAction::None;
+            }
+            VirtualAction::p1_right | VirtualAction::p1_menu_right if !ev.pressed => {
+                state.menu_lr_undo[P1] = 0;
+                handle_nav_event(state, asset_manager, active, P1, NavDirection::Down, false);
+                return ScreenAction::None;
+            }
+            VirtualAction::p2_left | VirtualAction::p2_menu_left if !ev.pressed => {
+                state.menu_lr_undo[P2] = 0;
+                handle_nav_event(state, asset_manager, active, P2, NavDirection::Up, false);
+                return ScreenAction::None;
+            }
+            VirtualAction::p2_right | VirtualAction::p2_menu_right if !ev.pressed => {
+                state.menu_lr_undo[P2] = 0;
+                handle_nav_event(state, asset_manager, active, P2, NavDirection::Down, false);
+                return ScreenAction::None;
+            }
+            _ => {}
+        }
+    }
     if state.pane_transition.is_active() {
+        if let Some((side, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
+            let player_idx = screen_input::player_side_ix(side);
+            if active[player_idx] {
+                return ScreenAction::Navigate(state.return_screen);
+            }
+        }
         return match ev.action {
             VirtualAction::p1_back if ev.pressed && active[P1] => {
                 ScreenAction::Navigate(state.return_screen)
@@ -5947,6 +6483,58 @@ pub fn handle_input(
             _ => ScreenAction::None,
         };
     }
+    if let Some((side, nav)) = three_key_action {
+        let player_idx = screen_input::player_side_ix(side);
+        if !active[player_idx] {
+            return ScreenAction::None;
+        }
+        return match nav {
+            screen_input::ThreeKeyMenuAction::Prev => {
+                handle_nav_event(
+                    state,
+                    asset_manager,
+                    active,
+                    player_idx,
+                    NavDirection::Up,
+                    true,
+                );
+                state.menu_lr_undo[player_idx] = 1;
+                ScreenAction::None
+            }
+            screen_input::ThreeKeyMenuAction::Next => {
+                handle_nav_event(
+                    state,
+                    asset_manager,
+                    active,
+                    player_idx,
+                    NavDirection::Down,
+                    true,
+                );
+                state.menu_lr_undo[player_idx] = -1;
+                ScreenAction::None
+            }
+            screen_input::ThreeKeyMenuAction::Confirm => {
+                state.menu_lr_undo[player_idx] = 0;
+                clear_nav_hold(state, player_idx);
+                if let Some(action) = handle_start_event(state, asset_manager, active, player_idx) {
+                    return action;
+                }
+                ScreenAction::None
+            }
+            screen_input::ThreeKeyMenuAction::Cancel => {
+                undo_three_key_nav(
+                    state,
+                    asset_manager,
+                    active,
+                    player_idx,
+                    state.menu_lr_undo[player_idx],
+                );
+                state.menu_lr_undo[player_idx] = 0;
+                clear_nav_hold(state, player_idx);
+                ScreenAction::Navigate(state.return_screen)
+            }
+        };
+    }
     match ev.action {
         VirtualAction::p1_back if ev.pressed && active[P1] => {
             return ScreenAction::Navigate(state.return_screen);
@@ -5955,6 +6543,9 @@ pub fn handle_input(
             return ScreenAction::Navigate(state.return_screen);
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+            if arcade_options_navigation_active() {
+                return ScreenAction::None;
+            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -5965,6 +6556,9 @@ pub fn handle_input(
             );
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+            if arcade_options_navigation_active() {
+                return ScreenAction::None;
+            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -5995,11 +6589,31 @@ pub fn handle_input(
             );
         }
         VirtualAction::p1_start if ev.pressed => {
+            if arcade_options_navigation_active() {
+                if screen_input::menu_lr_both_held(
+                    &state.menu_lr_chord,
+                    crate::game::profile::PlayerSide::P1,
+                ) {
+                    handle_arcade_prev_event(state, asset_manager, active, P1);
+                    return ScreenAction::None;
+                }
+                if let Some(action) = handle_arcade_start_event(state, asset_manager, active, P1) {
+                    return action;
+                }
+                return ScreenAction::None;
+            }
             if let Some(action) = handle_start_event(state, asset_manager, active, P1) {
                 return action;
             }
         }
+        VirtualAction::p1_select if ev.pressed && arcade_options_navigation_active() => {
+            handle_arcade_prev_event(state, asset_manager, active, P1);
+            return ScreenAction::None;
+        }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
+            if arcade_options_navigation_active() {
+                return ScreenAction::None;
+            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6010,6 +6624,9 @@ pub fn handle_input(
             );
         }
         VirtualAction::p2_down | VirtualAction::p2_menu_down => {
+            if arcade_options_navigation_active() {
+                return ScreenAction::None;
+            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6040,9 +6657,26 @@ pub fn handle_input(
             );
         }
         VirtualAction::p2_start if ev.pressed => {
+            if arcade_options_navigation_active() {
+                if screen_input::menu_lr_both_held(
+                    &state.menu_lr_chord,
+                    crate::game::profile::PlayerSide::P2,
+                ) {
+                    handle_arcade_prev_event(state, asset_manager, active, P2);
+                    return ScreenAction::None;
+                }
+                if let Some(action) = handle_arcade_start_event(state, asset_manager, active, P2) {
+                    return action;
+                }
+                return ScreenAction::None;
+            }
             if let Some(action) = handle_start_event(state, asset_manager, active, P2) {
                 return action;
             }
+        }
+        VirtualAction::p2_select if ev.pressed && arcade_options_navigation_active() => {
+            handle_arcade_prev_event(state, asset_manager, active, P2);
+            return ScreenAction::None;
         }
         _ => {}
     }
@@ -6326,12 +6960,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         sl_gray[3] *= a;
         // Some rows should display all choices inline
         let show_all_choices_inline = row_shows_all_choices_inline(&row.name);
+        let show_arcade_next_row = arcade_next_row_visible(state, item_idx);
         // Choice area: For single-choice rows (ShowOneInRow), use ItemsLongRowP1X positioning
         // For multi-choice rows (ShowAllInRow), use ItemsStartX positioning
         // ItemsLongRowP1X = WideScale(_screen.cx-100, _screen.cx-130) from Simply Love metrics
         // ItemsStartX = WideScale(146, 160) from Simply Love metrics
         let choice_inner_left = if show_all_choices_inline {
-            widescale(162.0, 176.0)
+            inline_choice_left_x_for_row(state, item_idx)
         } else {
             screen_center_x() + widescale(-100.0, -130.0) // ItemsLongRowP1X for single-choice rows
         };
@@ -6399,6 +7034,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // The active option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
             let spacing = 15.75;
+            let next_row_item = show_arcade_next_row
+                .then(|| arcade_next_row_layout(state, item_idx, asset_manager, value_zoom));
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
             let mut text_h: f32 = 16.0;
             asset_manager.with_fonts(|all_fonts| {
@@ -7132,6 +7769,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
             // Draw each option's text (active row: all white; inactive: #808080)
+            if let Some((next_row_x, _, _)) = next_row_item {
+                let next_row_color = if is_active {
+                    [1.0, 1.0, 1.0, a]
+                } else {
+                    sl_gray
+                };
+                actors.push(act!(text: font("miso"): settext(ARCADE_NEXT_ROW_TEXT):
+                    align(0.0, 0.5): xy(next_row_x, current_row_y): zoom(value_zoom):
+                    diffuse(
+                        next_row_color[0],
+                        next_row_color[1],
+                        next_row_color[2],
+                        next_row_color[3]
+                    ):
+                    z(101)
+                ));
+            }
             for (idx, text) in row.choices.iter().enumerate() {
                 let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
                 let color_rgba = if is_active {
@@ -7171,16 +7825,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
             asset_manager.with_fonts(|all_fonts| {
                 asset_manager.with_font("miso", |metrics_font| {
-                    let choice_display_text = if row.name == "Speed Mod" {
-                        match state.speed_mod[primary_player_idx].mod_type.as_str() {
-                            "X" => format!("{:.2}x", state.speed_mod[primary_player_idx].value),
-                            "C" => format!("C{}", state.speed_mod[primary_player_idx].value as i32),
-                            "M" => format!("M{}", state.speed_mod[primary_player_idx].value as i32),
-                            _ => String::new(),
-                        }
-                    } else {
-                        choice_text.clone()
-                    };
+                    let choice_display_text =
+                        if arcade_row_focuses_next_row(state, primary_player_idx, item_idx) {
+                            ARCADE_NEXT_ROW_TEXT.to_string()
+                        } else if row.name == "Speed Mod" {
+                            match state.speed_mod[primary_player_idx].mod_type.as_str() {
+                                "X" => format!("{:.2}x", state.speed_mod[primary_player_idx].value),
+                                "C" => format!(
+                                    "C{}",
+                                    state.speed_mod[primary_player_idx].value as i32
+                                ),
+                                "M" => format!(
+                                    "M{}",
+                                    state.speed_mod[primary_player_idx].value as i32
+                                ),
+                                _ => String::new(),
+                            }
+                        } else {
+                            choice_text.clone()
+                        };
                     let mut text_w = crate::engine::present::font::measure_line_width_logical(
                         metrics_font,
                         &choice_display_text,
@@ -7253,7 +7916,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                     let p2_text = if show_p2 && !row.name.starts_with("Music Rate") {
-                        if row.name == "Speed Mod" {
+                        if arcade_row_focuses_next_row(state, P2, item_idx) {
+                            ARCADE_NEXT_ROW_TEXT.to_string()
+                        } else if row.name == "Speed Mod" {
                             match state.speed_mod[P2].mod_type.as_str() {
                                 "X" => format!("{:.2}x", state.speed_mod[P2].value),
                                 "C" => format!("C{}", state.speed_mod[P2].value as i32),
@@ -7349,11 +8014,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             assets::judgment_texture_choices()
                                 .get(row.selected_choice_index[player_idx])
                                 .and_then(|choice| {
-                                    assets::resolve_texture_choice(
-                                        (!choice.key.eq_ignore_ascii_case("None"))
-                                            .then_some(choice.key.as_str()),
-                                        assets::judgment_texture_choices(),
-                                    )
+                                    if choice.key.eq_ignore_ascii_case("None") {
+                                        None
+                                    } else {
+                                        assets::resolve_texture_choice(
+                                            Some(choice.key.as_str()),
+                                            assets::judgment_texture_choices(),
+                                        )
+                                    }
                                 })
                         };
                         if let Some(texture) = texture_for(primary_player_idx) {
@@ -7386,11 +8054,14 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             assets::hold_judgment_texture_choices()
                                 .get(row.selected_choice_index[player_idx])
                                 .and_then(|choice| {
-                                    assets::resolve_texture_choice(
-                                        (!choice.key.eq_ignore_ascii_case("None"))
-                                            .then_some(choice.key.as_str()),
-                                        assets::hold_judgment_texture_choices(),
-                                    )
+                                    if choice.key.eq_ignore_ascii_case("None") {
+                                        None
+                                    } else {
+                                        assets::resolve_texture_choice(
+                                            Some(choice.key.as_str()),
+                                            assets::hold_judgment_texture_choices(),
+                                        )
+                                    }
                                 })
                         };
                         let draw_hold_preview = |texture: &str, center_x: f32, actors: &mut Vec<Actor>| {
@@ -7428,7 +8099,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                     }
                     // Match ITGmania themes that show four directional noteskin preview arrows
                     // with explicit quant offsets: Left/Down/Up/Right and 0/1/3/2 quant indices.
-                    if row.name == "NoteSkin" || row.name == "MineSkin" {
+                    if row.name == "NoteSkin"
+                        || row.name == "MineSkin"
+                        || row.name == "ReceptorSkin"
+                        || row.name == "TapExplosionSkin"
+                    {
                         const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
                         const PREVIEW_SCALE: f32 = 0.45;
                         const PREVIEW_ARROWS: [(usize, f32, f32); 4] = [
@@ -7694,6 +8369,165 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     draw_mine_slot(primary_slot, a, 107, actors);
                                 }
                             };
+                        let draw_receptor_preview =
+                            |receptor_ns: &Noteskin, center_x: f32, actors: &mut Vec<Actor>| {
+                                let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                                let receptor_color =
+                                    receptor_ns.receptor_pulse.color_for_beat(state.preview_beat);
+                                let color = [
+                                    receptor_color[0],
+                                    receptor_color[1],
+                                    receptor_color[2],
+                                    receptor_color[3] * a,
+                                ];
+                                for (col, _, x_mult) in PREVIEW_ARROWS {
+                                    let Some(receptor_slot) = receptor_ns.receptor_off.get(col) else {
+                                        continue;
+                                    };
+                                    let frame = receptor_slot
+                                        .frame_index(state.preview_time, state.preview_beat);
+                                    let uv = receptor_slot
+                                        .uv_for_frame_at(frame, state.preview_time);
+                                    let logical = receptor_slot.logical_size();
+                                    let width = logical[0].max(1.0);
+                                    let height = logical[1].max(1.0);
+                                    let scale = if height > f32::EPSILON {
+                                        target_height / height
+                                    } else {
+                                        PREVIEW_SCALE
+                                    };
+                                    let size = [width * scale, target_height];
+                                    let center = [center_x + x_mult * target_height, current_row_y];
+                                    if let Some(model_actor) = noteskin_model_actor(
+                                        receptor_slot,
+                                        center,
+                                        size,
+                                        uv,
+                                        -receptor_slot.def.rotation_deg as f32,
+                                        state.preview_time,
+                                        state.preview_beat,
+                                        color,
+                                        BlendMode::Alpha,
+                                        106,
+                                    ) {
+                                        actors.push(model_actor);
+                                    } else {
+                                        actors.push(act!(sprite(receptor_slot.texture_key_shared()):
+                                            align(0.5, 0.5):
+                                            xy(center[0], center[1]):
+                                            setsize(size[0], size[1]):
+                                            rotationz(-receptor_slot.def.rotation_deg as f32):
+                                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                            diffuse(color[0], color[1], color[2], color[3]):
+                                            z(106)
+                                        ));
+                                    }
+                                }
+                            };
+                        let draw_tap_explosion_preview = |explosion_ns: &Noteskin,
+                                                          receptor_ns: &Noteskin,
+                                                          center_x: f32,
+                                                          actors: &mut Vec<Actor>| {
+                            let preview_time = state.preview_time * TAP_EXPLOSION_PREVIEW_SPEED;
+                            let preview_beat = state.preview_beat * TAP_EXPLOSION_PREVIEW_SPEED;
+                            let Some(explosion) = explosion_ns
+                                .tap_explosions
+                                .get("W1")
+                                .or_else(|| explosion_ns.tap_explosions.values().next())
+                            else {
+                                return;
+                            };
+                            let duration = explosion.animation.duration();
+                            let anim_time = if duration > f32::EPSILON {
+                                preview_time.rem_euclid(duration)
+                            } else {
+                                0.0
+                            };
+                            let explosion_visual = explosion.animation.state_at(anim_time);
+                            if !explosion_visual.visible {
+                                return;
+                            }
+                            let slot = &explosion.slot;
+                            let beat_for_anim = if slot.source.is_beat_based() {
+                                anim_time.max(0.0)
+                            } else {
+                                preview_beat
+                            };
+                            let frame = slot.frame_index(anim_time, beat_for_anim);
+                            let uv_elapsed = if slot.model.is_some() {
+                                anim_time
+                            } else {
+                                preview_time
+                            };
+                            let uv = slot.uv_for_frame_at(frame, uv_elapsed);
+                            let logical = slot.logical_size();
+                            let width = logical[0].max(1.0);
+                            let height = logical[1].max(1.0);
+                            let target_height = TARGET_ARROW_PIXEL_SIZE * PREVIEW_SCALE;
+                            let scale = if height > f32::EPSILON {
+                                target_height / height
+                            } else {
+                                PREVIEW_SCALE
+                            };
+                            let size = [width * scale, target_height];
+                            let rotation_deg = receptor_ns
+                                .receptor_off
+                                .first()
+                                .map(|slot| slot.def.rotation_deg as f32)
+                                .unwrap_or(0.0);
+                            let color = [
+                                explosion_visual.diffuse[0],
+                                explosion_visual.diffuse[1],
+                                explosion_visual.diffuse[2],
+                                explosion_visual.diffuse[3] * a,
+                            ];
+                            let blend = if explosion.animation.blend_add {
+                                BlendMode::Add
+                            } else {
+                                BlendMode::Alpha
+                            };
+                            if let Some(model_actor) = noteskin_model_actor(
+                                slot,
+                                [center_x, current_row_y],
+                                [
+                                    size[0] * explosion_visual.zoom.max(0.0),
+                                    size[1] * explosion_visual.zoom.max(0.0),
+                                ],
+                                uv,
+                                -rotation_deg,
+                                anim_time,
+                                beat_for_anim,
+                                color,
+                                blend,
+                                107,
+                            ) {
+                                actors.push(model_actor);
+                            } else if matches!(blend, BlendMode::Add) {
+                                actors.push(act!(sprite(slot.texture_key_shared()):
+                                    align(0.5, 0.5):
+                                    xy(center_x, current_row_y):
+                                    setsize(size[0], size[1]):
+                                    zoom(explosion_visual.zoom):
+                                    rotationz(-rotation_deg):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(add):
+                                    z(107)
+                                ));
+                            } else {
+                                actors.push(act!(sprite(slot.texture_key_shared()):
+                                    align(0.5, 0.5):
+                                    xy(center_x, current_row_y):
+                                    setsize(size[0], size[1]):
+                                    zoom(explosion_visual.zoom):
+                                    rotationz(-rotation_deg):
+                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+                                    diffuse(color[0], color[1], color[2], color[3]):
+                                    blend(normal):
+                                    z(107)
+                                ));
+                            }
+                        };
                         if row.name == "NoteSkin" {
                             if let Some(ns) = state.noteskin[primary_player_idx].as_ref() {
                                 draw_noteskin_preview(
@@ -7724,6 +8558,62 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                                     .or_else(|| state.noteskin[P2].as_deref())
                             {
                                 draw_mine_preview(mine_ns, preview_x_for(P2), &mut actors);
+                            }
+                        } else if row.name == "ReceptorSkin" {
+                            if let Some(receptor_ns) = state.receptor_noteskin[primary_player_idx]
+                                .as_deref()
+                                .or_else(|| state.noteskin[primary_player_idx].as_deref())
+                            {
+                                draw_receptor_preview(
+                                    receptor_ns,
+                                    preview_x_for(primary_player_idx),
+                                    &mut actors,
+                                );
+                            }
+                            if show_p2
+                                && primary_player_idx != P2
+                                && let Some(receptor_ns) = state.receptor_noteskin[P2]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[P2].as_deref())
+                            {
+                                draw_receptor_preview(receptor_ns, preview_x_for(P2), &mut actors);
+                            }
+                        } else if row.name == "TapExplosionSkin" {
+                            if !state.player_profiles[primary_player_idx]
+                                .tap_explosion_noteskin_hidden()
+                                && let Some(explosion_ns) = state.tap_explosion_noteskin
+                                    [primary_player_idx]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[primary_player_idx].as_deref())
+                            {
+                                let receptor_ns = state.receptor_noteskin[primary_player_idx]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[primary_player_idx].as_deref())
+                                    .unwrap_or(explosion_ns);
+                                draw_tap_explosion_preview(
+                                    explosion_ns,
+                                    receptor_ns,
+                                    preview_x_for(primary_player_idx),
+                                    &mut actors,
+                                );
+                            }
+                            if show_p2
+                                && primary_player_idx != P2
+                                && !state.player_profiles[P2].tap_explosion_noteskin_hidden()
+                                && let Some(explosion_ns) = state.tap_explosion_noteskin[P2]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[P2].as_deref())
+                            {
+                                let receptor_ns = state.receptor_noteskin[P2]
+                                    .as_deref()
+                                    .or_else(|| state.noteskin[P2].as_deref())
+                                    .unwrap_or(explosion_ns);
+                                draw_tap_explosion_preview(
+                                    explosion_ns,
+                                    receptor_ns,
+                                    preview_x_for(P2),
+                                    &mut actors,
+                                );
                             }
                         }
                     }

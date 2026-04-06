@@ -10,6 +10,7 @@ use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
 use crate::screens::components::menu::menu_splash;
 use crate::screens::components::shared::{heart_bg, screen_bar};
+use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
 use std::cell::RefCell;
 use std::sync::{Arc, LazyLock};
@@ -107,6 +108,8 @@ pub struct State {
     info_text_cache: RefCell<Option<Arc<str>>>,
     groovestats_text_cache: RefCell<Option<StatusTextCache<GrooveStatusKey, 3>>>,
     arrowcloud_text_cache: RefCell<Option<StatusTextCache<ArrowCloudStatusKey, 1>>>,
+    menu_lr_chord: screen_input::MenuLrChordTracker,
+    menu_lr_undo: [i8; 2],
 }
 
 pub fn init() -> State {
@@ -119,6 +122,8 @@ pub fn init() -> State {
         info_text_cache: RefCell::new(None),
         groovestats_text_cache: RefCell::new(None),
         arrowcloud_text_cache: RefCell::new(None),
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        menu_lr_undo: [0; 2],
     }
 }
 
@@ -542,41 +547,80 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
     actors
 }
 
+#[inline(always)]
+fn move_selection(state: &mut State, delta: isize) {
+    let n = OPTION_COUNT as isize;
+    let cur = state.selected_index as isize;
+    state.selected_index = (cur + delta).rem_euclid(n) as usize;
+    crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+}
+
+#[inline(always)]
+fn start_selected(state: &mut State, started_by_p2: bool) -> ScreenAction {
+    crate::engine::audio::play_sfx("assets/sounds/start.ogg");
+    state.started_by_p2 = started_by_p2;
+    match state.selected_index {
+        0 => ScreenAction::Navigate(Screen::SelectProfile),
+        1 => ScreenAction::Navigate(Screen::Options),
+        2 => ScreenAction::Exit,
+        _ => ScreenAction::None,
+    }
+}
+
 // Event-driven virtual input handler
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if let Some(side) = screen_input::menu_lr_side(ev.action)
+        && !ev.pressed
+    {
+        state.menu_lr_undo[screen_input::player_side_ix(side)] = 0;
+    }
+    if let Some((side, nav)) = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev) {
+        let side_ix = screen_input::player_side_ix(side);
+        return match nav {
+            screen_input::ThreeKeyMenuAction::Prev => {
+                move_selection(state, -1);
+                state.menu_lr_undo[side_ix] = 1;
+                ScreenAction::None
+            }
+            screen_input::ThreeKeyMenuAction::Next => {
+                move_selection(state, 1);
+                state.menu_lr_undo[side_ix] = -1;
+                ScreenAction::None
+            }
+            screen_input::ThreeKeyMenuAction::Confirm => {
+                state.menu_lr_undo[side_ix] = 0;
+                start_selected(state, side_ix == 1)
+            }
+            screen_input::ThreeKeyMenuAction::Cancel => {
+                let undo = state.menu_lr_undo[side_ix];
+                if undo != 0 {
+                    move_selection(state, undo as isize);
+                    state.menu_lr_undo[side_ix] = 0;
+                }
+                ScreenAction::Exit
+            }
+        };
+    }
     if !ev.pressed {
         return ScreenAction::None;
     }
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
-            crate::engine::audio::play_sfx("assets/sounds/start.ogg");
-            state.started_by_p2 = matches!(ev.action, VirtualAction::p2_start);
-            match state.selected_index {
-                0 => ScreenAction::Navigate(Screen::SelectProfile),
-                1 => ScreenAction::Navigate(Screen::Options),
-                2 => ScreenAction::Exit,
-                _ => ScreenAction::None,
-            }
+            start_selected(state, matches!(ev.action, VirtualAction::p2_start))
         }
         VirtualAction::p1_back | VirtualAction::p2_back => ScreenAction::Exit,
         VirtualAction::p1_up
         | VirtualAction::p1_menu_up
         | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
-            let n = OPTION_COUNT as isize;
-            let cur = state.selected_index as isize;
-            state.selected_index = ((cur - 1 + n) % n) as usize;
-            crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+            move_selection(state, -1);
             ScreenAction::None
         }
         VirtualAction::p1_down
         | VirtualAction::p1_menu_down
         | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
-            let n = OPTION_COUNT as isize;
-            let cur = state.selected_index as isize;
-            state.selected_index = ((cur + 1 + n) % n) as usize;
-            crate::engine::audio::play_sfx("assets/sounds/change.ogg");
+            move_selection(state, 1);
             ScreenAction::None
         }
         _ => ScreenAction::None,

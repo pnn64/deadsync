@@ -28,7 +28,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       FREEBSD_RELEASE_HOST: ${{ vars.FREEBSD_RELEASE_HOST || '192.168.1.54' }}
-      FREEBSD_RELEASE_USER: ${{ vars.FREEBSD_RELEASE_USER || 'root' }}
+      FREEBSD_RELEASE_USER: ${{ vars.FREEBSD_RELEASE_USER || 'perfecttaste' }}
       FREEBSD_RELEASE_PORT: ${{ vars.FREEBSD_RELEASE_PORT || '22' }}
       FREEBSD_RELEASE_REMOTE_DIR: ${{ vars.FREEBSD_RELEASE_REMOTE_DIR || '/tmp/deadsync-release' }}
       FREEBSD_RELEASE_SSH_OPTS: ${{ vars.FREEBSD_RELEASE_SSH_OPTS || '-o BatchMode=yes -o StrictHostKeyChecking=accept-new' }}

@@ -649,6 +649,20 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
         "MineSkin={}\n",
         options.mine_noteskin.as_ref().map_or("", NoteSkin::as_str)
     ));
+    content.push_str(&format!(
+        "ReceptorSkin={}\n",
+        options
+            .receptor_noteskin
+            .as_ref()
+            .map_or("", NoteSkin::as_str)
+    ));
+    content.push_str(&format!(
+        "TapExplosionSkin={}\n",
+        options
+            .tap_explosion_noteskin
+            .as_ref()
+            .map_or("", NoteSkin::as_str)
+    ));
     content.push_str(&format!("MiniPercent={}\n", options.mini_percent));
     content.push_str(&format!("Perspective={}\n", options.perspective));
     content.push_str(&format!(
@@ -718,6 +732,12 @@ fn load_player_options(
         .unwrap_or_else(|| options.noteskin.clone());
     options.mine_noteskin = profile_conf
         .get(section, "MineSkin")
+        .and_then(|s| NoteSkin::from_str(&s).ok());
+    options.receptor_noteskin = profile_conf
+        .get(section, "ReceptorSkin")
+        .and_then(|s| NoteSkin::from_str(&s).ok());
+    options.tap_explosion_noteskin = profile_conf
+        .get(section, "TapExplosionSkin")
         .and_then(|s| NoteSkin::from_str(&s).ok());
     options.mini_percent = profile_conf
         .get(section, "MiniPercent")
@@ -1925,6 +1945,7 @@ pub struct NoteSkin {
 impl NoteSkin {
     pub const DEFAULT_NAME: &'static str = "default";
     pub const CEL_NAME: &'static str = "cel";
+    pub const NONE_NAME: &'static str = "__none__";
 
     #[inline(always)]
     fn normalize(raw: &str) -> Option<String> {
@@ -1942,8 +1963,20 @@ impl NoteSkin {
     }
 
     #[inline(always)]
+    pub fn none_choice() -> Self {
+        Self {
+            raw: Self::NONE_NAME.to_string(),
+        }
+    }
+
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         &self.raw
+    }
+
+    #[inline(always)]
+    pub fn is_none_choice(&self) -> bool {
+        self.raw == Self::NONE_NAME
     }
 }
 
@@ -2260,6 +2293,8 @@ pub struct PlayerOptionsData {
     pub carry_combo_between_songs: bool,
     pub noteskin: NoteSkin,
     pub mine_noteskin: Option<NoteSkin>,
+    pub receptor_noteskin: Option<NoteSkin>,
+    pub tap_explosion_noteskin: Option<NoteSkin>,
     pub scroll_speed: ScrollSpeedSetting,
     pub scroll_option: ScrollOption,
     pub reverse_scroll: bool,
@@ -2349,6 +2384,8 @@ fn default_player_options() -> PlayerOptionsData {
         carry_combo_between_songs: true,
         noteskin: NoteSkin::default(),
         mine_noteskin: None,
+        receptor_noteskin: None,
+        tap_explosion_noteskin: None,
         scroll_speed: ScrollSpeedSetting::default(),
         scroll_option: ScrollOption::default(),
         reverse_scroll: false,
@@ -2462,6 +2499,8 @@ pub struct Profile {
     pub known_pack_names: HashSet<String>,
     pub noteskin: NoteSkin,
     pub mine_noteskin: Option<NoteSkin>,
+    pub receptor_noteskin: Option<NoteSkin>,
+    pub tap_explosion_noteskin: Option<NoteSkin>,
     pub avatar_path: Option<PathBuf>,
     pub avatar_texture_key: Option<String>,
     pub scroll_speed: ScrollSpeedSetting,
@@ -2625,6 +2664,8 @@ impl Default for Profile {
             known_pack_names: HashSet::new(),
             noteskin: player_options.noteskin.clone(),
             mine_noteskin: player_options.mine_noteskin.clone(),
+            receptor_noteskin: player_options.receptor_noteskin.clone(),
+            tap_explosion_noteskin: player_options.tap_explosion_noteskin.clone(),
             avatar_path: None,
             avatar_texture_key: None,
             scroll_speed: player_options.scroll_speed,
@@ -2741,6 +2782,31 @@ impl Profile {
     }
 
     #[inline(always)]
+    pub fn resolved_receptor_noteskin(&self) -> &NoteSkin {
+        self.receptor_noteskin.as_ref().unwrap_or(&self.noteskin)
+    }
+
+    #[inline(always)]
+    pub fn tap_explosion_noteskin_hidden(&self) -> bool {
+        self.tap_explosion_noteskin
+            .as_ref()
+            .is_some_and(NoteSkin::is_none_choice)
+    }
+
+    #[inline(always)]
+    pub fn resolved_tap_explosion_noteskin(&self) -> Option<&NoteSkin> {
+        if self.tap_explosion_noteskin_hidden() {
+            None
+        } else {
+            Some(
+                self.tap_explosion_noteskin
+                    .as_ref()
+                    .unwrap_or(&self.noteskin),
+            )
+        }
+    }
+
+    #[inline(always)]
     pub fn current_player_options(&self) -> PlayerOptionsData {
         PlayerOptionsData {
             background_filter: self.background_filter,
@@ -2752,6 +2818,8 @@ impl Profile {
             carry_combo_between_songs: self.carry_combo_between_songs,
             noteskin: self.noteskin.clone(),
             mine_noteskin: self.mine_noteskin.clone(),
+            receptor_noteskin: self.receptor_noteskin.clone(),
+            tap_explosion_noteskin: self.tap_explosion_noteskin.clone(),
             scroll_speed: self.scroll_speed,
             scroll_option: self.scroll_option,
             reverse_scroll: self.reverse_scroll,
@@ -2841,6 +2909,10 @@ impl Profile {
         self.carry_combo_between_songs = options.carry_combo_between_songs;
         self.noteskin = options.noteskin.clone();
         self.mine_noteskin.clone_from(&options.mine_noteskin);
+        self.receptor_noteskin
+            .clone_from(&options.receptor_noteskin);
+        self.tap_explosion_noteskin
+            .clone_from(&options.tap_explosion_noteskin);
         self.scroll_speed = options.scroll_speed;
         self.scroll_option = options.scroll_option;
         self.reverse_scroll = options.reverse_scroll;
@@ -4388,7 +4460,7 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LastPlayed, PlayStyle, Profile,
+        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LastPlayed, NoteSkin, PlayStyle, Profile,
         TimingWindowsOption, parse_groovestats_is_pad_player,
     };
 
@@ -4500,17 +4572,23 @@ mod tests {
         profile.mini_percent = 18;
         profile.show_ex_score = true;
         profile.timing_windows = TimingWindowsOption::WayOffs;
+        profile.receptor_noteskin = Some(NoteSkin::new("default"));
+        profile.tap_explosion_noteskin = Some(NoteSkin::new("metal"));
         profile.store_current_player_options(PlayStyle::Single);
 
         profile.mini_percent = 62;
         profile.show_ex_score = false;
         profile.timing_windows = TimingWindowsOption::FantasticsAndExcellents;
+        profile.receptor_noteskin = Some(NoteSkin::new("cyber"));
+        profile.tap_explosion_noteskin = None;
         profile.store_current_player_options(PlayStyle::Double);
 
         profile.apply_player_options_for_style(PlayStyle::Single);
         assert_eq!(profile.mini_percent, 18);
         assert!(profile.show_ex_score);
         assert_eq!(profile.timing_windows, TimingWindowsOption::WayOffs);
+        assert_eq!(profile.receptor_noteskin, Some(NoteSkin::new("default")));
+        assert_eq!(profile.tap_explosion_noteskin, Some(NoteSkin::new("metal")));
 
         profile.apply_player_options_for_style(PlayStyle::Double);
         assert_eq!(profile.mini_percent, 62);
@@ -4519,5 +4597,18 @@ mod tests {
             profile.timing_windows,
             TimingWindowsOption::FantasticsAndExcellents
         );
+        assert_eq!(profile.receptor_noteskin, Some(NoteSkin::new("cyber")));
+        assert_eq!(profile.tap_explosion_noteskin, None);
+    }
+
+    #[test]
+    fn tap_explosion_none_choice_disables_resolution() {
+        let profile = Profile {
+            tap_explosion_noteskin: Some(NoteSkin::none_choice()),
+            ..Profile::default()
+        };
+
+        assert!(profile.tap_explosion_noteskin_hidden());
+        assert_eq!(profile.resolved_tap_explosion_noteskin(), None);
     }
 }
