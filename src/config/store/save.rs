@@ -288,6 +288,11 @@ fn push_saved_options(
         "InputDebounceTime",
         format!("{:.3}", cfg.input_debounce_seconds),
     );
+    push_bool(
+        content,
+        "ArcadeOptionsNavigation",
+        cfg.arcade_options_navigation,
+    );
     push_bool(content, "ThreeKeyNavigation", cfg.three_key_navigation);
     push_bool(
         content,

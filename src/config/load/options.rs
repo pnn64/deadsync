@@ -426,6 +426,10 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
             })
         })
         .unwrap_or(default.input_debounce_seconds);
+    cfg.arcade_options_navigation = conf
+        .get("Options", "ArcadeOptionsNavigation")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.arcade_options_navigation);
     cfg.three_key_navigation = conf
         .get("Options", "ThreeKeyNavigation")
         .and_then(|v| parse_loose_bool_str(&v))

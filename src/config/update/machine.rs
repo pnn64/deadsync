@@ -27,6 +27,17 @@ pub fn update_input_debounce_seconds(seconds: f32) {
     save_without_keymaps();
 }
 
+pub fn update_arcade_options_navigation(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.arcade_options_navigation == enabled {
+            return;
+        }
+        cfg.arcade_options_navigation = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_three_key_navigation(enabled: bool) {
     let dedicated = {
         let mut cfg = lock_config();

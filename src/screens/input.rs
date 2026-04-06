@@ -97,6 +97,14 @@ fn menu_lr_times_are_simultaneous(a: Option<Instant>, b: Option<Instant>) -> boo
 
 impl MenuLrChordTracker {
     #[inline(always)]
+    fn side_state(&self, side: profile::PlayerSide) -> &MenuLrChordSideState {
+        match side {
+            profile::PlayerSide::P1 => &self.p1,
+            profile::PlayerSide::P2 => &self.p2,
+        }
+    }
+
+    #[inline(always)]
     fn side_state_mut(&mut self, side: profile::PlayerSide) -> &mut MenuLrChordSideState {
         match side {
             profile::PlayerSide::P1 => &mut self.p1,
@@ -142,6 +150,16 @@ impl MenuLrChordTracker {
         }
         None
     }
+
+    #[inline(always)]
+    pub fn track(&mut self, ev: &InputEvent) {
+        let _ = self.update(ev);
+    }
+
+    #[inline(always)]
+    pub fn both_held(&self, side: profile::PlayerSide) -> bool {
+        self.side_state(side).held_mask == (MENU_LR_LEFT | MENU_LR_RIGHT)
+    }
 }
 
 pub fn three_key_menu_action(
@@ -174,6 +192,16 @@ pub fn three_key_menu_action(
         VirtualAction::p2_start => Some((profile::PlayerSide::P2, ThreeKeyMenuAction::Confirm)),
         _ => None,
     }
+}
+
+#[inline(always)]
+pub fn track_menu_lr_chord(chord: &mut MenuLrChordTracker, ev: &InputEvent) {
+    chord.track(ev);
+}
+
+#[inline(always)]
+pub fn menu_lr_both_held(chord: &MenuLrChordTracker, side: profile::PlayerSide) -> bool {
+    chord.both_held(side)
 }
 
 pub struct State {

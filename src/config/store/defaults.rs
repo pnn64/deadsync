@@ -216,6 +216,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         "InputDebounceTime",
         format!("{:.3}", default.input_debounce_seconds),
     );
+    push_bool(
+        content,
+        "ArcadeOptionsNavigation",
+        default.arcade_options_navigation,
+    );
     push_bool(content, "ThreeKeyNavigation", default.three_key_navigation);
     push_bool(
         content,

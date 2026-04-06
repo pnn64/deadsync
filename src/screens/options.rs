@@ -640,6 +640,7 @@ const INPUT_ROW_TEST: &str = "Test Input";
 const INPUT_ROW_OPTIONS: &str = "Input Options";
 const INPUT_ROW_BACKEND: &str = "Gamepad Backend";
 const INPUT_ROW_MENU_NAVIGATION: &str = "Menu Navigation";
+const INPUT_ROW_OPTIONS_NAVIGATION: &str = "Options Navigation";
 const INPUT_ROW_DEDICATED_MENU_BUTTONS: &str = "Menu Buttons";
 const INPUT_ROW_DEBOUNCE: &str = "Debounce (ms)";
 #[cfg(target_os = "windows")]
@@ -1230,6 +1231,7 @@ pub const INPUT_OPTIONS_ITEMS: &[Item] = &[
             "Open additional input settings.",
             "Gamepad Backend",
             INPUT_ROW_MENU_NAVIGATION,
+            INPUT_ROW_OPTIONS_NAVIGATION,
             INPUT_ROW_DEDICATED_MENU_BUTTONS,
             INPUT_ROW_DEBOUNCE,
         ],
@@ -1249,6 +1251,11 @@ pub const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         label: INPUT_ROW_MENU_NAVIGATION,
         choices: &["Five Key Menu", "Three Key Menu"],
+        inline: true,
+    },
+    SubRow {
+        label: INPUT_ROW_OPTIONS_NAVIGATION,
+        choices: &["StepMania Style", "Arcade Style"],
         inline: true,
     },
     SubRow {
@@ -1279,6 +1286,14 @@ pub const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
             "Only Dedicated Buttons - Navigate through the game using dedicated menu buttons.",
             "Five Key Menu requires MenuUp, MenuDown, MenuLeft, and MenuRight for at least one player.",
             "Three Key Menu requires MenuLeft, MenuRight, and Start for at least one player.",
+        ],
+    },
+    Item {
+        name: INPUT_ROW_OPTIONS_NAVIGATION,
+        help: &[
+            "Choose how Player Options style screens advance between rows.",
+            "StepMania Style - Up/Down changes rows and Start jumps to Exit.",
+            "Arcade Style - Start advances to the next row and the active row shows a down-pointer indicator.",
         ],
     },
     Item {
@@ -4932,6 +4947,12 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_input_backend,
         INPUT_BACKEND_OPTIONS_ROWS,
+        INPUT_ROW_OPTIONS_NAVIGATION,
+        usize::from(cfg.arcade_options_navigation),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_input_backend,
+        INPUT_BACKEND_OPTIONS_ROWS,
         INPUT_ROW_DEDICATED_MENU_BUTTONS,
         usize::from(cfg.only_dedicated_menu_buttons),
     );
@@ -6805,6 +6826,9 @@ fn apply_submenu_choice_delta(
         }
         if row.label == INPUT_ROW_MENU_NAVIGATION {
             config::update_three_key_navigation(new_index == 1);
+        }
+        if row.label == INPUT_ROW_OPTIONS_NAVIGATION {
+            config::update_arcade_options_navigation(new_index == 1);
         }
         if row.label == INPUT_ROW_DEDICATED_MENU_BUTTONS {
             state.pending_dedicated_menu_buttons = Some(new_index == 1);

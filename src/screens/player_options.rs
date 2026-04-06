@@ -449,6 +449,7 @@ pub struct State {
     pub nav_key_held_since: [Option<Instant>; PLAYER_SLOTS],
     pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
     inline_choice_x: [f32; PLAYER_SLOTS],
+    arcade_row_focus: [bool; PLAYER_SLOTS],
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
     noteskin_names: Vec<String>,
     noteskin_cache: HashMap<String, Arc<Noteskin>>,
@@ -2907,6 +2908,7 @@ pub fn init(
         nav_key_held_since: [None; PLAYER_SLOTS],
         nav_key_last_scrolled_at: [None; PLAYER_SLOTS],
         inline_choice_x: [f32::NAN; PLAYER_SLOTS],
+        arcade_row_focus: [true; PLAYER_SLOTS],
         player_profiles,
         noteskin_names,
         noteskin_cache,
@@ -2990,6 +2992,17 @@ fn session_active_players() -> [bool; PLAYER_SLOTS] {
 }
 
 #[inline(always)]
+fn arcade_options_navigation_active() -> bool {
+    crate::config::get().arcade_options_navigation
+        && !screen_input::dedicated_three_key_nav_enabled()
+}
+
+#[inline(always)]
+const fn pane_uses_arcade_next_row(pane: OptionsPane) -> bool {
+    !matches!(pane, OptionsPane::Main)
+}
+
+#[inline(always)]
 fn session_persisted_player_idx() -> usize {
     let play_style = crate::game::profile::get_session_play_style();
     let side = crate::game::profile::get_session_player_side();
@@ -3031,6 +3044,7 @@ const ROW_COMBO_COLOR_MODE: &str = "Combo Color Mode";
 const ROW_LIFEMETER_TYPE: &str = "LifeMeter Type";
 const ROW_LIFE_BAR_OPTIONS: &str = "Life Bar Options";
 const ROW_INDICATOR_SCORE_TYPE: &str = "Indicator Score Type";
+const ARCADE_NEXT_ROW_TEXT: &str = "▼";
 
 #[derive(Clone, Copy, Debug)]
 struct RowVisibility {
@@ -3525,6 +3539,25 @@ fn row_selects_on_focus_move(row_name: &str) -> bool {
     row_name == "Stepchart"
 }
 
+#[inline(always)]
+fn row_allows_arcade_next_row(state: &State, row_idx: usize) -> bool {
+    arcade_options_navigation_active()
+        && pane_uses_arcade_next_row(state.current_pane)
+        && state.rows.get(row_idx).is_some_and(|row| {
+            !row.name.is_empty() && (row_supports_inline_nav(row) || row.choices.len() > 1)
+        })
+}
+
+#[inline(always)]
+fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> bool {
+    if !arcade_options_navigation_active() || !pane_uses_arcade_next_row(state.current_pane) {
+        return false;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
+    state.rows.get(row_idx).is_some_and(row_supports_inline_nav)
+}
+
 fn inline_choice_centers(choices: &[String], asset_manager: &AssetManager) -> Vec<f32> {
     if choices.is_empty() {
         return Vec::new();
@@ -3591,6 +3624,34 @@ fn move_inline_focus(
     if centers.is_empty() {
         return false;
     }
+    if row_allows_arcade_next_row(state, row_idx) {
+        if state.arcade_row_focus[idx] {
+            if delta <= 0 {
+                return false;
+            }
+            state.arcade_row_focus[idx] = false;
+            state.inline_choice_x[idx] = centers[0];
+            return true;
+        }
+        let Some(current_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx)
+        else {
+            return false;
+        };
+        if delta < 0 {
+            if current_idx == 0 {
+                state.arcade_row_focus[idx] = true;
+                state.inline_choice_x[idx] = f32::NAN;
+                return true;
+            }
+            state.inline_choice_x[idx] = centers[current_idx - 1];
+            return true;
+        }
+        if current_idx + 1 >= centers.len() {
+            return false;
+        }
+        state.inline_choice_x[idx] = centers[current_idx + 1];
+        return true;
+    }
     let Some(current_idx) = focused_inline_choice_index(state, asset_manager, idx, row_idx) else {
         return false;
     };
@@ -3637,6 +3698,10 @@ fn sync_inline_intent_from_row(
     row_idx: usize,
 ) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
+    if row_allows_arcade_next_row(state, row_idx) && state.arcade_row_focus[idx] {
+        state.inline_choice_x[idx] = f32::NAN;
+        return;
+    }
     let Some(row) = state.rows.get(row_idx) else {
         return;
     };
@@ -3658,6 +3723,10 @@ fn apply_inline_intent_to_row(
     row_idx: usize,
 ) {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
+    if row_allows_arcade_next_row(state, row_idx) && state.arcade_row_focus[idx] {
+        state.inline_choice_x[idx] = f32::NAN;
+        return;
+    }
     let Some(row) = state.rows.get(row_idx) else {
         return;
     };
@@ -3706,6 +3775,7 @@ fn move_selection_vertical(
     }
     if let Some(next_row) = next_visible_row(&state.rows, current_row, dir, visibility) {
         state.selected_row[idx] = next_row;
+        state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, next_row);
         apply_inline_intent_to_row(state, asset_manager, idx, next_row);
     }
 }
@@ -3729,6 +3799,30 @@ fn measure_option_text(asset_manager: &AssetManager, text: &str, zoom: f32) -> (
         });
     });
     (out_w, out_h)
+}
+
+#[inline(always)]
+fn inline_choice_left_x() -> f32 {
+    widescale(162.0, 176.0)
+}
+
+#[inline(always)]
+fn arcade_next_row_visible(state: &State, row_idx: usize) -> bool {
+    row_allows_arcade_next_row(state, row_idx)
+}
+
+#[inline(always)]
+fn arcade_row_focuses_next_row(state: &State, player_idx: usize, row_idx: usize) -> bool {
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    row_allows_arcade_next_row(state, row_idx)
+        && state.arcade_row_focus[idx]
+        && state.selected_row[idx] == row_idx
+}
+
+fn arcade_next_row_layout(asset_manager: &AssetManager, zoom: f32) -> (f32, f32, f32) {
+    let (draw_w, draw_h) = measure_option_text(asset_manager, ARCADE_NEXT_ROW_TEXT, zoom);
+    let left_x = inline_choice_left_x() - draw_w - INLINE_SPACING;
+    (left_x, draw_w, draw_h)
 }
 
 fn cursor_dest_for_player(
@@ -3807,7 +3901,7 @@ fn cursor_dest_for_player(
             return None;
         }
         let spacing = INLINE_SPACING;
-        let choice_inner_left = widescale(162.0, 176.0);
+        let choice_inner_left = inline_choice_left_x();
         let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
         let mut text_h: f32 = 16.0;
         asset_manager.with_fonts(|all_fonts| {
@@ -3828,6 +3922,22 @@ fn cursor_dest_for_player(
         });
         if widths.is_empty() {
             return None;
+        }
+        if arcade_row_focuses_next_row(state, player_idx, row_idx) {
+            let (left_x, draw_w, draw_h) = arcade_next_row_layout(asset_manager, value_zoom);
+            let mut size_t = draw_w / width_ref;
+            if !size_t.is_finite() {
+                size_t = 0.0;
+            }
+            size_t = size_t.clamp(0.0, 1.0);
+            let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
+            let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+            if pad_x > max_pad_by_spacing {
+                pad_x = max_pad_by_spacing;
+            }
+            let ring_w = draw_w + pad_x * 2.0;
+            let ring_h = draw_h + pad_y * 2.0;
+            return Some((draw_w.mul_add(0.5, left_x), y, ring_w, ring_h));
         }
 
         let focus_idx = focused_inline_choice_index(state, asset_manager, player_idx, row_idx)
@@ -3863,7 +3973,9 @@ fn cursor_dest_for_player(
         center_x = screen_center_x().mul_add(2.0, -center_x);
     }
 
-    let display_text = if row.name == "Speed Mod" {
+    let display_text = if arcade_row_focuses_next_row(state, player_idx, row_idx) {
+        ARCADE_NEXT_ROW_TEXT.to_string()
+    } else if row.name == "Speed Mod" {
         match state.speed_mod[player_idx].mod_type.as_str() {
             "X" => format!("{:.2}x", state.speed_mod[player_idx].value),
             "C" => format!("C{}", state.speed_mod[player_idx].value as i32),
@@ -4652,10 +4764,14 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
                 );
             }
             NavDirection::Left => {
-                apply_choice_delta(state, asset_manager, player_idx, -1);
+                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
+                    apply_choice_delta(state, asset_manager, player_idx, -1);
+                }
             }
             NavDirection::Right => {
-                apply_choice_delta(state, asset_manager, player_idx, 1);
+                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
+                    apply_choice_delta(state, asset_manager, player_idx, 1);
+                }
             }
         }
         state.nav_key_last_scrolled_at[player_idx] = Some(now);
@@ -5894,6 +6010,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
     state.selected_row = [0; PLAYER_SLOTS];
     state.prev_selected_row = [0; PLAYER_SLOTS];
     state.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
+    state.arcade_row_focus = [false; PLAYER_SLOTS];
     state.cursor_initialized = [false; PLAYER_SLOTS];
     state.cursor_from_x = [0.0; PLAYER_SLOTS];
     state.cursor_from_y = [0.0; PLAYER_SLOTS];
@@ -5913,6 +6030,9 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         state.hide_active_mask,
         state.error_bar_active_mask,
     );
+    state.arcade_row_focus = std::array::from_fn(|player_idx| {
+        row_allows_arcade_next_row(state, state.selected_row[player_idx])
+    });
 }
 
 fn switch_to_pane(state: &mut State, pane: OptionsPane) {
@@ -5938,7 +6058,9 @@ fn focus_exit_row(state: &mut State, active: [bool; PLAYER_SLOTS], player_idx: u
     if state.rows.is_empty() {
         return;
     }
-    state.selected_row[player_idx.min(PLAYER_SLOTS - 1)] = state.rows.len().saturating_sub(1);
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    state.selected_row[idx] = state.rows.len().saturating_sub(1);
+    state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, state.selected_row[idx]);
     sync_selected_rows_with_visibility(state, active);
 }
 
@@ -5979,8 +6101,22 @@ fn handle_nav_event(
                 player_idx,
                 NavDirection::Down,
             ),
-            NavDirection::Left => apply_choice_delta(state, asset_manager, player_idx, -1),
-            NavDirection::Right => apply_choice_delta(state, asset_manager, player_idx, 1),
+            NavDirection::Left => {
+                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, -1) {
+                    apply_choice_delta(state, asset_manager, player_idx, -1);
+                    if arcade_row_uses_choice_focus(state, player_idx) {
+                        state.arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
+                    }
+                }
+            }
+            NavDirection::Right => {
+                if !move_arcade_horizontal_focus(state, asset_manager, player_idx, 1) {
+                    apply_choice_delta(state, asset_manager, player_idx, 1);
+                    if arcade_row_uses_choice_focus(state, player_idx) {
+                        state.arcade_row_focus[player_idx.min(PLAYER_SLOTS - 1)] = false;
+                    }
+                }
+            }
         }
         on_nav_press(state, player_idx, dir);
     } else {
@@ -5994,6 +6130,116 @@ fn clear_nav_hold(state: &mut State, player_idx: usize) {
     state.nav_key_held_direction[idx] = None;
     state.nav_key_held_since[idx] = None;
     state.nav_key_last_scrolled_at[idx] = None;
+}
+
+fn move_arcade_horizontal_focus(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    player_idx: usize,
+    delta: isize,
+) -> bool {
+    if delta == 0 || state.rows.is_empty() {
+        return false;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_idx = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
+    let Some(row) = state.rows.get(row_idx) else {
+        return false;
+    };
+    let row_supports_inline = row_supports_inline_nav(row);
+    let num_choices = row.choices.len();
+    let current_choice = row
+        .selected_choice_index
+        .get(idx)
+        .copied()
+        .unwrap_or(0)
+        .min(num_choices.saturating_sub(1));
+    if !row_allows_arcade_next_row(state, row_idx) {
+        return false;
+    }
+    if row_supports_inline {
+        apply_choice_delta(state, asset_manager, idx, delta);
+        return true;
+    }
+    if num_choices <= 1 {
+        return false;
+    }
+    if state.arcade_row_focus[idx] {
+        if delta < 0 {
+            return false;
+        }
+        state.arcade_row_focus[idx] = false;
+        if current_choice == 0 {
+            audio::play_sfx("assets/sounds/change_value.ogg");
+        } else {
+            change_choice_for_player(state, asset_manager, idx, -(current_choice as isize));
+        }
+        return true;
+    }
+    if delta < 0 {
+        if current_choice == 0 {
+            state.arcade_row_focus[idx] = true;
+            audio::play_sfx("assets/sounds/change_value.ogg");
+            return true;
+        }
+        change_choice_for_player(state, asset_manager, idx, -1);
+        return true;
+    }
+    if current_choice + 1 >= num_choices {
+        return false;
+    }
+    change_choice_for_player(state, asset_manager, idx, 1);
+    true
+}
+
+fn handle_arcade_prev_event(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+) {
+    if !active[player_idx] || state.rows.is_empty() {
+        return;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let prev_row = state.selected_row[idx];
+    clear_nav_hold(state, player_idx);
+    move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up);
+    if state.selected_row[idx] != prev_row {
+        audio::play_sfx("assets/sounds/prev_row.ogg");
+        state.help_anim_time[idx] = 0.0;
+        state.prev_selected_row[idx] = state.selected_row[idx];
+    }
+}
+
+fn handle_arcade_start_event(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    active: [bool; PLAYER_SLOTS],
+    player_idx: usize,
+) -> Option<ScreenAction> {
+    if !active[player_idx] {
+        return None;
+    }
+    sync_selected_rows_with_visibility(state, active);
+    let num_rows = state.rows.len();
+    if num_rows == 0 {
+        return None;
+    }
+    let idx = player_idx.min(PLAYER_SLOTS - 1);
+    let row_index = state.selected_row[idx].min(num_rows.saturating_sub(1));
+    if row_index + 1 == num_rows {
+        state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
+        return handle_start_event(state, asset_manager, active, idx);
+    }
+    if arcade_row_uses_choice_focus(state, idx) && !state.arcade_row_focus[idx] {
+        let action = handle_start_event(state, asset_manager, active, idx);
+        state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, row_index);
+        return action;
+    }
+    move_selection_vertical(state, asset_manager, active, idx, NavDirection::Down);
+    state.arcade_row_focus[idx] = row_allows_arcade_next_row(state, state.selected_row[idx]);
+    None
 }
 
 #[inline(always)]
@@ -6144,6 +6390,9 @@ pub fn handle_input(
     ev: &InputEvent,
 ) -> ScreenAction {
     let active = session_active_players();
+    if arcade_options_navigation_active() {
+        screen_input::track_menu_lr_chord(&mut state.menu_lr_chord, ev);
+    }
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     if screen_input::dedicated_three_key_nav_enabled() {
         match ev.action {
@@ -6247,6 +6496,9 @@ pub fn handle_input(
             return ScreenAction::Navigate(state.return_screen);
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
+            if arcade_options_navigation_active() {
+                return ScreenAction::None;
+            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6257,6 +6509,9 @@ pub fn handle_input(
             );
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
+            if arcade_options_navigation_active() {
+                return ScreenAction::None;
+            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6287,11 +6542,31 @@ pub fn handle_input(
             );
         }
         VirtualAction::p1_start if ev.pressed => {
+            if arcade_options_navigation_active() {
+                if screen_input::menu_lr_both_held(
+                    &state.menu_lr_chord,
+                    crate::game::profile::PlayerSide::P1,
+                ) {
+                    handle_arcade_prev_event(state, asset_manager, active, P1);
+                    return ScreenAction::None;
+                }
+                if let Some(action) = handle_arcade_start_event(state, asset_manager, active, P1) {
+                    return action;
+                }
+                return ScreenAction::None;
+            }
             if let Some(action) = handle_start_event(state, asset_manager, active, P1) {
                 return action;
             }
         }
+        VirtualAction::p1_select if ev.pressed && arcade_options_navigation_active() => {
+            handle_arcade_prev_event(state, asset_manager, active, P1);
+            return ScreenAction::None;
+        }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
+            if arcade_options_navigation_active() {
+                return ScreenAction::None;
+            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6302,6 +6577,9 @@ pub fn handle_input(
             );
         }
         VirtualAction::p2_down | VirtualAction::p2_menu_down => {
+            if arcade_options_navigation_active() {
+                return ScreenAction::None;
+            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6332,9 +6610,26 @@ pub fn handle_input(
             );
         }
         VirtualAction::p2_start if ev.pressed => {
+            if arcade_options_navigation_active() {
+                if screen_input::menu_lr_both_held(
+                    &state.menu_lr_chord,
+                    crate::game::profile::PlayerSide::P2,
+                ) {
+                    handle_arcade_prev_event(state, asset_manager, active, P2);
+                    return ScreenAction::None;
+                }
+                if let Some(action) = handle_arcade_start_event(state, asset_manager, active, P2) {
+                    return action;
+                }
+                return ScreenAction::None;
+            }
             if let Some(action) = handle_start_event(state, asset_manager, active, P2) {
                 return action;
             }
+        }
+        VirtualAction::p2_select if ev.pressed && arcade_options_navigation_active() => {
+            handle_arcade_prev_event(state, asset_manager, active, P2);
+            return ScreenAction::None;
         }
         _ => {}
     }
@@ -6618,12 +6913,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         sl_gray[3] *= a;
         // Some rows should display all choices inline
         let show_all_choices_inline = row_shows_all_choices_inline(&row.name);
+        let show_arcade_next_row = arcade_next_row_visible(state, item_idx);
         // Choice area: For single-choice rows (ShowOneInRow), use ItemsLongRowP1X positioning
         // For multi-choice rows (ShowAllInRow), use ItemsStartX positioning
         // ItemsLongRowP1X = WideScale(_screen.cx-100, _screen.cx-130) from Simply Love metrics
         // ItemsStartX = WideScale(146, 160) from Simply Love metrics
         let choice_inner_left = if show_all_choices_inline {
-            widescale(162.0, 176.0)
+            inline_choice_left_x()
         } else {
             screen_center_x() + widescale(-100.0, -130.0) // ItemsLongRowP1X for single-choice rows
         };
@@ -6691,6 +6987,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             // The active option gets an underline (quad) drawn just below the text.
             let value_zoom = 0.835;
             let spacing = 15.75;
+            let next_row_item =
+                show_arcade_next_row.then(|| arcade_next_row_layout(asset_manager, value_zoom));
             let mut widths: Vec<f32> = Vec::with_capacity(row.choices.len());
             let mut text_h: f32 = 16.0;
             asset_manager.with_fonts(|all_fonts| {
@@ -7424,6 +7722,23 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 }
             }
             // Draw each option's text (active row: all white; inactive: #808080)
+            if let Some((next_row_x, _, _)) = next_row_item {
+                let next_row_color = if is_active {
+                    [1.0, 1.0, 1.0, a]
+                } else {
+                    sl_gray
+                };
+                actors.push(act!(text: font("miso"): settext(ARCADE_NEXT_ROW_TEXT):
+                    align(0.0, 0.5): xy(next_row_x, current_row_y): zoom(value_zoom):
+                    diffuse(
+                        next_row_color[0],
+                        next_row_color[1],
+                        next_row_color[2],
+                        next_row_color[3]
+                    ):
+                    z(101)
+                ));
+            }
             for (idx, text) in row.choices.iter().enumerate() {
                 let x = x_positions.get(idx).copied().unwrap_or(choice_inner_left);
                 let color_rgba = if is_active {
@@ -7463,16 +7778,25 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
             asset_manager.with_fonts(|all_fonts| {
                 asset_manager.with_font("miso", |metrics_font| {
-                    let choice_display_text = if row.name == "Speed Mod" {
-                        match state.speed_mod[primary_player_idx].mod_type.as_str() {
-                            "X" => format!("{:.2}x", state.speed_mod[primary_player_idx].value),
-                            "C" => format!("C{}", state.speed_mod[primary_player_idx].value as i32),
-                            "M" => format!("M{}", state.speed_mod[primary_player_idx].value as i32),
-                            _ => String::new(),
-                        }
-                    } else {
-                        choice_text.clone()
-                    };
+                    let choice_display_text =
+                        if arcade_row_focuses_next_row(state, primary_player_idx, item_idx) {
+                            ARCADE_NEXT_ROW_TEXT.to_string()
+                        } else if row.name == "Speed Mod" {
+                            match state.speed_mod[primary_player_idx].mod_type.as_str() {
+                                "X" => format!("{:.2}x", state.speed_mod[primary_player_idx].value),
+                                "C" => format!(
+                                    "C{}",
+                                    state.speed_mod[primary_player_idx].value as i32
+                                ),
+                                "M" => format!(
+                                    "M{}",
+                                    state.speed_mod[primary_player_idx].value as i32
+                                ),
+                                _ => String::new(),
+                            }
+                        } else {
+                            choice_text.clone()
+                        };
                     let mut text_w = crate::engine::present::font::measure_line_width_logical(
                         metrics_font,
                         &choice_display_text,
@@ -7545,7 +7869,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                         }
                     }
                     let p2_text = if show_p2 && !row.name.starts_with("Music Rate") {
-                        if row.name == "Speed Mod" {
+                        if arcade_row_focuses_next_row(state, P2, item_idx) {
+                            ARCADE_NEXT_ROW_TEXT.to_string()
+                        } else if row.name == "Speed Mod" {
                             match state.speed_mod[P2].mod_type.as_str() {
                                 "X" => format!("{:.2}x", state.speed_mod[P2].value),
                                 "C" => format!("C{}", state.speed_mod[P2].value as i32),

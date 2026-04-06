@@ -232,6 +232,8 @@ pub struct Config {
     pub auto_screenshot_eval: u8,
     /// ITGmania InputFilter parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
+    /// StepMania parity: option menus use Start-to-advance arcade navigation.
+    pub arcade_options_navigation: bool,
     /// ITGmania/Simply Love parity: use left/right/start style menu navigation.
     pub three_key_navigation: bool,
     /// When true, gameplay arrow buttons (p*_up/down/left/right) are excluded from
@@ -344,6 +346,7 @@ impl Default for Config {
             smooth_histogram: true,
             auto_screenshot_eval: 0,
             input_debounce_seconds: 0.02,
+            arcade_options_navigation: false,
             three_key_navigation: false,
             only_dedicated_menu_buttons: false,
         }
