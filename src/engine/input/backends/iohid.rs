@@ -233,6 +233,26 @@ fn event_time(host_clock: Option<HostClock>, value: IOHIDValueRef) -> (Instant, 
     )
 }
 
+#[inline(always)]
+fn debug_log_keyboard_value(
+    device_key: usize,
+    usage_page: u16,
+    usage: u16,
+    value: i64,
+    host_nanos: u64,
+    capture_active: bool,
+) {
+    let mapped = if usage_page == 0x07 {
+        hid_key_code(usage)
+    } else {
+        None
+    };
+    debug!(
+        "macos iohid keyboard raw: dev=0x{device_key:X} page=0x{usage_page:04X} usage=0x{usage:04X} value={value} host_ns={host_nanos} capture={} mapped={mapped:?}",
+        capture_active
+    );
+}
+
 fn hid_key_code(usage: u16) -> Option<KeyCode> {
     Some(match usage {
         0x04 => KeyCode::KeyA,
@@ -566,10 +586,12 @@ extern "C" fn on_input(
         let Some(_dev) = ctx.key_devs.get(&key) else {
             return;
         };
+        let capture_active = keyboard_capture_active();
+        debug_log_keyboard_value(key, usage_page, usage, v, host_nanos, capture_active);
         if usage_page != 0x07 {
             return;
         }
-        if !keyboard_capture_active() {
+        if !capture_active {
             return;
         }
         let Some(code) = hid_key_code(usage) else {
