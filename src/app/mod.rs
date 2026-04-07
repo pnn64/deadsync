@@ -1357,6 +1357,8 @@ fn score_info_from_stage(
         profile_name: player.profile_name.clone(),
         score_valid: player.score_valid,
         disqualified: player.disqualified,
+        expected_groovestats_submit: false,
+        expected_arrowcloud_submit: false,
         groovestats: player.groovestats.clone(),
         itl: player.itl.clone(),
         judgment_counts,

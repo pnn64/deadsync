@@ -1,4 +1,7 @@
-use super::{gameplay_side_for_player, log_body_snippet, submit_side_ix};
+use super::{
+    gameplay_side_for_player, invalidate_player_leaderboards_for_side, log_body_snippet,
+    submit_side_ix,
+};
 use crate::engine::network;
 use crate::game::gameplay;
 use crate::game::judgment;
@@ -134,7 +137,10 @@ fn arrowcloud_next_submit_ui_token() -> u64 {
 
 #[inline(always)]
 const fn arrowcloud_can_retry_submit(status: ArrowCloudSubmitUiStatus) -> bool {
-    matches!(status, ArrowCloudSubmitUiStatus::TimedOut)
+    matches!(
+        status,
+        ArrowCloudSubmitUiStatus::SubmitFailed | ArrowCloudSubmitUiStatus::TimedOut
+    )
 }
 
 #[inline(always)]
@@ -153,47 +159,6 @@ fn arrowcloud_warn_submit_skip(side: profile::PlayerSide, chart_hash: &str, reas
         "Skipping ArrowCloud submit for {:?} ({}): {}.",
         side, chart_hash, reason
     );
-}
-
-#[inline(always)]
-fn arrowcloud_player_can_submit(gs: &gameplay::State, player_idx: usize) -> bool {
-    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) || !gs.score_valid[player_idx] {
-        return false;
-    }
-    if gs.player_profiles[player_idx]
-        .arrowcloud_api_key
-        .trim()
-        .is_empty()
-    {
-        return false;
-    }
-    !gs.players[player_idx].is_failing && gs.song_completed_naturally
-}
-
-fn arrowcloud_mark_submit_status_for_eligible_players(
-    gs: &gameplay::State,
-    status: ArrowCloudSubmitUiStatus,
-) {
-    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
-        if !arrowcloud_player_can_submit(gs, player_idx) {
-            continue;
-        }
-        let side = gameplay_side_for_player(gs, player_idx);
-        let chart_hash = gs.charts[player_idx].short_hash.as_str();
-        let token = arrowcloud_next_submit_ui_token();
-        arrowcloud_set_submit_ui_status(side, chart_hash, token, status);
-    }
-}
-
-fn arrowcloud_warn_submit_skip_for_eligible_players(gs: &gameplay::State, reason: &str) {
-    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
-        if !arrowcloud_player_can_submit(gs, player_idx) {
-            continue;
-        }
-        let side = gameplay_side_for_player(gs, player_idx);
-        let chart_hash = gs.charts[player_idx].short_hash.as_str();
-        arrowcloud_warn_submit_skip(side, chart_hash, reason);
-    }
 }
 
 #[inline(always)]
@@ -791,6 +756,7 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
                     );
                 }
             }
+            invalidate_player_leaderboards_for_side(job.payload.hash.as_str(), job.side);
         }
     });
 }
@@ -819,18 +785,6 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
         debug!("Skipping ArrowCloud submit: simfile relies on lua.");
         return;
     }
-    if let online::ArrowCloudConnectionStatus::Error(msg) = online::get_arrowcloud_status() {
-        arrowcloud_mark_submit_status_for_eligible_players(
-            gs,
-            arrowcloud_status_from_error_message(msg.as_str()),
-        );
-        arrowcloud_warn_submit_skip_for_eligible_players(
-            gs,
-            format!("connection status error: {msg}").as_str(),
-        );
-        return;
-    }
-
     let mut jobs = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
         if !gs.score_valid[player_idx] {
@@ -895,9 +849,6 @@ pub fn retry_timed_out_arrowcloud_submit(chart_hash: &str, side: profile::Player
     }
     let cfg = crate::config::get();
     if !cfg.enable_arrowcloud {
-        return false;
-    }
-    if let online::ArrowCloudConnectionStatus::Error(_) = online::get_arrowcloud_status() {
         return false;
     }
     let Some(status) = get_arrowcloud_submit_ui_status_for_side(hash, side) else {
@@ -1037,14 +988,14 @@ mod tests {
     }
 
     #[test]
-    fn arrowcloud_retry_only_allows_timeouts() {
+    fn arrowcloud_retry_allows_failed_submits() {
         assert!(!arrowcloud_can_retry_submit(
             ArrowCloudSubmitUiStatus::Submitting
         ));
         assert!(!arrowcloud_can_retry_submit(
             ArrowCloudSubmitUiStatus::Submitted
         ));
-        assert!(!arrowcloud_can_retry_submit(
+        assert!(arrowcloud_can_retry_submit(
             ArrowCloudSubmitUiStatus::SubmitFailed
         ));
         assert!(arrowcloud_can_retry_submit(

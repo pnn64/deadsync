@@ -3,7 +3,7 @@ use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use crate::game::online::{self as network, ConnectionStatus, downloads};
+use crate::game::online::downloads;
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::song::SongData;
@@ -922,15 +922,6 @@ fn gs_machine_pane(chart_hash: Option<&str>) -> scores::LeaderboardPane {
     }
 }
 
-fn gs_disabled_pane() -> scores::LeaderboardPane {
-    scores::LeaderboardPane {
-        name: "GrooveStats".to_string(),
-        entries: Vec::new(),
-        is_ex: false,
-        disabled: true,
-    }
-}
-
 fn gs_error_text(error: &str) -> String {
     let lower = error.to_ascii_lowercase();
     if lower.contains("timed out") || lower.contains("timeout") {
@@ -1038,40 +1029,24 @@ pub fn show_leaderboard_overlay(
         ..Default::default()
     };
 
-    let status = network::get_status();
-    let service = matches!(
-        &status,
-        ConnectionStatus::Connected(services) if services.leaderboard
-    );
-    let service_disabled = matches!(
-        &status,
-        ConnectionStatus::Connected(services) if !services.leaderboard
-    );
-
     if p1_joined {
         let profile = profile::get_for_side(profile::PlayerSide::P1);
-        if service && !profile.groovestats_api_key.is_empty() && chart_hash_p1.is_some() {
+        if !profile.groovestats_api_key.is_empty() && chart_hash_p1.is_some() {
             p1.chart_hash = chart_hash_p1;
             refresh_leaderboard_side_from_cache(&mut p1, profile::PlayerSide::P1);
         } else if let Some(machine) = p1.machine_pane.clone() {
             p1.panes.push(machine);
-            if service_disabled {
-                p1.panes.push(gs_disabled_pane());
-            }
             p1.show_icons = false;
         }
     }
 
     if p2_joined {
         let profile = profile::get_for_side(profile::PlayerSide::P2);
-        if service && !profile.groovestats_api_key.is_empty() && chart_hash_p2.is_some() {
+        if !profile.groovestats_api_key.is_empty() && chart_hash_p2.is_some() {
             p2.chart_hash = chart_hash_p2;
             refresh_leaderboard_side_from_cache(&mut p2, profile::PlayerSide::P2);
         } else if let Some(machine) = p2.machine_pane.clone() {
             p2.panes.push(machine);
-            if service_disabled {
-                p2.panes.push(gs_disabled_pane());
-            }
             p2.show_icons = false;
         }
     }

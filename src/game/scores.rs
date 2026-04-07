@@ -115,6 +115,12 @@ pub struct CachedScore {
     pub lamp_judge_count: Option<u8>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalScalarScore {
+    pub percent: f64,
+    pub is_fail: bool,
+}
+
 // --- GrooveStats grade cache (on-disk + network-fetched) ---
 
 #[derive(Default)]
@@ -216,6 +222,19 @@ pub fn get_cached_gs_score_for_side(
         .loaded_profiles
         .get(&profile_id)
         .and_then(|m| m.get(chart_hash).copied())
+}
+
+fn get_cached_gs_score_for_profile(profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
+    if profile_id.trim().is_empty() {
+        return None;
+    }
+    ensure_gs_score_cache_loaded_for_profile(profile_id);
+    GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(profile_id)
+        .and_then(|scores| scores.get(chart_hash).copied())
 }
 
 fn cached_gs_chart_hashes_for_profile(profile_id: &str) -> HashSet<String> {
@@ -712,15 +731,43 @@ pub fn get_cached_local_score_for_side(
         .and_then(|idx| idx.best_itg.get(chart_hash).copied())
 }
 
+fn get_cached_local_scalar_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+    hard_ex: bool,
+) -> Option<LocalScalarScore> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    ensure_local_score_cache_loaded(&profile_id);
+    let state = LOCAL_SCORE_CACHE.lock().unwrap();
+    let index = state.loaded_profiles.get(&profile_id)?;
+    let best = if hard_ex {
+        index.best_hard_ex.get(chart_hash)
+    } else {
+        index.best_ex.get(chart_hash)
+    }?;
+    Some(LocalScalarScore {
+        percent: best.percent,
+        is_fail: best.grade == Grade::Failed,
+    })
+}
+
+pub fn get_cached_local_ex_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<LocalScalarScore> {
+    get_cached_local_scalar_score_for_side(chart_hash, side, false)
+}
+
+pub fn get_cached_local_hard_ex_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<LocalScalarScore> {
+    get_cached_local_scalar_score_for_side(chart_hash, side, true)
+}
+
 #[inline(always)]
 pub fn is_gs_get_scores_service_allowed() -> bool {
-    if !crate::config::get().enable_groovestats {
-        return false;
-    }
-    matches!(
-        online::get_status(),
-        online::ConnectionStatus::Connected(services) if services.get_scores
-    )
+    crate::config::get().enable_groovestats
 }
 
 #[inline(always)]
@@ -1770,25 +1817,20 @@ enum PlayerLeaderboardCacheValue {
     Error(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PlayerLeaderboardCacheSource {
-    Fetch,
-    SubmitResponse,
-}
-
 #[derive(Debug, Clone)]
 struct PlayerLeaderboardCacheEntry {
     value: PlayerLeaderboardCacheValue,
     max_entries: usize,
     refreshed_at: Instant,
     retry_after: Option<Instant>,
-    source: PlayerLeaderboardCacheSource,
 }
 
 #[derive(Default)]
 struct PlayerLeaderboardCacheState {
     by_key: HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheEntry>,
-    in_flight: HashSet<PlayerLeaderboardCacheKey>,
+    in_flight: HashMap<PlayerLeaderboardCacheKey, usize>,
+    pending_refresh: HashMap<PlayerLeaderboardCacheKey, usize>,
+    invalidated_after: HashMap<PlayerLeaderboardCacheKey, Instant>,
 }
 
 static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCacheState>> =
@@ -2008,247 +2050,19 @@ struct FetchedPlayerLeaderboards {
 }
 
 #[inline(always)]
-fn leaderboard_pane_key_eq(a: &LeaderboardPane, b: &LeaderboardPane) -> bool {
-    a.is_ex == b.is_ex && a.name.eq_ignore_ascii_case(b.name.as_str())
-}
-
-#[inline(always)]
-fn same_leaderboard_identity(a: &LeaderboardEntry, b: &LeaderboardEntry) -> bool {
-    let a_name = a.name.trim();
-    let b_name = b.name.trim();
-    if a_name.is_empty() || b_name.is_empty() || !a_name.eq_ignore_ascii_case(b_name) {
-        return false;
-    }
-    match (a.machine_tag.as_deref(), b.machine_tag.as_deref()) {
-        (Some(a_tag), Some(b_tag)) if !a_tag.trim().is_empty() && !b_tag.trim().is_empty() => {
-            a_tag.eq_ignore_ascii_case(b_tag)
-        }
-        _ => true,
-    }
-}
-
-fn merge_submit_pane_entries(
-    pane: &mut LeaderboardPane,
-    username: &str,
-    existing: &LeaderboardPane,
-) {
-    if pane.entries.is_empty() || existing.entries.is_empty() {
-        return;
-    }
-
-    let username = username.trim();
-    if !username.is_empty()
-        && !pane.entries.iter().any(|entry| entry.is_self)
-        && let Some(entry) = pane
-            .entries
-            .iter_mut()
-            .find(|entry| entry.name.eq_ignore_ascii_case(username))
-    {
-        entry.is_self = true;
-    }
-
-    for existing_entry in &existing.entries {
-        if let Some(entry) = pane
-            .entries
-            .iter_mut()
-            .find(|entry| same_leaderboard_identity(entry, existing_entry))
-        {
-            entry.is_self |= existing_entry.is_self;
-            entry.is_rival |= existing_entry.is_rival;
-        }
-    }
-
-    if !pane.entries.iter().any(|entry| entry.is_self)
-        && let Some(existing_self) = existing.entries.iter().find(|entry| entry.is_self)
-    {
-        pane.entries.push(existing_self.clone());
-    }
-
-    for existing_rival in existing.entries.iter().filter(|entry| entry.is_rival) {
-        if pane
-            .entries
-            .iter()
-            .any(|entry| same_leaderboard_identity(entry, existing_rival))
-        {
-            continue;
-        }
-        pane.entries.push(existing_rival.clone());
-    }
-
-    pane.entries.sort_by(|a, b| {
-        a.rank.cmp(&b.rank).then_with(|| {
-            a.name
-                .to_ascii_lowercase()
-                .cmp(&b.name.to_ascii_lowercase())
-        })
-    });
-}
-
-fn player_leaderboard_data_from_submit_response(
-    response: &GrooveStatsSubmitApiPlayer,
-    username: &str,
-    show_ex_score: bool,
-    existing: Option<&PlayerLeaderboardData>,
-) -> PlayerLeaderboardData {
-    let mut panes = Vec::with_capacity(existing.map_or(4, |data| data.panes.len() + 2));
-    if show_ex_score {
-        push_leaderboard_pane(
-            &mut panes,
-            "GrooveStats",
-            response.ex_leaderboard.clone(),
-            true,
-        );
-        push_leaderboard_pane(
-            &mut panes,
-            "GrooveStats",
-            response.gs_leaderboard.clone(),
-            false,
-        );
-    } else {
-        push_leaderboard_pane(
-            &mut panes,
-            "GrooveStats",
-            response.gs_leaderboard.clone(),
-            false,
-        );
-        push_leaderboard_pane(
-            &mut panes,
-            "GrooveStats",
-            response.ex_leaderboard.clone(),
-            true,
-        );
-    }
-
-    if let Some(itl) = response.itl.as_ref()
-        && !itl.itl_leaderboard.is_empty()
-    {
-        let name = if itl.name.trim().is_empty() {
-            "ITL"
-        } else {
-            itl.name.as_str()
-        };
-        push_leaderboard_pane(&mut panes, name, itl.itl_leaderboard.clone(), true);
-    }
-
-    if let Some(existing) = existing {
-        for pane in &mut panes {
-            if let Some(existing_pane) = existing
-                .panes
-                .iter()
-                .find(|existing_pane| leaderboard_pane_key_eq(existing_pane, pane))
-            {
-                merge_submit_pane_entries(pane, username, existing_pane);
-            }
-        }
-        for pane in &existing.panes {
-            if panes
-                .iter()
-                .any(|existing_pane| leaderboard_pane_key_eq(existing_pane, pane))
-            {
-                continue;
-            }
-            panes.push(pane.clone());
-        }
-    }
-
-    let itl_self_score = response
-        .itl
-        .as_ref()
-        .and_then(|itl| leaderboard_self_score_10000(itl.itl_leaderboard.as_slice(), username))
-        .or(existing.and_then(|data| data.itl_self_score));
-
-    PlayerLeaderboardData {
-        panes,
-        itl_self_score,
-    }
-}
-
-fn player_leaderboard_cache_key_for_side(
-    chart_hash: &str,
-    side: profile::PlayerSide,
-    show_ex_score: bool,
-) -> Option<PlayerLeaderboardCacheKey> {
-    let chart_hash = chart_hash.trim();
-    if chart_hash.is_empty() {
-        return None;
-    }
-
-    let cfg = crate::config::get();
-    if !cfg.enable_groovestats {
-        return None;
-    }
-
-    let side_profile = profile::get_for_side(side);
-    let gs_api_key = side_profile.groovestats_api_key.trim();
-    if gs_api_key.is_empty() {
-        return None;
-    }
-
-    let arrowcloud_api_key = side_profile.arrowcloud_api_key.trim().to_string();
-    let include_arrowcloud = cfg.enable_arrowcloud
-        && !arrowcloud_api_key.is_empty()
-        && matches!(
-            online::get_arrowcloud_status(),
-            online::ArrowCloudConnectionStatus::Connected
-        );
-
-    Some(PlayerLeaderboardCacheKey {
-        chart_hash: chart_hash.to_string(),
-        api_key: gs_api_key.to_string(),
-        arrowcloud_api_key,
-        include_arrowcloud,
-        show_ex_score,
-    })
-}
-
-fn cache_player_leaderboard_submit_response(
-    side: profile::PlayerSide,
-    chart_hash: &str,
-    username: &str,
-    show_ex_score: bool,
-    response: &GrooveStatsSubmitApiPlayer,
-) {
-    let Some(key) = player_leaderboard_cache_key_for_side(chart_hash, side, show_ex_score) else {
-        return;
-    };
-
-    let refreshed_at = Instant::now();
-    let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
-    let existing = cache.by_key.get(&key).and_then(|entry| match &entry.value {
-        PlayerLeaderboardCacheValue::Ready(data) => Some(data.clone()),
-        PlayerLeaderboardCacheValue::Error(_) => None,
-    });
-    let data = player_leaderboard_data_from_submit_response(
-        response,
-        username,
-        show_ex_score,
-        existing.as_ref(),
-    );
-
-    cache.by_key.insert(
-        key,
-        PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(data),
-            // Submit responses are provisional snapshots: they are useful for
-            // immediate UI updates, but they may omit self/rival rows that the
-            // full leaderboard fetch returns. Force the next read to refresh.
-            max_entries: 0,
-            refreshed_at,
-            retry_after: None,
-            source: PlayerLeaderboardCacheSource::SubmitResponse,
-        },
-    );
-}
-
-#[inline(always)]
 fn should_keep_newer_player_leaderboard_entry(
     entry: Option<&PlayerLeaderboardCacheEntry>,
     request_started_at: Instant,
 ) -> bool {
-    entry.is_some_and(|entry| {
-        entry.source != PlayerLeaderboardCacheSource::SubmitResponse
-            && entry.refreshed_at > request_started_at
-    })
+    entry.is_some_and(|entry| entry.refreshed_at > request_started_at)
+}
+
+#[inline(always)]
+fn player_leaderboard_request_was_invalidated(
+    invalidated_after: Option<Instant>,
+    request_started_at: Instant,
+) -> bool {
+    invalidated_after.is_some_and(|invalidated_after| request_started_at <= invalidated_after)
 }
 
 #[inline(always)]
@@ -2344,6 +2158,11 @@ fn cache_gs_score_for_profile(
     score: CachedScore,
     username: &str,
 ) {
+    if let Some(existing) = get_cached_gs_score_for_profile(profile_id, chart_hash)
+        && !is_better_itg(&score, &existing)
+    {
+        return;
+    }
     set_cached_gs_score_for_profile(profile_id, chart_hash.to_string(), score);
     if !username.trim().is_empty() {
         append_gs_score_on_disk_for_profile(profile_id, chart_hash, score, username);
@@ -2612,6 +2431,176 @@ fn should_fetch_player_leaderboard_entry(
     }
 }
 
+#[inline(always)]
+fn should_rerun_in_flight_player_leaderboard_fetch(
+    in_flight_max_entries: usize,
+    requested_max_entries: usize,
+    refresh_cached: bool,
+) -> bool {
+    refresh_cached || requested_max_entries > in_flight_max_entries
+}
+
+#[inline(always)]
+fn queue_player_leaderboard_refresh(
+    pending_refresh: &mut HashMap<PlayerLeaderboardCacheKey, usize>,
+    key: &PlayerLeaderboardCacheKey,
+    requested_max_entries: usize,
+) {
+    pending_refresh
+        .entry(key.clone())
+        .and_modify(|max_entries| *max_entries = (*max_entries).max(requested_max_entries))
+        .or_insert(requested_max_entries);
+}
+
+fn spawn_player_leaderboard_fetch(
+    key: PlayerLeaderboardCacheKey,
+    gs_username: String,
+    persistent_profile_id: Option<String>,
+    auto_profile_id: Option<String>,
+    should_auto_populate: bool,
+    requested_max_entries: usize,
+) {
+    std::thread::spawn(move || {
+        let request_started_at = Instant::now();
+        let fetched = fetch_player_leaderboards_internal(
+            &key.chart_hash,
+            &key.api_key,
+            gs_username.as_str(),
+            if key.include_arrowcloud {
+                Some(key.arrowcloud_api_key.as_str())
+            } else {
+                None
+            },
+            key.show_ex_score,
+            requested_max_entries,
+        );
+        let refresh_finished_at = Instant::now();
+        let mut queued_refresh = None;
+        let mut queued_key = None;
+        let mut queued_gs_username = None;
+        let mut queued_persistent_profile_id = None;
+        let mut queued_auto_profile_id = None;
+
+        {
+            let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+            cache.in_flight.remove(&key);
+            let request_invalidated = player_leaderboard_request_was_invalidated(
+                cache.invalidated_after.get(&key).copied(),
+                request_started_at,
+            );
+
+            if !request_invalidated {
+                match fetched {
+                    Ok(fetched) => {
+                        if !should_keep_newer_player_leaderboard_entry(
+                            cache.by_key.get(&key),
+                            request_started_at,
+                        ) {
+                            let FetchedPlayerLeaderboards {
+                                data,
+                                gs_entries,
+                                itl_self_found,
+                            } = fetched;
+                            if itl_self_found {
+                                itl::set_cached_online_self_score(
+                                    persistent_profile_id.as_deref(),
+                                    key.api_key.as_str(),
+                                    key.chart_hash.as_str(),
+                                    data.itl_self_score,
+                                );
+                            }
+                            if should_auto_populate
+                                && let Some(profile_id) = auto_profile_id.as_deref()
+                            {
+                                cache_gs_score_from_leaderboard(
+                                    profile_id,
+                                    gs_username.as_str(),
+                                    key.chart_hash.as_str(),
+                                    gs_entries.as_slice(),
+                                );
+                            }
+                            cache.by_key.insert(
+                                key.clone(),
+                                PlayerLeaderboardCacheEntry {
+                                    value: PlayerLeaderboardCacheValue::Ready(data),
+                                    max_entries: requested_max_entries,
+                                    refreshed_at: refresh_finished_at,
+                                    retry_after: None,
+                                },
+                            );
+                            cache.invalidated_after.remove(&key);
+                        }
+                    }
+                    Err(error) => {
+                        if !should_keep_newer_player_leaderboard_entry(
+                            cache.by_key.get(&key),
+                            request_started_at,
+                        ) {
+                            if let Some(entry) = cache.by_key.get_mut(&key)
+                                && matches!(entry.value, PlayerLeaderboardCacheValue::Ready(_))
+                            {
+                                // Keep stale data visible on refresh failures, but back off retries.
+                                entry.refreshed_at = refresh_finished_at;
+                                entry.retry_after = Some(
+                                    refresh_finished_at + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
+                                );
+                            } else {
+                                cache.by_key.insert(
+                                    key.clone(),
+                                    PlayerLeaderboardCacheEntry {
+                                        value: PlayerLeaderboardCacheValue::Error(
+                                            error.to_string(),
+                                        ),
+                                        max_entries: requested_max_entries,
+                                        refreshed_at: refresh_finished_at,
+                                        retry_after: Some(
+                                            refresh_finished_at
+                                                + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
+                                        ),
+                                    },
+                                );
+                            }
+                            cache.invalidated_after.remove(&key);
+                        }
+                    }
+                }
+            }
+
+            if let Some(next_max_entries) = cache.pending_refresh.remove(&key) {
+                cache.in_flight.insert(key.clone(), next_max_entries);
+                queued_refresh = Some(next_max_entries);
+                queued_key = Some(key.clone());
+                queued_gs_username = Some(gs_username.clone());
+                queued_persistent_profile_id = Some(persistent_profile_id.clone());
+                queued_auto_profile_id = Some(auto_profile_id.clone());
+            }
+        }
+
+        if let (
+            Some(next_max_entries),
+            Some(next_key),
+            Some(next_gs_username),
+            Some(next_persistent_profile_id),
+            Some(next_auto_profile_id),
+        ) = (
+            queued_refresh,
+            queued_key,
+            queued_gs_username,
+            queued_persistent_profile_id,
+            queued_auto_profile_id,
+        ) {
+            spawn_player_leaderboard_fetch(
+                next_key,
+                next_gs_username,
+                next_persistent_profile_id,
+                next_auto_profile_id,
+                should_auto_populate,
+                next_max_entries,
+            );
+        }
+    });
+}
+
 fn get_or_fetch_player_leaderboards_for_side_inner(
     chart_hash: &str,
     side: profile::PlayerSide,
@@ -2636,12 +2625,7 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
         return None;
     }
     let arrowcloud_api_key = side_profile.arrowcloud_api_key.trim().to_string();
-    let include_arrowcloud = cfg.enable_arrowcloud
-        && !arrowcloud_api_key.is_empty()
-        && matches!(
-            online::get_arrowcloud_status(),
-            online::ArrowCloudConnectionStatus::Connected
-        );
+    let include_arrowcloud = cfg.enable_arrowcloud && !arrowcloud_api_key.is_empty();
     let persistent_profile_id = profile::active_local_profile_id_for_side(side);
     let auto_populate = cfg.auto_populate_gs_scores;
     let auto_profile_id = if auto_populate {
@@ -2660,31 +2644,6 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
         include_arrowcloud,
         show_ex_score: side_profile.show_ex_score,
     };
-    let cached_snapshot = {
-        let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
-        cache.by_key.get(&key).map(cache_snapshot_from_entry)
-    };
-
-    match online::get_status() {
-        online::ConnectionStatus::Pending => {
-            return Some(cached_snapshot.unwrap_or_else(loading_player_leaderboard_snapshot));
-        }
-        online::ConnectionStatus::Connected(services) if !services.get_scores => {
-            return Some(cached_snapshot.unwrap_or(CachedPlayerLeaderboardData {
-                loading: false,
-                data: None,
-                error: Some("Disabled".to_string()),
-            }));
-        }
-        online::ConnectionStatus::Error(error) => {
-            return Some(cached_snapshot.unwrap_or(CachedPlayerLeaderboardData {
-                loading: false,
-                data: None,
-                error: Some(error),
-            }));
-        }
-        _ => {}
-    }
 
     let mut should_spawn = false;
     let mut requested_max_entries = max_entries;
@@ -2700,101 +2659,36 @@ fn get_or_fetch_player_leaderboards_for_side_inner(
             loading_player_leaderboard_snapshot()
         };
 
-        if !cache.in_flight.contains(&key)
-            && should_fetch_player_leaderboard_entry(entry, requested_max_entries, refresh_cached)
-        {
-            cache.in_flight.insert(key.clone());
-            should_spawn = true;
+        if should_fetch_player_leaderboard_entry(entry, requested_max_entries, refresh_cached) {
+            if let Some(in_flight_max_entries) = cache.in_flight.get(&key).copied() {
+                if should_rerun_in_flight_player_leaderboard_fetch(
+                    in_flight_max_entries,
+                    requested_max_entries,
+                    refresh_cached,
+                ) {
+                    queue_player_leaderboard_refresh(
+                        &mut cache.pending_refresh,
+                        &key,
+                        requested_max_entries,
+                    );
+                }
+            } else {
+                cache.in_flight.insert(key.clone(), requested_max_entries);
+                should_spawn = true;
+            }
         }
         snapshot
     };
 
     if should_spawn {
-        std::thread::spawn(move || {
-            let request_started_at = Instant::now();
-            let fetched = fetch_player_leaderboards_internal(
-                &key.chart_hash,
-                &key.api_key,
-                gs_username.as_str(),
-                if key.include_arrowcloud {
-                    Some(key.arrowcloud_api_key.as_str())
-                } else {
-                    None
-                },
-                key.show_ex_score,
-                requested_max_entries,
-            );
-            let refresh_finished_at = Instant::now();
-            let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
-            cache.in_flight.remove(&key);
-
-            match fetched {
-                Ok(fetched) => {
-                    if should_keep_newer_player_leaderboard_entry(
-                        cache.by_key.get(&key),
-                        request_started_at,
-                    ) {
-                        return;
-                    }
-                    if fetched.itl_self_found {
-                        itl::set_cached_online_self_score(
-                            persistent_profile_id.as_deref(),
-                            key.api_key.as_str(),
-                            key.chart_hash.as_str(),
-                            fetched.data.itl_self_score,
-                        );
-                    }
-                    if should_auto_populate && let Some(profile_id) = auto_profile_id.as_deref() {
-                        cache_gs_score_from_leaderboard(
-                            profile_id,
-                            gs_username.as_str(),
-                            key.chart_hash.as_str(),
-                            fetched.gs_entries.as_slice(),
-                        );
-                    }
-                    cache.by_key.insert(
-                        key,
-                        PlayerLeaderboardCacheEntry {
-                            value: PlayerLeaderboardCacheValue::Ready(fetched.data),
-                            max_entries: requested_max_entries,
-                            refreshed_at: refresh_finished_at,
-                            retry_after: None,
-                            source: PlayerLeaderboardCacheSource::Fetch,
-                        },
-                    );
-                }
-                Err(error) => {
-                    if should_keep_newer_player_leaderboard_entry(
-                        cache.by_key.get(&key),
-                        request_started_at,
-                    ) {
-                        return;
-                    }
-                    if let Some(entry) = cache.by_key.get_mut(&key)
-                        && matches!(entry.value, PlayerLeaderboardCacheValue::Ready(_))
-                    {
-                        // Keep stale data visible on refresh failures, but back off retries.
-                        entry.refreshed_at = refresh_finished_at;
-                        entry.retry_after =
-                            Some(refresh_finished_at + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL);
-                        entry.source = PlayerLeaderboardCacheSource::Fetch;
-                    } else {
-                        cache.by_key.insert(
-                            key,
-                            PlayerLeaderboardCacheEntry {
-                                value: PlayerLeaderboardCacheValue::Error(error.to_string()),
-                                max_entries: requested_max_entries,
-                                refreshed_at: refresh_finished_at,
-                                retry_after: Some(
-                                    refresh_finished_at + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
-                                ),
-                                source: PlayerLeaderboardCacheSource::Fetch,
-                            },
-                        );
-                    }
-                }
-            }
-        });
+        spawn_player_leaderboard_fetch(
+            key,
+            gs_username,
+            persistent_profile_id,
+            auto_profile_id,
+            should_auto_populate,
+            requested_max_entries,
+        );
     }
 
     Some(snapshot)
@@ -2814,6 +2708,43 @@ pub fn refresh_player_leaderboards_for_side(
     max_entries: usize,
 ) -> Option<CachedPlayerLeaderboardData> {
     get_or_fetch_player_leaderboards_for_side_inner(chart_hash, side, max_entries, true)
+}
+
+pub fn invalidate_player_leaderboards_for_side(chart_hash: &str, side: profile::PlayerSide) {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() {
+        return;
+    }
+    let side_profile = profile::get_for_side(side);
+    let gs_api_key = side_profile.groovestats_api_key.trim();
+    if gs_api_key.is_empty() {
+        return;
+    }
+
+    itl::set_cached_online_self_score(
+        profile::active_local_profile_id_for_side(side).as_deref(),
+        gs_api_key,
+        chart_hash,
+        None,
+    );
+
+    let invalidated_at = Instant::now();
+    let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+    let matching_keys: HashSet<PlayerLeaderboardCacheKey> = cache
+        .by_key
+        .keys()
+        .chain(cache.in_flight.keys())
+        .chain(cache.pending_refresh.keys())
+        .chain(cache.invalidated_after.keys())
+        .filter(|key| key.api_key == gs_api_key && key.chart_hash.eq_ignore_ascii_case(chart_hash))
+        .cloned()
+        .collect();
+    for key in matching_keys {
+        cache.by_key.remove(&key);
+        cache.in_flight.remove(&key);
+        cache.pending_refresh.remove(&key);
+        cache.invalidated_after.insert(key, invalidated_at);
+    }
 }
 #[derive(Debug)]
 struct MachineLeaderboardPlay {
@@ -3937,7 +3868,6 @@ mod tests {
             max_entries: 5,
             refreshed_at: Instant::now(),
             retry_after: None,
-            source: PlayerLeaderboardCacheSource::Fetch,
         };
         assert!(!should_fetch_player_leaderboard_entry(
             Some(&ready),
@@ -3964,7 +3894,6 @@ mod tests {
             max_entries: 5,
             refreshed_at: Instant::now(),
             retry_after: Some(Instant::now() + PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL),
-            source: PlayerLeaderboardCacheSource::Fetch,
         };
         assert!(!should_fetch_player_leaderboard_entry(
             Some(&cooled_down_ready),
@@ -3982,7 +3911,6 @@ mod tests {
             max_entries: 5,
             refreshed_at: Instant::now() - PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
             retry_after: Some(Instant::now() - Duration::from_millis(1)),
-            source: PlayerLeaderboardCacheSource::Fetch,
         };
         assert!(should_fetch_player_leaderboard_entry(
             Some(&stale_error),
@@ -3992,187 +3920,32 @@ mod tests {
     }
 
     #[test]
-    fn submit_response_leaderboard_merge_preserves_non_gs_panes() {
-        let existing = PlayerLeaderboardData {
-            panes: vec![
-                LeaderboardPane {
-                    name: "GrooveStats".to_string(),
-                    entries: vec![LeaderboardEntry {
-                        rank: 99,
-                        name: "stale".to_string(),
-                        machine_tag: None,
-                        score: 9000.0,
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: false,
-                        is_fail: false,
-                    }],
-                    is_ex: false,
-                    disabled: false,
-                },
-                LeaderboardPane {
-                    name: "ArrowCloud".to_string(),
-                    entries: vec![LeaderboardEntry {
-                        rank: 1,
-                        name: "cloud".to_string(),
-                        machine_tag: None,
-                        score: 9876.0,
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: false,
-                        is_fail: false,
-                    }],
-                    is_ex: false,
-                    disabled: false,
-                },
-            ],
-            itl_self_score: Some(8123),
-        };
-        let response = GrooveStatsSubmitApiPlayer {
-            chart_hash: "deadbeef".to_string(),
-            result: "improved".to_string(),
-            gs_leaderboard: vec![LeaderboardApiEntry {
-                rank: 2,
-                name: "PerfectTaste".to_string(),
-                machine_tag: None,
-                score: 9950.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: true,
-                is_fail: false,
-                comments: None,
-            }],
-            ex_leaderboard: vec![LeaderboardApiEntry {
-                rank: 1,
-                name: "PerfectTaste".to_string(),
-                machine_tag: None,
-                score: 9988.0,
-                date: String::new(),
-                is_rival: false,
-                is_self: true,
-                is_fail: false,
-                comments: None,
-            }],
-            rpg: None,
-            itl: None,
-        };
-
-        let merged = player_leaderboard_data_from_submit_response(
-            &response,
-            "PerfectTaste",
-            true,
-            Some(&existing),
-        );
-
-        assert_eq!(
-            merged
-                .panes
-                .iter()
-                .filter(|pane| pane.is_groovestats())
-                .count(),
-            2
-        );
-        assert!(merged.panes[0].is_groovestats() && merged.panes[0].is_ex);
-        assert!(merged.panes.iter().any(LeaderboardPane::is_arrowcloud));
-        assert_eq!(merged.itl_self_score, Some(8123));
+    fn in_flight_leaderboard_fetch_reruns_for_submit_refresh() {
+        assert!(!should_rerun_in_flight_player_leaderboard_fetch(
+            5, 5, false
+        ));
+        assert!(should_rerun_in_flight_player_leaderboard_fetch(
+            5, 10, false
+        ));
+        assert!(should_rerun_in_flight_player_leaderboard_fetch(5, 5, true));
     }
 
     #[test]
-    fn submit_response_leaderboard_merge_preserves_self_and_rivals() {
-        let existing = PlayerLeaderboardData {
-            panes: vec![LeaderboardPane {
-                name: "GrooveStats".to_string(),
-                entries: vec![
-                    LeaderboardEntry {
-                        rank: 1,
-                        name: "World".to_string(),
-                        machine_tag: Some("WLD".to_string()),
-                        score: 9999.0,
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: false,
-                        is_fail: false,
-                    },
-                    LeaderboardEntry {
-                        rank: 4,
-                        name: "PerfectTaste".to_string(),
-                        machine_tag: Some("ME".to_string()),
-                        score: 9910.0,
-                        date: String::new(),
-                        is_rival: false,
-                        is_self: true,
-                        is_fail: false,
-                    },
-                    LeaderboardEntry {
-                        rank: 7,
-                        name: "RivalA".to_string(),
-                        machine_tag: Some("RIV".to_string()),
-                        score: 9820.0,
-                        date: String::new(),
-                        is_rival: true,
-                        is_self: false,
-                        is_fail: false,
-                    },
-                ],
-                is_ex: false,
-                disabled: false,
-            }],
-            itl_self_score: None,
-        };
-        let response = GrooveStatsSubmitApiPlayer {
+    fn queued_leaderboard_refresh_keeps_largest_request() {
+        let key = PlayerLeaderboardCacheKey {
             chart_hash: "deadbeef".to_string(),
-            result: "improved".to_string(),
-            gs_leaderboard: vec![
-                LeaderboardApiEntry {
-                    rank: 1,
-                    name: "World".to_string(),
-                    machine_tag: Some("WLD".to_string()),
-                    score: 9999.0,
-                    date: String::new(),
-                    is_rival: false,
-                    is_self: false,
-                    is_fail: false,
-                    comments: None,
-                },
-                LeaderboardApiEntry {
-                    rank: 3,
-                    name: "PerfectTaste".to_string(),
-                    machine_tag: Some("ME".to_string()),
-                    score: 9940.0,
-                    date: String::new(),
-                    is_rival: false,
-                    is_self: false,
-                    is_fail: false,
-                    comments: None,
-                },
-            ],
-            ex_leaderboard: Vec::new(),
-            rpg: None,
-            itl: None,
+            api_key: "gs".to_string(),
+            arrowcloud_api_key: "ac".to_string(),
+            include_arrowcloud: true,
+            show_ex_score: false,
         };
+        let mut pending_refresh = HashMap::new();
 
-        let merged = player_leaderboard_data_from_submit_response(
-            &response,
-            "PerfectTaste",
-            false,
-            Some(&existing),
-        );
-        let pane = merged
-            .panes
-            .iter()
-            .find(|pane| pane.is_groovestats() && !pane.is_ex)
-            .expect("merged GS pane");
+        queue_player_leaderboard_refresh(&mut pending_refresh, &key, 5);
+        queue_player_leaderboard_refresh(&mut pending_refresh, &key, 10);
+        queue_player_leaderboard_refresh(&mut pending_refresh, &key, 3);
 
-        assert!(
-            pane.entries
-                .iter()
-                .any(|entry| entry.name == "PerfectTaste" && entry.rank == 3 && entry.is_self)
-        );
-        assert!(
-            pane.entries
-                .iter()
-                .any(|entry| entry.name == "RivalA" && entry.is_rival)
-        );
+        assert_eq!(pending_refresh.get(&key), Some(&10));
     }
 
     #[test]
@@ -4185,7 +3958,6 @@ mod tests {
             max_entries: 0,
             refreshed_at: Instant::now(),
             retry_after: None,
-            source: PlayerLeaderboardCacheSource::Fetch,
         };
         let older_request_started_at = Instant::now() - Duration::from_millis(1);
         assert!(should_keep_newer_player_leaderboard_entry(
@@ -4201,30 +3973,10 @@ mod tests {
             max_entries: 0,
             refreshed_at: Instant::now() - Duration::from_secs(1),
             retry_after: None,
-            source: PlayerLeaderboardCacheSource::Fetch,
         };
         assert!(!should_keep_newer_player_leaderboard_entry(
             Some(&older_entry),
             Instant::now(),
-        ));
-    }
-
-    #[test]
-    fn provisional_submit_cache_does_not_block_authoritative_fetch() {
-        let provisional = PlayerLeaderboardCacheEntry {
-            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
-                panes: Vec::new(),
-                itl_self_score: None,
-            }),
-            max_entries: 0,
-            refreshed_at: Instant::now(),
-            retry_after: None,
-            source: PlayerLeaderboardCacheSource::SubmitResponse,
-        };
-
-        assert!(!should_keep_newer_player_leaderboard_entry(
-            Some(&provisional),
-            Instant::now() - Duration::from_millis(1),
         ));
     }
 

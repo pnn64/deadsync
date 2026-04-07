@@ -63,6 +63,8 @@ fn bench_score_info() -> ScoreInfo {
         profile_name: "BenchPlayer".to_string(),
         score_valid: true,
         disqualified: false,
+        expected_groovestats_submit: false,
+        expected_arrowcloud_submit: false,
         groovestats: GrooveStatsEvalState {
             valid: true,
             reason_lines: Vec::new(),

@@ -1,10 +1,10 @@
 use super::{
     GROOVESTATS_CHART_HASH_VERSION, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_REASON_COUNT,
     GROOVESTATS_SUBMIT_MAX_ENTRIES, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
-    GS_INVALID_REMOVE_MASK, ItlEventProgress, cache_gs_score_from_leaderboard,
-    cache_player_leaderboard_submit_response, compact_f32_text, de_i32_from_string_or_number,
-    de_string_from_string_or_number, de_u32_from_string_or_number, gameplay_side_for_player, itl,
-    log_body_snippet, submit_record_banner, submit_side_ix,
+    GS_INVALID_REMOVE_MASK, ItlEventProgress, compact_f32_text, de_i32_from_string_or_number,
+    de_string_from_string_or_number, de_u32_from_string_or_number, gameplay_side_for_player,
+    invalidate_player_leaderboards_for_side, itl, log_body_snippet, submit_record_banner,
+    submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -409,7 +409,10 @@ fn groovestats_next_submit_ui_token() -> u64 {
 
 #[inline(always)]
 const fn groovestats_can_retry_submit(status: GrooveStatsSubmitUiStatus) -> bool {
-    matches!(status, GrooveStatsSubmitUiStatus::TimedOut)
+    matches!(
+        status,
+        GrooveStatsSubmitUiStatus::SubmitFailed | GrooveStatsSubmitUiStatus::TimedOut
+    )
 }
 
 #[inline(always)]
@@ -726,33 +729,6 @@ fn groovestats_warn_submit_skip(side: profile::PlayerSide, chart_hash: &str, rea
     );
 }
 
-#[inline(always)]
-fn groovestats_player_can_submit(gs: &gameplay::State, player_idx: usize) -> bool {
-    if player_idx >= gs.num_players.min(gameplay::MAX_PLAYERS) {
-        return false;
-    }
-    let profile = &gs.player_profiles[player_idx];
-    let chart = gs.charts[player_idx].as_ref();
-    if groovestats_submit_invalid_reason(chart, gs.song.has_lua, profile, gs.music_rate).is_some() {
-        return false;
-    }
-    if !profile.groovestats_is_pad_player || profile.groovestats_api_key.trim().is_empty() {
-        return false;
-    }
-    !gs.players[player_idx].is_failing && gs.song_completed_naturally
-}
-
-fn groovestats_warn_submit_skip_for_eligible_players(gs: &gameplay::State, reason: &str) {
-    for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
-        if !groovestats_player_can_submit(gs, player_idx) {
-            continue;
-        }
-        let side = gameplay_side_for_player(gs, player_idx);
-        let chart_hash = gs.charts[player_idx].short_hash.as_str();
-        groovestats_warn_submit_skip(side, chart_hash, reason);
-    }
-}
-
 fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> GrooveStatsRescoreCounts {
     let (start, end) = gs.note_ranges[player_idx];
     let mut counts = GrooveStatsRescoreCounts::default();
@@ -949,6 +925,10 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                         player.side,
                         player.chart_hash
                     );
+                    invalidate_player_leaderboards_for_side(
+                        player.chart_hash.as_str(),
+                        player.side,
+                    );
                     continue;
                 };
                 if !player_response.chart_hash.trim().is_empty()
@@ -969,6 +949,10 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                         player.chart_hash,
                         player_response.chart_hash
                     );
+                    invalidate_player_leaderboards_for_side(
+                        player.chart_hash.as_str(),
+                        player.side,
+                    );
                     continue;
                 }
 
@@ -985,24 +969,6 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     itl::progress_from_submit(player, player_response),
                     submit_record_banner(player, player_response),
                 );
-                if let Some(profile_id) = player.profile_id.as_deref()
-                    && !player.username.is_empty()
-                    && !player_response.gs_leaderboard.is_empty()
-                {
-                    cache_gs_score_from_leaderboard(
-                        profile_id,
-                        player.username.as_str(),
-                        player.chart_hash.as_str(),
-                        player_response.gs_leaderboard.as_slice(),
-                    );
-                }
-                cache_player_leaderboard_submit_response(
-                    player.side,
-                    player.chart_hash.as_str(),
-                    player.username.as_str(),
-                    player.show_ex_score,
-                    player_response,
-                );
                 itl::handle_submit_player_unlocks(player, player_response);
                 debug!(
                     "{} submit succeeded for {:?} ({}) result='{}'",
@@ -1011,6 +977,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     player.chart_hash,
                     player_response.result
                 );
+                invalidate_player_leaderboards_for_side(player.chart_hash.as_str(), player.side);
             }
         }
         Err(err) => {
@@ -1030,6 +997,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     status,
                     err.message
                 );
+                invalidate_player_leaderboards_for_side(player.chart_hash.as_str(), player.side);
             }
         }
     });
@@ -1105,26 +1073,6 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         debug!(
             "Skipping {} submit: simfile relies on lua.",
             online::groovestats_service_name()
-        );
-        return;
-    }
-
-    let status = online::get_status();
-    let online::ConnectionStatus::Connected(services) = status else {
-        let reason = match status {
-            online::ConnectionStatus::Pending => "service connection is pending".to_string(),
-            online::ConnectionStatus::Error(error) => {
-                format!("service connection error: {error}")
-            }
-            online::ConnectionStatus::Connected(_) => unreachable!(),
-        };
-        groovestats_warn_submit_skip_for_eligible_players(gs, reason.as_str());
-        return;
-    };
-    if !services.auto_submit {
-        groovestats_warn_submit_skip_for_eligible_players(
-            gs,
-            "auto-submit is not enabled by the service",
         );
         return;
     }
@@ -1242,12 +1190,6 @@ pub fn retry_timed_out_groovestats_submit(chart_hash: &str, side: profile::Playe
     }
     let cfg = crate::config::get();
     if !cfg.enable_groovestats {
-        return false;
-    }
-    let online::ConnectionStatus::Connected(services) = online::get_status() else {
-        return false;
-    };
-    if !services.auto_submit {
         return false;
     }
     let Some(status) = get_groovestats_submit_ui_status_for_side(hash, side) else {
@@ -1572,14 +1514,14 @@ mod tests {
     }
 
     #[test]
-    fn groovestats_retry_only_allows_timeouts() {
+    fn groovestats_retry_allows_failed_submits() {
         assert!(!groovestats_can_retry_submit(
             GrooveStatsSubmitUiStatus::Submitting
         ));
         assert!(!groovestats_can_retry_submit(
             GrooveStatsSubmitUiStatus::Submitted
         ));
-        assert!(!groovestats_can_retry_submit(
+        assert!(groovestats_can_retry_submit(
             GrooveStatsSubmitUiStatus::SubmitFailed
         ));
         assert!(groovestats_can_retry_submit(
