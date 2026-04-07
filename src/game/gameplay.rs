@@ -12830,6 +12830,8 @@ mod tests {
         let mut song_state = regression_state(profiles.clone());
         let mut global_state = regression_state(profiles);
 
+        let song_offset_before = song_state.song_offset_seconds;
+        let global_offset_before = global_state.global_offset_seconds;
         let song_before = song_state.note_time_cache[0];
         let global_before = global_state.note_time_cache[0];
 
@@ -12839,8 +12841,10 @@ mod tests {
         let song_after = song_state.note_time_cache[0];
         let global_after = global_state.note_time_cache[0];
 
-        assert!((song_state.song_offset_seconds - 0.010).abs() <= 1e-6);
-        assert!((global_state.global_offset_seconds - 0.010).abs() <= 1e-6);
+        assert!((song_state.song_offset_seconds - (song_offset_before + 0.010)).abs() <= 1e-6);
+        assert!(
+            (global_state.global_offset_seconds - (global_offset_before + 0.010)).abs() <= 1e-6
+        );
         assert!((song_before - song_after - 0.010).abs() <= 1e-6);
         assert!((global_before - global_after - 0.010).abs() <= 1e-6);
     }
@@ -14349,10 +14353,7 @@ mod tests {
                 note_index: 1,
             },
         ];
-        let note_times_ns = [
-            song_time_ns_from_seconds(1.000),
-            song_time_ns_from_seconds(1.020),
-        ];
+        let note_times_ns = [1_000_000_000_i64, 1_020_000_000_i64];
         let (start_idx, end_idx) = arrow_time_window_bounds_ns(
             &arrows,
             &note_times_ns,
@@ -14363,7 +14364,7 @@ mod tests {
             &arrows,
             &notes,
             &note_times_ns,
-            song_time_ns_from_seconds(1.010),
+            1_010_000_000_i64,
             start_idx,
             end_idx,
         )
