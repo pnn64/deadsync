@@ -1096,16 +1096,22 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let disqualified = gs.autoplay_used;
             let groovestats = scores::groovestats_eval_state_from_gameplay(&gs, player_idx);
             let itl = scores::itl_eval_state_from_gameplay(&gs, player_idx);
-            let passed = !p.is_failing && gs.song_completed_naturally;
+            let failed = scores::gameplay_run_failed(p.is_failing, p.fail_time.is_some());
+            let passed = scores::gameplay_run_passed(
+                gs.song_completed_naturally,
+                p.is_failing,
+                p.life,
+                p.fail_time.is_some(),
+            );
             let expected_groovestats_submit = cfg.enable_groovestats
                 && score_valid
-                && passed
+                && (passed || (failed && cfg.submit_groovestats_fails))
                 && groovestats.valid
                 && prof.groovestats_is_pad_player
                 && !prof.groovestats_api_key.trim().is_empty();
             let expected_arrowcloud_submit = cfg.enable_arrowcloud
                 && score_valid
-                && passed
+                && (passed || (failed && cfg.submit_arrowcloud_fails))
                 && !gs.song.has_lua
                 && (gs.course_display_totals.is_none()
                     || cfg.autosubmit_course_scores_individually)

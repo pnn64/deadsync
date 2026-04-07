@@ -286,21 +286,6 @@ fn owned_text(text: &str) -> Arc<str> {
     Arc::<str>::from(text)
 }
 
-fn local_self_name(side: profile::PlayerSide) -> String {
-    let profile = profile::get_for_side(side);
-    for candidate in [
-        profile.groovestats_username.as_str(),
-        profile.display_name.as_str(),
-        profile.player_initials.as_str(),
-    ] {
-        let trimmed = candidate.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    "----".to_string()
-}
-
 fn local_self_machine_tag(side: profile::PlayerSide) -> Option<String> {
     let initials = profile::get_for_side(side).player_initials;
     let initials = initials.trim();
@@ -357,14 +342,25 @@ fn local_self_score_10000(
     }
 }
 
-fn entries_with_self_fallback(
+fn entries_with_local_self_state(
     side: profile::PlayerSide,
     chart_hash: Option<&str>,
     pane: &scores::LeaderboardPane,
 ) -> Vec<scores::LeaderboardEntry> {
     let kind = pane_kind(pane);
     let mut entries = pane.entries.clone();
-    if entries.iter().any(|entry| entry.is_self) {
+    let local_self = chart_hash.and_then(|hash| local_self_score_10000(side, hash, kind));
+
+    if let Some(entry) = entries.iter_mut().find(|entry| entry.is_self) {
+        if let Some((local_score_10000, local_is_fail)) = local_self
+            && local_is_fail
+            && scores::same_score_10000(entry.score, local_score_10000)
+        {
+            entry.is_fail = true;
+            if entry.machine_tag.is_none() {
+                entry.machine_tag = local_self_machine_tag(side);
+            }
+        }
         return entries;
     }
 
@@ -376,35 +372,15 @@ fn entries_with_self_fallback(
         if entry.machine_tag.is_none() {
             entry.machine_tag = local_self_machine_tag(side);
         }
+        if let Some((local_score_10000, local_is_fail)) = local_self
+            && local_is_fail
+            && scores::same_score_10000(entry.score, local_score_10000)
+        {
+            entry.is_fail = true;
+        }
         return entries;
     }
 
-    let Some(chart_hash) = chart_hash else {
-        return entries;
-    };
-    let Some((score_10000, is_fail)) = local_self_score_10000(side, chart_hash, kind) else {
-        return entries;
-    };
-    if !score_10000.is_finite() || (!is_fail && score_10000 <= 0.0) {
-        return entries;
-    }
-
-    let rank = scores::leaderboard_rank_for_score(entries.as_slice(), score_10000 / 10000.0)
-        .unwrap_or_else(|| {
-            entries
-                .last()
-                .map_or(1, |entry| entry.rank.saturating_add(1))
-        });
-    entries.push(scores::LeaderboardEntry {
-        rank,
-        name: local_self_name(side),
-        machine_tag: local_self_machine_tag(side),
-        score: score_10000,
-        date: String::new(),
-        is_rival: false,
-        is_self: true,
-        is_fail,
-    });
     entries
 }
 
@@ -500,7 +476,7 @@ pub fn select_music_scorebox_view(
     };
 
     let kind = pane_kind(pane);
-    let entries = entries_with_self_fallback(side, Some(hash), pane);
+    let entries = entries_with_local_self_state(side, Some(hash), pane);
     view.mode_text = pane_mode_text(kind, pane).to_string();
 
     if let Some(world) = entries
@@ -778,7 +754,7 @@ fn select_music_panes_from_snapshot(
     }
     let mut panes = Vec::with_capacity(filtered.len());
     for pane in filtered {
-        let entries = entries_with_self_fallback(side, chart_hash, pane);
+        let entries = entries_with_local_self_state(side, chart_hash, pane);
         panes.push(gameplay_pane_from_leaderboard(pane, entries.as_slice()));
     }
     panes
@@ -1474,6 +1450,15 @@ mod tests {
         }
     }
 
+    fn pane(name: &str, entries: Vec<scores::LeaderboardEntry>) -> scores::LeaderboardPane {
+        scores::LeaderboardPane {
+            name: name.to_string(),
+            entries,
+            is_ex: false,
+            disabled: false,
+        }
+    }
+
     #[test]
     fn non_hard_ex_scorebox_keeps_self_row() {
         let entries = vec![
@@ -1498,5 +1483,42 @@ mod tests {
 
         assert_eq!(ranks, vec![1, 2, 3, 4, 473]);
         assert!(names.iter().any(|name| name == "self"));
+    }
+
+    #[test]
+    fn entries_with_local_self_state_marks_matching_online_name_as_self() {
+        let side = profile::PlayerSide::P1;
+        let profile = profile::get_for_side(side);
+        let name = [
+            profile.groovestats_username.trim(),
+            profile.display_name.trim(),
+            profile.player_initials.trim(),
+        ]
+        .into_iter()
+        .find(|candidate| !candidate.is_empty())
+        .unwrap_or("self");
+        let pane = pane("GrooveStats", vec![entry(7, name, false, false)]);
+
+        let entries = entries_with_local_self_state(side, None, &pane);
+
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].is_self);
+        assert_eq!(entries[0].machine_tag, local_self_machine_tag(side));
+    }
+
+    #[test]
+    fn entries_with_local_self_state_does_not_add_missing_self_row() {
+        let pane = pane(
+            "GrooveStats",
+            vec![
+                entry(1, "world", false, false),
+                entry(2, "rival", false, true),
+            ],
+        );
+
+        let entries = entries_with_local_self_state(profile::PlayerSide::P1, None, &pane);
+
+        assert_eq!(entries.len(), 2);
+        assert!(!entries.iter().any(|entry| entry.is_self));
     }
 }

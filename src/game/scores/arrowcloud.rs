@@ -1,6 +1,6 @@
 use super::{
-    gameplay_side_for_player, invalidate_player_leaderboards_for_side, log_body_snippet,
-    submit_side_ix,
+    gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    invalidate_player_leaderboards_for_side, log_body_snippet, submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -628,7 +628,7 @@ fn arrowcloud_payload_for_player(
     } else {
         1.0
     };
-    let passed = !player.is_failing && gs.song_completed_naturally;
+    let passed = !gameplay_run_failed(player.is_failing, player.fail_time.is_some());
 
     Some(ArrowCloudPayload {
         song_name,
@@ -797,10 +797,27 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
 
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
-        let passed = !gs.players[player_idx].is_failing && gs.song_completed_naturally;
+        let failed = gameplay_run_failed(
+            gs.players[player_idx].is_failing,
+            gs.players[player_idx].fail_time.is_some(),
+        );
+        let passed = gameplay_run_passed(
+            gs.song_completed_naturally,
+            gs.players[player_idx].is_failing,
+            gs.players[player_idx].life,
+            gs.players[player_idx].fail_time.is_some(),
+        );
+        let finished = gs.song_completed_naturally || failed;
         let api_key = gs.player_profiles[player_idx].arrowcloud_api_key.trim();
+        if !finished {
+            debug!(
+                "Skipping ArrowCloud submit for {:?} ({}): stage was not completed.",
+                side, chart_hash
+            );
+            continue;
+        }
         if api_key.is_empty() {
-            if passed {
+            if passed || (failed && cfg.submit_arrowcloud_fails) {
                 arrowcloud_warn_submit_skip(side, chart_hash, "profile is missing API key");
             }
             continue;
@@ -809,9 +826,9 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
             arrowcloud_warn_submit_skip(side, chart_hash, "failed to build submit payload");
             continue;
         };
-        if !payload.passed {
+        if failed && !cfg.submit_arrowcloud_fails {
             debug!(
-                "Skipping ArrowCloud submit for {:?} ({}) : song was not passed.",
+                "Skipping ArrowCloud submit for {:?} ({}): failed-stage submits are disabled.",
                 side, payload.hash
             );
             continue;
@@ -988,7 +1005,23 @@ mod tests {
     }
 
     #[test]
-    fn arrowcloud_retry_allows_failed_submits() {
+    fn arrowcloud_run_passed_rejects_failed_runs() {
+        assert!(gameplay_run_passed(true, false, 1.0, false));
+        assert!(!gameplay_run_passed(false, false, 1.0, false));
+        assert!(!gameplay_run_passed(true, true, 1.0, false));
+        assert!(!gameplay_run_passed(true, false, 1.0, true));
+        assert!(!gameplay_run_passed(true, false, 0.0, false));
+    }
+
+    #[test]
+    fn arrowcloud_run_failed_uses_fail_signals_only() {
+        assert!(!gameplay_run_failed(false, false));
+        assert!(gameplay_run_failed(true, false));
+        assert!(gameplay_run_failed(false, true));
+    }
+
+    #[test]
+    fn arrowcloud_retry_allows_failed_requests() {
         assert!(!arrowcloud_can_retry_submit(
             ArrowCloudSubmitUiStatus::Submitting
         ));

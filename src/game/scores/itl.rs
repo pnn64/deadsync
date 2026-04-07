@@ -1,9 +1,9 @@
 use super::{
     GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
     GrooveStatsSubmitApiProgress, GrooveStatsSubmitPlayerJob, LeaderboardApiEntry,
-    LeaderboardEntry, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side_inner,
-    groovestats_eval_state_from_gameplay, groovestats_judgment_counts,
-    leaderboard_entries_from_api,
+    LeaderboardEntry, gameplay_run_passed, gameplay_side_for_player,
+    get_or_fetch_player_leaderboards_for_side_inner, groovestats_eval_state_from_gameplay,
+    groovestats_judgment_counts, leaderboard_entries_from_api,
 };
 use crate::config::dirs;
 use crate::game::gameplay;
@@ -1302,7 +1302,12 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
     let remove_mask =
         profile::normalize_remove_mask(gs.player_profiles[player_idx].remove_active_mask);
     let mines_enabled = (remove_mask & (1u8 << 1)) == 0;
-    let passed = !gs.players[player_idx].is_failing && gs.song_completed_naturally;
+    let passed = gameplay_run_passed(
+        gs.song_completed_naturally,
+        gs.players[player_idx].is_failing,
+        gs.players[player_idx].life,
+        gs.players[player_idx].fail_time.is_some(),
+    );
 
     let mut reason_lines = Vec::with_capacity(4);
     if !gs_valid.valid {
@@ -1636,5 +1641,14 @@ mod tests {
                 total_points: 150,
             }
         );
+    }
+
+    #[test]
+    fn itl_run_passed_rejects_failed_runs() {
+        assert!(gameplay_run_passed(true, false, 1.0, false));
+        assert!(!gameplay_run_passed(false, false, 1.0, false));
+        assert!(!gameplay_run_passed(true, true, 1.0, false));
+        assert!(!gameplay_run_passed(true, false, 1.0, true));
+        assert!(!gameplay_run_passed(true, false, 0.0, false));
     }
 }

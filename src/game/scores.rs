@@ -210,18 +210,17 @@ fn ensure_gs_score_cache_loaded_for_profile(profile_id: &str) {
         .or_insert(disk_cache);
 }
 
-pub fn get_cached_gs_score_for_side(
-    chart_hash: &str,
-    side: profile::PlayerSide,
-) -> Option<CachedScore> {
-    let profile_id = profile::active_local_profile_id_for_side(side)?;
-    ensure_gs_score_cache_loaded_for_profile(&profile_id);
-    GS_SCORE_CACHE
+fn get_cached_local_score_for_profile(profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
+    if profile_id.trim().is_empty() {
+        return None;
+    }
+    ensure_local_score_cache_loaded(profile_id);
+    LOCAL_SCORE_CACHE
         .lock()
         .unwrap()
         .loaded_profiles
-        .get(&profile_id)
-        .and_then(|m| m.get(chart_hash).copied())
+        .get(profile_id)
+        .and_then(|idx| idx.best_itg.get(chart_hash).copied())
 }
 
 fn get_cached_gs_score_for_profile(profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
@@ -235,6 +234,20 @@ fn get_cached_gs_score_for_profile(profile_id: &str, chart_hash: &str) -> Option
         .loaded_profiles
         .get(profile_id)
         .and_then(|scores| scores.get(chart_hash).copied())
+}
+
+pub fn get_cached_gs_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<CachedScore> {
+    let profile_id = profile::active_local_profile_id_for_side(side)?;
+    ensure_gs_score_cache_loaded_for_profile(&profile_id);
+    GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(&profile_id)
+        .and_then(|m| m.get(chart_hash).copied())
 }
 
 fn cached_gs_chart_hashes_for_profile(profile_id: &str) -> HashSet<String> {
@@ -279,6 +292,14 @@ struct LocalScoreIndex {
     best_hard_ex: HashMap<String, BestScalar>,
 }
 
+const LOCAL_SCORE_INDEX_VERSION_V2: u16 = 2;
+
+#[derive(Debug, Clone, Encode, Decode)]
+struct LocalScoreIndexFileV2 {
+    version: u16,
+    index: LocalScoreIndex,
+}
+
 #[derive(Default)]
 struct LocalScoreCacheState {
     loaded_profiles: HashMap<String, LocalScoreIndex>,
@@ -316,10 +337,13 @@ fn local_score_index_path_for_profile(profile_id: &str) -> PathBuf {
 
 fn load_local_score_index_file(path: &Path) -> Option<LocalScoreIndex> {
     let bytes = fs::read(path).ok()?;
-    let (index, _) =
-        bincode::decode_from_slice::<LocalScoreIndex, _>(&bytes, bincode::config::standard())
+    let (file, _) =
+        bincode::decode_from_slice::<LocalScoreIndexFileV2, _>(&bytes, bincode::config::standard())
             .ok()?;
-    Some(index)
+    if file.version != LOCAL_SCORE_INDEX_VERSION_V2 {
+        return None;
+    }
+    Some(file.index)
 }
 
 fn save_local_score_index_file(path: &Path, index: &LocalScoreIndex) {
@@ -330,7 +354,11 @@ fn save_local_score_index_file(path: &Path, index: &LocalScoreIndex) {
         warn!("Failed to create local score index dir {parent:?}: {e}");
         return;
     }
-    let Ok(buf) = bincode::encode_to_vec(index, bincode::config::standard()) else {
+    let file = LocalScoreIndexFileV2 {
+        version: LOCAL_SCORE_INDEX_VERSION_V2,
+        index: index.clone(),
+    };
+    let Ok(buf) = bincode::encode_to_vec(file, bincode::config::standard()) else {
         warn!("Failed to encode local score index at {path:?}");
         return;
     };
@@ -556,6 +584,33 @@ fn is_better_itg(new: &CachedScore, old: &CachedScore) -> bool {
 }
 
 #[inline(always)]
+pub(crate) fn same_score_10000(a: f64, b: f64) -> bool {
+    a.is_finite() && b.is_finite() && (a.round() - b.round()).abs() <= 1.0
+}
+
+#[inline(always)]
+fn cached_score_10000(score: &CachedScore) -> f64 {
+    score.score_percent * 10000.0
+}
+
+#[inline(always)]
+fn authoritative_failed_score<'a>(a: &'a CachedScore, b: &'a CachedScore) -> Option<CachedScore> {
+    if a.grade == Grade::Failed
+        && b.grade != Grade::Failed
+        && same_score_10000(cached_score_10000(a), cached_score_10000(b))
+    {
+        Some(*a)
+    } else if b.grade == Grade::Failed
+        && a.grade != Grade::Failed
+        && same_score_10000(cached_score_10000(a), cached_score_10000(b))
+    {
+        Some(*b)
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
 fn is_better_scalar(new: BestScalar, old: BestScalar) -> bool {
     match (old.grade == Grade::Failed, new.grade == Grade::Failed) {
         (true, false) => return true,
@@ -703,20 +758,6 @@ fn update_machine_cache_if_loaded(chart_hash: &str, score: CachedScore, initials
     }
 }
 
-pub fn get_cached_score_for_side(
-    chart_hash: &str,
-    side: profile::PlayerSide,
-) -> Option<CachedScore> {
-    let local = get_cached_local_score_for_side(chart_hash, side);
-    let gs = get_cached_gs_score_for_side(chart_hash, side);
-    match (local, gs) {
-        (None, None) => None,
-        (Some(a), None) => Some(a),
-        (None, Some(b)) => Some(b),
-        (Some(a), Some(b)) => Some(if is_better_itg(&a, &b) { a } else { b }),
-    }
-}
-
 pub fn get_cached_local_score_for_side(
     chart_hash: &str,
     side: profile::PlayerSide,
@@ -729,6 +770,21 @@ pub fn get_cached_local_score_for_side(
         .loaded_profiles
         .get(&profile_id)
         .and_then(|idx| idx.best_itg.get(chart_hash).copied())
+}
+
+pub fn get_cached_score_for_side(
+    chart_hash: &str,
+    side: profile::PlayerSide,
+) -> Option<CachedScore> {
+    let local = get_cached_local_score_for_side(chart_hash, side);
+    let gs = get_cached_gs_score_for_side(chart_hash, side);
+    match (local, gs) {
+        (None, None) => None,
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (Some(a), Some(b)) => authoritative_failed_score(&a, &b)
+            .or_else(|| Some(if is_better_itg(&a, &b) { a } else { b })),
+    }
 }
 
 fn get_cached_local_scalar_score_for_side(
@@ -871,12 +927,12 @@ fn entry_from_cached(score: CachedScore, username: &str, fetched_at_ms: i64) -> 
 }
 
 fn cached_from_entry(entry: &GsScoreEntry) -> CachedScore {
-    CachedScore {
-        grade: grade_from_code(entry.grade_code),
-        score_percent: entry.score_percent,
-        lamp_index: entry.lamp_index,
-        lamp_judge_count: entry.lamp_judge_count,
-    }
+    cached_score(
+        grade_from_code(entry.grade_code),
+        entry.score_percent,
+        entry.lamp_index,
+        entry.lamp_judge_count,
+    )
 }
 
 fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
@@ -1150,6 +1206,49 @@ fn compute_local_lamp(counts: [u32; 6], grade: Grade) -> (Option<u8>, Option<u8>
     (None, None)
 }
 
+#[inline(always)]
+const fn local_score_grade(grade_code: u8, has_fail_time: bool) -> Grade {
+    if has_fail_time {
+        Grade::Failed
+    } else {
+        grade_from_code(grade_code)
+    }
+}
+
+#[inline(always)]
+fn cached_score(
+    grade: Grade,
+    score_percent: f64,
+    lamp_index: Option<u8>,
+    lamp_judge_count: Option<u8>,
+) -> CachedScore {
+    if grade == Grade::Failed {
+        CachedScore {
+            grade,
+            score_percent,
+            lamp_index: None,
+            lamp_judge_count: None,
+        }
+    } else {
+        CachedScore {
+            grade,
+            score_percent,
+            lamp_index,
+            lamp_judge_count,
+        }
+    }
+}
+
+#[inline(always)]
+fn cached_local_score_from_header(h: &LocalScoreEntryHeaderV1) -> CachedScore {
+    cached_score(
+        local_score_grade(h.grade_code, h.fail_time.is_some()),
+        h.score_percent,
+        h.lamp_index,
+        h.lamp_judge_count,
+    )
+}
+
 fn decode_local_score_header(bytes: &[u8]) -> Option<LocalScoreEntryHeaderV1> {
     let Ok((h, _)) = bincode::decode_from_slice::<LocalScoreEntryHeaderV1, _>(
         bytes,
@@ -1214,13 +1313,8 @@ fn scan_local_scores_dir(dir: &Path, index: &mut LocalScoreIndex) {
             continue;
         };
 
-        let grade = grade_from_code(h.grade_code);
-        let cached = CachedScore {
-            grade,
-            score_percent: h.score_percent,
-            lamp_index: h.lamp_index,
-            lamp_judge_count: h.lamp_judge_count,
-        };
+        let cached = cached_local_score_from_header(&h);
+        let grade = cached.grade;
 
         match index.best_itg.get_mut(chart_hash) {
             Some(existing) => {
@@ -1297,13 +1391,8 @@ fn update_local_index_with_header(
     chart_hash: &str,
     h: &LocalScoreEntryHeaderV1,
 ) {
-    let grade = grade_from_code(h.grade_code);
-    let cached = CachedScore {
-        grade,
-        score_percent: h.score_percent,
-        lamp_index: h.lamp_index,
-        lamp_judge_count: h.lamp_judge_count,
-    };
+    let cached = cached_local_score_from_header(h);
+    let grade = cached.grade;
     match idx.best_itg.get_mut(chart_hash) {
         Some(existing) => {
             if is_better_itg(&cached, existing) {
@@ -1423,12 +1512,7 @@ fn append_local_score_on_disk(
         save_local_score_index_file(&index_path, &index);
     }
 
-    let cached = CachedScore {
-        grade: grade_from_code(header.grade_code),
-        score_percent: header.score_percent,
-        lamp_index: header.lamp_index,
-        lamp_judge_count: header.lamp_judge_count,
-    };
+    let cached = cached_local_score_from_header(&header);
     update_machine_cache_if_loaded(chart_hash, cached, profile_initials);
 }
 
@@ -1517,10 +1601,15 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             gs.possible_grade_points[player_idx],
         );
 
-        let mut grade = if p.is_failing || !gs.song_completed_naturally {
-            Grade::Failed
-        } else {
+        let mut grade = if gameplay_run_passed(
+            gs.song_completed_naturally,
+            p.is_failing,
+            p.life,
+            p.fail_time.is_some(),
+        ) {
             score_to_grade(score_percent * 10000.0)
+        } else {
+            Grade::Failed
         };
 
         let (start, end) = gs.note_ranges[player_idx];
@@ -1608,6 +1697,21 @@ pub(super) const fn submit_side_ix(side: profile::PlayerSide) -> usize {
         profile::PlayerSide::P1 => 0,
         profile::PlayerSide::P2 => 1,
     }
+}
+
+#[inline(always)]
+pub const fn gameplay_run_passed(
+    song_completed_naturally: bool,
+    is_failing: bool,
+    life: f32,
+    has_fail_time: bool,
+) -> bool {
+    song_completed_naturally && !gameplay_run_failed(is_failing, has_fail_time) && life > 0.0
+}
+
+#[inline(always)]
+pub const fn gameplay_run_failed(is_failing: bool, has_fail_time: bool) -> bool {
+    is_failing || has_fail_time
 }
 
 #[inline(always)]
@@ -2103,6 +2207,9 @@ fn submit_record_banner(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
 ) -> Option<GrooveStatsSubmitRecordBanner> {
+    if player.is_fail {
+        return None;
+    }
     if !submit_result_improved(response.result.as_str()) {
         return None;
     }
@@ -2123,13 +2230,13 @@ fn submit_record_banner(
 }
 
 #[inline(always)]
-const fn cached_failed_gs_score() -> CachedScore {
-    CachedScore {
-        grade: Grade::Failed,
-        score_percent: 0.0,
-        lamp_index: None,
-        lamp_judge_count: None,
-    }
+fn cached_failed_gs_score(score_10000: f64) -> CachedScore {
+    cached_score(Grade::Failed, score_10000 / 10000.0, None, None)
+}
+
+#[inline(always)]
+fn cached_missing_gs_score() -> CachedScore {
+    cached_failed_gs_score(0.0)
 }
 
 #[inline(always)]
@@ -2140,16 +2247,16 @@ fn cached_score_from_gs(
     is_fail: bool,
 ) -> CachedScore {
     if is_fail {
-        return cached_failed_gs_score();
+        return cached_failed_gs_score(score_10000);
     }
     let lamp_index = compute_lamp_index(score_10000, comments, chart_hash);
     let lamp_judge_count = compute_lamp_judge_count(lamp_index, comments);
-    CachedScore {
-        grade: score_to_grade(score_10000),
-        score_percent: score_10000 / 10000.0,
+    cached_score(
+        score_to_grade(score_10000),
+        score_10000 / 10000.0,
         lamp_index,
         lamp_judge_count,
-    }
+    )
 }
 
 fn cache_gs_score_for_profile(
@@ -2159,6 +2266,9 @@ fn cache_gs_score_for_profile(
     username: &str,
 ) {
     if let Some(existing) = get_cached_gs_score_for_profile(profile_id, chart_hash)
+        && !(score.grade == Grade::Failed
+            && existing.grade != Grade::Failed
+            && same_score_10000(cached_score_10000(&score), cached_score_10000(&existing)))
         && !is_better_itg(&score, &existing)
     {
         return;
@@ -2181,11 +2291,16 @@ fn cache_gs_score_from_leaderboard(
         // existing cached GS score and make the wheel fall back to local data.
         return;
     };
+    let local_failed_match = get_cached_local_score_for_profile(profile_id, chart_hash)
+        .filter(|score| {
+            score.grade == Grade::Failed && same_score_10000(cached_score_10000(score), entry.score)
+        })
+        .is_some();
     let score = cached_score_from_gs(
         entry.score,
         entry.comments.as_deref(),
         chart_hash,
-        entry.is_fail,
+        entry.is_fail || local_failed_match,
     );
     cache_gs_score_for_profile(profile_id, chart_hash, score, username);
 }
@@ -3730,7 +3845,7 @@ pub fn fetch_and_store_grade(
             "No score found for player '{}' on chart '{}'. Caching as Failed.",
             profile.groovestats_username, chart_hash
         );
-        set_cached_gs_score_for_profile(&profile_id, chart_hash, cached_failed_gs_score());
+        set_cached_gs_score_for_profile(&profile_id, chart_hash, cached_missing_gs_score());
     }
 
     Ok(())
@@ -3851,6 +3966,157 @@ mod tests {
             .copied();
         assert_eq!(cached, Some(existing));
 
+        GS_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .remove(profile_id);
+    }
+
+    #[test]
+    fn cached_score_from_gs_preserves_failed_percent() {
+        let cached = cached_score_from_gs(9482.0, Some("[DS], 3e"), "deadbeef", true);
+
+        assert_eq!(cached.grade, Grade::Failed);
+        assert_eq!(cached.score_percent, 0.9482);
+        assert_eq!(cached.lamp_index, None);
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn cached_local_score_from_header_treats_fail_time_as_failed() {
+        let header = LocalScoreEntryHeaderV1 {
+            version: LOCAL_SCORE_VERSION_V1,
+            played_at_ms: 0,
+            music_rate: 1.0,
+            score_percent: 0.9482,
+            grade_code: grade_to_code(Grade::Tier06),
+            lamp_index: Some(4),
+            lamp_judge_count: Some(2),
+            ex_score_percent: 92.0,
+            hard_ex_score_percent: 88.0,
+            judgment_counts: [0; 6],
+            holds_held: 0,
+            holds_total: 0,
+            rolls_held: 0,
+            rolls_total: 0,
+            mines_avoided: 0,
+            mines_total: 0,
+            hands_achieved: 0,
+            fail_time: Some(12.0),
+            beat0_time_seconds: 0.0,
+        };
+
+        let cached = cached_local_score_from_header(&header);
+
+        assert_eq!(cached.grade, Grade::Failed);
+        assert_eq!(cached.score_percent, 0.9482);
+        assert_eq!(cached.lamp_index, None);
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn cache_gs_score_for_profile_overwrites_same_score_pass_with_fail() {
+        let profile_id = "test-profile-force-fail";
+        let chart_hash = "deadbeef";
+        {
+            let mut state = GS_SCORE_CACHE.lock().unwrap();
+            state.loaded_profiles.insert(
+                profile_id.to_string(),
+                HashMap::from([(
+                    chart_hash.to_string(),
+                    CachedScore {
+                        grade: Grade::Tier17,
+                        score_percent: 0.1358,
+                        lamp_index: None,
+                        lamp_judge_count: None,
+                    },
+                )]),
+            );
+        }
+
+        cache_gs_score_for_profile(
+            profile_id,
+            chart_hash,
+            CachedScore {
+                grade: Grade::Failed,
+                score_percent: 0.1358,
+                lamp_index: None,
+                lamp_judge_count: None,
+            },
+            "PerfectTaste",
+        );
+
+        let cached = GS_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|scores| scores.get(chart_hash))
+            .copied();
+        assert_eq!(cached.map(|score| score.grade), Some(Grade::Failed));
+
+        GS_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .remove(profile_id);
+    }
+
+    #[test]
+    fn cache_gs_score_from_leaderboard_uses_matching_local_fail() {
+        let profile_id = "test-profile-local-fail";
+        let chart_hash = "deadbeef";
+        {
+            let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
+            state.loaded_profiles.insert(
+                profile_id.to_string(),
+                LocalScoreIndex {
+                    best_itg: HashMap::from([(
+                        chart_hash.to_string(),
+                        CachedScore {
+                            grade: Grade::Failed,
+                            score_percent: 0.1358,
+                            lamp_index: None,
+                            lamp_judge_count: None,
+                        },
+                    )]),
+                    ..LocalScoreIndex::default()
+                },
+            );
+        }
+
+        cache_gs_score_from_leaderboard(
+            profile_id,
+            "PerfectTaste",
+            chart_hash,
+            &[LeaderboardApiEntry {
+                rank: 498,
+                name: "PerfectTaste".to_string(),
+                machine_tag: None,
+                score: 1358.0,
+                date: String::new(),
+                is_rival: false,
+                is_self: true,
+                is_fail: false,
+                comments: None,
+            }],
+        );
+
+        let cached = GS_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|scores| scores.get(chart_hash))
+            .copied();
+        assert_eq!(cached.map(|score| score.grade), Some(Grade::Failed));
+
+        LOCAL_SCORE_CACHE
+            .lock()
+            .unwrap()
+            .loaded_profiles
+            .remove(profile_id);
         GS_SCORE_CACHE
             .lock()
             .unwrap()

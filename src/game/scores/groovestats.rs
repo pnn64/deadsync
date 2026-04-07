@@ -1,10 +1,11 @@
 use super::{
     GROOVESTATS_CHART_HASH_VERSION, GROOVESTATS_COMMENT_PREFIX, GROOVESTATS_REASON_COUNT,
     GROOVESTATS_SUBMIT_MAX_ENTRIES, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
-    GS_INVALID_REMOVE_MASK, ItlEventProgress, compact_f32_text, de_i32_from_string_or_number,
-    de_string_from_string_or_number, de_u32_from_string_or_number, gameplay_side_for_player,
-    invalidate_player_leaderboards_for_side, itl, log_body_snippet, submit_record_banner,
-    submit_side_ix,
+    GS_INVALID_REMOVE_MASK, ItlEventProgress, cache_gs_score_for_profile, cached_score_from_gs,
+    compact_f32_text, de_i32_from_string_or_number, de_string_from_string_or_number,
+    de_u32_from_string_or_number, gameplay_run_failed, gameplay_run_passed,
+    gameplay_side_for_player, invalidate_player_leaderboards_for_side, itl, log_body_snippet,
+    submit_record_banner, submit_side_ix,
 };
 use crate::engine::network;
 use crate::game::gameplay;
@@ -73,6 +74,7 @@ struct GrooveStatsSubmitRetryEntry {
     profile_id: Option<String>,
     itl_score_hundredths: Option<u32>,
     show_ex_score: bool,
+    is_fail: bool,
     api_key: String,
     payload: GrooveStatsSubmitPlayerPayload,
 }
@@ -133,6 +135,9 @@ pub(super) struct GrooveStatsSubmitPlayerJob {
     pub(super) token: u64,
     pub(super) itl_score_hundredths: Option<u32>,
     pub(super) show_ex_score: bool,
+    pub(super) score_10000: u32,
+    pub(super) comment: String,
+    pub(super) is_fail: bool,
 }
 
 #[derive(Debug)]
@@ -628,7 +633,10 @@ fn groovestats_manual_qr_url_from_gameplay(
         GROOVESTATS_CHART_HASH_VERSION,
         &payload.judgment_counts,
         &payload.rescore_counts,
-        gs.players[player_idx].fail_time.is_some() || gs.players[player_idx].is_failing,
+        gameplay_run_failed(
+            gs.players[player_idx].is_failing,
+            gs.players[player_idx].fail_time.is_some(),
+        ),
         payload.rate,
         payload.used_cmod,
     )
@@ -648,7 +656,32 @@ pub fn groovestats_eval_state_from_gameplay(
         gs.autoplay_used,
         gs.course_display_totals.is_some(),
     );
-    if state.valid {
+    let failed = gameplay_run_failed(
+        gs.players[player_idx].is_failing,
+        gs.players[player_idx].fail_time.is_some(),
+    );
+    let passed = gameplay_run_passed(
+        gs.song_completed_naturally,
+        gs.players[player_idx].is_failing,
+        gs.players[player_idx].life,
+        gs.players[player_idx].fail_time.is_some(),
+    );
+    let finished = gs.song_completed_naturally || failed;
+    if state.valid && !finished {
+        state.valid = false;
+        state
+            .reason_lines
+            .push("Only completed stages can be submitted.".to_string());
+        return state;
+    }
+    if state.valid && failed && !crate::config::get().submit_groovestats_fails {
+        state.valid = false;
+        state
+            .reason_lines
+            .push("Only passing scores are submitted.".to_string());
+        return state;
+    }
+    if state.valid && (passed || failed) {
         state.manual_qr_url = groovestats_manual_qr_url_from_gameplay(gs, player_idx);
     }
     state
@@ -822,7 +855,6 @@ fn groovestats_payload_for_player(
     } else {
         100
     };
-
     Some(GrooveStatsSubmitPlayerPayload {
         rate,
         score,
@@ -962,6 +994,20 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     player.token,
                     GrooveStatsSubmitUiStatus::Submitted,
                 );
+                if let Some(profile_id) = player.profile_id.as_deref() {
+                    let score = cached_score_from_gs(
+                        f64::from(player.score_10000),
+                        Some(player.comment.as_str()),
+                        player.chart_hash.as_str(),
+                        player.is_fail,
+                    );
+                    cache_gs_score_for_profile(
+                        profile_id,
+                        player.chart_hash.as_str(),
+                        score,
+                        player.username.as_str(),
+                    );
+                }
                 groovestats_update_submit_event_ui_if_token(
                     player.side,
                     player.chart_hash.as_str(),
@@ -1017,6 +1063,9 @@ fn groovestats_retry_request(
         token,
         itl_score_hundredths: entry.itl_score_hundredths,
         show_ex_score: entry.show_ex_score,
+        score_10000: entry.payload.score,
+        comment: entry.payload.comment.clone(),
+        is_fail: entry.is_fail,
     };
     let mut body = JsonMap::with_capacity(1);
     body.insert(
@@ -1096,7 +1145,18 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
         let profile = &gs.player_profiles[player_idx];
         let chart = gs.charts[player_idx].as_ref();
         let chart_hash = chart.short_hash.as_str();
-        let passed = !gs.players[player_idx].is_failing && gs.song_completed_naturally;
+        let failed = gameplay_run_failed(
+            gs.players[player_idx].is_failing,
+            gs.players[player_idx].fail_time.is_some(),
+        );
+        let passed = gameplay_run_passed(
+            gs.song_completed_naturally,
+            gs.players[player_idx].is_failing,
+            gs.players[player_idx].life,
+            gs.players[player_idx].fail_time.is_some(),
+        );
+        let finished = gs.song_completed_naturally || failed;
+        let is_fail = failed;
 
         if let Some(reason) =
             groovestats_submit_invalid_reason(chart, gs.song.has_lua, profile, gs.music_rate)
@@ -1108,15 +1168,24 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             groovestats_warn_submit_skip(side, chart_hash, "profile is not marked as a pad player");
             continue;
         }
+        if !finished {
+            debug!(
+                "Skipping {} submit for {:?} ({}): stage was not completed.",
+                online::groovestats_service_name(),
+                side,
+                chart_hash
+            );
+            continue;
+        }
         if profile.groovestats_api_key.trim().is_empty() {
-            if passed {
+            if passed || (failed && cfg.submit_groovestats_fails) {
                 groovestats_warn_submit_skip(side, chart_hash, "profile is missing API key");
             }
             continue;
         }
-        if !passed {
+        if failed && !cfg.submit_groovestats_fails {
             debug!(
-                "Skipping {} submit for {:?} ({}): song was not passed.",
+                "Skipping {} submit for {:?} ({}): failed-stage submits are disabled.",
                 online::groovestats_service_name(),
                 side,
                 chart_hash
@@ -1137,6 +1206,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             profile_id: profile::active_local_profile_id_for_side(side),
             itl_score_hundredths: Some(itl::current_score_hundredths(gs, player_idx)),
             show_ex_score: profile.show_ex_score,
+            is_fail,
             api_key: profile.groovestats_api_key.trim().to_string(),
             payload: payload.clone(),
         });
@@ -1158,6 +1228,9 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             token,
             itl_score_hundredths: Some(itl::current_score_hundredths(gs, player_idx)),
             show_ex_score: profile.show_ex_score,
+            score_10000: payload.score,
+            comment: payload.comment.clone(),
+            is_fail,
         });
         headers.push((
             format!("x-api-key-player-{slot}"),
@@ -1302,6 +1375,7 @@ mod tests {
         let value = serde_json::to_value(&payload).expect("serialize GrooveStats submit payload");
         assert_eq!(value["rate"], json!(150));
         assert_eq!(value["score"], json!(9_975));
+        assert!(value.get("isFail").is_none());
         assert_eq!(value["judgmentCounts"]["fantasticPlus"], json!(7));
         assert_eq!(value["judgmentCounts"]["totalMines"], json!(8));
         assert_eq!(value["rescoreCounts"]["wayOff"], json!(6));
@@ -1429,6 +1503,9 @@ mod tests {
             token: 1,
             itl_score_hundredths: None,
             show_ex_score,
+            score_10000: 9_999,
+            comment: String::new(),
+            is_fail: false,
         }
     }
 
@@ -1514,7 +1591,36 @@ mod tests {
     }
 
     #[test]
-    fn groovestats_retry_allows_failed_submits() {
+    fn submit_record_banner_ignores_failed_runs() {
+        let mut player = sample_submit_job(false);
+        player.is_fail = true;
+
+        let banner = submit_record_banner(
+            &player,
+            &sample_submit_response("improved", vec![sample_submit_entry(1, true)], Vec::new()),
+        );
+
+        assert_eq!(banner, None);
+    }
+
+    #[test]
+    fn groovestats_run_passed_rejects_failed_runs() {
+        assert!(gameplay_run_passed(true, false, 1.0, false));
+        assert!(!gameplay_run_passed(false, false, 1.0, false));
+        assert!(!gameplay_run_passed(true, true, 1.0, false));
+        assert!(!gameplay_run_passed(true, false, 1.0, true));
+        assert!(!gameplay_run_passed(true, false, 0.0, false));
+    }
+
+    #[test]
+    fn groovestats_run_failed_uses_fail_signals_only() {
+        assert!(!gameplay_run_failed(false, false));
+        assert!(gameplay_run_failed(true, false));
+        assert!(gameplay_run_failed(false, true));
+    }
+
+    #[test]
+    fn groovestats_retry_allows_failed_requests() {
         assert!(!groovestats_can_retry_submit(
             GrooveStatsSubmitUiStatus::Submitting
         ));

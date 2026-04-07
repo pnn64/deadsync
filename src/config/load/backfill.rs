@@ -24,6 +24,8 @@ const OPTION_KEYS: &[&str] = &[
     "EnableArrowCloud",
     "EnableBoogieStats",
     "EnableGrooveStats",
+    "SubmitArrowCloudFails",
+    "SubmitGrooveStatsFails",
     "FullscreenType",
     "Game",
     "GamepadBackend",

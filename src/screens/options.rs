@@ -741,7 +741,9 @@ const ONLINE_SCORING_ROW_ARROWCLOUD: &str = "ArrowCloud Options";
 const ONLINE_SCORING_ROW_SCORE_IMPORT: &str = "Score Import";
 const NULL_OR_DIE_ROW_OPTIONS: &str = "Null-or-Die Options";
 const NULL_OR_DIE_ROW_SYNC_PACKS: &str = "Sync Packs";
+const GS_ROW_SUBMIT_FAILS: &str = "Submit Fails";
 const ARROWCLOUD_ROW_ENABLE: &str = "Enable ArrowCloud";
+const ARROWCLOUD_ROW_SUBMIT_FAILS: &str = "Submit Fails";
 const GAMEPLAY_ROW_BG_BRIGHTNESS: &str = "BG Brightness";
 const GAMEPLAY_ROW_CENTERED_P1: &str = "Centered P1 Notefield";
 const GAMEPLAY_ROW_ZMOD_RATING_BOX: &str = "Zmod Rating Box";
@@ -2046,6 +2048,11 @@ pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: GS_ROW_SUBMIT_FAILS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
         label: GS_ROW_AUTO_POPULATE,
         choices: &["No", "Yes"],
         inline: true,
@@ -2062,11 +2069,18 @@ pub const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
     },
 ];
 
-pub const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[SubRow {
-    label: ARROWCLOUD_ROW_ENABLE,
-    choices: &["No", "Yes"],
-    inline: true,
-}];
+pub const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[
+    SubRow {
+        label: ARROWCLOUD_ROW_ENABLE,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+    SubRow {
+        label: ARROWCLOUD_ROW_SUBMIT_FAILS,
+        choices: &["No", "Yes"],
+        inline: true,
+    },
+];
 
 pub const ONLINE_SCORING_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
@@ -2206,6 +2220,13 @@ pub const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
         ],
     },
     Item {
+        name: GS_ROW_SUBMIT_FAILS,
+        help: &[
+            "When Yes, failed stages are still submitted to GrooveStats or BoogieStats.",
+            "Default: No.",
+        ],
+    },
+    Item {
         name: GS_ROW_AUTO_POPULATE,
         help: &["Import GS grade/lamp/score when scorebox leaderboard requests complete."],
     },
@@ -2233,6 +2254,13 @@ pub const ARROWCLOUD_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: ARROWCLOUD_ROW_ENABLE,
         help: &["Enable connection to ArrowCloud services."],
+    },
+    Item {
+        name: ARROWCLOUD_ROW_SUBMIT_FAILS,
+        help: &[
+            "When Yes, failed stages are still submitted to ArrowCloud.",
+            "Default: No.",
+        ],
     },
     Item {
         name: "Exit",
@@ -5370,6 +5398,12 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_groovestats,
         GROOVESTATS_OPTIONS_ROWS,
+        GS_ROW_SUBMIT_FAILS,
+        yes_no_choice_index(cfg.submit_groovestats_fails),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_groovestats,
+        GROOVESTATS_OPTIONS_ROWS,
         GS_ROW_AUTO_POPULATE,
         yes_no_choice_index(cfg.auto_populate_gs_scores),
     );
@@ -5390,6 +5424,12 @@ pub fn init() -> State {
         ARROWCLOUD_OPTIONS_ROWS,
         ARROWCLOUD_ROW_ENABLE,
         yes_no_choice_index(cfg.enable_arrowcloud),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_arrowcloud,
+        ARROWCLOUD_OPTIONS_ROWS,
+        ARROWCLOUD_ROW_SUBMIT_FAILS,
+        yes_no_choice_index(cfg.submit_arrowcloud_fails),
     );
     refresh_score_import_options(&mut state);
     refresh_null_or_die_options(&mut state);
@@ -7051,6 +7091,8 @@ fn apply_submenu_choice_delta(
         } else if row.label == GS_ROW_ENABLE_BOOGIE {
             config::update_enable_boogiestats(yes_no_from_choice(new_index));
             crate::game::online::init();
+        } else if row.label == GS_ROW_SUBMIT_FAILS {
+            config::update_submit_groovestats_fails(yes_no_from_choice(new_index));
         } else if row.label == GS_ROW_AUTO_POPULATE {
             config::update_auto_populate_gs_scores(yes_no_from_choice(new_index));
         } else if row.label == GS_ROW_AUTO_DOWNLOAD_UNLOCKS {
@@ -7063,6 +7105,8 @@ fn apply_submenu_choice_delta(
         if row.label == ARROWCLOUD_ROW_ENABLE {
             config::update_enable_arrowcloud(yes_no_from_choice(new_index));
             crate::game::online::init();
+        } else if row.label == ARROWCLOUD_ROW_SUBMIT_FAILS {
+            config::update_submit_arrowcloud_fails(yes_no_from_choice(new_index));
         }
     } else if matches!(kind, SubmenuKind::ScoreImport) {
         let row = &rows[row_index];

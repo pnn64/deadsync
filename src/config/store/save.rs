@@ -133,6 +133,16 @@ fn push_saved_options(
     push_bool(content, "EnableArrowCloud", cfg.enable_arrowcloud);
     push_bool(content, "EnableBoogieStats", cfg.enable_boogiestats);
     push_bool(content, "EnableGrooveStats", cfg.enable_groovestats);
+    push_bool(
+        content,
+        "SubmitArrowCloudFails",
+        cfg.submit_arrowcloud_fails,
+    );
+    push_bool(
+        content,
+        "SubmitGrooveStatsFails",
+        cfg.submit_groovestats_fails,
+    );
     push_bool(content, "FastLoad", cfg.fastload);
     push_line(content, "FullscreenType", cfg.fullscreen_type.as_str());
     push_line(content, "Game", cfg.game_flag.as_str());
