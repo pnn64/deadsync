@@ -2236,6 +2236,15 @@ impl App {
                 target,
             } => {
                 *elapsed += delta_time;
+                if *target == CurrentScreen::Evaluation
+                    && self.state.screens.current_screen == CurrentScreen::Gameplay
+                    && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+                {
+                    // Keep gameplay stepping under the evaluation fade so late
+                    // judgments and HUD animations can settle before we hand the
+                    // state off, while input remains blocked by the transition.
+                    let _ = gameplay::update(gs, delta_time);
+                }
                 if *elapsed >= *duration {
                     finished_fading_out_to = Some(*target);
                 }
