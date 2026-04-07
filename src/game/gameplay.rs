@@ -9878,7 +9878,6 @@ pub fn judge_a_tap(
                     window: Some(window),
                     miss_because_held: false,
                 };
-                error_bar_register_tap(state, player, &judgment, current_time);
                 set_final_note_result(state, player, note_index, judgment.clone());
 
                 log_timing_hit_detail(
@@ -9946,7 +9945,6 @@ pub fn judge_a_tap(
                     window: Some(window),
                     miss_because_held: false,
                 };
-                error_bar_register_tap(state, player, &judgment, current_time);
                 set_final_note_result(state, player, idx, judgment.clone());
 
                 log_timing_hit_detail(
@@ -10147,9 +10145,6 @@ pub fn judge_a_lift(
         window: Some(window),
         miss_because_held: false,
     };
-    if !scoring_blocked {
-        error_bar_register_tap(state, player, &judgment, current_time);
-    }
     set_final_note_result(state, player, note_index, judgment.clone());
 
     log_timing_hit_detail(
@@ -10902,6 +10897,7 @@ fn finalize_row_judgment(
         }
         return;
     }
+    let show_final_visual = !suppress_final_early_bad_visual;
     {
         let p = &mut state.players[player];
         let grade_ix = display_judge_ix(final_grade);
@@ -10913,12 +10909,6 @@ fn finalize_row_judgment(
         let life_delta = judge_life_delta(final_grade);
         if !skip_life_change {
             apply_life_change(p, state.current_music_time, life_delta);
-        }
-        if !suppress_final_early_bad_visual {
-            p.last_judgment = Some(JudgmentRenderInfo {
-                judgment: final_judgment,
-                judged_at: Instant::now(),
-            });
         }
         apply_row_combo_state(p, final_grade, player_row_note_count, 1);
         if !row_has_miss && !row_has_wayoff {
@@ -10943,6 +10933,12 @@ fn finalize_row_judgment(
                 p.hands_achieved = p.hands_achieved.saturating_add(1);
             }
         }
+    }
+    if show_final_visual {
+        // Arrow Cloud's gameplay HUD uses the row-final JudgmentMessage for
+        // offset/error-bar visuals, not individual note hits inside a chord.
+        set_last_judgment(state, player, final_judgment.clone());
+        error_bar_register_tap(state, player, &final_judgment, state.current_music_time);
     }
     if !skip_life_change {
         capture_failed_ex_score_inputs(state, player);
@@ -12455,16 +12451,17 @@ mod tests {
         closest_lane_note_ns, collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_grade, completed_row_hidden_note_indices,
         count_rescore_tracks_on_row, crossed_mine_bounds_ns, enforce_max_simultaneous_notes,
-        finalized_row_outcome_for_cached_row, find_arrow_index, frame_stable_display_music_time,
-        handle_input, input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap,
-        lane_edge_matches_note_type, lane_press_started, lane_release_finished,
-        late_note_resolution_window_s, live_autoplay_enabled_from_flags, max_step_distance_seconds,
-        mine_window_bounds_ns, music_time_from_song_clock, next_ready_row_in_lookahead,
-        next_tick_mode, parse_attack_mods, partition_notes_before_time,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
-        recompute_player_totals, remove_provisional_early_score, replay_edge_cap,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_missed_holds_and_rolls,
-        score_valid_for_chart, scored_hold_totals_with_carry, single_runtime_player_is_p2,
+        finalize_row_judgment, finalized_row_outcome_for_cached_row, find_arrow_index,
+        frame_stable_display_music_time, handle_input, input_queue_cap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
+        lane_release_finished, late_note_resolution_window_s, live_autoplay_enabled_from_flags,
+        max_step_distance_seconds, mine_window_bounds_ns, music_time_from_song_clock,
+        next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
+        partition_notes_before_time, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, recent_step_tracks, recompute_player_totals,
+        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
+        row_final_grade_hides_note, score_missed_holds_and_rolls, score_valid_for_chart,
+        scored_hold_totals_with_carry, set_final_note_result, single_runtime_player_is_p2,
         song_time_ns_from_seconds, song_time_ns_to_seconds, stage_music_cut, step_calories,
         suppress_final_bad_rescore_visual, tick_mode_status_line, turn_option_bits,
         update_lane_count,
@@ -13421,6 +13418,89 @@ mod tests {
         assert_eq!(wayoff.grade, JudgeGrade::WayOff);
         assert!(!row_final_grade_hides_note(decent.grade));
         assert!(!row_final_grade_hides_note(wayoff.grade));
+    }
+
+    #[test]
+    fn jump_row_finalization_uses_row_judgment_for_error_bar_hud() {
+        with_session(
+            profile::PlayStyle::Single,
+            profile::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let mut p1 = profile::Profile::default();
+                p1.error_ms_display = true;
+                p1.error_bar_text = true;
+                p1.error_bar_active_mask = profile::ERROR_BAR_BIT_TEXT;
+
+                let mut state = regression_state([p1, profile::Profile::default()]);
+                let row_index = 48usize;
+                state.notes = vec![
+                    test_note(0, row_index, NoteType::Tap),
+                    test_note(1, row_index, NoteType::Tap),
+                ];
+                state.row_entries = vec![RowEntry {
+                    row_index,
+                    nonmine_note_indices: vec![0, 1],
+                }];
+                state.note_time_cache = vec![1.0, 1.0];
+                state.note_time_cache_ns = vec![
+                    song_time_ns_from_seconds(1.0),
+                    song_time_ns_from_seconds(1.0),
+                ];
+                state.finalized_row_outcomes = std::array::from_fn(|_| vec![None; 1]);
+                state.current_music_time = 1.096;
+                state.total_elapsed_in_screen = 12.0;
+
+                set_final_note_result(
+                    &mut state,
+                    0,
+                    0,
+                    Judgment {
+                        time_error_ms: -12.0,
+                        grade: JudgeGrade::Great,
+                        window: Some(TimingWindow::W3),
+                        miss_because_held: false,
+                    },
+                );
+                set_final_note_result(
+                    &mut state,
+                    0,
+                    1,
+                    Judgment {
+                        time_error_ms: 96.0,
+                        grade: JudgeGrade::Decent,
+                        window: Some(TimingWindow::W4),
+                        miss_because_held: false,
+                    },
+                );
+
+                assert!(state.players[0].offset_indicator_text.is_none());
+                assert!(state.players[0].error_bar_text.is_none());
+
+                finalize_row_judgment(&mut state, 0, row_index, 0, false);
+
+                let offset = state.players[0]
+                    .offset_indicator_text
+                    .expect("row-final judgment should drive the offset indicator");
+                assert_eq!(offset.started_at, 12.0);
+                assert_eq!(offset.offset_ms, 96.0);
+                assert_eq!(offset.window, TimingWindow::W4);
+
+                let early_late = state.players[0]
+                    .error_bar_text
+                    .expect("row-final judgment should drive the early/late text");
+                assert_eq!(early_late.started_at, 12.0);
+                assert!(!early_late.early);
+
+                let last = state.players[0]
+                    .last_judgment
+                    .as_ref()
+                    .expect("row-final judgment should update the judgment sprite");
+                assert_eq!(last.judgment.grade, JudgeGrade::Decent);
+                assert_eq!(last.judgment.time_error_ms, 96.0);
+            },
+        );
     }
 
     #[test]
