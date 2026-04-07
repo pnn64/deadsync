@@ -38,6 +38,7 @@ enum Inner {
 pub(crate) struct Reader {
     inner: Inner,
     channels: usize,
+    blocksize_1: u8,
     pending: Option<Vec<i16>>,
     cursor_frames: u64,
 }
@@ -76,20 +77,23 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
 }
 
 fn opened_from_inner(inner: Inner) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
-    let (channels, sample_rate_hz) = match &inner {
+    let (channels, sample_rate_hz, blocksize_1) = match &inner {
         Inner::File(reader) => (
             reader.ident_hdr.audio_channels.max(1) as usize,
             reader.ident_hdr.audio_sample_rate,
+            reader.ident_hdr.blocksize_1,
         ),
         Inner::Memory(reader) => (
             reader.ident_hdr.audio_channels.max(1) as usize,
             reader.ident_hdr.audio_sample_rate,
+            reader.ident_hdr.blocksize_1,
         ),
     };
     Ok(OpenFile {
         reader: Reader {
             inner,
             channels,
+            blocksize_1,
             pending: None,
             cursor_frames: 0,
         },
@@ -121,7 +125,16 @@ impl Reader {
         &mut self,
         target_frame: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.seek_absgp_pg(target_frame)?;
+        // Seek *before* the target so the Vorbis decoder's overlap
+        // state (PreviousWindowRight) is fully primed by the time we
+        // reach `target_frame`.  After `seek_absgp_pg` the first
+        // decoded packet is a warmup that produces 0 output frames;
+        // if the target falls inside that warmup gap the audio we
+        // deliver would start late.  A preroll of one maximum block
+        // guarantees the gap is behind us.
+        let preroll_frames = 1u64 << self.blocksize_1;
+        let seek_pos = target_frame.saturating_sub(preroll_frames);
+        self.seek_absgp_pg(seek_pos)?;
         self.pending = None;
 
         // After `seek_absgp_pg`, lewton resets its internal `cur_absgp` to
