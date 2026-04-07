@@ -1328,7 +1328,6 @@ mod tests {
             first_second: 0.0,
             has_note_data: true,
             has_chart_attacks: false,
-            has_significant_timing_changes: true,
             possible_grade_points: 0,
             holds_total: 0,
             rolls_total: 0,

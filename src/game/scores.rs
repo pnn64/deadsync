@@ -1568,14 +1568,6 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     let mines_disabled = false;
 
     for player_idx in 0..gs.num_players {
-        if !gs.score_valid[player_idx] {
-            debug!(
-                "Skipping local score save for player {}: ranking-invalid modifiers were used.",
-                player_idx + 1
-            );
-            continue;
-        }
-
         let side = if gs.num_players >= 2 {
             if player_idx == 0 {
                 profile::PlayerSide::P1
@@ -1589,6 +1581,25 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
             continue;
         };
+        if !gs.score_valid[player_idx] {
+            let reasons = gameplay::score_invalid_reason_lines_for_chart(
+                &gs.charts[player_idx],
+                &gs.player_profiles[player_idx],
+                gs.scroll_speed[player_idx],
+                gs.music_rate,
+            );
+            let detail = if reasons.is_empty() {
+                "ranking-invalid modifiers were used".to_string()
+            } else {
+                reasons.join("; ")
+            };
+            debug!(
+                "Skipping local score save for player {}: {}.",
+                player_idx + 1,
+                detail
+            );
+            continue;
+        }
 
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
         let p = &gs.players[player_idx];
@@ -1761,6 +1772,10 @@ pub fn save_local_summary_score_for_side(
     summary: &stage_stats::PlayerStageSummary,
 ) {
     if chart_hash.trim().is_empty() {
+        return;
+    }
+    if summary.disqualified {
+        debug!("Skipping local summary score save: run was disqualified.");
         return;
     }
     if !summary.score_valid {

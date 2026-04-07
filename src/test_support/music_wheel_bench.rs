@@ -196,7 +196,6 @@ fn bench_chart(base: &str, difficulty: &str, meter: u32) -> ChartData {
         first_second: 0.0,
         has_note_data: true,
         has_chart_attacks: false,
-        has_significant_timing_changes: false,
         possible_grade_points: 0,
         holds_total: 0,
         rolls_total: 0,

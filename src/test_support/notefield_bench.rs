@@ -313,7 +313,6 @@ fn bench_chart() -> ChartData {
         first_second: gameplay.timing.get_time_for_beat(0.0).min(0.0),
         has_note_data: true,
         has_chart_attacks: false,
-        has_significant_timing_changes: false,
         possible_grade_points: 0,
         holds_total: holds,
         rolls_total: rolls,

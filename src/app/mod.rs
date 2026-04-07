@@ -1337,16 +1337,15 @@ fn score_info_from_stage(
         scores::leaderboard_rank_for_score(machine_records.as_slice(), player.score_percent);
     let personal_record_highlight_rank =
         scores::leaderboard_rank_for_score(personal_records.as_slice(), player.score_percent);
+    let local_score_valid = player.score_valid && !player.disqualified;
     let earned_machine_record =
-        player.score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
+        local_score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
     let earned_top2_personal =
-        player.score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
-    let machine_record_highlight_rank = player
-        .score_valid
+        local_score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+    let machine_record_highlight_rank = local_score_valid
         .then_some(machine_record_highlight_rank)
         .flatten();
-    let personal_record_highlight_rank = player
-        .score_valid
+    let personal_record_highlight_rank = local_score_valid
         .then_some(personal_record_highlight_rank)
         .flatten();
 
@@ -6336,7 +6335,6 @@ mod tests {
             first_second: 0.0,
             has_note_data: true,
             has_chart_attacks: false,
-            has_significant_timing_changes: false,
             possible_grade_points: 0,
             holds_total: 0,
             rolls_total: 0,

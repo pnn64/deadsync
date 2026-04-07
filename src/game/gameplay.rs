@@ -3446,10 +3446,6 @@ fn chart_has_attacks(chart: &ChartData) -> bool {
     chart.has_chart_attacks
 }
 
-fn chart_has_significant_timing_changes(chart: &ChartData) -> bool {
-    chart.has_significant_timing_changes
-}
-
 #[inline(always)]
 fn mini_indicator_mode(profile: &profile::Profile) -> profile::MiniIndicator {
     if profile.mini_indicator != profile::MiniIndicator::None {
@@ -3495,75 +3491,80 @@ pub fn stream_segments_for_results(state: &State, player: usize) -> Vec<StreamSe
     segments
 }
 
-fn score_valid_for_chart(
+pub fn score_invalid_reason_lines_for_chart(
     chart: &ChartData,
     profile: &profile::Profile,
-    scroll_speed: ScrollSpeedSetting,
+    _scroll_speed: ScrollSpeedSetting,
     music_rate: f32,
-) -> bool {
+) -> Vec<&'static str> {
+    let mut reasons = Vec::with_capacity(6);
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {
         1.0
     };
     if rate < 1.0 {
-        return false;
-    }
-
-    if matches!(scroll_speed, ScrollSpeedSetting::CMod(_))
-        && chart_has_significant_timing_changes(chart)
-    {
-        return false;
+        reasons.push("music rate is below 1.0x");
     }
 
     let remove_mask = profile::normalize_remove_mask(profile.remove_active_mask);
     if (remove_mask & REMOVE_MASK_BIT_NO_HOLDS) != 0 && chart.stats.holds > 0 {
-        return false;
+        reasons.push("No Holds is enabled on a chart with holds");
     }
     if (remove_mask & REMOVE_MASK_BIT_NO_MINES) != 0 && chart.mines_nonfake > 0 {
-        return false;
+        reasons.push("No Mines is enabled on a chart with mines");
     }
     if (remove_mask & REMOVE_MASK_BIT_NO_JUMPS) != 0 && chart.stats.jumps > 0 {
-        return false;
+        reasons.push("No Jumps is enabled on a chart with jumps");
     }
     if (remove_mask & REMOVE_MASK_BIT_NO_HANDS) != 0 && chart.stats.hands > 0 {
-        return false;
+        reasons.push("No Hands is enabled on a chart with hands");
     }
     if (remove_mask & REMOVE_MASK_BIT_NO_QUADS) != 0 && chart.stats.hands > 0 {
-        return false;
+        reasons.push("No Quads is enabled on a chart with quads");
     }
     if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 && chart.stats.lifts > 0 {
-        return false;
+        reasons.push("No Lifts is enabled on a chart with lifts");
     }
     if (remove_mask & REMOVE_MASK_BIT_NO_FAKES) != 0 && chart.stats.fakes > 0 {
-        return false;
+        reasons.push("No Fakes is enabled on a chart with fakes");
     }
 
     let holds_mask = profile::normalize_holds_mask(profile.holds_active_mask);
     if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 && chart.stats.rolls > 0 {
-        return false;
+        reasons.push("No Rolls is enabled on a chart with rolls");
     }
 
     if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
-        return false;
+        reasons.push("Little is enabled");
     }
 
     let insert_mask = profile::normalize_insert_mask(profile.insert_active_mask);
     if (insert_mask & INSERT_MASK_BIT_ECHO) != 0 {
-        return false;
+        reasons.push("Echo is enabled");
     }
 
-    if (holds_mask & (HOLDS_MASK_BIT_PLANTED | HOLDS_MASK_BIT_FLOORED | HOLDS_MASK_BIT_TWISTER))
-        != 0
-    {
-        return false;
+    if (holds_mask & HOLDS_MASK_BIT_PLANTED) != 0 {
+        reasons.push("Planted is enabled");
+    }
+    if (holds_mask & HOLDS_MASK_BIT_FLOORED) != 0 {
+        reasons.push("Floored is enabled");
+    }
+    if (holds_mask & HOLDS_MASK_BIT_TWISTER) != 0 {
+        reasons.push("Twister is enabled");
     }
 
     match profile.attack_mode {
-        profile::AttackMode::Off => !chart_has_attacks(chart),
-        profile::AttackMode::On => true,
-        profile::AttackMode::Random => false,
+        profile::AttackMode::Off => {
+            if chart_has_attacks(chart) {
+                reasons.push("AttackMode=Off is enabled on a chart with attacks");
+            }
+        }
+        profile::AttackMode::On => {}
+        profile::AttackMode::Random => reasons.push("AttackMode=Random is enabled"),
     }
+
+    reasons
 }
 
 fn compute_end_times(
@@ -7127,12 +7128,21 @@ pub fn init(
     let mut score_valid = [true; MAX_PLAYERS];
     let mut score_missed_holds_rolls = [false; MAX_PLAYERS];
     for player in 0..num_players {
-        score_valid[player] = score_valid_for_chart(
+        let invalid_reasons = score_invalid_reason_lines_for_chart(
             &charts[player],
             &player_profiles[player],
             scroll_speed[player],
             rate,
         );
+        score_valid[player] = invalid_reasons.is_empty();
+        if !score_valid[player] {
+            debug!(
+                "Score validity disabled for player {} ({}): {}.",
+                player + 1,
+                charts[player].short_hash,
+                invalid_reasons.join("; ")
+            );
+        }
         score_missed_holds_rolls[player] = score_missed_holds_and_rolls(&charts[player].chart_type);
     }
 
@@ -12460,11 +12470,11 @@ mod tests {
         partition_notes_before_time, player_draw_scale_for_tilt_with_visual_mask,
         player_row_scan_state, recent_step_tracks, recompute_player_totals,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
-        row_final_grade_hides_note, score_missed_holds_and_rolls, score_valid_for_chart,
-        scored_hold_totals_with_carry, set_final_note_result, single_runtime_player_is_p2,
-        song_time_ns_from_seconds, song_time_ns_to_seconds, stage_music_cut, step_calories,
-        suppress_final_bad_rescore_visual, tick_mode_status_line, turn_option_bits,
-        update_lane_count,
+        row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
+        single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
+        stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
+        turn_option_bits, update_lane_count,
     };
     use crate::engine::input::{InputEvent, InputSource, VirtualAction};
     use crate::engine::present::color;
@@ -12627,7 +12637,6 @@ mod tests {
             first_second: 0.0,
             has_note_data: true,
             has_chart_attacks: false,
-            has_significant_timing_changes: false,
             possible_grade_points: 0,
             holds_total: 0,
             rolls_total: 0,
@@ -12890,12 +12899,6 @@ mod tests {
                 }
             },
         );
-        let has_significant_timing_changes = !timing_segments.stops.is_empty()
-            || !timing_segments.delays.is_empty()
-            || !timing_segments.warps.is_empty()
-            || !timing_segments.speeds.is_empty()
-            || !timing_segments.scrolls.is_empty()
-            || (raw_min_bpm.is_finite() && raw_max_bpm - raw_min_bpm > 3.0);
         let (min_bpm, max_bpm) = if raw_min_bpm.is_finite() {
             (raw_min_bpm as f64, raw_max_bpm as f64)
         } else {
@@ -12928,7 +12931,6 @@ mod tests {
             first_second: 0.0,
             has_note_data: true,
             has_chart_attacks: chart_attacks.is_some_and(|attacks| !attacks.trim().is_empty()),
-            has_significant_timing_changes,
             possible_grade_points: 0,
             holds_total: 0,
             rolls_total: 0,
@@ -14023,12 +14025,10 @@ mod tests {
             None,
         );
 
-        assert!(!score_valid_for_chart(
-            &chart,
-            &profile,
-            profile.scroll_speed,
-            1.0,
-        ));
+        assert!(
+            !score_invalid_reason_lines_for_chart(&chart, &profile, profile.scroll_speed, 1.0)
+                .is_empty()
+        );
     }
 
     #[test]
@@ -14037,16 +14037,14 @@ mod tests {
         profile.turn_option = profile::TurnOption::Mirror;
         let chart = test_chart(ArrowStats::default(), TimingSegments::default(), None);
 
-        assert!(score_valid_for_chart(
-            &chart,
-            &profile,
-            profile.scroll_speed,
-            1.0,
-        ));
+        assert!(
+            score_invalid_reason_lines_for_chart(&chart, &profile, profile.scroll_speed, 1.0)
+                .is_empty()
+        );
     }
 
     #[test]
-    fn score_valid_rejects_cmod_on_significant_timing_changes() {
+    fn score_valid_keeps_cmod_rankable_on_timing_changes() {
         let mut profile = profile::Profile::default();
         profile.scroll_speed = ScrollSpeedSetting::CMod(600.0);
         let chart = test_chart(
@@ -14058,12 +14056,10 @@ mod tests {
             None,
         );
 
-        assert!(!score_valid_for_chart(
-            &chart,
-            &profile,
-            profile.scroll_speed,
-            1.0,
-        ));
+        assert!(
+            score_invalid_reason_lines_for_chart(&chart, &profile, profile.scroll_speed, 1.0)
+                .is_empty()
+        );
     }
 
     #[test]
@@ -14076,12 +14072,10 @@ mod tests {
             Some("TIME=1.0:LEN=2.0:MODS=mirror"),
         );
 
-        assert!(!score_valid_for_chart(
-            &chart,
-            &profile,
-            profile.scroll_speed,
-            1.0,
-        ));
+        assert!(
+            !score_invalid_reason_lines_for_chart(&chart, &profile, profile.scroll_speed, 1.0)
+                .is_empty()
+        );
     }
 
     #[test]

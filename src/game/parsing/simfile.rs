@@ -33,10 +33,8 @@ pub use scan::{
 };
 
 const SONG_ANALYSIS_MONO_THRESHOLD: usize = 6;
-// Bump this when song-cache semantics change in ways the source hash cannot
-// detect. This release recomputes cached music lengths for affected OGGs.
-const SONG_CACHE_VERSION: u8 = 2;
-const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE2";
+const SONG_CACHE_VERSION: u8 = 1;
+const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 
 // --- SERIALIZABLE MIRROR STRUCTS ---
 
@@ -607,7 +605,6 @@ struct CachedChartMeta {
     first_second: f32,
     has_note_data: bool,
     has_chart_attacks: bool,
-    has_significant_timing_changes: bool,
     possible_grade_points: i32,
     holds_total: u32,
     rolls_total: u32,
@@ -662,29 +659,6 @@ struct CachedChartPayloadIndex {
 #[inline(always)]
 fn chart_has_attacks(attacks: Option<&str>) -> bool {
     attacks.is_some_and(|attacks| !attacks.trim().is_empty())
-}
-
-fn chart_has_significant_timing_changes(timing: &TimingSegments) -> bool {
-    if !timing.stops.is_empty()
-        || !timing.delays.is_empty()
-        || !timing.warps.is_empty()
-        || !timing.speeds.is_empty()
-        || !timing.scrolls.is_empty()
-    {
-        return true;
-    }
-
-    let mut min_bpm = f32::INFINITY;
-    let mut max_bpm = 0.0_f32;
-    for &(_, bpm) in &timing.bpms {
-        if !bpm.is_finite() || bpm <= 0.0 {
-            continue;
-        }
-        min_bpm = min_bpm.min(bpm);
-        max_bpm = max_bpm.max(bpm);
-    }
-
-    min_bpm.is_finite() && max_bpm - min_bpm > 3.0
 }
 
 fn build_measure_seconds(timing: &TimingData, measure_count: usize) -> Vec<f32> {
@@ -768,7 +742,6 @@ fn build_chart_meta(
     let first_second = 0.0_f32.min(timing.get_time_for_beat(0.0));
     let measure_seconds_vec = build_measure_seconds(&timing, chart.measure_nps_vec.len());
     let has_chart_attacks = chart_has_attacks(chart.chart_attacks.as_deref());
-    let has_significant_timing_changes = chart_has_significant_timing_changes(&timing_segments);
     ChartData {
         chart_type: chart.chart_type,
         difficulty: chart.difficulty,
@@ -796,7 +769,6 @@ fn build_chart_meta(
         first_second,
         has_note_data: !chart.notes.is_empty(),
         has_chart_attacks,
-        has_significant_timing_changes,
         possible_grade_points,
         holds_total,
         rolls_total,
@@ -850,7 +822,6 @@ fn build_cached_chart_meta(
         first_second,
         has_note_data: !chart.notes.is_empty(),
         has_chart_attacks: chart_has_attacks(chart.chart_attacks.as_deref()),
-        has_significant_timing_changes: chart_has_significant_timing_changes(&timing_segments),
         possible_grade_points,
         holds_total,
         rolls_total,
@@ -889,7 +860,6 @@ fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
         first_second: chart.first_second,
         has_note_data: chart.has_note_data,
         has_chart_attacks: chart.has_chart_attacks,
-        has_significant_timing_changes: chart.has_significant_timing_changes,
         possible_grade_points: chart.possible_grade_points,
         holds_total: chart.holds_total,
         rolls_total: chart.rolls_total,

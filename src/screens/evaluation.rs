@@ -998,7 +998,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         stage_duration_seconds = gs.total_elapsed_in_screen;
 
         // Persist one score file per play (per local profile), including fails and replay lane
-        // input, unless the run was ranking-invalid (autoplay, score-invalid modifiers, etc.).
+        // input, unless the run was disqualified (autoplay/replay).
         scores::save_local_scores_from_gameplay(&gs);
         let _ = scores::save_itl_data_from_gameplay(&gs);
         scores::submit_groovestats_payloads_from_gameplay(&gs);
@@ -1094,6 +1094,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             // Simply Love's "Disqualified" label is driven by PlayerStageStats:IsDisqualified(),
             // not by our broader local ranking-validity heuristics.
             let disqualified = gs.autoplay_used;
+            let local_score_valid = score_valid && !disqualified;
             let groovestats = scores::groovestats_eval_state_from_gameplay(&gs, player_idx);
             let itl = scores::itl_eval_state_from_gameplay(&gs, player_idx);
             let failed = scores::gameplay_run_failed(p.is_failing, p.fail_time.is_some());
@@ -1104,27 +1105,26 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 p.fail_time.is_some(),
             );
             let expected_groovestats_submit = cfg.enable_groovestats
-                && score_valid
                 && (passed || (failed && cfg.submit_groovestats_fails))
                 && groovestats.valid
                 && prof.groovestats_is_pad_player
                 && !prof.groovestats_api_key.trim().is_empty();
             let expected_arrowcloud_submit = cfg.enable_arrowcloud
-                && score_valid
+                && !disqualified
                 && (passed || (failed && cfg.submit_arrowcloud_fails))
                 && !gs.song.has_lua
                 && (gs.course_display_totals.is_none()
                     || cfg.autosubmit_course_scores_individually)
                 && !prof.arrowcloud_api_key.trim().is_empty();
-            let earned_machine_record = score_valid
+            let earned_machine_record = local_score_valid
                 && machine_record_highlight_rank
                     .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
             let earned_top2_personal =
-                score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
-            let machine_record_highlight_rank = score_valid
+                local_score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+            let machine_record_highlight_rank = local_score_valid
                 .then_some(machine_record_highlight_rank)
                 .flatten();
-            let personal_record_highlight_rank = score_valid
+            let personal_record_highlight_rank = local_score_valid
                 .then_some(personal_record_highlight_rank)
                 .flatten();
             let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
@@ -2468,7 +2468,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             };
 
             // Record Texts (Simply Love PerPlayer/Upper/RecordTexts.lua)
-            let has_recordable_score = si.score_valid && si.score_percent >= 0.01;
+            let has_recordable_score =
+                si.score_valid && !si.disqualified && si.score_percent >= 0.01;
             let machine_record_rank = if has_recordable_score {
                 si.machine_record_highlight_rank.filter(|rank| *rank > 0)
             } else {

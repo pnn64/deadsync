@@ -60,7 +60,6 @@ pub struct ChartData {
     pub first_second: f32,
     pub has_note_data: bool,
     pub has_chart_attacks: bool,
-    pub has_significant_timing_changes: bool,
     pub possible_grade_points: i32,
     pub holds_total: u32,
     pub rolls_total: u32,

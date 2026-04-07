@@ -787,14 +787,6 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State) {
     }
     let mut jobs = Vec::with_capacity(gs.num_players.min(gameplay::MAX_PLAYERS));
     for player_idx in 0..gs.num_players.min(gameplay::MAX_PLAYERS) {
-        if !gs.score_valid[player_idx] {
-            debug!(
-                "Skipping ArrowCloud submit for player {}: ranking-invalid modifiers were used.",
-                player_idx + 1
-            );
-            continue;
-        }
-
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
         let failed = gameplay_run_failed(
