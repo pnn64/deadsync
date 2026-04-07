@@ -104,13 +104,11 @@ struct PadDev {
     id: PadId,
     name: String,
     uuid: [u8; 16],
-    last: HashMap<u32, i64>,
+    last_axis: HashMap<u32, i64>,
     dir: [bool; 4],
 }
 
-struct KeyDev {
-    last: HashMap<u32, i64>,
-}
+struct KeyDev;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DevClass {
@@ -414,12 +412,7 @@ extern "C" fn on_match(
         };
 
         if class == DevClass::Keyboard {
-            ctx.key_devs.insert(
-                key,
-                KeyDev {
-                    last: HashMap::new(),
-                },
-            );
+            ctx.key_devs.insert(key, KeyDev);
             return;
         }
 
@@ -447,7 +440,7 @@ extern "C" fn on_match(
             id,
             name: name.clone(),
             uuid,
-            last: HashMap::new(),
+            last_axis: HashMap::new(),
             dir: [false; 4],
         };
 
@@ -518,12 +511,10 @@ extern "C" fn on_input(
         let v = IOHIDValueGetIntegerValue(value) as i64;
 
         if let Some(dev) = ctx.pad_devs.get_mut(&key) {
-            if dev.last.get(&code).copied() == Some(v) {
-                return;
-            }
-            dev.last.insert(code, v);
-
             // Hat switch → PadDir edges (match common HID D-pads/pads).
+            // `emit_dir_edges` already filters unchanged logical directions, so
+            // coalescing raw hat values here is redundant and risks hiding
+            // distinct edges on devices that reuse HID usages across elements.
             if usage_page == 0x01 && usage == 0x39 {
                 let hat = v as u32;
                 let want_up = matches!(hat, 0 | 1 | 7);
@@ -543,6 +534,9 @@ extern "C" fn on_input(
 
             if usage_page == 0x09 {
                 let pressed = v != 0;
+                // The shared debounce path already tracks repeated button
+                // states by binding. Coalescing button values in the backend can
+                // mask real press/release transitions on some IOHID devices.
                 (ctx.emit_pad)(PadEvent::RawButton {
                     id: dev.id,
                     timestamp,
@@ -553,6 +547,10 @@ extern "C" fn on_input(
                     pressed,
                 });
             } else {
+                if dev.last_axis.get(&code).copied() == Some(v) {
+                    return;
+                }
+                dev.last_axis.insert(code, v);
                 (ctx.emit_pad)(PadEvent::RawAxis {
                     id: dev.id,
                     timestamp,
@@ -565,22 +563,20 @@ extern "C" fn on_input(
             return;
         }
 
-        let Some(dev) = ctx.key_devs.get_mut(&key) else {
+        let Some(_dev) = ctx.key_devs.get(&key) else {
             return;
         };
         if usage_page != 0x07 {
             return;
         }
-        if dev.last.get(&code).copied() == Some(v) {
-            return;
-        }
-        dev.last.insert(code, v);
         if !keyboard_capture_active() {
             return;
         }
         let Some(code) = hid_key_code(usage) else {
             return;
         };
+        // Like pad buttons, repeated raw keyboard values are filtered later by
+        // the shared debounce store, which preserves the true edge semantics.
         (ctx.emit_key)(RawKeyboardEvent {
             code,
             pressed: v != 0,

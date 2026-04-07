@@ -1686,6 +1686,55 @@ mod tests {
     }
 
     #[test]
+    fn map_pad_event_with_ignores_duplicate_raw_button_state() {
+        let _guard = lock_test_guard();
+        let _reset = TestReset::capture();
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_left,
+            &[InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 77,
+                device: Some(1),
+                uuid: Some([7; 16]),
+            })],
+        );
+        set_keymap(km);
+
+        let t0 = Instant::now();
+        let press = PadEvent::RawButton {
+            id: PadId(1),
+            timestamp: t0,
+            host_nanos: 456,
+            code: PadCode(77),
+            uuid: [7; 16],
+            value: 1.0,
+            pressed: true,
+        };
+        let repeat_press = PadEvent::RawButton {
+            id: PadId(1),
+            timestamp: t0 + Duration::from_millis(1),
+            host_nanos: 457,
+            code: PadCode(77),
+            uuid: [7; 16],
+            value: 1.0,
+            pressed: true,
+        };
+
+        let mut actual = Vec::new();
+        map_pad_event_with(&press, |event| actual.push(event));
+        assert_eq!(actual.len(), 1, "initial press should emit once");
+        assert_eq!(actual[0].action, VirtualAction::p1_left);
+        assert!(actual[0].pressed);
+
+        actual.clear();
+        map_pad_event_with(&repeat_press, |event| actual.push(event));
+        assert!(
+            actual.is_empty(),
+            "duplicate raw button state should be suppressed by shared debounce"
+        );
+    }
+
+    #[test]
     fn map_raw_key_event_with_debounces_shared_arrow_input() {
         let _guard = lock_test_guard();
         let _reset = TestReset::capture();
