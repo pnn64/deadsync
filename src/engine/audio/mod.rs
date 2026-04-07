@@ -145,7 +145,7 @@ struct PulseBackendHint {
 struct CoreAudioBackendHint {
     device_uid: Option<String>,
     device_name: String,
-    sample_rate_hz: u32,
+    requested_rate_hz: Option<u32>,
     channels: usize,
     output_mode: crate::config::AudioOutputMode,
 }
@@ -1705,8 +1705,8 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
         .map(|device| device.name.clone())
         .unwrap_or_else(|| "Default Audio Device".to_string());
     let device_uid = selected_device.map(|device| device.uid.clone());
-    let native_sample_rate_hz = cfg
-        .sample_rate_hz
+    let requested_rate_hz = cfg.sample_rate_hz;
+    let native_sample_rate_hz = requested_rate_hz
         .unwrap_or_else(|| selected_device.map_or(48_000, |device| device.default_rate_hz));
     let native_channels = selected_device.map_or(2, |device| device.channels);
     debug!(
@@ -1725,7 +1725,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, AudioThreadL
             coreaudio: Some(CoreAudioBackendHint {
                 device_uid,
                 device_name,
-                sample_rate_hz: native_sample_rate_hz,
+                requested_rate_hz,
                 channels: native_channels,
                 output_mode,
             }),
@@ -2097,7 +2097,7 @@ fn start_macos_coreaudio_backend(
     let prep = backends::macos_coreaudio::prepare(
         coreaudio.device_uid.clone(),
         coreaudio.device_name.clone(),
-        coreaudio.sample_rate_hz,
+        coreaudio.requested_rate_hz,
         coreaudio.channels,
     )?;
     let mut ready = prep.ready();

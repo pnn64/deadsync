@@ -6,8 +6,8 @@ use crate::engine::audio::internal;
 use crate::engine::host_time::now_nanos;
 use coreaudio::audio_unit::audio_format::LinearPcmFlags;
 use coreaudio::audio_unit::macos_helpers::{
-    audio_unit_from_device_id, get_audio_device_ids_for_scope, get_default_device_id,
-    get_device_id_from_name, get_device_name,
+    audio_unit_from_device_id, get_audio_device_ids_for_scope, get_available_sample_rates,
+    get_default_device_id, get_device_id_from_name, get_device_name,
 };
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, Element, SampleFormat, Scope, StreamFormat};
@@ -15,8 +15,9 @@ use log::{info, warn};
 use mach2::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
 use objc2_core_audio::{
     AudioDeviceID, AudioObjectGetPropertyData, AudioObjectPropertyAddress,
-    kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyDeviceUID, kAudioHardwareNoError,
-    kAudioObjectPropertyElementMain, kAudioObjectPropertyScopeGlobal,
+    kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertyDeviceUID,
+    kAudioDevicePropertyNominalSampleRate, kAudioHardwareNoError, kAudioObjectPropertyElementMain,
+    kAudioObjectPropertyScopeGlobal,
 };
 use objc2_core_foundation::{CFRetained, CFString};
 use std::mem::size_of;
@@ -68,6 +69,10 @@ pub(crate) struct CoreAudioOutputDevice {
     pub is_default: bool,
 }
 
+const COMMON_SAMPLE_RATES_HZ: [u32; 11] = [
+    48_000, 44_100, 96_000, 88_200, 192_000, 176_400, 32_000, 22_050, 16_000, 11_025, 384_000,
+];
+
 pub(crate) fn enumerate_output_devices() -> Vec<CoreAudioOutputDevice> {
     let default_device_id = get_default_device_id(false);
     let Ok(device_ids) = get_audio_device_ids_for_scope(Scope::Output) else {
@@ -85,17 +90,17 @@ pub(crate) fn enumerate_output_devices() -> Vec<CoreAudioOutputDevice> {
         };
         let name =
             get_device_name(device_id).unwrap_or_else(|_| format!("CoreAudio Device {device_id}"));
-        let (default_rate_hz, channels) = match probe_device_format(device_id) {
-            Ok(format) => format,
+        let (sample_rates_hz, default_rate_hz, channels) = match probe_output_device(device_id) {
+            Ok(probed) => probed,
             Err(err) => {
                 warn!("failed to probe CoreAudio device '{name}': {err}");
-                (48_000, 2)
+                (vec![48_000], 48_000, 2)
             }
         };
         devices.push(CoreAudioOutputDevice {
             uid,
             name,
-            sample_rates_hz: vec![default_rate_hz],
+            sample_rates_hz,
             default_rate_hz,
             channels,
             is_default: default_device_id == Some(device_id),
@@ -165,11 +170,14 @@ struct ConfiguredUnit {
 pub(crate) fn prepare(
     device_uid: Option<String>,
     device_name: String,
-    sample_rate_hz: u32,
+    requested_rate_hz: Option<u32>,
     channels: usize,
 ) -> Result<CoreAudioOutputPrep, String> {
     let device_id = select_device_id(device_uid.as_deref(), &device_name)?;
     let resolved_name = get_device_name(device_id).unwrap_or(device_name);
+    let sample_rate_hz = requested_rate_hz
+        .filter(|rate| *rate > 0)
+        .map_or_else(|| device_nominal_sample_rate_hz(device_id), Ok)?;
     let mut audio_unit = audio_unit_from_device_id(device_id, false)
         .map_err(|e| format!("failed to create CoreAudio HAL output unit: {e}"))?;
     let actual = configure_output_unit(&mut audio_unit, sample_rate_hz, channels)?;
@@ -249,16 +257,94 @@ fn select_device_id(device_uid: Option<&str>, device_name: &str) -> Result<Audio
     get_default_device_id(false).ok_or_else(|| "no default CoreAudio output device".to_string())
 }
 
-fn probe_device_format(device_id: AudioDeviceID) -> Result<(u32, usize), String> {
+fn probe_output_device(device_id: AudioDeviceID) -> Result<(Vec<u32>, u32, usize), String> {
+    let default_rate_hz = device_nominal_sample_rate_hz(device_id)?;
     let audio_unit = audio_unit_from_device_id(device_id, false)
         .map_err(|e| format!("failed to create HAL output unit: {e}"))?;
     let actual = audio_unit
         .output_stream_format()
         .map_err(|e| format!("failed to query output stream format: {e}"))?;
     Ok((
-        actual.sample_rate.max(1.0).round() as u32,
+        supported_sample_rates_hz(device_id, default_rate_hz),
+        default_rate_hz,
         actual.channels.max(1) as usize,
     ))
+}
+
+fn device_nominal_sample_rate_hz(device_id: AudioDeviceID) -> Result<u32, String> {
+    let property_address = AudioObjectPropertyAddress {
+        mSelector: kAudioDevicePropertyNominalSampleRate,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain,
+    };
+    let mut sample_rate_hz = 0f64;
+    let mut data_size = size_of::<f64>() as u32;
+    // SAFETY: the property address is fully initialized, `data_size` matches
+    // the output buffer, and CoreAudio writes the sample rate into the stack
+    // local `sample_rate_hz` without retaining the pointer.
+    let status = unsafe {
+        AudioObjectGetPropertyData(
+            device_id,
+            NonNull::from(&property_address),
+            0,
+            null(),
+            NonNull::from(&mut data_size),
+            NonNull::from(&mut sample_rate_hz).cast(),
+        )
+    };
+    if status != kAudioHardwareNoError {
+        return Err(format!(
+            "failed to query CoreAudio nominal sample rate (status={status})"
+        ));
+    }
+    if !sample_rate_hz.is_finite() || sample_rate_hz <= 0.0 {
+        return Err(format!(
+            "CoreAudio nominal sample rate was invalid ({sample_rate_hz})."
+        ));
+    }
+    Ok(sample_rate_hz.round().clamp(1.0, u32::MAX as f64) as u32)
+}
+
+fn supported_sample_rates_hz(device_id: AudioDeviceID, default_rate_hz: u32) -> Vec<u32> {
+    let mut sample_rates_hz = Vec::with_capacity(COMMON_SAMPLE_RATES_HZ.len() + 3);
+    if default_rate_hz > 0 {
+        sample_rates_hz.push(default_rate_hz);
+    }
+    let ranges = match get_available_sample_rates(device_id) {
+        Ok(ranges) => ranges,
+        Err(err) => {
+            warn!("failed to query CoreAudio sample rates for device {device_id}: {err}");
+            sample_rates_hz.sort_unstable();
+            sample_rates_hz.dedup();
+            return sample_rates_hz;
+        }
+    };
+    let supported_ranges: Vec<_> = ranges
+        .into_iter()
+        .map(|range| (range.mMinimum, range.mMaximum))
+        .collect();
+    for &(min_rate_hz, max_rate_hz) in &supported_ranges {
+        push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);
+        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);
+    }
+    for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {
+        let rate = f64::from(sample_rate_hz);
+        if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {
+            rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz
+        }) {
+            sample_rates_hz.push(sample_rate_hz);
+        }
+    }
+    sample_rates_hz.sort_unstable();
+    sample_rates_hz.dedup();
+    sample_rates_hz
+}
+
+fn push_sample_rate_hz(sample_rates_hz: &mut Vec<u32>, sample_rate_hz: f64) {
+    if !sample_rate_hz.is_finite() || sample_rate_hz <= 0.0 {
+        return;
+    }
+    sample_rates_hz.push(sample_rate_hz.round().clamp(1.0, u32::MAX as f64) as u32);
 }
 
 fn configure_output_unit(
