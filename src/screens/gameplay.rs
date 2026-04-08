@@ -19,6 +19,7 @@ use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
+use cgmath::{Deg, Matrix4, Vector3};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -888,6 +889,100 @@ fn build_song_lua_overlay_actor(
     }
 }
 
+fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4<f32> {
+    Matrix4::new(
+        1.0, 0.0, 0.0, 0.0, //
+        amount, 1.0, 0.0, 0.0, //
+        0.0, 0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, 1.0,
+    )
+}
+
+fn song_lua_player_transform_matrix(
+    playfield_center_x: f32,
+    rotation_z_deg: f32,
+    skew_x: f32,
+) -> Option<Matrix4<f32>> {
+    if !playfield_center_x.is_finite() || !rotation_z_deg.is_finite() || !skew_x.is_finite() {
+        return None;
+    }
+    let rotation_z_deg = if rotation_z_deg.abs() <= f32::EPSILON {
+        0.0
+    } else {
+        rotation_z_deg
+    };
+    let skew_x = if skew_x.abs() <= f32::EPSILON {
+        0.0
+    } else {
+        skew_x
+    };
+    if rotation_z_deg.abs() <= f32::EPSILON && skew_x.abs() <= f32::EPSILON {
+        return None;
+    }
+
+    let pivot_x = playfield_center_x - 0.5 * screen_width();
+    let pivot_y = 0.5 * screen_height() - screen_center_y();
+    Some(
+        Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
+            * Matrix4::from_angle_z(Deg(rotation_z_deg))
+            * song_lua_player_skew_x_matrix(skew_x)
+            * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0)),
+    )
+}
+
+fn apply_song_lua_player_transform(
+    actors: Vec<Actor>,
+    playfield_center_x: f32,
+    rotation_z_deg: f32,
+    skew_x: f32,
+) -> Vec<Actor> {
+    let Some(player_transform) =
+        song_lua_player_transform_matrix(playfield_center_x, rotation_z_deg, skew_x)
+    else {
+        return actors;
+    };
+    // notefield::build may already wrap the lane render in a perspective camera.
+    // Multiply those cameras in place, and only wrap plain HUD actors here, so
+    // the Lua transform affects the whole bundle without being shadowed.
+    let root_camera = cgmath::ortho(
+        -0.5 * screen_width(),
+        0.5 * screen_width(),
+        -0.5 * screen_height(),
+        0.5 * screen_height(),
+        -1.0,
+        1.0,
+    ) * player_transform;
+    let mut out = Vec::with_capacity(actors.len().saturating_add(1));
+    let mut plain_children = Vec::new();
+    for actor in actors {
+        match actor {
+            Actor::Camera {
+                view_proj,
+                children,
+            } => {
+                if !plain_children.is_empty() {
+                    out.push(Actor::Camera {
+                        view_proj: root_camera,
+                        children: std::mem::take(&mut plain_children),
+                    });
+                }
+                out.push(Actor::Camera {
+                    view_proj: view_proj * player_transform,
+                    children,
+                });
+            }
+            other => plain_children.push(other),
+        }
+    }
+    if !plain_children.is_empty() {
+        out.push(Actor::Camera {
+            view_proj: root_camera,
+            children: plain_children,
+        });
+    }
+    out
+}
+
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let cfg = crate::config::get();
     let hud_snapshot = profile::gameplay_hud_snapshot();
@@ -1141,7 +1236,22 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 play_style,
                 cfg.center_1player_notefield,
             );
-            (p1, Some(p2), p1_x, [(0, p1_x), (1, p2_x)])
+            (
+                apply_song_lua_player_transform(
+                    p1,
+                    p1_x,
+                    state.song_lua_player_rotation_z[0],
+                    state.song_lua_player_skew_x[0],
+                ),
+                Some(apply_song_lua_player_transform(
+                    p2,
+                    p2_x,
+                    state.song_lua_player_rotation_z[1],
+                    state.song_lua_player_skew_x[1],
+                )),
+                p1_x,
+                [(0, p1_x), (1, p2_x)],
+            )
         }
         _ => {
             let placement = if is_p2_single {
@@ -1156,7 +1266,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 play_style,
                 cfg.center_1player_notefield,
             );
-            (nf, None, nf_x, [(0, nf_x), (usize::MAX, 0.0)])
+            (
+                apply_song_lua_player_transform(
+                    nf,
+                    nf_x,
+                    state.song_lua_player_rotation_z[0],
+                    state.song_lua_player_skew_x[0],
+                ),
+                None,
+                nf_x,
+                [(0, nf_x), (usize::MAX, 0.0)],
+            )
         }
     };
 

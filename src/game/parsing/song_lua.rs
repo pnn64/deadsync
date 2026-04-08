@@ -148,6 +148,8 @@ pub enum SongLuaSpanMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SongLuaEaseTarget {
     Mod(String),
+    PlayerRotationZ,
+    PlayerSkewX,
     Function,
 }
 
@@ -293,6 +295,12 @@ pub fn compile_song_lua(
             entry_path.display()
         )
     })?;
+    run_actor_startup_commands(&lua, &root).map_err(|err| {
+        format!(
+            "failed to run actor startup commands for '{}': {err}",
+            entry_path.display()
+        )
+    })?;
 
     let globals = lua.globals();
     let mut out = CompiledSongLua {
@@ -312,6 +320,7 @@ pub fn compile_song_lua(
             SongLuaTimeUnit::Beat,
         )?);
         let (eases, info) = read_eases(
+            &lua,
             prefix_globals
                 .get::<Option<Table>>("ease")
                 .map_err(|err| err.to_string())?,
@@ -347,6 +356,7 @@ pub fn compile_song_lua(
         SongLuaTimeUnit::Second,
     )?);
     let (global_eases, global_info) = read_eases(
+        &lua,
         globals
             .get::<Option<Table>>("mods_ease")
             .map_err(|err| err.to_string())?,
@@ -783,6 +793,13 @@ fn run_actor_init_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
     run_actor_init_commands_for_table(lua, root)
 }
 
+fn run_actor_startup_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
+    let Value::Table(root) = root else {
+        return Ok(());
+    };
+    run_actor_startup_commands_for_table(lua, root)
+}
+
 fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     run_actor_init_command(lua, actor)?;
     for child in actor.sequence_values::<Value>() {
@@ -794,11 +811,36 @@ fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<(
     Ok(())
 }
 
+fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if actor_runs_startup_commands(actor)? {
+        run_actor_named_command(lua, actor, "OnCommand")?;
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child? else {
+            continue;
+        };
+        run_actor_startup_commands_for_table(lua, &child)?;
+    }
+    Ok(())
+}
+
 fn run_actor_init_command(lua: &Lua, actor: &Table) -> mlua::Result<()> {
-    let Some(command) = actor.get::<Option<Function>>("InitCommand")? else {
+    run_actor_named_command(lua, actor, "InitCommand")
+}
+
+fn run_actor_named_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
+    let Some(command) = actor.get::<Option<Function>>(name)? else {
         return Ok(());
     };
     call_actor_function(lua, actor, &command)
+}
+
+fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
+    let actor_type = actor.get::<Option<String>>("__songlua_actor_type")?;
+    Ok(!matches!(
+        actor_type.as_deref(),
+        Some("Sprite") | Some("Quad")
+    ))
 }
 
 fn call_actor_function(lua: &Lua, actor: &Table, command: &Function) -> mlua::Result<()> {
@@ -1449,7 +1491,11 @@ fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table
             name,
             lua.create_function({
                 let actor = actor.clone();
-                move |_, _args: MultiValue| Ok(actor.clone())
+                let method_name = name.to_string();
+                move |lua, _args: MultiValue| {
+                    record_probe_method_call(lua, &method_name)?;
+                    Ok(actor.clone())
+                }
             })?,
         )?;
     }
@@ -1579,6 +1625,7 @@ fn read_mod_windows(
 }
 
 fn read_eases(
+    lua: &Lua,
     table: Option<Table>,
     unit: SongLuaTimeUnit,
     easing_names: &HashMap<*const c_void, String>,
@@ -1612,10 +1659,15 @@ fn read_eases(
                 SongLuaEaseTarget::Mod(text.to_str().map_err(|err| err.to_string())?.to_string()),
                 false,
             ),
-            Value::Function(_) => (SongLuaEaseTarget::Function, true),
+            Value::Function(function) => (
+                probe_function_ease_target(lua, &function)
+                    .map_err(|err| err.to_string())?
+                    .unwrap_or(SongLuaEaseTarget::Function),
+                true,
+            ),
             _ => continue,
         };
-        if is_function_target {
+        if is_function_target && matches!(target, SongLuaEaseTarget::Function) {
             info.unsupported_function_eases += 1;
         }
 
@@ -1657,6 +1709,49 @@ fn read_eases(
         });
     }
     Ok((out, info))
+}
+
+fn record_probe_method_call(lua: &Lua, method_name: &str) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let Some(calls) = globals.get::<Option<Table>>("__songlua_probe_methods")? else {
+        return Ok(());
+    };
+    calls.raw_set(calls.raw_len() + 1, method_name)?;
+    Ok(())
+}
+
+fn probe_function_ease_target(
+    lua: &Lua,
+    function: &Function,
+) -> mlua::Result<Option<SongLuaEaseTarget>> {
+    let globals = lua.globals();
+    let previous = globals.get::<Value>("__songlua_probe_methods")?;
+    let calls = lua.create_table()?;
+    globals.set("__songlua_probe_methods", calls.clone())?;
+    let result = function.call::<Value>(1.0_f32);
+    let classify = classify_function_ease_probe(&calls);
+    globals.set("__songlua_probe_methods", previous)?;
+    match result {
+        Ok(_) => classify,
+        Err(_) => Ok(None),
+    }
+}
+
+fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEaseTarget>> {
+    let mut saw_rotation_z = false;
+    let mut saw_skew_x = false;
+    for value in calls.sequence_values::<String>() {
+        match value?.as_str() {
+            "rotationz" => saw_rotation_z = true,
+            "skewx" => saw_skew_x = true,
+            _ => return Ok(None),
+        }
+    }
+    Ok(match (saw_rotation_z, saw_skew_x) {
+        (true, false) => Some(SongLuaEaseTarget::PlayerRotationZ),
+        (false, true) => Some(SongLuaEaseTarget::PlayerSkewX),
+        _ => None,
+    })
 }
 
 fn read_actions(table: Option<Table>) -> Result<(Vec<SongLuaMessageEvent>, usize), String> {
@@ -1909,6 +2004,53 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_classifies_player_transform_function_eases() {
+        let song_dir = test_dir("function-ease");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target = nil
+prefix_globals = {}
+
+return Def.ActorFrame{
+    InitCommand=function(self)
+        prefix_globals.ease = {
+            {8, 2, 0, 10, function(x) if target then target:rotationz(x) end end, "len", ease.inOutQuad},
+            {12, 1, 0, 0.15, function(x) if target then target:skewx(x) end end, "len", ease.outQuad},
+        }
+    end,
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:queuecommand("BindTarget")
+        end,
+        BindTargetCommand=function(self)
+            target = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Function Ease Song"),
+        )
+        .unwrap();
+        assert_eq!(compiled.eases.len(), 2);
+        assert_eq!(compiled.info.unsupported_function_eases, 0);
+        assert!(matches!(
+            compiled.eases[0].target,
+            SongLuaEaseTarget::PlayerRotationZ
+        ));
+        assert!(matches!(
+            compiled.eases[1].target,
+            SongLuaEaseTarget::PlayerSkewX
+        ));
+    }
+
+    #[test]
     fn compile_song_lua_extracts_overlay_message_tweens() {
         let song_dir = test_dir("overlay");
         let entry = song_dir.join("default.lua");
@@ -2001,7 +2143,19 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 2);
         assert_eq!(compiled.overlays.len(), 3);
         assert!(compiled.eases.len() >= 40);
-        assert!(compiled.info.unsupported_function_eases >= 2);
+        assert_eq!(compiled.info.unsupported_function_eases, 0);
+        assert!(
+            compiled
+                .eases
+                .iter()
+                .any(|ease| matches!(ease.target, SongLuaEaseTarget::PlayerRotationZ))
+        );
+        assert!(
+            compiled
+                .eases
+                .iter()
+                .any(|ease| matches!(ease.target, SongLuaEaseTarget::PlayerSkewX))
+        );
     }
 
     #[test]
