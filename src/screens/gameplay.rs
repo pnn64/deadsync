@@ -10,8 +10,8 @@ use crate::engine::present::font;
 use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::parsing::song_lua::{
-    SongLuaOverlayActor, SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaOverlayState,
-    SongLuaOverlayStateDelta,
+    SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
+    SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaProxyTarget,
 };
 use crate::game::profile;
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
@@ -717,6 +717,15 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     if let Some(value) = delta.rot_z_deg {
         state.rot_z_deg = value;
     }
+    if let Some(value) = delta.blend {
+        state.blend = value;
+    }
+    if let Some(value) = delta.vibrate {
+        state.vibrate = value;
+    }
+    if let Some(value) = delta.effect_magnitude {
+        state.effect_magnitude = value;
+    }
     if let Some(value) = delta.size {
         state.size = Some(value);
     }
@@ -783,6 +792,12 @@ fn song_lua_overlay_state_lerp(
     if delta.rot_z_deg.is_some() {
         from.rot_z_deg = (to.rot_z_deg - from.rot_z_deg).mul_add(t, from.rot_z_deg);
     }
+    if delta.effect_magnitude.is_some() {
+        for i in 0..3 {
+            from.effect_magnitude[i] = (to.effect_magnitude[i] - from.effect_magnitude[i])
+                .mul_add(t, from.effect_magnitude[i]);
+        }
+    }
     if delta.size.is_some()
         && let (Some(from_size), Some(to_size)) = (from.size, to.size)
     {
@@ -803,6 +818,12 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.visible.is_some() && t >= 1.0 - f32::EPSILON {
         from.visible = to.visible;
+    }
+    if delta.blend.is_some() && t >= 1.0 - f32::EPSILON {
+        from.blend = to.blend;
+    }
+    if delta.vibrate.is_some() && t >= 1.0 - f32::EPSILON {
+        from.vibrate = to.vibrate;
     }
     from
 }
@@ -870,17 +891,102 @@ fn song_lua_proxy_active_players(
 ) -> [bool; 2] {
     let mut out = [false; 2];
     for (overlay_index, overlay) in overlays.iter().enumerate() {
-        let SongLuaOverlayKind::ActorProxy { player_index } = &overlay.kind else {
+        let SongLuaOverlayKind::ActorProxy { target } = &overlay.kind else {
             continue;
         };
-        if *player_index >= out.len() {
+        let player_index = match target {
+            SongLuaProxyTarget::Player { player_index }
+            | SongLuaProxyTarget::NoteField { player_index } => *player_index,
+            _ => continue,
+        };
+        if player_index >= out.len() {
             continue;
         }
         if overlay_states
             .get(overlay_index)
             .is_some_and(|proxy_state| proxy_state.visible && proxy_state.diffuse[3] > f32::EPSILON)
         {
-            out[*player_index] = true;
+            out[player_index] = true;
+        }
+    }
+    out
+}
+
+fn song_lua_overlay_aft_ancestor(
+    overlays: &[SongLuaOverlayActor],
+    mut index: usize,
+) -> Option<usize> {
+    while let Some(parent_index) = overlays.get(index).and_then(|overlay| overlay.parent_index) {
+        match overlays.get(parent_index).map(|overlay| &overlay.kind) {
+            Some(SongLuaOverlayKind::ActorFrameTexture) => return Some(parent_index),
+            Some(_) => index = parent_index,
+            None => return None,
+        }
+    }
+    None
+}
+
+fn song_lua_overlay_capture_index_by_name(
+    overlays: &[SongLuaOverlayActor],
+    capture_name: &str,
+) -> Option<usize> {
+    overlays.iter().position(|overlay| {
+        matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture)
+            && overlay
+                .name
+                .as_deref()
+                .is_some_and(|name| name.eq_ignore_ascii_case(capture_name))
+    })
+}
+
+fn song_lua_proxy_source(
+    target: &SongLuaProxyTarget,
+    player_proxy_sources: &[Option<Vec<Actor>>; 2],
+) -> Option<Vec<Actor>> {
+    match target {
+        SongLuaProxyTarget::Player { player_index }
+        | SongLuaProxyTarget::NoteField { player_index } => player_proxy_sources
+            .get(*player_index)
+            .and_then(|actors| actors.clone()),
+        SongLuaProxyTarget::Judgment { .. }
+        | SongLuaProxyTarget::Combo { .. }
+        | SongLuaProxyTarget::Underlay
+        | SongLuaProxyTarget::Overlay => None,
+    }
+}
+
+fn song_lua_capture_children(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+    asset_manager: &AssetManager,
+    capture_index: usize,
+    player_proxy_sources: &[Option<Vec<Actor>>; 2],
+) -> Vec<Actor> {
+    let mut out = Vec::new();
+    for (idx, overlay) in overlays.iter().enumerate() {
+        if song_lua_overlay_aft_ancestor(overlays, idx) != Some(capture_index) {
+            continue;
+        }
+        if matches!(
+            overlay.kind,
+            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+        ) {
+            continue;
+        }
+        let source = match &overlay.kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                song_lua_proxy_source(target, player_proxy_sources)
+            }
+            _ => None,
+        };
+        if let Some(actor) = build_song_lua_overlay_actor(
+            overlay,
+            overlay_states.get(idx).copied().unwrap_or_default(),
+            asset_manager,
+            0,
+            source,
+        ) {
+            out.push(actor);
         }
     }
     out
@@ -979,12 +1085,311 @@ fn song_lua_overlay_render_state(
     apply_song_lua_overlay_runtime_eases(state, overlay_index, current)
 }
 
+fn song_lua_capture_tint(color: [f32; 4], tint: [f32; 4]) -> [f32; 4] {
+    [
+        color[0] * tint[0],
+        color[1] * tint[1],
+        color[2] * tint[2],
+        color[3] * tint[3],
+    ]
+}
+
+fn song_lua_add_z(z: i16, delta: i16) -> i16 {
+    (i32::from(z) + i32::from(delta)).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
+}
+
+fn song_lua_style_capture_actor(
+    actor: Actor,
+    tint: [f32; 4],
+    blend: Option<BlendMode>,
+    z_shift: i16,
+) -> Actor {
+    match actor {
+        Actor::Sprite {
+            align,
+            offset,
+            world_z,
+            size,
+            source,
+            tint: actor_tint,
+            glow,
+            z,
+            cell,
+            grid,
+            uv_rect,
+            visible,
+            flip_x,
+            flip_y,
+            cropleft,
+            cropright,
+            croptop,
+            cropbottom,
+            fadeleft,
+            faderight,
+            fadetop,
+            fadebottom,
+            blend: actor_blend,
+            mask_source,
+            mask_dest,
+            rot_x_deg,
+            rot_y_deg,
+            rot_z_deg,
+            local_offset,
+            local_offset_rot_sin_cos,
+            texcoordvelocity,
+            animate,
+            state_delay,
+            scale,
+            effect,
+        } => Actor::Sprite {
+            align,
+            offset,
+            world_z,
+            size,
+            source,
+            tint: song_lua_capture_tint(actor_tint, tint),
+            glow,
+            z: song_lua_add_z(z, z_shift),
+            cell,
+            grid,
+            uv_rect,
+            visible,
+            flip_x,
+            flip_y,
+            cropleft,
+            cropright,
+            croptop,
+            cropbottom,
+            fadeleft,
+            faderight,
+            fadetop,
+            fadebottom,
+            blend: blend.unwrap_or(actor_blend),
+            mask_source,
+            mask_dest,
+            rot_x_deg,
+            rot_y_deg,
+            rot_z_deg,
+            local_offset,
+            local_offset_rot_sin_cos,
+            texcoordvelocity,
+            animate,
+            state_delay,
+            scale,
+            effect,
+        },
+        Actor::Text {
+            align,
+            offset,
+            color,
+            stroke_color,
+            glow,
+            font,
+            content,
+            attributes,
+            align_text,
+            z,
+            scale,
+            fit_width,
+            fit_height,
+            wrap_width_pixels,
+            max_width,
+            max_height,
+            max_w_pre_zoom,
+            max_h_pre_zoom,
+            clip,
+            blend: actor_blend,
+            effect,
+        } => Actor::Text {
+            align,
+            offset,
+            color: song_lua_capture_tint(color, tint),
+            stroke_color: stroke_color.map(|color| song_lua_capture_tint(color, tint)),
+            glow,
+            font,
+            content,
+            attributes,
+            align_text,
+            z: song_lua_add_z(z, z_shift),
+            scale,
+            fit_width,
+            fit_height,
+            wrap_width_pixels,
+            max_width,
+            max_height,
+            max_w_pre_zoom,
+            max_h_pre_zoom,
+            clip,
+            blend: blend.unwrap_or(actor_blend),
+            effect,
+        },
+        Actor::Mesh {
+            align,
+            offset,
+            size,
+            vertices,
+            mode,
+            visible,
+            blend: actor_blend,
+            z,
+        } => Actor::Mesh {
+            align,
+            offset,
+            size,
+            vertices,
+            mode,
+            visible,
+            blend: blend.unwrap_or(actor_blend),
+            z: song_lua_add_z(z, z_shift),
+        },
+        Actor::TexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            texture,
+            vertices,
+            mode,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            visible,
+            blend: actor_blend,
+            z,
+        } => Actor::TexturedMesh {
+            align,
+            offset,
+            world_z,
+            size,
+            texture,
+            vertices,
+            mode,
+            uv_scale,
+            uv_offset,
+            uv_tex_shift,
+            visible,
+            blend: blend.unwrap_or(actor_blend),
+            z: song_lua_add_z(z, z_shift),
+        },
+        Actor::Frame {
+            align,
+            offset,
+            size,
+            children,
+            background,
+            z,
+        } => Actor::Frame {
+            align,
+            offset,
+            size,
+            children: children
+                .into_iter()
+                .map(|child| song_lua_style_capture_actor(child, tint, blend, z_shift))
+                .collect(),
+            background,
+            z: song_lua_add_z(z, z_shift),
+        },
+        Actor::Camera {
+            view_proj,
+            children,
+        } => Actor::Camera {
+            view_proj,
+            children: children
+                .into_iter()
+                .map(|child| song_lua_style_capture_actor(child, tint, blend, z_shift))
+                .collect(),
+        },
+        Actor::Shadow { len, color, child } => Actor::Shadow {
+            len,
+            color: song_lua_capture_tint(color, tint),
+            child: Box::new(song_lua_style_capture_actor(*child, tint, blend, z_shift)),
+        },
+    }
+}
+
+fn song_lua_capture_transform_matrix(
+    state: SongLuaOverlayState,
+    extra_offset: [f32; 2],
+) -> Option<Matrix4<f32>> {
+    let translate_x = (state.x - 320.0) * song_lua_overlay_x_scale() + extra_offset[0];
+    let translate_y = (state.y - 240.0) * song_lua_overlay_y_scale() + extra_offset[1];
+    let scale_x = state.basezoom * state.zoom * state.zoom_x;
+    let scale_y = state.basezoom * state.zoom * state.zoom_y;
+    if translate_x.abs() <= f32::EPSILON
+        && translate_y.abs() <= f32::EPSILON
+        && state.rot_z_deg.abs() <= f32::EPSILON
+        && (scale_x - 1.0).abs() <= f32::EPSILON
+        && (scale_y - 1.0).abs() <= f32::EPSILON
+    {
+        return None;
+    }
+    Some(
+        Matrix4::from_translation(Vector3::new(translate_x, -translate_y, 0.0))
+            * Matrix4::from_angle_z(Deg(state.rot_z_deg))
+            * Matrix4::from_nonuniform_scale(scale_x, scale_y, 1.0),
+    )
+}
+
+fn song_lua_capture_channel_offset(name: Option<&str>, state: SongLuaOverlayState) -> [f32; 2] {
+    if !state.vibrate {
+        return [0.0, 0.0];
+    }
+    let x = state.effect_magnitude[0].abs() * song_lua_overlay_x_scale();
+    let y = state.effect_magnitude[1].abs() * song_lua_overlay_y_scale() * 0.25;
+    match name {
+        Some(name) if name.ends_with('R') => [-x, -y],
+        Some(name) if name.ends_with('B') => [x, y],
+        _ => [0.0, 0.0],
+    }
+}
+
+fn song_lua_build_capture_actor(
+    overlay: &SongLuaOverlayActor,
+    state: SongLuaOverlayState,
+    z: i16,
+    source: Vec<Actor>,
+) -> Option<Actor> {
+    if source.is_empty() {
+        return None;
+    }
+    let blend = match state.blend {
+        SongLuaOverlayBlendMode::Alpha => None,
+        SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
+    };
+    let children = source
+        .into_iter()
+        .map(|actor| song_lua_style_capture_actor(actor, state.diffuse, blend, z))
+        .collect::<Vec<_>>();
+    let extra_offset = song_lua_capture_channel_offset(overlay.name.as_deref(), state);
+    if let Some(transform) = song_lua_capture_transform_matrix(state, extra_offset) {
+        return Some(Actor::Camera {
+            view_proj: cgmath::ortho(
+                -0.5 * screen_width(),
+                0.5 * screen_width(),
+                -0.5 * screen_height(),
+                0.5 * screen_height(),
+                -1.0,
+                1.0,
+            ) * transform,
+            children,
+        });
+    }
+    Some(Actor::Frame {
+        align: [0.0, 0.0],
+        offset: extra_offset,
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children,
+        background: None,
+        z: 0,
+    })
+}
+
 fn build_song_lua_overlay_actor(
     overlay: &SongLuaOverlayActor,
     state: SongLuaOverlayState,
     asset_manager: &AssetManager,
     z: i16,
-    proxy_source: Option<&[Actor]>,
+    source: Option<Vec<Actor>>,
 ) -> Option<Actor> {
     if !state.visible || state.diffuse[3] <= f32::EPSILON {
         return None;
@@ -993,16 +1398,20 @@ fn build_song_lua_overlay_actor(
     let y_scale = song_lua_overlay_y_scale();
     match &overlay.kind {
         SongLuaOverlayKind::ActorFrame => None,
+        SongLuaOverlayKind::ActorFrameTexture => None,
         SongLuaOverlayKind::ActorProxy { .. } => {
-            let source = proxy_source?;
+            let source = source?;
             Some(Actor::Frame {
                 align: [0.0, 0.0],
                 offset: [state.x * x_scale, state.y * y_scale],
                 size: [SizeSpec::Fill, SizeSpec::Fill],
-                children: source.to_vec(),
+                children: source,
                 background: None,
                 z: 0,
             })
+        }
+        SongLuaOverlayKind::AftSprite { .. } => {
+            song_lua_build_capture_actor(overlay, state, z, source?)
         }
         SongLuaOverlayKind::Sprite { texture_path } => {
             let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
@@ -1032,6 +1441,7 @@ fn build_song_lua_overlay_actor(
                 cropright,
                 croptop,
                 cropbottom,
+                blend,
                 rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
@@ -1045,6 +1455,10 @@ fn build_song_lua_overlay_actor(
                 *cropright = state.cropright.clamp(0.0, 1.0);
                 *croptop = state.croptop.clamp(0.0, 1.0);
                 *cropbottom = state.cropbottom.clamp(0.0, 1.0);
+                *blend = match state.blend {
+                    SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
+                    SongLuaOverlayBlendMode::Add => BlendMode::Add,
+                };
                 *rot_x_deg = state.rot_x_deg;
                 *rot_y_deg = state.rot_y_deg;
                 *rot_z_deg = state.rot_z_deg;
@@ -1081,6 +1495,7 @@ fn build_song_lua_overlay_actor(
                 cropright,
                 croptop,
                 cropbottom,
+                blend,
                 rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
@@ -1092,6 +1507,10 @@ fn build_song_lua_overlay_actor(
                 *cropright = state.cropright.clamp(0.0, 1.0);
                 *croptop = state.croptop.clamp(0.0, 1.0);
                 *cropbottom = state.cropbottom.clamp(0.0, 1.0);
+                *blend = match state.blend {
+                    SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
+                    SongLuaOverlayBlendMode::Add => BlendMode::Add,
+                };
                 *rot_x_deg = state.rot_x_deg;
                 *rot_y_deg = state.rot_y_deg;
                 *rot_z_deg = state.rot_z_deg;
@@ -1575,11 +1994,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     actors.reserve(p1_actors.len() + p2_actors.as_ref().map_or(0, Vec::len) + 48);
     if let Some(p2_actors) = p2_actors {
-        if !proxy_active_players[1] {
+        if !(proxy_active_players[1] || state.song_lua_hidden_players[1]) {
             actors.extend(p2_actors);
         }
     }
-    if !proxy_active_players[0] {
+    if !(proxy_active_players[0] || state.song_lua_hidden_players[0]) {
         actors.extend(p1_actors);
     }
     let clamped_width = screen_width().clamp(640.0, 854.0);
@@ -2382,14 +2801,30 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
     for (idx, overlay) in state.song_lua_overlays.iter().enumerate() {
+        if song_lua_overlay_aft_ancestor(&state.song_lua_overlays, idx).is_some() {
+            continue;
+        }
         let overlay_state = overlay_states
             .get(idx)
             .copied()
             .unwrap_or_else(|| song_lua_overlay_render_state(state, idx, overlay));
-        let proxy_source = match &overlay.kind {
-            SongLuaOverlayKind::ActorProxy { player_index } => player_proxy_sources
-                .get(*player_index)
-                .and_then(|actors| actors.as_deref()),
+        let source = match &overlay.kind {
+            SongLuaOverlayKind::ActorProxy { target } => {
+                song_lua_proxy_source(target, &player_proxy_sources)
+            }
+            SongLuaOverlayKind::AftSprite { capture_name } => {
+                song_lua_overlay_capture_index_by_name(&state.song_lua_overlays, capture_name).map(
+                    |capture_index| {
+                        song_lua_capture_children(
+                            &state.song_lua_overlays,
+                            &overlay_states,
+                            asset_manager,
+                            capture_index,
+                            &player_proxy_sources,
+                        )
+                    },
+                )
+            }
             _ => None,
         };
         if let Some(actor) = build_song_lua_overlay_actor(
@@ -2397,7 +2832,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             overlay_state,
             asset_manager,
             1100 + idx as i16,
-            proxy_source,
+            source,
         ) {
             actors.push(actor);
         }

@@ -4131,6 +4131,7 @@ fn build_song_lua_runtime_windows(
     Vec<SongLuaOverlayActor>,
     Vec<SongLuaOverlayEaseWindowRuntime>,
     Vec<SongLuaMessageEvent>,
+    [bool; MAX_PLAYERS],
 ) {
     let mut constant_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
@@ -4139,6 +4140,7 @@ fn build_song_lua_runtime_windows(
     let mut overlays = Vec::new();
     let mut overlay_eases = Vec::new();
     let mut messages = Vec::new();
+    let mut hidden_players = [false; MAX_PLAYERS];
 
     let Some(entry) = song
         .foreground_lua_changes
@@ -4151,6 +4153,7 @@ fn build_song_lua_runtime_windows(
             overlays,
             overlay_eases,
             messages,
+            hidden_players,
         );
     };
 
@@ -4202,6 +4205,7 @@ fn build_song_lua_runtime_windows(
                 overlays,
                 overlay_eases,
                 messages,
+                hidden_players,
             );
         }
     };
@@ -4212,6 +4216,7 @@ fn build_song_lua_runtime_windows(
         global_offset_seconds,
     );
     messages = compiled.messages.clone();
+    hidden_players[..compiled.hidden_players.len()].copy_from_slice(&compiled.hidden_players);
 
     let mut unsupported_targets = 0usize;
     let mut total_constant = 0usize;
@@ -4266,6 +4271,7 @@ fn build_song_lua_runtime_windows(
         overlays,
         overlay_eases,
         messages,
+        hidden_players,
     )
 }
 
@@ -6241,6 +6247,7 @@ pub struct State {
     pub song_lua_overlays: Vec<SongLuaOverlayActor>,
     pub song_lua_overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
     pub song_lua_messages: Vec<SongLuaMessageEvent>,
+    pub song_lua_hidden_players: [bool; MAX_PLAYERS],
     pub song_lua_player_rotation_z: [f32; MAX_PLAYERS],
     pub song_lua_player_skew_x: [f32; MAX_PLAYERS],
     active_attack_clear_all: [bool; MAX_PLAYERS],
@@ -8957,6 +8964,7 @@ pub fn init(
         song_lua_overlays,
         song_lua_overlay_eases,
         song_lua_messages,
+        song_lua_hidden_players,
     ) = build_song_lua_runtime_windows(
         &song,
         &charts,
@@ -9380,6 +9388,7 @@ pub fn init(
         song_lua_overlays,
         song_lua_overlay_eases,
         song_lua_messages,
+        song_lua_hidden_players,
         song_lua_player_rotation_z: [0.0; MAX_PLAYERS],
         song_lua_player_skew_x: [0.0; MAX_PLAYERS],
         active_attack_clear_all: [false; MAX_PLAYERS],

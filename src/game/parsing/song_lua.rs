@@ -186,10 +186,28 @@ pub struct SongLuaMessageEvent {
     pub persists: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SongLuaProxyTarget {
+    Player { player_index: usize },
+    NoteField { player_index: usize },
+    Judgment { player_index: usize },
+    Combo { player_index: usize },
+    Underlay,
+    Overlay,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SongLuaOverlayBlendMode {
+    Alpha,
+    Add,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SongLuaOverlayKind {
     ActorFrame,
-    ActorProxy { player_index: usize },
+    ActorFrameTexture,
+    ActorProxy { target: SongLuaProxyTarget },
+    AftSprite { capture_name: String },
     Sprite { texture_path: PathBuf },
     Quad,
 }
@@ -211,6 +229,9 @@ pub struct SongLuaOverlayState {
     pub rot_x_deg: f32,
     pub rot_y_deg: f32,
     pub rot_z_deg: f32,
+    pub blend: SongLuaOverlayBlendMode,
+    pub vibrate: bool,
+    pub effect_magnitude: [f32; 3],
     pub size: Option<[f32; 2]>,
     pub stretch_rect: Option<[f32; 4]>,
 }
@@ -233,6 +254,9 @@ impl Default for SongLuaOverlayState {
             rot_x_deg: 0.0,
             rot_y_deg: 0.0,
             rot_z_deg: 0.0,
+            blend: SongLuaOverlayBlendMode::Alpha,
+            vibrate: false,
+            effect_magnitude: [0.0, 0.0, 0.0],
             size: None,
             stretch_rect: None,
         }
@@ -256,6 +280,9 @@ pub struct SongLuaOverlayStateDelta {
     pub rot_x_deg: Option<f32>,
     pub rot_y_deg: Option<f32>,
     pub rot_z_deg: Option<f32>,
+    pub blend: Option<SongLuaOverlayBlendMode>,
+    pub vibrate: Option<bool>,
+    pub effect_magnitude: Option<[f32; 3]>,
     pub size: Option<[f32; 2]>,
     pub stretch_rect: Option<[f32; 4]>,
 }
@@ -316,6 +343,7 @@ pub struct CompiledSongLua {
     pub messages: Vec<SongLuaMessageEvent>,
     pub overlays: Vec<SongLuaOverlayActor>,
     pub overlay_eases: Vec<SongLuaOverlayEase>,
+    pub hidden_players: [bool; LUA_PLAYERS],
     pub info: SongLuaCompileInfo,
 }
 
@@ -446,6 +474,24 @@ pub fn compile_song_lua(
     )?;
     out.info.unsupported_function_actions += global_fn_actions;
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
+    out.hidden_players = std::array::from_fn(|player| {
+        let key = if player == 0 {
+            "__songlua_top_screen_player_1"
+        } else {
+            "__songlua_top_screen_player_2"
+        };
+        globals
+            .get::<Option<Table>>(key)
+            .ok()
+            .flatten()
+            .and_then(|actor| {
+                actor
+                    .get::<Option<bool>>("__songlua_visible")
+                    .ok()
+                    .flatten()
+            })
+            .is_some_and(|visible| !visible)
+    });
 
     out.beat_mods.sort_by(mod_window_cmp);
     out.time_mods.sort_by(mod_window_cmp);
@@ -465,7 +511,7 @@ fn install_host(
     context: &SongLuaCompileContext,
     host: &mut HostState,
 ) -> mlua::Result<()> {
-    install_stdlib_compat(lua)?;
+    install_stdlib_compat(lua, context.song_dir.as_path())?;
     install_ease_table(lua, host)?;
     install_globals(lua, context)?;
     install_def(lua)?;
@@ -473,7 +519,7 @@ fn install_host(
     Ok(())
 }
 
-fn install_stdlib_compat(lua: &Lua) -> mlua::Result<()> {
+fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     let globals = lua.globals();
     let table: Table = globals.get("table")?;
     table.set(
@@ -487,7 +533,120 @@ fn install_stdlib_compat(lua: &Lua) -> mlua::Result<()> {
     }
     globals.set("unpack", table.get::<Value>("unpack")?)?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
+    globals.set(
+        "setfenv",
+        lua.create_function(|_, (target, env): (Value, Table)| match target {
+            Value::Function(function) => {
+                let _ = function.set_environment(env.clone())?;
+                Ok(Value::Function(function))
+            }
+            _ => Ok(target),
+        })?,
+    )?;
+    globals.set(
+        "loadstring",
+        lua.create_function(|lua, (code, chunk_name): (String, Option<String>)| {
+            let mut chunk = lua.load(&code);
+            if let Some(chunk_name) = chunk_name.as_deref() {
+                chunk = chunk.set_name(chunk_name);
+            }
+            Ok(Value::Function(chunk.into_function()?))
+        })?,
+    )?;
+    let fileman = lua.create_table()?;
+    let song_dir = song_dir.to_path_buf();
+    let listing_song_dir = song_dir.clone();
+    fileman.set(
+        "GetDirListing",
+        lua.create_function(move |lua, (_self, raw_path): (Table, String)| {
+            let path = resolve_compat_path(&listing_song_dir, raw_path.as_str());
+            if !path.exists() {
+                return Ok(Value::Nil);
+            }
+            let entries = if path.is_dir() {
+                let mut entries = fs::read_dir(&path)
+                    .map_err(mlua::Error::external)?
+                    .filter_map(Result::ok)
+                    .filter_map(|entry| entry.file_name().into_string().ok())
+                    .collect::<Vec<_>>();
+                entries.sort_unstable();
+                entries
+            } else {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| vec![name.to_string()])
+                    .unwrap_or_default()
+            };
+            let table = lua.create_table()?;
+            for (idx, entry) in entries.into_iter().enumerate() {
+                table.raw_set(idx + 1, entry)?;
+            }
+            Ok(Value::Table(table))
+        })?,
+    )?;
+    let file_song_dir = song_dir.clone();
+    fileman.set(
+        "DoesFileExist",
+        lua.create_function(move |_, (_self, raw_path): (Table, String)| {
+            Ok(resolve_compat_path(&file_song_dir, raw_path.as_str()).is_file())
+        })?,
+    )?;
+    globals.set("FILEMAN", fileman)?;
     Ok(())
+}
+
+fn resolve_compat_path(song_dir: &Path, raw_path: &str) -> PathBuf {
+    let path = Path::new(raw_path.trim());
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        song_dir.join(path)
+    }
+}
+
+fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
+    let proxy = lua.create_table()?;
+    proxy.set("__songlua_env_target", target.clone())?;
+    let globals = lua.globals();
+    let mt = lua.create_table()?;
+    let proxy_for_index = proxy.clone();
+    let globals_for_index = globals.clone();
+    mt.set(
+        "__index",
+        lua.create_function(move |_, (_self, key): (Table, Value)| {
+            let target: Table = proxy_for_index.get("__songlua_env_target")?;
+            let value = target.get::<Value>(key.clone())?;
+            if !matches!(value, Value::Nil) {
+                return Ok(value);
+            }
+            globals_for_index.get::<Value>(key)
+        })?,
+    )?;
+    let proxy_for_newindex = proxy.clone();
+    mt.set(
+        "__newindex",
+        lua.create_function(move |_, (_self, key, value): (Table, Value, Value)| {
+            let target: Table = proxy_for_newindex.get("__songlua_env_target")?;
+            target.set(key, value)?;
+            Ok(())
+        })?,
+    )?;
+    let _ = proxy.set_metatable(Some(mt));
+    Ok(proxy)
+}
+
+fn initial_chunk_environment(lua: &Lua, path: &Path) -> mlua::Result<Table> {
+    if path.file_name().and_then(|name| name.to_str()) == Some("std.lua")
+        && path
+            .parent()
+            .and_then(|dir| dir.file_name())
+            .and_then(|name| name.to_str())
+            == Some("template")
+        && let Some(xero) = lua.globals().get::<Option<Table>>("xero")?
+    {
+        return Ok(xero);
+    }
+    Ok(lua.globals())
 }
 
 fn install_ease_table(lua: &Lua, host: &mut HostState) -> mlua::Result<()> {
@@ -604,9 +763,18 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         lua,
         [context.players[0].enabled, context.players[1].enabled],
     )?;
+    globals.set(
+        "__songlua_top_screen_player_1",
+        top_screen.players[0].clone(),
+    )?;
+    globals.set(
+        "__songlua_top_screen_player_2",
+        top_screen.players[1].clone(),
+    )?;
+    let top_screen_table = top_screen.top_screen.clone();
     screenman.set(
         "GetTopScreen",
-        lua.create_function(move |_, _self: Table| Ok(top_screen.clone()))?,
+        lua.create_function(move |_, _self: Table| Ok(top_screen_table.clone()))?,
     )?;
     screenman.set(
         "SystemMessage",
@@ -626,6 +794,11 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
 struct PlayerLuaTables {
     player_states: [Table; LUA_PLAYERS],
     steps: [Table; LUA_PLAYERS],
+}
+
+struct TopScreenLuaTables {
+    top_screen: Table,
+    players: [Table; LUA_PLAYERS],
 }
 
 fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
@@ -678,19 +851,25 @@ fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Resu
     Ok(child)
 }
 
-fn create_top_screen_table(lua: &Lua, player_enabled: [bool; LUA_PLAYERS]) -> mlua::Result<Table> {
+fn create_top_screen_table(
+    lua: &Lua,
+    player_enabled: [bool; LUA_PLAYERS],
+) -> mlua::Result<TopScreenLuaTables> {
     let top_screen = create_dummy_actor(lua, "TopScreen")?;
     let top_screen_for_get_child = top_screen.clone();
     let player_actors = [
         create_top_screen_player_actor(lua, 0)?,
         create_top_screen_player_actor(lua, 1)?,
     ];
+    let player_actors_for_get_child = player_actors.clone();
     top_screen.set(
         "GetChild",
         lua.create_function(move |lua, (_self, name): (Table, String)| {
             if let Some(player_index) = top_screen_player_index(&name) {
                 return if player_enabled[player_index] {
-                    Ok(Value::Table(player_actors[player_index].clone()))
+                    Ok(Value::Table(
+                        player_actors_for_get_child[player_index].clone(),
+                    ))
                 } else {
                     Ok(Value::Nil)
                 };
@@ -704,12 +883,16 @@ fn create_top_screen_table(lua: &Lua, player_enabled: [bool; LUA_PLAYERS]) -> ml
             Ok(Value::Table(child))
         })?,
     )?;
-    Ok(top_screen)
+    Ok(TopScreenLuaTables {
+        top_screen,
+        players: player_actors,
+    })
 }
 
 fn create_top_screen_player_actor(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, "PlayerActor")?;
     actor.set("__songlua_player_index", player_index as i64)?;
+    actor.set("__songlua_visible", true)?;
     Ok(actor)
 }
 
@@ -901,7 +1084,18 @@ fn install_file_loaders(lua: &Lua, song_dir: PathBuf) -> mlua::Result<()> {
     globals.set(
         "loadfile",
         lua.create_function(move |lua, path: String| {
-            create_loader_function(lua, &song_dir_for_loadfile, &path)
+            let mut out = MultiValue::new();
+            match create_loader_function(lua, &song_dir_for_loadfile, &path) {
+                Ok(loader) => {
+                    out.push_back(Value::Function(loader));
+                    out.push_back(Value::Nil);
+                }
+                Err(err) => {
+                    out.push_back(Value::Nil);
+                    out.push_back(Value::String(lua.create_string(err.to_string())?));
+                }
+            }
+            Ok(out)
         })?,
     )?;
     let song_dir_for_dofile = song_dir.clone();
@@ -945,7 +1139,11 @@ fn create_loader_function(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Resul
 
 fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Function> {
     let source = fs::read_to_string(path).map_err(mlua::Error::external)?;
-    let chunk = lua.load(&source).set_name(path.to_string_lossy().as_ref());
+    let chunk_env = create_chunk_env_proxy(lua, initial_chunk_environment(lua, path)?)?;
+    let chunk = lua
+        .load(&source)
+        .set_name(path.to_string_lossy().as_ref())
+        .set_environment(chunk_env);
     let inner = chunk.into_function()?;
     let script_dir = path.parent().unwrap_or(song_dir).to_path_buf();
     lua.create_function(move |lua, args: MultiValue| {
@@ -1087,14 +1285,6 @@ fn read_overlay_actors_from_table(
     parent_index: Option<usize>,
     out: &mut Vec<OverlayCompileActor>,
 ) -> Result<(), String> {
-    if actor
-        .get::<Option<String>>("__songlua_actor_type")
-        .map_err(|err| err.to_string())?
-        .as_deref()
-        .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture"))
-    {
-        return Ok(());
-    }
     let next_parent_index = if let Some(overlay) = read_overlay_actor(lua, actor, parent_index)? {
         let index = out.len();
         out.push(overlay);
@@ -1153,24 +1343,29 @@ fn read_overlay_actor(
             return Ok(None);
         }
         SongLuaOverlayKind::ActorFrame
+    } else if actor_type.eq_ignore_ascii_case("ActorFrameTexture") {
+        SongLuaOverlayKind::ActorFrameTexture
     } else if actor_type.eq_ignore_ascii_case("ActorProxy") {
-        let Some(player_index) = actor
-            .get::<Option<i64>>("__songlua_proxy_player_index")
-            .map_err(|err| err.to_string())?
-            .and_then(|value| usize::try_from(value).ok())
-        else {
+        let Some(target) = read_proxy_target_kind(actor)? else {
             return Ok(None);
         };
-        SongLuaOverlayKind::ActorProxy { player_index }
+        SongLuaOverlayKind::ActorProxy { target }
     } else if actor_type.eq_ignore_ascii_case("Sprite") {
-        let Some(texture_path) = actor
-            .get::<Option<String>>("Texture")
+        if let Some(capture_name) = actor
+            .get::<Option<String>>("__songlua_aft_capture_name")
             .map_err(|err| err.to_string())?
-            .and_then(|texture| resolve_actor_asset_path(actor, &texture).ok())
-        else {
-            return Ok(None);
-        };
-        SongLuaOverlayKind::Sprite { texture_path }
+        {
+            SongLuaOverlayKind::AftSprite { capture_name }
+        } else {
+            let Some(texture_path) = actor
+                .get::<Option<String>>("Texture")
+                .map_err(|err| err.to_string())?
+                .and_then(|texture| resolve_actor_asset_path(actor, &texture).ok())
+            else {
+                return Ok(None);
+            };
+            SongLuaOverlayKind::Sprite { texture_path }
+        }
     } else if actor_type.eq_ignore_ascii_case("Quad") {
         SongLuaOverlayKind::Quad
     } else {
@@ -1186,6 +1381,32 @@ fn read_overlay_actor(
             message_commands,
         },
     }))
+}
+
+fn read_proxy_target_kind(actor: &Table) -> Result<Option<SongLuaProxyTarget>, String> {
+    let Some(raw_kind) = actor
+        .get::<Option<String>>("__songlua_proxy_target_kind")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let player_index = actor
+        .get::<Option<i64>>("__songlua_proxy_player_index")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| usize::try_from(value).ok());
+    Ok(match raw_kind.as_str() {
+        "player" => player_index.map(|player_index| SongLuaProxyTarget::Player { player_index }),
+        "notefield" => {
+            player_index.map(|player_index| SongLuaProxyTarget::NoteField { player_index })
+        }
+        "judgment" => {
+            player_index.map(|player_index| SongLuaProxyTarget::Judgment { player_index })
+        }
+        "combo" => player_index.map(|player_index| SongLuaProxyTarget::Combo { player_index }),
+        "underlay" => Some(SongLuaProxyTarget::Underlay),
+        "overlay" => Some(SongLuaProxyTarget::Overlay),
+        _ => None,
+    })
 }
 
 fn resolve_actor_asset_path(actor: &Table, raw: &str) -> Result<PathBuf, String> {
@@ -1411,6 +1632,18 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                 rot_z_deg: block
                     .get::<Option<f32>>("rot_z_deg")
                     .map_err(|err| err.to_string())?,
+                blend: block
+                    .get::<Option<String>>("blend")
+                    .map_err(|err| err.to_string())?
+                    .as_deref()
+                    .and_then(parse_overlay_blend_mode),
+                vibrate: block
+                    .get::<Option<bool>>("vibrate")
+                    .map_err(|err| err.to_string())?,
+                effect_magnitude: block
+                    .get::<Option<Table>>("effect_magnitude")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec3(&value)),
                 size: block
                     .get::<Option<Table>>("size")
                     .map_err(|err| err.to_string())?
@@ -1436,6 +1669,14 @@ fn table_vec4(table: &Table) -> Option<[f32; 4]> {
 
 fn table_vec2(table: &Table) -> Option<[f32; 2]> {
     Some([table.raw_get::<f32>(1).ok()?, table.raw_get::<f32>(2).ok()?])
+}
+
+fn table_vec3(table: &Table) -> Option<[f32; 3]> {
+    Some([
+        table.raw_get::<f32>(1).ok()?,
+        table.raw_get::<f32>(2).ok()?,
+        table.raw_get::<f32>(3).ok()?,
+    ])
 }
 
 fn overlay_state_after_blocks(
@@ -1519,6 +1760,15 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.rot_z_deg {
         state.rot_z_deg = value;
     }
+    if let Some(value) = delta.blend {
+        state.blend = value;
+    }
+    if let Some(value) = delta.vibrate {
+        state.vibrate = value;
+    }
+    if let Some(value) = delta.effect_magnitude {
+        state.effect_magnitude = value;
+    }
     if let Some(value) = delta.size {
         state.size = Some(value);
     }
@@ -1577,6 +1827,12 @@ fn overlay_state_lerp(
     if delta.rot_z_deg.is_some() {
         from.rot_z_deg = (to.rot_z_deg - from.rot_z_deg).mul_add(t, from.rot_z_deg);
     }
+    if delta.effect_magnitude.is_some() {
+        for i in 0..3 {
+            from.effect_magnitude[i] = (to.effect_magnitude[i] - from.effect_magnitude[i])
+                .mul_add(t, from.effect_magnitude[i]);
+        }
+    }
     if delta.size.is_some()
         && let (Some(from_size), Some(to_size)) = (from.size, to.size)
     {
@@ -1598,7 +1854,26 @@ fn overlay_state_lerp(
     if delta.visible.is_some() && t >= 1.0 - f32::EPSILON {
         from.visible = to.visible;
     }
+    if delta.blend.is_some() && t >= 1.0 - f32::EPSILON {
+        from.blend = to.blend;
+    }
+    if delta.vibrate.is_some() && t >= 1.0 - f32::EPSILON {
+        from.vibrate = to.vibrate;
+    }
     from
+}
+
+fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {
+    if raw.eq_ignore_ascii_case("add") {
+        Some(SongLuaOverlayBlendMode::Add)
+    } else if raw.eq_ignore_ascii_case("alpha")
+        || raw.eq_ignore_ascii_case("normal")
+        || raw.eq_ignore_ascii_case("blendmode_normal")
+    {
+        Some(SongLuaOverlayBlendMode::Alpha)
+    } else {
+        None
+    }
 }
 
 fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
@@ -1651,17 +1926,47 @@ fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table
     Ok(actor)
 }
 
+fn set_proxy_target_fields(actor: &Table, target: &Table) -> mlua::Result<()> {
+    actor.set("__songlua_proxy_target_kind", Value::Nil)?;
+    actor.set("__songlua_proxy_player_index", Value::Nil)?;
+    if let Some(child_name) = target.get::<Option<String>>("__songlua_top_screen_child_name")? {
+        let kind = if child_name.eq_ignore_ascii_case("Underlay") {
+            Some("underlay")
+        } else if child_name.eq_ignore_ascii_case("Overlay") {
+            Some("overlay")
+        } else {
+            None
+        };
+        if let Some(kind) = kind {
+            actor.set("__songlua_proxy_target_kind", kind)?;
+        }
+        return Ok(());
+    }
+    let Some(player_index) = target.get::<Option<i64>>("__songlua_player_index")? else {
+        return Ok(());
+    };
+    actor.set("__songlua_proxy_player_index", player_index)?;
+    let kind = match target
+        .get::<Option<String>>("__songlua_player_child_name")?
+        .as_deref()
+    {
+        Some(name) if name.eq_ignore_ascii_case("NoteField") => "notefield",
+        Some(name) if name.eq_ignore_ascii_case("Judgment") => "judgment",
+        Some(name) if name.eq_ignore_ascii_case("Combo") => "combo",
+        _ => "player",
+    };
+    actor.set("__songlua_proxy_target_kind", kind)?;
+    Ok(())
+}
+
 fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "SetTarget",
         lua.create_function({
             let actor = actor.clone();
             move |_, args: MultiValue| {
-                if let Some(Value::Table(target)) = args.get(1)
-                    && let Some(player_index) =
-                        target.get::<Option<i64>>("__songlua_player_index")?
-                {
-                    actor.set("__songlua_proxy_player_index", player_index)?;
+                if let Some(Value::Table(target)) = args.get(1) {
+                    set_proxy_target_fields(&actor, target)?;
                 }
                 Ok(actor.clone())
             }
@@ -1673,8 +1978,29 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).map(truthy) {
+                    actor.set("__songlua_visible", value)?;
                     capture_block_set_bool(lua, &actor, "visible", value)?;
                 }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "addcommand",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, (_self, name, function): (Table, String, Function)| {
+                actor.set(format!("{name}Command"), function)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "removecommand",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, (_self, name): (Table, String)| {
+                actor.set(format!("{name}Command"), Value::Nil)?;
                 Ok(actor.clone())
             }
         })?,
@@ -1740,6 +2066,52 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let command_name = format!("{name}Command");
                 run_actor_named_command(lua, &actor, &command_name)?;
                 Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetTexture",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                match args.get(1) {
+                    Some(Value::String(texture)) => {
+                        actor.set("Texture", texture.to_str()?.to_string())?;
+                        actor.set("__songlua_aft_capture_name", Value::Nil)?;
+                    }
+                    Some(Value::Table(texture)) => {
+                        if let Some(capture_name) =
+                            texture.get::<Option<String>>("__songlua_aft_capture_name")?
+                        {
+                            actor.set("__songlua_aft_capture_name", capture_name)?;
+                        }
+                    }
+                    _ => {}
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetTexture",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _self: Table| {
+                if actor
+                    .get::<Option<String>>("__songlua_actor_type")?
+                    .as_deref()
+                    .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture"))
+                {
+                    let marker = lua.create_table()?;
+                    if let Some(name) = actor.get::<Option<String>>("Name")? {
+                        marker.set("__songlua_aft_capture_name", name)?;
+                    }
+                    return Ok(Value::Table(marker));
+                }
+                match actor.get::<Value>("Texture")? {
+                    Value::Nil => Ok(Value::Nil),
+                    other => Ok(other),
+                }
             }
         })?,
     )?;
@@ -1933,21 +2305,88 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             })?,
         )?;
     }
-    for name in [
+    actor.set(
         "blend",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(raw) = args.get(1).cloned().and_then(read_string)
+                    && let Some(blend) = parse_overlay_blend_mode(raw.as_str())
+                {
+                    let block = actor_current_capture_block(lua, &actor)?;
+                    let label = match blend {
+                        SongLuaOverlayBlendMode::Alpha => "alpha",
+                        SongLuaOverlayBlendMode::Add => "add",
+                    };
+                    block.set("blend", label)?;
+                    block.set("__songlua_has_changes", true)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "effectmagnitude",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let block = actor_current_capture_block(lua, &actor)?;
+                let value = lua.create_table()?;
+                value.raw_set(1, args.get(1).cloned().and_then(read_f32).unwrap_or(0.0))?;
+                value.raw_set(2, args.get(2).cloned().and_then(read_f32).unwrap_or(0.0))?;
+                value.raw_set(3, args.get(3).cloned().and_then(read_f32).unwrap_or(0.0))?;
+                block.set("effect_magnitude", value)?;
+                block.set("__songlua_has_changes", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "vibrate",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                capture_block_set_bool(lua, &actor, "vibrate", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "stopeffect",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                capture_block_set_bool(lua, &actor, "vibrate", false)?;
+                let block = actor_current_capture_block(lua, &actor)?;
+                let value = lua.create_table()?;
+                value.raw_set(1, 0.0_f32)?;
+                value.raw_set(2, 0.0_f32)?;
+                value.raw_set(3, 0.0_f32)?;
+                block.set("effect_magnitude", value)?;
+                block.set("__songlua_has_changes", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    for name in [
         "clearzbuffer",
         "customtexturerect",
         "diffuseshift",
         "effectclock",
         "effectcolor1",
         "effectcolor2",
-        "effectmagnitude",
         "effectperiod",
+        "EnableAlphaBuffer",
+        "EnableDepthBuffer",
+        "EnableFloat",
+        "EnablePreserveTexture",
+        "Create",
         "fardistz",
         "fov",
         "spin",
+        "SetHeight",
+        "SetWidth",
         "texcoordvelocity",
-        "vibrate",
         "wag",
         "z",
     ] {
@@ -2386,6 +2825,9 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.rot_x_deg.is_none()
         && delta.rot_y_deg.is_none()
         && delta.rot_z_deg.is_none()
+        && delta.blend.is_none()
+        && delta.vibrate.is_none()
+        && delta.effect_magnitude.is_none()
         && delta.size.is_none()
         && delta.stretch_rect.is_none()
 }
@@ -2436,6 +2878,15 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.rot_z_deg.is_some() {
         into.rot_z_deg = from.rot_z_deg;
     }
+    if from.blend.is_some() {
+        into.blend = from.blend;
+    }
+    if from.vibrate.is_some() {
+        into.vibrate = from.vibrate;
+    }
+    if from.effect_magnitude.is_some() {
+        into.effect_magnitude = from.effect_magnitude;
+    }
     if from.size.is_some() {
         into.size = from.size;
     }
@@ -2483,6 +2934,9 @@ fn overlay_delta_intersection(
     copy_pair!(rot_x_deg);
     copy_pair!(rot_y_deg);
     copy_pair!(rot_z_deg);
+    copy_pair!(blend);
+    copy_pair!(vibrate);
+    copy_pair!(effect_magnitude);
     copy_pair!(size);
     copy_pair!(stretch_rect);
     (!overlay_delta_is_empty(&out_from)).then_some((out_from, out_to))
@@ -2739,8 +3193,9 @@ fn message_event_cmp(
 #[cfg(test)]
 mod tests {
     use super::{
-        SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayKind,
-        SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
+        SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayBlendMode,
+        SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode,
+        SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -3194,7 +3649,9 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 1);
         assert!(matches!(
             compiled.overlays[0].kind,
-            SongLuaOverlayKind::ActorProxy { player_index: 0 }
+            SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::NoteField { player_index: 0 }
+            }
         ));
         assert!(!compiled.overlays[0].initial_state.visible);
         assert_eq!(compiled.overlays[0].message_commands.len(), 1);
@@ -3207,38 +3664,52 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_ignores_actorframetexture_subtree() {
+    fn compile_song_lua_extracts_actorframetexture_capture_sprite_and_hidden_player() {
         let song_dir = test_dir("overlay-aft");
         let entry = song_dir.join("default.lua");
-        let overlay_dir = song_dir.join("gfx");
-        fs::create_dir_all(&overlay_dir).unwrap();
-        fs::write(
-            overlay_dir.join("inner.png"),
-            b"not-an-image-but-good-enough-for-parser",
-        )
-        .unwrap();
         fs::write(
             &entry,
             r#"
+local capture = nil
+
 return Def.ActorFrame{
+    OnCommand=function(self)
+        local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        if p then
+            p:visible(false)
+        end
+    end,
     Def.ActorFrameTexture{
         Name="CaptureAFT",
+        InitCommand=function(self)
+            capture = self
+        end,
         Def.ActorProxy{
             Name="ProxyP1",
             OnCommand=function(self)
                 local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
                 if p then
-                    self:SetTarget(p)
+                    local nf = p:GetChild("NoteField")
+                    if nf and nf:GetNumWrapperStates() == 0 then
+                        nf:AddWrapperState()
+                    end
+                    self:SetTarget(nf and nf:GetWrapperState(1) or nf)
                 end
                 self:visible(true)
             end,
         },
-        Def.Sprite{
-            Texture="gfx/inner.png",
-            OnCommand=function(self)
-                self:visible(true)
-            end,
-        },
+    },
+    Def.Sprite{
+        Name="AFTSpriteR",
+        OnCommand=function(self)
+            if capture then
+                self:SetTexture(capture:GetTexture())
+            end
+            self:diffuse(1, 0, 0, 1)
+            self:blend("add")
+            self:vibrate()
+            self:effectmagnitude(8, 4, 0)
+        end,
     },
 }
 "#,
@@ -3250,7 +3721,32 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "Overlay AFT"),
         )
         .unwrap();
-        assert!(compiled.overlays.is_empty());
+        assert!(compiled.hidden_players[0]);
+        assert_eq!(compiled.overlays.len(), 3);
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::ActorFrameTexture
+        ));
+        assert!(matches!(
+            compiled.overlays[1].kind,
+            SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::NoteField { player_index: 0 }
+            }
+        ));
+        assert!(matches!(
+            compiled.overlays[2].kind,
+            SongLuaOverlayKind::AftSprite { ref capture_name }
+                if capture_name == "CaptureAFT"
+        ));
+        assert_eq!(
+            compiled.overlays[2].initial_state.blend,
+            SongLuaOverlayBlendMode::Add
+        );
+        assert!(compiled.overlays[2].initial_state.vibrate);
+        assert_eq!(
+            compiled.overlays[2].initial_state.effect_magnitude,
+            [8.0, 4.0, 0.0]
+        );
     }
 
     #[test]
@@ -3407,6 +3903,45 @@ return Def.ActorFrame{
             compiled.eases.iter().any(
                 |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "tiny")
             )
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_supports_kenpo_sample_if_present() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../lua-songs/[11] KENPO SAITO (DX) [Scrypts]");
+        let entry = root.join("template/main.lua");
+        if !entry.is_file() {
+            return;
+        }
+
+        let mut context = SongLuaCompileContext::new(&root, "KENPO SAITO");
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                difficulty: SongLuaDifficulty::Challenge,
+                speedmod: SongLuaSpeedMod::X(2.0),
+            },
+            SongLuaPlayerContext {
+                enabled: true,
+                difficulty: SongLuaDifficulty::Challenge,
+                speedmod: SongLuaSpeedMod::C(516.0),
+            },
+        ];
+
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert!(compiled.hidden_players[0] || compiled.hidden_players[1]);
+        assert!(
+            compiled
+                .overlays
+                .iter()
+                .any(|overlay| matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture))
+        );
+        assert!(
+            compiled
+                .overlays
+                .iter()
+                .any(|overlay| matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }))
         );
     }
 }
