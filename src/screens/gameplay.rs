@@ -939,19 +939,32 @@ fn song_lua_overlay_capture_index_by_name(
     })
 }
 
+#[derive(Clone, Default)]
+struct SongLuaPlayerProxySources {
+    player: Option<Vec<Actor>>,
+    note_field: Option<Vec<Actor>>,
+    judgment: Option<Vec<Actor>>,
+    combo: Option<Vec<Actor>>,
+}
+
 fn song_lua_proxy_source(
     target: &SongLuaProxyTarget,
-    player_proxy_sources: &[Option<Vec<Actor>>; 2],
+    player_proxy_sources: &[SongLuaPlayerProxySources; 2],
 ) -> Option<Vec<Actor>> {
     match target {
-        SongLuaProxyTarget::Player { player_index }
-        | SongLuaProxyTarget::NoteField { player_index } => player_proxy_sources
+        SongLuaProxyTarget::Player { player_index } => player_proxy_sources
             .get(*player_index)
-            .and_then(|actors| actors.clone()),
-        SongLuaProxyTarget::Judgment { .. }
-        | SongLuaProxyTarget::Combo { .. }
-        | SongLuaProxyTarget::Underlay
-        | SongLuaProxyTarget::Overlay => None,
+            .and_then(|sources| sources.player.clone()),
+        SongLuaProxyTarget::NoteField { player_index } => player_proxy_sources
+            .get(*player_index)
+            .and_then(|sources| sources.note_field.clone()),
+        SongLuaProxyTarget::Judgment { player_index } => player_proxy_sources
+            .get(*player_index)
+            .and_then(|sources| sources.judgment.clone()),
+        SongLuaProxyTarget::Combo { player_index } => player_proxy_sources
+            .get(*player_index)
+            .and_then(|sources| sources.combo.clone()),
+        SongLuaProxyTarget::Underlay | SongLuaProxyTarget::Overlay => None,
     }
 }
 
@@ -960,7 +973,7 @@ fn song_lua_capture_children(
     overlay_states: &[SongLuaOverlayState],
     asset_manager: &AssetManager,
     capture_index: usize,
-    player_proxy_sources: &[Option<Vec<Actor>>; 2],
+    player_proxy_sources: &[SongLuaPlayerProxySources; 2],
 ) -> Vec<Actor> {
     let mut out = Vec::new();
     for (idx, overlay) in overlays.iter().enumerate() {
@@ -1855,42 +1868,67 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         (max_x - min_x) + arrow_w
     };
 
-    let (p1_actors, p2_actors, playfield_center_x, per_player_fields): (
+    let build_player_bundle = |player_idx: usize,
+                               profile: &profile::Profile,
+                               placement: notefield::FieldPlacement| {
+        let notefield::BuiltNotefield {
+            actors,
+            layout_center_x,
+            field_actors,
+            judgment_actors,
+            combo_actors,
+        } = notefield::build_bundles(
+            state,
+            profile,
+            placement,
+            play_style,
+            cfg.center_1player_notefield,
+        );
+        let rotation_z = state.song_lua_player_rotation_z[player_idx];
+        let skew_x = state.song_lua_player_skew_x[player_idx];
+        let player = apply_song_lua_player_transform(actors, layout_center_x, rotation_z, skew_x);
+        let proxy_sources = SongLuaPlayerProxySources {
+            player: Some(player.clone()),
+            note_field: Some(apply_song_lua_player_transform(
+                field_actors,
+                layout_center_x,
+                rotation_z,
+                skew_x,
+            )),
+            judgment: Some(apply_song_lua_player_transform(
+                judgment_actors,
+                layout_center_x,
+                rotation_z,
+                skew_x,
+            )),
+            combo: Some(apply_song_lua_player_transform(
+                combo_actors,
+                layout_center_x,
+                rotation_z,
+                skew_x,
+            )),
+        };
+        (player, layout_center_x, proxy_sources)
+    };
+
+    let (p1_actors, p2_actors, playfield_center_x, per_player_fields, player_proxy_sources): (
         Vec<Actor>,
         Option<Vec<Actor>>,
         f32,
         [(usize, f32); 2],
+        [SongLuaPlayerProxySources; 2],
     ) = match play_style {
         profile::PlayStyle::Versus => {
-            let (p1, p1_x) = notefield::build(
-                state,
-                &state.player_profiles[0],
-                notefield::FieldPlacement::P1,
-                play_style,
-                cfg.center_1player_notefield,
-            );
-            let (p2, p2_x) = notefield::build(
-                state,
-                &state.player_profiles[1],
-                notefield::FieldPlacement::P2,
-                play_style,
-                cfg.center_1player_notefield,
-            );
+            let (p1, p1_x, p1_sources) =
+                build_player_bundle(0, &state.player_profiles[0], notefield::FieldPlacement::P1);
+            let (p2, p2_x, p2_sources) =
+                build_player_bundle(1, &state.player_profiles[1], notefield::FieldPlacement::P2);
             (
-                apply_song_lua_player_transform(
-                    p1,
-                    p1_x,
-                    state.song_lua_player_rotation_z[0],
-                    state.song_lua_player_skew_x[0],
-                ),
-                Some(apply_song_lua_player_transform(
-                    p2,
-                    p2_x,
-                    state.song_lua_player_rotation_z[1],
-                    state.song_lua_player_skew_x[1],
-                )),
+                p1,
+                Some(p2),
                 p1_x,
                 [(0, p1_x), (1, p2_x)],
+                [p1_sources, p2_sources],
             )
         }
         _ => {
@@ -1899,27 +1937,17 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             } else {
                 notefield::FieldPlacement::P1
             };
-            let (nf, nf_x) = notefield::build(
-                state,
-                &state.player_profiles[0],
-                placement,
-                play_style,
-                cfg.center_1player_notefield,
-            );
+            let (nf, nf_x, nf_sources) =
+                build_player_bundle(0, &state.player_profiles[0], placement);
             (
-                apply_song_lua_player_transform(
-                    nf,
-                    nf_x,
-                    state.song_lua_player_rotation_z[0],
-                    state.song_lua_player_skew_x[0],
-                ),
+                nf,
                 None,
                 nf_x,
                 [(0, nf_x), (usize::MAX, 0.0)],
+                [nf_sources, SongLuaPlayerProxySources::default()],
             )
         }
     };
-    let player_proxy_sources = [Some(p1_actors.clone()), p2_actors.clone()];
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
     {

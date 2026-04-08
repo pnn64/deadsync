@@ -626,6 +626,31 @@ pub enum FieldPlacement {
     P1,
     P2,
 }
+
+pub struct BuiltNotefield {
+    pub actors: Vec<Actor>,
+    pub layout_center_x: f32,
+    pub field_actors: Vec<Actor>,
+    pub judgment_actors: Vec<Actor>,
+    pub combo_actors: Vec<Actor>,
+}
+
+impl BuiltNotefield {
+    fn empty(layout_center_x: f32) -> Self {
+        Self {
+            actors: Vec::new(),
+            layout_center_x,
+            field_actors: Vec::new(),
+            judgment_actors: Vec::new(),
+            combo_actors: Vec::new(),
+        }
+    }
+}
+
+fn push_hud_capture(hud_actors: &mut Vec<Actor>, capture_actors: &mut Vec<Actor>, actor: Actor) {
+    capture_actors.push(actor.clone());
+    hud_actors.push(actor);
+}
 #[inline(always)]
 fn translated_uv_rect(mut uv: [f32; 4], translate: [f32; 2]) -> [f32; 4] {
     uv[0] += translate[0];
@@ -2593,13 +2618,13 @@ fn let_go_head_beat(note_beat: f32, end_beat: f32, last_held_beat: f32, visible_
         .min(visible_beat.max(note_beat))
 }
 
-pub fn build(
+pub fn build_bundles(
     state: &State,
     profile: &profile::Profile,
     placement: FieldPlacement,
     play_style: profile::PlayStyle,
     center_1player_notefield: bool,
-) -> (Vec<Actor>, f32) {
+) -> BuiltNotefield {
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
 
     // --- Playfield Positioning (1:1 with Simply Love) ---
@@ -2614,7 +2639,7 @@ pub fn build(
         }
     };
     if player_idx >= state.num_players {
-        return (Vec::new(), screen_center_x());
+        return BuiltNotefield::empty(screen_center_x());
     }
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay.
@@ -2628,7 +2653,7 @@ pub fn build(
         .min(MAX_COLS);
     let num_cols = col_end.saturating_sub(col_start);
     if num_cols == 0 {
-        return (Vec::new(), screen_center_x());
+        return BuiltNotefield::empty(screen_center_x());
     }
     let error_bar_mask = {
         let mut mask = profile::normalize_error_bar_mask(profile.error_bar_active_mask);
@@ -2657,6 +2682,8 @@ pub fn build(
         };
     let mut actors = Vec::with_capacity(actor_cap);
     let mut hud_actors: Vec<Actor> = Vec::with_capacity(hud_cap);
+    let mut judgment_actors = Vec::with_capacity(4);
+    let mut combo_actors = Vec::with_capacity(8);
     let p = &state.players[player_idx];
     let mut model_cache = state.notefield_model_cache[player_idx].borrow_mut();
 
@@ -5754,15 +5781,19 @@ pub fn build(
                         let alpha = (0.5 * (1.0 - progress)).max(0.0);
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let rotation = 90.0 * direction * progress;
-                            hud_actors.push(act!(sprite("combo_explosion.png"):
-                                align(0.5, 0.5):
-                                xy(combo_center_x, combo_center_y):
-                                zoom(zoom):
-                                rotationz(rotation):
-                                diffuse(1.0, 1.0, 1.0, alpha):
-                                blend(add):
-                                z(89)
-                            ));
+                            push_hud_capture(
+                                &mut hud_actors,
+                                &mut combo_actors,
+                                act!(sprite("combo_explosion.png"):
+                                    align(0.5, 0.5):
+                                    xy(combo_center_x, combo_center_y):
+                                    zoom(zoom):
+                                    rotationz(rotation):
+                                    diffuse(1.0, 1.0, 1.0, alpha):
+                                    blend(add):
+                                    z(89)
+                                ),
+                            );
                         }
                     }
                     if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
@@ -5771,15 +5802,19 @@ pub fn build(
                         let zoom = (0.25 + (2.0 - 0.25) * eased) * judgment_zoom_mod;
                         let alpha = (0.6 * (1.0 - eased)).max(0.0);
                         let rotation = 10.0 + (0.0 - 10.0) * eased;
-                        hud_actors.push(act!(sprite("combo_100milestone_splode.png"):
-                            align(0.5, 0.5):
-                            xy(combo_center_x, combo_center_y):
-                            zoom(zoom):
-                            rotationz(rotation):
-                            diffuse(player_color[0], player_color[1], player_color[2], alpha):
-                            blend(add):
-                            z(89)
-                        ));
+                        push_hud_capture(
+                            &mut hud_actors,
+                            &mut combo_actors,
+                            act!(sprite("combo_100milestone_splode.png"):
+                                align(0.5, 0.5):
+                                xy(combo_center_x, combo_center_y):
+                                zoom(zoom):
+                                rotationz(rotation):
+                                diffuse(player_color[0], player_color[1], player_color[2], alpha):
+                                blend(add):
+                                z(89)
+                            ),
+                        );
                         let mini_duration = 0.4_f32;
                         if elapsed <= mini_duration {
                             let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
@@ -5787,15 +5822,19 @@ pub fn build(
                                 (0.25 + (1.8 - 0.25) * mini_progress) * judgment_zoom_mod;
                             let mini_alpha = (1.0 - mini_progress).max(0.0);
                             let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
-                            hud_actors.push(act!(sprite("combo_100milestone_minisplode.png"):
-                                align(0.5, 0.5):
-                                xy(combo_center_x, combo_center_y):
-                                zoom(mini_zoom):
-                                rotationz(mini_rotation):
-                                diffuse(player_color[0], player_color[1], player_color[2], mini_alpha):
-                                blend(add):
-                                z(89)
-                            ));
+                            push_hud_capture(
+                                &mut hud_actors,
+                                &mut combo_actors,
+                                act!(sprite("combo_100milestone_minisplode.png"):
+                                    align(0.5, 0.5):
+                                    xy(combo_center_x, combo_center_y):
+                                    zoom(mini_zoom):
+                                    rotationz(mini_rotation):
+                                    diffuse(player_color[0], player_color[1], player_color[2], mini_alpha):
+                                    blend(add):
+                                    z(89)
+                                ),
+                            );
                         }
                     }
                 }
@@ -5809,15 +5848,19 @@ pub fn build(
                         let x_offset = 100.0 * progress * judgment_zoom_mod;
                         for &direction in &[1.0_f32, -1.0_f32] {
                             let final_x = combo_center_x + x_offset * direction;
-                            hud_actors.push(act!(sprite("combo_1000milestone_swoosh.png"):
-                                align(0.5, 0.5):
-                                xy(final_x, combo_center_y):
-                                zoom(zoom):
-                                zoomx(zoom * direction):
-                                diffuse(player_color[0], player_color[1], player_color[2], alpha):
-                                blend(add):
-                                z(89)
-                            ));
+                            push_hud_capture(
+                                &mut hud_actors,
+                                &mut combo_actors,
+                                act!(sprite("combo_1000milestone_swoosh.png"):
+                                    align(0.5, 0.5):
+                                    xy(final_x, combo_center_y):
+                                    zoom(zoom):
+                                    zoomx(zoom * direction):
+                                    diffuse(player_color[0], player_color[1], player_color[2], alpha):
+                                    blend(add):
+                                    z(89)
+                                ),
+                            );
                         }
                     }
                 }
@@ -5830,13 +5873,17 @@ pub fn build(
         let combo_font_name = zmod_combo_font_name(profile.combo_font);
         if p.miss_combo >= SHOW_COMBO_AT {
             if let Some(font_name) = combo_font_name {
-                hud_actors.push(act!(text:
-                    font(font_name): settext(cached_int_u32(p.miss_combo)):
-                    align(0.5, 0.5): xy(combo_x, combo_y):
-                    zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
-                    diffuse(1.0, 0.0, 0.0, 1.0):
-                    z(90)
-                ));
+                push_hud_capture(
+                    &mut hud_actors,
+                    &mut combo_actors,
+                    act!(text:
+                        font(font_name): settext(cached_int_u32(p.miss_combo)):
+                        align(0.5, 0.5): xy(combo_x, combo_y):
+                        zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
+                        diffuse(1.0, 0.0, 0.0, 1.0):
+                        z(90)
+                    ),
+                );
             }
         } else if p.combo >= SHOW_COMBO_AT {
             let quint_active = zmod_combo_quint_active(state, player_idx, profile);
@@ -5903,13 +5950,17 @@ pub fn build(
                 }
             };
             if let Some(font_name) = combo_font_name {
-                hud_actors.push(act!(text:
-                    font(font_name): settext(cached_int_u32(p.combo)):
-                    align(0.5, 0.5): xy(combo_x, combo_y):
-                    zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
-                    diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
-                    z(90)
-                ));
+                push_hud_capture(
+                    &mut hud_actors,
+                    &mut combo_actors,
+                    act!(text:
+                        font(font_name): settext(cached_int_u32(p.combo)):
+                        align(0.5, 0.5): xy(combo_x, combo_y):
+                        zoom(0.75 * judgment_zoom_mod): horizalign(center): shadowlength(1.0):
+                        diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
+                        z(90)
+                    ),
+                );
             }
         }
     }
@@ -6638,17 +6689,25 @@ pub fn build(
                 } else {
                     0.0
                 };
-                hud_actors.push(act!(sprite(judgment_texture):
-                    align(0.5, 0.5): xy(judgment_x, judgment_y):
-                    z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
-                ));
+                push_hud_capture(
+                    &mut hud_actors,
+                    &mut judgment_actors,
+                    act!(sprite(judgment_texture):
+                        align(0.5, 0.5): xy(judgment_x, judgment_y):
+                        z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(linear_index): zoom(zoom)
+                    ),
+                );
                 if let Some(overlay_row) = overlay_row {
                     let overlay_index = (overlay_row * columns + col_index) as u32;
-                    hud_actors.push(act!(sprite(judgment_texture):
-                        align(0.5, 0.5): xy(judgment_x, judgment_y):
-                        z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
-                        diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
-                    ));
+                    push_hud_capture(
+                        &mut hud_actors,
+                        &mut judgment_actors,
+                        act!(sprite(judgment_texture):
+                            align(0.5, 0.5): xy(judgment_x, judgment_y):
+                            z(judgment_z): rotationz(rot_deg): setsize(0.0, 76.0): setstate(overlay_index): zoom(zoom):
+                            diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
+                        ),
+                    );
                 }
             }
         }
@@ -6693,14 +6752,18 @@ pub fn build(
                 .and_then(|ns| ns.column_xs.get(i))
                 .map(|&x| x as f32)
                 .unwrap_or_else(|| ((i as f32) - 1.5) * TARGET_ARROW_PIXEL_SIZE * field_zoom);
-            hud_actors.push(act!(sprite(texture):
-                align(0.5, 0.5):
-                xy(judgment_x + column_offset, hold_judgment_y):
-                z(195):
-                setstate(frame_index):
-                zoom(zoom):
-                diffusealpha(1.0)
-            ));
+            push_hud_capture(
+                &mut hud_actors,
+                &mut judgment_actors,
+                act!(sprite(texture):
+                    align(0.5, 0.5):
+                    xy(judgment_x + column_offset, hold_judgment_y):
+                    z(195):
+                    setstate(frame_index):
+                    zoom(zoom):
+                    diffusealpha(1.0)
+                ),
+            );
         }
     }
 
@@ -6723,13 +6786,43 @@ pub fn build(
         }
     }
 
+    let field_actors = actors.clone();
     if hud_actors.is_empty() {
-        return (actors, layout_center_x);
+        return BuiltNotefield {
+            actors,
+            layout_center_x,
+            field_actors,
+            judgment_actors,
+            combo_actors,
+        };
     }
     let mut out: Vec<Actor> = Vec::with_capacity(hud_actors.len() + actors.len());
     out.extend(hud_actors);
     out.extend(actors);
-    (out, layout_center_x)
+    BuiltNotefield {
+        actors: out,
+        layout_center_x,
+        field_actors,
+        judgment_actors,
+        combo_actors,
+    }
+}
+
+pub fn build(
+    state: &State,
+    profile: &profile::Profile,
+    placement: FieldPlacement,
+    play_style: profile::PlayStyle,
+    center_1player_notefield: bool,
+) -> (Vec<Actor>, f32) {
+    let built = build_bundles(
+        state,
+        profile,
+        placement,
+        play_style,
+        center_1player_notefield,
+    );
+    (built.actors, built.layout_center_x)
 }
 
 #[cfg(test)]
