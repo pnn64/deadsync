@@ -79,7 +79,7 @@ directories = "6.0.0"
 # Song cache
 bincode = "2.0.1"
 twox-hash = "2.1.2"
-tokio = { version = "1.51.0", features = ["rt"] }
+tokio = { version = "1.51.1", features = ["rt"] }
 bitflags = "2.11.0"
 
 # DirectX + Input (Windows)
