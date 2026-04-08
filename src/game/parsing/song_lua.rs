@@ -1428,7 +1428,7 @@ fn read_overlay_actor(
     };
     let on_command = capture_actor_command(lua, actor, "OnCommand")?;
     let initial_state =
-        overlay_state_after_blocks(SongLuaOverlayState::default(), &on_command, 0.0);
+        overlay_state_after_blocks(actor_overlay_initial_state(actor)?, &on_command, 0.0);
     let mut message_commands = Vec::new();
     for pair in actor.clone().pairs::<Value, Value>() {
         let (key, value) = pair.map_err(|err| err.to_string())?;
@@ -1495,6 +1495,24 @@ fn read_overlay_actor(
             message_commands,
         },
     }))
+}
+
+fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
+    let mut state = SongLuaOverlayState::default();
+    if let Some(visible) = actor
+        .get::<Option<bool>>("__songlua_visible")
+        .map_err(|err| err.to_string())?
+    {
+        state.visible = visible;
+    }
+    if let Some(diffuse) = actor
+        .get::<Option<Table>>("__songlua_diffuse")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec4(&value))
+    {
+        state.diffuse = diffuse;
+    }
+    Ok(state)
 }
 
 fn read_proxy_target_kind(actor: &Table) -> Result<Option<SongLuaProxyTarget>, String> {
