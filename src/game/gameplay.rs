@@ -14,8 +14,8 @@ use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, Noteskin, Style};
 use crate::game::parsing::song_lua::{
     SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaMessageEvent, SongLuaModWindow, SongLuaOverlayActor, SongLuaPlayerContext,
-    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
+    SongLuaMessageEvent, SongLuaModWindow, SongLuaOverlayActor, SongLuaOverlayEase,
+    SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
 };
 use crate::game::scores;
 use crate::game::song::SongData;
@@ -2670,6 +2670,19 @@ struct SongLuaEaseMaskWindow {
     opt2: Option<f32>,
 }
 
+#[derive(Clone, Debug)]
+pub struct SongLuaOverlayEaseWindowRuntime {
+    pub overlay_index: usize,
+    pub start_second: f32,
+    pub end_second: f32,
+    pub sustain_end_second: f32,
+    pub from: crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
+    pub to: crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
+    pub easing: Option<String>,
+    pub opt1: Option<f32>,
+    pub opt2: Option<f32>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SongLuaEaseMaskTarget {
     AccelBoost,
@@ -4005,6 +4018,76 @@ fn build_song_lua_ease_windows_for_player(
     (out, unsupported_targets)
 }
 
+fn build_song_lua_overlay_ease_windows(
+    compiled: &crate::game::parsing::song_lua::CompiledSongLua,
+    timing_player: &TimingData,
+    global_offset_seconds: f32,
+) -> Vec<SongLuaOverlayEaseWindowRuntime> {
+    let mut out = Vec::new();
+    for ease in &compiled.overlay_eases {
+        let Some((start_second, end_second)) = song_lua_window_seconds(
+            ease.unit,
+            ease.start,
+            ease.limit,
+            ease.span_mode,
+            timing_player,
+            global_offset_seconds,
+        ) else {
+            continue;
+        };
+        if end_second < start_second {
+            continue;
+        }
+        out.push(SongLuaOverlayEaseWindowRuntime {
+            overlay_index: ease.overlay_index,
+            start_second,
+            end_second,
+            sustain_end_second: SongLuaOverlayEaseWindowRuntime::sustain_end_second(
+                ease,
+                timing_player,
+                global_offset_seconds,
+                end_second,
+            ),
+            from: ease.from,
+            to: ease.to,
+            easing: ease.easing.clone(),
+            opt1: ease.opt1,
+            opt2: ease.opt2,
+        });
+    }
+    out
+}
+
+impl SongLuaOverlayEaseWindowRuntime {
+    fn sustain_end_second(
+        ease: &SongLuaOverlayEase,
+        timing_player: &TimingData,
+        global_offset_seconds: f32,
+        end_second: f32,
+    ) -> f32 {
+        let Some(sustain) = ease.sustain else {
+            return end_second;
+        };
+        let sustain_value = match ease.span_mode {
+            SongLuaSpanMode::Len => {
+                song_lua_end_value(ease.start, ease.limit, ease.span_mode) + sustain
+            }
+            SongLuaSpanMode::End => sustain,
+        };
+        let sustain_end_second = song_lua_time_to_second(
+            ease.unit,
+            sustain_value,
+            timing_player,
+            global_offset_seconds,
+        );
+        if sustain_end_second.is_finite() && sustain_end_second > end_second {
+            sustain_end_second
+        } else {
+            end_second
+        }
+    }
+}
+
 #[inline(always)]
 fn song_lua_difficulty_from_chart(difficulty: &str) -> SongLuaDifficulty {
     if difficulty.eq_ignore_ascii_case("beginner") {
@@ -4046,6 +4129,7 @@ fn build_song_lua_runtime_windows(
     [Vec<AttackMaskWindow>; MAX_PLAYERS],
     [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
     Vec<SongLuaOverlayActor>,
+    Vec<SongLuaOverlayEaseWindowRuntime>,
     Vec<SongLuaMessageEvent>,
 ) {
     let mut constant_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] =
@@ -4053,6 +4137,7 @@ fn build_song_lua_runtime_windows(
     let mut ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     let mut overlays = Vec::new();
+    let mut overlay_eases = Vec::new();
     let mut messages = Vec::new();
 
     let Some(entry) = song
@@ -4060,7 +4145,13 @@ fn build_song_lua_runtime_windows(
         .iter()
         .find(|change| change.start_beat <= 0.0 && change.path.is_file())
     else {
-        return (constant_windows, ease_windows, overlays, messages);
+        return (
+            constant_windows,
+            ease_windows,
+            overlays,
+            overlay_eases,
+            messages,
+        );
     };
 
     if song.foreground_lua_changes.len() > 1 {
@@ -4105,10 +4196,21 @@ fn build_song_lua_runtime_windows(
                 entry.path.display(),
                 err,
             );
-            return (constant_windows, ease_windows, overlays, messages);
+            return (
+                constant_windows,
+                ease_windows,
+                overlays,
+                overlay_eases,
+                messages,
+            );
         }
     };
     overlays = compiled.overlays.clone();
+    overlay_eases = build_song_lua_overlay_ease_windows(
+        &compiled,
+        timing_players[0].as_ref(),
+        global_offset_seconds,
+    );
     messages = compiled.messages.clone();
 
     let mut unsupported_targets = 0usize;
@@ -4136,6 +4238,7 @@ fn build_song_lua_runtime_windows(
     if total_constant > 0
         || total_eases > 0
         || !overlays.is_empty()
+        || !overlay_eases.is_empty()
         || !messages.is_empty()
         || compiled.info.unsupported_perframes > 0
         || compiled.info.unsupported_function_eases > 0
@@ -4143,10 +4246,11 @@ fn build_song_lua_runtime_windows(
         || unsupported_targets > 0
     {
         info!(
-            "Compiled gameplay lua for '{}' (constants={}, eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}).",
+            "Compiled gameplay lua for '{}' (constants={}, eases={}, overlay_eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}).",
             song.title,
             total_constant,
             total_eases,
+            overlay_eases.len(),
             overlays.len(),
             messages.len(),
             unsupported_targets,
@@ -4156,7 +4260,13 @@ fn build_song_lua_runtime_windows(
         );
     }
 
-    (constant_windows, ease_windows, overlays, messages)
+    (
+        constant_windows,
+        ease_windows,
+        overlays,
+        overlay_eases,
+        messages,
+    )
 }
 
 #[inline(always)]
@@ -4223,7 +4333,7 @@ fn song_lua_in_out_bounce(t: f32) -> f32 {
     }
 }
 
-fn song_lua_ease_factor(
+pub(crate) fn song_lua_ease_factor(
     easing: Option<&str>,
     t: f32,
     opt1: Option<f32>,
@@ -6129,6 +6239,7 @@ pub struct State {
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
     pub song_lua_overlays: Vec<SongLuaOverlayActor>,
+    pub song_lua_overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
     pub song_lua_messages: Vec<SongLuaMessageEvent>,
     pub song_lua_player_rotation_z: [f32; MAX_PLAYERS],
     pub song_lua_player_skew_x: [f32; MAX_PLAYERS],
@@ -8840,15 +8951,20 @@ pub fn init(
     let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         timing_players[player].get_beat_for_time(current_music_time_visible[player])
     });
-    let (song_lua_mask_windows, song_lua_ease_windows, song_lua_overlays, song_lua_messages) =
-        build_song_lua_runtime_windows(
-            &song,
-            &charts,
-            &timing_players,
-            num_players,
-            &scroll_speed,
-            config.global_offset_seconds,
-        );
+    let (
+        song_lua_mask_windows,
+        song_lua_ease_windows,
+        song_lua_overlays,
+        song_lua_overlay_eases,
+        song_lua_messages,
+    ) = build_song_lua_runtime_windows(
+        &song,
+        &charts,
+        &timing_players,
+        num_players,
+        &scroll_speed,
+        config.global_offset_seconds,
+    );
     let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return Vec::new();
@@ -9262,6 +9378,7 @@ pub fn init(
         attack_mask_windows,
         song_lua_ease_windows,
         song_lua_overlays,
+        song_lua_overlay_eases,
         song_lua_messages,
         song_lua_player_rotation_z: [0.0; MAX_PLAYERS],
         song_lua_player_skew_x: [0.0; MAX_PLAYERS],
