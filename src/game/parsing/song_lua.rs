@@ -718,6 +718,7 @@ fn make_actor_ctor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Function
         {
             table.set("__songlua_script_dir", script_dir)?;
         }
+        install_actor_methods(lua, &table)?;
         install_actor_metatable(lua, &table)?;
         Ok(table)
     })
@@ -1278,6 +1279,12 @@ fn call_with_script_dir<T>(
 fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table> {
     let actor = lua.create_table()?;
     actor.set("__songlua_actor_type", actor_type)?;
+    install_actor_methods(lua, &actor)?;
+    install_actor_metatable(lua, &actor)?;
+    Ok(actor)
+}
+
+fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "SetTarget",
         lua.create_function({
@@ -1545,8 +1552,7 @@ fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table
         "GetZoom",
         lua.create_function(|_, _self: Table| Ok(1.0_f32))?,
     )?;
-    install_actor_metatable(lua, &actor)?;
-    Ok(actor)
+    Ok(())
 }
 
 fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -2001,6 +2007,40 @@ return Def.ActorFrame{
         assert_eq!(compiled.eases[0].player, Some(2));
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "ShowDDRFail");
+    }
+
+    #[test]
+    fn compile_song_lua_runs_actor_startup_commands_with_stub_methods() {
+        let song_dir = test_dir("startup-command");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+prefix_globals = {}
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        prefix_globals.actions = {
+            {4, "StartupReady", true},
+        }
+    end,
+    Def.Actor{
+        OnCommand=function(self)
+            self:sleep(9e9)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Startup Command Song"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "StartupReady");
     }
 
     #[test]
