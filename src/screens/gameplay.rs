@@ -864,6 +864,59 @@ fn song_lua_overlay_states(state: &State) -> Vec<SongLuaOverlayState> {
     out
 }
 
+fn song_lua_overlay_first_visible_second(
+    state: &State,
+    overlay_index: usize,
+    overlay: &SongLuaOverlayActor,
+) -> Option<f32> {
+    let mut first: Option<f32> = overlay.initial_state.visible.then_some(0.0_f32);
+    for event in &state.song_lua_messages {
+        let Some(command) = overlay
+            .message_commands
+            .iter()
+            .find(|command| command.message.eq_ignore_ascii_case(&event.message))
+        else {
+            continue;
+        };
+        let event_second = state.timing.get_time_for_beat(event.beat);
+        for block in &command.blocks {
+            if block.delta.visible == Some(true) {
+                let candidate = event_second + block.start.max(0.0);
+                first = Some(first.map_or(candidate, |current| current.min(candidate)));
+                break;
+            }
+        }
+    }
+    for ease in &state.song_lua_overlay_eases {
+        if ease.overlay_index != overlay_index {
+            continue;
+        }
+        if ease.from.visible == Some(true) || ease.to.visible == Some(true) {
+            first = Some(first.map_or(ease.start_second, |current| current.min(ease.start_second)));
+        }
+    }
+    first
+}
+
+fn song_lua_proxy_active_players(state: &State) -> [bool; 2] {
+    let mut out = [false; 2];
+    let now = state.current_music_time_display;
+    for (overlay_index, overlay) in state.song_lua_overlays.iter().enumerate() {
+        let SongLuaOverlayKind::ActorProxy { player_index } = &overlay.kind else {
+            continue;
+        };
+        if *player_index >= out.len() {
+            continue;
+        }
+        if song_lua_overlay_first_visible_second(state, overlay_index, overlay)
+            .is_some_and(|first_second| now + f32::EPSILON >= first_second)
+        {
+            out[*player_index] = true;
+        }
+    }
+    out
+}
+
 fn song_lua_overlay_apply_blocks(
     state: SongLuaOverlayState,
     blocks: &[SongLuaOverlayCommandBlock],
@@ -962,6 +1015,7 @@ fn build_song_lua_overlay_actor(
     state: SongLuaOverlayState,
     asset_manager: &AssetManager,
     z: i16,
+    proxy_source: Option<&[Actor]>,
 ) -> Option<Actor> {
     if !state.visible || state.diffuse[3] <= f32::EPSILON {
         return None;
@@ -970,6 +1024,17 @@ fn build_song_lua_overlay_actor(
     let y_scale = song_lua_overlay_y_scale();
     match &overlay.kind {
         SongLuaOverlayKind::ActorFrame => None,
+        SongLuaOverlayKind::ActorProxy { .. } => {
+            let source = proxy_source?;
+            Some(Actor::Frame {
+                align: [0.0, 0.0],
+                offset: [state.x * x_scale, state.y * y_scale],
+                size: [SizeSpec::Fill, SizeSpec::Fill],
+                children: source.to_vec(),
+                background: None,
+                z: 0,
+            })
+        }
         SongLuaOverlayKind::Sprite { texture_path } => {
             let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
             if !asset_manager.has_texture_key(key.as_ref()) {
@@ -1364,6 +1429,9 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
 
+    let overlay_states = song_lua_overlay_states(state);
+    let proxy_active_players = song_lua_proxy_active_players(state);
+
     let notefield_width = |player_idx: usize| -> f32 {
         let Some(ns) = state.noteskin[player_idx].as_ref() else {
             return 256.0;
@@ -1462,6 +1530,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             )
         }
     };
+    let player_proxy_sources = [Some(p1_actors.clone()), p2_actors.clone()];
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
     {
@@ -1536,9 +1605,13 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 
     actors.reserve(p1_actors.len() + p2_actors.as_ref().map_or(0, Vec::len) + 48);
     if let Some(p2_actors) = p2_actors {
-        actors.extend(p2_actors);
+        if !proxy_active_players[1] {
+            actors.extend(p2_actors);
+        }
     }
-    actors.extend(p1_actors);
+    if !proxy_active_players[0] {
+        actors.extend(p1_actors);
+    }
     let clamped_width = screen_width().clamp(640.0, 854.0);
     let score_x_p1 = screen_center_x() - clamped_width / 4.3;
     let score_x_p2 = screen_center_x() + clamped_width / 2.75;
@@ -2338,15 +2411,24 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             ));
         }
     }
-    let overlay_states = song_lua_overlay_states(state);
     for (idx, overlay) in state.song_lua_overlays.iter().enumerate() {
         let overlay_state = overlay_states
             .get(idx)
             .copied()
             .unwrap_or_else(|| song_lua_overlay_render_state(state, idx, overlay));
-        if let Some(actor) =
-            build_song_lua_overlay_actor(overlay, overlay_state, asset_manager, 1100 + idx as i16)
-        {
+        let proxy_source = match &overlay.kind {
+            SongLuaOverlayKind::ActorProxy { player_index } => player_proxy_sources
+                .get(*player_index)
+                .and_then(|actors| actors.as_deref()),
+            _ => None,
+        };
+        if let Some(actor) = build_song_lua_overlay_actor(
+            overlay,
+            overlay_state,
+            asset_manager,
+            1100 + idx as i16,
+            proxy_source,
+        ) {
             actors.push(actor);
         }
     }

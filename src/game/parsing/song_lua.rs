@@ -189,6 +189,7 @@ pub struct SongLuaMessageEvent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SongLuaOverlayKind {
     ActorFrame,
+    ActorProxy { player_index: usize },
     Sprite { texture_path: PathBuf },
     Quad,
 }
@@ -599,7 +600,10 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("GAMESTATE", gamestate)?;
 
     let screenman = lua.create_table()?;
-    let top_screen = create_dummy_actor(lua, "TopScreen")?;
+    let top_screen = create_top_screen_table(
+        lua,
+        [context.players[0].enabled, context.players[1].enabled],
+    )?;
     screenman.set(
         "GetTopScreen",
         lua.create_function(move |_, _self: Table| Ok(top_screen.clone()))?,
@@ -622,6 +626,48 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
 struct PlayerLuaTables {
     player_states: [Table; LUA_PLAYERS],
     steps: [Table; LUA_PLAYERS],
+}
+
+fn create_top_screen_table(lua: &Lua, player_enabled: [bool; LUA_PLAYERS]) -> mlua::Result<Table> {
+    let top_screen = create_dummy_actor(lua, "TopScreen")?;
+    let player_actors = [
+        create_top_screen_player_actor(lua, 0)?,
+        create_top_screen_player_actor(lua, 1)?,
+    ];
+    top_screen.set(
+        "GetChild",
+        lua.create_function(move |lua, (_self, name): (Table, String)| {
+            if let Some(player_index) = top_screen_player_index(&name) {
+                return if player_enabled[player_index] {
+                    Ok(Value::Table(player_actors[player_index].clone()))
+                } else {
+                    Ok(Value::Nil)
+                };
+            }
+            Ok(Value::Table(create_dummy_actor(lua, "TopScreenChild")?))
+        })?,
+    )?;
+    Ok(top_screen)
+}
+
+fn create_top_screen_player_actor(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
+    let actor = create_dummy_actor(lua, "PlayerActor")?;
+    actor.set("__songlua_player_index", player_index as i64)?;
+    actor.set(
+        "GetChild",
+        lua.create_function(move |lua, (_self, _name): (Table, String)| {
+            create_dummy_actor(lua, "PlayerChild")
+        })?,
+    )?;
+    Ok(actor)
+}
+
+fn top_screen_player_index(name: &str) -> Option<usize> {
+    match name {
+        "PlayerP1" => Some(0),
+        "PlayerP2" => Some(1),
+        _ => None,
+    }
 }
 
 fn create_player_tables(
@@ -1048,6 +1094,15 @@ fn read_overlay_actor(
             return Ok(None);
         }
         SongLuaOverlayKind::ActorFrame
+    } else if actor_type.eq_ignore_ascii_case("ActorProxy") {
+        let Some(player_index) = actor
+            .get::<Option<i64>>("__songlua_proxy_player_index")
+            .map_err(|err| err.to_string())?
+            .and_then(|value| usize::try_from(value).ok())
+        else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::ActorProxy { player_index }
     } else if actor_type.eq_ignore_ascii_case("Sprite") {
         let Some(texture_path) = actor
             .get::<Option<String>>("Texture")
@@ -1542,7 +1597,15 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "SetTarget",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| Ok(actor.clone())
+            move |_, args: MultiValue| {
+                if let Some(Value::Table(target)) = args.get(1)
+                    && let Some(player_index) =
+                        target.get::<Option<i64>>("__songlua_player_index")?
+                {
+                    actor.set("__songlua_proxy_player_index", player_index)?;
+                }
+                Ok(actor.clone())
+            }
         })?,
     )?;
     actor.set(
@@ -2976,6 +3039,64 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays[1].parent_index, Some(0));
         assert_eq!(compiled.overlays[1].initial_state.x, 10.0);
         assert_eq!(compiled.overlays[1].initial_state.y, 20.0);
+    }
+
+    #[test]
+    fn compile_song_lua_extracts_actorproxy_targets() {
+        let song_dir = test_dir("overlay-proxy");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local proxy = nil
+
+mod_actions = {
+    {8, function()
+        if proxy then
+            proxy:visible(true)
+        end
+    end, true},
+}
+
+return Def.ActorFrame{
+    Def.ActorProxy{
+        Name="p1_proxy",
+        OnCommand=function(self)
+            proxy = self
+            self:queuecommand("Bind")
+        end,
+        BindCommand=function(self)
+            local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+            if p then
+                self:SetTarget(p)
+            end
+            self:visible(false)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Proxy"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.overlays.len(), 1);
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::ActorProxy { player_index: 0 }
+        ));
+        assert!(!compiled.overlays[0].initial_state.visible);
+        assert_eq!(compiled.overlays[0].message_commands.len(), 1);
+        assert_eq!(
+            compiled.overlays[0].message_commands[0].blocks[0]
+                .delta
+                .visible,
+            Some(true)
+        );
     }
 
     #[test]
