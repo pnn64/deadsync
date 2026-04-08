@@ -14,8 +14,8 @@ use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, Noteskin, Style};
 use crate::game::parsing::song_lua::{
     SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaModWindow, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
-    compile_song_lua,
+    SongLuaMessageEvent, SongLuaModWindow, SongLuaOverlayActor, SongLuaPlayerContext,
+    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
 };
 use crate::game::scores;
 use crate::game::song::SongData;
@@ -4019,18 +4019,22 @@ fn build_song_lua_runtime_windows(
 ) -> (
     [Vec<AttackMaskWindow>; MAX_PLAYERS],
     [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
+    Vec<SongLuaOverlayActor>,
+    Vec<SongLuaMessageEvent>,
 ) {
     let mut constant_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     let mut ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
+    let mut overlays = Vec::new();
+    let mut messages = Vec::new();
 
     let Some(entry) = song
         .foreground_lua_changes
         .iter()
         .find(|change| change.start_beat <= 0.0 && change.path.is_file())
     else {
-        return (constant_windows, ease_windows);
+        return (constant_windows, ease_windows, overlays, messages);
     };
 
     if song.foreground_lua_changes.len() > 1 {
@@ -4075,9 +4079,11 @@ fn build_song_lua_runtime_windows(
                 entry.path.display(),
                 err,
             );
-            return (constant_windows, ease_windows);
+            return (constant_windows, ease_windows, overlays, messages);
         }
     };
+    overlays = compiled.overlays.clone();
+    messages = compiled.messages.clone();
 
     let mut unsupported_targets = 0usize;
     let mut total_constant = 0usize;
@@ -4103,16 +4109,20 @@ fn build_song_lua_runtime_windows(
 
     if total_constant > 0
         || total_eases > 0
+        || !overlays.is_empty()
+        || !messages.is_empty()
         || compiled.info.unsupported_perframes > 0
         || compiled.info.unsupported_function_eases > 0
         || compiled.info.unsupported_function_actions > 0
         || unsupported_targets > 0
     {
         info!(
-            "Compiled gameplay lua for '{}' (constants={}, eases={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}).",
+            "Compiled gameplay lua for '{}' (constants={}, eases={}, overlays={}, messages={}, unsupported_targets={}, function_eases={}, function_actions={}, perframes={}).",
             song.title,
             total_constant,
             total_eases,
+            overlays.len(),
+            messages.len(),
             unsupported_targets,
             compiled.info.unsupported_function_eases,
             compiled.info.unsupported_function_actions,
@@ -4120,7 +4130,7 @@ fn build_song_lua_runtime_windows(
         );
     }
 
-    (constant_windows, ease_windows)
+    (constant_windows, ease_windows, overlays, messages)
 }
 
 #[inline(always)]
@@ -6088,6 +6098,8 @@ pub struct State {
     pub scorebox_side_snapshot: [Option<scores::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
+    pub song_lua_overlays: Vec<SongLuaOverlayActor>,
+    pub song_lua_messages: Vec<SongLuaMessageEvent>,
     active_attack_clear_all: [bool; MAX_PLAYERS],
     active_attack_chart: [ChartAttackEffects; MAX_PLAYERS],
     active_attack_accel: [AccelOverrides; MAX_PLAYERS],
@@ -8788,14 +8800,15 @@ pub fn init(
     let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         timing_players[player].get_beat_for_time(current_music_time_visible[player])
     });
-    let (song_lua_mask_windows, song_lua_ease_windows) = build_song_lua_runtime_windows(
-        &song,
-        &charts,
-        &timing_players,
-        num_players,
-        &scroll_speed,
-        config.global_offset_seconds,
-    );
+    let (song_lua_mask_windows, song_lua_ease_windows, song_lua_overlays, song_lua_messages) =
+        build_song_lua_runtime_windows(
+            &song,
+            &charts,
+            &timing_players,
+            num_players,
+            &scroll_speed,
+            config.global_offset_seconds,
+        );
     let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return Vec::new();
@@ -9208,6 +9221,8 @@ pub fn init(
         scorebox_side_snapshot,
         attack_mask_windows,
         song_lua_ease_windows,
+        song_lua_overlays,
+        song_lua_messages,
         active_attack_clear_all: [false; MAX_PLAYERS],
         active_attack_chart: [ChartAttackEffects::default(); MAX_PLAYERS],
         active_attack_accel: [AccelOverrides::default(); MAX_PLAYERS],

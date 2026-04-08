@@ -1475,6 +1475,17 @@ fn prewarm_gameplay_assets(
             media_cache::ensure_banner_texture(assets, backend, path);
         }
     }
+    for overlay in &state.song_lua_overlays {
+        let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } =
+            &overlay.kind
+        else {
+            continue;
+        };
+        let key = texture_path.to_string_lossy().into_owned();
+        if seen.insert(key) {
+            media_cache::ensure_banner_texture(assets, backend, texture_path);
+        }
+    }
     crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
     crate::engine::audio::preload_sfx("assets/sounds/assist_tick.ogg");
 }

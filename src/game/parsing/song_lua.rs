@@ -184,6 +184,75 @@ pub struct SongLuaMessageEvent {
     pub persists: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SongLuaOverlayKind {
+    Sprite { texture_path: PathBuf },
+    Quad,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongLuaOverlayState {
+    pub x: f32,
+    pub y: f32,
+    pub diffuse: [f32; 4],
+    pub visible: bool,
+    pub cropleft: f32,
+    pub cropright: f32,
+    pub zoom: f32,
+    pub basezoom: f32,
+    pub stretch_rect: Option<[f32; 4]>,
+}
+
+impl Default for SongLuaOverlayState {
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            diffuse: [1.0, 1.0, 1.0, 1.0],
+            visible: true,
+            cropleft: 0.0,
+            cropright: 0.0,
+            zoom: 1.0,
+            basezoom: 1.0,
+            stretch_rect: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct SongLuaOverlayStateDelta {
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub diffuse: Option<[f32; 4]>,
+    pub visible: Option<bool>,
+    pub cropleft: Option<f32>,
+    pub cropright: Option<f32>,
+    pub zoom: Option<f32>,
+    pub basezoom: Option<f32>,
+    pub stretch_rect: Option<[f32; 4]>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaOverlayCommandBlock {
+    pub start: f32,
+    pub duration: f32,
+    pub delta: SongLuaOverlayStateDelta,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaOverlayMessageCommand {
+    pub message: String,
+    pub blocks: Vec<SongLuaOverlayCommandBlock>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaOverlayActor {
+    pub kind: SongLuaOverlayKind,
+    pub name: Option<String>,
+    pub initial_state: SongLuaOverlayState,
+    pub message_commands: Vec<SongLuaOverlayMessageCommand>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SongLuaCompileInfo {
     pub unsupported_perframes: usize,
@@ -198,6 +267,7 @@ pub struct CompiledSongLua {
     pub time_mods: Vec<SongLuaModWindow>,
     pub eases: Vec<SongLuaEaseWindow>,
     pub messages: Vec<SongLuaMessageEvent>,
+    pub overlays: Vec<SongLuaOverlayActor>,
     pub info: SongLuaCompileInfo,
 }
 
@@ -229,6 +299,7 @@ pub fn compile_song_lua(
         entry_path,
         ..CompiledSongLua::default()
     };
+    out.overlays = read_overlay_actors(&lua, &root)?;
 
     if let Some(prefix_globals) = globals
         .get::<Option<Table>>("prefix_globals")
@@ -727,6 +798,10 @@ fn run_actor_init_command(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let Some(command) = actor.get::<Option<Function>>("InitCommand")? else {
         return Ok(());
     };
+    call_actor_function(lua, actor, &command)
+}
+
+fn call_actor_function(lua: &Lua, actor: &Table, command: &Function) -> mlua::Result<()> {
     if let Some(script_dir) = actor
         .get::<Option<String>>("__songlua_script_dir")?
         .filter(|dir| !dir.trim().is_empty())
@@ -736,6 +811,384 @@ fn run_actor_init_command(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         });
     }
     command.call::<()>(actor.clone())
+}
+
+fn read_overlay_actors(lua: &Lua, root: &Value) -> Result<Vec<SongLuaOverlayActor>, String> {
+    let Value::Table(root) = root else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    read_overlay_actors_from_table(lua, root, &mut out)?;
+    Ok(out)
+}
+
+fn read_overlay_actors_from_table(
+    lua: &Lua,
+    actor: &Table,
+    out: &mut Vec<SongLuaOverlayActor>,
+) -> Result<(), String> {
+    if let Some(overlay) = read_overlay_actor(lua, actor)? {
+        out.push(overlay);
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        read_overlay_actors_from_table(lua, &child, out)?;
+    }
+    Ok(())
+}
+
+fn read_overlay_actor(lua: &Lua, actor: &Table) -> Result<Option<SongLuaOverlayActor>, String> {
+    let Some(actor_type) = actor
+        .get::<Option<String>>("__songlua_actor_type")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let kind = if actor_type.eq_ignore_ascii_case("Sprite") {
+        let Some(texture_path) = actor
+            .get::<Option<String>>("Texture")
+            .map_err(|err| err.to_string())?
+            .and_then(|texture| resolve_actor_asset_path(actor, &texture).ok())
+        else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::Sprite { texture_path }
+    } else if actor_type.eq_ignore_ascii_case("Quad") {
+        SongLuaOverlayKind::Quad
+    } else {
+        return Ok(None);
+    };
+    let on_command = capture_actor_command(lua, actor, "OnCommand")?;
+    let initial_state =
+        overlay_state_after_blocks(SongLuaOverlayState::default(), &on_command, 0.0);
+    let mut message_commands = Vec::new();
+    for pair in actor.clone().pairs::<Value, Value>() {
+        let (key, value) = pair.map_err(|err| err.to_string())?;
+        let Some(name) = read_string(key) else {
+            continue;
+        };
+        if !name.ends_with("MessageCommand") || !matches!(value, Value::Function(_)) {
+            continue;
+        }
+        let message = name.trim_end_matches("MessageCommand").to_string();
+        let blocks = capture_actor_command(lua, actor, name.as_str())?;
+        if !blocks.is_empty() {
+            message_commands.push(SongLuaOverlayMessageCommand { message, blocks });
+        }
+    }
+    let name = actor
+        .get::<Option<String>>("Name")
+        .map_err(|err| err.to_string())?;
+    Ok(Some(SongLuaOverlayActor {
+        kind,
+        name,
+        initial_state,
+        message_commands,
+    }))
+}
+
+fn resolve_actor_asset_path(actor: &Table, raw: &str) -> Result<PathBuf, String> {
+    let raw_path = Path::new(raw.trim());
+    if raw_path.is_absolute() && raw_path.is_file() {
+        return Ok(raw_path.to_path_buf());
+    }
+    if let Some(script_dir) = actor
+        .get::<Option<String>>("__songlua_script_dir")
+        .map_err(|err| err.to_string())?
+        .filter(|dir| !dir.trim().is_empty())
+    {
+        let candidate = Path::new(&script_dir).join(raw);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err(format!("actor asset '{}' could not be resolved", raw))
+}
+
+fn capture_actor_command(
+    lua: &Lua,
+    actor: &Table,
+    command_name: &str,
+) -> Result<Vec<SongLuaOverlayCommandBlock>, String> {
+    let Some(command) = actor
+        .get::<Option<Function>>(command_name)
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    reset_actor_capture(lua, actor).map_err(|err| err.to_string())?;
+    call_actor_function(lua, actor, &command).map_err(|err| err.to_string())?;
+    flush_actor_capture(actor).map_err(|err| err.to_string())?;
+    read_actor_capture_blocks(actor)
+}
+
+fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    actor.set("__songlua_capture_cursor", 0.0_f32)?;
+    actor.set("__songlua_capture_duration", 0.0_f32)?;
+    actor.set("__songlua_capture_blocks", lua.create_table()?)?;
+    actor.set("__songlua_capture_block", Value::Nil)?;
+    Ok(())
+}
+
+fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    if let Some(block) = actor.get::<Option<Table>>("__songlua_capture_block")? {
+        return Ok(block);
+    }
+    let block = lua.create_table()?;
+    let start = actor
+        .get::<Option<f32>>("__songlua_capture_cursor")?
+        .unwrap_or(0.0);
+    let duration = actor
+        .get::<Option<f32>>("__songlua_capture_duration")?
+        .unwrap_or(0.0)
+        .max(0.0);
+    block.set("start", start)?;
+    block.set("duration", duration)?;
+    block.set("__songlua_has_changes", false)?;
+    actor.set("__songlua_capture_block", block.clone())?;
+    Ok(block)
+}
+
+fn flush_actor_capture(actor: &Table) -> mlua::Result<()> {
+    let Some(block) = actor.get::<Option<Table>>("__songlua_capture_block")? else {
+        return Ok(());
+    };
+    let duration = block
+        .get::<Option<f32>>("duration")?
+        .unwrap_or(0.0)
+        .max(0.0);
+    let cursor = block.get::<Option<f32>>("start")?.unwrap_or(0.0);
+    if block
+        .get::<Option<bool>>("__songlua_has_changes")?
+        .unwrap_or(false)
+    {
+        let blocks: Table = actor.get("__songlua_capture_blocks")?;
+        let index = blocks.raw_len() + 1;
+        blocks.raw_set(index, block.clone())?;
+    }
+    actor.set("__songlua_capture_cursor", cursor + duration)?;
+    actor.set("__songlua_capture_duration", 0.0_f32)?;
+    actor.set("__songlua_capture_block", Value::Nil)?;
+    Ok(())
+}
+
+fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    block.set(key, value)?;
+    block.set("__songlua_has_changes", true)?;
+    Ok(())
+}
+
+fn capture_block_set_bool(lua: &Lua, actor: &Table, key: &str, value: bool) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    block.set(key, value)?;
+    block.set("__songlua_has_changes", true)?;
+    Ok(())
+}
+
+fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    let value = lua.create_table()?;
+    value.raw_set(1, color[0])?;
+    value.raw_set(2, color[1])?;
+    value.raw_set(3, color[2])?;
+    value.raw_set(4, color[3])?;
+    block.set("diffuse", value)?;
+    block.set("__songlua_has_changes", true)?;
+    Ok(())
+}
+
+fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    let value = lua.create_table()?;
+    value.raw_set(1, rect[0])?;
+    value.raw_set(2, rect[1])?;
+    value.raw_set(3, rect[2])?;
+    value.raw_set(4, rect[3])?;
+    block.set("stretch_rect", value)?;
+    block.set("__songlua_has_changes", true)?;
+    Ok(())
+}
+
+fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandBlock>, String> {
+    let Some(blocks) = actor
+        .get::<Option<Table>>("__songlua_capture_blocks")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for value in blocks.sequence_values::<Value>() {
+        let Value::Table(block) = value.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        let start = block
+            .get::<Option<f32>>("start")
+            .map_err(|err| err.to_string())?
+            .unwrap_or(0.0);
+        let duration = block
+            .get::<Option<f32>>("duration")
+            .map_err(|err| err.to_string())?
+            .unwrap_or(0.0)
+            .max(0.0);
+        out.push(SongLuaOverlayCommandBlock {
+            start,
+            duration,
+            delta: SongLuaOverlayStateDelta {
+                x: block
+                    .get::<Option<f32>>("x")
+                    .map_err(|err| err.to_string())?,
+                y: block
+                    .get::<Option<f32>>("y")
+                    .map_err(|err| err.to_string())?,
+                diffuse: block
+                    .get::<Option<Table>>("diffuse")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec4(&value)),
+                visible: block
+                    .get::<Option<bool>>("visible")
+                    .map_err(|err| err.to_string())?,
+                cropleft: block
+                    .get::<Option<f32>>("cropleft")
+                    .map_err(|err| err.to_string())?,
+                cropright: block
+                    .get::<Option<f32>>("cropright")
+                    .map_err(|err| err.to_string())?,
+                zoom: block
+                    .get::<Option<f32>>("zoom")
+                    .map_err(|err| err.to_string())?,
+                basezoom: block
+                    .get::<Option<f32>>("basezoom")
+                    .map_err(|err| err.to_string())?,
+                stretch_rect: block
+                    .get::<Option<Table>>("stretch_rect")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec4(&value)),
+            },
+        });
+    }
+    Ok(out)
+}
+
+fn table_vec4(table: &Table) -> Option<[f32; 4]> {
+    Some([
+        table.raw_get::<f32>(1).ok()?,
+        table.raw_get::<f32>(2).ok()?,
+        table.raw_get::<f32>(3).ok()?,
+        table.raw_get::<f32>(4).ok()?,
+    ])
+}
+
+fn overlay_state_after_blocks(
+    mut state: SongLuaOverlayState,
+    blocks: &[SongLuaOverlayCommandBlock],
+    elapsed: f32,
+) -> SongLuaOverlayState {
+    if !elapsed.is_finite() {
+        return state;
+    }
+    for block in blocks {
+        if elapsed < block.start {
+            break;
+        }
+        if block.duration <= f32::EPSILON || elapsed >= block.start + block.duration {
+            apply_overlay_delta(&mut state, &block.delta);
+            continue;
+        }
+        let target = overlay_state_with_delta(state, &block.delta);
+        return overlay_state_lerp(
+            state,
+            target,
+            ((elapsed - block.start) / block.duration).clamp(0.0, 1.0),
+            &block.delta,
+        );
+    }
+    state
+}
+
+fn overlay_state_with_delta(
+    mut state: SongLuaOverlayState,
+    delta: &SongLuaOverlayStateDelta,
+) -> SongLuaOverlayState {
+    apply_overlay_delta(&mut state, delta);
+    state
+}
+
+fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlayStateDelta) {
+    if let Some(value) = delta.x {
+        state.x = value;
+    }
+    if let Some(value) = delta.y {
+        state.y = value;
+    }
+    if let Some(value) = delta.diffuse {
+        state.diffuse = value;
+    }
+    if let Some(value) = delta.visible {
+        state.visible = value;
+    }
+    if let Some(value) = delta.cropleft {
+        state.cropleft = value;
+    }
+    if let Some(value) = delta.cropright {
+        state.cropright = value;
+    }
+    if let Some(value) = delta.zoom {
+        state.zoom = value;
+    }
+    if let Some(value) = delta.basezoom {
+        state.basezoom = value;
+    }
+    if let Some(value) = delta.stretch_rect {
+        state.stretch_rect = Some(value);
+    }
+}
+
+fn overlay_state_lerp(
+    mut from: SongLuaOverlayState,
+    to: SongLuaOverlayState,
+    t: f32,
+    delta: &SongLuaOverlayStateDelta,
+) -> SongLuaOverlayState {
+    if delta.x.is_some() {
+        from.x = (to.x - from.x).mul_add(t, from.x);
+    }
+    if delta.y.is_some() {
+        from.y = (to.y - from.y).mul_add(t, from.y);
+    }
+    if delta.diffuse.is_some() {
+        for i in 0..4 {
+            from.diffuse[i] = (to.diffuse[i] - from.diffuse[i]).mul_add(t, from.diffuse[i]);
+        }
+    }
+    if delta.cropleft.is_some() {
+        from.cropleft = (to.cropleft - from.cropleft).mul_add(t, from.cropleft);
+    }
+    if delta.cropright.is_some() {
+        from.cropright = (to.cropright - from.cropright).mul_add(t, from.cropright);
+    }
+    if delta.zoom.is_some() {
+        from.zoom = (to.zoom - from.zoom).mul_add(t, from.zoom);
+    }
+    if delta.basezoom.is_some() {
+        from.basezoom = (to.basezoom - from.basezoom).mul_add(t, from.basezoom);
+    }
+    if delta.stretch_rect.is_some()
+        && let (Some(from_rect), Some(to_rect)) = (from.stretch_rect, to.stretch_rect)
+    {
+        from.stretch_rect = Some([
+            (to_rect[0] - from_rect[0]).mul_add(t, from_rect[0]),
+            (to_rect[1] - from_rect[1]).mul_add(t, from_rect[1]),
+            (to_rect[2] - from_rect[2]).mul_add(t, from_rect[2]),
+            (to_rect[3] - from_rect[3]).mul_add(t, from_rect[3]),
+        ]);
+    }
+    if delta.visible.is_some() && t >= 1.0 - f32::EPSILON {
+        from.visible = to.visible;
+    }
+    from
 }
 
 fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
@@ -783,36 +1236,236 @@ fn call_with_script_dir<T>(
 fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table> {
     let actor = lua.create_table()?;
     actor.set("__songlua_actor_type", actor_type)?;
-    let self_clone = actor.clone();
-    for name in [
+    actor.set(
         "SetTarget",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| Ok(actor.clone())
+        })?,
+    )?;
+    actor.set(
         "visible",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).map(truthy) {
+                    capture_block_set_bool(lua, &actor, "visible", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "sleep",
-        "queuecommand",
-        "playcommand",
-        "x",
-        "y",
-        "xy",
-        "stretchto",
-        "cropright",
-        "cropleft",
-        "diffusealpha",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                flush_actor_capture(&actor)?;
+                let duration = args
+                    .get(1)
+                    .cloned()
+                    .and_then(read_f32)
+                    .unwrap_or(0.0)
+                    .max(0.0);
+                let cursor = actor
+                    .get::<Option<f32>>("__songlua_capture_cursor")?
+                    .unwrap_or(0.0);
+                actor.set("__songlua_capture_cursor", cursor + duration)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "linear",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                flush_actor_capture(&actor)?;
+                actor.set(
+                    "__songlua_capture_duration",
+                    args.get(1)
+                        .cloned()
+                        .and_then(read_f32)
+                        .unwrap_or(0.0)
+                        .max(0.0),
+                )?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "queuecommand",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(name) = args.get(1).cloned().and_then(read_string) else {
+                    return Ok(actor.clone());
+                };
+                if let Some(command) = actor.get::<Option<Function>>(format!("{name}Command"))? {
+                    call_actor_function(lua, &actor, &command)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "playcommand",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(name) = args.get(1).cloned().and_then(read_string) else {
+                    return Ok(actor.clone());
+                };
+                if let Some(command) = actor.get::<Option<Function>>(format!("{name}Command"))? {
+                    call_actor_function(lua, &actor, &command)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "x",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "x", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "y",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "y", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "xy",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(x) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "x", x)?;
+                }
+                if let Some(y) = args.get(2).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "y", y)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "stretchto",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let rect = [
+                    args.get(1).cloned().and_then(read_f32).unwrap_or(0.0),
+                    args.get(2).cloned().and_then(read_f32).unwrap_or(0.0),
+                    args.get(3).cloned().and_then(read_f32).unwrap_or(0.0),
+                    args.get(4).cloned().and_then(read_f32).unwrap_or(0.0),
+                ];
+                capture_block_set_stretch(lua, &actor, rect)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "cropright",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "cropright", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "cropleft",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "cropleft", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "diffusealpha",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(alpha) = args.get(1).cloned().and_then(read_f32) {
+                    let block = actor_current_capture_block(lua, &actor)?;
+                    let mut diffuse = block
+                        .get::<Option<Table>>("diffuse")?
+                        .and_then(|value| table_vec4(&value))
+                        .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+                    diffuse[3] = alpha;
+                    capture_block_set_color(lua, &actor, diffuse)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "basezoom",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "basezoom", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "zoom",
-        "rotationz",
-        "skewx",
-        "SetUpdateFunction",
-        "addy",
-        "zoomz",
-        "diffuse",
-    ] {
-        let method_self = self_clone.clone();
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "zoom", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    for name in ["rotationz", "skewx", "SetUpdateFunction", "addy", "zoomz"] {
         actor.set(
             name,
-            lua.create_function(move |_, _args: MultiValue| Ok(method_self.clone()))?,
+            lua.create_function({
+                let actor = actor.clone();
+                move |_, _args: MultiValue| Ok(actor.clone())
+            })?,
         )?;
     }
+    actor.set(
+        "diffuse",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(color) = read_color_args(&args) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_color(lua, &actor, color)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
     let child = actor.clone();
     actor.set(
         "GetChild",
@@ -859,6 +1512,18 @@ fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     let _ = actor.set_metatable(Some(mt));
     Ok(())
+}
+
+fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {
+    if args.len() < 5 {
+        return None;
+    }
+    Some([
+        args.get(1).cloned().and_then(read_f32)?,
+        args.get(2).cloned().and_then(read_f32)?,
+        args.get(3).cloned().and_then(read_f32)?,
+        args.get(4).cloned().and_then(read_f32)?,
+    ])
 }
 
 fn entry_file_path(path: &Path) -> Option<PathBuf> {
@@ -1139,8 +1804,8 @@ fn message_event_cmp(
 #[cfg(test)]
 mod tests {
     use super::{
-        SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaPlayerContext,
-        SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
+        SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayKind,
+        SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -1244,6 +1909,71 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_extracts_overlay_message_tweens() {
+        let song_dir = test_dir("overlay");
+        let entry = song_dir.join("default.lua");
+        let overlay_dir = song_dir.join("gfx");
+        fs::create_dir_all(&overlay_dir).unwrap();
+        fs::write(
+            overlay_dir.join("door.png"),
+            b"not-an-image-but-good-enough-for-parser",
+        )
+        .unwrap();
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Name="door",
+        Texture="gfx/door.png",
+        OnCommand=function(self)
+            self:diffusealpha(0)
+            self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y)
+            self:stretchto(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+            self:cropright(0.5)
+        end,
+        SlideDoorMessageCommand=function(self)
+            self:x(0)
+            self:diffusealpha(1)
+            self:linear(0.3)
+            self:x(SCREEN_CENTER_X)
+        end,
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Overlay")).unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        let overlay = &compiled.overlays[0];
+        assert!(matches!(
+            overlay.kind,
+            SongLuaOverlayKind::Sprite { ref texture_path }
+                if texture_path.ends_with("gfx/door.png")
+        ));
+        assert_eq!(overlay.initial_state.diffuse[3], 0.0);
+        assert_eq!(overlay.initial_state.x, 320.0);
+        assert_eq!(overlay.initial_state.y, 240.0);
+        assert_eq!(overlay.initial_state.cropright, 0.5);
+        assert_eq!(
+            overlay.initial_state.stretch_rect,
+            Some([0.0, 0.0, 640.0, 480.0])
+        );
+        assert_eq!(overlay.message_commands.len(), 1);
+        assert_eq!(overlay.message_commands[0].message, "SlideDoor");
+        assert_eq!(overlay.message_commands[0].blocks.len(), 2);
+        assert_eq!(overlay.message_commands[0].blocks[0].delta.x, Some(0.0));
+        assert_eq!(
+            overlay.message_commands[0].blocks[0].delta.diffuse.unwrap()[3],
+            1.0
+        );
+        assert_eq!(overlay.message_commands[0].blocks[1].duration, 0.3);
+        assert_eq!(overlay.message_commands[0].blocks[1].delta.x, Some(320.0));
+    }
+
+    #[test]
     fn compile_song_lua_supports_spooky_sample_if_present() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../lua-songs/[07] Spooky (SM) [Scrypts]");
@@ -1269,6 +1999,7 @@ return Def.ActorFrame{
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert!(!compiled.beat_mods.is_empty());
         assert_eq!(compiled.messages.len(), 2);
+        assert_eq!(compiled.overlays.len(), 3);
         assert!(compiled.eases.len() >= 40);
         assert!(compiled.info.unsupported_function_eases >= 2);
     }
