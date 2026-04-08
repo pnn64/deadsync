@@ -224,9 +224,16 @@ pub fn compile_song_lua(
         ..CompiledSongLua::default()
     };
 
-    if let Some(prefix_globals) = globals.get::<Option<Table>>("prefix_globals").map_err(|err| err.to_string())? {
-        out.beat_mods
-            .extend(read_mod_windows(prefix_globals.get::<Option<Table>>("mods").map_err(|err| err.to_string())?, SongLuaTimeUnit::Beat)?);
+    if let Some(prefix_globals) = globals
+        .get::<Option<Table>>("prefix_globals")
+        .map_err(|err| err.to_string())?
+    {
+        out.beat_mods.extend(read_mod_windows(
+            prefix_globals
+                .get::<Option<Table>>("mods")
+                .map_err(|err| err.to_string())?,
+            SongLuaTimeUnit::Beat,
+        )?);
         let (eases, info) = read_eases(
             prefix_globals
                 .get::<Option<Table>>("ease")
@@ -325,13 +332,15 @@ fn install_ease_table(lua: &Lua, host: &mut HostState) -> mlua::Result<()> {
     let globals = lua.globals();
     let ease = lua.create_table()?;
     for &name in EASING_NAMES {
-        let function = lua.create_function(|_, (_t, b, c, d, _p1, _p2): (f32, f32, f32, f32, Value, Value)| {
-            if d.abs() <= f32::EPSILON {
-                Ok(b + c)
-            } else {
-                Ok(b + c * (f32::min(f32::max(_t / d, 0.0), 1.0)))
-            }
-        })?;
+        let function = lua.create_function(
+            |_, (_t, b, c, d, _p1, _p2): (f32, f32, f32, f32, Value, Value)| {
+                if d.abs() <= f32::EPSILON {
+                    Ok(b + c)
+                } else {
+                    Ok(b + c * (f32::min(f32::max(_t / d, 0.0), 1.0)))
+                }
+            },
+        )?;
         host.easing_names
             .insert(function.to_pointer(), name.to_string());
         ease.set(name, function)?;
@@ -454,7 +463,10 @@ struct PlayerLuaTables {
     steps: [Table; LUA_PLAYERS],
 }
 
-fn create_player_tables(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<PlayerLuaTables> {
+fn create_player_tables(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+) -> mlua::Result<PlayerLuaTables> {
     let player_states = [
         create_player_state_table(lua, context.players[0])?,
         create_player_state_table(lua, context.players[1])?,
@@ -491,10 +503,7 @@ fn create_steps_table(lua: &Lua, difficulty: SongLuaDifficulty) -> mlua::Result<
     Ok(table)
 }
 
-fn create_player_options_table(
-    lua: &Lua,
-    player: SongLuaPlayerContext,
-) -> mlua::Result<Table> {
+fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     install_speedmod_method(lua, &table, "CMod", player.speedmod, SongLuaSpeedMod::C)?;
     install_speedmod_method(lua, &table, "MMod", player.speedmod, SongLuaSpeedMod::M)?;
@@ -509,7 +518,9 @@ fn create_player_options_table(
                 return Ok(Value::Nil);
             };
             if name.eq_ignore_ascii_case("FromString") {
-                return Ok(Value::Function(lua.create_function(|_, _args: MultiValue| Ok(()) )?));
+                return Ok(Value::Function(
+                    lua.create_function(|_, _args: MultiValue| Ok(()))?,
+                ));
             }
             let owner = fallback_owner.clone();
             Ok(Value::Function(lua.create_function(
@@ -668,8 +679,7 @@ fn create_loader_function(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Resul
 }
 
 fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Function> {
-    let source = fs::read_to_string(path)
-        .map_err(mlua::Error::external)?;
+    let source = fs::read_to_string(path).map_err(mlua::Error::external)?;
     let chunk = lua.load(&source).set_name(path.to_string_lossy().as_ref());
     let inner = chunk.into_function()?;
     let script_dir = path.parent().unwrap_or(song_dir).to_path_buf();
@@ -716,7 +726,10 @@ fn call_with_script_dir<T>(
 ) -> mlua::Result<T> {
     let globals = lua.globals();
     let previous = globals.get::<Value>("__songlua_script_dir")?;
-    globals.set("__songlua_script_dir", script_dir.to_string_lossy().as_ref())?;
+    globals.set(
+        "__songlua_script_dir",
+        script_dir.to_string_lossy().as_ref(),
+    )?;
     let result = f();
     globals.set("__songlua_script_dir", previous)?;
     result
@@ -782,14 +795,8 @@ fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table
         "GetNumChildren",
         lua.create_function(|_, _self: Table| Ok(0_i64))?,
     )?;
-    actor.set(
-        "GetX",
-        lua.create_function(|_, _self: Table| Ok(0.0_f32))?,
-    )?;
-    actor.set(
-        "GetY",
-        lua.create_function(|_, _self: Table| Ok(0.0_f32))?,
-    )?;
+    actor.set("GetX", lua.create_function(|_, _self: Table| Ok(0.0_f32))?)?;
+    actor.set("GetY", lua.create_function(|_, _self: Table| Ok(0.0_f32))?)?;
     actor.set(
         "GetZoom",
         lua.create_function(|_, _self: Table| Ok(1.0_f32))?,
@@ -834,13 +841,16 @@ fn read_mod_windows(
         let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
             continue;
         };
-        let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?) else {
+        let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
+        else {
             continue;
         };
-        let Some(limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?) else {
+        let Some(limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?)
+        else {
             continue;
         };
-        let Some(mods) = read_string(entry.raw_get::<Value>(3).map_err(|err| err.to_string())?) else {
+        let Some(mods) = read_string(entry.raw_get::<Value>(3).map_err(|err| err.to_string())?)
+        else {
             continue;
         };
         let span_mode = read_span_mode(entry.raw_get::<Value>(4).map_err(|err| err.to_string())?)
@@ -872,10 +882,12 @@ fn read_eases(
         let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
             continue;
         };
-        let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?) else {
+        let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
+        else {
             continue;
         };
-        let Some(limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?) else {
+        let Some(limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?)
+        else {
             continue;
         };
         let Some(from) = read_f32(entry.raw_get::<Value>(3).map_err(|err| err.to_string())?) else {
@@ -1012,10 +1024,7 @@ fn read_span_mode(value: Value) -> Option<SongLuaSpanMode> {
 }
 
 #[inline(always)]
-fn read_easing_name(
-    value: Value,
-    easing_names: &HashMap<*const c_void, String>,
-) -> Option<String> {
+fn read_easing_name(value: Value, easing_names: &HashMap<*const c_void, String>) -> Option<String> {
     match value {
         Value::String(text) => Some(text.to_str().ok()?.to_string()),
         Value::Function(function) => easing_names.get(&function.to_pointer()).cloned(),
@@ -1086,7 +1095,7 @@ fn message_event_cmp(
 mod tests {
     use super::{
         SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaPlayerContext,
-        SongLuaSpeedMod, SongLuaSpanMode, SongLuaTimeUnit, compile_song_lua,
+        SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -1127,8 +1136,8 @@ return Def.ActorFrame{}
         )
         .unwrap();
 
-        let compiled = compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Test Song"))
-            .unwrap();
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Test Song")).unwrap();
         assert_eq!(compiled.beat_mods.len(), 1);
         assert_eq!(compiled.beat_mods[0].unit, SongLuaTimeUnit::Beat);
         assert_eq!(compiled.beat_mods[0].span_mode, SongLuaSpanMode::Len);
@@ -1200,9 +1209,10 @@ return Def.ActorFrame{}
 
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert!(!compiled.time_mods.is_empty());
-        assert!(compiled
-            .eases
-            .iter()
-            .any(|ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "tiny")));
+        assert!(
+            compiled.eases.iter().any(
+                |ease| matches!(ease.target, SongLuaEaseTarget::Mod(ref name) if name == "tiny")
+            )
+        );
     }
 }
