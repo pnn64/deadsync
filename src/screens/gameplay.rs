@@ -888,6 +888,7 @@ fn song_lua_overlay_states(state: &State) -> Vec<SongLuaOverlayState> {
 fn song_lua_proxy_active_players(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
+    proxy_sources: &[SongLuaPlayerProxySources; 2],
 ) -> [bool; 2] {
     let mut out = [false; 2];
     for (overlay_index, overlay) in overlays.iter().enumerate() {
@@ -900,6 +901,20 @@ fn song_lua_proxy_active_players(
             _ => continue,
         };
         if player_index >= out.len() {
+            continue;
+        }
+        let has_source = match target {
+            SongLuaProxyTarget::Player { .. } => proxy_sources[player_index]
+                .player
+                .as_ref()
+                .is_some_and(|actors| !actors.is_empty()),
+            SongLuaProxyTarget::NoteField { .. } => proxy_sources[player_index]
+                .note_field
+                .as_ref()
+                .is_some_and(|actors| !actors.is_empty()),
+            _ => false,
+        };
+        if !has_source {
             continue;
         }
         if overlay_states
@@ -1442,13 +1457,20 @@ fn build_song_lua_overlay_actor(
         SongLuaOverlayKind::ActorFrameTexture => None,
         SongLuaOverlayKind::ActorProxy { .. } => {
             let source = source?;
+            let blend = match state.blend {
+                SongLuaOverlayBlendMode::Alpha => None,
+                SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
+            };
             Some(Actor::Frame {
                 align: [0.0, 0.0],
                 offset: [state.x * x_scale, state.y * y_scale],
                 size: [SizeSpec::Fill, SizeSpec::Fill],
-                children: source,
+                children: source
+                    .into_iter()
+                    .map(|actor| song_lua_style_capture_actor(actor, state.diffuse, blend, 0))
+                    .collect(),
                 background: None,
-                z: 0,
+                z,
             })
         }
         SongLuaOverlayKind::AftSprite { .. } => {
@@ -1891,8 +1913,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     song_lua_capture_new_actors(&mut overlay_proxy_source, &actors, overlay_start);
 
     let overlay_states = song_lua_overlay_states(state);
-    let proxy_active_players =
-        song_lua_proxy_active_players(&state.song_lua_overlays, &overlay_states);
 
     let notefield_width = |player_idx: usize| -> f32 {
         let Some(ns) = state.noteskin[player_idx].as_ref() else {
@@ -2008,6 +2028,11 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             )
         }
     };
+    let proxy_active_players = song_lua_proxy_active_players(
+        &state.song_lua_overlays,
+        &overlay_states,
+        &player_proxy_sources,
+    );
 
     // Danger overlay (Simply Love parity): red flashing in danger + green recovery, optional HideDanger.
     {
@@ -2941,4 +2966,81 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }
     }
     actors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::present::actors::SizeSpec;
+
+    fn test_proxy_overlay(player_index: usize) -> SongLuaOverlayActor {
+        SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Player { player_index },
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        }
+    }
+
+    fn test_source_actor() -> Actor {
+        Actor::Frame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Fill, SizeSpec::Fill],
+            children: Vec::new(),
+            background: None,
+            z: 0,
+        }
+    }
+
+    #[test]
+    fn song_lua_proxy_active_players_requires_a_render_source() {
+        let overlays = vec![test_proxy_overlay(0)];
+        let overlay_states = vec![SongLuaOverlayState::default()];
+        let empty_sources = [
+            SongLuaPlayerProxySources::default(),
+            SongLuaPlayerProxySources::default(),
+        ];
+
+        assert_eq!(
+            song_lua_proxy_active_players(&overlays, &overlay_states, &empty_sources),
+            [false, false]
+        );
+
+        let sources = [
+            SongLuaPlayerProxySources {
+                player: Some(vec![test_source_actor()]),
+                ..SongLuaPlayerProxySources::default()
+            },
+            SongLuaPlayerProxySources::default(),
+        ];
+        assert_eq!(
+            song_lua_proxy_active_players(&overlays, &overlay_states, &sources),
+            [true, false]
+        );
+    }
+
+    #[test]
+    fn song_lua_actor_proxy_keeps_overlay_z_layer() {
+        let overlay = test_proxy_overlay(0);
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState::default(),
+            &AssetManager::new(),
+            1234,
+            Some(vec![test_source_actor()]),
+        )
+        .expect("actor proxy should render with a source");
+
+        match actor {
+            Actor::Frame { z, children, .. } => {
+                assert_eq!(z, 1234);
+                assert_eq!(children.len(), 1);
+            }
+            other => panic!("expected frame actor, got {other:?}"),
+        }
+    }
 }
