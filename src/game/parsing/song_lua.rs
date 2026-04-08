@@ -1638,9 +1638,17 @@ fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::R
     value.raw_set(2, color[1])?;
     value.raw_set(3, color[2])?;
     value.raw_set(4, color[3])?;
-    block.set("diffuse", value)?;
+    block.set("diffuse", value.clone())?;
     block.set("__songlua_has_changes", true)?;
+    actor.set("__songlua_diffuse", value)?;
     Ok(())
+}
+
+fn actor_diffuse(actor: &Table) -> mlua::Result<[f32; 4]> {
+    Ok(actor
+        .get::<Option<Table>>("__songlua_diffuse")?
+        .and_then(|value| table_vec4(&value))
+        .unwrap_or([1.0, 1.0, 1.0, 1.0]))
 }
 
 fn capture_block_set_vec4(
@@ -2438,7 +2446,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     let mut diffuse = block
                         .get::<Option<Table>>("diffuse")?
                         .and_then(|value| table_vec4(&value))
-                        .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+                        .unwrap_or(actor_diffuse(&actor)?);
                     diffuse[3] = alpha;
                     capture_block_set_color(lua, &actor, diffuse)?;
                 }
@@ -4358,6 +4366,57 @@ return Def.ActorFrame{
             [70.0 / 255.0, 70.0 / 255.0, 70.0 / 255.0, 1.0]
         );
         assert_eq!(state.effect_period, 5.0);
+    }
+
+    #[test]
+    fn compile_song_lua_preserves_overlay_color_for_diffusealpha_eases() {
+        let song_dir = test_dir("overlay-diffusealpha-color");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target = nil
+
+mods_ease = {
+    {4, 2, 0, 1, function(a)
+        if target then
+            target:diffusealpha(a)
+        end
+    end, "len", ease.outQuad},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            target = self
+            self:diffuse(0, 0, 0, 0)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Diffusealpha Color"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_eases, 0);
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(
+            compiled.overlays[0].initial_state.diffuse,
+            [0.0, 0.0, 0.0, 0.0]
+        );
+        assert_eq!(compiled.overlay_eases.len(), 1);
+        assert_eq!(
+            compiled.overlay_eases[0].from.diffuse,
+            Some([0.0, 0.0, 0.0, 0.0])
+        );
+        assert_eq!(
+            compiled.overlay_eases[0].to.diffuse,
+            Some([0.0, 0.0, 0.0, 1.0])
+        );
     }
 
     #[test]
