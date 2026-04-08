@@ -215,8 +215,14 @@ pub fn compile_song_lua(
     let lua = Lua::new();
     let mut host = HostState::default();
     install_host(&lua, context, &mut host).map_err(|err| err.to_string())?;
-    let _ = execute_script_file(&lua, &entry_path, context.song_dir.as_path())
+    let root = execute_script_file(&lua, &entry_path, context.song_dir.as_path())
         .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
+    run_actor_init_commands(&lua, &root).map_err(|err| {
+        format!(
+            "failed to run actor init commands for '{}': {err}",
+            entry_path.display()
+        )
+    })?;
 
     let globals = lua.globals();
     let mut out = CompiledSongLua {
@@ -625,6 +631,12 @@ fn make_actor_ctor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Function
             _ => lua.create_table()?,
         };
         table.set("__songlua_actor_type", actor_type)?;
+        if let Some(script_dir) = lua
+            .globals()
+            .get::<Option<String>>("__songlua_script_dir")?
+        {
+            table.set("__songlua_script_dir", script_dir)?;
+        }
         install_actor_metatable(lua, &table)?;
         Ok(table)
     })
@@ -691,6 +703,39 @@ fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Fun
 fn execute_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Value> {
     let loader = load_script_file(lua, path, song_dir)?;
     loader.call::<Value>(())
+}
+
+fn run_actor_init_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
+    let Value::Table(root) = root else {
+        return Ok(());
+    };
+    run_actor_init_commands_for_table(lua, root)
+}
+
+fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    run_actor_init_command(lua, actor)?;
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child? else {
+            continue;
+        };
+        run_actor_init_commands_for_table(lua, &child)?;
+    }
+    Ok(())
+}
+
+fn run_actor_init_command(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let Some(command) = actor.get::<Option<Function>>("InitCommand")? else {
+        return Ok(());
+    };
+    if let Some(script_dir) = actor
+        .get::<Option<String>>("__songlua_script_dir")?
+        .filter(|dir| !dir.trim().is_empty())
+    {
+        return call_with_script_dir(lua, Path::new(&script_dir), || {
+            command.call::<()>(actor.clone())
+        });
+    }
+    command.call::<()>(actor.clone())
 }
 
 fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
@@ -1156,6 +1201,49 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn compile_song_lua_runs_actor_init_commands() {
+        let song_dir = test_dir("init-command");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    InitCommand=function(self)
+        prefix_globals = {
+            mods = {
+                {2, 1, "*100 no dark", "len", 1},
+            },
+            ease = {
+                {8, 2, 0, 100, "flip", "len", ease.inOutQuad, 2},
+            },
+            actions = {
+                {12, "ShowDDRFail", true},
+            },
+        }
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Init Command Song"),
+        )
+        .unwrap();
+        assert_eq!(compiled.beat_mods.len(), 1);
+        assert_eq!(compiled.beat_mods[0].player, Some(1));
+        assert_eq!(compiled.eases.len(), 1);
+        assert_eq!(
+            compiled.eases[0].target,
+            SongLuaEaseTarget::Mod("flip".to_string())
+        );
+        assert_eq!(compiled.eases[0].player, Some(2));
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "ShowDDRFail");
+    }
+
+    #[test]
     fn compile_song_lua_supports_spooky_sample_if_present() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../lua-songs/[07] Spooky (SM) [Scrypts]");
@@ -1179,6 +1267,7 @@ return Def.ActorFrame{}
         ];
 
         let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert!(!compiled.beat_mods.is_empty());
         assert_eq!(compiled.messages.len(), 2);
         assert!(compiled.eases.len() >= 40);
         assert!(compiled.info.unsupported_function_eases >= 2);
