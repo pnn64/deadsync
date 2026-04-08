@@ -4132,6 +4132,8 @@ fn build_song_lua_runtime_windows(
     Vec<SongLuaOverlayEaseWindowRuntime>,
     Vec<SongLuaMessageEvent>,
     [bool; MAX_PLAYERS],
+    f32,
+    f32,
 ) {
     let mut constant_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
@@ -4141,6 +4143,8 @@ fn build_song_lua_runtime_windows(
     let mut overlay_eases = Vec::new();
     let mut messages = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
+    let screen_width = screen_width();
+    let screen_height = screen_height();
 
     let Some(entry) = song
         .foreground_lua_changes
@@ -4154,6 +4158,8 @@ fn build_song_lua_runtime_windows(
             overlay_eases,
             messages,
             hidden_players,
+            screen_width,
+            screen_height,
         );
     };
 
@@ -4173,6 +4179,8 @@ fn build_song_lua_runtime_windows(
         song.title.clone(),
     );
     context.global_offset_seconds = global_offset_seconds;
+    context.screen_width = screen_width;
+    context.screen_height = screen_height;
     context.confusion_offset_available = false;
     context.confusion_available = true;
     context.amod_available = false;
@@ -4206,6 +4214,8 @@ fn build_song_lua_runtime_windows(
                 overlay_eases,
                 messages,
                 hidden_players,
+                screen_width,
+                screen_height,
             );
         }
     };
@@ -4272,6 +4282,8 @@ fn build_song_lua_runtime_windows(
         overlay_eases,
         messages,
         hidden_players,
+        compiled.screen_width,
+        compiled.screen_height,
     )
 }
 
@@ -6248,6 +6260,8 @@ pub struct State {
     pub song_lua_overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
     pub song_lua_messages: Vec<SongLuaMessageEvent>,
     pub song_lua_hidden_players: [bool; MAX_PLAYERS],
+    pub song_lua_screen_width: f32,
+    pub song_lua_screen_height: f32,
     pub song_lua_player_rotation_z: [f32; MAX_PLAYERS],
     pub song_lua_player_skew_x: [f32; MAX_PLAYERS],
     active_attack_clear_all: [bool; MAX_PLAYERS],
@@ -8965,6 +8979,8 @@ pub fn init(
         song_lua_overlay_eases,
         song_lua_messages,
         song_lua_hidden_players,
+        song_lua_screen_width,
+        song_lua_screen_height,
     ) = build_song_lua_runtime_windows(
         &song,
         &charts,
@@ -9389,6 +9405,8 @@ pub fn init(
         song_lua_overlay_eases,
         song_lua_messages,
         song_lua_hidden_players,
+        song_lua_screen_width,
+        song_lua_screen_height,
         song_lua_player_rotation_z: [0.0; MAX_PLAYERS],
         song_lua_player_skew_x: [0.0; MAX_PLAYERS],
         active_attack_clear_all: [false; MAX_PLAYERS],

@@ -15,7 +15,9 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::config::{self, DisplayMode, dirs};
 use crate::engine::display;
-use crate::engine::gfx::{self as renderer, BackendType, PresentModePolicy};
+use crate::engine::gfx::{
+    self as renderer, BackendType, PresentModePolicy, SamplerDesc, SamplerWrap,
+};
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use crate::engine::host_time;
 use crate::engine::input::{self, InputEvent};
@@ -1431,6 +1433,30 @@ fn prewarm_gameplay_assets(
     backend: &mut renderer::Backend,
     state: &gameplay::State,
 ) {
+    fn song_lua_overlay_uses_repeat_sampler(
+        overlay: &crate::game::parsing::song_lua::SongLuaOverlayActor,
+    ) -> bool {
+        let uses_repeat_state = |state: &crate::game::parsing::song_lua::SongLuaOverlayState| {
+            state
+                .custom_texture_rect
+                .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
+                || state.texcoord_velocity.is_some()
+        };
+        let uses_repeat_delta =
+            |delta: &crate::game::parsing::song_lua::SongLuaOverlayStateDelta| {
+                delta
+                    .custom_texture_rect
+                    .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
+                    || delta.texcoord_velocity.is_some()
+            };
+        uses_repeat_state(&overlay.initial_state)
+            || overlay
+                .message_commands
+                .iter()
+                .flat_map(|command| command.blocks.iter())
+                .any(|block| uses_repeat_delta(&block.delta))
+    }
+
     let mut seen = HashSet::<String>::with_capacity(256);
     for noteskin in state.noteskin.iter().flatten() {
         noteskin.for_each_texture_key(|key| {
@@ -1482,8 +1508,31 @@ fn prewarm_gameplay_assets(
             continue;
         };
         let key = texture_path.to_string_lossy().into_owned();
-        if seen.insert(key) {
-            media_cache::ensure_banner_texture(assets, backend, texture_path);
+        if seen.insert(key.clone()) {
+            if song_lua_overlay_uses_repeat_sampler(overlay) {
+                match media_cache::load_banner_source_rgba(texture_path) {
+                    Ok(rgba) => {
+                        let sampler = SamplerDesc {
+                            wrap: SamplerWrap::Repeat,
+                            ..SamplerDesc::default()
+                        };
+                        if let Err(e) = assets
+                            .update_texture_for_key_with_sampler(backend, &key, &rgba, sampler)
+                        {
+                            warn!(
+                                "Failed to create repeating GPU texture for image {texture_path:?}: {e}. Skipping."
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                        );
+                    }
+                }
+            } else {
+                media_cache::ensure_banner_texture(assets, backend, texture_path);
+            }
         }
     }
     crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");

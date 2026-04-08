@@ -1,3 +1,4 @@
+use crate::engine::present::anim::EffectMode;
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -113,6 +114,8 @@ pub struct SongLuaCompileContext {
     pub song_dir: PathBuf,
     pub main_title: String,
     pub global_offset_seconds: f32,
+    pub screen_width: f32,
+    pub screen_height: f32,
     pub players: [SongLuaPlayerContext; LUA_PLAYERS],
     pub confusion_offset_available: bool,
     pub confusion_available: bool,
@@ -125,6 +128,8 @@ impl SongLuaCompileContext {
             song_dir: song_dir.into(),
             main_title: main_title.into(),
             global_offset_seconds: 0.0,
+            screen_width: 640.0,
+            screen_height: 480.0,
             players: [SongLuaPlayerContext::default(); LUA_PLAYERS],
             confusion_offset_available: true,
             confusion_available: true,
@@ -232,6 +237,12 @@ pub struct SongLuaOverlayState {
     pub blend: SongLuaOverlayBlendMode,
     pub vibrate: bool,
     pub effect_magnitude: [f32; 3],
+    pub effect_mode: EffectMode,
+    pub effect_color1: [f32; 4],
+    pub effect_color2: [f32; 4],
+    pub effect_period: f32,
+    pub custom_texture_rect: Option<[f32; 4]>,
+    pub texcoord_velocity: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
     pub stretch_rect: Option<[f32; 4]>,
 }
@@ -257,6 +268,12 @@ impl Default for SongLuaOverlayState {
             blend: SongLuaOverlayBlendMode::Alpha,
             vibrate: false,
             effect_magnitude: [0.0, 0.0, 0.0],
+            effect_mode: EffectMode::None,
+            effect_color1: [1.0, 1.0, 1.0, 1.0],
+            effect_color2: [1.0, 1.0, 1.0, 1.0],
+            effect_period: 1.0,
+            custom_texture_rect: None,
+            texcoord_velocity: None,
             size: None,
             stretch_rect: None,
         }
@@ -283,6 +300,12 @@ pub struct SongLuaOverlayStateDelta {
     pub blend: Option<SongLuaOverlayBlendMode>,
     pub vibrate: Option<bool>,
     pub effect_magnitude: Option<[f32; 3]>,
+    pub effect_mode: Option<EffectMode>,
+    pub effect_color1: Option<[f32; 4]>,
+    pub effect_color2: Option<[f32; 4]>,
+    pub effect_period: Option<f32>,
+    pub custom_texture_rect: Option<[f32; 4]>,
+    pub texcoord_velocity: Option<[f32; 2]>,
     pub size: Option<[f32; 2]>,
     pub stretch_rect: Option<[f32; 4]>,
 }
@@ -337,6 +360,8 @@ pub struct SongLuaCompileInfo {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CompiledSongLua {
     pub entry_path: PathBuf,
+    pub screen_width: f32,
+    pub screen_height: f32,
     pub beat_mods: Vec<SongLuaModWindow>,
     pub time_mods: Vec<SongLuaModWindow>,
     pub eases: Vec<SongLuaEaseWindow>,
@@ -390,6 +415,8 @@ pub fn compile_song_lua(
     let globals = lua.globals();
     let mut out = CompiledSongLua {
         entry_path,
+        screen_width: context.screen_width,
+        screen_height: context.screen_height,
         ..CompiledSongLua::default()
     };
     let mut overlays = read_overlay_actors(&lua, &root)?;
@@ -714,12 +741,24 @@ fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
 
 fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
     let globals = lua.globals();
-    globals.set("SCREEN_WIDTH", 640)?;
-    globals.set("SCREEN_HEIGHT", 480)?;
-    globals.set("SCREEN_CENTER_X", 320.0)?;
-    globals.set("SCREEN_CENTER_Y", 240.0)?;
-    globals.set("scx", 320.0)?;
-    globals.set("scy", 240.0)?;
+    let screen_width = context.screen_width.max(1.0);
+    let screen_height = context.screen_height.max(1.0);
+    let screen_center_x = 0.5 * screen_width;
+    let screen_center_y = 0.5 * screen_height;
+    globals.set("SCREEN_WIDTH", screen_width.round() as i32)?;
+    globals.set("SCREEN_HEIGHT", screen_height.round() as i32)?;
+    globals.set("SCREEN_CENTER_X", screen_center_x)?;
+    globals.set("SCREEN_CENTER_Y", screen_center_y)?;
+    globals.set("scx", screen_center_x)?;
+    globals.set("scy", screen_center_y)?;
+    globals.set("SCREEN_LEFT", 0)?;
+    globals.set("SCREEN_TOP", 0)?;
+    globals.set("SCREEN_RIGHT", screen_width.round() as i32)?;
+    globals.set("SCREEN_BOTTOM", screen_height.round() as i32)?;
+    globals.set(
+        "ASPECT_SCALE_FACTOR",
+        screen_width / (640.0 * (screen_height / 480.0)),
+    )?;
     globals.set(
         "__songlua_song_dir",
         song_dir_string(context.song_dir.as_path()),
@@ -1604,6 +1643,38 @@ fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::R
     Ok(())
 }
 
+fn capture_block_set_vec4(
+    lua: &Lua,
+    actor: &Table,
+    key: &str,
+    value4: [f32; 4],
+) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    let value = lua.create_table()?;
+    value.raw_set(1, value4[0])?;
+    value.raw_set(2, value4[1])?;
+    value.raw_set(3, value4[2])?;
+    value.raw_set(4, value4[3])?;
+    block.set(key, value)?;
+    block.set("__songlua_has_changes", true)?;
+    Ok(())
+}
+
+fn capture_block_set_vec2(
+    lua: &Lua,
+    actor: &Table,
+    key: &str,
+    value2: [f32; 2],
+) -> mlua::Result<()> {
+    let block = actor_current_capture_block(lua, actor)?;
+    let value = lua.create_table()?;
+    value.raw_set(1, value2[0])?;
+    value.raw_set(2, value2[1])?;
+    block.set(key, value)?;
+    block.set("__songlua_has_changes", true)?;
+    Ok(())
+}
+
 fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
     let block = actor_current_capture_block(lua, actor)?;
     let value = lua.create_table()?;
@@ -1719,6 +1790,30 @@ fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayCommandB
                     .get::<Option<Table>>("effect_magnitude")
                     .map_err(|err| err.to_string())?
                     .and_then(|value| table_vec3(&value)),
+                effect_mode: block
+                    .get::<Option<String>>("effect_mode")
+                    .map_err(|err| err.to_string())?
+                    .as_deref()
+                    .and_then(parse_overlay_effect_mode),
+                effect_color1: block
+                    .get::<Option<Table>>("effect_color1")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec4(&value)),
+                effect_color2: block
+                    .get::<Option<Table>>("effect_color2")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec4(&value)),
+                effect_period: block
+                    .get::<Option<f32>>("effect_period")
+                    .map_err(|err| err.to_string())?,
+                custom_texture_rect: block
+                    .get::<Option<Table>>("custom_texture_rect")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec4(&value)),
+                texcoord_velocity: block
+                    .get::<Option<Table>>("texcoord_velocity")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec2(&value)),
                 size: block
                     .get::<Option<Table>>("size")
                     .map_err(|err| err.to_string())?
@@ -1844,6 +1939,24 @@ fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlaySt
     if let Some(value) = delta.effect_magnitude {
         state.effect_magnitude = value;
     }
+    if let Some(value) = delta.effect_mode {
+        state.effect_mode = value;
+    }
+    if let Some(value) = delta.effect_color1 {
+        state.effect_color1 = value;
+    }
+    if let Some(value) = delta.effect_color2 {
+        state.effect_color2 = value;
+    }
+    if let Some(value) = delta.effect_period {
+        state.effect_period = value;
+    }
+    if let Some(value) = delta.custom_texture_rect {
+        state.custom_texture_rect = Some(value);
+    }
+    if let Some(value) = delta.texcoord_velocity {
+        state.texcoord_velocity = Some(value);
+    }
     if let Some(value) = delta.size {
         state.size = Some(value);
     }
@@ -1908,6 +2021,39 @@ fn overlay_state_lerp(
                 .mul_add(t, from.effect_magnitude[i]);
         }
     }
+    if delta.effect_color1.is_some() {
+        for i in 0..4 {
+            from.effect_color1[i] =
+                (to.effect_color1[i] - from.effect_color1[i]).mul_add(t, from.effect_color1[i]);
+        }
+    }
+    if delta.effect_color2.is_some() {
+        for i in 0..4 {
+            from.effect_color2[i] =
+                (to.effect_color2[i] - from.effect_color2[i]).mul_add(t, from.effect_color2[i]);
+        }
+    }
+    if delta.effect_period.is_some() {
+        from.effect_period = (to.effect_period - from.effect_period).mul_add(t, from.effect_period);
+    }
+    if delta.custom_texture_rect.is_some()
+        && let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, to.custom_texture_rect)
+    {
+        from.custom_texture_rect = Some([
+            (to_rect[0] - from_rect[0]).mul_add(t, from_rect[0]),
+            (to_rect[1] - from_rect[1]).mul_add(t, from_rect[1]),
+            (to_rect[2] - from_rect[2]).mul_add(t, from_rect[2]),
+            (to_rect[3] - from_rect[3]).mul_add(t, from_rect[3]),
+        ]);
+    }
+    if delta.texcoord_velocity.is_some()
+        && let (Some(from_vel), Some(to_vel)) = (from.texcoord_velocity, to.texcoord_velocity)
+    {
+        from.texcoord_velocity = Some([
+            (to_vel[0] - from_vel[0]).mul_add(t, from_vel[0]),
+            (to_vel[1] - from_vel[1]).mul_add(t, from_vel[1]),
+        ]);
+    }
     if delta.size.is_some()
         && let (Some(from_size), Some(to_size)) = (from.size, to.size)
     {
@@ -1935,6 +2081,9 @@ fn overlay_state_lerp(
     if delta.vibrate.is_some() && t >= 1.0 - f32::EPSILON {
         from.vibrate = to.vibrate;
     }
+    if delta.effect_mode.is_some() && t >= 1.0 - f32::EPSILON {
+        from.effect_mode = to.effect_mode;
+    }
     from
 }
 
@@ -1948,6 +2097,15 @@ fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {
         Some(SongLuaOverlayBlendMode::Alpha)
     } else {
         None
+    }
+}
+
+fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
+    match raw {
+        "none" => Some(EffectMode::None),
+        "diffuseshift" => Some(EffectMode::DiffuseShift),
+        "spin" => Some(EffectMode::Spin),
+        _ => None,
     }
 }
 
@@ -2418,6 +2576,94 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "customtexturerect",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let rect = [
+                    args.get(1).cloned().and_then(read_f32).unwrap_or(0.0),
+                    args.get(2).cloned().and_then(read_f32).unwrap_or(0.0),
+                    args.get(3).cloned().and_then(read_f32).unwrap_or(0.0),
+                    args.get(4).cloned().and_then(read_f32).unwrap_or(0.0),
+                ];
+                capture_block_set_vec4(lua, &actor, "custom_texture_rect", rect)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "texcoordvelocity",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let velocity = [
+                    args.get(1).cloned().and_then(read_f32).unwrap_or(0.0),
+                    args.get(2).cloned().and_then(read_f32).unwrap_or(0.0),
+                ];
+                capture_block_set_vec2(lua, &actor, "texcoord_velocity", velocity)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "diffuseshift",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let block = actor_current_capture_block(lua, &actor)?;
+                block.set("effect_mode", "diffuseshift")?;
+                block.set("__songlua_has_changes", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "spin",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let block = actor_current_capture_block(lua, &actor)?;
+                block.set("effect_mode", "spin")?;
+                block.set("__songlua_has_changes", true)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "effectcolor1",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let color = read_color_args(&args).unwrap_or([1.0, 1.0, 1.0, 1.0]);
+                capture_block_set_vec4(lua, &actor, "effect_color1", color)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "effectcolor2",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let color = read_color_args(&args).unwrap_or([1.0, 1.0, 1.0, 1.0]);
+                capture_block_set_vec4(lua, &actor, "effect_color2", color)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "effectperiod",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    capture_block_set_f32(lua, &actor, "effect_period", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "vibrate",
         lua.create_function({
             let actor = actor.clone();
@@ -2434,6 +2680,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             move |lua, _args: MultiValue| {
                 capture_block_set_bool(lua, &actor, "vibrate", false)?;
                 let block = actor_current_capture_block(lua, &actor)?;
+                block.set("effect_mode", "none")?;
+                let block = actor_current_capture_block(lua, &actor)?;
                 let value = lua.create_table()?;
                 value.raw_set(1, 0.0_f32)?;
                 value.raw_set(2, 0.0_f32)?;
@@ -2446,12 +2694,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     for name in [
         "clearzbuffer",
-        "customtexturerect",
-        "diffuseshift",
         "effectclock",
-        "effectcolor1",
-        "effectcolor2",
-        "effectperiod",
         "EnableAlphaBuffer",
         "EnableDepthBuffer",
         "EnableFloat",
@@ -2459,10 +2702,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "Create",
         "fardistz",
         "fov",
-        "spin",
         "SetHeight",
         "SetWidth",
-        "texcoordvelocity",
         "wag",
         "z",
     ] {
@@ -2634,14 +2875,14 @@ fn make_actor_tween_method(
 }
 
 fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {
-    if args.len() < 5 {
-        return None;
+    if let Some(Value::Table(table)) = method_arg(args, 0) {
+        return table_vec4(table);
     }
     Some([
-        args.get(1).cloned().and_then(read_f32)?,
-        args.get(2).cloned().and_then(read_f32)?,
-        args.get(3).cloned().and_then(read_f32)?,
-        args.get(4).cloned().and_then(read_f32)?,
+        method_arg(args, 0).cloned().and_then(read_f32)?,
+        method_arg(args, 1).cloned().and_then(read_f32)?,
+        method_arg(args, 2).cloned().and_then(read_f32)?,
+        method_arg(args, 3).cloned().and_then(read_f32)?,
     ])
 }
 
@@ -2920,6 +3161,12 @@ fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.blend.is_none()
         && delta.vibrate.is_none()
         && delta.effect_magnitude.is_none()
+        && delta.effect_mode.is_none()
+        && delta.effect_color1.is_none()
+        && delta.effect_color2.is_none()
+        && delta.effect_period.is_none()
+        && delta.custom_texture_rect.is_none()
+        && delta.texcoord_velocity.is_none()
         && delta.size.is_none()
         && delta.stretch_rect.is_none()
 }
@@ -2979,6 +3226,24 @@ fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverla
     if from.effect_magnitude.is_some() {
         into.effect_magnitude = from.effect_magnitude;
     }
+    if from.effect_mode.is_some() {
+        into.effect_mode = from.effect_mode;
+    }
+    if from.effect_color1.is_some() {
+        into.effect_color1 = from.effect_color1;
+    }
+    if from.effect_color2.is_some() {
+        into.effect_color2 = from.effect_color2;
+    }
+    if from.effect_period.is_some() {
+        into.effect_period = from.effect_period;
+    }
+    if from.custom_texture_rect.is_some() {
+        into.custom_texture_rect = from.custom_texture_rect;
+    }
+    if from.texcoord_velocity.is_some() {
+        into.texcoord_velocity = from.texcoord_velocity;
+    }
     if from.size.is_some() {
         into.size = from.size;
     }
@@ -3029,6 +3294,12 @@ fn overlay_delta_intersection(
     copy_pair!(blend);
     copy_pair!(vibrate);
     copy_pair!(effect_magnitude);
+    copy_pair!(effect_mode);
+    copy_pair!(effect_color1);
+    copy_pair!(effect_color2);
+    copy_pair!(effect_period);
+    copy_pair!(custom_texture_rect);
+    copy_pair!(texcoord_velocity);
     copy_pair!(size);
     copy_pair!(stretch_rect);
     (!overlay_delta_is_empty(&out_from)).then_some((out_from, out_to))
@@ -3291,9 +3562,9 @@ fn message_event_cmp(
 #[cfg(test)]
 mod tests {
     use super::{
-        SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayBlendMode,
-        SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode,
-        SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
+        EffectMode, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
+        SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget,
+        SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -3638,6 +3909,49 @@ return Def.ActorFrame{
         );
         assert_eq!(overlay.message_commands[0].blocks[1].duration, 0.3);
         assert_eq!(overlay.message_commands[0].blocks[1].delta.x, Some(320.0));
+    }
+
+    #[test]
+    fn compile_song_lua_respects_context_screen_dimensions() {
+        let song_dir = test_dir("overlay-screen-dims");
+        let entry = song_dir.join("default.lua");
+        let overlay_dir = song_dir.join("gfx");
+        fs::create_dir_all(&overlay_dir).unwrap();
+        fs::write(
+            overlay_dir.join("panel.png"),
+            b"not-an-image-but-good-enough-for-parser",
+        )
+        .unwrap();
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="gfx/panel.png",
+        OnCommand=function(self)
+            self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y)
+            self:stretchto(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+        end,
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Overlay");
+        context.screen_width = 854.0;
+        context.screen_height = 480.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        let overlay = &compiled.overlays[0];
+
+        assert_eq!(compiled.screen_width, 854.0);
+        assert_eq!(compiled.screen_height, 480.0);
+        assert_eq!(overlay.initial_state.x, 427.0);
+        assert_eq!(overlay.initial_state.y, 240.0);
+        assert_eq!(
+            overlay.initial_state.stretch_rect,
+            Some([0.0, 0.0, 854.0, 480.0])
+        );
     }
 
     #[test]
@@ -3994,6 +4308,56 @@ return Def.ActorFrame{
         assert_eq!(ease.to.zoom_x, Some(2.0));
         assert_eq!(ease.from.cropbottom, Some(0.0));
         assert_eq!(ease.to.cropbottom, Some(0.5));
+    }
+
+    #[test]
+    fn compile_song_lua_reads_table_color_calls_for_overlays() {
+        let song_dir = test_dir("overlay-table-colors");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local function rgb(r, g, b, a)
+    return {r / 255, g / 255, b / 255, a or 1}
+end
+
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="gfx/grid.png",
+        OnCommand=function(self)
+            self:diffuse(rgb(30, 30, 35, 0.5))
+            self:diffuseshift()
+            self:effectcolor1(rgb(30, 30, 35, 1))
+            self:effectcolor2(rgb(70, 70, 70, 1))
+            self:effectperiod(5)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Table Colors"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        let state = compiled.overlays[0].initial_state;
+        assert_eq!(
+            state.diffuse,
+            [30.0 / 255.0, 30.0 / 255.0, 35.0 / 255.0, 0.5]
+        );
+        assert_eq!(state.effect_mode, EffectMode::DiffuseShift);
+        assert_eq!(
+            state.effect_color1,
+            [30.0 / 255.0, 30.0 / 255.0, 35.0 / 255.0, 1.0]
+        );
+        assert_eq!(
+            state.effect_color2,
+            [70.0 / 255.0, 70.0 / 255.0, 70.0 / 255.0, 1.0]
+        );
+        assert_eq!(state.effect_period, 5.0);
     }
 
     #[test]

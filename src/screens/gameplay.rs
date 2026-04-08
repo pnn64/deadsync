@@ -3,6 +3,7 @@ use crate::assets::AssetManager;
 use crate::engine::gfx::{BlendMode, MeshMode};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::anim::EffectState;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::engine::present::compose::TextLayoutCache;
@@ -662,13 +663,13 @@ fn build_background(state: &State, bg_brightness: f32) -> Actor {
 }
 
 #[inline(always)]
-fn song_lua_overlay_x_scale() -> f32 {
-    screen_width() / 640.0
+fn song_lua_overlay_space_width(state: &State) -> f32 {
+    state.song_lua_screen_width.max(1.0)
 }
 
 #[inline(always)]
-fn song_lua_overlay_y_scale() -> f32 {
-    screen_height() / 480.0
+fn song_lua_overlay_space_height(state: &State) -> f32 {
+    state.song_lua_screen_height.max(1.0)
 }
 
 fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlayStateDelta) {
@@ -725,6 +726,24 @@ fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLua
     }
     if let Some(value) = delta.effect_magnitude {
         state.effect_magnitude = value;
+    }
+    if let Some(value) = delta.effect_mode {
+        state.effect_mode = value;
+    }
+    if let Some(value) = delta.effect_color1 {
+        state.effect_color1 = value;
+    }
+    if let Some(value) = delta.effect_color2 {
+        state.effect_color2 = value;
+    }
+    if let Some(value) = delta.effect_period {
+        state.effect_period = value;
+    }
+    if let Some(value) = delta.custom_texture_rect {
+        state.custom_texture_rect = Some(value);
+    }
+    if let Some(value) = delta.texcoord_velocity {
+        state.texcoord_velocity = Some(value);
     }
     if let Some(value) = delta.size {
         state.size = Some(value);
@@ -798,6 +817,39 @@ fn song_lua_overlay_state_lerp(
                 .mul_add(t, from.effect_magnitude[i]);
         }
     }
+    if delta.effect_color1.is_some() {
+        for i in 0..4 {
+            from.effect_color1[i] =
+                (to.effect_color1[i] - from.effect_color1[i]).mul_add(t, from.effect_color1[i]);
+        }
+    }
+    if delta.effect_color2.is_some() {
+        for i in 0..4 {
+            from.effect_color2[i] =
+                (to.effect_color2[i] - from.effect_color2[i]).mul_add(t, from.effect_color2[i]);
+        }
+    }
+    if delta.effect_period.is_some() {
+        from.effect_period = (to.effect_period - from.effect_period).mul_add(t, from.effect_period);
+    }
+    if delta.custom_texture_rect.is_some()
+        && let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, to.custom_texture_rect)
+    {
+        from.custom_texture_rect = Some([
+            (to_rect[0] - from_rect[0]).mul_add(t, from_rect[0]),
+            (to_rect[1] - from_rect[1]).mul_add(t, from_rect[1]),
+            (to_rect[2] - from_rect[2]).mul_add(t, from_rect[2]),
+            (to_rect[3] - from_rect[3]).mul_add(t, from_rect[3]),
+        ]);
+    }
+    if delta.texcoord_velocity.is_some()
+        && let (Some(from_vel), Some(to_vel)) = (from.texcoord_velocity, to.texcoord_velocity)
+    {
+        from.texcoord_velocity = Some([
+            (to_vel[0] - from_vel[0]).mul_add(t, from_vel[0]),
+            (to_vel[1] - from_vel[1]).mul_add(t, from_vel[1]),
+        ]);
+    }
     if delta.size.is_some()
         && let (Some(from_size), Some(to_size)) = (from.size, to.size)
     {
@@ -824,6 +876,9 @@ fn song_lua_overlay_state_lerp(
     }
     if delta.vibrate.is_some() && t >= 1.0 - f32::EPSILON {
         from.vibrate = to.vibrate;
+    }
+    if delta.effect_mode.is_some() && t >= 1.0 - f32::EPSILON {
+        from.effect_mode = to.effect_mode;
     }
     from
 }
@@ -1017,6 +1072,8 @@ fn song_lua_capture_children(
     asset_manager: &AssetManager,
     capture_index: usize,
     proxy_sources: &SongLuaScreenProxySources,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
 ) -> Vec<Actor> {
     let mut out = Vec::new();
     for (idx, overlay) in overlays.iter().enumerate() {
@@ -1041,6 +1098,8 @@ fn song_lua_capture_children(
             asset_manager,
             0,
             source,
+            overlay_space_width,
+            overlay_space_height,
         ) {
             out.push(actor);
         }
@@ -1366,9 +1425,13 @@ fn song_lua_style_capture_actor(
 fn song_lua_capture_transform_matrix(
     state: SongLuaOverlayState,
     extra_offset: [f32; 2],
+    overlay_space_width: f32,
+    overlay_space_height: f32,
 ) -> Option<Matrix4<f32>> {
-    let translate_x = (state.x - 320.0) * song_lua_overlay_x_scale() + extra_offset[0];
-    let translate_y = (state.y - 240.0) * song_lua_overlay_y_scale() + extra_offset[1];
+    let x_scale = screen_width() / overlay_space_width.max(1.0);
+    let y_scale = screen_height() / overlay_space_height.max(1.0);
+    let translate_x = (state.x - 0.5 * overlay_space_width) * x_scale + extra_offset[0];
+    let translate_y = (state.y - 0.5 * overlay_space_height) * y_scale + extra_offset[1];
     let scale_x = state.basezoom * state.zoom * state.zoom_x;
     let scale_y = state.basezoom * state.zoom * state.zoom_y;
     if translate_x.abs() <= f32::EPSILON
@@ -1386,12 +1449,18 @@ fn song_lua_capture_transform_matrix(
     )
 }
 
-fn song_lua_capture_channel_offset(name: Option<&str>, state: SongLuaOverlayState) -> [f32; 2] {
+fn song_lua_capture_channel_offset(
+    name: Option<&str>,
+    state: SongLuaOverlayState,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
+) -> [f32; 2] {
     if !state.vibrate {
         return [0.0, 0.0];
     }
-    let x = state.effect_magnitude[0].abs() * song_lua_overlay_x_scale();
-    let y = state.effect_magnitude[1].abs() * song_lua_overlay_y_scale() * 0.25;
+    let x = state.effect_magnitude[0].abs() * (screen_width() / overlay_space_width.max(1.0));
+    let y =
+        state.effect_magnitude[1].abs() * (screen_height() / overlay_space_height.max(1.0)) * 0.25;
     match name {
         Some(name) if name.ends_with('R') => [-x, -y],
         Some(name) if name.ends_with('B') => [x, y],
@@ -1404,6 +1473,8 @@ fn song_lua_build_capture_actor(
     state: SongLuaOverlayState,
     z: i16,
     source: Vec<Actor>,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
 ) -> Option<Actor> {
     if source.is_empty() {
         return None;
@@ -1416,8 +1487,18 @@ fn song_lua_build_capture_actor(
         .into_iter()
         .map(|actor| song_lua_style_capture_actor(actor, state.diffuse, blend, z))
         .collect::<Vec<_>>();
-    let extra_offset = song_lua_capture_channel_offset(overlay.name.as_deref(), state);
-    if let Some(transform) = song_lua_capture_transform_matrix(state, extra_offset) {
+    let extra_offset = song_lua_capture_channel_offset(
+        overlay.name.as_deref(),
+        state,
+        overlay_space_width,
+        overlay_space_height,
+    );
+    if let Some(transform) = song_lua_capture_transform_matrix(
+        state,
+        extra_offset,
+        overlay_space_width,
+        overlay_space_height,
+    ) {
         return Some(Actor::Camera {
             view_proj: cgmath::ortho(
                 -0.5 * screen_width(),
@@ -1446,12 +1527,33 @@ fn build_song_lua_overlay_actor(
     asset_manager: &AssetManager,
     z: i16,
     source: Option<Vec<Actor>>,
+    overlay_space_width: f32,
+    overlay_space_height: f32,
 ) -> Option<Actor> {
     if !state.visible || state.diffuse[3] <= f32::EPSILON {
         return None;
     }
-    let x_scale = song_lua_overlay_x_scale();
-    let y_scale = song_lua_overlay_y_scale();
+    let x_scale = screen_width() / overlay_space_width.max(1.0);
+    let y_scale = screen_height() / overlay_space_height.max(1.0);
+    let overlay_scale = song_lua_overlay_axis_scale(state);
+    let (size_scale_x, flip_x) = if overlay_scale[0] < 0.0 {
+        (-overlay_scale[0], true)
+    } else {
+        (overlay_scale[0], false)
+    };
+    let (size_scale_y, flip_y) = if overlay_scale[1] < 0.0 {
+        (-overlay_scale[1], true)
+    } else {
+        (overlay_scale[1], false)
+    };
+    let effect = EffectState {
+        mode: state.effect_mode,
+        color1: state.effect_color1,
+        color2: state.effect_color2,
+        period: state.effect_period.max(f32::EPSILON),
+        magnitude: state.effect_magnitude,
+        ..EffectState::default()
+    };
     match &overlay.kind {
         SongLuaOverlayKind::ActorFrame => None,
         SongLuaOverlayKind::ActorFrameTexture => None,
@@ -1473,9 +1575,14 @@ fn build_song_lua_overlay_actor(
                 z,
             })
         }
-        SongLuaOverlayKind::AftSprite { .. } => {
-            song_lua_build_capture_actor(overlay, state, z, source?)
-        }
+        SongLuaOverlayKind::AftSprite { .. } => song_lua_build_capture_actor(
+            overlay,
+            state,
+            z,
+            source?,
+            overlay_space_width,
+            overlay_space_height,
+        ),
         SongLuaOverlayKind::Sprite { texture_path } => {
             let key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
             if !asset_manager.has_texture_key(key.as_ref()) {
@@ -1485,7 +1592,10 @@ fn build_song_lua_overlay_actor(
                 act!(sprite(key.clone()):
                     align(0.0, 0.0):
                     xy(left * x_scale, top * y_scale):
-                    setsize((right - left).abs() * x_scale, (bottom - top).abs() * y_scale):
+                    setsize(
+                        (right - left).abs() * x_scale * size_scale_x,
+                        (bottom - top).abs() * y_scale * size_scale_y
+                    ):
                     z(z)
                 )
             } else {
@@ -1494,7 +1604,10 @@ fn build_song_lua_overlay_actor(
                 act!(sprite(key.clone()):
                     align(0.5, 0.5):
                     xy(state.x * x_scale, state.y * y_scale):
-                    setsize(size[0] * x_scale, size[1] * y_scale):
+                    setsize(
+                        size[0] * x_scale * size_scale_x,
+                        size[1] * y_scale * size_scale_y
+                    ):
                     z(z)
                 )
             };
@@ -1508,7 +1621,11 @@ fn build_song_lua_overlay_actor(
                 rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
-                scale,
+                uv_rect,
+                texcoordvelocity,
+                effect: actor_effect,
+                flip_x: actor_flip_x,
+                flip_y: actor_flip_y,
                 visible,
                 ..
             } = &mut actor
@@ -1525,10 +1642,11 @@ fn build_song_lua_overlay_actor(
                 *rot_x_deg = state.rot_x_deg;
                 *rot_y_deg = state.rot_y_deg;
                 *rot_z_deg = state.rot_z_deg;
-                *scale = [
-                    state.basezoom * state.zoom * state.zoom_x,
-                    state.basezoom * state.zoom * state.zoom_y,
-                ];
+                *uv_rect = state.custom_texture_rect;
+                *texcoordvelocity = state.texcoord_velocity;
+                *actor_effect = effect;
+                *actor_flip_x ^= flip_x;
+                *actor_flip_y ^= flip_y;
                 *visible = state.visible;
             }
             Some(actor)
@@ -1538,7 +1656,10 @@ fn build_song_lua_overlay_actor(
                 act!(quad:
                     align(0.0, 0.0):
                     xy(left * x_scale, top * y_scale):
-                    zoomto((right - left).abs() * x_scale, (bottom - top).abs() * y_scale):
+                    zoomto(
+                        (right - left).abs() * x_scale * size_scale_x,
+                        (bottom - top).abs() * y_scale * size_scale_y
+                    ):
                     diffuse(state.diffuse[0], state.diffuse[1], state.diffuse[2], state.diffuse[3]):
                     z(z)
                 )
@@ -1547,7 +1668,10 @@ fn build_song_lua_overlay_actor(
                 act!(quad:
                     align(0.5, 0.5):
                     xy(state.x * x_scale, state.y * y_scale):
-                    zoomto(size[0] * x_scale, size[1] * y_scale):
+                    zoomto(
+                        size[0] * x_scale * size_scale_x,
+                        size[1] * y_scale * size_scale_y
+                    ):
                     diffuse(state.diffuse[0], state.diffuse[1], state.diffuse[2], state.diffuse[3]):
                     z(z)
                 )
@@ -1562,7 +1686,9 @@ fn build_song_lua_overlay_actor(
                 rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
-                scale,
+                effect: actor_effect,
+                flip_x: actor_flip_x,
+                flip_y: actor_flip_y,
                 ..
             } = &mut actor
             {
@@ -1577,10 +1703,9 @@ fn build_song_lua_overlay_actor(
                 *rot_x_deg = state.rot_x_deg;
                 *rot_y_deg = state.rot_y_deg;
                 *rot_z_deg = state.rot_z_deg;
-                *scale = [
-                    state.basezoom * state.zoom * state.zoom_x,
-                    state.basezoom * state.zoom * state.zoom_y,
-                ];
+                *actor_effect = effect;
+                *actor_flip_x ^= flip_x;
+                *actor_flip_y ^= flip_y;
                 *visible = state.visible;
             }
             Some(actor)
@@ -1693,6 +1818,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     let centered_single_notefield = play_style == profile::PlayStyle::Single
         && state.num_players == 1
         && cfg.center_1player_notefield;
+    let song_lua_space_width = song_lua_overlay_space_width(state);
+    let song_lua_space_height = song_lua_overlay_space_height(state);
     let player_color = if is_p2_single {
         color::decorative_rgba(state.active_color_index - 2)
     } else {
@@ -2949,6 +3076,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                             asset_manager,
                             capture_index,
                             &proxy_sources,
+                            song_lua_space_width,
+                            song_lua_space_height,
                         )
                     },
                 )
@@ -2961,6 +3090,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             asset_manager,
             1100 + idx as i16,
             source,
+            song_lua_space_width,
+            song_lua_space_height,
         ) {
             actors.push(actor);
         }
@@ -3032,6 +3163,8 @@ mod tests {
             &AssetManager::new(),
             1234,
             Some(vec![test_source_actor()]),
+            640.0,
+            480.0,
         )
         .expect("actor proxy should render with a source");
 
@@ -3041,6 +3174,55 @@ mod tests {
                 assert_eq!(children.len(), 1);
             }
             other => panic!("expected frame actor, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn song_lua_quad_bakes_zoom_into_explicit_size() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let actor = build_song_lua_overlay_actor(
+            &overlay,
+            SongLuaOverlayState {
+                x: 320.0,
+                y: 240.0,
+                size: Some([100.0, 50.0]),
+                zoom: 0.5,
+                ..SongLuaOverlayState::default()
+            },
+            &AssetManager::new(),
+            321,
+            None,
+            640.0,
+            480.0,
+        )
+        .expect("quad overlay should render");
+
+        match actor {
+            Actor::Sprite {
+                size,
+                scale,
+                z,
+                visible,
+                ..
+            } => {
+                assert_eq!(z, 321);
+                assert!(visible);
+                assert_eq!(scale, [1.0, 1.0]);
+                match size {
+                    [SizeSpec::Px(w), SizeSpec::Px(h)] => {
+                        assert_eq!(w, 50.0);
+                        assert_eq!(h, 25.0);
+                    }
+                    other => panic!("expected explicit quad size, got {other:?}"),
+                }
+            }
+            other => panic!("expected sprite-backed quad, got {other:?}"),
         }
     }
 }

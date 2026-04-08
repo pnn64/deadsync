@@ -256,6 +256,19 @@ impl AssetManager {
         Ok(())
     }
 
+    pub(crate) fn update_texture_for_key_with_sampler(
+        &mut self,
+        backend: &mut Backend,
+        key: &str,
+        rgba: &RgbaImage,
+        sampler: SamplerDesc,
+    ) -> Result<(), AssetError> {
+        let texture = backend.create_texture(rgba, sampler)?;
+        self.set_texture_for_key(backend, key.to_string(), texture);
+        register_texture_dims(key, rgba.width(), rgba.height());
+        Ok(())
+    }
+
     fn note_texture_handle_alias(&mut self, key: &str, handle: TextureHandle) {
         let folded = ascii_ci_hash(key);
         match self.texture_handles_ascii_ci.get_mut(&folded) {
