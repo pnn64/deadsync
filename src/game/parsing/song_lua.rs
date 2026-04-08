@@ -514,6 +514,7 @@ fn install_host(
     install_stdlib_compat(lua, context.song_dir.as_path())?;
     install_ease_table(lua, host)?;
     install_globals(lua, context)?;
+    install_cmd_helpers(lua)?;
     install_def(lua)?;
     install_file_loaders(lua, context.song_dir.clone())?;
     Ok(())
@@ -667,6 +668,36 @@ fn install_ease_table(lua: &Lua, host: &mut HostState) -> mlua::Result<()> {
         ease.set(name, function)?;
     }
     globals.set("ease", ease)?;
+    Ok(())
+}
+
+fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
+    let globals = lua.globals();
+    for name in ["queuecommand", "playcommand"] {
+        globals.set(name, name)?;
+    }
+    globals.set(
+        "cmd",
+        lua.create_function(move |lua, args: MultiValue| {
+            let command_name = args.get(0).cloned().and_then(read_string);
+            let command_args = args.into_iter().skip(1).collect::<Vec<_>>();
+            lua.create_function(move |_, actor: Table| {
+                let Some(command_name) = command_name.as_deref() else {
+                    return Ok(Value::Table(actor));
+                };
+                let Value::Function(method) = actor.get::<Value>(command_name)? else {
+                    return Ok(Value::Table(actor));
+                };
+                let mut call_args = MultiValue::new();
+                call_args.push_back(Value::Table(actor.clone()));
+                for arg in &command_args {
+                    call_args.push_back(arg.clone());
+                }
+                let _ = method.call::<Value>(call_args)?;
+                Ok(Value::Table(actor))
+            })
+        })?,
+    )?;
     Ok(())
 }
 
@@ -3661,6 +3692,45 @@ return Def.ActorFrame{
                 .visible,
             Some(true)
         );
+    }
+
+    #[test]
+    fn compile_song_lua_runs_cmd_queuecommand_builders() {
+        let song_dir = test_dir("overlay-proxy-cmd");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.ActorProxy{
+        Name="p1_proxy",
+        OnCommand=cmd(queuecommand, "Bind"),
+        BindCommand=function(self)
+            local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+            if p then
+                self:SetTarget(p)
+            end
+            self:visible(false)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Proxy Cmd"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Player { player_index: 0 }
+            }
+        ));
+        assert!(!compiled.overlays[0].initial_state.visible);
     }
 
     #[test]
