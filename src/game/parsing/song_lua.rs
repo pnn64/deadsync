@@ -301,6 +301,12 @@ pub fn compile_song_lua(
             entry_path.display()
         )
     })?;
+    run_actor_update_functions(&lua, &root).map_err(|err| {
+        format!(
+            "failed to run actor update functions for '{}': {err}",
+            entry_path.display()
+        )
+    })?;
 
     let globals = lua.globals();
     let mut out = CompiledSongLua {
@@ -801,6 +807,13 @@ fn run_actor_startup_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
     run_actor_startup_commands_for_table(lua, root)
 }
 
+fn run_actor_update_functions(lua: &Lua, root: &Value) -> mlua::Result<()> {
+    let Value::Table(root) = root else {
+        return Ok(());
+    };
+    run_actor_update_functions_for_table(lua, root)
+}
+
 fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     run_actor_init_command(lua, actor)?;
     for child in actor.sequence_values::<Value>() {
@@ -825,6 +838,19 @@ fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resul
     Ok(())
 }
 
+fn run_actor_update_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if let Some(update) = actor.get::<Option<Function>>("__songlua_update_function")? {
+        call_actor_function(lua, actor, &update)?;
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child? else {
+            continue;
+        };
+        run_actor_update_functions_for_table(lua, &child)?;
+    }
+    Ok(())
+}
+
 fn run_actor_init_command(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     run_actor_named_command(lua, actor, "InitCommand")
 }
@@ -833,7 +859,7 @@ fn run_actor_named_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result
     let Some(command) = actor.get::<Option<Function>>(name)? else {
         return Ok(());
     };
-    call_actor_function(lua, actor, &command)
+    run_guarded_actor_command(lua, actor, name, &command)
 }
 
 fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
@@ -854,6 +880,31 @@ fn call_actor_function(lua: &Lua, actor: &Table, command: &Function) -> mlua::Re
         });
     }
     command.call::<()>(actor.clone())
+}
+
+fn run_guarded_actor_command(
+    lua: &Lua,
+    actor: &Table,
+    name: &str,
+    command: &Function,
+) -> mlua::Result<()> {
+    let active = actor_active_commands(lua, actor)?;
+    if active.get::<Option<bool>>(name)?.unwrap_or(false) {
+        return Ok(());
+    }
+    active.set(name, true)?;
+    let result = call_actor_function(lua, actor, command);
+    active.set(name, Value::Nil)?;
+    result
+}
+
+fn actor_active_commands(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    if let Some(active) = actor.get::<Option<Table>>("__songlua_active_commands")? {
+        return Ok(active);
+    }
+    let active = lua.create_table()?;
+    actor.set("__songlua_active_commands", active.clone())?;
+    Ok(active)
 }
 
 fn read_overlay_actors(lua: &Lua, root: &Value) -> Result<Vec<SongLuaOverlayActor>, String> {
@@ -1342,6 +1393,9 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             }
         })?,
     )?;
+    for name in ["accelerate", "decelerate", "smooth"] {
+        actor.set(name, make_actor_tween_method(lua, actor)?)?;
+    }
     actor.set(
         "queuecommand",
         lua.create_function({
@@ -1350,9 +1404,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let Some(name) = args.get(1).cloned().and_then(read_string) else {
                     return Ok(actor.clone());
                 };
-                if let Some(command) = actor.get::<Option<Function>>(format!("{name}Command"))? {
-                    call_actor_function(lua, &actor, &command)?;
-                }
+                let command_name = format!("{name}Command");
+                run_actor_named_command(lua, &actor, &command_name)?;
                 Ok(actor.clone())
             }
         })?,
@@ -1365,9 +1418,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let Some(name) = args.get(1).cloned().and_then(read_string) else {
                     return Ok(actor.clone());
                 };
-                if let Some(command) = actor.get::<Option<Function>>(format!("{name}Command"))? {
-                    call_actor_function(lua, &actor, &command)?;
-                }
+                let command_name = format!("{name}Command");
+                run_actor_named_command(lua, &actor, &command_name)?;
                 Ok(actor.clone())
             }
         })?,
@@ -1493,7 +1545,19 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             }
         })?,
     )?;
-    for name in ["rotationz", "skewx", "SetUpdateFunction", "addy", "zoomz"] {
+    actor.set(
+        "SetUpdateFunction",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if let Some(Value::Function(function)) = args.get(1).cloned() {
+                    actor.set("__songlua_update_function", function)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    for name in ["rotationz", "skewx", "addy", "zoomz"] {
         actor.set(
             name,
             lua.create_function({
@@ -1505,6 +1569,33 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 }
             })?,
         )?;
+    }
+    for name in [
+        "blend",
+        "clearzbuffer",
+        "cropbottom",
+        "croptop",
+        "customtexturerect",
+        "diffuseshift",
+        "effectclock",
+        "effectcolor1",
+        "effectcolor2",
+        "effectmagnitude",
+        "effectperiod",
+        "fardistz",
+        "fov",
+        "rotationx",
+        "rotationy",
+        "spin",
+        "texcoordvelocity",
+        "vibrate",
+        "wag",
+        "z",
+        "zoomto",
+        "zoomx",
+        "zoomy",
+    ] {
+        actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
     actor.set(
         "diffuse",
@@ -1564,6 +1655,27 @@ fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     let _ = actor.set_metatable(Some(mt));
     Ok(())
+}
+
+fn make_actor_chain_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
+    let actor = actor.clone();
+    lua.create_function(move |_, _args: MultiValue| Ok(actor.clone()))
+}
+
+fn make_actor_tween_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
+    let actor = actor.clone();
+    lua.create_function(move |_, args: MultiValue| {
+        flush_actor_capture(&actor)?;
+        actor.set(
+            "__songlua_capture_duration",
+            args.get(1)
+                .cloned()
+                .and_then(read_f32)
+                .unwrap_or(0.0)
+                .max(0.0),
+        )?;
+        Ok(actor.clone())
+    })
 }
 
 fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {
@@ -2041,6 +2153,75 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "StartupReady");
+    }
+
+    #[test]
+    fn compile_song_lua_runs_set_update_function_once() {
+        let song_dir = test_dir("set-update-function");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:SetUpdateFunction(function()
+                mods = {
+                    {4, 1, "*100 no dark", "len"},
+                }
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "SetUpdateFunction Song"),
+        )
+        .unwrap();
+        assert_eq!(compiled.beat_mods.len(), 1);
+        assert_eq!(compiled.beat_mods[0].start, 4.0);
+    }
+
+    #[test]
+    fn compile_song_lua_guards_recursive_update_commands() {
+        let song_dir = test_dir("recursive-update");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local runs = 0
+
+return Def.ActorFrame{
+    Def.ActorFrame{
+        OnCommand=function(self)
+            self:queuecommand("Update")
+        end,
+        UpdateCommand=function(self)
+            runs = runs + 1
+            mod_actions = {
+                {runs, "LoopSafe", true},
+            }
+            self:sleep(1/60)
+            self:queuecommand("Update")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Recursive Update Song"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].beat, 1.0);
+        assert_eq!(compiled.messages[0].message, "LoopSafe");
     }
 
     #[test]
