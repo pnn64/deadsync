@@ -52,7 +52,6 @@ pub use itl::{
 // --- Grade Definitions ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-#[allow(dead_code)] // Quint will be used eventually for W0 tracking
 pub enum Grade {
     Quint,
     Tier01,
@@ -292,10 +291,10 @@ struct LocalScoreIndex {
     best_hard_ex: HashMap<String, BestScalar>,
 }
 
-const LOCAL_SCORE_INDEX_VERSION_V2: u16 = 2;
+const LOCAL_SCORE_INDEX_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, Encode, Decode)]
-struct LocalScoreIndexFileV2 {
+struct LocalScoreIndexFile {
     version: u16,
     index: LocalScoreIndex,
 }
@@ -338,9 +337,9 @@ fn local_score_index_path_for_profile(profile_id: &str) -> PathBuf {
 fn load_local_score_index_file(path: &Path) -> Option<LocalScoreIndex> {
     let bytes = fs::read(path).ok()?;
     let (file, _) =
-        bincode::decode_from_slice::<LocalScoreIndexFileV2, _>(&bytes, bincode::config::standard())
+        bincode::decode_from_slice::<LocalScoreIndexFile, _>(&bytes, bincode::config::standard())
             .ok()?;
-    if file.version != LOCAL_SCORE_INDEX_VERSION_V2 {
+    if file.version != LOCAL_SCORE_INDEX_VERSION {
         return None;
     }
     Some(file.index)
@@ -354,8 +353,8 @@ fn save_local_score_index_file(path: &Path, index: &LocalScoreIndex) {
         warn!("Failed to create local score index dir {parent:?}: {e}");
         return;
     }
-    let file = LocalScoreIndexFileV2 {
-        version: LOCAL_SCORE_INDEX_VERSION_V2,
+    let file = LocalScoreIndexFile {
+        version: LOCAL_SCORE_INDEX_VERSION,
         index: index.clone(),
     };
     let Ok(buf) = bincode::encode_to_vec(file, bincode::config::standard()) else {
@@ -580,7 +579,66 @@ fn is_better_itg(new: &CachedScore, old: &CachedScore) -> bool {
         (false, true) => return false,
         _ => {}
     }
-    new.score_percent > old.score_percent
+    if !same_score_10000(cached_score_10000(new), cached_score_10000(old)) {
+        return new.score_percent > old.score_percent;
+    }
+
+    let new_grade = grade_priority(new.grade);
+    let old_grade = grade_priority(old.grade);
+    if new_grade != old_grade {
+        return new_grade < old_grade;
+    }
+
+    let new_lamp = lamp_priority(new.lamp_index);
+    let old_lamp = lamp_priority(old.lamp_index);
+    if new_lamp != old_lamp {
+        return new_lamp < old_lamp;
+    }
+
+    let new_count = lamp_judge_count_priority(new.lamp_judge_count);
+    let old_count = lamp_judge_count_priority(old.lamp_judge_count);
+    new_count < old_count
+}
+
+#[inline(always)]
+const fn grade_priority(grade: Grade) -> u8 {
+    match grade {
+        Grade::Quint => 0,
+        Grade::Tier01 => 1,
+        Grade::Tier02 => 2,
+        Grade::Tier03 => 3,
+        Grade::Tier04 => 4,
+        Grade::Tier05 => 5,
+        Grade::Tier06 => 6,
+        Grade::Tier07 => 7,
+        Grade::Tier08 => 8,
+        Grade::Tier09 => 9,
+        Grade::Tier10 => 10,
+        Grade::Tier11 => 11,
+        Grade::Tier12 => 12,
+        Grade::Tier13 => 13,
+        Grade::Tier14 => 14,
+        Grade::Tier15 => 15,
+        Grade::Tier16 => 16,
+        Grade::Tier17 => 17,
+        Grade::Failed => u8::MAX,
+    }
+}
+
+#[inline(always)]
+const fn lamp_priority(lamp_index: Option<u8>) -> u8 {
+    match lamp_index {
+        Some(idx @ 0..=4) => idx,
+        Some(_) | None => u8::MAX,
+    }
+}
+
+#[inline(always)]
+const fn lamp_judge_count_priority(count: Option<u8>) -> u8 {
+    match count {
+        Some(value) => value,
+        None => u8::MAX,
+    }
 }
 
 #[inline(always)]
@@ -1177,7 +1235,11 @@ fn local_lamp_judge_count(count: u32) -> Option<u8> {
     }
 }
 
-fn compute_local_lamp(counts: [u32; 6], grade: Grade) -> (Option<u8>, Option<u8>) {
+fn compute_local_lamp(
+    counts: [u32; 6],
+    grade: Grade,
+    white_fantastics: Option<u32>,
+) -> (Option<u8>, Option<u8>) {
     if grade == Grade::Failed {
         return (None, None);
     }
@@ -1192,7 +1254,7 @@ fn compute_local_lamp(counts: [u32; 6], grade: Grade) -> (Option<u8>, Option<u8>
     let miss = counts[5];
 
     if miss == 0 && wayoff == 0 && decent == 0 && great == 0 && excellent == 0 {
-        return (Some(1), None);
+        return (Some(1), white_fantastics.and_then(local_lamp_judge_count));
     }
     if miss == 0 && wayoff == 0 && decent == 0 && great == 0 {
         return (Some(2), local_lamp_judge_count(excellent));
@@ -1657,7 +1719,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         }
 
         let counts = judgment_counts_arr(p);
-        let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade);
+        let white_fantastics = Some(gs.live_window_counts[player_idx].w1);
+        let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade, white_fantastics);
         let replay = replay_edges_for_player(gs, player_idx);
 
         let mut entry = LocalScoreEntryV1 {
@@ -1802,7 +1865,8 @@ pub fn save_local_summary_score_for_side(
         summary.window_counts.w5,
         summary.window_counts.miss,
     ];
-    let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, summary.grade);
+    let (lamp_index, lamp_judge_count) =
+        compute_local_lamp(counts, summary.grade, Some(summary.window_counts.w1));
     let mut entry = LocalScoreEntryV1 {
         version: LOCAL_SCORE_VERSION_V1,
         played_at_ms: now_ms,
@@ -2266,12 +2330,11 @@ fn cached_score_from_gs(
     }
     let lamp_index = compute_lamp_index(score_10000, comments, chart_hash);
     let lamp_judge_count = compute_lamp_judge_count(lamp_index, comments);
-    cached_score(
-        score_to_grade(score_10000),
-        score_10000 / 10000.0,
-        lamp_index,
-        lamp_judge_count,
-    )
+    let mut grade = score_to_grade(score_10000);
+    if lamp_index == Some(0) {
+        grade = Grade::Quint;
+    }
+    cached_score(grade, score_10000 / 10000.0, lamp_index, lamp_judge_count)
 }
 
 fn cache_gs_score_for_profile(
@@ -3191,12 +3254,36 @@ fn find_chart_stats_for_hash(chart_hash: &str) -> Option<rssp::stats::ArrowStats
 fn compute_lamp_index(score: f64, comment: Option<&str>, chart_hash: &str) -> Option<u8> {
     let score_percent = score / 10000.0;
 
-    // Perfect 100%: always at least a W1 full combo lamp.
-    // Use a very small epsilon so only true 100.00% (score == 10000) hits this,
-    // not 99.95% (score == 9995) or similar edge cases.
+    // Perfect 100%: a comment with no white/excellent-or-worse judgments is a
+    // true quint; otherwise it is at least a W1 full combo lamp.
     if (score_percent - 1.0).abs() <= 1e-9 {
+        if let Some(comment) = comment {
+            let counts = parse_comment_counts(comment);
+            if counts.w == 0
+                && counts.e == 0
+                && counts.g == 0
+                && counts.d == 0
+                && counts.wo == 0
+                && counts.m == 0
+            {
+                debug!(
+                    "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> Quint lamp (index=0)",
+                    chart_hash,
+                    score_percent * 100.0,
+                    comment
+                );
+                return Some(0);
+            }
+            debug!(
+                "GrooveStats lamp: hash={} score={:.4}% comment=\"{}\" -> Quad lamp (W1 FC, index=1)",
+                chart_hash,
+                score_percent * 100.0,
+                comment
+            );
+            return Some(1);
+        }
         debug!(
-            "GrooveStats lamp: hash={} score={:.4}% -> Quad lamp (W1 FC, no DP check needed)",
+            "GrooveStats lamp: hash={} score={:.4}% -> Quad lamp (W1 FC, no comment available)",
             chart_hash,
             score_percent * 100.0
         );
@@ -3376,10 +3463,11 @@ fn compute_lamp_judge_count(lamp_index: Option<u8>, comment: Option<&str>) -> Op
     let counts = parse_comment_counts(comment);
 
     // zmod-style single-digit overlay:
+    // - lamp 1 shows #white fantastics
     // - lamp 2 shows #W2
     // - lamp 3 shows #W3
-    // (lamp 1 would show FA+ blue W1 count, which we don't track yet)
     let count = match lamp_index {
+        1 => counts.w,
         2 => counts.e,
         3 => counts.g,
         _ => return None,
@@ -3880,8 +3968,66 @@ mod tests {
 
     #[test]
     fn groovestats_lamp_judge_count_ignores_ds_prefix() {
+        assert_eq!(compute_lamp_judge_count(Some(1), Some("[DS], 4w")), Some(4));
         assert_eq!(compute_lamp_judge_count(Some(2), Some("[DS], 5e")), Some(5));
         assert_eq!(compute_lamp_judge_count(Some(3), Some("[DS], 2g")), Some(2));
+    }
+
+    #[test]
+    fn cached_score_from_gs_detects_quint_from_fa_comment() {
+        let cached = cached_score_from_gs(10_000.0, Some("[DS], FA+, 100.00EX"), "deadbeef", false);
+
+        assert_eq!(cached.grade, Grade::Quint);
+        assert_eq!(cached.lamp_index, Some(0));
+        assert_eq!(cached.lamp_judge_count, None);
+    }
+
+    #[test]
+    fn cached_score_from_gs_keeps_quad_white_count() {
+        let cached =
+            cached_score_from_gs(10_000.0, Some("[DS], FA+, 99.71EX, 3w"), "deadbeef", false);
+
+        assert_eq!(cached.grade, Grade::Tier01);
+        assert_eq!(cached.lamp_index, Some(1));
+        assert_eq!(cached.lamp_judge_count, Some(3));
+    }
+
+    #[test]
+    fn local_lamp_uses_single_digit_white_fantastics() {
+        assert_eq!(
+            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Tier01, Some(5)),
+            (Some(1), Some(5))
+        );
+        assert_eq!(
+            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0)),
+            (Some(0), None)
+        );
+    }
+
+    #[test]
+    fn is_better_itg_prefers_richer_tied_score() {
+        let quad = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: Some(3),
+        };
+        let quint = CachedScore {
+            grade: Grade::Quint,
+            score_percent: 1.0,
+            lamp_index: Some(0),
+            lamp_judge_count: None,
+        };
+        let bland_quad = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: None,
+        };
+
+        assert!(is_better_itg(&quint, &quad));
+        assert!(is_better_itg(&quad, &bland_quad));
+        assert!(!is_better_itg(&bland_quad, &quad));
     }
 
     #[test]
