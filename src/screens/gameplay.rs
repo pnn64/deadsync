@@ -864,52 +864,21 @@ fn song_lua_overlay_states(state: &State) -> Vec<SongLuaOverlayState> {
     out
 }
 
-fn song_lua_overlay_first_visible_second(
-    state: &State,
-    overlay_index: usize,
-    overlay: &SongLuaOverlayActor,
-) -> Option<f32> {
-    let mut first: Option<f32> = overlay.initial_state.visible.then_some(0.0_f32);
-    for event in &state.song_lua_messages {
-        let Some(command) = overlay
-            .message_commands
-            .iter()
-            .find(|command| command.message.eq_ignore_ascii_case(&event.message))
-        else {
-            continue;
-        };
-        let event_second = state.timing.get_time_for_beat(event.beat);
-        for block in &command.blocks {
-            if block.delta.visible == Some(true) {
-                let candidate = event_second + block.start.max(0.0);
-                first = Some(first.map_or(candidate, |current| current.min(candidate)));
-                break;
-            }
-        }
-    }
-    for ease in &state.song_lua_overlay_eases {
-        if ease.overlay_index != overlay_index {
-            continue;
-        }
-        if ease.from.visible == Some(true) || ease.to.visible == Some(true) {
-            first = Some(first.map_or(ease.start_second, |current| current.min(ease.start_second)));
-        }
-    }
-    first
-}
-
-fn song_lua_proxy_active_players(state: &State) -> [bool; 2] {
+fn song_lua_proxy_active_players(
+    overlays: &[SongLuaOverlayActor],
+    overlay_states: &[SongLuaOverlayState],
+) -> [bool; 2] {
     let mut out = [false; 2];
-    let now = state.current_music_time_display;
-    for (overlay_index, overlay) in state.song_lua_overlays.iter().enumerate() {
+    for (overlay_index, overlay) in overlays.iter().enumerate() {
         let SongLuaOverlayKind::ActorProxy { player_index } = &overlay.kind else {
             continue;
         };
         if *player_index >= out.len() {
             continue;
         }
-        if song_lua_overlay_first_visible_second(state, overlay_index, overlay)
-            .is_some_and(|first_second| now + f32::EPSILON >= first_second)
+        if overlay_states
+            .get(overlay_index)
+            .is_some_and(|proxy_state| proxy_state.visible && proxy_state.diffuse[3] > f32::EPSILON)
         {
             out[*player_index] = true;
         }
@@ -1430,7 +1399,8 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     let overlay_states = song_lua_overlay_states(state);
-    let proxy_active_players = song_lua_proxy_active_players(state);
+    let proxy_active_players =
+        song_lua_proxy_active_players(&state.song_lua_overlays, &overlay_states);
 
     let notefield_width = |player_idx: usize| -> f32 {
         let Some(ns) = state.noteskin[player_idx].as_ref() else {

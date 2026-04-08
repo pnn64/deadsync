@@ -628,8 +628,59 @@ struct PlayerLuaTables {
     steps: [Table; LUA_PLAYERS],
 }
 
+fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    if let Some(children) = actor.get::<Option<Table>>("__songlua_children")? {
+        return Ok(children);
+    }
+    let children = lua.create_table()?;
+    actor.set("__songlua_children", children.clone())?;
+    Ok(children)
+}
+
+fn actor_wrappers(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
+        return Ok(wrappers);
+    }
+    let wrappers = lua.create_table()?;
+    actor.set("__songlua_wrappers", wrappers.clone())?;
+    Ok(wrappers)
+}
+
+fn copy_dummy_actor_tags(from: &Table, into: &Table) -> mlua::Result<()> {
+    if let Some(player_index) = from.get::<Option<i64>>("__songlua_player_index")? {
+        into.set("__songlua_player_index", player_index)?;
+    }
+    if let Some(child_name) = from.get::<Option<String>>("__songlua_player_child_name")? {
+        into.set("__songlua_player_child_name", child_name)?;
+    }
+    if let Some(child_name) = from.get::<Option<String>>("__songlua_top_screen_child_name")? {
+        into.set("__songlua_top_screen_child_name", child_name)?;
+    }
+    Ok(())
+}
+
+fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
+    let child = create_dummy_actor(lua, "ChildActor")?;
+    copy_dummy_actor_tags(parent, &child)?;
+    if parent
+        .get::<Option<String>>("__songlua_actor_type")?
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
+    {
+        child.set("__songlua_player_child_name", name)?;
+    } else if parent
+        .get::<Option<String>>("__songlua_actor_type")?
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
+    {
+        child.set("__songlua_top_screen_child_name", name)?;
+    }
+    Ok(child)
+}
+
 fn create_top_screen_table(lua: &Lua, player_enabled: [bool; LUA_PLAYERS]) -> mlua::Result<Table> {
     let top_screen = create_dummy_actor(lua, "TopScreen")?;
+    let top_screen_for_get_child = top_screen.clone();
     let player_actors = [
         create_top_screen_player_actor(lua, 0)?,
         create_top_screen_player_actor(lua, 1)?,
@@ -644,7 +695,13 @@ fn create_top_screen_table(lua: &Lua, player_enabled: [bool; LUA_PLAYERS]) -> ml
                     Ok(Value::Nil)
                 };
             }
-            Ok(Value::Table(create_dummy_actor(lua, "TopScreenChild")?))
+            let children = actor_children(lua, &top_screen_for_get_child)?;
+            if let Some(child) = children.get::<Option<Table>>(name.as_str())? {
+                return Ok(Value::Table(child));
+            }
+            let child = create_named_child_actor(lua, &top_screen_for_get_child, &name)?;
+            children.set(name.as_str(), child.clone())?;
+            Ok(Value::Table(child))
         })?,
     )?;
     Ok(top_screen)
@@ -653,12 +710,6 @@ fn create_top_screen_table(lua: &Lua, player_enabled: [bool; LUA_PLAYERS]) -> ml
 fn create_top_screen_player_actor(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, "PlayerActor")?;
     actor.set("__songlua_player_index", player_index as i64)?;
-    actor.set(
-        "GetChild",
-        lua.create_function(move |lua, (_self, _name): (Table, String)| {
-            create_dummy_actor(lua, "PlayerChild")
-        })?,
-    )?;
     Ok(actor)
 }
 
@@ -1036,6 +1087,14 @@ fn read_overlay_actors_from_table(
     parent_index: Option<usize>,
     out: &mut Vec<OverlayCompileActor>,
 ) -> Result<(), String> {
+    if actor
+        .get::<Option<String>>("__songlua_actor_type")
+        .map_err(|err| err.to_string())?
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture"))
+    {
+        return Ok(());
+    }
     let next_parent_index = if let Some(overlay) = read_overlay_actor(lua, actor, parent_index)? {
         let index = out.len();
         out.push(overlay);
@@ -1907,32 +1966,75 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             }
         })?,
     )?;
-    let child = actor.clone();
     actor.set(
         "GetChild",
-        lua.create_function(move |_, (_self, _name): (Table, String)| Ok(child.clone()))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, (_self, name): (Table, String)| {
+                let children = actor_children(lua, &actor)?;
+                if let Some(child) = children.get::<Option<Table>>(name.as_str())? {
+                    return Ok(child);
+                }
+                let child = create_named_child_actor(lua, &actor, &name)?;
+                children.set(name.as_str(), child.clone())?;
+                Ok(child)
+            }
+        })?,
     )?;
-    let wrapper = actor.clone();
     actor.set(
         "GetWrapperState",
-        lua.create_function(move |_, (_self, _index): (Table, i64)| Ok(wrapper.clone()))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, (_self, index): (Table, i64)| {
+                let Some(wrapper) = actor_wrappers(lua, &actor)?.get::<Option<Table>>(index)?
+                else {
+                    return Ok(Value::Nil);
+                };
+                Ok(Value::Table(wrapper))
+            }
+        })?,
     )?;
     actor.set(
         "GetNumWrapperStates",
-        lua.create_function(|_, _self: Table| Ok(0_i64))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _self: Table| Ok(actor_wrappers(lua, &actor)?.raw_len() as i64)
+        })?,
     )?;
-    let add_wrapper = actor.clone();
     actor.set(
         "AddWrapperState",
-        lua.create_function(move |_, _self: Table| Ok(add_wrapper.clone()))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _self: Table| {
+                let wrapper = create_dummy_actor(lua, "WrapperState")?;
+                copy_dummy_actor_tags(&actor, &wrapper)?;
+                let wrappers = actor_wrappers(lua, &actor)?;
+                let next_index = wrappers.raw_len() + 1;
+                wrappers.raw_set(next_index, wrapper.clone())?;
+                Ok(wrapper)
+            }
+        })?,
     )?;
     actor.set(
         "GetChildren",
-        lua.create_function(|lua, _self: Table| lua.create_table())?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _self: Table| actor_children(lua, &actor)
+        })?,
     )?;
     actor.set(
         "GetNumChildren",
-        lua.create_function(|_, _self: Table| Ok(0_i64))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _self: Table| {
+                let mut count = 0_i64;
+                for pair in actor_children(lua, &actor)?.pairs::<Value, Value>() {
+                    let _ = pair?;
+                    count += 1;
+                }
+                Ok(count)
+            }
+        })?,
     )?;
     actor.set("GetX", lua.create_function(|_, _self: Table| Ok(0.0_f32))?)?;
     actor.set("GetY", lua.create_function(|_, _self: Table| Ok(0.0_f32))?)?;
@@ -3067,8 +3169,13 @@ return Def.ActorFrame{
         end,
         BindCommand=function(self)
             local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
-            if p then
-                self:SetTarget(p)
+            local nf = p and p:GetChild("NoteField") or nil
+            if nf and nf:GetNumWrapperStates() == 0 then
+                nf:AddWrapperState()
+            end
+            local wrapper = nf and nf:GetWrapperState(1) or nil
+            if wrapper then
+                self:SetTarget(wrapper)
             end
             self:visible(false)
         end,
@@ -3097,6 +3204,53 @@ return Def.ActorFrame{
                 .visible,
             Some(true)
         );
+    }
+
+    #[test]
+    fn compile_song_lua_ignores_actorframetexture_subtree() {
+        let song_dir = test_dir("overlay-aft");
+        let entry = song_dir.join("default.lua");
+        let overlay_dir = song_dir.join("gfx");
+        fs::create_dir_all(&overlay_dir).unwrap();
+        fs::write(
+            overlay_dir.join("inner.png"),
+            b"not-an-image-but-good-enough-for-parser",
+        )
+        .unwrap();
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.ActorFrameTexture{
+        Name="CaptureAFT",
+        Def.ActorProxy{
+            Name="ProxyP1",
+            OnCommand=function(self)
+                local p = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+                if p then
+                    self:SetTarget(p)
+                end
+                self:visible(true)
+            end,
+        },
+        Def.Sprite{
+            Texture="gfx/inner.png",
+            OnCommand=function(self)
+                self:visible(true)
+            end,
+        },
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay AFT"),
+        )
+        .unwrap();
+        assert!(compiled.overlays.is_empty());
     }
 
     #[test]
