@@ -4062,7 +4062,6 @@ fn build_song_lua_overlay_ease_windows(
             timing_player,
             global_offset_seconds,
             start_second,
-            sustain_end_second,
         );
         out.push(SongLuaOverlayEaseWindowRuntime {
             overlay_index: ease.overlay_index,
@@ -4086,8 +4085,9 @@ fn song_lua_overlay_ease_cutoff_second(
     timing_player: &TimingData,
     global_offset_seconds: f32,
     start_second: f32,
-    sustain_end_second: f32,
 ) -> Option<f32> {
+    const SAME_TICK_CUTOFF_EPSILON: f32 = 0.001;
+
     let overlay = compiled.overlays.get(ease.overlay_index)?;
     let mut cutoff_second: Option<f32> = None;
     for event in &compiled.messages {
@@ -4097,10 +4097,7 @@ fn song_lua_overlay_ease_cutoff_second(
             timing_player,
             global_offset_seconds,
         );
-        if !event_second.is_finite()
-            || event_second < start_second
-            || event_second > sustain_end_second
-        {
+        if !event_second.is_finite() || event_second < start_second {
             continue;
         }
         let Some(command) = overlay
@@ -4117,9 +4114,7 @@ fn song_lua_overlay_ease_cutoff_second(
                 continue;
             }
             let block_second = event_second + block.start.max(0.0);
-            if !block_second.is_finite()
-                || block_second < start_second
-                || block_second > sustain_end_second
+            if !block_second.is_finite() || block_second <= start_second + SAME_TICK_CUTOFF_EPSILON
             {
                 continue;
             }
@@ -16020,6 +16015,136 @@ mod tests {
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0].cutoff_second, Some(4.0));
         assert_eq!(windows[0].end_second, 8.0);
+    }
+
+    #[test]
+    fn song_lua_overlay_eases_ignore_same_timestamp_setup_blocks() {
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(8 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            overlays: vec![crate::game::parsing::song_lua::SongLuaOverlayActor {
+                kind: crate::game::parsing::song_lua::SongLuaOverlayKind::ActorFrame,
+                name: None,
+                parent_index: None,
+                initial_state: crate::game::parsing::song_lua::SongLuaOverlayState::default(),
+                message_commands: vec![
+                    crate::game::parsing::song_lua::SongLuaOverlayMessageCommand {
+                        message: "SetupZoom".to_string(),
+                        blocks: vec![crate::game::parsing::song_lua::SongLuaOverlayCommandBlock {
+                            start: 0.0,
+                            duration: 0.0,
+                            easing: None,
+                            opt1: None,
+                            opt2: None,
+                            delta: crate::game::parsing::song_lua::SongLuaOverlayStateDelta {
+                                zoom: Some(1.5),
+                                ..Default::default()
+                            },
+                        }],
+                    },
+                ],
+            }],
+            overlay_eases: vec![crate::game::parsing::song_lua::SongLuaOverlayEase {
+                overlay_index: 0,
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 8.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                from: crate::game::parsing::song_lua::SongLuaOverlayStateDelta {
+                    zoom: Some(1.5),
+                    ..Default::default()
+                },
+                to: crate::game::parsing::song_lua::SongLuaOverlayStateDelta {
+                    zoom: Some(1.0),
+                    ..Default::default()
+                },
+                easing: Some("linear".to_string()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            }],
+            messages: vec![crate::game::parsing::song_lua::SongLuaMessageEvent {
+                beat: 0.0,
+                message: "SetupZoom".to_string(),
+                persists: true,
+            }],
+            ..Default::default()
+        };
+
+        let windows = super::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+
+        assert_eq!(windows.len(), 1);
+        assert_eq!(windows[0].cutoff_second, None);
+        assert_eq!(windows[0].end_second, 8.0);
+    }
+
+    #[test]
+    fn song_lua_overlay_eases_stop_persisting_after_later_reset_messages() {
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(8 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            overlays: vec![crate::game::parsing::song_lua::SongLuaOverlayActor {
+                kind: crate::game::parsing::song_lua::SongLuaOverlayKind::Quad,
+                name: None,
+                parent_index: None,
+                initial_state: crate::game::parsing::song_lua::SongLuaOverlayState::default(),
+                message_commands: vec![
+                    crate::game::parsing::song_lua::SongLuaOverlayMessageCommand {
+                        message: "ResetBlack".to_string(),
+                        blocks: vec![crate::game::parsing::song_lua::SongLuaOverlayCommandBlock {
+                            start: 0.0,
+                            duration: 0.0,
+                            easing: None,
+                            opt1: None,
+                            opt2: None,
+                            delta: crate::game::parsing::song_lua::SongLuaOverlayStateDelta {
+                                diffuse: Some([0.0, 0.0, 0.0, 0.0]),
+                                ..Default::default()
+                            },
+                        }],
+                    },
+                ],
+            }],
+            overlay_eases: vec![crate::game::parsing::song_lua::SongLuaOverlayEase {
+                overlay_index: 0,
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 2.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                from: crate::game::parsing::song_lua::SongLuaOverlayStateDelta {
+                    diffuse: Some([0.0, 0.0, 0.0, 0.0]),
+                    ..Default::default()
+                },
+                to: crate::game::parsing::song_lua::SongLuaOverlayStateDelta {
+                    diffuse: Some([0.0, 0.0, 0.0, 1.0]),
+                    ..Default::default()
+                },
+                easing: Some("linear".to_string()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            }],
+            messages: vec![crate::game::parsing::song_lua::SongLuaMessageEvent {
+                beat: 4.0,
+                message: "ResetBlack".to_string(),
+                persists: true,
+            }],
+            ..Default::default()
+        };
+
+        let windows = super::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+
+        assert_eq!(windows.len(), 1);
+        assert_eq!(windows[0].end_second, 2.0);
+        assert_eq!(windows[0].cutoff_second, Some(4.0));
     }
 
     #[test]
