@@ -250,6 +250,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "VideoRenderer", default.video_renderer);
     push_bool(content, "Vsync", default.vsync);
     push_bool(content, "Windowed", default.windowed);
+    push_bool(content, "WriteCurrentScreen", default.write_current_screen);
     content.push('\n');
 }
 

@@ -5740,6 +5740,7 @@ impl App {
                                 song_arc.title, e
                             );
                             self.state.screens.current_screen = CurrentScreen::PlayerOptions;
+                            screen_nav::write_current_screen_file(CurrentScreen::PlayerOptions);
                             self.state.screens.player_options_state = Some(po_state);
                             return commands;
                         }

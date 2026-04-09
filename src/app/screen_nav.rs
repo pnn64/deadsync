@@ -150,6 +150,7 @@ impl App {
     ) {
         let prev = self.state.screens.current_screen;
         self.state.screens.current_screen = target_screen;
+        write_current_screen_file(target_screen);
         if target_screen == CurrentScreen::SelectColor {
             select_color::on_enter(&mut self.state.screens.select_color_state);
         }
@@ -340,6 +341,7 @@ impl App {
         if from == CurrentScreen::Init && target == CurrentScreen::Menu {
             debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
             self.state.screens.current_screen = target;
+            write_current_screen_file(target);
             self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
             crate::engine::present::runtime::clear_all();
             return;
@@ -439,6 +441,7 @@ impl App {
 
         let prev = self.state.screens.current_screen;
         self.state.screens.current_screen = target;
+        write_current_screen_file(target);
         if target != CurrentScreen::Gameplay {
             self.state.gameplay_offset_save_prompt = None;
         }
@@ -527,5 +530,22 @@ impl App {
             CurrentScreen::Input => input_screen::in_transition(),
             CurrentScreen::Init => (vec![], 0.0),
         }
+    }
+}
+
+pub(super) fn write_current_screen_file(screen: CurrentScreen) {
+    if !config::get().write_current_screen {
+        return;
+    }
+    let path = dirs::app_dirs().current_screen_path();
+    if let Some(parent) = path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            log::warn!("Failed to create current_screen.txt parent dir: {e}");
+            return;
+        }
+    }
+    let name = screen.current_screen_file_name();
+    if let Err(e) = std::fs::write(&path, name) {
+        log::warn!("Failed to write current_screen.txt: {e}");
     }
 }

@@ -75,6 +75,7 @@ const OPTION_KEYS: &[&str] = &[
     "VisualDelaySeconds",
     "Vsync",
     "Windowed",
+    "WriteCurrentScreen",
 ];
 
 const THEME_KEYS: &[&str] = &[

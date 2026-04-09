@@ -314,6 +314,7 @@ pub const ITEMS: &[Item] = &[
             "Menu Music",
             "Keyboard Features",
             "Video BGs",
+            "Write Current Screen",
         ],
     },
     Item {
@@ -693,6 +694,7 @@ const MACHINE_ROW_MENU_MUSIC: &str = "Menu Music";
 const MACHINE_ROW_REPLAYS: &str = "Replays";
 const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
 const MACHINE_ROW_VIDEO_BGS: &str = "Video BGs";
+const MACHINE_ROW_WRITE_CURRENT_SCREEN: &str = "Write Current Screen";
 const ADVANCED_ROW_DEFAULT_FAIL_TYPE: &str = "Default Fail Type";
 const ADVANCED_ROW_BANNER_CACHE: &str = "Banner Cache";
 const ADVANCED_ROW_CDTITLE_CACHE: &str = "CDTitle Cache";
@@ -1367,6 +1369,11 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: MACHINE_ROW_WRITE_CURRENT_SCREEN,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
         label: MACHINE_ROW_MENU_MUSIC,
         choices: &["Off", "On"],
         inline: true,
@@ -1424,6 +1431,10 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     Item {
         name: MACHINE_ROW_GAMEOVER,
         help: &["Show or skip the Gameover screen after Name Entry."],
+    },
+    Item {
+        name: MACHINE_ROW_WRITE_CURRENT_SCREEN,
+        help: &["Write the active screen name to save/current_screen.txt on each transition."],
     },
     Item {
         name: MACHINE_ROW_MENU_MUSIC,
@@ -5063,6 +5074,12 @@ pub fn init() -> State {
         usize::from(cfg.show_video_backgrounds),
     );
     set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_WRITE_CURRENT_SCREEN,
+        usize::from(cfg.write_current_screen),
+    );
+    set_choice_by_label(
         &mut state.sub_choice_indices_advanced,
         ADVANCED_OPTIONS_ROWS,
         ADVANCED_ROW_DEFAULT_FAIL_TYPE,
@@ -6894,6 +6911,7 @@ fn apply_submenu_choice_delta(
             MACHINE_ROW_REPLAYS => config::update_machine_enable_replays(enabled),
             MACHINE_ROW_KEYBOARD_FEATURES => config::update_keyboard_features(enabled),
             MACHINE_ROW_VIDEO_BGS => config::update_show_video_backgrounds(enabled),
+            MACHINE_ROW_WRITE_CURRENT_SCREEN => config::update_write_current_screen(enabled),
             _ => {}
         }
     } else if matches!(kind, SubmenuKind::Advanced) {

@@ -37,6 +37,10 @@ impl AppDirs {
         self.data_dir.join("save").join("screenshots")
     }
 
+    pub fn current_screen_path(&self) -> PathBuf {
+        self.data_dir.join("save").join("current_screen.txt")
+    }
+
     pub fn songs_dir(&self) -> PathBuf {
         self.data_dir.join("songs")
     }

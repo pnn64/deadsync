@@ -113,6 +113,17 @@ pub fn update_show_video_backgrounds(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_write_current_screen(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.write_current_screen == enabled {
+            return;
+        }
+        cfg.write_current_screen = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_machine_show_select_color(enabled: bool) {
     {
         let mut cfg = lock_config();
