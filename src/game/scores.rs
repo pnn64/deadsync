@@ -718,8 +718,8 @@ fn profile_initials_for_id(profile_id: &str) -> Option<String> {
         return None;
     }
     let s = ini.get("userprofile", "PlayerInitials")?;
-    let s = s.trim();
-    (!s.is_empty()).then_some(s.to_string())
+    let s = profile::sanitize_player_initials(&s);
+    (!s.is_empty()).then_some(s)
 }
 
 fn ensure_machine_local_score_cache_loaded() {

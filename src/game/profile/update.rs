@@ -7,8 +7,8 @@ use super::{
     clamp_custom_fantastic_window_ms, error_bar_style_from_mask, error_bar_text_from_mask,
     lock_profiles, normalize_accel_effects_mask, normalize_appearance_effects_mask,
     normalize_error_bar_mask, normalize_holds_mask, normalize_insert_mask, normalize_remove_mask,
-    normalize_visual_effects_mask, save_profile_ini_for_side, save_profile_stats_for_side,
-    session_side_is_guest, side_ix,
+    normalize_visual_effects_mask, sanitize_player_initials, save_profile_ini_for_side,
+    save_profile_stats_for_side, session_side_is_guest, side_ix,
 };
 use chrono::Local;
 use std::path::Path;
@@ -79,14 +79,17 @@ pub fn update_player_initials_for_side(side: PlayerSide, initials: &str) {
     if session_side_is_guest(side) {
         return;
     }
-    let initials = initials.trim();
+    let initials = sanitize_player_initials(initials);
+    if initials.is_empty() {
+        return;
+    }
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
         if profile.player_initials == initials {
             return;
         }
-        profile.player_initials = initials.to_string();
+        profile.player_initials = initials;
     }
     save_profile_ini_for_side(side);
 }

@@ -18,7 +18,7 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 
 const STAGE_CYCLE_SECONDS: f32 = 4.0;
 
-const CHARACTER_LIMIT: usize = 4;
+const CHARACTER_LIMIT: usize = profile::PLAYER_INITIALS_MAX_LEN;
 
 /* -------------------------- hold-to-scroll timing ------------------------- */
 // ITGmania `_fallback` [ScreenNameEntryTraditional]: RepeatDelay=1/4, RepeatRate=15.
@@ -139,16 +139,7 @@ fn player_color_rgba(side: profile::PlayerSide, active_color_index: i32) -> [f32
 }
 
 fn sanitize_name(raw: &str) -> String {
-    let mut out = String::with_capacity(CHARACTER_LIMIT);
-    for ch in raw.chars() {
-        if out.len() >= CHARACTER_LIMIT {
-            break;
-        }
-        if ch.is_ascii_alphanumeric() || ch == '?' || ch == '!' {
-            out.push(ch.to_ascii_uppercase());
-        }
-    }
-    out
+    profile::sanitize_player_initials(raw)
 }
 
 #[inline(always)]

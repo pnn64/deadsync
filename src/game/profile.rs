@@ -17,6 +17,7 @@ pub use update::*;
 
 pub const DEFAULT_WEIGHT_POUNDS: i32 = 120;
 pub const DEFAULT_BIRTH_YEAR: i32 = 1995;
+pub const PLAYER_INITIALS_MAX_LEN: usize = 4;
 // Shared player-option HUD offset range, in logical pixels.
 pub const HUD_OFFSET_MIN: i32 = -250;
 pub const HUD_OFFSET_MAX: i32 = 250;
@@ -3704,6 +3705,8 @@ fn load_for_side(side: PlayerSide) {
                 .unwrap_or(default_profile.display_name.clone());
             profile.player_initials = profile_conf
                 .get("userprofile", "PlayerInitials")
+                .map(|initials| sanitize_player_initials(&initials))
+                .filter(|initials| !initials.is_empty())
                 .unwrap_or(default_profile.player_initials.clone());
             profile.player_options_singles = load_player_options(
                 &profile_conf,
@@ -4168,15 +4171,7 @@ fn allocate_local_profile_id() -> Result<String, std::io::Error> {
 }
 
 fn initials_from_name(name: &str) -> String {
-    let mut out = String::new();
-    for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_uppercase());
-            if out.len() >= 2 {
-                break;
-            }
-        }
-    }
+    let mut out = sanitize_player_initials(name);
     match out.len() {
         0 => "??".to_string(),
         1 => {
@@ -4185,6 +4180,19 @@ fn initials_from_name(name: &str) -> String {
         }
         _ => out,
     }
+}
+
+pub fn sanitize_player_initials(raw: &str) -> String {
+    let mut out = String::with_capacity(PLAYER_INITIALS_MAX_LEN);
+    for ch in raw.chars() {
+        if out.len() >= PLAYER_INITIALS_MAX_LEN {
+            break;
+        }
+        if ch.is_ascii_alphanumeric() || ch == '?' || ch == '!' {
+            out.push(ch.to_ascii_uppercase());
+        }
+    }
+    out
 }
 
 pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error> {
@@ -4475,8 +4483,9 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LastPlayed, NoteSkin, PlayStyle, Profile,
-        TimingWindowsOption, parse_groovestats_is_pad_player,
+        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, LastPlayed, NoteSkin, PLAYER_INITIALS_MAX_LEN,
+        PlayStyle, Profile, TimingWindowsOption, initials_from_name,
+        parse_groovestats_is_pad_player, sanitize_player_initials,
     };
 
     #[test]
@@ -4511,6 +4520,21 @@ mod tests {
             Some("abc".to_string()),
             false
         ));
+    }
+
+    #[test]
+    fn sanitize_player_initials_limits_to_four_chars() {
+        assert_eq!(sanitize_player_initials("ab?c!de"), "AB?C");
+        assert_eq!(sanitize_player_initials("a b-c_d"), "ABCD");
+        assert_eq!(sanitize_player_initials(""), "");
+        assert_eq!(PLAYER_INITIALS_MAX_LEN, 4);
+    }
+
+    #[test]
+    fn initials_from_name_uses_four_char_default() {
+        assert_eq!(initials_from_name("john smith"), "JOHN");
+        assert_eq!(initials_from_name("a"), "A?");
+        assert_eq!(initials_from_name("!!!"), "??");
     }
 
     #[test]
