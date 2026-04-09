@@ -2915,9 +2915,9 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
     state.last_requested_chart_hash_p2 = None;
 }
 
-fn start_reload_songs_and_courses(state: &mut State) {
+fn begin_reload_ui(state: &mut State) -> Option<mpsc::Sender<ReloadMsg>> {
     if state.reload_ui.is_some() {
-        return;
+        return None;
     }
 
     clear_preview(state);
@@ -2941,6 +2941,13 @@ fn start_reload_songs_and_courses(state: &mut State) {
 
     let (tx, rx) = mpsc::channel::<ReloadMsg>();
     state.reload_ui = Some(ReloadUiState::new(rx));
+    Some(tx)
+}
+
+fn start_reload_songs_and_courses(state: &mut State) {
+    let Some(tx) = begin_reload_ui(state) else {
+        return;
+    };
 
     std::thread::spawn(move || {
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
@@ -2973,6 +2980,32 @@ fn start_reload_songs_and_courses(state: &mut State) {
             &dirs.courses_dir(),
             &dirs.songs_dir(),
             &mut on_course,
+        );
+
+        let _ = tx.send(ReloadMsg::Done);
+    });
+}
+
+fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) {
+    let Some(tx) = begin_reload_ui(state) else {
+        return;
+    };
+
+    std::thread::spawn(move || {
+        let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
+
+        let mut on_song = |done: usize, total: usize, pack: &str, song: &str| {
+            let _ = tx.send(ReloadMsg::Song {
+                done,
+                total,
+                pack: pack.to_owned(),
+                song: song.to_owned(),
+            });
+        };
+        song_loading::reload_song_dirs_with_progress_counts(
+            &dirs::app_dirs().songs_dir(),
+            &pack_dirs,
+            &mut on_song,
         );
 
         let _ = tx.send(ReloadMsg::Done);
@@ -6397,8 +6430,9 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         profile_boxes::update(overlay, dt);
         return ScreenAction::None;
     }
-    if crate::game::online::downloads::take_ready_song_reload_request() {
-        start_reload_songs_and_courses(state);
+    let reload_dirs = crate::game::online::downloads::take_ready_song_reload_request();
+    if !reload_dirs.is_empty() {
+        start_reload_song_dirs(state, reload_dirs);
         return ScreenAction::None;
     }
 

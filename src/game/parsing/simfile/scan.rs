@@ -1,6 +1,6 @@
 use super::{fmt_scan_time, process_song};
 use crate::config::dirs;
-use crate::game::song::{SongData, SongPack, set_song_cache};
+use crate::game::song::{SongData, SongPack, get_song_cache, set_song_cache};
 use log::{debug, info, warn};
 use rssp::pack::{PackScan, SongScan};
 use std::collections::HashMap;
@@ -28,30 +28,45 @@ where
     scan_and_load_songs_impl(root_path, Some(progress));
 }
 
-pub(crate) fn collect_song_scan_roots(root_path: &Path) -> Vec<PathBuf> {
-    fn push_unique_root(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<String>) {
-        let mut key = path.to_string_lossy().into_owned();
-        if cfg!(windows) {
-            key.make_ascii_lowercase();
-        }
-        if keys.iter().any(|existing| existing == &key) {
-            return;
-        }
-        keys.push(key);
-        roots.push(path);
-    }
+pub fn reload_song_dirs_with_progress_counts<F>(
+    root_path: &Path,
+    dirs: &[PathBuf],
+    progress: &mut F,
+) where
+    F: FnMut(usize, usize, &str, &str),
+{
+    reload_song_dirs_impl(root_path, dirs, Some(progress));
+}
 
+fn path_key(path: &Path) -> String {
+    let mut key = path.to_string_lossy().into_owned();
+    if cfg!(windows) {
+        key.make_ascii_lowercase();
+    }
+    key
+}
+
+fn push_unique_path(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<String>) {
+    let key = path_key(&path);
+    if keys.iter().any(|existing| existing == &key) {
+        return;
+    }
+    keys.push(key);
+    roots.push(path);
+}
+
+pub(crate) fn collect_song_scan_roots(root_path: &Path) -> Vec<PathBuf> {
     let mut roots = Vec::with_capacity(4);
     let mut keys: Vec<String> = Vec::with_capacity(4);
     if root_path.is_dir() {
-        push_unique_root(root_path.to_path_buf(), &mut roots, &mut keys);
+        push_unique_path(root_path.to_path_buf(), &mut roots, &mut keys);
     } else {
         warn!("Songs directory '{}' not found.", root_path.display());
     }
 
     // In platform-native mode, also include exe-dir songs.
     for extra in dirs::app_dirs().extra_song_roots() {
-        push_unique_root(extra, &mut roots, &mut keys);
+        push_unique_path(extra, &mut roots, &mut keys);
     }
 
     let additional_folders = crate::config::additional_song_folders();
@@ -62,7 +77,7 @@ pub(crate) fn collect_song_scan_roots(root_path: &Path) -> Vec<PathBuf> {
         }
         let extra_root = PathBuf::from(path);
         if extra_root.is_dir() {
-            push_unique_root(extra_root, &mut roots, &mut keys);
+            push_unique_path(extra_root, &mut roots, &mut keys);
         } else {
             warn!(
                 "AdditionalSongFolders entry '{}' is not a directory; skipping.",
@@ -228,6 +243,132 @@ fn merge_pack_scans(mut packs: Vec<PackScan>) -> Vec<PackScan> {
     merged
 }
 
+fn pack_dir_key(path: &Path) -> Option<String> {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(ci_key)
+        .filter(|key| !key.is_empty())
+}
+
+fn collect_reload_pack_dirs(
+    song_roots: &[PathBuf],
+    dirs: &[PathBuf],
+) -> (Vec<PathBuf>, Vec<String>) {
+    let mut pack_dirs = Vec::with_capacity(dirs.len());
+    let mut pack_dir_keys = Vec::with_capacity(dirs.len());
+    let mut pack_keys = Vec::with_capacity(dirs.len());
+
+    for dir in dirs {
+        let Some(key) = pack_dir_key(dir) else {
+            continue;
+        };
+        if !pack_keys.iter().any(|existing| existing == &key) {
+            pack_keys.push(key);
+        }
+
+        if dir.is_dir() {
+            push_unique_path(dir.to_path_buf(), &mut pack_dirs, &mut pack_dir_keys);
+        }
+
+        let Some(file_name) = dir.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        for root in song_roots {
+            let candidate = root.join(file_name);
+            if candidate.is_dir() {
+                push_unique_path(candidate, &mut pack_dirs, &mut pack_dir_keys);
+            }
+        }
+    }
+
+    (pack_dirs, pack_keys)
+}
+
+fn scan_song_roots(song_roots: &[PathBuf]) -> Vec<PackScan> {
+    let mut packs = Vec::new();
+    for songs_root in song_roots {
+        match rssp::pack::scan_songs_dir(songs_root, rssp::pack::ScanOpt::default()) {
+            Ok(mut found) => packs.append(&mut found),
+            Err(error) => warn!(
+                "Could not scan songs dir '{}': {error:?}",
+                songs_root.display()
+            ),
+        }
+    }
+    merge_pack_scans(packs)
+}
+
+fn scan_pack_dirs(pack_dirs: &[PathBuf]) -> Vec<PackScan> {
+    let mut packs = Vec::new();
+    for pack_dir in pack_dirs {
+        match rssp::pack::scan_pack_dir(pack_dir, rssp::pack::ScanOpt::default()) {
+            Ok(Some(pack)) => packs.push(pack),
+            Ok(None) => {}
+            Err(error) => warn!(
+                "Could not scan pack dir '{}': {error:?}",
+                pack_dir.display()
+            ),
+        }
+    }
+    merge_pack_scans(packs)
+}
+
+#[derive(Default)]
+struct SongLoadStats {
+    songs_cache_hits: usize,
+    songs_parsed: usize,
+    songs_failed: usize,
+}
+
+fn ensure_song_cache_dir() {
+    let cache_dir = dirs::app_dirs().song_cache_dir();
+    if let Err(error) = fs::create_dir_all(&cache_dir) {
+        warn!(
+            "Could not create cache directory '{}': {}. Caching will be disabled.",
+            cache_dir.to_string_lossy(),
+            error
+        );
+    }
+}
+
+fn count_loaded_songs(packs: &[SongPack]) -> usize {
+    packs.iter().map(|pack| pack.songs.len()).sum()
+}
+
+fn sort_song_packs(packs: &mut Vec<SongPack>) {
+    packs.sort_by_cached_key(|pack| {
+        (
+            pack.sort_title.to_ascii_lowercase(),
+            pack.group_name.to_ascii_lowercase(),
+        )
+    });
+}
+
+fn finalize_loaded_packs(loaded_packs: &mut Vec<SongPack>) {
+    loaded_packs.retain(|pack| !pack.songs.is_empty());
+    for pack in loaded_packs.iter_mut() {
+        pack.songs
+            .sort_by_cached_key(|song| ItgmaniaSongTitleKey::new(song.as_ref()));
+    }
+    sort_song_packs(loaded_packs);
+}
+
+fn replace_song_packs(
+    song_cache: &mut Vec<SongPack>,
+    pack_keys: &[String],
+    mut reloaded: Vec<SongPack>,
+) {
+    if pack_keys.is_empty() {
+        return;
+    }
+    song_cache.retain(|pack| {
+        let key = ci_key(&pack.group_name);
+        !pack_keys.iter().any(|existing| existing == &key)
+    });
+    song_cache.append(&mut reloaded);
+    sort_song_packs(song_cache);
+}
+
 #[inline(always)]
 fn report_load_progress<F>(
     progress: &mut Option<&mut F>,
@@ -271,9 +412,7 @@ fn reap_song_parse<F>(
     rx: Option<&std::sync::mpsc::Receiver<SongParseMsg>>,
     in_flight: &mut usize,
     loaded_packs: &mut Vec<SongPack>,
-    songs_failed: &mut usize,
-    songs_cache_hits: &mut usize,
-    songs_parsed: &mut usize,
+    stats: &mut SongLoadStats,
     songs_done: &mut usize,
     total_songs: usize,
     progress: &mut Option<&mut F>,
@@ -289,16 +428,16 @@ fn reap_song_parse<F>(
             match result {
                 Ok((song_data, is_hit)) => {
                     if is_hit {
-                        *songs_cache_hits += 1;
+                        stats.songs_cache_hits += 1;
                     } else {
-                        *songs_parsed += 1;
+                        stats.songs_parsed += 1;
                     }
                     if let Some(pack) = loaded_packs.get_mut(pack_idx) {
                         pack.songs.push(song_data);
                     }
                 }
                 Err(error) => {
-                    *songs_failed += 1;
+                    stats.songs_failed += 1;
                     warn!("Failed to load '{simfile_path:?}': {error}")
                 }
             }
@@ -320,16 +459,13 @@ fn reap_song_parse<F>(
     }
 }
 
-fn scan_and_load_songs_impl<F>(root_path: &Path, mut progress: Option<&mut F>)
+fn load_pack_scans<F>(
+    packs: Vec<PackScan>,
+    mut progress: Option<&mut F>,
+) -> (Vec<SongPack>, SongLoadStats)
 where
     F: FnMut(usize, usize, &str, &str),
 {
-    info!(
-        "Starting simfile scan (base songs root '{}')...",
-        root_path.display()
-    );
-
-    let started = std::time::Instant::now();
     let config = crate::config::get();
     let fastload = config.fastload;
     let cachesongs = config.cachesongs;
@@ -348,38 +484,8 @@ where
     }
     let parallel_parsing = parse_threads > 1;
 
-    let cache_dir = dirs::app_dirs().song_cache_dir();
-    if let Err(error) = fs::create_dir_all(&cache_dir) {
-        warn!(
-            "Could not create cache directory '{}': {}. Caching will be disabled.",
-            cache_dir.to_string_lossy(),
-            error
-        );
-    }
-
-    let song_roots = collect_song_scan_roots(root_path);
-    if song_roots.is_empty() {
-        warn!("No valid song roots found. No songs will be loaded.");
-        set_song_cache(Vec::new());
-        return;
-    }
-
     let mut loaded_packs = Vec::new();
-    let mut songs_cache_hits = 0usize;
-    let mut songs_parsed = 0usize;
-    let mut songs_failed = 0usize;
-
-    let mut packs = Vec::new();
-    for songs_root in &song_roots {
-        match rssp::pack::scan_songs_dir(songs_root, rssp::pack::ScanOpt::default()) {
-            Ok(mut found) => packs.append(&mut found),
-            Err(error) => warn!(
-                "Could not scan songs dir '{}': {error:?}",
-                songs_root.display()
-            ),
-        }
-    }
-    packs = merge_pack_scans(packs);
+    let mut stats = SongLoadStats::default();
     let total_songs = packs.iter().map(|pack| pack.songs.len()).sum::<usize>();
     let mut songs_done = 0usize;
     report_load_progress(&mut progress, 0, total_songs, "", "");
@@ -436,9 +542,7 @@ where
                         rx_opt.as_ref(),
                         &mut in_flight,
                         &mut loaded_packs,
-                        &mut songs_failed,
-                        &mut songs_cache_hits,
-                        &mut songs_parsed,
+                        &mut stats,
                         &mut songs_done,
                         total_songs,
                         &mut progress,
@@ -454,14 +558,14 @@ where
                     ) {
                         Ok((song_data, is_hit)) => {
                             if is_hit {
-                                songs_cache_hits += 1;
+                                stats.songs_cache_hits += 1;
                             } else {
-                                songs_parsed += 1;
+                                stats.songs_parsed += 1;
                             }
                             loaded_packs[pack_idx].songs.push(Arc::new(song_data));
                         }
                         Err(error) => {
-                            songs_failed += 1;
+                            stats.songs_failed += 1;
                             warn!("Failed to load '{simfile_path:?}': {error}")
                         }
                     }
@@ -501,14 +605,14 @@ where
                 ) {
                     Ok((song_data, is_hit)) => {
                         if is_hit {
-                            songs_cache_hits += 1;
+                            stats.songs_cache_hits += 1;
                         } else {
-                            songs_parsed += 1;
+                            stats.songs_parsed += 1;
                         }
                         loaded_packs[pack_idx].songs.push(Arc::new(song_data));
                     }
                     Err(error) => {
-                        songs_failed += 1;
+                        stats.songs_failed += 1;
                         warn!("Failed to load '{simfile_path:?}': {error}")
                     }
                 }
@@ -529,9 +633,7 @@ where
             rx_opt.as_ref(),
             &mut in_flight,
             &mut loaded_packs,
-            &mut songs_failed,
-            &mut songs_cache_hits,
-            &mut songs_parsed,
+            &mut stats,
             &mut songs_done,
             total_songs,
             &mut progress,
@@ -545,38 +647,95 @@ where
         );
     }
 
-    loaded_packs.retain(|pack| !pack.songs.is_empty());
-    for pack in &mut loaded_packs {
-        pack.songs
-            .sort_by_cached_key(|song| ItgmaniaSongTitleKey::new(song.as_ref()));
+    finalize_loaded_packs(&mut loaded_packs);
+    (loaded_packs, stats)
+}
+
+fn scan_and_load_songs_impl<F>(root_path: &Path, progress: Option<&mut F>)
+where
+    F: FnMut(usize, usize, &str, &str),
+{
+    info!(
+        "Starting simfile scan (base songs root '{}')...",
+        root_path.display()
+    );
+
+    let started = std::time::Instant::now();
+    ensure_song_cache_dir();
+
+    let song_roots = collect_song_scan_roots(root_path);
+    if song_roots.is_empty() {
+        warn!("No valid song roots found. No songs will be loaded.");
+        set_song_cache(Vec::new());
+        return;
     }
 
-    loaded_packs.sort_by_cached_key(|pack| {
-        (
-            pack.sort_title.to_ascii_lowercase(),
-            pack.group_name.to_ascii_lowercase(),
-        )
-    });
-
-    let songs_loaded = loaded_packs
-        .iter()
-        .map(|pack| pack.songs.len())
-        .sum::<usize>();
+    let packs = scan_song_roots(&song_roots);
+    let (loaded_packs, stats) = load_pack_scans(packs, progress);
+    let songs_loaded = count_loaded_songs(&loaded_packs);
     info!(
         "Finished scan. Found {} packs / {} songs (parsed {}, cache hits {}, failed {}) in {}.",
         loaded_packs.len(),
         songs_loaded,
-        songs_parsed,
-        songs_cache_hits,
-        songs_failed,
+        stats.songs_parsed,
+        stats.songs_cache_hits,
+        stats.songs_failed,
         fmt_scan_time(started.elapsed())
     );
     set_song_cache(loaded_packs);
 }
 
+fn reload_song_dirs_impl<F>(root_path: &Path, pack_dirs: &[PathBuf], progress: Option<&mut F>)
+where
+    F: FnMut(usize, usize, &str, &str),
+{
+    ensure_song_cache_dir();
+
+    let song_roots = collect_song_scan_roots(root_path);
+    if song_roots.is_empty() {
+        warn!("No valid song roots found. No songs will be reloaded.");
+        return;
+    }
+
+    let (scan_dirs, pack_keys) = collect_reload_pack_dirs(&song_roots, pack_dirs);
+    if pack_keys.is_empty() {
+        warn!("No valid song pack directories were requested for targeted reload.");
+        return;
+    }
+
+    info!(
+        "Starting targeted song reload for {} affected pack(s)...",
+        pack_keys.len()
+    );
+    let started = std::time::Instant::now();
+    let packs = scan_pack_dirs(&scan_dirs);
+    let (reloaded_packs, stats) = load_pack_scans(packs, progress);
+    let reloaded_pack_count = reloaded_packs.len();
+    let reloaded_song_count = count_loaded_songs(&reloaded_packs);
+
+    let (total_packs, total_songs) = {
+        let mut song_cache = get_song_cache();
+        replace_song_packs(&mut song_cache, &pack_keys, reloaded_packs);
+        (song_cache.len(), count_loaded_songs(&song_cache))
+    };
+
+    info!(
+        "Finished targeted reload. Reloaded {} packs / {} songs (parsed {}, cache hits {}, failed {}) in {}. Song cache now has {} packs / {} songs.",
+        reloaded_pack_count,
+        reloaded_song_count,
+        stats.songs_parsed,
+        stats.songs_cache_hits,
+        stats.songs_failed,
+        fmt_scan_time(started.elapsed()),
+        total_packs,
+        total_songs,
+    );
+}
+
 #[cfg(test)]
 mod tests {
-    use super::merge_pack_scans;
+    use super::{collect_reload_pack_dirs, merge_pack_scans, replace_song_packs};
+    use crate::game::song::SongPack;
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -623,6 +782,21 @@ mod tests {
         dir
     }
 
+    fn song_pack(group_name: &str, sort_title: &str, root: &Path) -> SongPack {
+        SongPack {
+            group_name: group_name.to_string(),
+            name: sort_title.to_string(),
+            sort_title: sort_title.to_string(),
+            translit_title: sort_title.to_string(),
+            series: String::new(),
+            year: 0,
+            sync_pref: rssp::pack::SyncPref::Default,
+            directory: root.join(group_name),
+            banner_path: None,
+            songs: Vec::new(),
+        }
+    }
+
     #[test]
     fn merge_pack_scans_collapses_case_insensitive_groups() {
         let root = test_dir("merge-pack-scans");
@@ -667,6 +841,67 @@ mod tests {
                 .iter()
                 .any(|song| song.dir.starts_with(&extra))
         );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn collect_reload_pack_dirs_includes_matching_pack_dirs_across_roots() {
+        let root = test_dir("reload-pack-dirs");
+        let base = root.join("base");
+        let extra = root.join("extra");
+        let base_pack = base.join("Pack");
+        let extra_pack = extra.join("Pack");
+        fs::create_dir_all(&base_pack).unwrap();
+        fs::create_dir_all(&extra_pack).unwrap();
+        fs::create_dir_all(base.join("Other")).unwrap();
+
+        let (dirs, keys) = collect_reload_pack_dirs(
+            &[base.clone(), extra.clone()],
+            std::slice::from_ref(&base_pack),
+        );
+
+        let mut actual_dirs = dirs
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        actual_dirs.sort();
+        let mut expected_dirs = vec![
+            base_pack.to_string_lossy().into_owned(),
+            extra_pack.to_string_lossy().into_owned(),
+        ];
+        expected_dirs.sort();
+
+        assert_eq!(actual_dirs, expected_dirs);
+        assert_eq!(keys, vec!["pack".to_string()]);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn replace_song_packs_only_updates_targeted_group() {
+        let root = test_dir("replace-song-packs");
+        let before_root = root.join("before");
+        let after_root = root.join("after");
+        let mut cache = vec![
+            song_pack("Alpha", "Bravo", &before_root),
+            song_pack("Pack", "Zulu", &before_root),
+            song_pack("Beta", "Alpha", &before_root),
+        ];
+
+        replace_song_packs(
+            &mut cache,
+            &["pack".to_string()],
+            vec![song_pack("Pack", "Charlie", &after_root)],
+        );
+
+        let group_names = cache
+            .iter()
+            .map(|pack| pack.group_name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(group_names, vec!["Beta", "Alpha", "Pack"]);
+        assert_eq!(cache.len(), 3);
+        assert_eq!(cache[2].directory, after_root.join("Pack"));
 
         let _ = fs::remove_dir_all(root);
     }

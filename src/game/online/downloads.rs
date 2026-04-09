@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 use zip::ZipArchive;
 
@@ -45,6 +45,7 @@ struct DownloadState {
     cache_loaded: bool,
     unlock_cache: UnlockCache,
     entries: Vec<DownloadEntry>,
+    ready_song_reload_dirs: Vec<PathBuf>,
 }
 
 type UnlockCache = HashMap<String, HashMap<String, bool>>;
@@ -52,7 +53,6 @@ type UnlockCache = HashMap<String, HashMap<String, bool>>;
 static DOWNLOAD_STATE: LazyLock<Mutex<DownloadState>> =
     LazyLock::new(|| Mutex::new(DownloadState::default()));
 static NEXT_DOWNLOAD_ID: AtomicU64 = AtomicU64::new(1);
-static PENDING_SONG_RELOAD: AtomicBool = AtomicBool::new(false);
 
 #[derive(Serialize, Deserialize)]
 struct UnlockCacheFile(HashMap<String, HashMap<String, bool>>);
@@ -85,16 +85,13 @@ pub fn completion_counts() -> (usize, usize) {
     (finished, total)
 }
 
-pub fn take_ready_song_reload_request() -> bool {
-    if !PENDING_SONG_RELOAD.load(Ordering::Relaxed) {
-        return false;
+pub fn take_ready_song_reload_request() -> Vec<PathBuf> {
+    let mut state = DOWNLOAD_STATE.lock().unwrap();
+    if state.ready_song_reload_dirs.is_empty() || state.entries.iter().any(|entry| !entry.complete)
+    {
+        return Vec::new();
     }
-    let state = DOWNLOAD_STATE.lock().unwrap();
-    if state.entries.iter().any(|entry| !entry.complete) {
-        return false;
-    }
-    PENDING_SONG_RELOAD.store(false, Ordering::Relaxed);
-    true
+    std::mem::take(&mut state.ready_song_reload_dirs)
 }
 
 pub fn queue_event_unlock_download(url: &str, unlock_name: &str, pack_name: &str) {
@@ -143,7 +140,6 @@ fn begin_download(url: &str, name: String, destination: String) -> Option<u64> {
         complete: false,
         error_message: None,
     });
-    PENDING_SONG_RELOAD.store(true, Ordering::Relaxed);
     Some(id)
 }
 
@@ -213,6 +209,7 @@ fn extract_zip(id: u64, zip_path: &Path, destination: &str, url: &str) -> Result
         .map_err(|_| "Failed to Unzip!".to_string())?;
     write_pack_ini_if_needed(&destination_pack, destination).map_err(|error| error.to_string())?;
     mark_cache_success(url, destination);
+    queue_ready_song_reload_dir(destination_pack);
     let total = file_len(zip_path);
     set_download_progress(id, total, total);
     Ok(())
@@ -274,6 +271,18 @@ fn mark_cache_success(url: &str, destination: &str) {
         state.unlock_cache.clone()
     };
     write_unlock_cache(&cache_snapshot);
+}
+
+fn queue_ready_song_reload_dir(path: PathBuf) {
+    let mut state = DOWNLOAD_STATE.lock().unwrap();
+    if state
+        .ready_song_reload_dirs
+        .iter()
+        .any(|existing| existing == &path)
+    {
+        return;
+    }
+    state.ready_song_reload_dirs.push(path);
 }
 
 fn set_download_total(id: u64, total_bytes: u64) {
@@ -389,15 +398,15 @@ fn mime_token(value: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::{
-        DOWNLOAD_STATE, DownloadEntry, DownloadState, NEXT_DOWNLOAD_ID, PENDING_SONG_RELOAD,
-        mime_token, sanitize_pack_name, take_ready_song_reload_request,
+        DOWNLOAD_STATE, DownloadEntry, DownloadState, NEXT_DOWNLOAD_ID, mime_token,
+        sanitize_pack_name, take_ready_song_reload_request,
     };
+    use std::path::PathBuf;
     use std::sync::atomic::Ordering;
 
     fn reset_download_state() {
         *DOWNLOAD_STATE.lock().unwrap() = DownloadState::default();
         NEXT_DOWNLOAD_ID.store(1, Ordering::Relaxed);
-        PENDING_SONG_RELOAD.store(false, Ordering::Relaxed);
     }
 
     #[test]
@@ -421,23 +430,31 @@ mod tests {
     #[test]
     fn take_ready_song_reload_request_waits_for_downloads() {
         reset_download_state();
-        DOWNLOAD_STATE.lock().unwrap().entries.push(DownloadEntry {
-            id: 1,
-            name: "Unlock".to_string(),
-            url: "https://example.com/unlock.zip".to_string(),
-            destination: "ITL Unlocks".to_string(),
-            current_bytes: 10,
-            total_bytes: 10,
-            complete: false,
-            error_message: None,
-        });
-        PENDING_SONG_RELOAD.store(true, Ordering::Relaxed);
+        {
+            let mut state = DOWNLOAD_STATE.lock().unwrap();
+            state.entries.push(DownloadEntry {
+                id: 1,
+                name: "Unlock".to_string(),
+                url: "https://example.com/unlock.zip".to_string(),
+                destination: "ITL Unlocks".to_string(),
+                current_bytes: 10,
+                total_bytes: 10,
+                complete: false,
+                error_message: None,
+            });
+            state
+                .ready_song_reload_dirs
+                .push(PathBuf::from("Songs/ITL Unlocks"));
+        }
 
-        assert!(!take_ready_song_reload_request());
+        assert!(take_ready_song_reload_request().is_empty());
 
         DOWNLOAD_STATE.lock().unwrap().entries[0].complete = true;
 
-        assert!(take_ready_song_reload_request());
-        assert!(!take_ready_song_reload_request());
+        assert_eq!(
+            take_ready_song_reload_request(),
+            vec![PathBuf::from("Songs/ITL Unlocks")]
+        );
+        assert!(take_ready_song_reload_request().is_empty());
     }
 }

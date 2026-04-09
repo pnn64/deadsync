@@ -31,7 +31,7 @@ mod scan;
 
 pub(crate) use scan::collect_song_scan_roots;
 pub use scan::{
-    scan_and_load_songs, scan_and_load_songs_with_progress,
+    reload_song_dirs_with_progress_counts, scan_and_load_songs, scan_and_load_songs_with_progress,
     scan_and_load_songs_with_progress_counts,
 };
 
