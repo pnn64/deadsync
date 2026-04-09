@@ -230,6 +230,19 @@ impl AppearanceEffects {
             random_vanish: f32::from((mask & APPEARANCE_MASK_BIT_RANDOM_VANISH) != 0),
         }
     }
+
+    #[inline(always)]
+    fn approach_speeds() -> Self {
+        Self {
+            hidden: 1.0,
+            hidden_offset: 1.0,
+            sudden: 1.0,
+            sudden_offset: 1.0,
+            stealth: 1.0,
+            blink: 1.0,
+            random_vanish: 1.0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -2661,6 +2674,7 @@ struct AttackMaskWindow {
     accel: AccelOverrides,
     visual: VisualOverrides,
     appearance: AppearanceOverrides,
+    appearance_speed: AppearanceOverrides,
     visibility: VisibilityOverrides,
     scroll: ScrollOverrides,
     perspective: PerspectiveOverrides,
@@ -2754,6 +2768,7 @@ struct ParsedAttackMods {
     accel: AccelOverrides,
     visual: VisualOverrides,
     appearance: AppearanceOverrides,
+    appearance_speed: AppearanceOverrides,
     visibility: VisibilityOverrides,
     scroll: ScrollOverrides,
     perspective: PerspectiveOverrides,
@@ -2772,6 +2787,7 @@ impl Default for ParsedAttackMods {
             accel: AccelOverrides::default(),
             visual: VisualOverrides::default(),
             appearance: AppearanceOverrides::default(),
+            appearance_speed: AppearanceOverrides::default(),
             visibility: VisibilityOverrides::default(),
             scroll: ScrollOverrides::default(),
             perspective: PerspectiveOverrides::default(),
@@ -2920,23 +2936,22 @@ fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
 }
 
 #[inline(always)]
-fn strip_attack_approach_prefix(token: &str) -> &str {
+fn parse_attack_approach_prefix(token: &str) -> (f32, &str) {
     let token = token.trim();
     let Some(prefix) = token.split_ascii_whitespace().next() else {
-        return token;
+        return (1.0, token);
     };
     if prefix.len() <= 1 || !prefix.starts_with('*') {
-        return token;
+        return (1.0, token);
     }
-    if prefix[1..]
+    let Some(speed) = prefix[1..]
         .parse::<f32>()
         .ok()
         .filter(|value| value.is_finite())
-        .is_none()
-    {
-        return token;
-    }
-    token[prefix.len()..].trim_start()
+    else {
+        return (1.0, token);
+    };
+    (speed.max(0.0), token[prefix.len()..].trim_start())
 }
 
 #[inline(always)]
@@ -2963,7 +2978,12 @@ fn parse_attack_level_token(token: &str) -> (Option<f32>, &str) {
     parse_attack_percent_prefix(token)
 }
 
-fn apply_runtime_mod(out: &mut ParsedAttackMods, key: &str, percent_value: Option<f32>) {
+fn apply_runtime_mod(
+    out: &mut ParsedAttackMods,
+    key: &str,
+    percent_value: Option<f32>,
+    approach_speed: f32,
+) {
     match key {
         "wide" => out.insert_mask |= INSERT_MASK_BIT_WIDE,
         "big" => out.insert_mask |= INSERT_MASK_BIT_BIG,
@@ -3021,14 +3041,33 @@ fn apply_runtime_mod(out: &mut ParsedAttackMods, key: &str, percent_value: Optio
                 out.mini_percent = Some(mini);
             }
         }
-        "hidden" => out.appearance.hidden = attack_level(percent_value),
-        "hiddenoffset" => out.appearance.hidden_offset = attack_level(percent_value),
-        "sudden" => out.appearance.sudden = attack_level(percent_value),
-        "suddenoffset" => out.appearance.sudden_offset = attack_level(percent_value),
-        "stealth" => out.appearance.stealth = attack_level(percent_value),
-        "blink" => out.appearance.blink = attack_level(percent_value),
+        "hidden" => {
+            out.appearance.hidden = attack_level(percent_value);
+            out.appearance_speed.hidden = Some(approach_speed);
+        }
+        "hiddenoffset" => {
+            out.appearance.hidden_offset = attack_level(percent_value);
+            out.appearance_speed.hidden_offset = Some(approach_speed);
+        }
+        "sudden" => {
+            out.appearance.sudden = attack_level(percent_value);
+            out.appearance_speed.sudden = Some(approach_speed);
+        }
+        "suddenoffset" => {
+            out.appearance.sudden_offset = attack_level(percent_value);
+            out.appearance_speed.sudden_offset = Some(approach_speed);
+        }
+        "stealth" => {
+            out.appearance.stealth = attack_level(percent_value);
+            out.appearance_speed.stealth = Some(approach_speed);
+        }
+        "blink" => {
+            out.appearance.blink = attack_level(percent_value);
+            out.appearance_speed.blink = Some(approach_speed);
+        }
         "rvanish" | "randomvanish" | "reversevanish" => {
-            out.appearance.random_vanish = attack_level(percent_value)
+            out.appearance.random_vanish = attack_level(percent_value);
+            out.appearance_speed.random_vanish = Some(approach_speed);
         }
         "dark" => out.visibility.dark = attack_level(percent_value),
         "blind" => out.visibility.blind = attack_level(percent_value),
@@ -3064,7 +3103,7 @@ fn apply_runtime_mod(out: &mut ParsedAttackMods, key: &str, percent_value: Optio
 fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
     let mut out = ParsedAttackMods::default();
     for token in mods.split(',') {
-        let token = strip_attack_approach_prefix(token);
+        let (approach_speed, token) = parse_attack_approach_prefix(token);
         if token.is_empty() {
             continue;
         }
@@ -3084,7 +3123,7 @@ fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
                     ..ParsedAttackMods::default()
                 };
             }
-            _ => apply_runtime_mod(&mut out, key.as_str(), percent_value),
+            _ => apply_runtime_mod(&mut out, key.as_str(), percent_value, approach_speed),
         }
     }
     out
@@ -3132,11 +3171,12 @@ fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
                 };
                 continue;
             }
-            apply_runtime_mod(&mut out, key.as_str(), Some(100.0));
+            apply_runtime_mod(&mut out, key.as_str(), Some(100.0), 1.0);
             continue;
         }
 
         if parts[0].starts_with('*') {
+            let approach_speed = parse_attack_approach_prefix(parts[0]).0;
             if parts.len() == 2 {
                 if let Some(scroll_speed) = parse_attack_scroll_override(parts[1]) {
                     out.scroll_speed = Some(scroll_speed);
@@ -3144,7 +3184,7 @@ fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
                 }
                 let key = attack_token_key(parts[1]);
                 if !key.is_empty() {
-                    apply_runtime_mod(&mut out, key.as_str(), Some(100.0));
+                    apply_runtime_mod(&mut out, key.as_str(), Some(100.0), approach_speed);
                 }
                 continue;
             }
@@ -3153,7 +3193,7 @@ fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
                 continue;
             }
             let amount = parse_song_lua_mod_amount(parts[1]).unwrap_or(0.0);
-            apply_runtime_mod(&mut out, key.as_str(), Some(amount));
+            apply_runtime_mod(&mut out, key.as_str(), Some(amount), approach_speed);
             continue;
         }
 
@@ -3162,7 +3202,7 @@ fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
             continue;
         }
         let amount = parse_song_lua_mod_amount(parts[0]).unwrap_or(0.0);
-        apply_runtime_mod(&mut out, key.as_str(), Some(amount));
+        apply_runtime_mod(&mut out, key.as_str(), Some(amount), 1.0);
     }
     out
 }
@@ -3288,6 +3328,7 @@ fn build_attack_mask_windows_for_player(
             accel: mods.accel,
             visual: mods.visual,
             appearance: mods.appearance,
+            appearance_speed: mods.appearance_speed,
             visibility: mods.visibility,
             scroll: mods.scroll,
             perspective: mods.perspective,
@@ -3400,6 +3441,7 @@ fn build_song_lua_constant_window(
         accel: mods.accel,
         visual: mods.visual,
         appearance: mods.appearance,
+        appearance_speed: mods.appearance_speed,
         visibility: mods.visibility,
         scroll: mods.scroll,
         perspective: mods.perspective,
@@ -4554,6 +4596,11 @@ fn build_song_lua_runtime_windows(
         } else {
             SongLuaSpeedMod::default()
         },
+        noteskin_name: if player < num_players {
+            player_profiles[player].noteskin.to_string()
+        } else {
+            crate::game::profile::NoteSkin::default().to_string()
+        },
         screen_x: if player < num_players {
             song_lua_compile_player_screen_x(
                 num_players,
@@ -5038,7 +5085,7 @@ fn song_lua_apply_eased_target(
     value: f32,
     accel: &mut AccelOverrides,
     visual: &mut VisualOverrides,
-    appearance: &mut AppearanceOverrides,
+    appearance: &mut AppearanceEffects,
     visibility: &mut VisibilityOverrides,
     scroll: &mut ScrollOverrides,
     perspective: &mut PerspectiveOverrides,
@@ -5069,11 +5116,11 @@ fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTipsy => visual.tipsy = Some(value),
         SongLuaEaseMaskTarget::VisualBumpy => visual.bumpy = Some(value),
         SongLuaEaseMaskTarget::VisualBeat => visual.beat = Some(value),
-        SongLuaEaseMaskTarget::AppearanceHidden => appearance.hidden = Some(value),
-        SongLuaEaseMaskTarget::AppearanceSudden => appearance.sudden = Some(value),
-        SongLuaEaseMaskTarget::AppearanceStealth => appearance.stealth = Some(value),
-        SongLuaEaseMaskTarget::AppearanceBlink => appearance.blink = Some(value),
-        SongLuaEaseMaskTarget::AppearanceRandomVanish => appearance.random_vanish = Some(value),
+        SongLuaEaseMaskTarget::AppearanceHidden => appearance.hidden = value,
+        SongLuaEaseMaskTarget::AppearanceSudden => appearance.sudden = value,
+        SongLuaEaseMaskTarget::AppearanceStealth => appearance.stealth = value,
+        SongLuaEaseMaskTarget::AppearanceBlink => appearance.blink = value,
+        SongLuaEaseMaskTarget::AppearanceRandomVanish => appearance.random_vanish = value,
         SongLuaEaseMaskTarget::VisibilityDark => visibility.dark = Some(value),
         SongLuaEaseMaskTarget::VisibilityBlind => visibility.blind = Some(value),
         SongLuaEaseMaskTarget::VisibilityCover => visibility.cover = Some(value),
@@ -6878,7 +6925,10 @@ pub struct State {
     active_attack_chart: [ChartAttackEffects; MAX_PLAYERS],
     active_attack_accel: [AccelOverrides; MAX_PLAYERS],
     active_attack_visual: [VisualOverrides; MAX_PLAYERS],
-    active_attack_appearance: [AppearanceOverrides; MAX_PLAYERS],
+    attack_current_appearance: [AppearanceEffects; MAX_PLAYERS],
+    attack_target_appearance: [AppearanceEffects; MAX_PLAYERS],
+    attack_speed_appearance: [AppearanceEffects; MAX_PLAYERS],
+    active_attack_appearance: [AppearanceEffects; MAX_PLAYERS],
     active_attack_visibility: [VisibilityOverrides; MAX_PLAYERS],
     active_attack_scroll: [ScrollOverrides; MAX_PLAYERS],
     active_attack_perspective: [PerspectiveOverrides; MAX_PLAYERS],
@@ -7454,14 +7504,119 @@ fn finalize_update_trace(
     trace_gameplay_update(state, delta_time, music_time_sec, total_us, phase_timings);
 }
 
-fn refresh_active_attack_masks(state: &mut State) {
+#[inline(always)]
+fn approach_f32(current: &mut f32, target: f32, step: f32) {
+    if !current.is_finite() || !target.is_finite() {
+        *current = target;
+        return;
+    }
+    let step = step.max(0.0);
+    if step <= f32::EPSILON || (*current - target).abs() <= f32::EPSILON {
+        return;
+    }
+    let delta = target - *current;
+    let step = delta.clamp(-step, step);
+    if step.abs() >= delta.abs() {
+        *current = target;
+    } else {
+        *current += step;
+    }
+}
+
+#[inline(always)]
+fn base_appearance_effects(profile: &profile::Profile) -> AppearanceEffects {
+    AppearanceEffects::from_mask(profile::normalize_appearance_effects_mask(
+        profile.appearance_effects_active_mask,
+    ))
+}
+
+#[inline(always)]
+fn apply_appearance_target(
+    target: &mut AppearanceEffects,
+    speed: &mut AppearanceEffects,
+    overrides: AppearanceOverrides,
+    override_speeds: AppearanceOverrides,
+) {
+    if let Some(value) = overrides.hidden {
+        target.hidden = value;
+        speed.hidden = override_speeds.hidden.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.hidden_offset {
+        target.hidden_offset = value;
+        speed.hidden_offset = override_speeds.hidden_offset.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.sudden {
+        target.sudden = value;
+        speed.sudden = override_speeds.sudden.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.sudden_offset {
+        target.sudden_offset = value;
+        speed.sudden_offset = override_speeds.sudden_offset.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.stealth {
+        target.stealth = value;
+        speed.stealth = override_speeds.stealth.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.blink {
+        target.blink = value;
+        speed.blink = override_speeds.blink.unwrap_or(1.0).max(0.0);
+    }
+    if let Some(value) = overrides.random_vanish {
+        target.random_vanish = value;
+        speed.random_vanish = override_speeds.random_vanish.unwrap_or(1.0).max(0.0);
+    }
+}
+
+#[inline(always)]
+fn approach_appearance_effects(
+    current: &mut AppearanceEffects,
+    target: AppearanceEffects,
+    speed: AppearanceEffects,
+    delta_time: f32,
+) {
+    let delta_time = delta_time.max(0.0);
+    approach_f32(
+        &mut current.hidden,
+        target.hidden,
+        delta_time * speed.hidden,
+    );
+    approach_f32(
+        &mut current.hidden_offset,
+        target.hidden_offset,
+        delta_time * speed.hidden_offset,
+    );
+    approach_f32(
+        &mut current.sudden,
+        target.sudden,
+        delta_time * speed.sudden,
+    );
+    approach_f32(
+        &mut current.sudden_offset,
+        target.sudden_offset,
+        delta_time * speed.sudden_offset,
+    );
+    approach_f32(
+        &mut current.stealth,
+        target.stealth,
+        delta_time * speed.stealth,
+    );
+    approach_f32(&mut current.blink, target.blink, delta_time * speed.blink);
+    approach_f32(
+        &mut current.random_vanish,
+        target.random_vanish,
+        delta_time * speed.random_vanish,
+    );
+}
+
+fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
     for player in 0..state.num_players {
         let now = state.current_music_time_visible[player];
         let mut clear_all = false;
         let mut chart = ChartAttackEffects::default();
         let mut accel = AccelOverrides::default();
         let mut visual = VisualOverrides::default();
-        let mut appearance = AppearanceOverrides::default();
+        let mut appearance_target = base_appearance_effects(&state.player_profiles[player]);
+        let mut appearance_speed = AppearanceEffects::approach_speeds();
         let mut visibility = VisibilityOverrides::default();
         let mut scroll = ScrollOverrides::default();
         let mut perspective = PerspectiveOverrides::default();
@@ -7479,7 +7634,8 @@ fn refresh_active_attack_masks(state: &mut State) {
                     clear_all = true;
                     accel = AccelOverrides::default();
                     visual = VisualOverrides::default();
-                    appearance = AppearanceOverrides::default();
+                    appearance_target = AppearanceEffects::default();
+                    appearance_speed = AppearanceEffects::approach_speeds();
                     visibility = VisibilityOverrides::default();
                     scroll = ScrollOverrides::default();
                     perspective = PerspectiveOverrides::default();
@@ -7532,27 +7688,12 @@ fn refresh_active_attack_masks(state: &mut State) {
                 if let Some(v) = window.visual.beat {
                     visual.beat = Some(v);
                 }
-                if let Some(v) = window.appearance.hidden {
-                    appearance.hidden = Some(v);
-                }
-                if let Some(v) = window.appearance.hidden_offset {
-                    appearance.hidden_offset = Some(v);
-                }
-                if let Some(v) = window.appearance.sudden {
-                    appearance.sudden = Some(v);
-                }
-                if let Some(v) = window.appearance.sudden_offset {
-                    appearance.sudden_offset = Some(v);
-                }
-                if let Some(v) = window.appearance.stealth {
-                    appearance.stealth = Some(v);
-                }
-                if let Some(v) = window.appearance.blink {
-                    appearance.blink = Some(v);
-                }
-                if let Some(v) = window.appearance.random_vanish {
-                    appearance.random_vanish = Some(v);
-                }
+                apply_appearance_target(
+                    &mut appearance_target,
+                    &mut appearance_speed,
+                    window.appearance,
+                    window.appearance_speed,
+                );
                 if let Some(v) = window.visibility.dark {
                     visibility.dark = Some(v);
                 }
@@ -7591,6 +7732,15 @@ fn refresh_active_attack_masks(state: &mut State) {
                 }
             }
         }
+        state.attack_target_appearance[player] = appearance_target;
+        state.attack_speed_appearance[player] = appearance_speed;
+        approach_appearance_effects(
+            &mut state.attack_current_appearance[player],
+            appearance_target,
+            appearance_speed,
+            delta_time,
+        );
+        let mut appearance = state.attack_current_appearance[player];
         for window in &state.song_lua_ease_windows[player] {
             if let Some(value) = song_lua_ease_window_value(window, now) {
                 song_lua_apply_eased_target(
@@ -7709,23 +7859,7 @@ pub fn effective_appearance_effects_for_player(
     if player_idx >= state.num_players {
         return AppearanceEffects::default();
     }
-    let base = if player_attack_base_cleared(state, player_idx) {
-        AppearanceEffects::default()
-    } else {
-        AppearanceEffects::from_mask(profile::normalize_appearance_effects_mask(
-            state.player_profiles[player_idx].appearance_effects_active_mask,
-        ))
-    };
-    let attack = state.active_attack_appearance[player_idx];
-    AppearanceEffects {
-        hidden: merge_attack_value(base.hidden, attack.hidden),
-        hidden_offset: merge_attack_value(base.hidden_offset, attack.hidden_offset),
-        sudden: merge_attack_value(base.sudden, attack.sudden),
-        sudden_offset: merge_attack_value(base.sudden_offset, attack.sudden_offset),
-        stealth: merge_attack_value(base.stealth, attack.stealth),
-        blink: merge_attack_value(base.blink, attack.blink),
-        random_vanish: merge_attack_value(base.random_vanish, attack.random_vanish),
-    }
+    state.active_attack_appearance[player_idx]
 }
 
 #[inline(always)]
@@ -10065,6 +10199,13 @@ pub fn init(
         .iter()
         .take_while(|change| change.start_beat <= init_beat)
         .count();
+    let base_attack_appearance = std::array::from_fn(|player| {
+        if player < num_players {
+            base_appearance_effects(&player_profiles[player])
+        } else {
+            AppearanceEffects::default()
+        }
+    });
 
     let mut state = State {
         song,
@@ -10188,7 +10329,10 @@ pub fn init(
         active_attack_chart: [ChartAttackEffects::default(); MAX_PLAYERS],
         active_attack_accel: [AccelOverrides::default(); MAX_PLAYERS],
         active_attack_visual: [VisualOverrides::default(); MAX_PLAYERS],
-        active_attack_appearance: [AppearanceOverrides::default(); MAX_PLAYERS],
+        attack_current_appearance: base_attack_appearance,
+        attack_target_appearance: base_attack_appearance,
+        attack_speed_appearance: [AppearanceEffects::approach_speeds(); MAX_PLAYERS],
+        active_attack_appearance: base_attack_appearance,
         active_attack_visibility: [VisibilityOverrides::default(); MAX_PLAYERS],
         active_attack_scroll: [ScrollOverrides::default(); MAX_PLAYERS],
         active_attack_perspective: [PerspectiveOverrides::default(); MAX_PLAYERS],
@@ -10281,7 +10425,7 @@ pub fn init(
         update_trace: GameplayUpdateTraceState::default(),
     };
     state.update_trace = GameplayUpdateTraceState::from_state(&state);
-    refresh_active_attack_masks(&mut state);
+    refresh_active_attack_masks(&mut state, 0.0);
     let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
     refresh_live_notefield_options(&mut state, current_bpm);
     let finalize_ms = finalize_started.elapsed().as_secs_f64() * 1000.0;
@@ -14547,7 +14691,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
             state.current_beat_visible[player] =
                 state.timing_players[player].get_beat_for_time(visible_time);
         }
-        refresh_active_attack_masks(state);
+        refresh_active_attack_masks(state, delta_time);
 
         let current_bpm = state.timing.get_bpm_for_beat(state.current_beat);
         refresh_live_notefield_options(state, current_bpm);
@@ -14838,16 +14982,17 @@ mod tests {
         build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
         completed_row_final_judgment, completed_row_flash_note_indices_and_grade,
         completed_row_hidden_note_indices, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
-        effective_player_global_offset_seconds, enforce_max_simultaneous_notes,
-        finalize_row_judgment, finalized_row_outcome_for_cached_row, find_arrow_index,
-        frame_stable_display_music_time, handle_input, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
-        lane_release_finished, late_note_resolution_window_s, live_autoplay_enabled_from_flags,
-        max_step_distance_seconds, mine_window_bounds_ns, music_time_from_song_clock,
-        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
+        effective_appearance_effects_for_player, effective_player_global_offset_seconds,
+        enforce_max_simultaneous_notes, finalize_row_judgment,
+        finalized_row_outcome_for_cached_row, find_arrow_index, frame_stable_display_music_time,
+        handle_input, input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap,
+        lane_edge_matches_note_type, lane_press_started, lane_release_finished,
+        late_note_resolution_window_s, live_autoplay_enabled_from_flags, max_step_distance_seconds,
+        mine_window_bounds_ns, music_time_from_song_clock, mutate_timing_arc,
+        next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
         parse_song_lua_runtime_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
-        recompute_player_totals, refresh_timing_after_offset_change,
+        recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
         row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
@@ -16568,6 +16713,42 @@ mod tests {
         assert_eq!(mods.appearance.sudden, Some(1.0));
         assert_eq!(mods.appearance.sudden_offset, Some(-1.25));
         assert_eq!(mods.appearance.hidden_offset, Some(1.5));
+        assert_eq!(mods.appearance_speed.sudden, Some(1000.0));
+        assert_eq!(mods.appearance_speed.sudden_offset, Some(1000.0));
+        assert_eq!(mods.appearance_speed.hidden_offset, Some(2.4));
+    }
+
+    #[test]
+    fn chart_attack_sudden_offset_approaches_instead_of_snapping() {
+        let mut state = regression_state(std::array::from_fn(|_| profile::Profile::default()));
+        state.attack_mask_windows[0] = build_attack_mask_windows_for_player(
+            Some(
+                "TIME=0.000:LEN=3.000:MODS=*1000 sudden,*1000 -125% suddenoffset\
+                 :TIME=0.083:LEN=3.000:MODS=*2.4 150% suddenoffset",
+            ),
+            profile::AttackMode::On,
+            0,
+            0x1234,
+            10.0,
+        );
+
+        state.current_music_time_visible[0] = 0.01;
+        refresh_active_attack_masks(&mut state, 0.01);
+        let start = effective_appearance_effects_for_player(&state, 0);
+        assert!((start.sudden - 1.0).abs() <= 1e-6);
+        assert!((start.sudden_offset + 1.25).abs() <= 1e-6);
+
+        state.current_music_time_visible[0] = 0.10;
+        refresh_active_attack_masks(&mut state, 0.09);
+        let mid = effective_appearance_effects_for_player(&state, 0);
+        assert!(mid.sudden_offset > -1.25);
+        assert!(mid.sudden_offset < 1.5);
+
+        state.current_music_time_visible[0] = 1.10;
+        refresh_active_attack_masks(&mut state, 1.0);
+        let late = effective_appearance_effects_for_player(&state, 0);
+        assert!(late.sudden_offset > mid.sudden_offset);
+        assert!(late.sudden_offset < 1.5);
     }
 
     #[test]
