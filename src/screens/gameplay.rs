@@ -1892,7 +1892,7 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             mask_source,
             mask_dest,
             rot_x_deg,
-            mut rot_y_deg,
+            rot_y_deg,
             rot_z_deg,
             local_offset,
             local_offset_rot_sin_cos,
@@ -1903,7 +1903,6 @@ fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32)
             effect,
         } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            rot_y_deg += rotation_y_deg;
             Actor::Sprite {
                 align,
                 offset,

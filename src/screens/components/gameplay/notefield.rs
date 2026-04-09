@@ -1234,15 +1234,6 @@ fn calc_note_rotation_z(
 }
 
 #[inline(always)]
-fn song_lua_note_rotation_y_deg(confusion_y_offset_deg: f32) -> f32 {
-    if confusion_y_offset_deg.abs() <= f32::EPSILON {
-        0.0
-    } else {
-        confusion_y_offset_deg
-    }
-}
-
-#[inline(always)]
 fn song_lua_note_model_draw(mut draw: ModelDrawState, rotation_y_deg: f32) -> ModelDrawState {
     if rotation_y_deg.abs() > f32::EPSILON {
         draw.rot[1] += rotation_y_deg;
@@ -2895,8 +2886,13 @@ pub fn build_bundles(
         } else {
             0.0
         };
-        let note_rotation_y =
-            song_lua_note_rotation_y_deg(state.song_lua_player_confusion_y_offset[player_idx]);
+        // The column swap for Step's hold-turn section is handled at the player bundle
+        // level. Keep the actual note/receptor/ghost visuals on the normal noteskin
+        // path here; applying an extra local Y turn breaks model-backed arrows and hit
+        // effects.
+        let note_rotation_y = 0.0_f32;
+        let prefer_sprite_note_path = false;
+        let flat_tap_face_rotation_y = 0.0_f32;
         let beat_push = beat_factor(current_beat);
         let mut col_offsets = [0.0_f32; MAX_COLS];
         for (i, col_offset) in col_offsets.iter_mut().take(num_cols).enumerate() {
@@ -3559,7 +3555,7 @@ pub fn build_bundles(
                             explosion_visual.diffuse[2],
                             explosion_visual.diffuse[3]
                         ):
-                        rotationy(note_rotation_y):
+                        rotationy(flat_tap_face_rotation_y):
                         rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                         blend(add):
                         z(Z_TAP_EXPLOSION)
@@ -3572,7 +3568,7 @@ pub fn build_bundles(
                             zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
-                            rotationy(note_rotation_y):
+                            rotationy(flat_tap_face_rotation_y):
                             rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                             blend(add):
                             z(Z_TAP_EXPLOSION)
@@ -3591,7 +3587,7 @@ pub fn build_bundles(
                             explosion_visual.diffuse[2],
                             explosion_visual.diffuse[3]
                         ):
-                        rotationy(note_rotation_y):
+                        rotationy(flat_tap_face_rotation_y):
                         rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                         blend(normal):
                         z(Z_TAP_EXPLOSION)
@@ -3604,7 +3600,7 @@ pub fn build_bundles(
                             zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
-                            rotationy(note_rotation_y):
+                            rotationy(flat_tap_face_rotation_y):
                             rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                             blend(normal):
                             z(Z_TAP_EXPLOSION)
@@ -5075,18 +5071,20 @@ pub fn build_bundles(
                     } else {
                         BlendMode::Alpha
                     };
-                    if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                        head_slot,
-                        draw,
-                        model_center,
-                        size,
-                        uv,
-                        -head_slot.def.rotation_deg as f32 + hold_head_rot,
-                        color,
-                        blend,
-                        Z_TAP_NOTE as i16,
-                        &mut model_cache,
-                    ) {
+                    if !prefer_sprite_note_path
+                        && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
+                            head_slot,
+                            draw,
+                            model_center,
+                            size,
+                            uv,
+                            -head_slot.def.rotation_deg as f32 + hold_head_rot,
+                            color,
+                            blend,
+                            Z_TAP_NOTE as i16,
+                            &mut model_cache,
+                        )
+                    {
                         actors.push(actor_with_world_z(model_actor, head_world_z));
                     } else if draw.blend_add {
                         let sprite_center =
@@ -5096,7 +5094,7 @@ pub fn build_bundles(
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
-                                rotationy(note_rotation_y):
+                                rotationy(flat_tap_face_rotation_y):
                                 rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + hold_head_rot):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 diffuse(color[0], color[1], color[2], color[3]):
@@ -5113,7 +5111,7 @@ pub fn build_bundles(
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
-                                rotationy(note_rotation_y):
+                                rotationy(flat_tap_face_rotation_y):
                                 rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + hold_head_rot):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 diffuse(color[0], color[1], color[2], color[3]):
@@ -5176,18 +5174,20 @@ pub fn build_bundles(
                         } else {
                             BlendMode::Alpha
                         };
-                        if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                            note_slot,
-                            draw,
-                            model_center,
-                            size,
-                            uv,
-                            -note_slot.def.rotation_deg as f32 + hold_head_rot,
-                            color,
-                            blend,
-                            layer_z as i16,
-                            &mut model_cache,
-                        ) {
+                        if !prefer_sprite_note_path
+                            && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
+                                note_slot,
+                                draw,
+                                model_center,
+                                size,
+                                uv,
+                                -note_slot.def.rotation_deg as f32 + hold_head_rot,
+                                color,
+                                blend,
+                                layer_z as i16,
+                                &mut model_cache,
+                            )
+                        {
                             actors.push(actor_with_world_z(model_actor, head_world_z));
                         } else if draw.blend_add {
                             let sprite_center =
@@ -5197,7 +5197,7 @@ pub fn build_bundles(
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
-                                    rotationy(note_rotation_y):
+                                    rotationy(flat_tap_face_rotation_y):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + hold_head_rot):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
@@ -5214,7 +5214,7 @@ pub fn build_bundles(
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
-                                    rotationy(note_rotation_y):
+                                    rotationy(flat_tap_face_rotation_y):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + hold_head_rot):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
@@ -5241,23 +5241,25 @@ pub fn build_bundles(
                         note_slot.model_draw_at(elapsed, current_beat),
                         note_rotation_y,
                     );
-                    if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                        note_slot,
-                        draw,
-                        head_center,
-                        size,
-                        uv,
-                        -note_slot.def.rotation_deg as f32 + hold_head_rot,
-                        [
-                            hold_diffuse[0],
-                            hold_diffuse[1],
-                            hold_diffuse[2],
-                            hold_diffuse[3] * head_alpha,
-                        ],
-                        BlendMode::Alpha,
-                        Z_TAP_NOTE as i16,
-                        &mut model_cache,
-                    ) {
+                    if !prefer_sprite_note_path
+                        && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
+                            note_slot,
+                            draw,
+                            head_center,
+                            size,
+                            uv,
+                            -note_slot.def.rotation_deg as f32 + hold_head_rot,
+                            [
+                                hold_diffuse[0],
+                                hold_diffuse[1],
+                                hold_diffuse[2],
+                                hold_diffuse[3] * head_alpha,
+                            ],
+                            BlendMode::Alpha,
+                            Z_TAP_NOTE as i16,
+                            &mut model_cache,
+                        )
+                    {
                         actors.push(actor_with_world_z(model_actor, head_world_z));
                     } else {
                         actors.push(actor_with_world_z(
@@ -5265,7 +5267,7 @@ pub fn build_bundles(
                                 align(0.5, 0.5):
                                 xy(head_center[0], head_center[1]):
                                 setsize(size[0], size[1]):
-                                rotationy(note_rotation_y):
+                                rotationy(flat_tap_face_rotation_y):
                                 rotationz(-note_slot.def.rotation_deg as f32 + hold_head_rot):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 diffuse(
@@ -5575,18 +5577,20 @@ pub fn build_bundles(
                             head_slot.model_draw_at(elapsed, current_beat),
                             note_rotation_y,
                         );
-                        if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                            head_slot,
-                            draw,
-                            center,
-                            note_size,
-                            note_uv,
-                            -head_slot.def.rotation_deg as f32 + note_rot,
-                            [1.0, 1.0, 1.0, note_alpha],
-                            BlendMode::Alpha,
-                            Z_TAP_NOTE as i16,
-                            &mut model_cache,
-                        ) {
+                        if !prefer_sprite_note_path
+                            && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
+                                head_slot,
+                                draw,
+                                center,
+                                note_size,
+                                note_uv,
+                                -head_slot.def.rotation_deg as f32 + note_rot,
+                                [1.0, 1.0, 1.0, note_alpha],
+                                BlendMode::Alpha,
+                                Z_TAP_NOTE as i16,
+                                &mut model_cache,
+                            )
+                        {
                             actors.push(actor_with_world_z(model_actor, note_world_z));
                         } else {
                             actors.push(actor_with_world_z(
@@ -5594,7 +5598,7 @@ pub fn build_bundles(
                                     align(0.5, 0.5):
                                     xy(center[0], center[1]):
                                     setsize(note_size[0], note_size[1]):
-                                    rotationy(note_rotation_y):
+                                    rotationy(flat_tap_face_rotation_y):
                                     rotationz(-head_slot.def.rotation_deg as f32 + note_rot):
                                     customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                     diffuse(1.0, 1.0, 1.0, note_alpha):
@@ -5669,18 +5673,20 @@ pub fn build_bundles(
                             draw.tint[2],
                             draw.tint[3] * note_alpha,
                         ];
-                        if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                            note_slot,
-                            draw,
-                            model_center,
-                            note_size,
-                            note_uv,
-                            -note_slot.def.rotation_deg as f32 + note_rot,
-                            color,
-                            blend,
-                            layer_z as i16,
-                            &mut model_cache,
-                        ) {
+                        if !prefer_sprite_note_path
+                            && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
+                                note_slot,
+                                draw,
+                                model_center,
+                                note_size,
+                                note_uv,
+                                -note_slot.def.rotation_deg as f32 + note_rot,
+                                color,
+                                blend,
+                                layer_z as i16,
+                                &mut model_cache,
+                            )
+                        {
                             actors.push(actor_with_world_z(model_actor, note_world_z));
                         } else {
                             let sprite_center =
@@ -5691,7 +5697,7 @@ pub fn build_bundles(
                                         align(0.5, 0.5):
                                         xy(sprite_center[0], sprite_center[1]):
                                         setsize(note_size[0], note_size[1]):
-                                        rotationy(note_rotation_y):
+                                        rotationy(flat_tap_face_rotation_y):
                                         rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
                                         customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                         diffuse(color[0], color[1], color[2], color[3]):
@@ -5706,7 +5712,7 @@ pub fn build_bundles(
                                         align(0.5, 0.5):
                                         xy(sprite_center[0], sprite_center[1]):
                                         setsize(note_size[0], note_size[1]):
-                                        rotationy(note_rotation_y):
+                                        rotationy(flat_tap_face_rotation_y):
                                         rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
                                         customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                         diffuse(color[0], color[1], color[2], color[3]):
@@ -5737,18 +5743,20 @@ pub fn build_bundles(
                         note_slot.model_draw_at(elapsed, current_beat),
                         note_rotation_y,
                     );
-                    if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                        note_slot,
-                        draw,
-                        center,
-                        note_size,
-                        note_uv,
-                        -note_slot.def.rotation_deg as f32 + note_rot,
-                        [1.0, 1.0, 1.0, note_alpha],
-                        BlendMode::Alpha,
-                        Z_TAP_NOTE as i16,
-                        &mut model_cache,
-                    ) {
+                    if !prefer_sprite_note_path
+                        && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
+                            note_slot,
+                            draw,
+                            center,
+                            note_size,
+                            note_uv,
+                            -note_slot.def.rotation_deg as f32 + note_rot,
+                            [1.0, 1.0, 1.0, note_alpha],
+                            BlendMode::Alpha,
+                            Z_TAP_NOTE as i16,
+                            &mut model_cache,
+                        )
+                    {
                         actors.push(actor_with_world_z(model_actor, note_world_z));
                     } else {
                         actors.push(actor_with_world_z(
@@ -5756,7 +5764,7 @@ pub fn build_bundles(
                                 align(0.5, 0.5):
                                 xy(center[0], center[1]):
                                 setsize(note_size[0], note_size[1]):
-                                rotationy(note_rotation_y):
+                                rotationy(flat_tap_face_rotation_y):
                                 rotationz(-note_slot.def.rotation_deg as f32 + note_rot):
                                 customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                 diffuse(1.0, 1.0, 1.0, note_alpha):
