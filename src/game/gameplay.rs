@@ -209,7 +209,9 @@ impl VisualEffects {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AppearanceEffects {
     pub hidden: f32,
+    pub hidden_offset: f32,
     pub sudden: f32,
+    pub sudden_offset: f32,
     pub stealth: f32,
     pub blink: f32,
     pub random_vanish: f32,
@@ -220,7 +222,9 @@ impl AppearanceEffects {
     fn from_mask(mask: u8) -> Self {
         Self {
             hidden: f32::from((mask & APPEARANCE_MASK_BIT_HIDDEN) != 0),
+            hidden_offset: 0.0,
             sudden: f32::from((mask & APPEARANCE_MASK_BIT_SUDDEN) != 0),
+            sudden_offset: 0.0,
             stealth: f32::from((mask & APPEARANCE_MASK_BIT_STEALTH) != 0),
             blink: f32::from((mask & APPEARANCE_MASK_BIT_BLINK) != 0),
             random_vanish: f32::from((mask & APPEARANCE_MASK_BIT_RANDOM_VANISH) != 0),
@@ -361,7 +365,9 @@ impl VisualOverrides {
 #[derive(Clone, Copy, Debug, Default)]
 struct AppearanceOverrides {
     hidden: Option<f32>,
+    hidden_offset: Option<f32>,
     sudden: Option<f32>,
+    sudden_offset: Option<f32>,
     stealth: Option<f32>,
     blink: Option<f32>,
     random_vanish: Option<f32>,
@@ -371,7 +377,9 @@ impl AppearanceOverrides {
     #[inline(always)]
     fn any(self) -> bool {
         self.hidden.is_some()
+            || self.hidden_offset.is_some()
             || self.sudden.is_some()
+            || self.sudden_offset.is_some()
             || self.stealth.is_some()
             || self.blink.is_some()
             || self.random_vanish.is_some()
@@ -2912,6 +2920,26 @@ fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
 }
 
 #[inline(always)]
+fn strip_attack_approach_prefix(token: &str) -> &str {
+    let token = token.trim();
+    let Some(prefix) = token.split_ascii_whitespace().next() else {
+        return token;
+    };
+    if prefix.len() <= 1 || !prefix.starts_with('*') {
+        return token;
+    }
+    if prefix[1..]
+        .parse::<f32>()
+        .ok()
+        .filter(|value| value.is_finite())
+        .is_none()
+    {
+        return token;
+    }
+    token[prefix.len()..].trim_start()
+}
+
+#[inline(always)]
 fn attack_level(percent_value: Option<f32>) -> Option<f32> {
     let raw = percent_value.unwrap_or(100.0);
     raw.is_finite().then_some(raw / 100.0)
@@ -2994,7 +3022,9 @@ fn apply_runtime_mod(out: &mut ParsedAttackMods, key: &str, percent_value: Optio
             }
         }
         "hidden" => out.appearance.hidden = attack_level(percent_value),
+        "hiddenoffset" => out.appearance.hidden_offset = attack_level(percent_value),
         "sudden" => out.appearance.sudden = attack_level(percent_value),
+        "suddenoffset" => out.appearance.sudden_offset = attack_level(percent_value),
         "stealth" => out.appearance.stealth = attack_level(percent_value),
         "blink" => out.appearance.blink = attack_level(percent_value),
         "rvanish" | "randomvanish" | "reversevanish" => {
@@ -3034,7 +3064,7 @@ fn apply_runtime_mod(out: &mut ParsedAttackMods, key: &str, percent_value: Optio
 fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
     let mut out = ParsedAttackMods::default();
     for token in mods.split(',') {
-        let token = token.trim();
+        let token = strip_attack_approach_prefix(token);
         if token.is_empty() {
             continue;
         }
@@ -7505,8 +7535,14 @@ fn refresh_active_attack_masks(state: &mut State) {
                 if let Some(v) = window.appearance.hidden {
                     appearance.hidden = Some(v);
                 }
+                if let Some(v) = window.appearance.hidden_offset {
+                    appearance.hidden_offset = Some(v);
+                }
                 if let Some(v) = window.appearance.sudden {
                     appearance.sudden = Some(v);
+                }
+                if let Some(v) = window.appearance.sudden_offset {
+                    appearance.sudden_offset = Some(v);
                 }
                 if let Some(v) = window.appearance.stealth {
                     appearance.stealth = Some(v);
@@ -7683,7 +7719,9 @@ pub fn effective_appearance_effects_for_player(
     let attack = state.active_attack_appearance[player_idx];
     AppearanceEffects {
         hidden: merge_attack_value(base.hidden, attack.hidden),
+        hidden_offset: merge_attack_value(base.hidden_offset, attack.hidden_offset),
         sudden: merge_attack_value(base.sudden, attack.sudden),
+        sudden_offset: merge_attack_value(base.sudden_offset, attack.sudden_offset),
         stealth: merge_attack_value(base.stealth, attack.stealth),
         blink: merge_attack_value(base.blink, attack.blink),
         random_vanish: merge_attack_value(base.random_vanish, attack.random_vanish),
@@ -16521,6 +16559,15 @@ mod tests {
         assert_eq!(mods.visual.drunk, None);
         assert_eq!(mods.appearance.blink, Some(0.3));
         assert_eq!(mods.appearance.hidden, Some(0.0));
+    }
+
+    #[test]
+    fn attack_mod_parser_handles_star_prefix_offsets() {
+        let mods =
+            parse_attack_mods("*1000 sudden,*1000 -125% suddenoffset,*2.4 150% hiddenoffset");
+        assert_eq!(mods.appearance.sudden, Some(1.0));
+        assert_eq!(mods.appearance.sudden_offset, Some(-1.25));
+        assert_eq!(mods.appearance.hidden_offset, Some(1.5));
     }
 
     #[test]

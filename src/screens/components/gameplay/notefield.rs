@@ -937,10 +937,18 @@ fn note_alpha(y_no_reverse: f32, elapsed: f32, mini: f32, appearance: Appearance
     let zoom = (1.0 - mini * 0.5).abs().max(0.01);
     let center_line = CENTER_LINE_Y / zoom;
     let hidden_sudden = appearance.hidden * appearance.sudden;
-    let hidden_end = center_line + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, -1.0, -1.25);
-    let hidden_start = center_line + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, -0.25);
-    let sudden_end = center_line + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, 0.25);
-    let sudden_start = center_line + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 1.0, 1.25);
+    let hidden_end = center_line
+        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, -1.0, -1.25)
+        + center_line * appearance.hidden_offset;
+    let hidden_start = center_line
+        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, -0.25)
+        + center_line * appearance.hidden_offset;
+    let sudden_end = center_line
+        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, 0.25)
+        + center_line * appearance.sudden_offset;
+    let sudden_start = center_line
+        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 1.0, 1.25)
+        + center_line * appearance.sudden_offset;
     let mut visible_adjust = 0.0;
     if appearance.hidden > f32::EPSILON {
         visible_adjust += appearance.hidden
@@ -7231,6 +7239,30 @@ mod tests {
             },
         );
         assert!((partial - full).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn sudden_offset_shifts_fade_band_like_itg() {
+        let base = note_alpha(
+            180.0,
+            0.0,
+            0.0,
+            AppearanceEffects {
+                sudden: 1.0,
+                ..AppearanceEffects::default()
+            },
+        );
+        let shifted = note_alpha(
+            180.0,
+            0.0,
+            0.0,
+            AppearanceEffects {
+                sudden: 1.0,
+                sudden_offset: 1.0,
+                ..AppearanceEffects::default()
+            },
+        );
+        assert!(shifted > base);
     }
 
     #[test]
