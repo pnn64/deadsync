@@ -1713,10 +1713,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             mines_disabled,
         );
 
-        // Simply Love: show Quint (Grade_Tier00) if EX score is exactly 100.00.
-        if grade != Grade::Failed && ex_score_percent >= 100.0 {
-            grade = Grade::Quint;
-        }
+        // Quint comes from the achieved result, not the active UI display mode.
+        grade = promote_quint_grade(grade, ex_score_percent);
 
         let counts = judgment_counts_arr(p);
         let white_fantastics = Some(gs.live_window_counts[player_idx].w1);
@@ -2332,7 +2330,7 @@ fn cached_score_from_gs(
     let lamp_judge_count = compute_lamp_judge_count(lamp_index, comments);
     let mut grade = score_to_grade(score_10000);
     if lamp_index == Some(0) {
-        grade = Grade::Quint;
+        grade = promote_quint_grade(grade, 100.0);
     }
     cached_score(grade, score_10000 / 10000.0, lamp_index, lamp_judge_count)
 }
@@ -3481,6 +3479,14 @@ fn compute_lamp_judge_count(lamp_index: Option<u8>, comment: Option<&str>) -> Op
 
 // --- Grade Calculation ---
 
+pub fn promote_quint_grade(grade: Grade, ex_score_percent: f64) -> Grade {
+    if grade != Grade::Failed && ex_score_percent >= 100.0 {
+        Grade::Quint
+    } else {
+        grade
+    }
+}
+
 pub fn score_to_grade(score: f64) -> Grade {
     let percent = score / 10000.0;
     if percent >= 1.00 {
@@ -3990,6 +3996,13 @@ mod tests {
         assert_eq!(cached.grade, Grade::Tier01);
         assert_eq!(cached.lamp_index, Some(1));
         assert_eq!(cached.lamp_judge_count, Some(3));
+    }
+
+    #[test]
+    fn promote_quint_grade_ignores_display_mode() {
+        assert_eq!(promote_quint_grade(Grade::Tier01, 100.0), Grade::Quint);
+        assert_eq!(promote_quint_grade(Grade::Tier01, 99.99), Grade::Tier01);
+        assert_eq!(promote_quint_grade(Grade::Failed, 100.0), Grade::Failed);
     }
 
     #[test]

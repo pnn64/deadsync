@@ -1167,14 +1167,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 mines_disabled,
             );
 
-            let w0_enabled =
-                (prof.show_fa_plus_window && prof.show_fa_plus_pane) || prof.show_ex_score;
-
-            // Simply Love: show Quint (Grade_Tier00) if EX score is exactly 100.00
-            // and we're in a mode that actually tracks/displays W0 (FA+/EX score).
-            if w0_enabled && grade != scores::Grade::Failed && ex_score_percent >= 100.0 {
-                grade = scores::Grade::Quint;
-            }
+            // Quint comes from the achieved result, not whether FA+ is displayed.
+            grade = scores::promote_quint_grade(grade, ex_score_percent);
 
             let column_judgments = compute_column_judgments(
                 notes,

@@ -1412,9 +1412,7 @@ fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::St
         } else {
             scores::score_to_grade(score_percent * 10000.0)
         };
-        if grade != scores::Grade::Failed && show_w0 && ex_score_percent >= 100.0 {
-            grade = scores::Grade::Quint;
-        }
+        grade = scores::promote_quint_grade(grade, ex_score_percent);
         let mut summary_chart = (*first_player.chart).clone();
         summary_chart.short_hash.clone_from(&course.score_hash);
         summary_chart
