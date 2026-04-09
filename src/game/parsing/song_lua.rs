@@ -2824,11 +2824,11 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     actor.set(
         "rotationx",
-        make_actor_capture_f32_method(lua, actor, "rot_x_deg", None)?,
+        make_actor_capture_f32_method(lua, actor, "rot_x_deg", Some("rotationx"))?,
     )?;
     actor.set(
         "rotationy",
-        make_actor_capture_f32_method(lua, actor, "rot_y_deg", None)?,
+        make_actor_capture_f32_method(lua, actor, "rot_y_deg", Some("rotationy"))?,
     )?;
     actor.set(
         "rotationz",
@@ -2836,11 +2836,11 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     actor.set(
         "zoomx",
-        make_actor_capture_f32_method(lua, actor, "zoom_x", None)?,
+        make_actor_capture_f32_method(lua, actor, "zoom_x", Some("zoomx"))?,
     )?;
     actor.set(
         "zoomy",
-        make_actor_capture_f32_method(lua, actor, "zoom_y", None)?,
+        make_actor_capture_f32_method(lua, actor, "zoom_y", Some("zoomy"))?,
     )?;
     actor.set(
         "zoomto",
@@ -2865,7 +2865,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let actor = actor.clone();
                 let method_name = name.to_string();
                 move |lua, _args: MultiValue| {
-                    record_probe_method_call(lua, &method_name)?;
+                    record_probe_method_call(lua, &actor, &method_name)?;
                     Ok(actor.clone())
                 }
             })?,
@@ -3180,7 +3180,7 @@ fn make_actor_capture_f32_method(
     let actor = actor.clone();
     lua.create_function(move |lua, args: MultiValue| {
         if let Some(probe_name) = probe_name {
-            record_probe_method_call(lua, probe_name)?;
+            record_probe_method_call(lua, &actor, probe_name)?;
         }
         if let Some(value) = args.get(1).cloned().and_then(read_f32) {
             capture_block_set_f32(lua, &actor, key, value)?;
@@ -3404,13 +3404,34 @@ fn read_eases(
     Ok((out, overlay_eases, info))
 }
 
-fn record_probe_method_call(lua: &Lua, method_name: &str) -> mlua::Result<()> {
+fn record_probe_method_call(lua: &Lua, actor: &Table, method_name: &str) -> mlua::Result<()> {
     let globals = lua.globals();
     let Some(calls) = globals.get::<Option<Table>>("__songlua_probe_methods")? else {
         return Ok(());
     };
-    calls.raw_set(calls.raw_len() + 1, method_name)?;
+    calls.raw_set(
+        calls.raw_len() + 1,
+        format!("{}.{}", probe_target_kind(actor)?, method_name),
+    )?;
     Ok(())
+}
+
+fn probe_target_kind(actor: &Table) -> mlua::Result<&'static str> {
+    let Some(_player_index) = actor.get::<Option<i64>>("__songlua_player_index")? else {
+        return Ok("overlay");
+    };
+    Ok(
+        match actor
+            .get::<Option<String>>("__songlua_player_child_name")?
+            .as_deref()
+        {
+            None => "player",
+            Some(name) if name.eq_ignore_ascii_case("NoteField") => "notefield",
+            Some(name) if name.eq_ignore_ascii_case("Judgment") => "judgment",
+            Some(name) if name.eq_ignore_ascii_case("Combo") => "combo",
+            _ => "player-child",
+        },
+    )
 }
 
 fn probe_function_ease_target(
@@ -3435,7 +3456,13 @@ fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEas
     let mut saw_rotation_z = false;
     let mut saw_skew_x = false;
     for value in calls.sequence_values::<String>() {
-        match value?.as_str() {
+        let value = value?;
+        let (target_kind, method_name) =
+            value.split_once('.').unwrap_or(("player", value.as_str()));
+        if !matches!(target_kind, "player" | "notefield") {
+            return Ok(None);
+        }
+        match method_name {
             "rotationz" => saw_rotation_z = true,
             "skewx" => saw_skew_x = true,
             _ => return Ok(None),
@@ -4718,6 +4745,47 @@ return Def.ActorFrame{
         assert_eq!(ease.to.zoom_x, Some(2.0));
         assert_eq!(ease.from.cropbottom, Some(0.0));
         assert_eq!(ease.to.cropbottom, Some(0.5));
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_overlay_rotation_eases_out_of_player_transforms() {
+        let song_dir = test_dir("overlay-rotation-ease");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target = nil
+
+mods_ease = {
+    {4, 2, 0, 45, function(a)
+        if target then
+            target:rotationz(a)
+        end
+    end, "len", ease.outQuad},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            target = self
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Overlay Rotation Ease"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_eases, 0);
+        assert!(compiled.eases.is_empty());
+        assert_eq!(compiled.overlay_eases.len(), 1);
+        assert_eq!(compiled.overlay_eases[0].overlay_index, 0);
+        assert_eq!(compiled.overlay_eases[0].from.rot_z_deg, Some(0.0));
+        assert_eq!(compiled.overlay_eases[0].to.rot_z_deg, Some(45.0));
     }
 
     #[test]
