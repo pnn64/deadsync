@@ -98,11 +98,12 @@ impl Default for SongLuaSpeedMod {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaPlayerContext {
     pub enabled: bool,
     pub difficulty: SongLuaDifficulty,
     pub speedmod: SongLuaSpeedMod,
+    pub noteskin_name: String,
     pub screen_x: f32,
     pub screen_y: f32,
 }
@@ -113,6 +114,7 @@ impl Default for SongLuaPlayerContext {
             enabled: true,
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
+            noteskin_name: crate::game::profile::NoteSkin::default().to_string(),
             screen_x: 320.0,
             screen_y: 240.0,
         }
@@ -140,7 +142,7 @@ impl SongLuaCompileContext {
             global_offset_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
-            players: [SongLuaPlayerContext::default(); LUA_PLAYERS],
+            players: std::array::from_fn(|_| SongLuaPlayerContext::default()),
             confusion_offset_available: true,
             confusion_available: true,
             amod_available: true,
@@ -817,14 +819,14 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context)?;
     let gamestate = lua.create_table()?;
-    let enabled_players = create_enabled_players_table(lua, context.players)?;
+    let enabled_players = create_enabled_players_table(lua, context.players.clone())?;
     let human_players = enabled_players.clone();
     let song_clone = song.clone();
     gamestate.set(
         "GetCurrentSong",
         lua.create_function(move |_, _args: MultiValue| Ok(song_clone.clone()))?,
     )?;
-    let players_enabled = context.players;
+    let players_enabled = context.players.clone();
     gamestate.set(
         "IsPlayerEnabled",
         lua.create_function(move |_, args: MultiValue| {
@@ -834,7 +836,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             Ok(players_enabled[player].enabled)
         })?,
     )?;
-    let human_players_enabled = context.players;
+    let human_players_enabled = context.players.clone();
     gamestate.set(
         "IsHumanPlayer",
         lua.create_function(move |_, args: MultiValue| {
@@ -888,7 +890,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("GAMESTATE", gamestate)?;
 
     let screenman = lua.create_table()?;
-    let top_screen = create_top_screen_table(lua, context.players)?;
+    let top_screen = create_top_screen_table(lua, context.players.clone())?;
     globals.set(
         "__songlua_top_screen_player_1",
         top_screen.players[0].clone(),
@@ -984,8 +986,8 @@ fn create_top_screen_table(
     let top_screen = create_dummy_actor(lua, "TopScreen")?;
     let top_screen_for_get_child = top_screen.clone();
     let player_actors = [
-        create_top_screen_player_actor(lua, players[0], 0)?,
-        create_top_screen_player_actor(lua, players[1], 1)?,
+        create_top_screen_player_actor(lua, players[0].clone(), 0)?,
+        create_top_screen_player_actor(lua, players[1].clone(), 1)?,
     ];
     let player_actors_for_get_child = player_actors.clone();
     top_screen.set(
@@ -1044,8 +1046,8 @@ fn create_player_tables(
     context: &SongLuaCompileContext,
 ) -> mlua::Result<PlayerLuaTables> {
     let player_states = [
-        create_player_state_table(lua, context.players[0])?,
-        create_player_state_table(lua, context.players[1])?,
+        create_player_state_table(lua, context.players[0].clone())?,
+        create_player_state_table(lua, context.players[1].clone())?,
     ];
     let steps = [
         create_steps_table(lua, context.players[0].difficulty)?,
@@ -1131,6 +1133,26 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     install_speedmod_method(lua, &table, "MMod", player.speedmod, SongLuaSpeedMod::M)?;
     install_speedmod_method(lua, &table, "AMod", player.speedmod, SongLuaSpeedMod::A)?;
     install_speedmod_method(lua, &table, "XMod", player.speedmod, SongLuaSpeedMod::X)?;
+    table.set("__songlua_noteskin_name", player.noteskin_name.clone())?;
+    table.set(
+        "NoteSkin",
+        lua.create_function(move |lua, args: MultiValue| {
+            let Some(owner) = args.front().and_then(|value| match value {
+                Value::Table(table) => Some(table.clone()),
+                _ => None,
+            }) else {
+                return Ok(Value::Nil);
+            };
+            if let Some(noteskin_name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                owner.set("__songlua_noteskin_name", noteskin_name)?;
+                return Ok(Value::Table(owner));
+            }
+            let noteskin_name = owner
+                .get::<Option<String>>("__songlua_noteskin_name")?
+                .unwrap_or_else(|| player.noteskin_name.clone());
+            Ok(Value::String(lua.create_string(&noteskin_name)?))
+        })?,
+    )?;
     let mt = lua.create_table()?;
     let fallback_owner = table.clone();
     mt.set(
@@ -4167,6 +4189,47 @@ return Def.ActorFrame{}
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "PlayerNumber_P1");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_player_noteskin_name() {
+        let song_dir = test_dir("player-noteskin");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+if string.lower(po:NoteSkin()) ~= "cyber" then
+    error("unexpected NoteSkin getter: " .. tostring(po:NoteSkin()))
+end
+po:NoteSkin("lambda")
+if po:NoteSkin() ~= "lambda" then
+    error("unexpected NoteSkin setter: " .. tostring(po:NoteSkin()))
+end
+mod_actions = {
+    {4, po:NoteSkin(), true},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Player Noteskin");
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                noteskin_name: "cyber".to_string(),
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: false,
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "lambda");
     }
 
     #[test]
