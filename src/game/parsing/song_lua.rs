@@ -10,6 +10,8 @@ const LUA_PLAYERS: usize = 2;
 const SONG_LUA_PRODUCT_FAMILY: &str = "ITGmania";
 const SONG_LUA_PRODUCT_ID: &str = "ITGmania";
 const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
+const THEME_RECEPTOR_Y_STD: f32 = -125.0;
+const THEME_RECEPTOR_Y_REV: f32 = 145.0;
 const EASING_NAMES: &[&str] = &[
     "linear",
     "inQuad",
@@ -808,6 +810,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         })?,
     )?;
     globals.set("PREFSMAN", prefsmgr)?;
+    globals.set("THEME", create_theme_table(lua)?)?;
 
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context)?;
@@ -1030,6 +1033,36 @@ fn create_player_tables(
         player_states,
         steps,
     })
+}
+
+fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
+    let theme = lua.create_table()?;
+    let get_metric = lua.create_function(|_, args: MultiValue| {
+        let Some(group) = method_arg(&args, 0).cloned().and_then(read_string) else {
+            return Ok(Value::Nil);
+        };
+        let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
+            return Ok(Value::Nil);
+        };
+        Ok(theme_metric(&group, &name).map_or(Value::Nil, |value| Value::Number(value as f64)))
+    })?;
+    theme.set("GetMetric", get_metric.clone())?;
+    theme.set("GetMetricF", get_metric)?;
+    Ok(theme)
+}
+
+#[inline(always)]
+fn theme_metric(group: &str, name: &str) -> Option<f32> {
+    if !group.eq_ignore_ascii_case("Player") {
+        return None;
+    }
+    if name.eq_ignore_ascii_case("ReceptorArrowsYStandard") {
+        Some(THEME_RECEPTOR_Y_STD)
+    } else if name.eq_ignore_ascii_case("ReceptorArrowsYReverse") {
+        Some(THEME_RECEPTOR_Y_REV)
+    } else {
+        None
+    }
 }
 
 fn create_player_state_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
@@ -4032,6 +4065,45 @@ return Def.ActorFrame{}
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "ITGmania:ITGmania:1.2.0");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_theme_player_metrics() {
+        let song_dir = test_dir("theme-metrics");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local standard = THEME:GetMetric("Player", "ReceptorArrowsYStandard")
+local reverse = THEME:GetMetricF("Player", "ReceptorArrowsYReverse")
+local missing = THEME:GetMetric("Player", "NoSuchMetric")
+
+if standard ~= -125 then
+    error("unexpected ReceptorArrowsYStandard: " .. tostring(standard))
+end
+if reverse ~= 145 then
+    error("unexpected ReceptorArrowsYReverse: " .. tostring(reverse))
+end
+if missing ~= nil then
+    error("unexpected metric fallback: " .. tostring(missing))
+end
+
+mod_actions = {
+    {4, "theme-metrics-ok", true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme Metrics"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "theme-metrics-ok");
     }
 
     #[test]
