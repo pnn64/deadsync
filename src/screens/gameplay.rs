@@ -891,6 +891,18 @@ fn song_lua_overlay_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
     ]
 }
 
+#[inline(always)]
+fn song_lua_overlay_parent_uses_center_origin(
+    parent_kind: &SongLuaOverlayKind,
+    parent_axis: f32,
+    overlay_space_axis: f32,
+) -> bool {
+    matches!(
+        parent_kind,
+        SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+    ) && (parent_axis - 0.5 * overlay_space_axis).abs() <= 0.01
+}
+
 fn song_lua_overlay_compose_state(
     parent_kind: &SongLuaOverlayKind,
     parent: SongLuaOverlayState,
@@ -904,6 +916,10 @@ fn song_lua_overlay_compose_state(
     let local_x = if matches!(
         parent_kind,
         SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+    ) && song_lua_overlay_parent_uses_center_origin(
+        parent_kind,
+        parent.x,
+        overlay_space_width,
     ) && (child.x - 0.5 * overlay_space_width).abs() <= epsilon
     {
         0.0
@@ -913,6 +929,10 @@ fn song_lua_overlay_compose_state(
     let local_y = if matches!(
         parent_kind,
         SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture
+    ) && song_lua_overlay_parent_uses_center_origin(
+        parent_kind,
+        parent.y,
+        overlay_space_height,
     ) && (child.y - 0.5 * overlay_space_height).abs() <= epsilon
     {
         0.0
@@ -3582,6 +3602,25 @@ mod tests {
             y: 240.0,
             ..SongLuaOverlayState::default()
         };
+        let child = SongLuaOverlayState {
+            x: 427.0,
+            y: 240.0,
+            ..SongLuaOverlayState::default()
+        };
+        let composed = song_lua_overlay_compose_state(
+            &SongLuaOverlayKind::ActorFrame,
+            parent,
+            child,
+            854.0,
+            480.0,
+        );
+        assert_eq!(composed.x, 427.0);
+        assert_eq!(composed.y, 240.0);
+    }
+
+    #[test]
+    fn song_lua_overlay_root_actorframe_keeps_absolute_center_child() {
+        let parent = SongLuaOverlayState::default();
         let child = SongLuaOverlayState {
             x: 427.0,
             y: 240.0,
