@@ -680,6 +680,10 @@ fn write_player_options(content: &mut String, section: &str, options: &PlayerOpt
     content.push_str(&format!("ErrorBarOffsetX={}\n", options.error_bar_offset_x));
     content.push_str(&format!("ErrorBarOffsetY={}\n", options.error_bar_offset_y));
     content.push_str(&format!("VisualDelayMs={}\n", options.visual_delay_ms));
+    content.push_str(&format!(
+        "GlobalOffsetShiftMs={}\n",
+        options.global_offset_shift_ms
+    ));
     content.push('\n');
 }
 
@@ -784,6 +788,10 @@ fn load_player_options(
         .or_else(|| profile_conf.get(section, "VisualDelay"))
         .and_then(|s| s.trim_end_matches("ms").parse::<i32>().ok())
         .unwrap_or(options.visual_delay_ms);
+    options.global_offset_shift_ms = profile_conf
+        .get(section, "GlobalOffsetShiftMs")
+        .and_then(|s| s.trim_end_matches("ms").parse::<i32>().ok())
+        .unwrap_or(options.global_offset_shift_ms);
     options.show_fa_plus_window = profile_conf
         .get(section, "ShowFaPlusWindow")
         .and_then(|s| s.parse::<u8>().ok())
@@ -2371,6 +2379,7 @@ pub struct PlayerOptionsData {
     pub error_bar_offset_x: i32,
     pub error_bar_offset_y: i32,
     pub visual_delay_ms: i32,
+    pub global_offset_shift_ms: i32,
 }
 
 fn default_player_options() -> PlayerOptionsData {
@@ -2462,6 +2471,7 @@ fn default_player_options() -> PlayerOptionsData {
         error_bar_offset_x: 0,
         error_bar_offset_y: 0,
         visual_delay_ms: 0,
+        global_offset_shift_ms: 0,
     }
 }
 
@@ -2611,6 +2621,8 @@ pub struct Profile {
     // Per-player visual delay (Simply Love semantics). Stored in milliseconds.
     // Negative values shift arrows upwards; positive values shift them down.
     pub visual_delay_ms: i32,
+    // Per-player timing shift applied on top of machine global offset. Stored in milliseconds.
+    pub global_offset_shift_ms: i32,
     pub player_options_singles: PlayerOptionsData,
     pub player_options_doubles: PlayerOptionsData,
     // Persisted "last played" selections so future sessions can reopen
@@ -2744,6 +2756,7 @@ impl Default for Profile {
             error_bar_offset_x: player_options.error_bar_offset_x,
             error_bar_offset_y: player_options.error_bar_offset_y,
             visual_delay_ms: player_options.visual_delay_ms,
+            global_offset_shift_ms: player_options.global_offset_shift_ms,
             player_options_singles: player_options.clone(),
             player_options_doubles: player_options,
             last_played_singles: LastPlayed::default(),
@@ -2896,6 +2909,7 @@ impl Profile {
             error_bar_offset_x: self.error_bar_offset_x,
             error_bar_offset_y: self.error_bar_offset_y,
             visual_delay_ms: self.visual_delay_ms,
+            global_offset_shift_ms: self.global_offset_shift_ms,
         }
     }
 
@@ -2989,6 +3003,7 @@ impl Profile {
         self.error_bar_offset_x = options.error_bar_offset_x;
         self.error_bar_offset_y = options.error_bar_offset_y;
         self.visual_delay_ms = options.visual_delay_ms;
+        self.global_offset_shift_ms = options.global_offset_shift_ms;
     }
 
     #[inline(always)]
@@ -4557,13 +4572,33 @@ mod tests {
     fn player_options_use_singles_for_single_and_versus() {
         let mut profile = Profile::default();
         profile.mini_percent = 12;
+        profile.global_offset_shift_ms = 9;
         profile.store_current_player_options(PlayStyle::Single);
         profile.mini_percent = 48;
+        profile.global_offset_shift_ms = -11;
         profile.store_current_player_options(PlayStyle::Double);
 
         assert_eq!(profile.player_options(PlayStyle::Single).mini_percent, 12);
         assert_eq!(profile.player_options(PlayStyle::Versus).mini_percent, 12);
         assert_eq!(profile.player_options(PlayStyle::Double).mini_percent, 48);
+        assert_eq!(
+            profile
+                .player_options(PlayStyle::Single)
+                .global_offset_shift_ms,
+            9
+        );
+        assert_eq!(
+            profile
+                .player_options(PlayStyle::Versus)
+                .global_offset_shift_ms,
+            9
+        );
+        assert_eq!(
+            profile
+                .player_options(PlayStyle::Double)
+                .global_offset_shift_ms,
+            -11
+        );
     }
 
     #[test]
@@ -4571,6 +4606,7 @@ mod tests {
         let mut profile = Profile::default();
         profile.mini_percent = 18;
         profile.show_ex_score = true;
+        profile.global_offset_shift_ms = 7;
         profile.timing_windows = TimingWindowsOption::WayOffs;
         profile.receptor_noteskin = Some(NoteSkin::new("default"));
         profile.tap_explosion_noteskin = Some(NoteSkin::new("metal"));
@@ -4578,6 +4614,7 @@ mod tests {
 
         profile.mini_percent = 62;
         profile.show_ex_score = false;
+        profile.global_offset_shift_ms = -13;
         profile.timing_windows = TimingWindowsOption::FantasticsAndExcellents;
         profile.receptor_noteskin = Some(NoteSkin::new("cyber"));
         profile.tap_explosion_noteskin = None;
@@ -4586,6 +4623,7 @@ mod tests {
         profile.apply_player_options_for_style(PlayStyle::Single);
         assert_eq!(profile.mini_percent, 18);
         assert!(profile.show_ex_score);
+        assert_eq!(profile.global_offset_shift_ms, 7);
         assert_eq!(profile.timing_windows, TimingWindowsOption::WayOffs);
         assert_eq!(profile.receptor_noteskin, Some(NoteSkin::new("default")));
         assert_eq!(profile.tap_explosion_noteskin, Some(NoteSkin::new("metal")));
@@ -4593,6 +4631,7 @@ mod tests {
         profile.apply_player_options_for_style(PlayStyle::Double);
         assert_eq!(profile.mini_percent, 62);
         assert!(!profile.show_ex_score);
+        assert_eq!(profile.global_offset_shift_ms, -13);
         assert_eq!(
             profile.timing_windows,
             TimingWindowsOption::FantasticsAndExcellents

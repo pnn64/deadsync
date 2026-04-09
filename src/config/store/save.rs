@@ -374,6 +374,11 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
         cfg.machine_show_select_style,
     );
     push_bool(content, "MachineEnableReplays", cfg.machine_enable_replays);
+    push_bool(
+        content,
+        "MachineAllowPerPlayerGlobalOffsets",
+        cfg.machine_allow_per_player_global_offsets,
+    );
     push_line(
         content,
         "MachinePreferredStyle",

@@ -165,6 +165,8 @@ pub struct Config {
     pub machine_preferred_play_mode: MachinePreferredPlayMode,
     /// Machine-wide replay recording and replay menu visibility.
     pub machine_enable_replays: bool,
+    /// Allow players to add a personal timing shift on top of machine global offset.
+    pub machine_allow_per_player_global_offsets: bool,
     /// Post-session flow from Select Music/Course: show Evaluation Summary.
     pub machine_show_eval_summary: bool,
     /// Post-session flow from Select Music/Course: show Name Entry.
@@ -297,6 +299,7 @@ impl Default for Config {
             machine_preferred_style: MachinePreferredPlayStyle::Single,
             machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
             machine_enable_replays: true,
+            machine_allow_per_player_global_offsets: false,
             machine_show_eval_summary: true,
             machine_show_name_entry: true,
             machine_show_gameover: true,

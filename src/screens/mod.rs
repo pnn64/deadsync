@@ -157,9 +157,15 @@ mod tests {
             Screen::ManageLocalProfiles.current_screen_file_name(),
             "ScreenOptionsManageProfiles"
         );
-        assert_eq!(Screen::Mappings.current_screen_file_name(), "ScreenMapControllers");
+        assert_eq!(
+            Screen::Mappings.current_screen_file_name(),
+            "ScreenMapControllers"
+        );
         assert_eq!(Screen::Input.current_screen_file_name(), "ScreenTestInput");
-        assert_eq!(Screen::Evaluation.current_screen_file_name(), "ScreenEvaluationStage");
+        assert_eq!(
+            Screen::Evaluation.current_screen_file_name(),
+            "ScreenEvaluationStage"
+        );
         assert_eq!(
             Screen::PlayerOptions.current_screen_file_name(),
             "ScreenPlayerOptions"

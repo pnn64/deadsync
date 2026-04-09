@@ -692,6 +692,7 @@ const MACHINE_ROW_NAME_ENTRY: &str = "Name Entry";
 const MACHINE_ROW_GAMEOVER: &str = "Gameover Screen";
 const MACHINE_ROW_MENU_MUSIC: &str = "Menu Music";
 const MACHINE_ROW_REPLAYS: &str = "Replays";
+const MACHINE_ROW_PER_PLAYER_GLOBAL_OFFSETS: &str = "Allow Per Player Global Offsets";
 const MACHINE_ROW_KEYBOARD_FEATURES: &str = "Keyboard Features";
 const MACHINE_ROW_VIDEO_BGS: &str = "Video BGs";
 const MACHINE_ROW_WRITE_CURRENT_SCREEN: &str = "Write Current Screen";
@@ -1384,6 +1385,11 @@ pub const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        label: MACHINE_ROW_PER_PLAYER_GLOBAL_OFFSETS,
+        choices: &["Off", "On"],
+        inline: true,
+    },
+    SubRow {
         label: MACHINE_ROW_KEYBOARD_FEATURES,
         choices: &["Off", "On"],
         inline: true,
@@ -1445,6 +1451,13 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             "Enable local replay recording during gameplay.",
             "When Off, Select Music hides the Play Replay option.",
+        ],
+    },
+    Item {
+        name: MACHINE_ROW_PER_PLAYER_GLOBAL_OFFSETS,
+        help: &[
+            "Allow each player profile to add a personal timing shift in Player Options.",
+            "This shift is applied on top of the machine global offset.",
         ],
     },
     Item {
@@ -5064,6 +5077,12 @@ pub fn init() -> State {
     set_choice_by_label(
         &mut state.sub_choice_indices_machine,
         MACHINE_OPTIONS_ROWS,
+        MACHINE_ROW_PER_PLAYER_GLOBAL_OFFSETS,
+        usize::from(cfg.machine_allow_per_player_global_offsets),
+    );
+    set_choice_by_label(
+        &mut state.sub_choice_indices_machine,
+        MACHINE_OPTIONS_ROWS,
         MACHINE_ROW_KEYBOARD_FEATURES,
         usize::from(cfg.keyboard_features),
     );
@@ -6909,6 +6928,9 @@ fn apply_submenu_choice_delta(
             MACHINE_ROW_GAMEOVER => config::update_machine_show_gameover(enabled),
             MACHINE_ROW_MENU_MUSIC => config::update_menu_music(enabled),
             MACHINE_ROW_REPLAYS => config::update_machine_enable_replays(enabled),
+            MACHINE_ROW_PER_PLAYER_GLOBAL_OFFSETS => {
+                config::update_machine_allow_per_player_global_offsets(enabled)
+            }
             MACHINE_ROW_KEYBOARD_FEATURES => config::update_keyboard_features(enabled),
             MACHINE_ROW_VIDEO_BGS => config::update_show_video_backgrounds(enabled),
             MACHINE_ROW_WRITE_CURRENT_SCREEN => config::update_write_current_screen(enabled),

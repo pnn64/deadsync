@@ -4445,7 +4445,8 @@ fn build_song_lua_runtime_windows(
     num_players: usize,
     player_profiles: &[profile::Profile; MAX_PLAYERS],
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
-    global_offset_seconds: f32,
+    machine_global_offset_seconds: f32,
+    player_global_offset_shift_seconds: &[f32; MAX_PLAYERS],
 ) -> (
     [Vec<AttackMaskWindow>; MAX_PLAYERS],
     [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
@@ -4502,7 +4503,7 @@ fn build_song_lua_runtime_windows(
             .unwrap_or_default(),
         song.title.clone(),
     );
-    context.global_offset_seconds = global_offset_seconds;
+    context.global_offset_seconds = machine_global_offset_seconds;
     context.screen_width = screen_width;
     context.screen_height = screen_height;
     context.confusion_offset_available = false;
@@ -4564,14 +4565,14 @@ fn build_song_lua_runtime_windows(
     let overlay_runtime_eases = build_song_lua_overlay_ease_windows(
         &compiled,
         timing_players[0].as_ref(),
-        global_offset_seconds,
+        machine_global_offset_seconds,
     );
     (overlay_eases, overlay_ease_ranges) =
         group_song_lua_overlay_eases(compiled.overlays.len(), overlay_runtime_eases);
     overlay_events = build_song_lua_overlay_message_events(
         &compiled,
         timing_players[0].as_ref(),
-        global_offset_seconds,
+        machine_global_offset_seconds,
     );
     hidden_players[..compiled.hidden_players.len()].copy_from_slice(&compiled.hidden_players);
 
@@ -4579,17 +4580,19 @@ fn build_song_lua_runtime_windows(
     let mut total_constant = 0usize;
     let mut total_eases = 0usize;
     for player in 0..num_players {
+        let player_global_offset_seconds =
+            machine_global_offset_seconds + player_global_offset_shift_seconds[player];
         constant_windows[player] = build_song_lua_constant_windows_for_player(
             &compiled,
             timing_players[player].as_ref(),
             player,
-            global_offset_seconds,
+            player_global_offset_seconds,
         );
         let (player_eases, player_unsupported_targets) = build_song_lua_ease_windows_for_player(
             &compiled,
             timing_players[player].as_ref(),
             player,
-            global_offset_seconds,
+            player_global_offset_seconds,
         );
         unsupported_targets += player_unsupported_targets;
         total_constant += constant_windows[player].len();
@@ -6767,6 +6770,7 @@ pub struct State {
     pub play_mine_sounds: bool,
     pub global_offset_seconds: f32,
     pub initial_global_offset_seconds: f32,
+    pub player_global_offset_shift_seconds: [f32; MAX_PLAYERS],
     pub song_offset_seconds: f32,
     pub initial_song_offset_seconds: f32,
     pub autosync_mode: AutosyncMode,
@@ -9199,12 +9203,23 @@ pub fn init(
             .find(|p| p.group_name == pack_group.as_ref())
             .and_then(|p| p.banner_path.clone())
     };
+    let player_global_offset_shift_seconds: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if !config.machine_allow_per_player_global_offsets || player >= num_players {
+            return 0.0;
+        }
+        player_profiles[player]
+            .global_offset_shift_ms
+            .clamp(-100, 100) as f32
+            / 1000.0
+    });
     let mut timing_base = gameplay_charts[0].timing.clone();
     timing_base.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing_base);
     let mut timing_players: [Arc<TimingData>; MAX_PLAYERS] = std::array::from_fn(|player| {
         let mut t = gameplay_charts[player].timing.clone();
-        t.set_global_offset_seconds(config.global_offset_seconds);
+        t.set_global_offset_seconds(
+            config.global_offset_seconds + player_global_offset_shift_seconds[player],
+        );
         Arc::new(t)
     });
     if num_players == 1 {
@@ -9702,6 +9717,7 @@ pub fn init(
         &player_profiles,
         &scroll_speed,
         config.global_offset_seconds,
+        &player_global_offset_shift_seconds,
     );
     let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
@@ -10065,6 +10081,7 @@ pub fn init(
         play_mine_sounds: config.mine_hit_sound,
         global_offset_seconds: config.global_offset_seconds,
         initial_global_offset_seconds: config.global_offset_seconds,
+        player_global_offset_shift_seconds,
         song_offset_seconds,
         initial_song_offset_seconds: song_offset_seconds,
         autosync_mode: AutosyncMode::Off,
@@ -10483,6 +10500,16 @@ fn classify_player_tap_offset_s(
         &timing_profile,
         &player_disabled_timing_windows(state, player_idx),
     )
+}
+
+#[inline(always)]
+fn effective_player_global_offset_seconds(state: &State, player_idx: usize) -> f32 {
+    let shift = state
+        .player_global_offset_shift_seconds
+        .get(player_idx)
+        .copied()
+        .unwrap_or(0.0);
+    state.global_offset_seconds + shift
 }
 
 #[inline(always)]
@@ -12083,7 +12110,7 @@ pub fn judge_a_tap(
             let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
                 (
                     state.song_offset_seconds,
-                    state.global_offset_seconds,
+                    effective_player_global_offset_seconds(state, player),
                     state.audio_lead_in_seconds.max(0.0),
                     audio::get_music_stream_position_seconds(),
                 )
@@ -12368,7 +12395,7 @@ pub fn judge_a_lift(
     let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
         (
             state.song_offset_seconds,
-            state.global_offset_seconds,
+            effective_player_global_offset_seconds(state, player),
             state.audio_lead_in_seconds.max(0.0),
             audio::get_music_stream_position_seconds(),
         )
@@ -13084,9 +13111,10 @@ fn apply_global_offset_delta(state: &mut State, delta: f32) -> bool {
     mutate_timing_arc(&mut state.timing, |timing| {
         timing.set_global_offset_seconds(new_offset)
     });
-    for timing in &mut state.timing_players {
+    for (player_idx, timing) in state.timing_players.iter_mut().enumerate() {
+        let effective_offset = new_offset + state.player_global_offset_shift_seconds[player_idx];
         mutate_timing_arc(timing, |timing| {
-            timing.set_global_offset_seconds(new_offset)
+            timing.set_global_offset_seconds(effective_offset)
         });
     }
     refresh_timing_after_offset_change(state);
@@ -14038,7 +14066,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                 set_final_note_result(state, player, cursor, judgment);
                 if log::log_enabled!(log::Level::Debug) {
                     let song_offset_s = state.song_offset_seconds;
-                    let global_offset_s = state.global_offset_seconds;
+                    let global_offset_s = effective_player_global_offset_seconds(state, player);
                     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
                     let stream_pos_s = audio::get_music_stream_position_seconds();
                     let expected_stream_for_note_s =
@@ -14761,27 +14789,29 @@ fn update_danger_fx(state: &mut State) {
 #[cfg(test)]
 mod tests {
     use super::{
-        Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, FinalizedRowOutcome, FrameStableDisplayClock,
-        GAMEPLAY_INPUT_BACKLOG_WARN, HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS,
-        REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot,
-        TickMode, TurnRng, active_hold_counts_as_pressed, add_provisional_early_score,
-        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
-        apply_global_offset_delta, apply_mines_insert, apply_song_offset_delta,
-        arrow_time_window_bounds_ns, autoplay_random_offset_s_for_window, build_assist_clap_rows,
-        build_attack_mask_windows_for_player, build_column_cues_for_player, build_row_grids,
-        closest_lane_note_ns, collect_edge_judge_indices, completed_row_final_judgment,
-        completed_row_flash_note_indices_and_grade, completed_row_hidden_note_indices,
-        count_rescore_tracks_on_row, crossed_mine_bounds_ns, enforce_max_simultaneous_notes,
+        Arrow, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, FinalizedRowOutcome,
+        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, HoldToExitKey, INSERT_MASK_BIT_MINES,
+        MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
+        ScrollSpeedSetting, SongClockSnapshot, TickMode, TurnRng, active_hold_counts_as_pressed,
+        add_provisional_early_score, advance_hold_last_held, advance_hold_life_ns,
+        advance_judged_row_cursor, apply_global_offset_delta, apply_mines_insert,
+        apply_song_offset_delta, arrow_time_window_bounds_ns, autoplay_random_offset_s_for_window,
+        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
+        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
+        completed_row_final_judgment, completed_row_flash_note_indices_and_grade,
+        completed_row_hidden_note_indices, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
+        effective_player_global_offset_seconds, enforce_max_simultaneous_notes,
         finalize_row_judgment, finalized_row_outcome_for_cached_row, find_arrow_index,
         frame_stable_display_music_time, handle_input, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
         lane_release_finished, late_note_resolution_window_s, live_autoplay_enabled_from_flags,
         max_step_distance_seconds, mine_window_bounds_ns, music_time_from_song_clock,
-        next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
+        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
         parse_song_lua_runtime_mods, partition_notes_before_time,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
-        recompute_player_totals, remove_provisional_early_score, replay_edge_cap,
-        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        recompute_player_totals, refresh_timing_after_offset_change,
+        remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
+        row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
         stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
@@ -15165,6 +15195,33 @@ mod tests {
         );
         assert!((song_before - song_after - 0.010).abs() <= 1e-6);
         assert!((global_before - global_after - 0.010).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn global_offset_delta_preserves_player_shift() {
+        let profiles = [profile::Profile::default(), profile::Profile::default()];
+        let mut state = regression_state(profiles);
+        let shift = 0.015_f32;
+
+        state.player_global_offset_shift_seconds[0] = shift;
+        mutate_timing_arc(&mut state.timing_players[0], |timing| {
+            timing.set_global_offset_seconds(state.global_offset_seconds + shift)
+        });
+        refresh_timing_after_offset_change(&mut state);
+
+        let machine_before = state.global_offset_seconds;
+        let effective_before = effective_player_global_offset_seconds(&state, 0);
+        let note_before = state.note_time_cache[0];
+
+        assert!((effective_before - (machine_before + shift)).abs() <= 1e-6);
+        assert!(apply_global_offset_delta(&mut state, 0.010));
+
+        let effective_after = effective_player_global_offset_seconds(&state, 0);
+        let note_after = state.note_time_cache[0];
+
+        assert!((state.global_offset_seconds - (machine_before + 0.010)).abs() <= 1e-6);
+        assert!((effective_after - (state.global_offset_seconds + shift)).abs() <= 1e-6);
+        assert!((note_before - note_after - 0.010).abs() <= 1e-6);
     }
 
     #[test]

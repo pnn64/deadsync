@@ -223,6 +223,17 @@ pub fn update_machine_enable_replays(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_machine_allow_per_player_global_offsets(enabled: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.machine_allow_per_player_global_offsets == enabled {
+            return;
+        }
+        cfg.machine_allow_per_player_global_offsets = enabled;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_enable_groovestats(enabled: bool) {
     {
         let mut cfg = lock_config();

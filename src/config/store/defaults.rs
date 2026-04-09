@@ -306,6 +306,11 @@ fn push_default_theme(content: &mut String, default: &Config) {
         "MachineEnableReplays",
         default.machine_enable_replays,
     );
+    push_bool(
+        content,
+        "MachineAllowPerPlayerGlobalOffsets",
+        default.machine_allow_per_player_global_offsets,
+    );
     push_line(
         content,
         "MachinePreferredStyle",

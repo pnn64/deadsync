@@ -667,6 +667,20 @@ pub fn update_visual_delay_ms_for_side(side: PlayerSide, ms: i32) {
     save_profile_ini_for_side(side);
 }
 
+pub fn update_global_offset_shift_ms_for_side(side: PlayerSide, ms: i32) {
+    // Keep the personal timing shift in the same small-calibration range as visual delay.
+    let clamped = ms.clamp(-100, 100);
+    {
+        let mut profiles = lock_profiles();
+        let profile = &mut profiles[side_ix(side)];
+        if profile.global_offset_shift_ms == clamped {
+            return;
+        }
+        profile.global_offset_shift_ms = clamped;
+    }
+    save_profile_ini_for_side(side);
+}
+
 pub fn update_show_fa_plus_window_for_side(side: PlayerSide, enabled: bool) {
     {
         let mut profiles = lock_profiles();

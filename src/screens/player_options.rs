@@ -178,6 +178,7 @@ fn init_row_tweens(
     active: [bool; PLAYER_SLOTS],
     hide_active_mask: [u8; PLAYER_SLOTS],
     error_bar_active_mask: [u8; PLAYER_SLOTS],
+    allow_per_player_global_offsets: bool,
 ) -> Vec<RowTween> {
     let total_rows = rows.len();
     if total_rows == 0 {
@@ -185,7 +186,13 @@ fn init_row_tweens(
     }
 
     let (first_row_center_y, row_step) = row_layout_params();
-    let visibility = row_visibility(rows, active, hide_active_mask, error_bar_active_mask);
+    let visibility = row_visibility(
+        rows,
+        active,
+        hide_active_mask,
+        error_bar_active_mask,
+        allow_per_player_global_offsets,
+    );
     let visible_rows = count_visible_rows(rows, visibility);
     if visible_rows == 0 {
         let y = first_row_center_y - row_step * 0.5;
@@ -450,6 +457,7 @@ pub struct State {
     pub nav_key_last_scrolled_at: [Option<Instant>; PLAYER_SLOTS],
     inline_choice_x: [f32; PLAYER_SLOTS],
     arcade_row_focus: [bool; PLAYER_SLOTS],
+    allow_per_player_global_offsets: bool,
     pub player_profiles: [crate::game::profile::Profile; PLAYER_SLOTS],
     noteskin_names: Vec<String>,
     noteskin_cache: HashMap<String, Arc<Noteskin>>,
@@ -1177,6 +1185,16 @@ fn build_main_rows(
             help: vec![
                 "Player specific visual delay. Negative values shifts the arrows".to_string(),
                 "upwards, while positive values move them down.".to_string(),
+            ],
+            choice_difficulty_indices: None,
+        },
+        Row {
+            name: ROW_GLOBAL_OFFSET_SHIFT.to_string(),
+            choices: (-100..=100).map(|v| format!("{v}ms")).collect(),
+            selected_choice_index: [100; PLAYER_SLOTS],
+            help: vec![
+                "Player specific timing shift added on top of the machine global".to_string(),
+                "offset. Use this for controller-specific latency differences.".to_string(),
             ],
             choice_difficulty_indices: None,
         },
@@ -2115,6 +2133,13 @@ fn apply_profile_defaults(
             row.selected_choice_index[player_idx] = idx;
         }
     }
+    if let Some(row) = rows.iter_mut().find(|r| r.name == ROW_GLOBAL_OFFSET_SHIFT) {
+        let val = profile.global_offset_shift_ms.clamp(-100, 100);
+        let needle = format!("{val}ms");
+        if let Some(idx) = row.choices.iter().position(|c| c == &needle) {
+            row.selected_choice_index[player_idx] = idx;
+        }
+    }
     // Initialize Judgment Tilt rows from profile (Simply Love semantics).
     if let Some(row) = rows.iter_mut().find(|r| r.name == "Judgment Tilt") {
         row.selected_choice_index[player_idx] = if profile.judgment_tilt { 1 } else { 0 };
@@ -2702,6 +2727,8 @@ pub fn init(
     fixed_stepchart: Option<FixedStepchart>,
 ) -> State {
     let session_music_rate = crate::game::profile::get_session_music_rate();
+    let allow_per_player_global_offsets =
+        crate::config::get().machine_allow_per_player_global_offsets;
     let p1_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P1);
     let p2_profile = crate::game::profile::get_for_side(crate::game::profile::PlayerSide::P2);
 
@@ -2853,6 +2880,7 @@ pub fn init(
         active,
         [hide_active_mask_p1, hide_active_mask_p2],
         [error_bar_active_mask_p1, error_bar_active_mask_p2],
+        allow_per_player_global_offsets,
     );
     State {
         song,
@@ -2909,6 +2937,7 @@ pub fn init(
         nav_key_last_scrolled_at: [None; PLAYER_SLOTS],
         inline_choice_x: [f32::NAN; PLAYER_SLOTS],
         arcade_row_focus: [true; PLAYER_SLOTS],
+        allow_per_player_global_offsets,
         player_profiles,
         noteskin_names,
         noteskin_cache,
@@ -3037,6 +3066,7 @@ const ROW_ERROR_BAR_OFFSET_Y: &str = "Error Bar Offset Y";
 const ROW_CUSTOM_FANTASTIC_WINDOW: &str = "Custom Blue Fantastic Window";
 const ROW_CUSTOM_FANTASTIC_WINDOW_MS: &str = "Custom Blue Fantastic Window (ms)";
 const ROW_CARRY_COMBO: &str = "Carry Combo";
+const ROW_GLOBAL_OFFSET_SHIFT: &str = "Global Offset Shift";
 const ROW_HIDE: &str = "Hide";
 const ROW_RESULTS_EXTRAS: &str = "Results Extras";
 const ROW_COMBO_COLORS: &str = "Combo Colors";
@@ -3058,6 +3088,7 @@ struct RowVisibility {
     show_combo_rows: bool,
     show_lifebar_rows: bool,
     show_indicator_score_type: bool,
+    show_global_offset_shift: bool,
 }
 
 #[inline(always)]
@@ -3098,6 +3129,9 @@ fn row_visible_with_flags(row_name: &str, visibility: RowVisibility) -> bool {
     }
     if row_name == ROW_INDICATOR_SCORE_TYPE {
         return visibility.show_indicator_score_type;
+    }
+    if row_name == ROW_GLOBAL_OFFSET_SHIFT {
+        return visibility.show_global_offset_shift;
     }
     true
 }
@@ -3306,6 +3340,7 @@ fn row_visibility(
     active: [bool; PLAYER_SLOTS],
     hide_active_mask: [u8; PLAYER_SLOTS],
     error_bar_active_mask: [u8; PLAYER_SLOTS],
+    allow_per_player_global_offsets: bool,
 ) -> RowVisibility {
     RowVisibility {
         show_measure_counter_children: measure_counter_children_visible(rows, active),
@@ -3318,6 +3353,7 @@ fn row_visibility(
         show_combo_rows: combo_rows_visible(active, hide_active_mask),
         show_lifebar_rows: lifebar_rows_visible(active, hide_active_mask),
         show_indicator_score_type: indicator_score_type_visible(rows, active),
+        show_global_offset_shift: allow_per_player_global_offsets,
     }
 }
 
@@ -3441,6 +3477,7 @@ fn sync_selected_rows_with_visibility(state: &mut State, active: [bool; PLAYER_S
         active,
         state.hide_active_mask,
         state.error_bar_active_mask,
+        state.allow_per_player_global_offsets,
     );
     for player_idx in [P1, P2] {
         let idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
@@ -3785,6 +3822,7 @@ fn move_selection_vertical(
         active,
         state.hide_active_mask,
         state.error_bar_active_mask,
+        state.allow_per_player_global_offsets,
     );
     let current_row = state.selected_row[idx].min(state.rows.len().saturating_sub(1));
     if !state.inline_choice_x[idx].is_finite() {
@@ -3885,6 +3923,7 @@ fn cursor_dest_for_player(
         session_active_players(),
         state.hide_active_mask,
         state.error_bar_active_mask,
+        state.allow_per_player_global_offsets,
     );
     let mut row_idx = state.selected_row[player_idx].min(state.rows.len().saturating_sub(1));
     if !is_row_visible(&state.rows, row_idx, visibility) {
@@ -4456,6 +4495,15 @@ fn change_choice_for_player(
                 crate::game::profile::update_visual_delay_ms_for_side(persist_side, raw);
             }
         }
+    } else if row_name == ROW_GLOBAL_OFFSET_SHIFT {
+        if let Some(choice) = row.choices.get(row.selected_choice_index[player_idx])
+            && let Ok(raw) = choice.trim_end_matches("ms").parse::<i32>()
+        {
+            state.player_profiles[player_idx].global_offset_shift_ms = raw;
+            if should_persist {
+                crate::game::profile::update_global_offset_shift_ms_for_side(persist_side, raw);
+            }
+        }
     } else if row_name == ROW_JUDGMENT_TILT {
         let enabled = row.selected_choice_index[player_idx] == 1;
         state.player_profiles[player_idx].judgment_tilt = enabled;
@@ -4892,6 +4940,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
             active,
             state.hide_active_mask,
             state.error_bar_active_mask,
+            state.allow_per_player_global_offsets,
         );
     } else {
         let visibility = row_visibility(
@@ -4899,6 +4948,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) {
             active,
             state.hide_active_mask,
             state.error_bar_active_mask,
+            state.allow_per_player_global_offsets,
         );
         let visible_rows = count_visible_rows(&state.rows, visibility);
         if visible_rows == 0 {
@@ -6076,6 +6126,7 @@ fn apply_pane(state: &mut State, pane: OptionsPane) {
         active,
         state.hide_active_mask,
         state.error_bar_active_mask,
+        state.allow_per_player_global_offsets,
     );
     state.arcade_row_focus = std::array::from_fn(|player_idx| {
         row_allows_arcade_next_row(state, state.selected_row[player_idx])
@@ -8801,10 +8852,10 @@ mod tests {
             test_row("Error Bar", &["Colorful"], [0, 0]),
             test_row(ROW_ERROR_BAR_OFFSET_X, &["0"], [0, 0]),
         ];
-        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0]);
+        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
         assert!(!is_row_visible(&rows, 1, visibility));
 
-        let visibility = row_visibility(&rows, [true, false], [0, 0], [1, 0]);
+        let visibility = row_visibility(&rows, [true, false], [0, 0], [1, 0], false);
         assert!(is_row_visible(&rows, 1, visibility));
     }
 
@@ -8814,14 +8865,14 @@ mod tests {
             test_row(ROW_JUDGMENT_FONT, &["Love", "None"], [1, 0]),
             test_row(ROW_JUDGMENT_OFFSET_X, &["0"], [0, 0]),
         ];
-        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0]);
+        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
         assert!(!is_row_visible(&rows, 1, visibility));
 
         let rows = vec![
             test_row(ROW_JUDGMENT_FONT, &["Love", "None"], [0, 0]),
             test_row(ROW_JUDGMENT_OFFSET_X, &["0"], [0, 0]),
         ];
-        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0]);
+        let visibility = row_visibility(&rows, [true, false], [0, 0], [0, 0], false);
         assert!(is_row_visible(&rows, 1, visibility));
     }
 
@@ -8831,14 +8882,14 @@ mod tests {
             test_row(ROW_COMBO_FONT, &["Wendy", "None"], [1, 1]),
             test_row(ROW_COMBO_OFFSET_X, &["0"], [0, 0]),
         ];
-        let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0]);
+        let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0], false);
         assert!(!is_row_visible(&rows, 1, visibility));
 
         let rows = vec![
             test_row(ROW_COMBO_FONT, &["Wendy", "None"], [1, 0]),
             test_row(ROW_COMBO_OFFSET_X, &["0"], [0, 0]),
         ];
-        let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0]);
+        let visibility = row_visibility(&rows, [true, true], [0, 0], [0, 0], false);
         assert!(is_row_visible(&rows, 1, visibility));
     }
 

@@ -65,6 +65,10 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Theme", "MachineEnableReplays")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.machine_enable_replays);
+    cfg.machine_allow_per_player_global_offsets = conf
+        .get("Theme", "MachineAllowPerPlayerGlobalOffsets")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.machine_allow_per_player_global_offsets);
     cfg.machine_preferred_style = conf
         .get("Theme", "MachinePreferredStyle")
         .and_then(|v| MachinePreferredPlayStyle::from_str(&v).ok())
