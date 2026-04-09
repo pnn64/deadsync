@@ -758,6 +758,8 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     let screen_height = context.screen_height.max(1.0);
     let screen_center_x = 0.5 * screen_width;
     let screen_center_y = 0.5 * screen_height;
+    globals.set("PLAYER_1", player_number_name(0))?;
+    globals.set("PLAYER_2", player_number_name(1))?;
     globals.set("SCREEN_WIDTH", screen_width.round() as i32)?;
     globals.set("SCREEN_HEIGHT", screen_height.round() as i32)?;
     globals.set("SCREEN_CENTER_X", screen_center_x)?;
@@ -815,6 +817,8 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context)?;
     let gamestate = lua.create_table()?;
+    let enabled_players = create_enabled_players_table(lua, context.players)?;
+    let human_players = enabled_players.clone();
     let song_clone = song.clone();
     gamestate.set(
         "GetCurrentSong",
@@ -829,6 +833,24 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             };
             Ok(players_enabled[player].enabled)
         })?,
+    )?;
+    let human_players_enabled = context.players;
+    gamestate.set(
+        "IsHumanPlayer",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                return Ok(false);
+            };
+            Ok(human_players_enabled[player].enabled)
+        })?,
+    )?;
+    gamestate.set(
+        "GetEnabledPlayers",
+        lua.create_function(move |_, _args: MultiValue| Ok(enabled_players.clone()))?,
+    )?;
+    gamestate.set(
+        "GetHumanPlayers",
+        lua.create_function(move |_, _args: MultiValue| Ok(human_players.clone()))?,
     )?;
     let player_states = players.player_states.clone();
     gamestate.set(
@@ -1033,6 +1055,22 @@ fn create_player_tables(
         player_states,
         steps,
     })
+}
+
+fn create_enabled_players_table(
+    lua: &Lua,
+    players: [SongLuaPlayerContext; LUA_PLAYERS],
+) -> mlua::Result<Table> {
+    let enabled = lua.create_table()?;
+    let mut next_index = 1;
+    for (player_index, player) in players.into_iter().enumerate() {
+        if !player.enabled {
+            continue;
+        }
+        enabled.set(next_index, player_number_name(player_index))?;
+        next_index += 1;
+    }
+    Ok(enabled)
 }
 
 fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
@@ -3853,6 +3891,15 @@ fn player_index_from_value(value: &Value) -> Option<usize> {
 }
 
 #[inline(always)]
+fn player_number_name(player: usize) -> &'static str {
+    match player {
+        0 => "PlayerNumber_P1",
+        1 => "PlayerNumber_P2",
+        _ => unreachable!("song lua only exposes two player numbers"),
+    }
+}
+
+#[inline(always)]
 fn song_dir_string(path: &Path) -> String {
     let mut text = path.to_string_lossy().replace('\\', "/");
     if !text.ends_with('/') {
@@ -4065,6 +4112,61 @@ return Def.ActorFrame{}
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "ITGmania:ITGmania:1.2.0");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_enabled_player_globals() {
+        let song_dir = test_dir("player-globals");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local enabled = GAMESTATE:GetEnabledPlayers()
+local human = GAMESTATE:GetHumanPlayers()
+
+if PLAYER_1 ~= "PlayerNumber_P1" then
+    error("unexpected PLAYER_1: " .. tostring(PLAYER_1))
+end
+if PLAYER_2 ~= "PlayerNumber_P2" then
+    error("unexpected PLAYER_2: " .. tostring(PLAYER_2))
+end
+if #enabled ~= 1 or enabled[1] ~= PLAYER_1 then
+    error("unexpected enabled players")
+end
+if #human ~= 1 or human[1] ~= PLAYER_1 then
+    error("unexpected human players")
+end
+if not GAMESTATE:IsHumanPlayer(PLAYER_1) then
+    error("PLAYER_1 should be human")
+end
+if GAMESTATE:IsHumanPlayer(PLAYER_2) then
+    error("PLAYER_2 should be disabled")
+end
+
+mod_actions = {
+    {4, enabled[1], true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Player Globals");
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: false,
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "PlayerNumber_P1");
     }
 
     #[test]
