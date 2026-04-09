@@ -313,6 +313,7 @@ fn push_saved_options(
     push_line(content, "VideoRenderer", cfg.video_renderer);
     push_bool(content, "Vsync", cfg.vsync);
     push_bool(content, "Windowed", cfg.windowed);
+    push_bool(content, "WriteCurrentScreen", cfg.write_current_screen);
     content.push('\n');
 }
 

@@ -21,6 +21,7 @@ pub mod select_mode;
 pub mod select_music;
 pub mod select_profile;
 pub mod select_style;
+use std::fmt;
 use std::path::PathBuf;
 
 use crate::config::DisplayMode;
@@ -111,6 +112,35 @@ pub enum Screen {
     Evaluation,
     EvaluationSummary,
     PlayerOptions,
+}
+
+impl fmt::Display for Screen {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Menu => "Menu",
+            Self::Gameplay => "Gameplay",
+            Self::Options => "Options",
+            Self::Credits => "Credits",
+            Self::ManageLocalProfiles => "ManageLocalProfiles",
+            Self::Init => "Init",
+            Self::Initials => "Initials",
+            Self::GameOver => "GameOver",
+            Self::Mappings => "Mappings",
+            Self::Input => "Input",
+            Self::SelectProfile => "SelectProfile",
+            Self::SelectColor => "SelectColor",
+            Self::SelectStyle => "SelectStyle",
+            Self::SelectPlayMode => "SelectPlayMode",
+            Self::ProfileLoad => "ProfileLoad",
+            Self::SelectMusic => "SelectMusic",
+            Self::SelectCourse => "SelectCourse",
+            Self::Sandbox => "Sandbox",
+            Self::Evaluation => "Evaluation",
+            Self::EvaluationSummary => "EvaluationSummary",
+            Self::PlayerOptions => "PlayerOptions",
+        };
+        f.write_str(s)
+    }
 }
 
 #[inline(always)]

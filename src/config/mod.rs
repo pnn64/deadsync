@@ -101,6 +101,8 @@ pub struct Config {
     pub language_flag: LanguageFlag,
     pub log_level: LogLevel,
     pub log_to_file: bool,
+    /// Write the active screen name to save/current_screen.txt on each transition.
+    pub write_current_screen: bool,
     /// 0=Off, 1=FPS, 2=FPS+Stutter.
     pub show_stats_mode: u8,
     pub translated_titles: bool,
@@ -255,6 +257,7 @@ impl Default for Config {
             language_flag: LanguageFlag::English,
             log_level: LogLevel::Warn,
             log_to_file: true,
+            write_current_screen: false,
             show_stats_mode: 0,
             translated_titles: false,
             mine_hit_sound: true,
