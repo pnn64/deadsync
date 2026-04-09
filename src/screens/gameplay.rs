@@ -2262,8 +2262,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 cfg.center_1player_notefield,
             );
             let rotation_z = state.song_lua_player_rotation_z[player_idx];
-            let rotation_y = state.song_lua_player_rotation_y[player_idx]
-                + state.song_lua_player_confusion_y_offset[player_idx];
+            let rotation_y = state.song_lua_player_rotation_y[player_idx];
             let skew_x = state.song_lua_player_skew_x[player_idx];
             let zoom_x = state.song_lua_player_zoom_x[player_idx];
             let zoom_y = state.song_lua_player_zoom_y[player_idx];

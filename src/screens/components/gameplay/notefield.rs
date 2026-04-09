@@ -24,7 +24,7 @@ use crate::game::gameplay::{
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldResult, NoteType};
 use crate::game::parsing::noteskin::{
-    ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
+    ModelDrawState, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
 };
 use crate::game::{
     gameplay::{ActiveHold, PlayerRuntime, State},
@@ -1231,6 +1231,23 @@ fn calc_note_rotation_z(
         r += dizzy * (180.0 / std::f32::consts::PI) * visual.dizzy;
     }
     r
+}
+
+#[inline(always)]
+fn song_lua_note_rotation_y_deg(confusion_y_offset_deg: f32) -> f32 {
+    if confusion_y_offset_deg.abs() <= f32::EPSILON {
+        0.0
+    } else {
+        confusion_y_offset_deg
+    }
+}
+
+#[inline(always)]
+fn song_lua_note_model_draw(mut draw: ModelDrawState, rotation_y_deg: f32) -> ModelDrawState {
+    if rotation_y_deg.abs() > f32::EPSILON {
+        draw.rot[1] += rotation_y_deg;
+    }
+    draw
 }
 
 #[inline(always)]
@@ -2878,6 +2895,8 @@ pub fn build_bundles(
         } else {
             0.0
         };
+        let note_rotation_y =
+            song_lua_note_rotation_y_deg(state.song_lua_player_confusion_y_offset[player_idx]);
         let beat_push = beat_factor(current_beat);
         let mut col_offsets = [0.0_f32; MAX_COLS];
         for (i, col_offset) in col_offsets.iter_mut().take(num_cols).enumerate() {
@@ -3299,6 +3318,7 @@ pub fn build_bundles(
                             receptor_color[2],
                             alpha
                         ):
+                        rotationy(note_rotation_y):
                         rotationz(-receptor_slot.def.rotation_deg as f32 + confusion_receptor_rot):
                         customtexturerect(
                             receptor_uv[0],
@@ -3457,6 +3477,7 @@ pub fn build_bundles(
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(width, height):
+                            rotationy(note_rotation_y):
                             rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
                             customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
                             diffuse(1.0, 1.0, 1.0, alpha):
@@ -3468,6 +3489,7 @@ pub fn build_bundles(
                             align(0.5, 0.5):
                             xy(receptor_center[0], receptor_center[1]):
                             setsize(width, height):
+                            rotationy(note_rotation_y):
                             rotationz(-glow_slot.def.rotation_deg as f32 + confusion_receptor_rot):
                             customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
                             diffuse(1.0, 1.0, 1.0, alpha):
@@ -3534,6 +3556,7 @@ pub fn build_bundles(
                             explosion_visual.diffuse[2],
                             explosion_visual.diffuse[3]
                         ):
+                        rotationy(note_rotation_y):
                         rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                         blend(add):
                         z(Z_TAP_EXPLOSION)
@@ -3546,6 +3569,7 @@ pub fn build_bundles(
                             zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            rotationy(note_rotation_y):
                             rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                             blend(add):
                             z(Z_TAP_EXPLOSION)
@@ -3564,6 +3588,7 @@ pub fn build_bundles(
                             explosion_visual.diffuse[2],
                             explosion_visual.diffuse[3]
                         ):
+                        rotationy(note_rotation_y):
                         rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                         blend(normal):
                         z(Z_TAP_EXPLOSION)
@@ -3576,6 +3601,7 @@ pub fn build_bundles(
                             zoom(explosion_visual.zoom):
                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                             diffuse(glow[0], glow[1], glow[2], glow[3]):
+                            rotationy(note_rotation_y):
                             rotationz(-(rotation_deg as f32) + confusion_receptor_rot):
                             blend(normal):
                             z(Z_TAP_EXPLOSION)
@@ -4980,7 +5006,10 @@ pub fn build_bundles(
                 let hold_head_translation =
                     ns.part_uv_translation(hold_head_part, note.beat, false);
                 let head_slot = head_slot.and_then(|slot| {
-                    let draw = slot.model_draw_at(elapsed, current_beat);
+                    let draw = song_lua_note_model_draw(
+                        slot.model_draw_at(elapsed, current_beat),
+                        note_rotation_y,
+                    );
                     if !draw.visible {
                         return None;
                     }
@@ -5052,6 +5081,7 @@ pub fn build_bundles(
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
+                                rotationy(note_rotation_y):
                                 rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + hold_head_rot):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 diffuse(color[0], color[1], color[2], color[3]):
@@ -5068,6 +5098,7 @@ pub fn build_bundles(
                                 align(0.5, 0.5):
                                 xy(sprite_center[0], sprite_center[1]):
                                 setsize(size[0], size[1]):
+                                rotationy(note_rotation_y):
                                 rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + hold_head_rot):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 diffuse(color[0], color[1], color[2], color[3]):
@@ -5080,7 +5111,10 @@ pub fn build_bundles(
                 } else if let Some(note_slots) = ns.note_layers.get(note_idx) {
                     let note_scale = field_zoom;
                     for note_slot in note_slots.iter() {
-                        let draw = note_slot.model_draw_at(elapsed, current_beat);
+                        let draw = song_lua_note_model_draw(
+                            note_slot.model_draw_at(elapsed, current_beat),
+                            note_rotation_y,
+                        );
                         if !draw.visible {
                             continue;
                         }
@@ -5148,6 +5182,7 @@ pub fn build_bundles(
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
+                                    rotationy(note_rotation_y):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + hold_head_rot):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
@@ -5164,6 +5199,7 @@ pub fn build_bundles(
                                     align(0.5, 0.5):
                                     xy(sprite_center[0], sprite_center[1]):
                                     setsize(size[0], size[1]):
+                                    rotationy(note_rotation_y):
                                     rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + hold_head_rot):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(color[0], color[1], color[2], color[3]):
@@ -5186,7 +5222,10 @@ pub fn build_bundles(
                         hold_head_translation,
                     );
                     let size = scale_sprite(note_slot.size());
-                    let draw = note_slot.model_draw_at(elapsed, current_beat);
+                    let draw = song_lua_note_model_draw(
+                        note_slot.model_draw_at(elapsed, current_beat),
+                        note_rotation_y,
+                    );
                     if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                         note_slot,
                         draw,
@@ -5211,6 +5250,7 @@ pub fn build_bundles(
                                 align(0.5, 0.5):
                                 xy(head_center[0], head_center[1]):
                                 setsize(size[0], size[1]):
+                                rotationy(note_rotation_y):
                                 rotationz(-note_slot.def.rotation_deg as f32 + hold_head_rot):
                                 customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                 diffuse(
@@ -5333,7 +5373,10 @@ pub fn build_bundles(
                                 ));
                             }
                         } else {
-                            let draw = slot.model_draw_at(note_display_time, current_beat);
+                            let draw = song_lua_note_model_draw(
+                                slot.model_draw_at(note_display_time, current_beat),
+                                note_rotation_y,
+                            );
                             if draw.visible {
                                 let frame = slot.frame_index_from_phase(mine_uv_phase);
                                 let uv_elapsed = if slot.model.is_some() {
@@ -5380,6 +5423,7 @@ pub fn build_bundles(
                                             align(0.5, 0.5):
                                             xy(center[0], center[1]):
                                             setsize(width, height):
+                                            rotationy(note_rotation_y):
                                             rotationz(sprite_rotation):
                                             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                             diffuse(1.0, 1.0, 1.0, 0.9 * note_alpha):
@@ -5392,7 +5436,10 @@ pub fn build_bundles(
                         }
                     }
                     if let Some(slot) = frame_slot {
-                        let draw = slot.model_draw_at(note_display_time, current_beat);
+                        let draw = song_lua_note_model_draw(
+                            slot.model_draw_at(note_display_time, current_beat),
+                            note_rotation_y,
+                        );
                         if !draw.visible {
                             continue;
                         }
@@ -5438,6 +5485,7 @@ pub fn build_bundles(
                                     align(0.5, 0.5):
                                     xy(center[0], center[1]):
                                     setsize(size[0], size[1]):
+                                    rotationy(note_rotation_y):
                                     rotationz(sprite_rotation):
                                     customtexturerect(uv[0], uv[1], uv[2], uv[3]):
                                     diffuse(1.0, 1.0, 1.0, note_alpha):
@@ -5508,7 +5556,10 @@ pub fn build_bundles(
                         let note_scale = field_zoom;
                         let note_size = note_slot_base_size(head_slot, note_scale);
                         let center = [column_center_x, y_pos];
-                        let draw = head_slot.model_draw_at(elapsed, current_beat);
+                        let draw = song_lua_note_model_draw(
+                            head_slot.model_draw_at(elapsed, current_beat),
+                            note_rotation_y,
+                        );
                         if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                             head_slot,
                             draw,
@@ -5528,6 +5579,7 @@ pub fn build_bundles(
                                     align(0.5, 0.5):
                                     xy(center[0], center[1]):
                                     setsize(note_size[0], note_size[1]):
+                                    rotationy(note_rotation_y):
                                     rotationz(-head_slot.def.rotation_deg as f32 + note_rot):
                                     customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                     diffuse(1.0, 1.0, 1.0, note_alpha):
@@ -5552,7 +5604,10 @@ pub fn build_bundles(
                         ns.part_uv_phase(tap_note_part, elapsed, current_beat, note.beat);
                     let note_scale = field_zoom;
                     for note_slot in note_slots.iter() {
-                        let draw = note_slot.model_draw_at(elapsed, current_beat);
+                        let draw = song_lua_note_model_draw(
+                            note_slot.model_draw_at(elapsed, current_beat),
+                            note_rotation_y,
+                        );
                         if !draw.visible {
                             continue;
                         }
@@ -5621,6 +5676,7 @@ pub fn build_bundles(
                                         align(0.5, 0.5):
                                         xy(sprite_center[0], sprite_center[1]):
                                         setsize(note_size[0], note_size[1]):
+                                        rotationy(note_rotation_y):
                                         rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
                                         customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                         diffuse(color[0], color[1], color[2], color[3]):
@@ -5635,6 +5691,7 @@ pub fn build_bundles(
                                         align(0.5, 0.5):
                                         xy(sprite_center[0], sprite_center[1]):
                                         setsize(note_size[0], note_size[1]):
+                                        rotationy(note_rotation_y):
                                         rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
                                         customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                         diffuse(color[0], color[1], color[2], color[3]):
@@ -5661,7 +5718,10 @@ pub fn build_bundles(
                     );
                     let note_size = scale_sprite(note_slot.size());
                     let center = [column_center_x, y_pos];
-                    let draw = note_slot.model_draw_at(elapsed, current_beat);
+                    let draw = song_lua_note_model_draw(
+                        note_slot.model_draw_at(elapsed, current_beat),
+                        note_rotation_y,
+                    );
                     if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
                         note_slot,
                         draw,
@@ -5681,6 +5741,7 @@ pub fn build_bundles(
                                 align(0.5, 0.5):
                                 xy(center[0], center[1]):
                                 setsize(note_size[0], note_size[1]):
+                                rotationy(note_rotation_y):
                                 rotationz(-note_slot.def.rotation_deg as f32 + note_rot):
                                 customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
                                 diffuse(1.0, 1.0, 1.0, note_alpha):
