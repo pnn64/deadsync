@@ -912,7 +912,6 @@ mod compiled {
     pub fn compiled_bundle_path(game: &str, skin: &str, source_hash: &str) -> PathBuf {
         dirs::app_dirs()
             .noteskin_cache_dir()
-            .join(format!("v{}", CACHE_SCHEMA_VERSION))
             .join(game.trim().to_ascii_lowercase())
             .join(skin.trim().to_ascii_lowercase())
             .join(format!("{source_hash}.bin"))
@@ -1574,4 +1573,26 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
         blank,
         rotation_z,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compiled;
+    use std::ffi::OsStr;
+    use std::path::Path;
+
+    #[test]
+    fn compiled_bundle_path_omits_version_dir() {
+        let path = compiled::compiled_bundle_path(" Dance ", " Default ", "hash123");
+        let suffix = Path::new("noteskins")
+            .join("dance")
+            .join("default")
+            .join("hash123.bin");
+        let version_dir = format!("v{}", compiled::CACHE_SCHEMA_VERSION);
+        assert!(path.ends_with(&suffix));
+        assert!(
+            path.components()
+                .all(|component| component.as_os_str() != OsStr::new(&version_dir))
+        );
+    }
 }
