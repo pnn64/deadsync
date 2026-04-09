@@ -155,7 +155,10 @@ pub enum SongLuaSpanMode {
 pub enum SongLuaEaseTarget {
     Mod(String),
     PlayerRotationZ,
+    PlayerRotationY,
     PlayerSkewX,
+    PlayerZoomX,
+    PlayerZoomY,
     Function,
 }
 
@@ -502,7 +505,6 @@ pub fn compile_song_lua(
     )?;
     out.info.unsupported_function_actions += global_fn_actions;
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
-    flatten_static_root_overlay_wrappers(&mut out);
     out.hidden_players = std::array::from_fn(|player| {
         let key = if player == 0 {
             "__songlua_top_screen_player_1"
@@ -533,148 +535,6 @@ pub fn compile_song_lua(
     });
     out.messages.sort_by(message_event_cmp);
     Ok(out)
-}
-
-fn flatten_static_root_overlay_wrappers(compiled: &mut CompiledSongLua) {
-    if compiled.overlays.is_empty() {
-        return;
-    }
-    let mut referenced = vec![false; compiled.overlays.len()];
-    for ease in &compiled.overlay_eases {
-        if let Some(slot) = referenced.get_mut(ease.overlay_index) {
-            *slot = true;
-        }
-    }
-
-    let keep = compiled
-        .overlays
-        .iter()
-        .enumerate()
-        .map(|(index, overlay)| {
-            !overlay_can_flatten_root_wrapper(
-                compiled,
-                index,
-                overlay,
-                referenced.get(index).copied().unwrap_or(false),
-            )
-        })
-        .collect::<Vec<_>>();
-    if keep.iter().all(|&keep| keep) {
-        return;
-    }
-
-    let mut remap = vec![None; compiled.overlays.len()];
-    let mut overlays = Vec::with_capacity(keep.iter().filter(|&&keep| keep).count());
-    for (index, overlay) in compiled.overlays.iter().enumerate() {
-        if !keep[index] {
-            continue;
-        }
-        remap[index] = Some(overlays.len());
-        overlays.push(overlay.clone());
-    }
-
-    for overlay in &mut overlays {
-        overlay.parent_index =
-            remap_overlay_parent(&compiled.overlays, &keep, &remap, overlay.parent_index);
-    }
-    for ease in &mut compiled.overlay_eases {
-        let Some(remapped) = remap.get(ease.overlay_index).and_then(|index| *index) else {
-            continue;
-        };
-        ease.overlay_index = remapped;
-    }
-    let flattened = keep
-        .iter()
-        .enumerate()
-        .filter_map(|(index, keep)| (!keep).then_some(index))
-        .collect::<Vec<_>>();
-    debug!(
-        "Song lua flattened {} static root overlay wrapper(s): {:?}",
-        flattened.len(),
-        flattened
-    );
-    compiled.overlays = overlays;
-}
-
-fn overlay_can_flatten_root_wrapper(
-    compiled: &CompiledSongLua,
-    index: usize,
-    overlay: &SongLuaOverlayActor,
-    referenced: bool,
-) -> bool {
-    if referenced
-        || overlay.parent_index.is_some()
-        || overlay.name.is_some()
-        || !overlay.message_commands.is_empty()
-        || !matches!(overlay.kind, SongLuaOverlayKind::ActorFrame)
-    {
-        return false;
-    }
-    if !overlay_state_is_center_wrapper(
-        overlay.initial_state,
-        compiled.screen_width,
-        compiled.screen_height,
-    ) {
-        return false;
-    }
-    let mut children = compiled
-        .overlays
-        .iter()
-        .enumerate()
-        .filter(|(_, child)| child.parent_index == Some(index));
-    let Some((_, first_child)) = children.next() else {
-        return false;
-    };
-    children.next().is_none() && matches!(first_child.kind, SongLuaOverlayKind::ActorFrame)
-}
-
-fn overlay_state_is_center_wrapper(
-    state: SongLuaOverlayState,
-    screen_width: f32,
-    screen_height: f32,
-) -> bool {
-    let epsilon = 0.01;
-    (state.x - 0.5 * screen_width).abs() <= epsilon
-        && (state.y - 0.5 * screen_height).abs() <= epsilon
-        && state.diffuse == [1.0, 1.0, 1.0, 1.0]
-        && state.visible
-        && state.cropleft.abs() <= epsilon
-        && state.cropright.abs() <= epsilon
-        && state.croptop.abs() <= epsilon
-        && state.cropbottom.abs() <= epsilon
-        && (state.zoom - 1.0).abs() <= epsilon
-        && (state.zoom_x - 1.0).abs() <= epsilon
-        && (state.zoom_y - 1.0).abs() <= epsilon
-        && (state.basezoom - 1.0).abs() <= epsilon
-        && state.rot_x_deg.abs() <= epsilon
-        && state.rot_y_deg.abs() <= epsilon
-        && state.rot_z_deg.abs() <= epsilon
-        && matches!(state.blend, SongLuaOverlayBlendMode::Alpha)
-        && !state.vibrate
-        && state.effect_magnitude == [0.0, 0.0, 0.0]
-        && matches!(state.effect_mode, EffectMode::None)
-        && state.effect_color1 == [1.0, 1.0, 1.0, 1.0]
-        && state.effect_color2 == [1.0, 1.0, 1.0, 1.0]
-        && (state.effect_period - 1.0).abs() <= epsilon
-        && state.custom_texture_rect.is_none()
-        && state.texcoord_velocity.is_none()
-        && state.size.is_none()
-        && state.stretch_rect.is_none()
-}
-
-fn remap_overlay_parent(
-    overlays: &[SongLuaOverlayActor],
-    keep: &[bool],
-    remap: &[Option<usize>],
-    mut parent_index: Option<usize>,
-) -> Option<usize> {
-    while let Some(index) = parent_index {
-        if keep.get(index).copied().unwrap_or(false) {
-            return remap.get(index).and_then(|index| *index);
-        }
-        parent_index = overlays.get(index).and_then(|overlay| overlay.parent_index);
-    }
-    None
 }
 
 fn install_host(
@@ -3454,7 +3314,10 @@ fn probe_function_ease_target(
 
 fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEaseTarget>> {
     let mut saw_rotation_z = false;
+    let mut saw_rotation_y = false;
     let mut saw_skew_x = false;
+    let mut saw_zoom_x = false;
+    let mut saw_zoom_y = false;
     for value in calls.sequence_values::<String>() {
         let value = value?;
         let (target_kind, method_name) =
@@ -3464,15 +3327,29 @@ fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLuaEas
         }
         match method_name {
             "rotationz" => saw_rotation_z = true,
+            "rotationy" => saw_rotation_y = true,
             "skewx" => saw_skew_x = true,
+            "zoomx" => saw_zoom_x = true,
+            "zoomy" => saw_zoom_y = true,
             _ => return Ok(None),
         }
     }
-    Ok(match (saw_rotation_z, saw_skew_x) {
-        (true, false) => Some(SongLuaEaseTarget::PlayerRotationZ),
-        (false, true) => Some(SongLuaEaseTarget::PlayerSkewX),
-        _ => None,
-    })
+    Ok(
+        match (
+            saw_rotation_z,
+            saw_rotation_y,
+            saw_skew_x,
+            saw_zoom_x,
+            saw_zoom_y,
+        ) {
+            (true, false, false, false, false) => Some(SongLuaEaseTarget::PlayerRotationZ),
+            (false, true, false, false, false) => Some(SongLuaEaseTarget::PlayerRotationY),
+            (false, false, true, false, false) => Some(SongLuaEaseTarget::PlayerSkewX),
+            (false, false, false, true, false) => Some(SongLuaEaseTarget::PlayerZoomX),
+            (false, false, false, false, true) => Some(SongLuaEaseTarget::PlayerZoomY),
+            _ => None,
+        },
+    )
 }
 
 fn probe_call_names(calls: &Table) -> mlua::Result<Vec<String>> {
@@ -4417,62 +4294,6 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays[1].parent_index, Some(0));
         assert_eq!(compiled.overlays[1].initial_state.x, 10.0);
         assert_eq!(compiled.overlays[1].initial_state.y, 20.0);
-    }
-
-    #[test]
-    fn compile_song_lua_flattens_static_root_center_wrapper_actorframes() {
-        let song_dir = test_dir("overlay-root-wrapper-flatten");
-        let entry = song_dir.join("default.lua");
-        let overlay_dir = song_dir.join("gfx");
-        fs::create_dir_all(&overlay_dir).unwrap();
-        fs::write(
-            overlay_dir.join("grid.png"),
-            b"not-an-image-but-good-enough-for-parser",
-        )
-        .unwrap();
-        fs::write(
-            &entry,
-            r#"
-return Def.ActorFrame{
-    Def.ActorFrame{
-        OnCommand=function(self)
-            self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y)
-        end,
-        Def.ActorFrame{
-            Def.Sprite{
-                Texture="gfx/grid.png",
-                OnCommand=function(self)
-                    self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y)
-                end,
-            },
-        },
-    },
-}
-"#,
-        )
-        .unwrap();
-
-        let mut context = SongLuaCompileContext::new(&song_dir, "Flatten Wrapper");
-        context.screen_width = 854.0;
-        context.screen_height = 480.0;
-        let compiled = compile_song_lua(&entry, &context).unwrap();
-
-        assert_eq!(compiled.overlays.len(), 2);
-        assert!(matches!(
-            compiled.overlays[0].kind,
-            SongLuaOverlayKind::ActorFrame
-        ));
-        assert_eq!(compiled.overlays[0].parent_index, None);
-        assert_eq!(compiled.overlays[0].initial_state.x, 0.0);
-        assert_eq!(compiled.overlays[0].initial_state.y, 0.0);
-        assert!(matches!(
-            compiled.overlays[1].kind,
-            SongLuaOverlayKind::Sprite { ref texture_path }
-                if texture_path.ends_with("gfx/grid.png")
-        ));
-        assert_eq!(compiled.overlays[1].parent_index, Some(0));
-        assert_eq!(compiled.overlays[1].initial_state.x, 427.0);
-        assert_eq!(compiled.overlays[1].initial_state.y, 240.0);
     }
 
     #[test]

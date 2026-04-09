@@ -2720,7 +2720,11 @@ enum SongLuaEaseMaskTarget {
     ScrollSpeedM,
     MiniPercent,
     PlayerRotationZ,
+    PlayerRotationY,
     PlayerSkewX,
+    PlayerZoomX,
+    PlayerZoomY,
+    ConfusionYOffsetY,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -3942,6 +3946,18 @@ fn append_song_lua_ease_targets(
             opt1,
             opt2,
         ),
+        "confusionyoffset" => push_song_lua_ease_target(
+            out,
+            SongLuaEaseMaskTarget::ConfusionYOffsetY,
+            start_second,
+            end_second,
+            sustain_end_second,
+            pct_from * (180.0 / std::f32::consts::PI),
+            pct_to * (180.0 / std::f32::consts::PI),
+            easing,
+            opt1,
+            opt2,
+        ),
         _ => return false,
     }
     true
@@ -4013,11 +4029,44 @@ fn build_song_lua_ease_windows_for_player(
                 opt1: window.opt1,
                 opt2: window.opt2,
             }),
+            SongLuaEaseTarget::PlayerRotationY => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerRotationY,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
             SongLuaEaseTarget::PlayerSkewX => out.push(SongLuaEaseMaskWindow {
                 start_second,
                 end_second,
                 sustain_end_second,
                 target: SongLuaEaseMaskTarget::PlayerSkewX,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerZoomX => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerZoomX,
+                from: window.from,
+                to: window.to,
+                easing: window.easing.clone(),
+                opt1: window.opt1,
+                opt2: window.opt2,
+            }),
+            SongLuaEaseTarget::PlayerZoomY => out.push(SongLuaEaseMaskWindow {
+                start_second,
+                end_second,
+                sustain_end_second,
+                target: SongLuaEaseMaskTarget::PlayerZoomY,
                 from: window.from,
                 to: window.to,
                 easing: window.easing.clone(),
@@ -4773,7 +4822,11 @@ fn song_lua_apply_eased_target(
     scroll_speed: &mut Option<ScrollSpeedSetting>,
     mini_percent: &mut Option<f32>,
     player_rotation_z: &mut Option<f32>,
+    player_rotation_y: &mut Option<f32>,
     player_skew_x: &mut Option<f32>,
+    player_zoom_x: &mut Option<f32>,
+    player_zoom_y: &mut Option<f32>,
+    player_confusion_y_offset: &mut Option<f32>,
 ) {
     if !value.is_finite() {
         return;
@@ -4825,7 +4878,11 @@ fn song_lua_apply_eased_target(
         }
         SongLuaEaseMaskTarget::MiniPercent => *mini_percent = Some(value),
         SongLuaEaseMaskTarget::PlayerRotationZ => *player_rotation_z = Some(value),
+        SongLuaEaseMaskTarget::PlayerRotationY => *player_rotation_y = Some(value),
         SongLuaEaseMaskTarget::PlayerSkewX => *player_skew_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoomX => *player_zoom_x = Some(value),
+        SongLuaEaseMaskTarget::PlayerZoomY => *player_zoom_y = Some(value),
+        SongLuaEaseMaskTarget::ConfusionYOffsetY => *player_confusion_y_offset = Some(value),
     }
 }
 
@@ -6474,7 +6531,11 @@ pub struct State {
     pub song_lua_screen_width: f32,
     pub song_lua_screen_height: f32,
     pub song_lua_player_rotation_z: [f32; MAX_PLAYERS],
+    pub song_lua_player_rotation_y: [f32; MAX_PLAYERS],
     pub song_lua_player_skew_x: [f32; MAX_PLAYERS],
+    pub song_lua_player_zoom_x: [f32; MAX_PLAYERS],
+    pub song_lua_player_zoom_y: [f32; MAX_PLAYERS],
+    pub song_lua_player_confusion_y_offset: [f32; MAX_PLAYERS],
     active_attack_clear_all: [bool; MAX_PLAYERS],
     active_attack_chart: [ChartAttackEffects; MAX_PLAYERS],
     active_attack_accel: [AccelOverrides; MAX_PLAYERS],
@@ -7069,7 +7130,11 @@ fn refresh_active_attack_masks(state: &mut State) {
         let mut scroll_speed = None;
         let mut mini_percent = None;
         let mut player_rotation_z = None;
+        let mut player_rotation_y = None;
         let mut player_skew_x = None;
+        let mut player_zoom_x = None;
+        let mut player_zoom_y = None;
+        let mut player_confusion_y_offset = None;
         for window in &state.attack_mask_windows[player] {
             if now >= window.start_second && now < window.end_second {
                 if window.clear_all {
@@ -7196,7 +7261,11 @@ fn refresh_active_attack_masks(state: &mut State) {
                     &mut scroll_speed,
                     &mut mini_percent,
                     &mut player_rotation_z,
+                    &mut player_rotation_y,
                     &mut player_skew_x,
+                    &mut player_zoom_x,
+                    &mut player_zoom_y,
+                    &mut player_confusion_y_offset,
                 );
             }
         }
@@ -7215,8 +7284,17 @@ fn refresh_active_attack_masks(state: &mut State) {
         state.active_attack_mini_percent[player] = mini_percent;
         state.song_lua_player_rotation_z[player] =
             player_rotation_z.filter(|v| v.is_finite()).unwrap_or(0.0);
+        state.song_lua_player_rotation_y[player] =
+            player_rotation_y.filter(|v| v.is_finite()).unwrap_or(0.0);
         state.song_lua_player_skew_x[player] =
             player_skew_x.filter(|v| v.is_finite()).unwrap_or(0.0);
+        state.song_lua_player_zoom_x[player] =
+            player_zoom_x.filter(|v| v.is_finite()).unwrap_or(1.0);
+        state.song_lua_player_zoom_y[player] =
+            player_zoom_y.filter(|v| v.is_finite()).unwrap_or(1.0);
+        state.song_lua_player_confusion_y_offset[player] = player_confusion_y_offset
+            .filter(|v| v.is_finite())
+            .unwrap_or(0.0);
     }
 }
 
@@ -9619,7 +9697,11 @@ pub fn init(
         song_lua_screen_width,
         song_lua_screen_height,
         song_lua_player_rotation_z: [0.0; MAX_PLAYERS],
+        song_lua_player_rotation_y: [0.0; MAX_PLAYERS],
         song_lua_player_skew_x: [0.0; MAX_PLAYERS],
+        song_lua_player_zoom_x: [1.0; MAX_PLAYERS],
+        song_lua_player_zoom_y: [1.0; MAX_PLAYERS],
+        song_lua_player_confusion_y_offset: [0.0; MAX_PLAYERS],
         active_attack_clear_all: [false; MAX_PLAYERS],
         active_attack_chart: [ChartAttackEffects::default(); MAX_PLAYERS],
         active_attack_accel: [AccelOverrides::default(); MAX_PLAYERS],
