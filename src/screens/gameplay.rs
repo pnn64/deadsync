@@ -1146,6 +1146,11 @@ fn apply_song_lua_overlay_runtime_eases(
         if ease.overlay_index != overlay_index || now < ease.start_second {
             continue;
         }
+        if let Some(cutoff_second) = ease.cutoff_second
+            && now >= cutoff_second
+        {
+            continue;
+        }
         if now >= ease.sustain_end_second {
             apply_song_lua_overlay_delta(&mut current, &ease.to);
             continue;

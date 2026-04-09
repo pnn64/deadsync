@@ -30,7 +30,7 @@ use crate::game::{
 use log::{debug, info, trace, warn};
 use rssp::streams::StreamSegment;
 use std::cell::RefCell;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -2676,6 +2676,7 @@ pub struct SongLuaOverlayEaseWindowRuntime {
     pub start_second: f32,
     pub end_second: f32,
     pub sustain_end_second: f32,
+    pub cutoff_second: Option<f32>,
     pub from: crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
     pub to: crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
     pub easing: Option<String>,
@@ -3988,6 +3989,17 @@ fn build_song_lua_ease_windows_for_player(
                     window.opt2,
                 ) {
                     unsupported_targets += 1;
+                    debug!(
+                        "Unsupported gameplay lua ease target for player {}: target='{}' start={:.3} limit={:.3} span={:?} from={:.3} to={:.3} easing={:?}",
+                        player + 1,
+                        target_name,
+                        window.start,
+                        window.limit,
+                        window.span_mode,
+                        window.from,
+                        window.to,
+                        window.easing
+                    );
                 }
             }
             SongLuaEaseTarget::PlayerRotationZ => out.push(SongLuaEaseMaskWindow {
@@ -4038,16 +4050,26 @@ fn build_song_lua_overlay_ease_windows(
         if end_second < start_second {
             continue;
         }
+        let sustain_end_second = SongLuaOverlayEaseWindowRuntime::sustain_end_second(
+            ease,
+            timing_player,
+            global_offset_seconds,
+            end_second,
+        );
+        let cutoff_second = song_lua_overlay_ease_cutoff_second(
+            compiled,
+            ease,
+            timing_player,
+            global_offset_seconds,
+            start_second,
+            sustain_end_second,
+        );
         out.push(SongLuaOverlayEaseWindowRuntime {
             overlay_index: ease.overlay_index,
             start_second,
             end_second,
-            sustain_end_second: SongLuaOverlayEaseWindowRuntime::sustain_end_second(
-                ease,
-                timing_player,
-                global_offset_seconds,
-                end_second,
-            ),
+            sustain_end_second,
+            cutoff_second,
             from: ease.from,
             to: ease.to,
             easing: ease.easing.clone(),
@@ -4056,6 +4078,98 @@ fn build_song_lua_overlay_ease_windows(
         });
     }
     out
+}
+
+fn song_lua_overlay_ease_cutoff_second(
+    compiled: &crate::game::parsing::song_lua::CompiledSongLua,
+    ease: &SongLuaOverlayEase,
+    timing_player: &TimingData,
+    global_offset_seconds: f32,
+    start_second: f32,
+    sustain_end_second: f32,
+) -> Option<f32> {
+    let overlay = compiled.overlays.get(ease.overlay_index)?;
+    let mut cutoff_second: Option<f32> = None;
+    for event in &compiled.messages {
+        let event_second = song_lua_time_to_second(
+            SongLuaTimeUnit::Beat,
+            event.beat,
+            timing_player,
+            global_offset_seconds,
+        );
+        if !event_second.is_finite()
+            || event_second < start_second
+            || event_second > sustain_end_second
+        {
+            continue;
+        }
+        let Some(command) = overlay
+            .message_commands
+            .iter()
+            .find(|command| command.message.eq_ignore_ascii_case(&event.message))
+        else {
+            continue;
+        };
+        for block in &command.blocks {
+            if !song_lua_overlay_delta_overlaps(&ease.from, &block.delta)
+                && !song_lua_overlay_delta_overlaps(&ease.to, &block.delta)
+            {
+                continue;
+            }
+            let block_second = event_second + block.start.max(0.0);
+            if !block_second.is_finite()
+                || block_second < start_second
+                || block_second > sustain_end_second
+            {
+                continue;
+            }
+            cutoff_second = Some(match cutoff_second {
+                Some(current) => current.min(block_second),
+                None => block_second,
+            });
+        }
+    }
+    cutoff_second
+}
+
+fn song_lua_overlay_delta_overlaps(
+    left: &crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
+    right: &crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
+) -> bool {
+    macro_rules! overlap {
+        ($field:ident) => {
+            if left.$field.is_some() && right.$field.is_some() {
+                return true;
+            }
+        };
+    }
+    overlap!(x);
+    overlap!(y);
+    overlap!(diffuse);
+    overlap!(visible);
+    overlap!(cropleft);
+    overlap!(cropright);
+    overlap!(croptop);
+    overlap!(cropbottom);
+    overlap!(zoom);
+    overlap!(zoom_x);
+    overlap!(zoom_y);
+    overlap!(basezoom);
+    overlap!(rot_x_deg);
+    overlap!(rot_y_deg);
+    overlap!(rot_z_deg);
+    overlap!(blend);
+    overlap!(vibrate);
+    overlap!(effect_magnitude);
+    overlap!(effect_mode);
+    overlap!(effect_color1);
+    overlap!(effect_color2);
+    overlap!(effect_period);
+    overlap!(custom_texture_rect);
+    overlap!(texcoord_velocity);
+    overlap!(size);
+    overlap!(stretch_rect);
+    false
 }
 
 impl SongLuaOverlayEaseWindowRuntime {
@@ -4273,6 +4387,16 @@ fn build_song_lua_runtime_windows(
             compiled.info.unsupported_function_actions,
             compiled.info.unsupported_perframes,
         );
+        log_song_lua_runtime_debug(
+            song.title.as_str(),
+            &compiled,
+            &overlay_eases,
+            &messages,
+            &hidden_players,
+            total_constant,
+            total_eases,
+            unsupported_targets,
+        );
     }
 
     (
@@ -4285,6 +4409,98 @@ fn build_song_lua_runtime_windows(
         compiled.screen_width,
         compiled.screen_height,
     )
+}
+
+fn log_song_lua_runtime_debug(
+    song_title: &str,
+    compiled: &crate::game::parsing::song_lua::CompiledSongLua,
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
+    messages: &[SongLuaMessageEvent],
+    hidden_players: &[bool; MAX_PLAYERS],
+    total_constant: usize,
+    total_eases: usize,
+    unsupported_targets: usize,
+) {
+    debug!(
+        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} overlay_eases={} overlays={} messages={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={}",
+        song_title,
+        compiled.entry_path.display(),
+        compiled.screen_width,
+        compiled.screen_height,
+        hidden_players,
+        total_constant,
+        total_eases,
+        overlay_eases.len(),
+        compiled.overlays.len(),
+        messages.len(),
+        unsupported_targets,
+        compiled.info.unsupported_function_eases,
+        compiled.info.unsupported_function_actions,
+        compiled.info.unsupported_perframes,
+    );
+
+    let mut message_counts = BTreeMap::<&str, usize>::new();
+    for event in messages {
+        *message_counts.entry(event.message.as_str()).or_default() += 1;
+    }
+    if !message_counts.is_empty() {
+        debug!(
+            "Song lua message kinds for '{}': {}",
+            song_title,
+            message_counts
+                .iter()
+                .map(|(message, count)| format!("{message}x{count}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    for (index, overlay) in compiled.overlays.iter().enumerate() {
+        let message_names = overlay
+            .message_commands
+            .iter()
+            .map(|command| format!("{}({})", command.message, command.blocks.len()))
+            .collect::<Vec<_>>();
+        debug!(
+            "Song lua overlay[{index}] for '{}': kind={:?} name={:?} parent={:?} visible={} xy=({:.1},{:.1}) zoom={:.3}/{:.3}/{:.3} rot=({:.1},{:.1},{:.1}) alpha={:.3} msgs=[{}]",
+            song_title,
+            overlay.kind,
+            overlay.name,
+            overlay.parent_index,
+            overlay.initial_state.visible,
+            overlay.initial_state.x,
+            overlay.initial_state.y,
+            overlay.initial_state.basezoom,
+            overlay.initial_state.zoom_x,
+            overlay.initial_state.zoom_y,
+            overlay.initial_state.rot_x_deg,
+            overlay.initial_state.rot_y_deg,
+            overlay.initial_state.rot_z_deg,
+            overlay.initial_state.diffuse[3],
+            message_names.join(", ")
+        );
+    }
+
+    for (index, ease) in overlay_eases.iter().enumerate() {
+        trace!(
+            "Song lua overlay_ease[{index}] for '{}': overlay={} start_s={:.3} end_s={:.3} sustain_end_s={:.3} cutoff_s={:?} easing={:?} from={:?} to={:?}",
+            song_title,
+            ease.overlay_index,
+            ease.start_second,
+            ease.end_second,
+            ease.sustain_end_second,
+            ease.cutoff_second,
+            ease.easing,
+            ease.from,
+            ease.to
+        );
+    }
+    for (index, event) in messages.iter().enumerate() {
+        trace!(
+            "Song lua message[{index}] for '{}': beat={:.3} message='{}' persists={}",
+            song_title, event.beat, event.message, event.persists
+        );
+    }
 }
 
 #[inline(always)]
@@ -15739,6 +15955,71 @@ mod tests {
         assert_eq!(mods.perspective.tilt, Some(-0.5));
         assert_eq!(mods.perspective.skew, Some(0.5));
         assert_eq!(mods.visual.bumpy, Some(0.15));
+    }
+
+    #[test]
+    fn song_lua_overlay_eases_stop_after_later_message_blocks() {
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..TimingSegments::default()
+        };
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(8 * 48));
+        let compiled = crate::game::parsing::song_lua::CompiledSongLua {
+            overlays: vec![crate::game::parsing::song_lua::SongLuaOverlayActor {
+                kind: crate::game::parsing::song_lua::SongLuaOverlayKind::Quad,
+                name: None,
+                parent_index: None,
+                initial_state: crate::game::parsing::song_lua::SongLuaOverlayState::default(),
+                message_commands: vec![
+                    crate::game::parsing::song_lua::SongLuaOverlayMessageCommand {
+                        message: "ResetBlack".to_string(),
+                        blocks: vec![crate::game::parsing::song_lua::SongLuaOverlayCommandBlock {
+                            start: 0.0,
+                            duration: 0.0,
+                            easing: None,
+                            opt1: None,
+                            opt2: None,
+                            delta: crate::game::parsing::song_lua::SongLuaOverlayStateDelta {
+                                diffuse: Some([1.0, 1.0, 1.0, 0.0]),
+                                ..Default::default()
+                            },
+                        }],
+                    },
+                ],
+            }],
+            overlay_eases: vec![crate::game::parsing::song_lua::SongLuaOverlayEase {
+                overlay_index: 0,
+                unit: crate::game::parsing::song_lua::SongLuaTimeUnit::Beat,
+                start: 0.0,
+                limit: 8.0,
+                span_mode: crate::game::parsing::song_lua::SongLuaSpanMode::Len,
+                from: crate::game::parsing::song_lua::SongLuaOverlayStateDelta {
+                    diffuse: Some([1.0, 1.0, 1.0, 0.0]),
+                    ..Default::default()
+                },
+                to: crate::game::parsing::song_lua::SongLuaOverlayStateDelta {
+                    diffuse: Some([1.0, 1.0, 1.0, 1.0]),
+                    ..Default::default()
+                },
+                easing: Some("linear".to_string()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            }],
+            messages: vec![crate::game::parsing::song_lua::SongLuaMessageEvent {
+                beat: 4.0,
+                message: "ResetBlack".to_string(),
+                persists: true,
+            }],
+            ..Default::default()
+        };
+
+        let windows = super::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+
+        assert_eq!(windows.len(), 1);
+        assert_eq!(windows[0].cutoff_second, Some(4.0));
+        assert_eq!(windows[0].end_second, 8.0);
     }
 
     #[test]
