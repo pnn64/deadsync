@@ -7,7 +7,9 @@ use crate::engine::present::{
     color,
     density::{self, DensityHistCache},
 };
-use crate::engine::space::{is_wide, screen_center_y, screen_height, screen_width};
+use crate::engine::space::{
+    is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
+};
 use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
@@ -4328,11 +4330,50 @@ fn song_lua_speedmod_from_setting(speed: ScrollSpeedSetting) -> SongLuaSpeedMod 
     }
 }
 
+fn song_lua_compile_player_screen_x(
+    num_players: usize,
+    player_index: usize,
+    profile: &profile::Profile,
+    play_style: profile::PlayStyle,
+    player_side: profile::PlayerSide,
+    center_1player_notefield: bool,
+) -> f32 {
+    let clamped_width = screen_width().clamp(640.0, 854.0);
+    let centered_one_side =
+        num_players == 1 && play_style == profile::PlayStyle::Single && center_1player_notefield;
+    let centered_both_sides = num_players == 1 && play_style == profile::PlayStyle::Double;
+    let p2_side = if num_players == 1 {
+        play_style == profile::PlayStyle::Single && player_side == profile::PlayerSide::P2
+    } else {
+        player_index == 1
+    };
+    let base_center_x = if num_players == 2 {
+        if p2_side {
+            screen_center_x() + (clamped_width * 0.25)
+        } else {
+            screen_center_x() - (clamped_width * 0.25)
+        }
+    } else if centered_both_sides || centered_one_side {
+        screen_center_x()
+    } else if p2_side {
+        screen_center_x() + (clamped_width * 0.25)
+    } else {
+        screen_center_x() - (clamped_width * 0.25)
+    };
+    if num_players == 1 && (centered_both_sides || centered_one_side) {
+        screen_center_x()
+    } else {
+        let offset_sign = if p2_side { 1.0 } else { -1.0 };
+        base_center_x + offset_sign * (profile.note_field_offset_x.clamp(0, 50) as f32)
+    }
+}
+
 fn build_song_lua_runtime_windows(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     timing_players: &[Arc<TimingData>; MAX_PLAYERS],
     num_players: usize,
+    player_profiles: &[profile::Profile; MAX_PLAYERS],
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     global_offset_seconds: f32,
 ) -> (
@@ -4394,6 +4435,9 @@ fn build_song_lua_runtime_windows(
     context.confusion_offset_available = false;
     context.confusion_available = true;
     context.amod_available = false;
+    let play_style = profile::get_session_play_style();
+    let player_side = profile::get_session_player_side();
+    let center_1player_notefield = crate::config::get().center_1player_notefield;
     context.players = std::array::from_fn(|player| SongLuaPlayerContext {
         enabled: player < num_players,
         difficulty: if player < num_players {
@@ -4406,6 +4450,19 @@ fn build_song_lua_runtime_windows(
         } else {
             SongLuaSpeedMod::default()
         },
+        screen_x: if player < num_players {
+            song_lua_compile_player_screen_x(
+                num_players,
+                player,
+                &player_profiles[player],
+                play_style,
+                player_side,
+                center_1player_notefield,
+            )
+        } else {
+            screen_center_x()
+        },
+        screen_y: screen_center_y(),
     });
 
     let compiled = match compile_song_lua(&entry.path, &context) {
@@ -9327,6 +9384,7 @@ pub fn init(
         &charts,
         &timing_players,
         num_players,
+        &player_profiles,
         &scroll_speed,
         config.global_offset_seconds,
     );

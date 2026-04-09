@@ -1758,9 +1758,6 @@ fn push_sprite<'a>(
     let center_y = ((cb - ct) * base_size.y).mul_add(0.5, base_center.y);
     let size_x = base_size.x * sx_crop;
     let size_y = base_size.y * sy_crop;
-    let (flip_x, flip_y, size_x, size_y) =
-        fold_sprite_xy_rot(flip_x, flip_y, size_x, size_y, rot_x_deg, rot_y_deg);
-
     let (uv_scale, uv_offset) = if is_solid {
         ([1.0, 1.0], [0.0, 0.0])
     } else {
@@ -1779,6 +1776,9 @@ fn push_sprite<'a>(
             total_elapsed,
         )
     };
+
+    let (flip_x, flip_y, size_x, size_y) =
+        fold_sprite_xy_rot(flip_x, flip_y, size_x, size_y, rot_x_deg, rot_y_deg);
 
     let fl = fadeleft.clamp(0.0, 1.0);
     let fr = faderight.clamp(0.0, 1.0);

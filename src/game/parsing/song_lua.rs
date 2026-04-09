@@ -98,6 +98,8 @@ pub struct SongLuaPlayerContext {
     pub enabled: bool,
     pub difficulty: SongLuaDifficulty,
     pub speedmod: SongLuaSpeedMod,
+    pub screen_x: f32,
+    pub screen_y: f32,
 }
 
 impl Default for SongLuaPlayerContext {
@@ -106,6 +108,8 @@ impl Default for SongLuaPlayerContext {
             enabled: true,
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
+            screen_x: 320.0,
+            screen_y: 240.0,
         }
     }
 }
@@ -844,10 +848,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("GAMESTATE", gamestate)?;
 
     let screenman = lua.create_table()?;
-    let top_screen = create_top_screen_table(
-        lua,
-        [context.players[0].enabled, context.players[1].enabled],
-    )?;
+    let top_screen = create_top_screen_table(lua, context.players)?;
     globals.set(
         "__songlua_top_screen_player_1",
         top_screen.players[0].clone(),
@@ -938,13 +939,13 @@ fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Resu
 
 fn create_top_screen_table(
     lua: &Lua,
-    player_enabled: [bool; LUA_PLAYERS],
+    players: [SongLuaPlayerContext; LUA_PLAYERS],
 ) -> mlua::Result<TopScreenLuaTables> {
     let top_screen = create_dummy_actor(lua, "TopScreen")?;
     let top_screen_for_get_child = top_screen.clone();
     let player_actors = [
-        create_top_screen_player_actor(lua, 0)?,
-        create_top_screen_player_actor(lua, 1)?,
+        create_top_screen_player_actor(lua, players[0], 0)?,
+        create_top_screen_player_actor(lua, players[1], 1)?,
     ];
     let player_actors_for_get_child = player_actors.clone();
     top_screen.set(
@@ -954,7 +955,7 @@ fn create_top_screen_table(
                 return Ok(Value::Nil);
             };
             if let Some(player_index) = top_screen_player_index(&name) {
-                return if player_enabled[player_index] {
+                return if players[player_index].enabled {
                     Ok(Value::Table(
                         player_actors_for_get_child[player_index].clone(),
                     ))
@@ -977,10 +978,16 @@ fn create_top_screen_table(
     })
 }
 
-fn create_top_screen_player_actor(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
+fn create_top_screen_player_actor(
+    lua: &Lua,
+    player: SongLuaPlayerContext,
+    player_index: usize,
+) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, "PlayerActor")?;
     actor.set("__songlua_player_index", player_index as i64)?;
     actor.set("__songlua_visible", true)?;
+    actor.set("__songlua_state_x", player.screen_x)?;
+    actor.set("__songlua_state_y", player.screen_y)?;
     Ok(actor)
 }
 
@@ -3002,11 +3009,25 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     actor.set(
         "GetX",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_x")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
     )?;
     actor.set(
         "GetY",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_y")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
     )?;
     actor.set(
         "GetZoom",
@@ -4213,6 +4234,48 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_exposes_top_screen_player_positions() {
+        let song_dir = test_dir("overlay-player-position");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+            self:x(player:GetX()):y(player:GetY())
+            self:zoomto(48, 64)
+        end,
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Overlay Player Position");
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                screen_x: 123.0,
+                screen_y: 234.0,
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: false,
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        let overlay = &compiled.overlays[0];
+
+        assert_eq!(overlay.initial_state.x, 123.0);
+        assert_eq!(overlay.initial_state.y, 234.0);
+        assert_eq!(overlay.initial_state.size, Some([48.0, 64.0]));
+    }
+
+    #[test]
     fn compile_song_lua_extracts_actorframe_overlay_hierarchy() {
         let song_dir = test_dir("overlay-hierarchy");
         let entry = song_dir.join("default.lua");
@@ -4725,11 +4788,13 @@ return Def.ActorFrame{
                 enabled: true,
                 difficulty: SongLuaDifficulty::Challenge,
                 speedmod: SongLuaSpeedMod::X(2.0),
+                ..SongLuaPlayerContext::default()
             },
             SongLuaPlayerContext {
                 enabled: true,
                 difficulty: SongLuaDifficulty::Challenge,
                 speedmod: SongLuaSpeedMod::C(516.0),
+                ..SongLuaPlayerContext::default()
             },
         ];
 
@@ -4768,11 +4833,13 @@ return Def.ActorFrame{
                 enabled: true,
                 difficulty: SongLuaDifficulty::Challenge,
                 speedmod: SongLuaSpeedMod::X(2.0),
+                ..SongLuaPlayerContext::default()
             },
             SongLuaPlayerContext {
                 enabled: false,
                 difficulty: SongLuaDifficulty::Easy,
                 speedmod: SongLuaSpeedMod::X(1.0),
+                ..SongLuaPlayerContext::default()
             },
         ];
 
@@ -4800,11 +4867,13 @@ return Def.ActorFrame{
                 enabled: true,
                 difficulty: SongLuaDifficulty::Challenge,
                 speedmod: SongLuaSpeedMod::X(2.0),
+                ..SongLuaPlayerContext::default()
             },
             SongLuaPlayerContext {
                 enabled: false,
                 difficulty: SongLuaDifficulty::Challenge,
                 speedmod: SongLuaSpeedMod::X(1.0),
+                ..SongLuaPlayerContext::default()
             },
         ];
 
@@ -4828,11 +4897,13 @@ return Def.ActorFrame{
                 enabled: true,
                 difficulty: SongLuaDifficulty::Challenge,
                 speedmod: SongLuaSpeedMod::X(2.0),
+                ..SongLuaPlayerContext::default()
             },
             SongLuaPlayerContext {
                 enabled: true,
                 difficulty: SongLuaDifficulty::Challenge,
                 speedmod: SongLuaSpeedMod::C(516.0),
+                ..SongLuaPlayerContext::default()
             },
         ];
 

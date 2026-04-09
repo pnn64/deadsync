@@ -3345,7 +3345,10 @@ pub fn build_bundles(
                 None
             };
             if let Some(hold_slot) = hold_slot {
-                let draw = hold_slot.model_draw_at(state.total_elapsed_in_screen, current_beat);
+                let draw = song_lua_note_model_draw(
+                    hold_slot.model_draw_at(state.total_elapsed_in_screen, current_beat),
+                    note_rotation_y,
+                );
                 let hold_frame = hold_slot.frame_index(state.total_elapsed_in_screen, current_beat);
                 let hold_uv = hold_slot.uv_for_frame_at(hold_frame, state.total_elapsed_in_screen);
                 let base_size = scale_hold_explosion(hold_slot);
@@ -3965,6 +3968,7 @@ pub fn build_bundles(
                 && visual.drunk <= f32::EPSILON
                 && visual.tornado <= f32::EPSILON
                 && visual.beat <= f32::EPSILON;
+            let hold_y_rotation_active = note_rotation_y.abs() > f32::EPSILON;
             // ITG draws hold bodies from y_head to y_tail (top-to-bottom in screen space).
             // If noteskin offsets invert the interval for ultra-short holds, skip body draw
             // and rely on tail-cap clipping.
@@ -4134,6 +4138,7 @@ pub fn build_bundles(
                                             align(0.5, 0.5):
                                             xy(segment_center_x, segment_center_screen):
                                             setsize(body_width, segment_size):
+                                            rotationy(note_rotation_y):
                                             rotationz(0.0):
                                             customtexturerect(u0, v0, u1, v1):
                                             diffuse(
@@ -4152,6 +4157,7 @@ pub fn build_bundles(
                                                 align(0.5, 0.5):
                                                 xy(segment_center_x, segment_center_screen):
                                                 setsize(body_width, segment_size):
+                                                rotationy(note_rotation_y):
                                                 rotationz(0.0):
                                                 customtexturerect(u0, v0, u1, v1):
                                                 diffuse(1.0, 1.0, 1.0, segment_glow):
@@ -4171,8 +4177,9 @@ pub fn build_bundles(
                             } else {
                                 16.0
                             };
-                            let use_body_mesh =
-                                body_slot.model.is_none() && visual.bumpy <= f32::EPSILON;
+                            let use_body_mesh = body_slot.model.is_none()
+                                && visual.bumpy <= f32::EPSILON
+                                && !hold_y_rotation_active;
                             let mut body_mesh_vertices =
                                 use_body_mesh.then(|| Vec::with_capacity(96));
                             let mut body_glow_vertices =
@@ -4419,6 +4426,7 @@ pub fn build_bundles(
                                                 align(0.5, 0.5):
                                                 xy(slice_center[0], slice_center[1]):
                                                 setsize(body_width, slice_height):
+                                                rotationy(note_rotation_y):
                                                 rotationz(slice_rotation):
                                                 customtexturerect(u0, slice_v0, u1, slice_v1):
                                                 diffuse(
@@ -4437,6 +4445,7 @@ pub fn build_bundles(
                                                     align(0.5, 0.5):
                                                     xy(slice_center[0], slice_center[1]):
                                                     setsize(body_width, slice_height):
+                                                    rotationy(note_rotation_y):
                                                     rotationz(slice_rotation):
                                                     customtexturerect(u0, slice_v0, u1, slice_v1):
                                                     diffuse(1.0, 1.0, 1.0, slice_glow):
@@ -4563,7 +4572,8 @@ pub fn build_bundles(
                         }
                         let use_top_cap_mesh = !use_legacy_hold_sprites
                             && cap_slot.model.is_none()
-                            && visual.bumpy <= f32::EPSILON;
+                            && visual.bumpy <= f32::EPSILON
+                            && !hold_y_rotation_active;
                         if use_top_cap_mesh {
                             let top_alpha = note_alpha(
                                 cap_top_travel + tipsy_y_for_col(local_col),
@@ -4692,6 +4702,7 @@ pub fn build_bundles(
                                         hold_diffuse[2],
                                         hold_diffuse[3] * cap_alpha
                                     ):
+                                    rotationy(note_rotation_y):
                                     rotationz(cap_rotation):
                                     z(Z_HOLD_CAP)
                                 ),
@@ -4705,6 +4716,7 @@ pub fn build_bundles(
                                         setsize(cap_width, cap_draw_height):
                                         customtexturerect(u0, v0, u1, v1):
                                         diffuse(1.0, 1.0, 1.0, cap_glow):
+                                        rotationy(note_rotation_y):
                                         rotationz(cap_rotation):
                                         z(Z_HOLD_GLOW)
                                     ),
@@ -4824,7 +4836,8 @@ pub fn build_bundles(
                         let use_bottom_cap_mesh = !use_legacy_hold_sprites
                             && cap_slot.model.is_none()
                             && visual.bumpy <= f32::EPSILON
-                            && !lane_reverse;
+                            && !lane_reverse
+                            && !hold_y_rotation_active;
                         if use_bottom_cap_mesh {
                             let top_alpha = note_alpha(
                                 cap_top_travel + tipsy_y_for_col(local_col),
@@ -4948,6 +4961,7 @@ pub fn build_bundles(
                                         hold_diffuse[2],
                                         hold_diffuse[3] * cap_alpha
                                     ):
+                                    rotationy(note_rotation_y):
                                     rotationz(cap_rotation):
                                     z(Z_HOLD_CAP)
                                 ),
@@ -4961,6 +4975,7 @@ pub fn build_bundles(
                                         setsize(cap_width, cap_draw_height):
                                         customtexturerect(u0, v0, u1, v1):
                                         diffuse(1.0, 1.0, 1.0, cap_glow):
+                                        rotationy(note_rotation_y):
                                         rotationz(cap_rotation):
                                         z(Z_HOLD_GLOW)
                                     ),
