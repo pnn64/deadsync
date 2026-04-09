@@ -2686,6 +2686,12 @@ pub struct SongLuaOverlayEaseWindowRuntime {
     pub opt2: Option<f32>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct SongLuaOverlayMessageRuntime {
+    pub event_second: f32,
+    pub command_index: usize,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SongLuaEaseMaskTarget {
     AccelBoost,
@@ -4182,6 +4188,69 @@ fn build_song_lua_overlay_ease_windows(
     out
 }
 
+fn group_song_lua_overlay_eases(
+    overlay_count: usize,
+    overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
+) -> (
+    Vec<SongLuaOverlayEaseWindowRuntime>,
+    Vec<std::ops::Range<usize>>,
+) {
+    let mut buckets = vec![Vec::new(); overlay_count];
+    for ease in overlay_eases {
+        if let Some(bucket) = buckets.get_mut(ease.overlay_index) {
+            bucket.push(ease);
+        }
+    }
+    let total_len = buckets.iter().map(Vec::len).sum();
+    let mut flat = Vec::with_capacity(total_len);
+    let mut ranges = Vec::with_capacity(overlay_count);
+    for mut bucket in buckets {
+        bucket.sort_by(|left, right| {
+            left.start_second
+                .total_cmp(&right.start_second)
+                .then_with(|| left.end_second.total_cmp(&right.end_second))
+                .then_with(|| left.sustain_end_second.total_cmp(&right.sustain_end_second))
+        });
+        let start = flat.len();
+        flat.extend(bucket);
+        ranges.push(start..flat.len());
+    }
+    (flat, ranges)
+}
+
+fn build_song_lua_overlay_message_events(
+    compiled: &crate::game::parsing::song_lua::CompiledSongLua,
+    timing_player: &TimingData,
+    global_offset_seconds: f32,
+) -> Vec<Vec<SongLuaOverlayMessageRuntime>> {
+    let mut out = vec![Vec::new(); compiled.overlays.len()];
+    for message in &compiled.messages {
+        let event_second = song_lua_time_to_second(
+            SongLuaTimeUnit::Beat,
+            message.beat,
+            timing_player,
+            global_offset_seconds,
+        );
+        if !event_second.is_finite() {
+            continue;
+        }
+        for (overlay_index, overlay) in compiled.overlays.iter().enumerate() {
+            let Some(command_index) = overlay
+                .message_commands
+                .iter()
+                .position(|command| command.message.eq_ignore_ascii_case(&message.message))
+            else {
+                continue;
+            };
+            out[overlay_index].push(SongLuaOverlayMessageRuntime {
+                event_second,
+                command_index,
+            });
+        }
+    }
+    out
+}
+
 fn song_lua_overlay_ease_cutoff_second(
     compiled: &crate::game::parsing::song_lua::CompiledSongLua,
     ease: &SongLuaOverlayEase,
@@ -4381,7 +4450,8 @@ fn build_song_lua_runtime_windows(
     [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
     Vec<SongLuaOverlayActor>,
     Vec<SongLuaOverlayEaseWindowRuntime>,
-    Vec<SongLuaMessageEvent>,
+    Vec<std::ops::Range<usize>>,
+    Vec<Vec<SongLuaOverlayMessageRuntime>>,
     [bool; MAX_PLAYERS],
     f32,
     f32,
@@ -4392,7 +4462,8 @@ fn build_song_lua_runtime_windows(
         std::array::from_fn(|_| Vec::new());
     let mut overlays = Vec::new();
     let mut overlay_eases = Vec::new();
-    let mut messages = Vec::new();
+    let mut overlay_ease_ranges = Vec::new();
+    let mut overlay_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
     let screen_width = screen_width();
     let screen_height = screen_height();
@@ -4407,7 +4478,8 @@ fn build_song_lua_runtime_windows(
             ease_windows,
             overlays,
             overlay_eases,
-            messages,
+            overlay_ease_ranges,
+            overlay_events,
             hidden_players,
             screen_width,
             screen_height,
@@ -4479,7 +4551,8 @@ fn build_song_lua_runtime_windows(
                 ease_windows,
                 overlays,
                 overlay_eases,
-                messages,
+                overlay_ease_ranges,
+                overlay_events,
                 hidden_players,
                 screen_width,
                 screen_height,
@@ -4487,12 +4560,18 @@ fn build_song_lua_runtime_windows(
         }
     };
     overlays = compiled.overlays.clone();
-    overlay_eases = build_song_lua_overlay_ease_windows(
+    let overlay_runtime_eases = build_song_lua_overlay_ease_windows(
         &compiled,
         timing_players[0].as_ref(),
         global_offset_seconds,
     );
-    messages = compiled.messages.clone();
+    (overlay_eases, overlay_ease_ranges) =
+        group_song_lua_overlay_eases(compiled.overlays.len(), overlay_runtime_eases);
+    overlay_events = build_song_lua_overlay_message_events(
+        &compiled,
+        timing_players[0].as_ref(),
+        global_offset_seconds,
+    );
     hidden_players[..compiled.hidden_players.len()].copy_from_slice(&compiled.hidden_players);
 
     let mut unsupported_targets = 0usize;
@@ -4521,7 +4600,7 @@ fn build_song_lua_runtime_windows(
         || total_eases > 0
         || !overlays.is_empty()
         || !overlay_eases.is_empty()
-        || !messages.is_empty()
+        || !compiled.messages.is_empty()
         || compiled.info.unsupported_perframes > 0
         || compiled.info.unsupported_function_eases > 0
         || compiled.info.unsupported_function_actions > 0
@@ -4534,7 +4613,7 @@ fn build_song_lua_runtime_windows(
             total_eases,
             overlay_eases.len(),
             overlays.len(),
-            messages.len(),
+            compiled.messages.len(),
             unsupported_targets,
             compiled.info.unsupported_function_eases,
             compiled.info.unsupported_function_actions,
@@ -4544,7 +4623,7 @@ fn build_song_lua_runtime_windows(
             song.title.as_str(),
             &compiled,
             &overlay_eases,
-            &messages,
+            &compiled.messages,
             &hidden_players,
             total_constant,
             total_eases,
@@ -4557,7 +4636,8 @@ fn build_song_lua_runtime_windows(
         ease_windows,
         overlays,
         overlay_eases,
-        messages,
+        overlay_ease_ranges,
+        overlay_events,
         hidden_players,
         compiled.screen_width,
         compiled.screen_height,
@@ -6634,8 +6714,11 @@ pub struct State {
     attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS],
     song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
     pub song_lua_overlays: Vec<SongLuaOverlayActor>,
+    // Gameplay-thread song-lua caches built at song load and read every frame by
+    // render, so overlay evaluation stays local to each overlay.
     pub song_lua_overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
-    pub song_lua_messages: Vec<SongLuaMessageEvent>,
+    pub song_lua_overlay_ease_ranges: Vec<std::ops::Range<usize>>,
+    pub song_lua_overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
     pub song_lua_hidden_players: [bool; MAX_PLAYERS],
     pub song_lua_screen_width: f32,
     pub song_lua_screen_height: f32,
@@ -9375,7 +9458,8 @@ pub fn init(
         song_lua_ease_windows,
         song_lua_overlays,
         song_lua_overlay_eases,
-        song_lua_messages,
+        song_lua_overlay_ease_ranges,
+        song_lua_overlay_events,
         song_lua_hidden_players,
         song_lua_screen_width,
         song_lua_screen_height,
@@ -9802,7 +9886,8 @@ pub fn init(
         song_lua_ease_windows,
         song_lua_overlays,
         song_lua_overlay_eases,
-        song_lua_messages,
+        song_lua_overlay_ease_ranges,
+        song_lua_overlay_events,
         song_lua_hidden_players,
         song_lua_screen_width,
         song_lua_screen_height,

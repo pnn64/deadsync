@@ -1289,7 +1289,10 @@ fn apply_song_lua_overlay_runtime_eases(
     mut current: SongLuaOverlayState,
 ) -> SongLuaOverlayState {
     let now = state.current_music_time_display;
-    for ease in &state.song_lua_overlay_eases {
+    let Some(ease_range) = state.song_lua_overlay_ease_ranges.get(overlay_index) else {
+        return current;
+    };
+    for ease in &state.song_lua_overlay_eases[ease_range.clone()] {
         if ease.overlay_index != overlay_index || now < ease.start_second {
             continue;
         }
@@ -1327,18 +1330,17 @@ fn song_lua_overlay_render_state(
     let now = state.current_music_time_display;
     let mut current = overlay.initial_state;
     let mut active: Option<(&[SongLuaOverlayCommandBlock], SongLuaOverlayState, f32)> = None;
-    for event in &state.song_lua_messages {
-        let Some(command) = overlay
-            .message_commands
-            .iter()
-            .find(|command| command.message.eq_ignore_ascii_case(&event.message))
-        else {
-            continue;
-        };
-        let event_second = state.timing.get_time_for_beat(event.beat);
+    let Some(events) = state.song_lua_overlay_events.get(overlay_index) else {
+        return apply_song_lua_overlay_runtime_eases(state, overlay_index, current);
+    };
+    for event in events {
+        let event_second = event.event_second;
         if event_second > now {
             break;
         }
+        let Some(command) = overlay.message_commands.get(event.command_index) else {
+            continue;
+        };
         if let Some((blocks, base, start_second)) = active.take() {
             current = song_lua_overlay_apply_blocks(base, blocks, event_second - start_second);
         }
