@@ -95,6 +95,9 @@ const GAMEPLAY_EVENT_TRACE_INTERVAL: Duration = Duration::from_secs(1);
 const GAMEPLAY_EVENT_BATCH_SLOW_US: u32 = 1_000;
 const GAMEPLAY_EVENT_BATCH_BURST_KEYS: u32 = 8;
 const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 131_072;
+const STUTTER_DIAG_DUMP_WINDOW_NS: u64 = 500_000_000;
+const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
+const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
 
 #[derive(Clone, Copy, Debug)]
 struct GameplayOffsetSavePrompt {
@@ -231,6 +234,16 @@ fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
 }
 
 #[inline(always)]
+fn seconds_to_us_u32(seconds: f32) -> u32 {
+    let micros = (seconds * 1_000_000.0).max(0.0);
+    if micros > u32::MAX as f32 {
+        u32::MAX
+    } else {
+        micros as u32
+    }
+}
+
+#[inline(always)]
 fn stutter_severity(frame_seconds: f32, expected_seconds: f32) -> u8 {
     if expected_seconds <= 0.0 {
         return 0;
@@ -243,6 +256,11 @@ fn stutter_severity(frame_seconds: f32, expected_seconds: f32) -> u8 {
         severity = severity.saturating_add(1);
     }
     severity
+}
+
+#[inline(always)]
+fn stutter_diag_enabled() -> bool {
+    log::log_enabled!(log::Level::Trace)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -326,6 +344,140 @@ impl StutterSample {
             frame_seconds: 0.0,
             expected_seconds: 0.0,
             severity: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct StutterDiagFrameSample {
+    host_nanos: u64,
+    screen: CurrentScreen,
+    redraw_request_reason: &'static str,
+    frame_us: u32,
+    expected_us: u32,
+    pre_redraw_gap_us: u32,
+    request_to_redraw_us: u32,
+    input_us: u32,
+    update_us: u32,
+    compose_us: u32,
+    upload_us: u32,
+    draw_us: u32,
+    acquire_us: u32,
+    submit_us: u32,
+    present_us: u32,
+    gpu_wait_us: u32,
+    draw_setup_us: u32,
+    draw_prepare_us: u32,
+    draw_record_us: u32,
+    display_error_us: i32,
+    display_catching_up: bool,
+    present_mode: renderer::PresentModeTrace,
+    present_display_clock: renderer::ClockDomainTrace,
+    present_host_clock: renderer::ClockDomainTrace,
+    in_flight_images: u8,
+    waited_for_image: bool,
+    applied_back_pressure: bool,
+    queue_idle_waited: bool,
+    suboptimal: bool,
+}
+
+impl StutterDiagFrameSample {
+    #[inline(always)]
+    const fn empty() -> Self {
+        Self {
+            host_nanos: 0,
+            screen: CurrentScreen::Init,
+            redraw_request_reason: "none",
+            frame_us: 0,
+            expected_us: 0,
+            pre_redraw_gap_us: 0,
+            request_to_redraw_us: 0,
+            input_us: 0,
+            update_us: 0,
+            compose_us: 0,
+            upload_us: 0,
+            draw_us: 0,
+            acquire_us: 0,
+            submit_us: 0,
+            present_us: 0,
+            gpu_wait_us: 0,
+            draw_setup_us: 0,
+            draw_prepare_us: 0,
+            draw_record_us: 0,
+            display_error_us: 0,
+            display_catching_up: false,
+            present_mode: renderer::PresentModeTrace::Unknown,
+            present_display_clock: renderer::ClockDomainTrace::Unknown,
+            present_host_clock: renderer::ClockDomainTrace::Unknown,
+            in_flight_images: 0,
+            waited_for_image: false,
+            applied_back_pressure: false,
+            queue_idle_waited: false,
+            suboptimal: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StutterDiagRecorder {
+    frames: [StutterDiagFrameSample; STUTTER_DIAG_FRAME_SAMPLE_COUNT],
+    frame_cursor: usize,
+    frame_len: usize,
+    last_audio_trigger_seq: u64,
+    last_display_trigger_seq: u64,
+    last_dump_host_nanos: u64,
+}
+
+impl StutterDiagRecorder {
+    #[inline(always)]
+    const fn new() -> Self {
+        Self {
+            frames: [StutterDiagFrameSample::empty(); STUTTER_DIAG_FRAME_SAMPLE_COUNT],
+            frame_cursor: 0,
+            frame_len: 0,
+            last_audio_trigger_seq: 0,
+            last_display_trigger_seq: 0,
+            last_dump_host_nanos: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn reset(&mut self) {
+        self.frames = [StutterDiagFrameSample::empty(); STUTTER_DIAG_FRAME_SAMPLE_COUNT];
+        self.frame_cursor = 0;
+        self.frame_len = 0;
+        self.last_dump_host_nanos = 0;
+    }
+
+    #[inline(always)]
+    fn push_frame(&mut self, sample: StutterDiagFrameSample) {
+        self.frames[self.frame_cursor] = sample;
+        self.frame_cursor = (self.frame_cursor + 1) % STUTTER_DIAG_FRAME_SAMPLE_COUNT;
+        self.frame_len = self
+            .frame_len
+            .saturating_add(1)
+            .min(STUTTER_DIAG_FRAME_SAMPLE_COUNT);
+    }
+
+    fn collect_recent_frames(
+        &self,
+        now_host_nanos: u64,
+        window_ns: u64,
+        out: &mut Vec<StutterDiagFrameSample>,
+    ) {
+        let start = self
+            .frame_cursor
+            .saturating_add(STUTTER_DIAG_FRAME_SAMPLE_COUNT)
+            .saturating_sub(self.frame_len)
+            % STUTTER_DIAG_FRAME_SAMPLE_COUNT;
+        for i in 0..self.frame_len {
+            let sample = self.frames[(start + i) % STUTTER_DIAG_FRAME_SAMPLE_COUNT];
+            if sample.host_nanos == 0 {
+                continue;
+            }
+            if now_host_nanos.saturating_sub(sample.host_nanos) <= window_ns {
+                out.push(sample);
+            }
         }
     }
 }
@@ -593,6 +745,7 @@ pub struct ShellState {
     overlay_mode: OverlayMode,
     stutter_samples: [StutterSample; STUTTER_SAMPLE_COUNT],
     stutter_cursor: usize,
+    stutter_diag: StutterDiagRecorder,
     transition: TransitionState,
     display_width: u32,
     display_height: u32,
@@ -719,6 +872,7 @@ impl ShellState {
             overlay_mode: OverlayMode::from_code(overlay_mode),
             stutter_samples: [StutterSample::empty(); STUTTER_SAMPLE_COUNT],
             stutter_cursor: 0,
+            stutter_diag: StutterDiagRecorder::new(),
             transition: TransitionState::Idle,
             display_width: cfg.display_width,
             display_height: cfg.display_height,
@@ -763,6 +917,7 @@ impl ShellState {
         self.gameplay_pacing_trace.reset(now);
         self.gameplay_event_batch_trace.reset(now);
         self.gameplay_event_trace.reset(now);
+        self.stutter_diag.reset();
     }
 
     #[inline(always)]
@@ -2486,6 +2641,20 @@ impl App {
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
         self.update_stutter_samples(frame_seconds, total_elapsed_end);
+        self.record_stutter_diag_frame(
+            frame_finished,
+            self.state.screens.current_screen,
+            frame_seconds,
+            pre_redraw_gap_us,
+            request_to_redraw_us,
+            redraw_request_reason,
+            input_us,
+            update_us,
+            compose_us,
+            upload_us,
+            draw_us,
+            draw_stats,
+        );
         self.trace_frame_stutter_if_needed(
             frame_seconds,
             total_elapsed_end,
@@ -2500,6 +2669,12 @@ impl App {
             draw_us,
             draw_stats,
             compose_breakdown,
+        );
+        self.trace_stutter_diag_dump_if_needed(
+            frame_finished,
+            total_elapsed_end,
+            self.state.screens.current_screen,
+            frame_seconds,
         );
         self.trace_gameplay_frame_pacing_if_needed(
             frame_finished,
@@ -3997,6 +4172,237 @@ impl App {
         self.state
             .shell
             .push_stutter_sample(total_elapsed, frame_seconds, expected, severity);
+    }
+
+    #[inline(always)]
+    fn record_stutter_diag_frame(
+        &mut self,
+        frame_finished: Instant,
+        screen: CurrentScreen,
+        frame_seconds: f32,
+        pre_redraw_gap_us: u32,
+        request_to_redraw_us: u32,
+        redraw_request_reason: &'static str,
+        input_us: u32,
+        update_us: u32,
+        compose_us: u32,
+        upload_us: u32,
+        draw_us: u32,
+        draw_stats: renderer::DrawStats,
+    ) {
+        if !stutter_diag_enabled() {
+            return;
+        }
+        let display_clock = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(crate::game::gameplay::display_clock_health)
+            .unwrap_or_default();
+        let display_error_us_i64 =
+            (f64::from(display_clock.error_seconds) * 1_000_000.0).round() as i64;
+        let display_error_us =
+            display_error_us_i64.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        let present_stats = draw_stats.present_stats;
+        self.state
+            .shell
+            .stutter_diag
+            .push_frame(StutterDiagFrameSample {
+                host_nanos: crate::engine::host_time::instant_nanos(frame_finished),
+                screen,
+                redraw_request_reason,
+                frame_us: seconds_to_us_u32(frame_seconds),
+                expected_us: seconds_to_us_u32(self.expected_frame_seconds_for_stutter()),
+                pre_redraw_gap_us,
+                request_to_redraw_us,
+                input_us,
+                update_us,
+                compose_us,
+                upload_us,
+                draw_us,
+                acquire_us: draw_stats.acquire_us,
+                submit_us: draw_stats.submit_us,
+                present_us: draw_stats.present_us,
+                gpu_wait_us: draw_stats.gpu_wait_us,
+                draw_setup_us: draw_stats.backend_setup_us,
+                draw_prepare_us: draw_stats.backend_prepare_us,
+                draw_record_us: draw_stats.backend_record_us,
+                display_error_us,
+                display_catching_up: display_clock.catching_up,
+                present_mode: present_stats.mode,
+                present_display_clock: present_stats.display_clock,
+                present_host_clock: present_stats.host_clock,
+                in_flight_images: present_stats.in_flight_images,
+                waited_for_image: present_stats.waited_for_image,
+                applied_back_pressure: present_stats.applied_back_pressure,
+                queue_idle_waited: present_stats.queue_idle_waited,
+                suboptimal: present_stats.suboptimal,
+            });
+    }
+
+    fn dump_stutter_diag_window(
+        &self,
+        now_host_nanos: u64,
+        total_elapsed: f32,
+        screen: CurrentScreen,
+        stutter_severity: u8,
+        audio_triggered: bool,
+        display_triggered: bool,
+    ) {
+        let mut frames = Vec::with_capacity(STUTTER_DIAG_FRAME_SAMPLE_COUNT);
+        self.state.shell.stutter_diag.collect_recent_frames(
+            now_host_nanos,
+            STUTTER_DIAG_DUMP_WINDOW_NS,
+            &mut frames,
+        );
+        let mut audio_events = Vec::with_capacity(32);
+        crate::engine::audio::collect_stutter_diag_events(
+            now_host_nanos,
+            STUTTER_DIAG_DUMP_WINDOW_NS,
+            &mut audio_events,
+        );
+        let mut display_events = Vec::with_capacity(32);
+        if let Some(gameplay_state) = self.state.screens.gameplay_state.as_ref() {
+            crate::game::gameplay::collect_display_clock_stutter_diag_events(
+                gameplay_state,
+                now_host_nanos,
+                STUTTER_DIAG_DUMP_WINDOW_NS,
+                &mut display_events,
+            );
+        }
+        trace!(
+            "Stutter recorder dump t={:.3}s screen={:?} reason=[stutter:{} audio:{} display:{}] window_ms={:.1} frames={} audio_events={} display_events={}",
+            total_elapsed,
+            screen,
+            stutter_severity,
+            u8::from(audio_triggered),
+            u8::from(display_triggered),
+            STUTTER_DIAG_DUMP_WINDOW_NS as f64 / 1_000_000.0,
+            frames.len(),
+            audio_events.len(),
+            display_events.len(),
+        );
+        for sample in frames {
+            let age_ms = now_host_nanos.saturating_sub(sample.host_nanos) as f64 / 1_000_000.0;
+            let multiple = if sample.expected_us > 0 {
+                sample.frame_us as f64 / sample.expected_us as f64
+            } else {
+                0.0
+            };
+            trace!(
+                "Stutter recorder frame age_ms={:.3} screen={:?} dt_ms={:.3} expected_ms={:.3} x{:.2} req={} phases_ms=[pre:{:.3} rq:{:.3} in:{:.3} up:{:.3} comp:{:.3} upload:{:.3} draw:{:.3}] draw_ms=[acq:{:.3} sub:{:.3} present:{:.3} gpu_wait:{:.3} setup:{:.3} prep:{:.3} record:{:.3}] display=[err_ms:{:+.3} catch:{}] present=[mode:{} display:{} host:{} inflight:{} wait:{} back:{} idle:{} subopt:{}]",
+                age_ms,
+                sample.screen,
+                sample.frame_us as f64 / 1000.0,
+                sample.expected_us as f64 / 1000.0,
+                multiple,
+                sample.redraw_request_reason,
+                sample.pre_redraw_gap_us as f64 / 1000.0,
+                sample.request_to_redraw_us as f64 / 1000.0,
+                sample.input_us as f64 / 1000.0,
+                sample.update_us as f64 / 1000.0,
+                sample.compose_us as f64 / 1000.0,
+                sample.upload_us as f64 / 1000.0,
+                sample.draw_us as f64 / 1000.0,
+                sample.acquire_us as f64 / 1000.0,
+                sample.submit_us as f64 / 1000.0,
+                sample.present_us as f64 / 1000.0,
+                sample.gpu_wait_us as f64 / 1000.0,
+                sample.draw_setup_us as f64 / 1000.0,
+                sample.draw_prepare_us as f64 / 1000.0,
+                sample.draw_record_us as f64 / 1000.0,
+                sample.display_error_us as f64 / 1000.0,
+                u8::from(sample.display_catching_up),
+                sample.present_mode,
+                sample.present_display_clock,
+                sample.present_host_clock,
+                sample.in_flight_images,
+                u8::from(sample.waited_for_image),
+                u8::from(sample.applied_back_pressure),
+                u8::from(sample.queue_idle_waited),
+                u8::from(sample.suboptimal),
+            );
+        }
+        for event in display_events {
+            let age_ms = now_host_nanos.saturating_sub(event.at_host_nanos) as f64 / 1_000_000.0;
+            trace!(
+                "Stutter recorder display age_ms={:.3} kind={} target_ms={:.3} prev_ms={:.3} curr_ms={:.3} err_ms={:+.3} step_ms={:+.3} limit_ms={:.3}",
+                age_ms,
+                event.kind,
+                event.target_time_sec as f64 * 1000.0,
+                event.previous_time_sec as f64 * 1000.0,
+                event.current_time_sec as f64 * 1000.0,
+                event.error_seconds as f64 * 1000.0,
+                event.step_seconds as f64 * 1000.0,
+                event.limit_seconds as f64 * 1000.0,
+            );
+        }
+        for event in audio_events {
+            let age_ms = now_host_nanos.saturating_sub(event.at_host_nanos) as f64 / 1_000_000.0;
+            trace!(
+                "Stutter recorder audio age_ms={:.3} kind={} value_ms={:.3} rate={} buf={} pad={} q={} period_ms={:.3} out_ms={:.3} qual={}",
+                age_ms,
+                event.kind,
+                event.value_ns as f64 / 1_000_000.0,
+                event.sample_rate_hz,
+                event.buffer_frames,
+                event.padding_frames,
+                event.queued_frames,
+                event.device_period_ns as f64 / 1_000_000.0,
+                event.estimated_output_delay_ns as f64 / 1_000_000.0,
+                event.timing_quality,
+            );
+        }
+    }
+
+    fn trace_stutter_diag_dump_if_needed(
+        &mut self,
+        frame_finished: Instant,
+        total_elapsed: f32,
+        screen: CurrentScreen,
+        frame_seconds: f32,
+    ) {
+        if !stutter_diag_enabled() {
+            return;
+        }
+        let now_host_nanos = crate::engine::host_time::instant_nanos(frame_finished);
+        if now_host_nanos == 0 {
+            return;
+        }
+        let expected = self.expected_frame_seconds_for_stutter();
+        let stutter_severity = stutter_severity(frame_seconds, expected);
+        let audio_trigger_seq = crate::engine::audio::stutter_diag_trigger_seq();
+        let display_trigger_seq = self
+            .state
+            .screens
+            .gameplay_state
+            .as_ref()
+            .map(crate::game::gameplay::display_clock_stutter_diag_trigger_seq)
+            .unwrap_or(0);
+        let audio_triggered =
+            audio_trigger_seq > self.state.shell.stutter_diag.last_audio_trigger_seq;
+        let display_triggered =
+            display_trigger_seq > self.state.shell.stutter_diag.last_display_trigger_seq;
+        if stutter_severity == 0 && !audio_triggered && !display_triggered {
+            return;
+        }
+        if now_host_nanos.saturating_sub(self.state.shell.stutter_diag.last_dump_host_nanos)
+            < STUTTER_DIAG_MIN_DUMP_GAP_NS
+        {
+            return;
+        }
+        self.dump_stutter_diag_window(
+            now_host_nanos,
+            total_elapsed,
+            screen,
+            stutter_severity,
+            audio_triggered,
+            display_triggered,
+        );
+        self.state.shell.stutter_diag.last_audio_trigger_seq = audio_trigger_seq;
+        self.state.shell.stutter_diag.last_display_trigger_seq = display_trigger_seq;
+        self.state.shell.stutter_diag.last_dump_host_nanos = now_host_nanos;
     }
 
     #[inline(always)]

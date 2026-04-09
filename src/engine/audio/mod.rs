@@ -449,6 +449,115 @@ impl OutputTimingSnapshot {
     }
 }
 
+const AUDIO_STUTTER_DIAG_EVENT_COUNT: usize = 64;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum StutterDiagAudioEventKind {
+    Underrun = 1,
+    CallbackGap = 2,
+    TimingSanity = 3,
+    ClockFallback = 4,
+}
+
+impl StutterDiagAudioEventKind {
+    #[inline(always)]
+    fn from_bits(bits: u8) -> Option<Self> {
+        match bits {
+            1 => Some(Self::Underrun),
+            2 => Some(Self::CallbackGap),
+            3 => Some(Self::TimingSanity),
+            4 => Some(Self::ClockFallback),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for StutterDiagAudioEventKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let label = match self {
+            Self::Underrun => "underrun",
+            Self::CallbackGap => "callback_gap",
+            Self::TimingSanity => "timing_sanity",
+            Self::ClockFallback => "clock_fallback",
+        };
+        f.write_str(label)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct StutterDiagAudioEvent {
+    pub at_host_nanos: u64,
+    pub kind: StutterDiagAudioEventKind,
+    pub value_ns: u64,
+    pub sample_rate_hz: u32,
+    pub buffer_frames: u32,
+    pub padding_frames: u32,
+    pub queued_frames: u32,
+    pub device_period_ns: u64,
+    pub estimated_output_delay_ns: u64,
+    pub timing_quality: OutputTimingQuality,
+}
+
+struct AudioDiagEventSlot {
+    version: AtomicU64,
+    at_host_nanos: AtomicU64,
+    kind: AtomicU8,
+    value_ns: AtomicU64,
+    sample_rate_hz: AtomicU32,
+    buffer_frames: AtomicU32,
+    padding_frames: AtomicU32,
+    queued_frames: AtomicU32,
+    device_period_ns: AtomicU64,
+    estimated_output_delay_ns: AtomicU64,
+    timing_quality: AtomicU8,
+}
+
+impl AudioDiagEventSlot {
+    #[inline(always)]
+    fn new() -> Self {
+        Self {
+            version: AtomicU64::new(0),
+            at_host_nanos: AtomicU64::new(0),
+            kind: AtomicU8::new(0),
+            value_ns: AtomicU64::new(0),
+            sample_rate_hz: AtomicU32::new(0),
+            buffer_frames: AtomicU32::new(0),
+            padding_frames: AtomicU32::new(0),
+            queued_frames: AtomicU32::new(0),
+            device_period_ns: AtomicU64::new(0),
+            estimated_output_delay_ns: AtomicU64::new(0),
+            timing_quality: AtomicU8::new(OutputTimingQuality::Unknown as u8),
+        }
+    }
+
+    fn load(&self) -> Option<(u64, StutterDiagAudioEvent)> {
+        let version_start = self.version.load(Ordering::Acquire);
+        if version_start == 0 || version_start & 1 != 0 {
+            return None;
+        }
+        let event = StutterDiagAudioEvent {
+            at_host_nanos: self.at_host_nanos.load(Ordering::Relaxed),
+            kind: StutterDiagAudioEventKind::from_bits(self.kind.load(Ordering::Relaxed))?,
+            value_ns: self.value_ns.load(Ordering::Relaxed),
+            sample_rate_hz: self.sample_rate_hz.load(Ordering::Relaxed),
+            buffer_frames: self.buffer_frames.load(Ordering::Relaxed),
+            padding_frames: self.padding_frames.load(Ordering::Relaxed),
+            queued_frames: self.queued_frames.load(Ordering::Relaxed),
+            device_period_ns: self.device_period_ns.load(Ordering::Relaxed),
+            estimated_output_delay_ns: self.estimated_output_delay_ns.load(Ordering::Relaxed),
+            timing_quality: match self.timing_quality.load(Ordering::Relaxed) {
+                1 => OutputTimingQuality::Trusted,
+                2 => OutputTimingQuality::Degraded,
+                3 => OutputTimingQuality::Fallback,
+                _ => OutputTimingQuality::Unknown,
+            },
+        };
+        let version_end = self.version.load(Ordering::Acquire);
+        (version_start == version_end).then_some((version_end >> 1, event))
+    }
+}
+
 /// A handle to a streaming music track.
 struct MusicStream {
     thread: thread::JoinHandle<()>,
@@ -480,6 +589,10 @@ static AUDIO_TIMING_DIAG_ENABLED: OnceLock<bool> = OnceLock::new();
 static AUDIO_TIMING_DIAG_LAST_SOURCE: AtomicU8 = AtomicU8::new(0);
 static AUDIO_TIMING_DIAG_LAST_NANOS: AtomicU64 = AtomicU64::new(0);
 static AUDIO_TIMING_DIAG_LAST_GAP_NS: AtomicU64 = AtomicU64::new(0);
+static AUDIO_STUTTER_DIAG_EVENT_HEAD: AtomicU64 = AtomicU64::new(0);
+static AUDIO_STUTTER_DIAG_EVENTS: std::sync::LazyLock<
+    [AudioDiagEventSlot; AUDIO_STUTTER_DIAG_EVENT_COUNT],
+> = std::sync::LazyLock::new(|| std::array::from_fn(|_| AudioDiagEventSlot::new()));
 static OUTPUT_TIMING_BACKEND: AtomicU8 = AtomicU8::new(OutputTelemetryBackend::Unknown as u8);
 static OUTPUT_TIMING_REQUESTED_MODE: AtomicU8 = AtomicU8::new(1);
 static OUTPUT_TIMING_NATIVE_FALLBACK: AtomicBool = AtomicBool::new(false);
@@ -561,8 +674,100 @@ pub(crate) fn timing_diag_last_callback_gap_ns() -> u64 {
 }
 
 #[inline(always)]
+fn stutter_diag_enabled() -> bool {
+    log::log_enabled!(log::Level::Trace)
+}
+
+#[inline(always)]
+fn stutter_diag_callback_gap_threshold_ns() -> u64 {
+    let device_period_ns = OUTPUT_TIMING_DEVICE_PERIOD_NS.load(Ordering::Relaxed);
+    if device_period_ns > 0 {
+        return device_period_ns.saturating_mul(2).max(5_000_000);
+    }
+    let sample_rate_hz = OUTPUT_TIMING_SAMPLE_RATE_HZ.load(Ordering::Relaxed);
+    let buffer_frames = OUTPUT_TIMING_BUFFER_FRAMES.load(Ordering::Relaxed);
+    if sample_rate_hz > 0 && buffer_frames > 0 {
+        let buffer_ns =
+            (u64::from(buffer_frames) * 1_000_000_000).saturating_div(u64::from(sample_rate_hz));
+        return buffer_ns.saturating_mul(2).max(5_000_000);
+    }
+    10_000_000
+}
+
+fn record_stutter_diag_event(
+    kind: StutterDiagAudioEventKind,
+    at_host_nanos: u64,
+    value_ns: u64,
+    timing_quality: OutputTimingQuality,
+) {
+    if !stutter_diag_enabled() {
+        return;
+    }
+    let seq = AUDIO_STUTTER_DIAG_EVENT_HEAD.fetch_add(1, Ordering::Relaxed) + 1;
+    let slot = &AUDIO_STUTTER_DIAG_EVENTS[(seq as usize - 1) % AUDIO_STUTTER_DIAG_EVENT_COUNT];
+    slot.version.store((seq << 1) | 1, Ordering::Relaxed);
+    slot.at_host_nanos.store(at_host_nanos, Ordering::Relaxed);
+    slot.kind.store(kind as u8, Ordering::Relaxed);
+    slot.value_ns.store(value_ns, Ordering::Relaxed);
+    slot.sample_rate_hz.store(
+        OUTPUT_TIMING_SAMPLE_RATE_HZ.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    slot.buffer_frames.store(
+        OUTPUT_TIMING_BUFFER_FRAMES.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    slot.padding_frames.store(
+        OUTPUT_TIMING_PADDING_FRAMES.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    slot.queued_frames.store(
+        OUTPUT_TIMING_QUEUED_FRAMES.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    slot.device_period_ns.store(
+        OUTPUT_TIMING_DEVICE_PERIOD_NS.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    slot.estimated_output_delay_ns.store(
+        OUTPUT_TIMING_EST_DELAY_NS.load(Ordering::Relaxed),
+        Ordering::Relaxed,
+    );
+    slot.timing_quality
+        .store(timing_quality as u8, Ordering::Relaxed);
+    slot.version.store(seq << 1, Ordering::Release);
+}
+
+pub fn stutter_diag_trigger_seq() -> u64 {
+    AUDIO_STUTTER_DIAG_EVENT_HEAD.load(Ordering::Acquire)
+}
+
+pub fn collect_stutter_diag_events(
+    now_host_nanos: u64,
+    window_ns: u64,
+    out: &mut Vec<StutterDiagAudioEvent>,
+) {
+    let head = AUDIO_STUTTER_DIAG_EVENT_HEAD.load(Ordering::Acquire);
+    let start = head.saturating_sub(AUDIO_STUTTER_DIAG_EVENT_COUNT as u64);
+    for seq in (start + 1)..=head {
+        let slot = &AUDIO_STUTTER_DIAG_EVENTS[(seq as usize - 1) % AUDIO_STUTTER_DIAG_EVENT_COUNT];
+        let Some((loaded_seq, event)) = slot.load() else {
+            continue;
+        };
+        if loaded_seq != seq || event.at_host_nanos == 0 {
+            continue;
+        }
+        if now_host_nanos.saturating_sub(event.at_host_nanos) <= window_ns {
+            out.push(event);
+        }
+    }
+}
+
+#[inline(always)]
 fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource) {
-    if !timing_diag_enabled() || anchor_nanos == 0 {
+    let timing_diag = timing_diag_enabled();
+    let stutter_diag = stutter_diag_enabled();
+    if anchor_nanos == 0 || (!timing_diag && !stutter_diag) {
         return;
     }
     let source_id = source as u8;
@@ -574,7 +779,16 @@ fn note_timing_diag_callback_gap(anchor_nanos: u64, source: CallbackClockSource)
         0
     };
     if prev_nanos != 0 && anchor_nanos >= prev_nanos {
-        AUDIO_TIMING_DIAG_LAST_GAP_NS.store(anchor_nanos - prev_nanos, Ordering::Relaxed);
+        let gap_ns = anchor_nanos - prev_nanos;
+        AUDIO_TIMING_DIAG_LAST_GAP_NS.store(gap_ns, Ordering::Relaxed);
+        if stutter_diag && gap_ns >= stutter_diag_callback_gap_threshold_ns() {
+            record_stutter_diag_event(
+                StutterDiagAudioEventKind::CallbackGap,
+                anchor_nanos,
+                gap_ns,
+                OutputTimingQuality::load(),
+            );
+        }
     }
 }
 
@@ -1290,6 +1504,12 @@ pub(crate) fn publish_output_timing(
 #[inline(always)]
 pub(crate) fn note_output_underrun() {
     OUTPUT_TIMING_UNDERRUNS.fetch_add(1, Ordering::Relaxed);
+    record_stutter_diag_event(
+        StutterDiagAudioEventKind::Underrun,
+        instant_nanos(Instant::now()),
+        0,
+        OutputTimingQuality::load(),
+    );
 }
 
 #[inline(always)]
@@ -1303,6 +1523,14 @@ pub(crate) fn publish_output_timing_quality(quality: OutputTimingQuality) {
 pub(crate) fn note_output_timing_sanity_failure(quality: OutputTimingQuality) {
     OUTPUT_TIMING_QUALITY.store(quality as u8, Ordering::Relaxed);
     OUTPUT_TIMING_SANITY_FAILURES.fetch_add(1, Ordering::Relaxed);
+    if !matches!(quality, OutputTimingQuality::Fallback) {
+        record_stutter_diag_event(
+            StutterDiagAudioEventKind::TimingSanity,
+            instant_nanos(Instant::now()),
+            0,
+            quality,
+        );
+    }
 }
 
 #[inline(always)]
@@ -1310,6 +1538,12 @@ pub(crate) fn note_output_timing_sanity_failure(quality: OutputTimingQuality) {
 pub(crate) fn note_output_clock_fallback() {
     note_output_timing_sanity_failure(OutputTimingQuality::Fallback);
     OUTPUT_TIMING_CLOCK_FALLBACKS.fetch_add(1, Ordering::Relaxed);
+    record_stutter_diag_event(
+        StutterDiagAudioEventKind::ClockFallback,
+        instant_nanos(Instant::now()),
+        0,
+        OutputTimingQuality::Fallback,
+    );
 }
 
 fn commit_played_music_map(

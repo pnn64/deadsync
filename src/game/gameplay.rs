@@ -36,6 +36,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
@@ -6458,6 +6459,114 @@ struct FrameStableDisplayClock {
     current_time_sec: f32,
     target_time_sec: f32,
     catching_up: bool,
+    error_over_threshold: bool,
+}
+
+const DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT: usize = 32;
+static DISPLAY_CLOCK_STUTTER_DIAG_TRIGGER_SEQ: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DisplayClockDiagEventKind {
+    ResetJump,
+    TargetJump,
+    ClampStep,
+    ErrorThreshold,
+    CatchUpStart,
+}
+
+impl std::fmt::Display for DisplayClockDiagEventKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let label = match self {
+            Self::ResetJump => "reset_jump",
+            Self::TargetJump => "target_jump",
+            Self::ClampStep => "clamp_step",
+            Self::ErrorThreshold => "error_threshold",
+            Self::CatchUpStart => "catch_up_start",
+        };
+        f.write_str(label)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DisplayClockDiagEvent {
+    pub at_host_nanos: u64,
+    pub kind: DisplayClockDiagEventKind,
+    pub target_time_sec: f32,
+    pub previous_time_sec: f32,
+    pub current_time_sec: f32,
+    pub error_seconds: f32,
+    pub step_seconds: f32,
+    pub limit_seconds: f32,
+}
+
+impl DisplayClockDiagEvent {
+    #[inline(always)]
+    const fn empty() -> Self {
+        Self {
+            at_host_nanos: 0,
+            kind: DisplayClockDiagEventKind::ResetJump,
+            target_time_sec: 0.0,
+            previous_time_sec: 0.0,
+            current_time_sec: 0.0,
+            error_seconds: 0.0,
+            step_seconds: 0.0,
+            limit_seconds: 0.0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DisplayClockDiagRing {
+    events: [DisplayClockDiagEvent; DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT],
+    cursor: usize,
+    len: usize,
+    last_trigger_seq: u64,
+}
+
+impl DisplayClockDiagRing {
+    #[inline(always)]
+    const fn new() -> Self {
+        Self {
+            events: [DisplayClockDiagEvent::empty(); DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT],
+            cursor: 0,
+            len: 0,
+            last_trigger_seq: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn push(&mut self, event: DisplayClockDiagEvent) {
+        self.events[self.cursor] = event;
+        self.cursor = (self.cursor + 1) % DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT;
+        self.len = self
+            .len
+            .saturating_add(1)
+            .min(DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT);
+        self.last_trigger_seq =
+            DISPLAY_CLOCK_STUTTER_DIAG_TRIGGER_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
+    }
+
+    fn collect_recent(
+        &self,
+        now_host_nanos: u64,
+        window_ns: u64,
+        out: &mut Vec<DisplayClockDiagEvent>,
+    ) {
+        let start = self
+            .cursor
+            .saturating_add(DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT)
+            .saturating_sub(self.len)
+            % DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT;
+        for i in 0..self.len {
+            let event = self.events[(start + i) % DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT];
+            if event.at_host_nanos == 0 {
+                continue;
+            }
+            if now_host_nanos.saturating_sub(event.at_host_nanos) <= window_ns {
+                out.push(event);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -6473,6 +6582,7 @@ impl FrameStableDisplayClock {
             current_time_sec: time_sec,
             target_time_sec: time_sec,
             catching_up: false,
+            error_over_threshold: false,
         }
     }
 
@@ -6481,6 +6591,7 @@ impl FrameStableDisplayClock {
         self.current_time_sec = time_sec;
         self.target_time_sec = time_sec;
         self.catching_up = false;
+        self.error_over_threshold = false;
         time_sec
     }
 }
@@ -6637,6 +6748,7 @@ pub struct State {
     pub current_beat_display: f32,
     pub current_music_time_display: f32,
     display_clock: FrameStableDisplayClock,
+    display_clock_diag: DisplayClockDiagRing,
     pub note_spawn_cursor: [usize; MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     finalized_row_outcomes: [Vec<Option<FinalizedRowOutcome>>; MAX_PLAYERS],
@@ -7816,6 +7928,22 @@ pub fn display_clock_health(state: &State) -> DisplayClockHealth {
 }
 
 #[inline(always)]
+pub fn display_clock_stutter_diag_trigger_seq(state: &State) -> u64 {
+    state.display_clock_diag.last_trigger_seq
+}
+
+pub fn collect_display_clock_stutter_diag_events(
+    state: &State,
+    now_host_nanos: u64,
+    window_ns: u64,
+    out: &mut Vec<DisplayClockDiagEvent>,
+) {
+    state
+        .display_clock_diag
+        .collect_recent(now_host_nanos, window_ns, out);
+}
+
+#[inline(always)]
 fn autoplay_blocks_scoring(state: &State) -> bool {
     live_autoplay_enabled(state)
 }
@@ -8577,8 +8705,41 @@ const DISPLAY_CLOCK_RESET_ERROR_S: f32 = 0.100;
 const DISPLAY_CLOCK_MAX_STEP_S: f32 = 1.0 / 60.0;
 
 #[inline(always)]
+fn display_clock_stutter_diag_enabled() -> bool {
+    log::log_enabled!(log::Level::Trace)
+}
+
+fn note_display_clock_diag_event(
+    diag: &mut DisplayClockDiagRing,
+    at_host_nanos: u64,
+    kind: DisplayClockDiagEventKind,
+    target_time_sec: f32,
+    previous_time_sec: f32,
+    current_time_sec: f32,
+    error_seconds: f32,
+    step_seconds: f32,
+    limit_seconds: f32,
+) {
+    if !display_clock_stutter_diag_enabled() || at_host_nanos == 0 {
+        return;
+    }
+    diag.push(DisplayClockDiagEvent {
+        at_host_nanos,
+        kind,
+        target_time_sec,
+        previous_time_sec,
+        current_time_sec,
+        error_seconds,
+        step_seconds,
+        limit_seconds,
+    });
+}
+
+#[inline(always)]
 fn frame_stable_display_music_time(
     display_clock: &mut FrameStableDisplayClock,
+    diag: &mut DisplayClockDiagRing,
+    at_host_nanos: u64,
     target_display_time_sec: f32,
     delta_time: f32,
     seconds_per_second: f32,
@@ -8600,8 +8761,22 @@ fn frame_stable_display_music_time(
         1.0
     };
     let previous_display_time_sec = display_clock.current_time_sec;
+    let previous_catching_up = display_clock.catching_up;
+    let previous_error_over_threshold = display_clock.error_over_threshold;
+    let target_delta = target_display_time_sec - previous_display_time_sec;
     let max_error = DISPLAY_CLOCK_RESET_ERROR_S * slope;
-    if (target_display_time_sec - previous_display_time_sec).abs() > max_error {
+    if target_delta.abs() > max_error {
+        note_display_clock_diag_event(
+            diag,
+            at_host_nanos,
+            DisplayClockDiagEventKind::ResetJump,
+            target_display_time_sec,
+            previous_display_time_sec,
+            target_display_time_sec,
+            target_delta,
+            target_delta,
+            max_error,
+        );
         return display_clock.reset(target_display_time_sec);
     }
 
@@ -8609,9 +8784,24 @@ fn frame_stable_display_music_time(
     let correction_alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
     let mut corrected = advanced + (target_display_time_sec - advanced) * correction_alpha;
     let max_step = DISPLAY_CLOCK_MAX_STEP_S * slope;
+    if target_delta.abs() > max_step * 2.0 {
+        note_display_clock_diag_event(
+            diag,
+            at_host_nanos,
+            DisplayClockDiagEventKind::TargetJump,
+            target_display_time_sec,
+            previous_display_time_sec,
+            corrected,
+            target_delta,
+            target_delta,
+            max_step * 2.0,
+        );
+    }
     let step = corrected - previous_display_time_sec;
+    let mut clamped_step = false;
     if step.abs() > max_step * 1.2 {
         corrected = previous_display_time_sec + step.signum() * max_step;
+        clamped_step = true;
     }
     let min_allowed = target_display_time_sec - DISPLAY_CLOCK_MAX_LAG_S * slope;
     let max_allowed = target_display_time_sec + DISPLAY_CLOCK_MAX_LEAD_S * slope;
@@ -8619,7 +8809,48 @@ fn frame_stable_display_music_time(
         .clamp(min_allowed, max_allowed)
         .max(previous_display_time_sec);
     display_clock.current_time_sec = corrected;
-    display_clock.catching_up = (target_display_time_sec - corrected).abs() > max_step * 0.5;
+    let error_seconds = target_display_time_sec - corrected;
+    display_clock.catching_up = error_seconds.abs() > max_step * 0.5;
+    display_clock.error_over_threshold = error_seconds.abs() > max_step;
+    if clamped_step {
+        note_display_clock_diag_event(
+            diag,
+            at_host_nanos,
+            DisplayClockDiagEventKind::ClampStep,
+            target_display_time_sec,
+            previous_display_time_sec,
+            corrected,
+            error_seconds,
+            corrected - previous_display_time_sec,
+            max_step,
+        );
+    }
+    if !previous_error_over_threshold && display_clock.error_over_threshold {
+        note_display_clock_diag_event(
+            diag,
+            at_host_nanos,
+            DisplayClockDiagEventKind::ErrorThreshold,
+            target_display_time_sec,
+            previous_display_time_sec,
+            corrected,
+            error_seconds,
+            corrected - previous_display_time_sec,
+            max_step,
+        );
+    }
+    if !previous_catching_up && display_clock.catching_up {
+        note_display_clock_diag_event(
+            diag,
+            at_host_nanos,
+            DisplayClockDiagEventKind::CatchUpStart,
+            target_display_time_sec,
+            previous_display_time_sec,
+            corrected,
+            error_seconds,
+            corrected - previous_display_time_sec,
+            max_step * 0.5,
+        );
+    }
     corrected
 }
 
@@ -9808,6 +10039,7 @@ pub fn init(
         current_beat_display: init_beat,
         current_music_time_display: init_music_time,
         display_clock: FrameStableDisplayClock::new(init_music_time),
+        display_clock_diag: DisplayClockDiagRing::new(),
         note_spawn_cursor: note_range_start,
         judged_row_cursor: [0; MAX_PLAYERS],
         finalized_row_outcomes: std::array::from_fn(|_| vec![None; row_entries.len()]),
@@ -14178,8 +14410,15 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     state.current_music_time_ns = music_time_ns;
     state.current_music_time = music_time_sec;
     let target_display_music_time_sec = music_time_sec;
+    let display_diag_host_nanos = if song_clock.valid_at_host_nanos != 0 {
+        song_clock.valid_at_host_nanos
+    } else {
+        crate::engine::host_time::instant_nanos(Instant::now())
+    };
     let display_music_time_sec = frame_stable_display_music_time(
         &mut state.display_clock,
+        &mut state.display_clock_diag,
+        display_diag_host_nanos,
         target_display_music_time_sec,
         delta_time,
         song_clock.seconds_per_second,
@@ -15719,16 +15958,32 @@ mod tests {
     #[test]
     fn display_clock_snaps_on_first_update() {
         let mut display_clock = FrameStableDisplayClock::new(10.0);
-        let display_time =
-            frame_stable_display_music_time(&mut display_clock, 12.5, 0.001, 1.0, true);
+        let mut diag = DisplayClockDiagRing::new();
+        let display_time = frame_stable_display_music_time(
+            &mut display_clock,
+            &mut diag,
+            1,
+            12.5,
+            0.001,
+            1.0,
+            true,
+        );
         assert!((display_time - 12.5).abs() < 0.000_5);
     }
 
     #[test]
     fn display_clock_advances_smoothly_toward_target() {
         let mut display_clock = FrameStableDisplayClock::new(100.0);
-        let display_time =
-            frame_stable_display_music_time(&mut display_clock, 100.004, 0.001, 1.0, false);
+        let mut diag = DisplayClockDiagRing::new();
+        let display_time = frame_stable_display_music_time(
+            &mut display_clock,
+            &mut diag,
+            1,
+            100.004,
+            0.001,
+            1.0,
+            false,
+        );
         assert!(display_time > 100.0);
         assert!(display_time < 100.004);
     }
@@ -15736,8 +15991,16 @@ mod tests {
     #[test]
     fn display_clock_snaps_back_when_far_from_target() {
         let mut display_clock = FrameStableDisplayClock::new(100.0);
-        let display_time =
-            frame_stable_display_music_time(&mut display_clock, 100.250, 0.001, 1.0, false);
+        let mut diag = DisplayClockDiagRing::new();
+        let display_time = frame_stable_display_music_time(
+            &mut display_clock,
+            &mut diag,
+            1,
+            100.250,
+            0.001,
+            1.0,
+            false,
+        );
         assert!((display_time - 100.250).abs() < 0.000_5);
     }
 
