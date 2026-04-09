@@ -7,6 +7,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const LUA_PLAYERS: usize = 2;
+const SONG_LUA_PRODUCT_FAMILY: &str = "ITGmania";
+const SONG_LUA_PRODUCT_ID: &str = "ITGmania";
+const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
 const EASING_NAMES: &[&str] = &[
     "linear",
     "inQuad",
@@ -763,6 +766,18 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("SCREEN_TOP", 0)?;
     globals.set("SCREEN_RIGHT", screen_width.round() as i32)?;
     globals.set("SCREEN_BOTTOM", screen_height.round() as i32)?;
+    globals.set(
+        "ProductFamily",
+        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_PRODUCT_FAMILY))?,
+    )?;
+    globals.set(
+        "ProductID",
+        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_PRODUCT_ID))?,
+    )?;
+    globals.set(
+        "ProductVersion",
+        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_PRODUCT_VERSION))?,
+    )?;
     globals.set(
         "ASPECT_SCALE_FACTOR",
         screen_width / (640.0 * (screen_height / 480.0)),
@@ -3978,6 +3993,45 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "StartupReady");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_product_globals() {
+        let song_dir = test_dir("product-globals");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local version = ProductVersion()
+local product = ProductID()
+local family = ProductFamily()
+
+if version ~= "1.2.0" then
+    error("unexpected ProductVersion: " .. tostring(version))
+end
+if product ~= "ITGmania" then
+    error("unexpected ProductID: " .. tostring(product))
+end
+if family ~= "ITGmania" then
+    error("unexpected ProductFamily: " .. tostring(family))
+end
+
+mod_actions = {
+    {4, product .. ":" .. family .. ":" .. version, true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Product Globals"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "ITGmania:ITGmania:1.2.0");
     }
 
     #[test]
