@@ -538,7 +538,13 @@ pub(super) fn write_current_screen_file(screen: CurrentScreen) {
         return;
     }
     let path = dirs::app_dirs().current_screen_path();
-    let name = format!("{screen}");
+    if let Some(parent) = path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            log::warn!("Failed to create current_screen.txt parent dir: {e}");
+            return;
+        }
+    }
+    let name = screen.current_screen_file_name();
     if let Err(e) = std::fs::write(&path, name) {
         log::warn!("Failed to write current_screen.txt: {e}");
     }

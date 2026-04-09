@@ -21,7 +21,6 @@ pub mod select_mode;
 pub mod select_music;
 pub mod select_profile;
 pub mod select_style;
-use std::fmt;
 use std::path::PathBuf;
 
 use crate::config::DisplayMode;
@@ -114,32 +113,57 @@ pub enum Screen {
     PlayerOptions,
 }
 
-impl fmt::Display for Screen {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            Self::Menu => "Menu",
-            Self::Gameplay => "Gameplay",
-            Self::Options => "Options",
-            Self::Credits => "Credits",
-            Self::ManageLocalProfiles => "ManageLocalProfiles",
-            Self::Init => "Init",
-            Self::Initials => "Initials",
-            Self::GameOver => "GameOver",
-            Self::Mappings => "Mappings",
-            Self::Input => "Input",
-            Self::SelectProfile => "SelectProfile",
-            Self::SelectColor => "SelectColor",
-            Self::SelectStyle => "SelectStyle",
-            Self::SelectPlayMode => "SelectPlayMode",
-            Self::ProfileLoad => "ProfileLoad",
-            Self::SelectMusic => "SelectMusic",
-            Self::SelectCourse => "SelectCourse",
-            Self::Sandbox => "Sandbox",
-            Self::Evaluation => "Evaluation",
-            Self::EvaluationSummary => "EvaluationSummary",
-            Self::PlayerOptions => "PlayerOptions",
-        };
-        f.write_str(s)
+impl Screen {
+    /// Stable external screen name written to `save/current_screen.txt`.
+    pub const fn current_screen_file_name(self) -> &'static str {
+        match self {
+            Self::Menu => "ScreenTitleMenu",
+            Self::Gameplay => "ScreenGameplay",
+            Self::Options => "ScreenOptionsService",
+            Self::Credits => "ScreenCredits",
+            Self::ManageLocalProfiles => "ScreenOptionsManageProfiles",
+            Self::Init => "ScreenInit",
+            Self::Initials => "ScreenNameEntryTraditional",
+            Self::GameOver => "ScreenGameOver",
+            Self::Mappings => "ScreenMapControllers",
+            Self::Input => "ScreenTestInput",
+            Self::SelectProfile => "ScreenSelectProfile",
+            Self::SelectColor => "ScreenSelectColor",
+            Self::SelectStyle => "ScreenSelectStyle",
+            Self::SelectPlayMode => "ScreenSelectPlayMode",
+            Self::ProfileLoad => "ScreenProfileLoad",
+            Self::SelectMusic => "ScreenSelectMusic",
+            Self::SelectCourse => "ScreenSelectCourse",
+            Self::Sandbox => "ScreenSandbox",
+            Self::Evaluation => "ScreenEvaluationStage",
+            Self::EvaluationSummary => "ScreenEvaluationSummary",
+            Self::PlayerOptions => "ScreenPlayerOptions",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Screen;
+
+    #[test]
+    fn current_screen_file_names_match_theme_names() {
+        assert_eq!(Screen::Menu.current_screen_file_name(), "ScreenTitleMenu");
+        assert_eq!(
+            Screen::Options.current_screen_file_name(),
+            "ScreenOptionsService"
+        );
+        assert_eq!(
+            Screen::ManageLocalProfiles.current_screen_file_name(),
+            "ScreenOptionsManageProfiles"
+        );
+        assert_eq!(Screen::Mappings.current_screen_file_name(), "ScreenMapControllers");
+        assert_eq!(Screen::Input.current_screen_file_name(), "ScreenTestInput");
+        assert_eq!(Screen::Evaluation.current_screen_file_name(), "ScreenEvaluationStage");
+        assert_eq!(
+            Screen::PlayerOptions.current_screen_file_name(),
+            "ScreenPlayerOptions"
+        );
     }
 }
 
