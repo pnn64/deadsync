@@ -7,11 +7,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const LUA_PLAYERS: usize = 2;
+const SONG_LUA_NOTE_COLUMNS: usize = 4;
 const SONG_LUA_PRODUCT_FAMILY: &str = "ITGmania";
 const SONG_LUA_PRODUCT_ID: &str = "ITGmania";
 const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
 const THEME_RECEPTOR_Y_STD: f32 = -125.0;
 const THEME_RECEPTOR_Y_REV: f32 = 145.0;
+const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
 const EASING_NAMES: &[&str] = &[
     "linear",
     "inQuad",
@@ -848,6 +850,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("PREFSMAN", prefsmgr)?;
     globals.set("THEME", create_theme_table(lua)?)?;
     globals.set("NOTESKIN", create_noteskin_table(lua, context)?)?;
+    globals.set("ArrowEffects", create_arrow_effects_table(lua)?)?;
 
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context)?;
@@ -962,6 +965,75 @@ struct TopScreenLuaTables {
     players: [Table; LUA_PLAYERS],
 }
 
+#[inline(always)]
+fn song_lua_column_x(column_index: usize) -> f32 {
+    SONG_LUA_COLUMN_X.get(column_index).copied().unwrap_or(0.0)
+}
+
+fn create_arrow_effects_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "GetYOffset",
+        lua.create_function(|_, args: MultiValue| {
+            Ok(args
+                .get(2)
+                .cloned()
+                .and_then(read_f32)
+                .map(|beat| -64.0 * beat)
+                .unwrap_or(0.0_f32))
+        })?,
+    )?;
+    table.set(
+        "GetYPos",
+        lua.create_function(|_, args: MultiValue| {
+            Ok(args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32))
+        })?,
+    )?;
+    table.set(
+        "GetXPos",
+        lua.create_function(|_, args: MultiValue| {
+            let column_index = args
+                .get(1)
+                .cloned()
+                .and_then(read_f32)
+                .map(|value| value as isize - 1)
+                .filter(|value| *value >= 0)
+                .map(|value| value as usize)
+                .unwrap_or(0);
+            Ok(song_lua_column_x(column_index))
+        })?,
+    )?;
+    table.set(
+        "GetZPos",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetRotationX",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetRotationY",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetRotationZ",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetZoom",
+        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+    )?;
+    table.set(
+        "GetAlpha",
+        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+    )?;
+    table.set(
+        "GetGlow",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    Ok(table)
+}
+
 fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if let Some(children) = actor.get::<Option<Table>>("__songlua_children")? {
         return Ok(children);
@@ -994,22 +1066,211 @@ fn copy_dummy_actor_tags(from: &Table, into: &Table) -> mlua::Result<()> {
 }
 
 fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
-    let child = create_dummy_actor(lua, "ChildActor")?;
+    let parent_type = parent.get::<Option<String>>("__songlua_actor_type")?;
+    let player_index = parent.get::<Option<i64>>("__songlua_player_index")?;
+    let child = if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
+        && name.eq_ignore_ascii_case("NoteField")
+        && let Some(player_index) = player_index
+    {
+        create_note_field_actor(lua, player_index as usize)?
+    } else {
+        create_dummy_actor(lua, "ChildActor")?
+    };
     copy_dummy_actor_tags(parent, &child)?;
-    if parent
-        .get::<Option<String>>("__songlua_actor_type")?
+    child.set("__songlua_parent", parent.clone())?;
+    if parent_type
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
     {
         child.set("__songlua_player_child_name", name)?;
-    } else if parent
-        .get::<Option<String>>("__songlua_actor_type")?
+    } else if parent_type
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
     {
         child.set("__songlua_top_screen_child_name", name)?;
     }
     Ok(child)
+}
+
+fn create_note_field_actor(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
+    let actor = create_dummy_actor(lua, "NoteField")?;
+    actor.set("__songlua_player_index", player_index as i64)?;
+    actor.set("__songlua_player_child_name", "NoteField")?;
+    actor.set("__songlua_state_x", 0.0_f32)?;
+    actor.set(
+        "__songlua_state_y",
+        0.5 * (THEME_RECEPTOR_Y_STD + THEME_RECEPTOR_Y_REV),
+    )?;
+    actor.set("__songlua_state_z", 0.0_f32)?;
+    Ok(actor)
+}
+
+fn note_field_column_actors(lua: &Lua, note_field: &Table) -> mlua::Result<Table> {
+    if let Some(columns) = note_field.get::<Option<Table>>("__songlua_note_columns")? {
+        return Ok(columns);
+    }
+    let columns = lua.create_table()?;
+    let player_index = note_field
+        .get::<Option<i64>>("__songlua_player_index")?
+        .unwrap_or(0) as usize;
+    for column_index in 0..SONG_LUA_NOTE_COLUMNS {
+        let column = create_note_column_actor(lua, note_field, player_index, column_index)?;
+        columns.raw_set(column_index + 1, column)?;
+    }
+    note_field.set("__songlua_note_columns", columns.clone())?;
+    Ok(columns)
+}
+
+fn create_note_column_actor(
+    lua: &Lua,
+    note_field: &Table,
+    player_index: usize,
+    column_index: usize,
+) -> mlua::Result<Table> {
+    let actor = create_dummy_actor(lua, "NoteColumnRenderer")?;
+    actor.set("__songlua_parent", note_field.clone())?;
+    actor.set("__songlua_player_index", player_index as i64)?;
+    actor.set("__songlua_state_x", song_lua_column_x(column_index))?;
+    actor.set("__songlua_state_y", 0.0_f32)?;
+    actor.set("__songlua_state_z", 0.0_f32)?;
+
+    let pos_handler = create_note_column_spline_handler(lua)?;
+    let rot_handler = create_note_column_spline_handler(lua)?;
+    let zoom_handler = create_note_column_spline_handler(lua)?;
+    actor.set(
+        "GetPosHandler",
+        lua.create_function(move |_, _args: MultiValue| Ok(pos_handler.clone()))?,
+    )?;
+    actor.set(
+        "GetRotHandler",
+        lua.create_function(move |_, _args: MultiValue| Ok(rot_handler.clone()))?,
+    )?;
+    actor.set(
+        "GetZoomHandler",
+        lua.create_function(move |_, _args: MultiValue| Ok(zoom_handler.clone()))?,
+    )?;
+    Ok(actor)
+}
+
+fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
+    let handler = lua.create_table()?;
+    let spline = create_cubic_spline_table(lua)?;
+    handler.set("__songlua_spline_mode", "NoteColumnSplineMode_Offset")?;
+    handler.set("__songlua_subtract_song_beat", false)?;
+    handler.set("__songlua_receptor_t", 0.0_f32)?;
+    handler.set("__songlua_beats_per_t", 1.0_f32)?;
+    handler.set(
+        "GetSpline",
+        lua.create_function(move |_, _args: MultiValue| Ok(spline.clone()))?,
+    )?;
+    handler.set(
+        "SetSplineMode",
+        lua.create_function({
+            let handler = handler.clone();
+            move |_, args: MultiValue| {
+                if let Some(mode) = args.get(1).cloned().and_then(read_string) {
+                    handler.set("__songlua_spline_mode", mode)?;
+                }
+                Ok(handler.clone())
+            }
+        })?,
+    )?;
+    handler.set(
+        "SetSubtractSongBeat",
+        lua.create_function({
+            let handler = handler.clone();
+            move |_, args: MultiValue| {
+                handler.set(
+                    "__songlua_subtract_song_beat",
+                    args.get(1).is_some_and(truthy),
+                )?;
+                Ok(handler.clone())
+            }
+        })?,
+    )?;
+    handler.set(
+        "SetReceptorT",
+        lua.create_function({
+            let handler = handler.clone();
+            move |_, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    handler.set("__songlua_receptor_t", value)?;
+                }
+                Ok(handler.clone())
+            }
+        })?,
+    )?;
+    handler.set(
+        "SetBeatsPerT",
+        lua.create_function({
+            let handler = handler.clone();
+            move |_, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    handler.set("__songlua_beats_per_t", value)?;
+                }
+                Ok(handler.clone())
+            }
+        })?,
+    )?;
+    Ok(handler)
+}
+
+fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
+    let spline = lua.create_table()?;
+    spline.set("__songlua_spline_size", 0_i64)?;
+    spline.set("__songlua_spline_points", lua.create_table()?)?;
+    spline.set(
+        "SetSize",
+        lua.create_function({
+            let spline = spline.clone();
+            move |_, args: MultiValue| {
+                if let Some(size) = args.get(1).cloned().and_then(read_f32) {
+                    spline.set("__songlua_spline_size", size.max(0.0).round() as i64)?;
+                }
+                Ok(spline.clone())
+            }
+        })?,
+    )?;
+    spline.set(
+        "SetPoint",
+        lua.create_function({
+            let spline = spline.clone();
+            move |lua, args: MultiValue| {
+                let Some(index) = args
+                    .get(1)
+                    .cloned()
+                    .and_then(read_f32)
+                    .map(|value| value.max(1.0).round() as i64)
+                else {
+                    return Ok(spline.clone());
+                };
+                let points = spline.get::<Table>("__songlua_spline_points")?;
+                match args.get(2) {
+                    Some(Value::Table(point)) => {
+                        points.raw_set(index, point.clone())?;
+                    }
+                    _ => {
+                        let point = lua.create_table()?;
+                        point.raw_set(1, 0.0_f32)?;
+                        point.raw_set(2, 0.0_f32)?;
+                        point.raw_set(3, 0.0_f32)?;
+                        points.raw_set(index, point)?;
+                    }
+                }
+                Ok(spline.clone())
+            }
+        })?,
+    )?;
+    spline.set(
+        "Solve",
+        lua.create_function({
+            let spline = spline.clone();
+            move |_, _args: MultiValue| Ok(spline.clone())
+        })?,
+    )?;
+    Ok(spline)
 }
 
 fn create_top_screen_table(
@@ -1022,6 +1283,9 @@ fn create_top_screen_table(
         create_top_screen_player_actor(lua, players[0].clone(), 0)?,
         create_top_screen_player_actor(lua, players[1].clone(), 1)?,
     ];
+    for player_actor in &player_actors {
+        player_actor.set("__songlua_parent", top_screen.clone())?;
+    }
     let player_actors_for_get_child = player_actors.clone();
     top_screen.set(
         "GetChild",
@@ -1357,6 +1621,30 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     install_speedmod_method(lua, &table, "MMod", player.speedmod, SongLuaSpeedMod::M)?;
     install_speedmod_method(lua, &table, "AMod", player.speedmod, SongLuaSpeedMod::A)?;
     install_speedmod_method(lua, &table, "XMod", player.speedmod, SongLuaSpeedMod::X)?;
+    table.set(
+        "Mirror",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    table.set(
+        "Left",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    table.set(
+        "Right",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    table.set(
+        "Skew",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "Tilt",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetReversePercentForColumn",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
     table.set("__songlua_noteskin_name", player.noteskin_name.clone())?;
     table.set(
         "NoteSkin",
@@ -1623,6 +1911,7 @@ fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<(
         let Value::Table(child) = child? else {
             continue;
         };
+        child.set("__songlua_parent", actor.clone())?;
         run_actor_init_commands_for_table(lua, &child)?;
     }
     Ok(())
@@ -1636,6 +1925,7 @@ fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resul
         let Value::Table(child) = child? else {
             continue;
         };
+        child.set("__songlua_parent", actor.clone())?;
         run_actor_startup_commands_for_table(lua, &child)?;
     }
     Ok(())
@@ -1649,6 +1939,7 @@ fn run_actor_update_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Resul
         let Value::Table(child) = child? else {
             continue;
         };
+        child.set("__songlua_parent", actor.clone())?;
         run_actor_update_functions_for_table(lua, &child)?;
     }
     Ok(())
@@ -3063,6 +3354,18 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             }
         })?,
     )?;
+    actor.set(
+        "z",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    actor.set("__songlua_state_z", value)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
     for name in ["skewx", "addy", "zoomz"] {
         actor.set(
             name,
@@ -3251,8 +3554,8 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "SetWidth",
         "strokecolor",
         "texturetranslate",
+        "vanishpoint",
         "wag",
-        "z",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
@@ -3283,6 +3586,43 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 };
                 capture_block_set_color(lua, &actor, color)?;
                 Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetDidTapNoteCallback",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                match args.get(1) {
+                    Some(Value::Function(function)) => {
+                        actor.set("__songlua_did_tap_note_callback", function.clone())?;
+                    }
+                    _ => {
+                        actor.set("__songlua_did_tap_note_callback", Value::Nil)?;
+                    }
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetColumnActors",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let is_note_field = actor
+                    .get::<Option<String>>("__songlua_player_child_name")?
+                    .as_deref()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("NoteField"))
+                    || actor
+                        .get::<Option<String>>("__songlua_actor_type")?
+                        .as_deref()
+                        .is_some_and(|kind| kind.eq_ignore_ascii_case("NoteField"));
+                if !is_note_field {
+                    return Ok(Value::Nil);
+                }
+                Ok(Value::Table(note_field_column_actors(lua, &actor)?))
             }
         })?,
     )?;
@@ -3378,6 +3718,17 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetName",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                Ok(Value::String(lua.create_string(
+                    actor.get::<Option<String>>("Name")?.unwrap_or_default(),
+                )?))
+            }
+        })?,
+    )?;
+    actor.set(
         "GetY",
         lua.create_function({
             let actor = actor.clone();
@@ -3390,11 +3741,47 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     actor.set(
         "GetZoom",
-        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_zoom")?
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
     )?;
     actor.set(
         "GetZ",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_z")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetRotationX",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_rot_x_deg")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetRotationY",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_rot_y_deg")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
     )?;
     actor.set(
         "GetRotationZ",
@@ -3408,14 +3795,50 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetZoomX",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_zoom_x")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetZoomY",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_zoom_y")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
         "GetZoomZ",
-        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_zoom_z")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
     )?;
     actor.set(
         "GetParent",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| Ok(actor.clone())
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<Table>>("__songlua_parent")?
+                    .unwrap_or_else(|| actor.clone()))
+            }
         })?,
     )?;
     Ok(())
@@ -5076,6 +5499,63 @@ return Def.ActorFrame{
         assert_eq!(overlay.initial_state.x, 123.0);
         assert_eq!(overlay.initial_state.y, 234.0);
         assert_eq!(overlay.initial_state.size, Some([48.0, 64.0]));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_notefield_column_api() {
+        let song_dir = test_dir("notefield-column-api");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    InitCommand=function(self)
+        self:SetUpdateFunction(function(actor)
+            local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+            local pp = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+            local nf = pp:GetChild("NoteField")
+            local cols = nf:GetColumnActors()
+            if type(cols) ~= "table" or #cols ~= 4 then
+                error("expected four note columns")
+            end
+            nf:SetDidTapNoteCallback(function() end)
+            local zh = cols[1]:GetZoomHandler()
+            zh:SetSplineMode("NoteColumnSplineMode_Offset")
+                :SetSubtractSongBeat(false)
+                :SetReceptorT(0.0)
+                :SetBeatsPerT(1/48)
+            local spline = zh:GetSpline()
+            spline:SetSize(2)
+            spline:SetPoint(1, {0, 0, 0})
+            spline:SetPoint(2, {-1, -1, -1})
+            spline:Solve()
+            local po = ps:GetPlayerOptions("ModsLevel_Song")
+            if po:Mirror() ~= false or po:Left() ~= false or po:Right() ~= false then
+                error("unexpected lane permutation")
+            end
+            if po:Skew() ~= 0 or po:Tilt() ~= 0 then
+                error("unexpected skew or tilt")
+            end
+            if po:GetReversePercentForColumn(0) ~= 0 then
+                error("unexpected reverse percent")
+            end
+            mod_actions = {
+                {4, string.format("%.0f:%.0f", ArrowEffects.GetXPos(ps, 1, 0), ArrowEffects.GetYPos(ps, 1, 0)), true},
+            }
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "NoteField Column API"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "-96:0");
     }
 
     #[test]
