@@ -45,6 +45,7 @@ pub fn fixture() -> GameplayBenchFixture {
         state.autosync_offset_sample_count = 11;
         state.music_rate = 1.15;
         state.current_music_time_display = 48.25;
+        state.current_music_time_visible_ns[0] = 48_250_000_000;
         state.current_music_time_visible[0] = 48.25;
         state.density_graph_first_second = 0.0;
         state.density_graph_last_second = 120.0;

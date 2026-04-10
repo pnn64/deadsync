@@ -113,6 +113,7 @@ pub fn fixture() -> NotefieldBenchFixture {
 fn prime_visible_window(state: &mut gameplay::State) {
     let beat = VISIBLE_BEAT;
     let time = state.timing_players[0].get_time_for_beat(beat);
+    let time_ns = state.timing_players[0].get_time_for_beat_ns(beat);
     state.total_elapsed_in_screen = 7.25;
     state.current_beat = beat;
     state.current_beat_display = beat;
@@ -120,6 +121,8 @@ fn prime_visible_window(state: &mut gameplay::State) {
     state.current_music_time_display = time;
     state.current_beat_visible[0] = beat;
     state.current_beat_visible[1] = beat;
+    state.current_music_time_visible_ns[0] = time_ns;
+    state.current_music_time_visible_ns[1] = time_ns;
     state.current_music_time_visible[0] = time;
     state.current_music_time_visible[1] = time;
 

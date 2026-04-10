@@ -27,7 +27,7 @@ use crate::game::parsing::noteskin::{
     ModelDrawState, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
 };
 use crate::game::{
-    gameplay::{ActiveHold, PlayerRuntime, State},
+    gameplay::{ActiveHold, PlayerRuntime, SongTimeNs, State},
     profile, scores,
     scroll::ScrollSpeedSetting,
 };
@@ -2635,17 +2635,33 @@ fn let_go_head_beat(note_beat: f32, end_beat: f32, last_held_beat: f32, visible_
 }
 
 #[inline(always)]
-fn note_window_bounds_by_time(
-    note_times: &[f32],
+fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
+    let nanos = (seconds as f64 * 1_000_000_000.0).round();
+    nanos.clamp(i64::MIN as f64, i64::MAX as f64) as SongTimeNs
+}
+
+#[inline(always)]
+fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
+    (time_ns as f64 * 1.0e-9) as f32
+}
+
+#[inline(always)]
+fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
+    ((lhs as i128 - rhs as i128) as f64 * 1.0e-9) as f32
+}
+
+#[inline(always)]
+fn note_window_bounds_by_time_ns(
+    note_times_ns: &[SongTimeNs],
     start: usize,
     end: usize,
-    min_time: f32,
-    max_time: f32,
+    min_time_ns: SongTimeNs,
+    max_time_ns: SongTimeNs,
 ) -> (usize, usize) {
-    let note_times = &note_times[start..end];
+    let note_times_ns = &note_times_ns[start..end];
     (
-        start + note_times.partition_point(|note_time| *note_time < min_time),
-        start + note_times.partition_point(|note_time| *note_time <= max_time),
+        start + note_times_ns.partition_point(|&note_time_ns| note_time_ns < min_time_ns),
+        start + note_times_ns.partition_point(|&note_time_ns| note_time_ns <= max_time_ns),
     )
 }
 
@@ -2665,15 +2681,15 @@ fn note_window_bounds_by_display_beat(
 }
 
 #[inline(always)]
-fn lane_window_bounds_by_time(
+fn lane_window_bounds_by_time_ns(
     note_indices: &[usize],
-    note_times: &[f32],
-    min_time: f32,
-    max_time: f32,
+    note_times_ns: &[SongTimeNs],
+    min_time_ns: SongTimeNs,
+    max_time_ns: SongTimeNs,
 ) -> (usize, usize) {
     (
-        note_indices.partition_point(|&note_index| note_times[note_index] < min_time),
-        note_indices.partition_point(|&note_index| note_times[note_index] <= max_time),
+        note_indices.partition_point(|&note_index| note_times_ns[note_index] < min_time_ns),
+        note_indices.partition_point(|&note_index| note_times_ns[note_index] <= max_time_ns),
     )
 }
 
@@ -2942,7 +2958,8 @@ pub fn build_bundles(
             let logical = logical_slot_size(slot);
             [logical[0] * field_zoom, logical[1] * field_zoom]
         };
-        let current_time = state.current_music_time_visible[player_idx];
+        let current_time_ns = state.current_music_time_visible_ns[player_idx];
+        let current_time = song_time_ns_to_seconds(current_time_ns);
         let current_beat = state.current_beat_visible[player_idx];
         let confusion_receptor_rot = if visual.confusion > f32::EPSILON {
             let beat = current_beat.rem_euclid(2.0 * std::f32::consts::PI);
@@ -2983,26 +3000,31 @@ pub fn build_bundles(
             }
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                 let curr_disp = timing.get_displayed_beat(state.current_beat_visible[player_idx]);
-                let speed_multiplier = timing
-                    .get_speed_multiplier(state.current_beat_visible[player_idx], current_time);
+                let speed_multiplier = timing.get_speed_multiplier_ns(
+                    state.current_beat_visible[player_idx],
+                    current_time_ns,
+                );
                 let player_multiplier =
                     scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                 let final_multiplier = player_multiplier * speed_multiplier;
                 (1.0, None, curr_disp, final_multiplier)
             }
         };
+        let travel_offset_for_time_ns = |note_time_ns: SongTimeNs| -> f32 {
+            let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+            let time_diff_real = song_time_ns_delta_seconds(note_time_ns, current_time_ns) / rate;
+            time_diff_real * pps_chart
+        };
         let travel_offset_for_cached_note = |note_index: usize, use_hold_end: bool| -> f32 {
             match scroll_speed {
                 ScrollSpeedSetting::CMod(_) => {
-                    let pps_chart = cmod_pps_opt.expect("cmod pps computed");
-                    let note_time = if use_hold_end {
-                        state.hold_end_time_cache[note_index]
-                            .unwrap_or(state.note_time_cache[note_index])
+                    let note_time_ns = if use_hold_end {
+                        state.hold_end_time_cache_ns[note_index]
+                            .unwrap_or(state.note_time_cache_ns[note_index])
                     } else {
-                        state.note_time_cache[note_index]
+                        state.note_time_cache_ns[note_index]
                     };
-                    let time_diff_real = (note_time - current_time) / rate;
-                    time_diff_real * pps_chart
+                    travel_offset_for_time_ns(note_time_ns)
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let note_disp = if use_hold_end {
@@ -3029,12 +3051,16 @@ pub fn build_bundles(
             )
         };
         let (note_start, note_end) = state.note_ranges[player_idx];
-        let visible_time_range = match scroll_speed {
+        let visible_time_range_ns = match scroll_speed {
             ScrollSpeedSetting::CMod(_) => {
                 let pps_chart = cmod_pps_opt.expect("cmod pps computed");
                 Some((
-                    current_time - draw_distance_after_targets / pps_chart * rate,
-                    current_time + draw_distance_before_targets / pps_chart * rate,
+                    current_time_ns.saturating_sub(song_time_ns_from_seconds(
+                        draw_distance_after_targets / pps_chart * rate,
+                    )),
+                    current_time_ns.saturating_add(song_time_ns_from_seconds(
+                        draw_distance_before_targets / pps_chart * rate,
+                    )),
                 ))
             }
             ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => None,
@@ -3066,28 +3092,34 @@ pub fn build_bundles(
             }
             ScrollSpeedSetting::CMod(_) => None,
         };
-        let player_note_window_bounds = if let Some((min_time, max_time)) = visible_time_range {
-            note_window_bounds_by_time(
-                &state.note_time_cache,
-                note_start,
-                note_end,
-                min_time,
-                max_time,
-            )
-        } else if let Some((min_beat, max_beat)) = visible_display_beat_range {
-            note_window_bounds_by_display_beat(
-                &state.note_display_beat_cache,
-                note_start,
-                note_end,
-                min_beat,
-                max_beat,
-            )
-        } else {
-            (note_start, note_end)
-        };
+        let player_note_window_bounds =
+            if let Some((min_time_ns, max_time_ns)) = visible_time_range_ns {
+                note_window_bounds_by_time_ns(
+                    &state.note_time_cache_ns,
+                    note_start,
+                    note_end,
+                    min_time_ns,
+                    max_time_ns,
+                )
+            } else if let Some((min_beat, max_beat)) = visible_display_beat_range {
+                note_window_bounds_by_display_beat(
+                    &state.note_display_beat_cache,
+                    note_start,
+                    note_end,
+                    min_beat,
+                    max_beat,
+                )
+            } else {
+                (note_start, note_end)
+            };
         let lane_note_window_bounds = |note_indices: &[usize]| -> (usize, usize) {
-            if let Some((min_time, max_time)) = visible_time_range {
-                lane_window_bounds_by_time(note_indices, &state.note_time_cache, min_time, max_time)
+            if let Some((min_time_ns, max_time_ns)) = visible_time_range_ns {
+                lane_window_bounds_by_time_ns(
+                    note_indices,
+                    &state.note_time_cache_ns,
+                    min_time_ns,
+                    max_time_ns,
+                )
             } else if let Some((min_beat, max_beat)) = visible_display_beat_range {
                 lane_window_bounds_by_display_beat(
                     note_indices,
@@ -3165,10 +3197,7 @@ pub fn build_bundles(
             |local_col: usize, beat: f32, receptor_y_lane: f32, dir: f32| -> f32 {
                 let travel_offset = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
-                        let pps_chart = cmod_pps_opt.expect("cmod pps computed");
-                        let note_time_chart = timing.get_time_for_beat(beat);
-                        let time_diff_real = (note_time_chart - current_time) / rate;
-                        time_diff_real * pps_chart
+                        travel_offset_for_time_ns(timing.get_time_for_beat_ns(beat))
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = timing.get_displayed_beat(beat);
@@ -3317,7 +3346,6 @@ pub fn build_bundles(
             } else {
                 1.0
             };
-            let current_time = state.current_music_time_visible[player_idx];
             if let Some(cue) = active_column_cue(&state.column_cues[player_idx], current_time) {
                 let duration_real = cue.duration / rate;
                 let elapsed_real = (current_time - cue.start_time) / rate;
@@ -3901,9 +3929,7 @@ pub fn build_bundles(
             let head_travel_offset = if is_head_dynamic {
                 match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
-                        let pps_chart = cmod_pps_opt.expect("cmod pps computed");
-                        let note_time_chart = timing.get_time_for_beat(head_beat);
-                        (note_time_chart - current_time) / rate * pps_chart
+                        travel_offset_for_time_ns(timing.get_time_for_beat_ns(head_beat))
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = timing.get_displayed_beat(head_beat);
@@ -5449,9 +5475,7 @@ pub fn build_bundles(
                 }
                 let raw_travel_offset = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
-                        let pps_chart = cmod_pps_opt.expect("cmod pps computed");
-                        let note_time_chart = state.note_time_cache[note_index];
-                        (note_time_chart - current_time) / rate * pps_chart
+                        travel_offset_for_time_ns(state.note_time_cache_ns[note_index])
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                         let note_disp_beat = state.note_display_beat_cache[note_index];

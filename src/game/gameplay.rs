@@ -515,7 +515,7 @@ const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
 const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
 const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
 const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
-type SongTimeNs = i64;
+pub type SongTimeNs = i64;
 const INVALID_SONG_TIME_NS: SongTimeNs = i64::MIN;
 const SONG_TIME_NS_PER_SECOND: f64 = 1_000_000_000.0;
 
@@ -1353,12 +1353,18 @@ fn timing_row_floor(timing: &TimingData, beat: f32) -> usize {
 
 #[inline(always)]
 fn assist_row_no_offset(state: &State, music_time: f32) -> i32 {
+    assist_row_no_offset_ns(state, song_time_ns_from_seconds(music_time))
+}
+
+#[inline(always)]
+fn assist_row_no_offset_ns(state: &State, music_time_ns: SongTimeNs) -> i32 {
     // ITG parity: assist clap/metronome uses *no global offset* timing.
-    // TimingData::get_beat_for_time() applies global offset internally, so
+    // TimingData::get_beat_for_time_ns() applies global offset internally, so
     // feed (time - offset) to cancel it out.
-    let beat_no_offset = state
-        .timing
-        .get_beat_for_time(music_time - state.global_offset_seconds);
+    let beat_no_offset = state.timing.get_beat_for_time_ns(song_time_ns_add_seconds(
+        music_time_ns,
+        -state.global_offset_seconds,
+    ));
     timing_row_floor(&state.timing, beat_no_offset).min(i32::MAX as usize) as i32
 }
 
@@ -6803,10 +6809,10 @@ pub struct State {
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     finalized_row_outcomes: [Vec<Option<FinalizedRowOutcome>>; MAX_PLAYERS],
     pub note_time_cache: Vec<f32>,
-    note_time_cache_ns: Vec<SongTimeNs>,
+    pub note_time_cache_ns: Vec<SongTimeNs>,
     pub note_display_beat_cache: Vec<f32>,
     pub hold_end_time_cache: Vec<Option<f32>>,
-    hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
+    pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
     pub hold_end_display_beat_cache: Vec<Option<f32>>,
     pub notes_end_time: f32,
     pub music_end_time: f32,
@@ -6825,6 +6831,7 @@ pub struct State {
     pub autosync_standard_deviation: f32,
     pub global_visual_delay_seconds: f32,
     pub player_visual_delay_seconds: [f32; MAX_PLAYERS],
+    pub current_music_time_visible_ns: [SongTimeNs; MAX_PLAYERS],
     pub current_music_time_visible: [f32; MAX_PLAYERS],
     pub current_beat_visible: [f32; MAX_PLAYERS],
     pub next_tap_miss_cursor: [usize; MAX_PLAYERS],
@@ -9027,16 +9034,18 @@ pub fn start_stage_music(state: &mut State) {
     state.current_music_time = start_time;
     state.current_music_time_ns = song_time_ns_from_seconds(start_time);
     state.current_music_time_display = state.display_clock.reset(start_time);
+    let display_time_ns = song_time_ns_from_seconds(state.current_music_time_display);
     state.current_beat = state
         .timing
         .get_beat_for_time_ns(state.current_music_time_ns);
-    state.current_beat_display = state.current_beat;
+    state.current_beat_display = state.timing.get_beat_for_time_ns(display_time_ns);
     for player in 0..state.num_players {
         let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
-        let visible_time = start_time - delay;
-        state.current_music_time_visible[player] = visible_time;
+        let visible_time_ns = song_time_ns_add_seconds(display_time_ns, -delay);
+        state.current_music_time_visible_ns[player] = visible_time_ns;
+        state.current_music_time_visible[player] = song_time_ns_to_seconds(visible_time_ns);
         state.current_beat_visible[player] =
-            state.timing_players[player].get_beat_for_time(visible_time);
+            state.timing_players[player].get_beat_for_time_ns(visible_time_ns);
     }
     state.total_elapsed_in_screen = 0.0;
     start_stage_music_audio(state);
@@ -9839,8 +9848,10 @@ pub fn init(
     let current_music_time_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         init_music_time - global_visual_delay_seconds - player_visual_delay_seconds[player]
     });
+    let current_music_time_visible_ns: [SongTimeNs; MAX_PLAYERS] =
+        std::array::from_fn(|player| song_time_ns_from_seconds(current_music_time_visible[player]));
     let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        timing_players[player].get_beat_for_time(current_music_time_visible[player])
+        timing_players[player].get_beat_for_time_ns(current_music_time_visible_ns[player])
     });
     let (
         song_lua_mask_windows,
@@ -10232,6 +10243,7 @@ pub fn init(
         autosync_standard_deviation: 0.0,
         global_visual_delay_seconds,
         player_visual_delay_seconds,
+        current_music_time_visible_ns,
         current_music_time_visible,
         current_beat_visible,
         next_tap_miss_cursor: note_range_start,
@@ -14178,6 +14190,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         song_clock.seconds_per_second,
         is_first_update,
     );
+    let display_music_time_ns = song_time_ns_from_seconds(display_music_time_sec);
     state.current_music_time_display = display_music_time_sec;
 
     if let (Some(key), Some(start_time)) = (state.hold_to_exit_key, state.hold_to_exit_start) {
@@ -14221,19 +14234,20 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
             .timing
             .get_beat_info_from_time_ns_cached(music_time_ns, &mut state.beat_info_cache);
         state.current_beat = beat_info.beat;
-        state.current_beat_display = state.timing.get_beat_for_time(display_music_time_sec);
+        state.current_beat_display = state.timing.get_beat_for_time_ns(display_music_time_ns);
         state.is_in_freeze = beat_info.is_in_freeze;
         state.is_in_delay = beat_info.is_in_delay;
-        let song_row = assist_row_no_offset(state, music_time_sec);
+        let song_row = assist_row_no_offset_ns(state, music_time_ns);
         run_assist_clap(state, song_row);
 
         for player in 0..state.num_players {
             let delay =
                 state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
-            let visible_time = display_music_time_sec - delay;
-            state.current_music_time_visible[player] = visible_time;
+            let visible_time_ns = song_time_ns_add_seconds(display_music_time_ns, -delay);
+            state.current_music_time_visible_ns[player] = visible_time_ns;
+            state.current_music_time_visible[player] = song_time_ns_to_seconds(visible_time_ns);
             state.current_beat_visible[player] =
-                state.timing_players[player].get_beat_for_time(visible_time);
+                state.timing_players[player].get_beat_for_time_ns(visible_time_ns);
         }
         refresh_active_attack_masks(state, delta_time);
 

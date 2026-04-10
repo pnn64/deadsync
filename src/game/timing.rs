@@ -1094,7 +1094,7 @@ impl TimingData {
         self.get_speed_multiplier_ns(beat, timing_ns_from_seconds(time))
     }
 
-    fn get_speed_multiplier_ns(&self, beat: f32, time_ns: TimingNs) -> f32 {
+    pub fn get_speed_multiplier_ns(&self, beat: f32, time_ns: i64) -> f32 {
         if self.speeds.is_empty() {
             return 1.0;
         }
