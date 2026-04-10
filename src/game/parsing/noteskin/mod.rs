@@ -1725,6 +1725,49 @@ fn load_itg_data_cached(
     Ok(entry.clone())
 }
 
+fn song_lua_itg_data(skin: &str) -> Option<Arc<noteskin_itg::NoteskinData>> {
+    let requested = skin.trim();
+    let skin = if requested.is_empty() {
+        "default"
+    } else {
+        requested
+    };
+    for root in &dirs::app_dirs().noteskin_roots() {
+        if let Ok(data) = load_itg_data_cached(root, "dance", skin) {
+            return Some(data);
+        }
+    }
+    None
+}
+
+pub(crate) fn song_lua_noteskin_resolve_path(
+    skin: &str,
+    button: &str,
+    element: &str,
+) -> Option<PathBuf> {
+    song_lua_itg_data(skin)?.resolve_path(button, element)
+}
+
+pub(crate) fn song_lua_noteskin_metric(skin: &str, element: &str, value: &str) -> Option<String> {
+    song_lua_itg_data(skin)?
+        .get_metric(element, value)
+        .map(str::to_string)
+}
+
+pub(crate) fn song_lua_noteskin_metric_f(skin: &str, element: &str, value: &str) -> Option<f32> {
+    parse_script_number(song_lua_noteskin_metric(skin, element, value)?.as_str())
+}
+
+pub(crate) fn song_lua_noteskin_metric_b(skin: &str, element: &str, value: &str) -> Option<bool> {
+    Some(parse_script_bool(
+        song_lua_noteskin_metric(skin, element, value)?.as_str(),
+    ))
+}
+
+pub(crate) fn song_lua_noteskin_exists(skin: &str) -> bool {
+    song_lua_itg_data(skin).is_some()
+}
+
 pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, String> {
     let key = itg_skin_cache_key(style, skin);
     let cache = ITG_SKIN_CACHE.get_or_init(|| Mutex::new(HashMap::new()));

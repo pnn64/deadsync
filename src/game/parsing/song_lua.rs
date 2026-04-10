@@ -815,6 +815,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     globals.set("PREFSMAN", prefsmgr)?;
     globals.set("THEME", create_theme_table(lua)?)?;
+    globals.set("NOTESKIN", create_noteskin_table(lua, context)?)?;
 
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context)?;
@@ -1089,6 +1090,197 @@ fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
     theme.set("GetMetric", get_metric.clone())?;
     theme.set("GetMetricF", get_metric)?;
     Ok(theme)
+}
+
+fn create_noteskin_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
+    let noteskin = lua.create_table()?;
+    let default_noteskin = song_lua_default_noteskin_name(context);
+
+    let default_metric_skin = default_noteskin.clone();
+    noteskin.set(
+        "GetMetric",
+        lua.create_function(
+            move |lua, (_self, element, value): (Table, String, String)| {
+                let Some(metric) = crate::game::parsing::noteskin::song_lua_noteskin_metric(
+                    &default_metric_skin,
+                    &element,
+                    &value,
+                ) else {
+                    return Ok(Value::Nil);
+                };
+                Ok(Value::String(lua.create_string(&metric)?))
+            },
+        )?,
+    )?;
+    noteskin.set(
+        "GetMetricForNoteSkin",
+        lua.create_function(
+            move |lua, (_self, element, value, skin): (Table, String, String, String)| {
+                let Some(metric) = crate::game::parsing::noteskin::song_lua_noteskin_metric(
+                    &skin, &element, &value,
+                ) else {
+                    return Ok(Value::Nil);
+                };
+                Ok(Value::String(lua.create_string(&metric)?))
+            },
+        )?,
+    )?;
+
+    let default_metric_f_skin = default_noteskin.clone();
+    noteskin.set(
+        "GetMetricF",
+        lua.create_function(move |_, (_self, element, value): (Table, String, String)| {
+            Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_f(
+                &default_metric_f_skin,
+                &element,
+                &value,
+            )
+            .unwrap_or(0.0_f32))
+        })?,
+    )?;
+    noteskin.set(
+        "GetMetricFForNoteSkin",
+        lua.create_function(
+            move |_, (_self, element, value, skin): (Table, String, String, String)| {
+                Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_f(
+                    &skin, &element, &value,
+                )
+                .unwrap_or(0.0_f32))
+            },
+        )?,
+    )?;
+
+    let default_metric_b_skin = default_noteskin.clone();
+    noteskin.set(
+        "GetMetricB",
+        lua.create_function(move |_, (_self, element, value): (Table, String, String)| {
+            Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_b(
+                &default_metric_b_skin,
+                &element,
+                &value,
+            )
+            .unwrap_or(false))
+        })?,
+    )?;
+    noteskin.set(
+        "GetMetricBForNoteSkin",
+        lua.create_function(
+            move |_, (_self, element, value, skin): (Table, String, String, String)| {
+                Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_b(
+                    &skin, &element, &value,
+                )
+                .unwrap_or(false))
+            },
+        )?,
+    )?;
+
+    let default_path_skin = default_noteskin.clone();
+    noteskin.set(
+        "GetPath",
+        lua.create_function(
+            move |lua, (_self, button, element): (Table, String, String)| {
+                let path = song_lua_noteskin_path(&default_path_skin, &button, &element);
+                Ok(Value::String(lua.create_string(&path)?))
+            },
+        )?,
+    )?;
+    noteskin.set(
+        "GetPathForNoteSkin",
+        lua.create_function(
+            move |lua, (_self, button, element, skin): (Table, String, String, String)| {
+                let path = song_lua_noteskin_path(&skin, &button, &element);
+                Ok(Value::String(lua.create_string(&path)?))
+            },
+        )?,
+    )?;
+
+    let default_load_skin = default_noteskin.clone();
+    noteskin.set(
+        "LoadActor",
+        lua.create_function(
+            move |lua, (_self, button, element): (Table, String, String)| {
+                song_lua_noteskin_actor(lua, &default_load_skin, &button, &element)
+            },
+        )?,
+    )?;
+    noteskin.set(
+        "LoadActorForNoteSkin",
+        lua.create_function(
+            move |lua, (_self, button, element, skin): (Table, String, String, String)| {
+                song_lua_noteskin_actor(lua, &skin, &button, &element)
+            },
+        )?,
+    )?;
+
+    noteskin.set(
+        "DoesNoteSkinExist",
+        lua.create_function(|_, (_self, skin): (Table, String)| {
+            Ok(crate::game::parsing::noteskin::song_lua_noteskin_exists(
+                &skin,
+            ))
+        })?,
+    )?;
+    noteskin.set(
+        "GetNoteSkinNames",
+        lua.create_function(|lua, _args: MultiValue| {
+            let names = crate::game::parsing::noteskin::discover_itg_skins("dance");
+            let table = lua.create_table()?;
+            for (idx, name) in names.into_iter().enumerate() {
+                table.raw_set(idx + 1, name)?;
+            }
+            Ok(table)
+        })?,
+    )?;
+    Ok(noteskin)
+}
+
+fn song_lua_default_noteskin_name(context: &SongLuaCompileContext) -> String {
+    context
+        .players
+        .iter()
+        .find(|player| player.enabled)
+        .map(|player| player.noteskin_name.clone())
+        .or_else(|| {
+            context
+                .players
+                .first()
+                .map(|player| player.noteskin_name.clone())
+        })
+        .unwrap_or_else(|| crate::game::profile::NoteSkin::default().to_string())
+}
+
+fn song_lua_noteskin_path(skin: &str, button: &str, element: &str) -> String {
+    crate::game::parsing::noteskin::song_lua_noteskin_resolve_path(skin, button, element)
+        .map(|path| file_path_string(path.as_path()))
+        .unwrap_or_default()
+}
+
+fn song_lua_noteskin_actor(
+    lua: &Lua,
+    skin: &str,
+    button: &str,
+    element: &str,
+) -> mlua::Result<Table> {
+    let resolved =
+        crate::game::parsing::noteskin::song_lua_noteskin_resolve_path(skin, button, element);
+    let sprite_path = resolved
+        .as_ref()
+        .filter(|path| is_song_lua_image_path(path));
+    let actor = create_dummy_actor(
+        lua,
+        if sprite_path.is_some() {
+            "Sprite"
+        } else {
+            "Actor"
+        },
+    )?;
+    actor.set("__songlua_noteskin_name", skin.trim().to_ascii_lowercase())?;
+    actor.set("__songlua_noteskin_button", button)?;
+    actor.set("__songlua_noteskin_element", element)?;
+    if let Some(path) = sprite_path {
+        actor.set("Texture", file_path_string(path.as_path()))?;
+    }
+    Ok(actor)
 }
 
 #[inline(always)]
@@ -3931,6 +4123,23 @@ fn song_dir_string(path: &Path) -> String {
 }
 
 #[inline(always)]
+fn file_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+#[inline(always)]
+fn is_song_lua_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp" | "qoi" | "tif" | "tiff"
+            )
+        })
+}
+
+#[inline(always)]
 fn mod_window_cmp(left: &SongLuaModWindow, right: &SongLuaModWindow) -> std::cmp::Ordering {
     left.start
         .total_cmp(&right.start)
@@ -4230,6 +4439,73 @@ return Def.ActorFrame{}
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "lambda");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_noteskin_helpers() {
+        let song_dir = test_dir("noteskin-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local x = NOTESKIN:GetMetricF("", "TapNoteNoteColorTextureCoordSpacingX")
+local y = NOTESKIN:GetMetricFForNoteSkin("", "TapNoteNoteColorTextureCoordSpacingY", "cyber")
+local vivid = NOTESKIN:GetMetricBForNoteSkin("", "TapNoteAnimationIsVivid", "cyber")
+local path = NOTESKIN:GetPathForNoteSkin("Down", "Tap Explosion Bright W1", "cyber")
+local actor = NOTESKIN:LoadActorForNoteSkin("Down", "Tap Explosion Bright W1", "cyber")
+
+if math.abs(x - 0.125) > 0.0001 then
+    error("unexpected noteskin metric x: " .. tostring(x))
+end
+if math.abs(y - 0.0) > 0.0001 then
+    error("unexpected noteskin metric y: " .. tostring(y))
+end
+if vivid ~= false then
+    error("unexpected noteskin vivid flag: " .. tostring(vivid))
+end
+if type(path) ~= "string" or path == "" then
+    error("expected noteskin path")
+end
+if type(actor) ~= "table" then
+    error("expected noteskin actor table")
+end
+
+mod_actions = {
+    {4, tostring(vivid) .. ":" .. tostring(x), true},
+}
+
+return Def.ActorFrame{
+    actor..{
+        Name="NoteskinExplosion",
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Noteskin Helpers");
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                noteskin_name: "cyber".to_string(),
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: false,
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "false:0.125");
+        assert!(
+            compiled.overlays.iter().any(|overlay| {
+                overlay.name.as_deref() == Some("NoteskinExplosion")
+                    && matches!(overlay.kind, SongLuaOverlayKind::Sprite { .. })
+            }),
+            "noteskin actor should materialize as a sprite overlay when it resolves to an image"
+        );
     }
 
     #[test]
