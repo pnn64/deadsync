@@ -1454,6 +1454,8 @@ fn install_def(lua: &Lua) -> mlua::Result<()> {
         ("Actor", "Actor"),
         ("ActorFrame", "ActorFrame"),
         ("Sprite", "Sprite"),
+        ("BitmapText", "BitmapText"),
+        ("Model", "Model"),
         ("Quad", "Quad"),
         ("ActorProxy", "ActorProxy"),
         ("ActorFrameTexture", "ActorFrameTexture"),
@@ -3002,6 +3004,10 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         make_actor_capture_f32_method(lua, actor, "rot_z_deg", Some("rotationz"))?,
     )?;
     actor.set(
+        "baserotationz",
+        make_actor_capture_f32_method(lua, actor, "rot_z_deg", Some("rotationz"))?,
+    )?;
+    actor.set(
         "zoomx",
         make_actor_capture_f32_method(lua, actor, "zoom_x", Some("zoomx"))?,
     )?;
@@ -3199,6 +3205,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     for name in [
         "clearzbuffer",
+        "diffuseramp",
         "effectclock",
         "EnableAlphaBuffer",
         "EnableDepthBuffer",
@@ -3207,13 +3214,33 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "Create",
         "fardistz",
         "fov",
+        "finishtweening",
         "SetHeight",
         "SetWidth",
+        "strokecolor",
+        "texturetranslate",
         "wag",
         "z",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
+    actor.set(
+        "settext",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                let text = match args.get(1).cloned() {
+                    Some(Value::String(text)) => text.to_str()?.to_string(),
+                    Some(Value::Integer(value)) => value.to_string(),
+                    Some(Value::Number(value)) => value.to_string(),
+                    Some(Value::Boolean(value)) => value.to_string(),
+                    _ => String::new(),
+                };
+                actor.set("Text", text)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
     actor.set(
         "diffuse",
         lua.create_function({
@@ -3332,6 +3359,32 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "GetZoom",
         lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+    )?;
+    actor.set(
+        "GetZ",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    actor.set(
+        "GetRotationZ",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_rot_z_deg")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetZoomZ",
+        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+    )?;
+    actor.set(
+        "GetParent",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| Ok(actor.clone())
+        })?,
     )?;
     Ok(())
 }
@@ -4506,6 +4559,36 @@ return Def.ActorFrame{
             }),
             "noteskin actor should materialize as a sprite overlay when it resolves to an image"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_supports_bitmap_text_ctor() {
+        let song_dir = test_dir("bitmap-text");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r##"
+return Def.ActorFrame{
+    Def.BitmapText{
+        Name="Countdown",
+        Font="_komika axis 42px.ini",
+        Text="",
+        OnCommand=function(self)
+            self:visible(false)
+                :z(10)
+                :strokecolor(color("#000000"))
+                :settext(3)
+                :finishtweening()
+        end,
+    },
+}
+"##,
+        )
+        .unwrap();
+
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "BitmapText")).unwrap();
+        assert!(compiled.overlays.is_empty());
     }
 
     #[test]
