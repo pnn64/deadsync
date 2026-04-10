@@ -28,6 +28,12 @@ pub enum Action {
     SortByRecent,
     SortByGenre,
     SortByTopGrades,
+    SortByPopularityP1,
+    SortByPopularityP2,
+    SortByRecentP1,
+    SortByRecentP2,
+    SortByTopGradesP1,
+    SortByTopGradesP2,
     SwitchToSingle,
     SwitchToDouble,
     TestInput,
@@ -103,6 +109,36 @@ pub const ITEM_SORT_BY_TOP_GRADES: Item = Item {
     top_label: "Sort By",
     bottom_label: "Top Grades",
     action: Action::SortByTopGrades,
+};
+pub const ITEM_SORT_BY_POPULARITY_P1: Item = Item {
+    top_label: "Popularity",
+    bottom_label: "P1",
+    action: Action::SortByPopularityP1,
+};
+pub const ITEM_SORT_BY_POPULARITY_P2: Item = Item {
+    top_label: "Popularity",
+    bottom_label: "P2",
+    action: Action::SortByPopularityP2,
+};
+pub const ITEM_SORT_BY_RECENT_P1: Item = Item {
+    top_label: "Recent",
+    bottom_label: "P1",
+    action: Action::SortByRecentP1,
+};
+pub const ITEM_SORT_BY_RECENT_P2: Item = Item {
+    top_label: "Recent",
+    bottom_label: "P2",
+    action: Action::SortByRecentP2,
+};
+pub const ITEM_SORT_BY_TOP_GRADES_P1: Item = Item {
+    top_label: "Top Grades",
+    bottom_label: "P1",
+    action: Action::SortByTopGradesP1,
+};
+pub const ITEM_SORT_BY_TOP_GRADES_P2: Item = Item {
+    top_label: "Top Grades",
+    bottom_label: "P2",
+    action: Action::SortByTopGradesP2,
 };
 pub const ITEM_SWITCH_TO_SINGLE: Item = Item {
     top_label: "Change Style To",
