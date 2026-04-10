@@ -814,6 +814,7 @@ enum WheelSortMode {
     Meter,
     Popularity,
     Recent,
+    TopGrades,
 }
 
 #[derive(Clone, Debug)]
@@ -889,6 +890,7 @@ pub struct State {
     meter_entries: Vec<MusicWheelEntry>,
     popularity_entries: Vec<MusicWheelEntry>,
     recent_entries: Vec<MusicWheelEntry>,
+    top_grades_entries: Vec<MusicWheelEntry>,
     expanded_pack_name: Option<String>,
     bg: heart_bg::State,
     last_requested_banner_path: Option<PathBuf>,
@@ -959,6 +961,7 @@ pub struct State {
     meter_pack_song_counts: HashMap<String, usize>,
     popularity_pack_song_counts: HashMap<String, usize>,
     recent_pack_song_counts: HashMap<String, usize>,
+    top_grades_pack_song_counts: HashMap<String, usize>,
     new_pack_names: HashSet<String>,
 }
 
@@ -1913,6 +1916,129 @@ fn build_recent_grouped_entries(
     (entries, counts)
 }
 
+const TOP_GRADES_UNPLAYED_HEADER: &str = "Unplayed";
+
+fn build_top_grades_grouped_entries(
+    grouped_entries: &[MusicWheelEntry],
+    chart_type: &str,
+) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+    let songs: Vec<Arc<SongData>> = grouped_entries
+        .iter()
+        .filter_map(|e| match e {
+            MusicWheelEntry::Song(song) => Some(song.clone()),
+            MusicWheelEntry::PackHeader { .. } => None,
+        })
+        .collect();
+
+    let mut graded_songs: Vec<(Arc<SongData>, Option<scores::Grade>)> =
+        Vec::with_capacity(songs.len());
+    for song in songs {
+        let mut best_grade: Option<scores::Grade> = None;
+        for chart in &song.charts {
+            if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
+                continue;
+            }
+            for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side)
+                else {
+                    continue;
+                };
+                if score.grade != scores::Grade::Failed || score.score_percent > 0.0 {
+                    let grade = score.grade;
+                    if best_grade.is_none()
+                        || grade_sort_order(grade) < grade_sort_order(best_grade.unwrap())
+                    {
+                        best_grade = Some(grade);
+                    }
+                }
+            }
+        }
+        graded_songs.push((song, best_grade));
+    }
+
+    graded_songs.sort_by_cached_key(|(song, best)| {
+        let grade_key = match best {
+            Some(g) => grade_sort_order(*g),
+            None => u8::MAX,
+        };
+        (grade_key, song_title_sort_key(song.as_ref()))
+    });
+
+    let mut entries: Vec<MusicWheelEntry> =
+        Vec::with_capacity(graded_songs.len().saturating_add(20));
+    let mut counts: HashMap<String, usize> = HashMap::with_capacity(20);
+    let mut current_group: Option<String> = None;
+    let mut header_idx = 0usize;
+
+    for (song, best) in graded_songs {
+        let group_name = match best {
+            Some(g) => grade_group_name(g),
+            None => TOP_GRADES_UNPLAYED_HEADER.to_string(),
+        };
+        if current_group.as_deref() != Some(group_name.as_str()) {
+            entries.push(MusicWheelEntry::PackHeader {
+                name: group_name.clone(),
+                original_index: header_idx,
+                banner_path: None,
+            });
+            current_group = Some(group_name.clone());
+            header_idx += 1;
+        }
+        *counts.entry(group_name).or_insert(0) += 1;
+        entries.push(MusicWheelEntry::Song(song));
+    }
+
+    (entries, counts)
+}
+
+fn grade_sort_order(grade: scores::Grade) -> u8 {
+    match grade {
+        scores::Grade::Quint => 0,
+        scores::Grade::Tier01 => 1,
+        scores::Grade::Tier02 => 2,
+        scores::Grade::Tier03 => 3,
+        scores::Grade::Tier04 => 4,
+        scores::Grade::Tier05 => 5,
+        scores::Grade::Tier06 => 6,
+        scores::Grade::Tier07 => 7,
+        scores::Grade::Tier08 => 8,
+        scores::Grade::Tier09 => 9,
+        scores::Grade::Tier10 => 10,
+        scores::Grade::Tier11 => 11,
+        scores::Grade::Tier12 => 12,
+        scores::Grade::Tier13 => 13,
+        scores::Grade::Tier14 => 14,
+        scores::Grade::Tier15 => 15,
+        scores::Grade::Tier16 => 16,
+        scores::Grade::Tier17 => 17,
+        scores::Grade::Failed => 18,
+    }
+}
+
+fn grade_group_name(grade: scores::Grade) -> String {
+    match grade {
+        scores::Grade::Quint => "\u{2605}\u{2605}\u{2605}\u{2605}\u{2605}".to_string(),
+        scores::Grade::Tier01 => "\u{2605}\u{2605}\u{2605}\u{2605}".to_string(),
+        scores::Grade::Tier02 => "\u{2605}\u{2605}\u{2605}".to_string(),
+        scores::Grade::Tier03 => "\u{2605}\u{2605}".to_string(),
+        scores::Grade::Tier04 => "\u{2605}".to_string(),
+        scores::Grade::Tier05 => "S+".to_string(),
+        scores::Grade::Tier06 => "S".to_string(),
+        scores::Grade::Tier07 => "S-".to_string(),
+        scores::Grade::Tier08 => "A+".to_string(),
+        scores::Grade::Tier09 => "A".to_string(),
+        scores::Grade::Tier10 => "A-".to_string(),
+        scores::Grade::Tier11 => "B+".to_string(),
+        scores::Grade::Tier12 => "B".to_string(),
+        scores::Grade::Tier13 => "B-".to_string(),
+        scores::Grade::Tier14 => "C+".to_string(),
+        scores::Grade::Tier15 => "C".to_string(),
+        scores::Grade::Tier16 => "C-".to_string(),
+        scores::Grade::Tier17 => "D".to_string(),
+        scores::Grade::Failed => "Failed".to_string(),
+    }
+}
+
 fn refresh_recent_cache(state: &mut State) {
     let (recent_entries, recent_pack_song_counts) =
         build_recent_grouped_entries(&state.group_entries);
@@ -2006,6 +2132,14 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
                 .as_ref()
                 .and_then(|song| group_name_for_song(&state.recent_entries, song))
                 .or_else(|| first_header_name(&state.recent_entries));
+        }
+        WheelSortMode::TopGrades => {
+            state.all_entries = state.top_grades_entries.clone();
+            state.pack_song_counts = state.top_grades_pack_song_counts.clone();
+            state.expanded_pack_name = selected_song
+                .as_ref()
+                .and_then(|song| group_name_for_song(&state.top_grades_entries, song))
+                .or_else(|| first_header_name(&state.top_grades_entries));
         }
     }
 
@@ -2160,6 +2294,8 @@ pub fn init() -> State {
     let (popularity_entries, popularity_pack_song_counts) =
         build_popularity_grouped_entries(&all_entries);
     let (recent_entries, recent_pack_song_counts) = build_recent_grouped_entries(&all_entries);
+    let (top_grades_entries, top_grades_pack_song_counts) =
+        build_top_grades_grouped_entries(&all_entries, target_chart_type);
     let new_pack_names = sync_new_pack_names(
         &joined_profile_ids,
         pack_song_counts.keys().cloned().collect(),
@@ -2178,6 +2314,7 @@ pub fn init() -> State {
         meter_entries,
         popularity_entries,
         recent_entries,
+        top_grades_entries,
         entries: Vec::new(),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
@@ -2283,6 +2420,7 @@ pub fn init() -> State {
         meter_pack_song_counts,
         popularity_pack_song_counts,
         recent_pack_song_counts,
+        top_grades_pack_song_counts,
         new_pack_names,
     };
 
@@ -2374,6 +2512,7 @@ pub fn init_placeholder() -> State {
         meter_entries: Vec::new(),
         popularity_entries: Vec::new(),
         recent_entries: Vec::new(),
+        top_grades_entries: Vec::new(),
         entries: Vec::new(),
         selected_index: 0,
         selected_steps_index: initial_diff_index,
@@ -2479,6 +2618,7 @@ pub fn init_placeholder() -> State {
         meter_pack_song_counts: HashMap::new(),
         popularity_pack_song_counts: HashMap::new(),
         recent_pack_song_counts: HashMap::new(),
+        top_grades_pack_song_counts: HashMap::new(),
         new_pack_names: HashSet::new(),
     }
 }
@@ -2746,6 +2886,7 @@ fn sort_submenu_index_for_mode(sort_mode: WheelSortMode) -> usize {
         WheelSortMode::Meter => 6,
         WheelSortMode::Popularity => 7,
         WheelSortMode::Recent => 8,
+        WheelSortMode::TopGrades => 9,
     }
 }
 
@@ -5631,6 +5772,11 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
         }
         select_music_menu::Action::SortByGenre => {
             apply_wheel_sort(state, WheelSortMode::Genre);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByTopGrades => {
+            apply_wheel_sort(state, WheelSortMode::TopGrades);
             hide_select_music_menu(state);
             ScreenAction::None
         }
