@@ -23,7 +23,7 @@ use crate::game::song::{SongData, get_song_cache};
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
-        lobby_overlay, music_wheel, screen_bars, select_pane, sort_menu, step_artist_bar,
+        lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
         banner as shared_banner, gs_scorebox, heart_bg, lobby_hud, mode_pads, profile_boxes,
@@ -864,19 +864,19 @@ pub struct State {
     out_prompt: OutPromptState,
     exit_prompt: ExitPromptState,
     reload_ui: Option<ReloadUiState>,
-    song_search: sort_menu::SongSearchState,
+    song_search: select_music_menu::SongSearchState,
     song_search_ignore_next_back_select: bool,
-    replay_overlay: sort_menu::ReplayOverlayState,
+    replay_overlay: select_music_menu::ReplayOverlayState,
     lobby_overlay: lobby_overlay::OverlayState,
     sync_overlay: SyncOverlayState,
     pack_sync_overlay: crate::screens::pack_sync::OverlayState,
     pub test_input_overlay_visible: bool,
     test_input_overlay: test_input::State,
     profile_switch_overlay: Option<profile_boxes::State>,
-    pending_replay: Option<sort_menu::ReplayStartPayload>,
-    sort_menu: sort_menu::State,
-    leaderboard: sort_menu::LeaderboardOverlayState,
-    downloads_overlay: sort_menu::DownloadsOverlayState,
+    pending_replay: Option<select_music_menu::ReplayStartPayload>,
+    select_music_menu: select_music_menu::State,
+    leaderboard: select_music_menu::LeaderboardOverlayState,
+    downloads_overlay: select_music_menu::DownloadsOverlayState,
     sort_mode: WheelSortMode,
     all_entries: Vec<MusicWheelEntry>,
     group_entries: Vec<MusicWheelEntry>,
@@ -918,8 +918,8 @@ pub struct State {
     overlay_nav_held_direction: Option<NavDirection>,
     overlay_nav_held_since: Option<Instant>,
     overlay_nav_last_scrolled_at: Option<Instant>,
-    sort_menu_prev_selected_index: usize,
-    sort_menu_focus_anim_elapsed: f32,
+    select_music_menu_prev_selected_index: usize,
+    select_music_menu_focus_anim_elapsed: f32,
     currently_playing_preview_path: Option<PathBuf>,
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
@@ -2128,9 +2128,9 @@ pub fn init() -> State {
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
         reload_ui: None,
-        song_search: sort_menu::SongSearchState::Hidden,
+        song_search: select_music_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
-        replay_overlay: sort_menu::ReplayOverlayState::Hidden,
+        replay_overlay: select_music_menu::ReplayOverlayState::Hidden,
         lobby_overlay: lobby_overlay::OverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
         pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
@@ -2138,9 +2138,9 @@ pub fn init() -> State {
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
         pending_replay: None,
-        sort_menu: sort_menu::State::Hidden,
-        leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
-        downloads_overlay: sort_menu::DownloadsOverlayState::Hidden,
+        select_music_menu: select_music_menu::State::Hidden,
+        leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
+        downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: last_pack_name,
         bg: heart_bg::State::new(),
@@ -2181,8 +2181,8 @@ pub fn init() -> State {
         overlay_nav_held_direction: None,
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
-        sort_menu_prev_selected_index: 0,
-        sort_menu_focus_anim_elapsed: sort_menu::FOCUS_TWEEN_SECONDS,
+        select_music_menu_prev_selected_index: 0,
+        select_music_menu_focus_anim_elapsed: select_music_menu::FOCUS_TWEEN_SECONDS,
         currently_playing_preview_path: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
@@ -2322,9 +2322,9 @@ pub fn init_placeholder() -> State {
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
         reload_ui: None,
-        song_search: sort_menu::SongSearchState::Hidden,
+        song_search: select_music_menu::SongSearchState::Hidden,
         song_search_ignore_next_back_select: false,
-        replay_overlay: sort_menu::ReplayOverlayState::Hidden,
+        replay_overlay: select_music_menu::ReplayOverlayState::Hidden,
         lobby_overlay: lobby_overlay::OverlayState::Hidden,
         sync_overlay: SyncOverlayState::Hidden,
         pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
@@ -2332,9 +2332,9 @@ pub fn init_placeholder() -> State {
         test_input_overlay: test_input::State::default(),
         profile_switch_overlay: None,
         pending_replay: None,
-        sort_menu: sort_menu::State::Hidden,
-        leaderboard: sort_menu::LeaderboardOverlayState::Hidden,
-        downloads_overlay: sort_menu::DownloadsOverlayState::Hidden,
+        select_music_menu: select_music_menu::State::Hidden,
+        leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
+        downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: None,
         bg: heart_bg::State::new(),
@@ -2375,8 +2375,8 @@ pub fn init_placeholder() -> State {
         overlay_nav_held_direction: None,
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
-        sort_menu_prev_selected_index: 0,
-        sort_menu_focus_anim_elapsed: sort_menu::FOCUS_TWEEN_SECONDS,
+        select_music_menu_prev_selected_index: 0,
+        select_music_menu_focus_anim_elapsed: select_music_menu::FOCUS_TWEEN_SECONDS,
         currently_playing_preview_path: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
@@ -2593,24 +2593,29 @@ const fn overlay_nav_dir(action: VirtualAction) -> Option<NavDirection> {
 }
 
 #[inline(always)]
-fn show_sort_menu(state: &mut State) {
-    state.sort_menu = sort_menu::State::Visible {
-        page: sort_menu::Page::Main,
-        selected_index: 0,
-    };
-    state.sort_menu_prev_selected_index = 0;
+fn show_select_music_menu(state: &mut State) {
+    if config::get().use_category_select_music_menu {
+        state.select_music_menu =
+            select_music_menu::State::Categories(select_music_menu::categories::open());
+    } else {
+        state.select_music_menu = select_music_menu::State::Classic {
+            page: select_music_menu::Page::Main,
+            selected_index: 0,
+        };
+    }
+    state.select_music_menu_prev_selected_index = 0;
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
-    state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
+    state.select_music_menu_focus_anim_elapsed = select_music_menu::FOCUS_TWEEN_SECONDS;
     clear_preview(state);
     audio::play_sfx("assets/sounds/start.ogg");
 }
 
 #[inline(always)]
-fn hide_sort_menu(state: &mut State) {
-    state.sort_menu = sort_menu::State::Hidden;
+fn hide_select_music_menu(state: &mut State) {
+    state.select_music_menu = select_music_menu::State::Hidden;
     clear_menu_chord(state);
     clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
@@ -2618,7 +2623,7 @@ fn hide_sort_menu(state: &mut State) {
 }
 
 #[inline(always)]
-fn try_open_sort_menu(state: &mut State) -> bool {
+fn try_open_select_music_menu(state: &mut State) -> bool {
     if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
         == (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
         && chord_times_are_simultaneous(
@@ -2634,7 +2639,7 @@ fn try_open_sort_menu(state: &mut State) -> bool {
             Some(NavDirection::Right) => music_wheel_change(state, -1),
             None => {}
         }
-        show_sort_menu(state);
+        show_select_music_menu(state);
         true
     } else {
         false
@@ -2642,7 +2647,7 @@ fn try_open_sort_menu(state: &mut State) -> bool {
 }
 
 #[inline(always)]
-fn try_open_sort_menu_with_select_start(
+fn try_open_select_music_menu_with_select_start(
     state: &mut State,
     select_held: bool,
     pressed: bool,
@@ -2651,7 +2656,7 @@ fn try_open_sort_menu_with_select_start(
         return false;
     }
     // Simply Love parity: holding Select and pressing Start opens SortMenu.
-    show_sort_menu(state);
+    show_select_music_menu(state);
     true
 }
 
@@ -2681,18 +2686,18 @@ fn sort_submenu_index_for_mode(sort_mode: WheelSortMode) -> usize {
 #[inline(always)]
 fn show_sorts_submenu(state: &mut State) {
     let selected_index = sort_submenu_index_for_mode(state.sort_mode);
-    state.sort_menu = sort_menu::State::Visible {
-        page: sort_menu::Page::Sorts,
+    state.select_music_menu = select_music_menu::State::Classic {
+        page: select_music_menu::Page::Sorts,
         selected_index,
     };
-    state.sort_menu_prev_selected_index = selected_index;
-    state.sort_menu_focus_anim_elapsed = 0.0;
+    state.select_music_menu_prev_selected_index = selected_index;
+    state.select_music_menu_focus_anim_elapsed = 0.0;
 }
 
 #[inline(always)]
-fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item> {
-    if page == sort_menu::Page::Sorts {
-        return sort_menu::ITEMS_SORTS.to_vec();
+fn select_music_menu_items(state: &State, page: select_music_menu::Page) -> Vec<select_music_menu::Item> {
+    if page == select_music_menu::Page::Sorts {
+        return select_music_menu::ITEMS_SORTS.to_vec();
     }
     let replays_enabled = config::get().machine_enable_replays;
     let downloads_enabled = crate::game::online::downloads::sort_menu_available();
@@ -2708,29 +2713,29 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item>
     let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
     let single_player_joined = p1_joined ^ p2_joined;
     let mut items = Vec::with_capacity(12);
-    items.push(sort_menu::ITEM_CATEGORY_SORTS);
+    items.push(select_music_menu::ITEM_CATEGORY_SORTS);
     match (profile::get_session_play_style(), single_player_joined) {
-        (profile::PlayStyle::Single, true) => items.push(sort_menu::ITEM_SWITCH_TO_DOUBLE),
-        (profile::PlayStyle::Double, true) => items.push(sort_menu::ITEM_SWITCH_TO_SINGLE),
+        (profile::PlayStyle::Single, true) => items.push(select_music_menu::ITEM_SWITCH_TO_DOUBLE),
+        (profile::PlayStyle::Double, true) => items.push(select_music_menu::ITEM_SWITCH_TO_SINGLE),
         _ => {}
     }
-    items.push(sort_menu::ITEM_TEST_INPUT);
-    items.push(sort_menu::ITEM_SONG_SEARCH);
-    items.push(sort_menu::ITEM_SWITCH_PROFILE);
-    items.push(sort_menu::ITEM_RELOAD_SONGS_COURSES);
-    items.push(sort_menu::ITEM_SHOW_LOBBIES);
+    items.push(select_music_menu::ITEM_TEST_INPUT);
+    items.push(select_music_menu::ITEM_SONG_SEARCH);
+    items.push(select_music_menu::ITEM_SWITCH_PROFILE);
+    items.push(select_music_menu::ITEM_RELOAD_SONGS_COURSES);
+    items.push(select_music_menu::ITEM_SHOW_LOBBIES);
     if downloads_enabled {
-        items.push(sort_menu::ITEM_VIEW_DOWNLOADS);
+        items.push(select_music_menu::ITEM_VIEW_DOWNLOADS);
     }
     if has_pack_selected {
-        items.push(sort_menu::ITEM_SYNC_PACK);
+        items.push(select_music_menu::ITEM_SYNC_PACK);
     }
     if has_song_selected {
-        items.push(sort_menu::ITEM_SYNC_SONG);
+        items.push(select_music_menu::ITEM_SYNC_SONG);
         if replays_enabled {
-            items.push(sort_menu::ITEM_PLAY_REPLAY);
+            items.push(select_music_menu::ITEM_PLAY_REPLAY);
         }
-        items.push(sort_menu::ITEM_SHOW_LEADERBOARD);
+        items.push(select_music_menu::ITEM_SHOW_LEADERBOARD);
     }
     items
 }
@@ -2738,10 +2743,10 @@ fn sort_menu_items(state: &State, page: sort_menu::Page) -> Vec<sort_menu::Item>
 #[inline(always)]
 fn show_test_input_overlay(state: &mut State) {
     clear_preview(state);
-    state.song_search = sort_menu::SongSearchState::Hidden;
-    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
-    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
-    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.song_search = select_music_menu::SongSearchState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
@@ -2760,9 +2765,9 @@ fn hide_test_input_overlay(state: &mut State) {
 }
 
 fn show_lobby_overlay(state: &mut State) {
-    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
-    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
-    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
@@ -2778,10 +2783,10 @@ fn show_lobby_overlay(state: &mut State) {
 
 fn start_song_search_prompt(state: &mut State) {
     clear_preview(state);
-    state.sort_menu = sort_menu::State::Hidden;
-    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
-    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
-    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.select_music_menu = select_music_menu::State::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
@@ -2791,17 +2796,17 @@ fn start_song_search_prompt(state: &mut State) {
     clear_overlay_nav_hold(state);
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
-    state.song_search = sort_menu::begin_song_search_prompt();
+    state.song_search = select_music_menu::begin_song_search_prompt();
 }
 
 fn show_profile_switch_overlay(state: &mut State) {
     profile::set_fast_profile_switch_from_select_music(false);
     clear_preview(state);
-    state.sort_menu = sort_menu::State::Hidden;
-    state.song_search = sort_menu::SongSearchState::Hidden;
-    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
-    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
-    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.select_music_menu = select_music_menu::State::Hidden;
+    state.song_search = select_music_menu::SongSearchState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
@@ -2828,36 +2833,44 @@ fn show_profile_switch_overlay(state: &mut State) {
 }
 
 #[inline(always)]
-fn restore_sort_menu_after_profile_overlay(state: &mut State) {
-    let selected_index = sort_menu_items(state, sort_menu::Page::Main)
-        .iter()
-        .position(|item| matches!(item.action, sort_menu::Action::SwitchProfile))
-        .unwrap_or(0);
-    state.sort_menu = sort_menu::State::Visible {
-        page: sort_menu::Page::Main,
-        selected_index,
-    };
-    state.sort_menu_prev_selected_index = selected_index;
-    state.sort_menu_focus_anim_elapsed = sort_menu::FOCUS_TWEEN_SECONDS;
+fn restore_select_music_menu_after_profile_overlay(state: &mut State) {
+    if config::get().use_category_select_music_menu {
+        // Re-open categories menu, preserving expansion state if we still have it
+        if !matches!(state.select_music_menu, select_music_menu::State::Categories(_)) {
+            state.select_music_menu =
+                select_music_menu::State::Categories(select_music_menu::categories::open());
+        }
+    } else {
+        let selected_index = select_music_menu_items(state, select_music_menu::Page::Main)
+            .iter()
+            .position(|item| matches!(item.action, select_music_menu::Action::SwitchProfile))
+            .unwrap_or(0);
+        state.select_music_menu = select_music_menu::State::Classic {
+            page: select_music_menu::Page::Main,
+            selected_index,
+        };
+        state.select_music_menu_prev_selected_index = selected_index;
+        state.select_music_menu_focus_anim_elapsed = select_music_menu::FOCUS_TWEEN_SECONDS;
+    }
     clear_overlay_nav_hold(state);
 }
 
 #[inline(always)]
 fn close_song_search(state: &mut State) {
-    state.song_search = sort_menu::SongSearchState::Hidden;
+    state.song_search = select_music_menu::SongSearchState::Hidden;
     clear_overlay_nav_hold(state);
 }
 
 #[inline(always)]
 fn cancel_song_search(state: &mut State) {
-    state.song_search = sort_menu::SongSearchState::Hidden;
+    state.song_search = select_music_menu::SongSearchState::Hidden;
     clear_overlay_nav_hold(state);
     state.song_search_ignore_next_back_select = true;
 }
 
 fn start_song_search_results(state: &mut State, search_text: String) {
     clear_overlay_nav_hold(state);
-    state.song_search = sort_menu::begin_song_search_results(&state.group_entries, search_text);
+    state.song_search = select_music_menu::begin_song_search_results(&state.group_entries, search_text);
 }
 
 fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
@@ -2921,9 +2934,9 @@ fn begin_reload_ui(state: &mut State) -> Option<mpsc::Sender<ReloadMsg>> {
     }
 
     clear_preview(state);
-    state.sort_menu = sort_menu::State::Hidden;
-    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
-    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.select_music_menu = select_music_menu::State::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
@@ -4167,15 +4180,15 @@ fn refresh_after_reload(state: &mut State) {
     *state = refreshed;
 }
 
-fn sort_menu_move(state: &mut State, delta: isize) -> bool {
-    let (page, selected_index) = match state.sort_menu {
-        sort_menu::State::Visible {
+fn select_music_menu_move(state: &mut State, delta: isize) -> bool {
+    let (page, selected_index) = match &state.select_music_menu {
+        select_music_menu::State::Classic {
             page,
             selected_index,
-        } => (page, selected_index),
-        sort_menu::State::Hidden => return false,
+        } => (*page, *selected_index),
+        select_music_menu::State::Hidden | select_music_menu::State::Categories(_) => return false,
     };
-    let len = sort_menu_items(state, page).len();
+    let len = select_music_menu_items(state, page).len();
     if len == 0 {
         return false;
     }
@@ -4184,11 +4197,11 @@ fn sort_menu_move(state: &mut State, delta: isize) -> bool {
     if next == old {
         return false;
     }
-    state.sort_menu_prev_selected_index = old;
-    if let sort_menu::State::Visible { selected_index, .. } = &mut state.sort_menu {
+    state.select_music_menu_prev_selected_index = old;
+    if let select_music_menu::State::Classic { selected_index, .. } = &mut state.select_music_menu {
         *selected_index = next;
     }
-    state.sort_menu_focus_anim_elapsed = 0.0;
+    state.select_music_menu_focus_anim_elapsed = 0.0;
     audio::play_sfx("assets/sounds/change.ogg");
     true
 }
@@ -4206,8 +4219,8 @@ fn update_overlay_nav_hold(state: &mut State) {
         return;
     };
 
-    let overlay_active = state.sort_menu != sort_menu::State::Hidden
-        || matches!(state.song_search, sort_menu::SongSearchState::Results(_));
+    let overlay_active = state.select_music_menu.is_visible()
+        || matches!(state.song_search, select_music_menu::SongSearchState::Results(_));
     if !overlay_active {
         clear_overlay_nav_hold(state);
         return;
@@ -4220,14 +4233,14 @@ fn update_overlay_nav_hold(state: &mut State) {
         return;
     }
 
-    let moved = if let sort_menu::SongSearchState::Results(results) = &mut state.song_search {
+    let moved = if let select_music_menu::SongSearchState::Results(results) = &mut state.song_search {
         if results.input_lock > 0.0 {
             false
         } else {
-            sort_menu::song_search_move(results, overlay_nav_delta(dir))
+            select_music_menu::song_search_move(results, overlay_nav_delta(dir))
         }
     } else {
-        sort_menu_move(state, overlay_nav_delta(dir))
+        select_music_menu_move(state, overlay_nav_delta(dir))
     };
     if moved {
         state.overlay_nav_last_scrolled_at = Some(now);
@@ -4270,9 +4283,9 @@ fn show_leaderboard_overlay(state: &mut State) {
 
     let chart_hash_p1 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P1);
     let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
-    if let Some(overlay) = sort_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
-        state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
-        state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
+    if let Some(overlay) = select_music_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
+        state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
+        state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
         state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
         state.sync_overlay = SyncOverlayState::Hidden;
         pack_sync::hide_overlay(state);
@@ -4284,14 +4297,14 @@ fn show_leaderboard_overlay(state: &mut State) {
 }
 
 fn show_downloads_overlay(state: &mut State) {
-    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
-    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
-    state.downloads_overlay = sort_menu::show_downloads_overlay();
+    state.downloads_overlay = select_music_menu::show_downloads_overlay();
     clear_preview(state);
 }
 
@@ -4306,12 +4319,12 @@ fn show_replay_overlay(state: &mut State) {
     let Some(chart_hash) = selected_chart_hash_for_side(state, song, side) else {
         return;
     };
-    let overlay = sort_menu::begin_replay_overlay(&chart_hash);
-    if matches!(overlay, sort_menu::ReplayOverlayState::Hidden) {
+    let overlay = select_music_menu::begin_replay_overlay(&chart_hash);
+    if matches!(overlay, select_music_menu::ReplayOverlayState::Hidden) {
         return;
     }
-    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
-    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
@@ -5121,10 +5134,10 @@ fn show_sync_overlay(state: &mut State) {
     let chart_label = sync_chart_label(chart);
 
     clear_preview(state);
-    state.song_search = sort_menu::SongSearchState::Hidden;
-    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
-    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
-    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.song_search = select_music_menu::SongSearchState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
@@ -5324,7 +5337,7 @@ fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction
 }
 
 fn switch_single_player_style(state: &mut State, new_style: profile::PlayStyle) {
-    hide_sort_menu(state);
+    hide_select_music_menu(state);
 
     let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
     let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
@@ -5345,50 +5358,50 @@ fn switch_single_player_style(state: &mut State, new_style: profile::PlayStyle) 
 }
 
 fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    match sort_menu::handle_leaderboard_input(&mut state.leaderboard, ev) {
-        sort_menu::LeaderboardInputOutcome::ChangedPane => {
+    match select_music_menu::handle_leaderboard_input(&mut state.leaderboard, ev) {
+        select_music_menu::LeaderboardInputOutcome::ChangedPane => {
             audio::play_sfx("assets/sounds/change.ogg");
         }
-        sort_menu::LeaderboardInputOutcome::Closed => {
+        select_music_menu::LeaderboardInputOutcome::Closed => {
             audio::play_sfx("assets/sounds/start.ogg");
         }
-        sort_menu::LeaderboardInputOutcome::None => {}
+        select_music_menu::LeaderboardInputOutcome::None => {}
     }
 
     ScreenAction::None
 }
 
 fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    match sort_menu::handle_downloads_input(&mut state.downloads_overlay, ev) {
-        sort_menu::DownloadsInputOutcome::ChangedSelection => {
+    match select_music_menu::handle_downloads_input(&mut state.downloads_overlay, ev) {
+        select_music_menu::DownloadsInputOutcome::ChangedSelection => {
             audio::play_sfx("assets/sounds/change.ogg");
         }
-        sort_menu::DownloadsInputOutcome::Closed => {
+        select_music_menu::DownloadsInputOutcome::Closed => {
             audio::play_sfx("assets/sounds/start.ogg");
         }
-        sort_menu::DownloadsInputOutcome::None => {}
+        select_music_menu::DownloadsInputOutcome::None => {}
     }
 
     ScreenAction::None
 }
 
 fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    match sort_menu::handle_replay_input(&mut state.replay_overlay, ev) {
-        sort_menu::ReplayInputOutcome::ChangedSelection => {
+    match select_music_menu::handle_replay_input(&mut state.replay_overlay, ev) {
+        select_music_menu::ReplayInputOutcome::ChangedSelection => {
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
-        sort_menu::ReplayInputOutcome::Closed => {
+        select_music_menu::ReplayInputOutcome::Closed => {
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }
-        sort_menu::ReplayInputOutcome::StartGameplay(payload) => {
+        select_music_menu::ReplayInputOutcome::StartGameplay(payload) => {
             state.pending_replay = Some(payload);
             state.out_prompt = OutPromptState::None;
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::Navigate(Screen::Gameplay)
         }
-        sort_menu::ReplayInputOutcome::None => ScreenAction::None,
+        select_music_menu::ReplayInputOutcome::None => ScreenAction::None,
     }
 }
 
@@ -5404,7 +5417,7 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Sc
         }
         ScreenAction::Navigate(_) => {
             state.profile_switch_overlay = None;
-            restore_sort_menu_after_profile_overlay(state);
+            restore_select_music_menu_after_profile_overlay(state);
             ScreenAction::None
         }
         _ => ScreenAction::None,
@@ -5425,162 +5438,68 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
     ScreenAction::None
 }
 
-fn sort_menu_activate(state: &mut State) -> ScreenAction {
+fn select_music_menu_activate(state: &mut State) -> ScreenAction {
     clear_overlay_nav_hold(state);
-    let (page, selected_index) = match state.sort_menu {
-        sort_menu::State::Visible {
+    let (page, selected_index) = match &state.select_music_menu {
+        select_music_menu::State::Classic {
             page,
             selected_index,
-        } => (page, selected_index),
-        sort_menu::State::Hidden => return ScreenAction::None,
+        } => (*page, *selected_index),
+        select_music_menu::State::Hidden | select_music_menu::State::Categories(_) => {
+            return ScreenAction::None;
+        }
     };
-    let items = sort_menu_items(state, page);
+    let items = select_music_menu_items(state, page);
     if items.is_empty() {
-        hide_sort_menu(state);
+        hide_select_music_menu(state);
         return ScreenAction::None;
     }
     let selected_index = selected_index.min(items.len() - 1);
     audio::play_sfx("assets/sounds/start.ogg");
     match items[selected_index].action {
-        sort_menu::Action::OpenSorts => {
+        select_music_menu::Action::OpenSorts => {
             show_sorts_submenu(state);
             ScreenAction::None
         }
-        sort_menu::Action::BackToMain => {
-            state.sort_menu = sort_menu::State::Visible {
-                page: sort_menu::Page::Main,
+        select_music_menu::Action::BackToMain => {
+            state.select_music_menu = select_music_menu::State::Classic {
+                page: select_music_menu::Page::Main,
                 selected_index: 0,
             };
-            state.sort_menu_prev_selected_index = 0;
-            state.sort_menu_focus_anim_elapsed = 0.0;
+            state.select_music_menu_prev_selected_index = 0;
+            state.select_music_menu_focus_anim_elapsed = 0.0;
             ScreenAction::None
         }
-        sort_menu::Action::SortByGroup => {
-            apply_wheel_sort(state, WheelSortMode::Group);
-            hide_sort_menu(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SortByTitle => {
-            apply_wheel_sort(state, WheelSortMode::Title);
-            hide_sort_menu(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SortByArtist => {
-            apply_wheel_sort(state, WheelSortMode::Artist);
-            hide_sort_menu(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SortByBpm => {
-            apply_wheel_sort(state, WheelSortMode::Bpm);
-            hide_sort_menu(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SortByLength => {
-            apply_wheel_sort(state, WheelSortMode::Length);
-            hide_sort_menu(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SortByMeter => {
-            apply_wheel_sort(state, WheelSortMode::Meter);
-            hide_sort_menu(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SortByPopularity => {
-            apply_wheel_sort(state, WheelSortMode::Popularity);
-            hide_sort_menu(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SortByRecent => {
-            apply_wheel_sort(state, WheelSortMode::Recent);
-            hide_sort_menu(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SwitchToSingle => {
-            switch_single_player_style(state, profile::PlayStyle::Single);
-            ScreenAction::None
-        }
-        sort_menu::Action::SwitchToDouble => {
-            switch_single_player_style(state, profile::PlayStyle::Double);
-            ScreenAction::None
-        }
-        sort_menu::Action::TestInput => {
-            hide_sort_menu(state);
-            show_test_input_overlay(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SongSearch => {
-            hide_sort_menu(state);
-            start_song_search_prompt(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SwitchProfile => {
-            show_profile_switch_overlay(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::ReloadSongsCourses => {
-            hide_sort_menu(state);
-            start_reload_songs_and_courses(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::ShowLobbies => {
-            hide_sort_menu(state);
-            show_lobby_overlay(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::ViewDownloads => {
-            hide_sort_menu(state);
-            show_downloads_overlay(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SyncSong => {
-            hide_sort_menu(state);
-            show_sync_overlay(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::SyncPack => {
-            hide_sort_menu(state);
-            pack_sync::show_from_selected(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::PlayReplay => {
-            hide_sort_menu(state);
-            show_replay_overlay(state);
-            ScreenAction::None
-        }
-        sort_menu::Action::ShowLeaderboard => {
-            hide_sort_menu(state);
-            show_leaderboard_overlay(state);
-            ScreenAction::None
-        }
+        _ => dispatch_menu_action(state, items[selected_index].action),
     }
 }
 
-fn handle_sort_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     let Some(dir) = overlay_nav_dir(ev.action) else {
         if !ev.pressed {
             return ScreenAction::None;
         }
         clear_overlay_nav_hold(state);
         return match ev.action {
-            VirtualAction::p1_start | VirtualAction::p2_start => sort_menu_activate(state),
+            VirtualAction::p1_start | VirtualAction::p2_start => select_music_menu_activate(state),
             VirtualAction::p1_back
             | VirtualAction::p2_back
             | VirtualAction::p1_select
             | VirtualAction::p2_select => {
                 audio::play_sfx("assets/sounds/start.ogg");
-                match state.sort_menu {
-                    sort_menu::State::Visible {
-                        page: sort_menu::Page::Sorts,
+                match &state.select_music_menu {
+                    select_music_menu::State::Classic {
+                        page: select_music_menu::Page::Sorts,
                         ..
                     } => {
-                        state.sort_menu = sort_menu::State::Visible {
-                            page: sort_menu::Page::Main,
+                        state.select_music_menu = select_music_menu::State::Classic {
+                            page: select_music_menu::Page::Main,
                             selected_index: 0,
                         };
-                        state.sort_menu_prev_selected_index = 0;
-                        state.sort_menu_focus_anim_elapsed = 0.0;
+                        state.select_music_menu_prev_selected_index = 0;
+                        state.select_music_menu_focus_anim_elapsed = 0.0;
                     }
-                    _ => hide_sort_menu(state),
+                    _ => hide_select_music_menu(state),
                 }
                 ScreenAction::None
             }
@@ -5593,24 +5512,130 @@ fn handle_sort_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    let _ = sort_menu_move(state, overlay_nav_delta(dir));
+    let _ = select_music_menu_move(state, overlay_nav_delta(dir));
     start_overlay_nav_hold(state, dir);
     ScreenAction::None
 }
 
+fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) -> ScreenAction {
+    match action {
+        select_music_menu::Action::OpenSorts | select_music_menu::Action::BackToMain => {
+            // These are classic-only navigation actions; no-op in categories
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByGroup => {
+            apply_wheel_sort(state, WheelSortMode::Group);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByTitle => {
+            apply_wheel_sort(state, WheelSortMode::Title);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByArtist => {
+            apply_wheel_sort(state, WheelSortMode::Artist);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByBpm => {
+            apply_wheel_sort(state, WheelSortMode::Bpm);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByLength => {
+            apply_wheel_sort(state, WheelSortMode::Length);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByMeter => {
+            apply_wheel_sort(state, WheelSortMode::Meter);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByPopularity => {
+            apply_wheel_sort(state, WheelSortMode::Popularity);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByRecent => {
+            apply_wheel_sort(state, WheelSortMode::Recent);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SwitchToSingle => {
+            switch_single_player_style(state, profile::PlayStyle::Single);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SwitchToDouble => {
+            switch_single_player_style(state, profile::PlayStyle::Double);
+            ScreenAction::None
+        }
+        select_music_menu::Action::TestInput => {
+            hide_select_music_menu(state);
+            show_test_input_overlay(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SongSearch => {
+            hide_select_music_menu(state);
+            start_song_search_prompt(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SwitchProfile => {
+            show_profile_switch_overlay(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::ReloadSongsCourses => {
+            hide_select_music_menu(state);
+            start_reload_songs_and_courses(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::ShowLobbies => {
+            hide_select_music_menu(state);
+            show_lobby_overlay(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::ViewDownloads => {
+            hide_select_music_menu(state);
+            show_downloads_overlay(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SyncSong => {
+            hide_select_music_menu(state);
+            show_sync_overlay(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SyncPack => {
+            hide_select_music_menu(state);
+            pack_sync::show_from_selected(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::PlayReplay => {
+            hide_select_music_menu(state);
+            show_replay_overlay(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::ShowLeaderboard => {
+            hide_select_music_menu(state);
+            show_leaderboard_overlay(state);
+            ScreenAction::None
+        }
+    }
+}
+
 fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if matches!(state.song_search, sort_menu::SongSearchState::Hidden) {
+    if matches!(state.song_search, select_music_menu::SongSearchState::Hidden) {
         return ScreenAction::None;
     }
 
-    if matches!(state.song_search, sort_menu::SongSearchState::TextEntry(_)) {
+    if matches!(state.song_search, select_music_menu::SongSearchState::TextEntry(_)) {
         if !ev.pressed {
             return ScreenAction::None;
         }
 
         let mut prompt_start = None;
         let mut prompt_close = false;
-        if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
+        if let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
             match ev.action {
                 VirtualAction::p1_start | VirtualAction::p2_start => {
                     prompt_start = Some(entry.query.clone());
@@ -5639,17 +5664,17 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
             return ScreenAction::None;
         }
 
-        if let sort_menu::SongSearchState::Results(results) = &state.song_search
+        if let select_music_menu::SongSearchState::Results(results) = &state.song_search
             && results.input_lock > 0.0
         {
             return ScreenAction::None;
         }
 
         start_overlay_nav_hold(state, dir);
-        if let sort_menu::SongSearchState::Results(results) = &mut state.song_search
+        if let select_music_menu::SongSearchState::Results(results) = &mut state.song_search
             && results.input_lock <= 0.0
         {
-            let _ = sort_menu::song_search_move(results, overlay_nav_delta(dir));
+            let _ = select_music_menu::song_search_move(results, overlay_nav_delta(dir));
         }
         return ScreenAction::None;
     }
@@ -5658,7 +5683,7 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         return ScreenAction::None;
     }
 
-    if let sort_menu::SongSearchState::Results(results) = &state.song_search
+    if let select_music_menu::SongSearchState::Results(results) = &state.song_search
         && results.input_lock > 0.0
     {
         return ScreenAction::None;
@@ -5667,8 +5692,8 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
     clear_overlay_nav_hold(state);
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
-            let picked = if let sort_menu::SongSearchState::Results(results) = &state.song_search {
-                sort_menu::song_search_focused_candidate(results).map(|c| c.song.clone())
+            let picked = if let select_music_menu::SongSearchState::Results(results) = &state.song_search {
+                select_music_menu::song_search_focused_candidate(results).map(|c| c.song.clone())
             } else {
                 None
             };
@@ -5701,7 +5726,7 @@ pub fn handle_pad_dir(
                 // Simply Love [ScreenSelectMusic]: CodeSortList4 = "Left-Right".
                 state.menu_chord_mask |= MENU_CHORD_RIGHT;
                 state.menu_chord_right_pressed_at = Some(timestamp);
-                if try_open_sort_menu(state) {
+                if try_open_select_music_menu(state) {
                     return ScreenAction::None;
                 }
                 if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
@@ -5722,7 +5747,7 @@ pub fn handle_pad_dir(
             PadDir::Left => {
                 state.menu_chord_mask |= MENU_CHORD_LEFT;
                 state.menu_chord_left_pressed_at = Some(timestamp);
-                if try_open_sort_menu(state) {
+                if try_open_select_music_menu(state) {
                     return ScreenAction::None;
                 }
                 if state.menu_chord_mask & (MENU_CHORD_LEFT | MENU_CHORD_RIGHT)
@@ -6066,9 +6091,9 @@ pub fn handle_raw_key_event(
         return ScreenAction::None;
     }
 
-    if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
+    if !matches!(state.replay_overlay, select_music_menu::ReplayOverlayState::Hidden) {
         if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
-            state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+            state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
             state.song_search_ignore_next_back_select = true;
             return ScreenAction::None;
         }
@@ -6089,7 +6114,7 @@ pub fn handle_raw_key_event(
     }
 
     if key.is_some_and(|key| key.pressed) {
-        if matches!(state.song_search, sort_menu::SongSearchState::Results(_))
+        if matches!(state.song_search, select_music_menu::SongSearchState::Results(_))
             && key.is_some_and(|key| key.code == KeyCode::Escape)
         {
             cancel_song_search(state);
@@ -6097,12 +6122,12 @@ pub fn handle_raw_key_event(
         }
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
-        if let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
+        if let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
             if let Some(key) = key {
                 let code = key.code;
                 match code {
                     KeyCode::Backspace => {
-                        sort_menu::song_search_backspace(entry);
+                        select_music_menu::song_search_backspace(entry);
                         return ScreenAction::None;
                     }
                     KeyCode::Escape => {
@@ -6119,7 +6144,7 @@ pub fn handle_raw_key_event(
                 && prompt_start.is_none()
                 && let Some(text) = text
             {
-                sort_menu::song_search_add_text(entry, text);
+                select_music_menu::song_search_add_text(entry, text);
             }
 
             if let Some(search_text) = prompt_start {
@@ -6134,9 +6159,9 @@ pub fn handle_raw_key_event(
         }
     } else if key.is_none()
         && let Some(text) = text
-        && let sort_menu::SongSearchState::TextEntry(entry) = &mut state.song_search
+        && let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search
     {
-        sort_menu::song_search_add_text(entry, text);
+        select_music_menu::song_search_add_text(entry, text);
         return ScreenAction::None;
     }
 
@@ -6176,7 +6201,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    if matches!(state.song_search, sort_menu::SongSearchState::Hidden)
+    if matches!(state.song_search, select_music_menu::SongSearchState::Hidden)
         && state.song_search_ignore_next_back_select
     {
         if matches!(
@@ -6195,7 +6220,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
     }
 
-    if !matches!(state.song_search, sort_menu::SongSearchState::Hidden) {
+    if !matches!(state.song_search, select_music_menu::SongSearchState::Hidden) {
         return handle_song_search_input(state, ev);
     }
 
@@ -6214,7 +6239,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return handle_sync_overlay_input(state, ev);
     }
 
-    if !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden) {
+    if !matches!(state.replay_overlay, select_music_menu::ReplayOverlayState::Hidden) {
         return handle_replay_overlay_input(state, ev);
     }
     if state.test_input_overlay_visible {
@@ -6251,20 +6276,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     if !matches!(
         state.leaderboard,
-        sort_menu::LeaderboardOverlayState::Hidden
+        select_music_menu::LeaderboardOverlayState::Hidden
     ) {
         return handle_leaderboard_input(state, ev);
     }
 
     if !matches!(
         state.downloads_overlay,
-        sort_menu::DownloadsOverlayState::Hidden
+        select_music_menu::DownloadsOverlayState::Hidden
     ) {
         return handle_downloads_overlay_input(state, ev);
     }
 
-    if state.sort_menu != sort_menu::State::Hidden {
-        return handle_sort_menu_input(state, ev);
+    if state.select_music_menu.is_visible() {
+        return handle_select_music_menu_input(state, ev);
     }
 
     let play_style = crate::game::profile::get_session_play_style();
@@ -6283,7 +6308,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_start if ev.pressed => {
-                if try_open_sort_menu_with_select_start(state, state.p1_select_held, ev.pressed) {
+                if try_open_select_music_menu_with_select_start(state, state.p1_select_held, ev.pressed) {
                     ScreenAction::None
                 } else {
                     handle_confirm(state)
@@ -6307,7 +6332,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir_p2(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_start if ev.pressed => {
-                if try_open_sort_menu_with_select_start(state, state.p2_select_held, ev.pressed) {
+                if try_open_select_music_menu_with_select_start(state, state.p2_select_held, ev.pressed) {
                     ScreenAction::None
                 } else {
                     handle_confirm(state)
@@ -6336,7 +6361,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_start if ev.pressed => {
-                if try_open_sort_menu_with_select_start(state, state.p2_select_held, ev.pressed) {
+                if try_open_select_music_menu_with_select_start(state, state.p2_select_held, ev.pressed) {
                     ScreenAction::None
                 } else {
                     handle_confirm(state)
@@ -6362,7 +6387,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_start if ev.pressed => {
-                if try_open_sort_menu_with_select_start(state, state.p1_select_held, ev.pressed) {
+                if try_open_select_music_menu_with_select_start(state, state.p1_select_held, ev.pressed) {
                     ScreenAction::None
                 } else {
                     handle_confirm(state)
@@ -6411,7 +6436,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    if sort_menu::update_song_search(&mut state.song_search, dt) {
+    if select_music_menu::update_song_search(&mut state.song_search, dt) {
         update_overlay_nav_hold(state);
         return ScreenAction::None;
     }
@@ -6423,7 +6448,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         poll_sync_overlay(overlay);
         return ScreenAction::None;
     }
-    if sort_menu::update_replay_overlay(&mut state.replay_overlay, dt) {
+    if select_music_menu::update_replay_overlay(&mut state.replay_overlay, dt) {
         return ScreenAction::None;
     }
     if let Some(overlay) = state.profile_switch_overlay.as_mut() {
@@ -6476,8 +6501,8 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
     }
 
-    sort_menu::update_leaderboard_overlay(&mut state.leaderboard, dt);
-    sort_menu::update_downloads_overlay(&mut state.downloads_overlay, dt);
+    select_music_menu::update_leaderboard_overlay(&mut state.leaderboard, dt);
+    select_music_menu::update_downloads_overlay(&mut state.downloads_overlay, dt);
 
     state.time_since_selection_change += dt;
     if dt > 0.0 {
@@ -6487,14 +6512,20 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 (state.cdtitle_spin_elapsed + dt).min(CDTITLE_SPIN_SECONDS);
         }
         state.cdtitle_anim_elapsed += dt;
-        if state.sort_menu != sort_menu::State::Hidden
-            && state.sort_menu_focus_anim_elapsed < sort_menu::FOCUS_TWEEN_SECONDS
+        if state.select_music_menu.is_visible()
+            && state.select_music_menu_focus_anim_elapsed < select_music_menu::FOCUS_TWEEN_SECONDS
         {
-            state.sort_menu_focus_anim_elapsed =
-                (state.sort_menu_focus_anim_elapsed + dt).min(sort_menu::FOCUS_TWEEN_SECONDS);
+            state.select_music_menu_focus_anim_elapsed =
+                (state.select_music_menu_focus_anim_elapsed + dt).min(select_music_menu::FOCUS_TWEEN_SECONDS);
+        }
+        if let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu {
+            if cat_state.focus_anim_elapsed < select_music_menu::categories::FOCUS_TWEEN_SECONDS {
+                cat_state.focus_anim_elapsed =
+                    (cat_state.focus_anim_elapsed + dt).min(select_music_menu::categories::FOCUS_TWEEN_SECONDS);
+            }
         }
     }
-    if state.sort_menu != sort_menu::State::Hidden {
+    if state.select_music_menu.is_visible() {
         update_overlay_nav_hold(state);
     }
 
@@ -6564,17 +6595,17 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 
     sync_lobby_select_music(state);
 
-    let overlays_block_delayed_updates = state.sort_menu != sort_menu::State::Hidden
+    let overlays_block_delayed_updates = state.select_music_menu.is_visible()
         || !matches!(
             state.leaderboard,
-            sort_menu::LeaderboardOverlayState::Hidden
+            select_music_menu::LeaderboardOverlayState::Hidden
         )
         || !matches!(
             state.pack_sync_overlay,
             crate::screens::pack_sync::OverlayState::Hidden
         )
         || !matches!(state.sync_overlay, SyncOverlayState::Hidden)
-        || !matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden)
+        || !matches!(state.replay_overlay, select_music_menu::ReplayOverlayState::Hidden)
         || state.profile_switch_overlay.is_some()
         || state.test_input_overlay_visible;
     if overlays_block_delayed_updates && state.currently_playing_preview_path.is_some() {
@@ -6834,7 +6865,7 @@ pub fn prime_displayed_chart_data(state: &mut State) {
         .map(|chart_ix| DisplayedChart { song, chart_ix });
 }
 
-pub fn take_pending_replay(state: &mut State) -> Option<sort_menu::ReplayStartPayload> {
+pub fn take_pending_replay(state: &mut State) -> Option<select_music_menu::ReplayStartPayload> {
     state.pending_replay.take()
 }
 
@@ -6843,12 +6874,12 @@ pub fn allows_late_join(state: &State) -> bool {
     state.reload_ui.is_none()
         && state.out_prompt == OutPromptState::None
         && state.exit_prompt == ExitPromptState::None
-        && state.sort_menu == sort_menu::State::Hidden
-        && matches!(state.song_search, sort_menu::SongSearchState::Hidden)
-        && matches!(state.replay_overlay, sort_menu::ReplayOverlayState::Hidden)
+        && state.select_music_menu.is_hidden()
+        && matches!(state.song_search, select_music_menu::SongSearchState::Hidden)
+        && matches!(state.replay_overlay, select_music_menu::ReplayOverlayState::Hidden)
         && matches!(
             state.leaderboard,
-            sort_menu::LeaderboardOverlayState::Hidden
+            select_music_menu::LeaderboardOverlayState::Hidden
         )
         && state.profile_switch_overlay.is_none()
         && !state.test_input_overlay_visible
@@ -8246,7 +8277,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     }
 
     if let Some(song_search_overlay) =
-        sort_menu::build_song_search_overlay(&state.song_search, state.active_color_index)
+        select_music_menu::build_song_search_overlay(&state.song_search, state.active_color_index)
     {
         actors.extend(song_search_overlay);
         return actors;
@@ -8268,7 +8299,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         return actors;
     }
     if let Some(replay_overlay) =
-        sort_menu::build_replay_overlay(&state.replay_overlay, state.active_color_index)
+        select_music_menu::build_replay_overlay(&state.replay_overlay, state.active_color_index)
     {
         actors.extend(replay_overlay);
         return actors;
@@ -8325,26 +8356,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         }));
     }
 
-    if let sort_menu::State::Visible {
+    if let select_music_menu::State::Classic {
         page,
         selected_index,
-    } = state.sort_menu
+    } = &state.select_music_menu
     {
-        let items = sort_menu_items(state, page);
-        actors.extend(sort_menu::build_overlay(sort_menu::RenderParams {
+        let items = select_music_menu_items(state, *page);
+        actors.extend(select_music_menu::build_overlay(select_music_menu::RenderParams {
             items: items.as_slice(),
-            selected_index,
-            prev_selected_index: state.sort_menu_prev_selected_index,
-            focus_anim_elapsed: state.sort_menu_focus_anim_elapsed,
+            selected_index: *selected_index,
+            prev_selected_index: state.select_music_menu_prev_selected_index,
+            focus_anim_elapsed: state.select_music_menu_focus_anim_elapsed,
             selected_color: color::simply_love_rgba(state.active_color_index),
         }));
     }
 
-    if let Some(leaderboard_overlay) = sort_menu::build_leaderboard_overlay(&state.leaderboard) {
+    if let Some(leaderboard_overlay) = select_music_menu::build_leaderboard_overlay(&state.leaderboard) {
         actors.extend(leaderboard_overlay);
     }
     if let Some(downloads_overlay) =
-        sort_menu::build_downloads_overlay(&state.downloads_overlay, state.active_color_index)
+        select_music_menu::build_downloads_overlay(&state.downloads_overlay, state.active_color_index)
     {
         actors.extend(downloads_overlay);
     }

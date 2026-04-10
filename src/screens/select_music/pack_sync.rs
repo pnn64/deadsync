@@ -47,10 +47,10 @@ fn show_for_group(state: &mut State, pack_group: Option<&str>) -> bool {
     };
 
     clear_preview(state);
-    state.song_search = sort_menu::SongSearchState::Hidden;
-    state.leaderboard = sort_menu::LeaderboardOverlayState::Hidden;
-    state.downloads_overlay = sort_menu::DownloadsOverlayState::Hidden;
-    state.replay_overlay = sort_menu::ReplayOverlayState::Hidden;
+    state.song_search = select_music_menu::SongSearchState::Hidden;
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
