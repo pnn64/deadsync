@@ -351,6 +351,10 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicPreviewLoop")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.select_music_preview_loop, |v| v != 0);
+    cfg.use_category_select_music_menu = conf
+        .get("Options", "UseCategorySelectMusicMenu")
+        .and_then(|v| v.parse::<u8>().ok())
+        .map_or(default.use_category_select_music_menu, |v| v != 0);
     cfg.select_music_pattern_info_mode = conf
         .get("Options", "SelectMusicPatternInfo")
         .and_then(|v| SelectMusicPatternInfoMode::from_str(&v).ok())

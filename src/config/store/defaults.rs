@@ -163,6 +163,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SelectMusicPreviewLoop",
         default.select_music_preview_loop,
     );
+    push_bool(
+        content,
+        "UseCategorySelectMusicMenu",
+        default.use_category_select_music_menu,
+    );
     push_line(
         content,
         "SelectMusicPatternInfo",
