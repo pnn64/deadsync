@@ -582,6 +582,38 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     globals.set("unpack", table.get::<Value>("unpack")?)?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
     globals.set(
+        "color",
+        lua.create_function(|lua, args: MultiValue| {
+            Ok(match read_color_call(&args) {
+                Some(color) => Value::Table(make_color_table(lua, color)?),
+                None => Value::Nil,
+            })
+        })?,
+    )?;
+    globals.set(
+        "lerp_color",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(percent) = args.front().cloned().and_then(read_f32) else {
+                return Ok(Value::Nil);
+            };
+            let Some(a) = args.get(1).cloned().and_then(read_color_value) else {
+                return Ok(Value::Nil);
+            };
+            let Some(b) = args.get(2).cloned().and_then(read_color_value) else {
+                return Ok(Value::Nil);
+            };
+            Ok(Value::Table(make_color_table(
+                lua,
+                [
+                    a[0] + (b[0] - a[0]) * percent,
+                    a[1] + (b[1] - a[1]) * percent,
+                    a[2] + (b[2] - a[2]) * percent,
+                    a[3] + (b[3] - a[3]) * percent,
+                ],
+            )?))
+        })?,
+    )?;
+    globals.set(
         "setfenv",
         lua.create_function(|_, (target, env): (Value, Table)| match target {
             Value::Function(function) => {
@@ -3447,15 +3479,17 @@ fn make_actor_tween_method(
 }
 
 fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {
-    if let Some(Value::Table(table)) = method_arg(args, 0) {
-        return table_vec4(table);
+    if let Some(color) = method_arg(args, 0).cloned().and_then(read_color_value) {
+        return Some(color);
     }
-    Some([
-        method_arg(args, 0).cloned().and_then(read_f32)?,
-        method_arg(args, 1).cloned().and_then(read_f32)?,
-        method_arg(args, 2).cloned().and_then(read_f32)?,
-        method_arg(args, 3).cloned().and_then(read_f32)?,
-    ])
+    let r = method_arg(args, 0).cloned().and_then(read_f32)?;
+    let g = method_arg(args, 1).cloned().and_then(read_f32)?;
+    let b = method_arg(args, 2).cloned().and_then(read_f32)?;
+    let a = method_arg(args, 3)
+        .cloned()
+        .and_then(read_f32)
+        .unwrap_or(1.0);
+    Some([r, g, b, a])
 }
 
 fn entry_file_path(path: &Path) -> Option<PathBuf> {
@@ -4097,6 +4131,86 @@ fn read_string(value: Value) -> Option<String> {
 }
 
 #[inline(always)]
+fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.raw_set(1, rgba[0])?;
+    table.raw_set(2, rgba[1])?;
+    table.raw_set(3, rgba[2])?;
+    table.raw_set(4, rgba[3])?;
+    Ok(table)
+}
+
+#[inline(always)]
+fn table_color(table: &Table) -> Option<[f32; 4]> {
+    Some([
+        table.raw_get::<f32>(1).ok()?,
+        table.raw_get::<f32>(2).ok()?,
+        table.raw_get::<f32>(3).ok()?,
+        table.raw_get::<Option<f32>>(4).ok()?.unwrap_or(1.0),
+    ])
+}
+
+fn parse_color_text(text: &str) -> Option<[f32; 4]> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    if let Some(hex) = text.strip_prefix('#') {
+        if matches!(hex.len(), 6 | 8) {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+            let a = if hex.len() == 8 {
+                u8::from_str_radix(&hex[6..8], 16).ok()? as f32 / 255.0
+            } else {
+                1.0
+            };
+            return Some([r, g, b, a]);
+        }
+    }
+    let parts = text
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    match parts.as_slice() {
+        [r, g, b] => Some([
+            r.parse::<f32>().ok()?,
+            g.parse::<f32>().ok()?,
+            b.parse::<f32>().ok()?,
+            1.0,
+        ]),
+        [r, g, b, a] => Some([
+            r.parse::<f32>().ok()?,
+            g.parse::<f32>().ok()?,
+            b.parse::<f32>().ok()?,
+            a.parse::<f32>().ok()?,
+        ]),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn read_color_value(value: Value) -> Option<[f32; 4]> {
+    match value {
+        Value::Table(table) => table_color(&table),
+        Value::String(text) => Some(parse_color_text(&text.to_str().ok()?).unwrap_or([1.0; 4])),
+        _ => None,
+    }
+}
+
+fn read_color_call(args: &MultiValue) -> Option<[f32; 4]> {
+    if let Some(color) = args.front().cloned().and_then(read_color_value) {
+        return Some(color);
+    }
+    let r = args.front().cloned().and_then(read_f32)?;
+    let g = args.get(1).cloned().and_then(read_f32)?;
+    let b = args.get(2).cloned().and_then(read_f32)?;
+    let a = args.get(3).cloned().and_then(read_f32).unwrap_or(1.0);
+    Some([r, g, b, a])
+}
+
+#[inline(always)]
 fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
     let offset = usize::from(matches!(args.front(), Some(Value::Table(_))));
     args.get(offset + index)
@@ -4588,6 +4702,45 @@ return Def.ActorFrame{
 
         let compiled =
             compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "BitmapText")).unwrap();
+        assert!(compiled.overlays.is_empty());
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_color_helpers() {
+        let song_dir = test_dir("color-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r##"
+local c1 = color("#00000080")
+local c2 = color("1,0.5,0.25")
+local c3 = color(0.25, 0.5, 0.75, 1)
+local mix = lerp_color(0.5, c1, c3)
+
+local function approx(a, b)
+    return math.abs(a - b) < 0.001
+end
+
+if not approx(c1[4], 128 / 255) then
+    error("unexpected hex alpha: " .. tostring(c1[4]))
+end
+if c2[4] ~= 1 then
+    error("numeric string alpha default mismatch")
+end
+if not approx(mix[1], 0.125) or not approx(mix[2], 0.25) or not approx(mix[3], 0.375) then
+    error("unexpected lerp color")
+end
+
+return Def.ActorFrame{}
+"##,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Color Helpers"),
+        )
+        .unwrap();
         assert!(compiled.overlays.is_empty());
     }
 

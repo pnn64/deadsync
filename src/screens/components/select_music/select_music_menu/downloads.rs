@@ -301,4 +301,3 @@ pub fn build_downloads_overlay(
 
     Some(actors)
 }
-

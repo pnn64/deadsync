@@ -19,7 +19,6 @@ const GS_LEADERBOARD_PANE_CENTER_Y: f32 = -15.0;
 const GS_LEADERBOARD_DIM_ALPHA: f32 = 0.875;
 const GS_LEADERBOARD_Z: i16 = 1480;
 
-
 #[derive(Clone, Debug)]
 pub struct ReplayOverlayStateData {
     pub entries: Vec<scores::MachineReplayEntry>,
