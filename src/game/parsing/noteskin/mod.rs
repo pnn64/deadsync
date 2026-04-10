@@ -1851,7 +1851,7 @@ where
             }
             Ok((_data, noteskin_compile::CompileOutcome::Reused)) => {
                 summary.reused += 1;
-                on_progress(idx + 1, total, &label, "cached");
+                on_progress(idx + 1, total, &label, "");
             }
             Err(err) => {
                 summary.failed += 1;
