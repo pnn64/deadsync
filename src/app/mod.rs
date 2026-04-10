@@ -5104,7 +5104,6 @@ impl App {
 
         if input::unix_raw_keyboard_backend_active()
             || !self.accepts_live_input()
-            || self.state.screens.current_screen == CurrentScreen::Init
         {
             return;
         }
@@ -5128,7 +5127,7 @@ impl App {
     #[inline(always)]
     fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
-        if is_transitioning || self.state.screens.current_screen == CurrentScreen::Init {
+        if is_transitioning {
             input::clear_debounce_state();
             self.clear_gameplay_input_events();
             return;
