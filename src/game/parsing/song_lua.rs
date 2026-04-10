@@ -1957,11 +1957,8 @@ fn run_actor_named_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result
 }
 
 fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
-    let actor_type = actor.get::<Option<String>>("__songlua_actor_type")?;
-    Ok(!matches!(
-        actor_type.as_deref(),
-        Some("Sprite") | Some("Quad")
-    ))
+    let _ = actor;
+    Ok(true)
 }
 
 fn call_actor_function(lua: &Lua, actor: &Table, command: &Function) -> mlua::Result<()> {
@@ -3849,9 +3846,44 @@ fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let actor_clone = actor.clone();
     mt.set(
         "__concat",
-        lua.create_function(move |_, (_lhs, _rhs): (Value, Value)| Ok(actor_clone.clone()))?,
+        lua.create_function(move |lua, (_lhs, rhs): (Value, Value)| {
+            if let Value::Table(rhs) = rhs {
+                merge_actor_concat(lua, &actor_clone, &rhs)?;
+            }
+            Ok(actor_clone.clone())
+        })?,
     )?;
     let _ = actor.set_metatable(Some(mt));
+    Ok(())
+}
+
+fn merge_actor_concat(_lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()> {
+    let next_index = actor.raw_len() + 1;
+    let mut append_index = next_index;
+    for value in rhs.sequence_values::<Value>() {
+        actor.raw_set(append_index, value?)?;
+        append_index += 1;
+    }
+    for pair in rhs.pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let is_sequence_key = match key {
+            Value::Integer(index) => index >= 1,
+            Value::Number(index) => index.is_finite() && index >= 1.0 && index.fract() == 0.0,
+            _ => false,
+        };
+        if is_sequence_key {
+            continue;
+        }
+        if matches!(
+            &key,
+            Value::String(text)
+                if text.to_str().ok().is_some_and(|name|
+                    name == "__songlua_actor_type" || name == "__songlua_script_dir")
+        ) {
+            continue;
+        }
+        actor.set(key, value)?;
+    }
     Ok(())
 }
 
@@ -5096,6 +5128,38 @@ return Def.ActorFrame{
             }),
             "noteskin actor should materialize as a sprite overlay when it resolves to an image"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_runs_concat_noteskin_sprite_oncommand() {
+        let song_dir = test_dir("noteskin-concat-oncommand");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {}
+
+return Def.ActorFrame{
+    NOTESKIN:LoadActorForNoteSkin("Down", "Tap Explosion Bright W1", "cyber")..{
+        Name="ConcatNoteskin",
+        OnCommand=function(self)
+            mod_actions = {
+                {4, self:GetName(), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Noteskin Concat"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "ConcatNoteskin");
     }
 
     #[test]
