@@ -8,6 +8,29 @@ use std::sync::Arc;
 
 // --- ITGMania Parity Constants and Helpers ---
 pub const ROWS_PER_BEAT: i32 = 48;
+type TimingNs = i64;
+const INVALID_TIMING_NS: TimingNs = i64::MIN;
+
+#[inline(always)]
+fn timing_ns_from_seconds(seconds: f32) -> TimingNs {
+    let nanos = f64::from(seconds) * 1_000_000_000.0;
+    nanos.clamp((i64::MIN + 1) as f64, i64::MAX as f64) as TimingNs
+}
+
+#[inline(always)]
+fn timing_ns_to_seconds(time_ns: TimingNs) -> f32 {
+    (time_ns as f64 * 1.0e-9) as f32
+}
+
+#[inline(always)]
+fn timing_ns_delta_seconds(lhs: TimingNs, rhs: TimingNs) -> f32 {
+    ((lhs as i128 - rhs as i128) as f64 * 1.0e-9) as f32
+}
+
+#[inline(always)]
+fn timing_ns_add_seconds(time_ns: TimingNs, delta_seconds: f32) -> TimingNs {
+    time_ns.saturating_add(timing_ns_from_seconds(delta_seconds))
+}
 
 // ------------------ Unified Timing Windows (Gameplay + Visuals) ------------------
 // All base windows are in seconds.
@@ -312,8 +335,8 @@ impl From<&rssp_timing::TimingSegments> for TimingSegments {
 
 #[derive(Debug, Clone, Copy)]
 struct SpeedRuntime {
-    start_time: f32,
-    end_time: f32,
+    start_time_ns: TimingNs,
+    end_time_ns: TimingNs,
     prev_ratio: f32,
 }
 
@@ -339,13 +362,14 @@ pub struct TimingData {
     speed_runtime: Vec<SpeedRuntime>,
     scroll_prefix: Vec<ScrollPrefix>,
     global_offset_sec: f32,
+    global_offset_ns: TimingNs,
     max_bpm: f32,
 }
 
 #[derive(Debug, Clone, Default, Copy)]
 struct BeatTimePoint {
     beat: f32,
-    time_sec: f32,
+    time_ns: TimingNs,
     bpm: f32,
 }
 
@@ -356,7 +380,7 @@ struct GetBeatStarts {
     delay_idx: usize,
     warp_idx: usize,
     last_row: i32,
-    last_time: f32,
+    last_time_ns: TimingNs,
     warp_destination: f32,
     is_warping: bool,
 }
@@ -369,7 +393,7 @@ impl Default for GetBeatStarts {
             delay_idx: 0,
             warp_idx: 0,
             last_row: 0,
-            last_time: 0.0,
+            last_time_ns: 0,
             warp_destination: 0.0,
             is_warping: false,
         }
@@ -379,39 +403,52 @@ impl Default for GetBeatStarts {
 #[derive(Debug, Clone)]
 pub struct BeatInfoCache {
     start: GetBeatStarts,
-    last_elapsed_time: f32,
-    global_offset_sec: f32,
+    last_elapsed_time_ns: TimingNs,
+    global_offset_ns: TimingNs,
 }
 
 impl BeatInfoCache {
     pub fn new(timing: &TimingData) -> Self {
         let mut cache = Self {
             start: GetBeatStarts::default(),
-            last_elapsed_time: f32::NEG_INFINITY,
-            global_offset_sec: timing.global_offset_sec,
+            last_elapsed_time_ns: INVALID_TIMING_NS,
+            global_offset_ns: timing.global_offset_ns,
         };
-        cache.start.last_time =
-            -timing.beat0_offset_seconds() - timing.beat0_group_offset_seconds();
+        cache.start.last_time_ns = timing.beat_start_time_ns();
         cache
     }
 
     pub fn reset(&mut self, timing: &TimingData) {
         self.start = GetBeatStarts::default();
-        self.start.last_time = -timing.beat0_offset_seconds() - timing.beat0_group_offset_seconds();
-        self.last_elapsed_time = f32::NEG_INFINITY;
-        self.global_offset_sec = timing.global_offset_sec;
+        self.start.last_time_ns = timing.beat_start_time_ns();
+        self.last_elapsed_time_ns = INVALID_TIMING_NS;
+        self.global_offset_ns = timing.global_offset_ns;
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct GetBeatArgs {
-    pub elapsed_time: f32,
-    pub beat: f32,
-    pub bps_out: f32,
-    pub warp_dest_out: f32,
-    pub warp_begin_out: i32,
-    pub freeze_out: bool,
-    pub delay_out: bool,
+#[derive(Debug, Clone, Copy)]
+struct GetBeatArgs {
+    elapsed_time_ns: TimingNs,
+    beat: f32,
+    bps_out: f32,
+    warp_dest_out: f32,
+    warp_begin_out: i32,
+    freeze_out: bool,
+    delay_out: bool,
+}
+
+impl Default for GetBeatArgs {
+    fn default() -> Self {
+        Self {
+            elapsed_time_ns: INVALID_TIMING_NS,
+            beat: 0.0,
+            bps_out: 0.0,
+            warp_dest_out: 0.0,
+            warp_begin_out: 0,
+            freeze_out: false,
+            delay_out: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -467,6 +504,8 @@ impl TimingData {
         fakes.sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
 
         let song_offset_sec = song_offset_sec + segments.beat0_offset_adjust;
+        let song_offset_ns = timing_ns_from_seconds(song_offset_sec);
+        let global_offset_ns = timing_ns_from_seconds(global_offset_sec);
 
         let mut beat_to_time = Vec::with_capacity(parsed_bpms.len());
         let mut current_time = 0.0;
@@ -480,7 +519,7 @@ impl TimingData {
             }
             beat_to_time.push(BeatTimePoint {
                 beat,
-                time_sec: song_offset_sec + current_time,
+                time_ns: timing_ns_add_seconds(song_offset_ns, current_time),
                 bpm,
             });
             if bpm.is_finite() && bpm > max_bpm {
@@ -502,6 +541,7 @@ impl TimingData {
             speed_runtime: Vec::new(),
             scroll_prefix: Vec::new(),
             global_offset_sec,
+            global_offset_ns,
             max_bpm,
         };
 
@@ -510,33 +550,13 @@ impl TimingData {
             .iter()
             .map(|point| {
                 let mut new_point = *point;
-                new_point.time_sec = timing_with_stops.get_time_for_beat_internal(point.beat);
+                new_point.time_ns = timing_with_stops.get_time_for_beat_internal_ns(point.beat);
                 new_point
             })
             .collect();
         timing_with_stops.beat_to_time = Arc::new(re_beat_to_time);
 
-        if !timing_with_stops.speeds.is_empty() {
-            let mut runtime = Vec::with_capacity(timing_with_stops.speeds.len());
-            let mut prev_ratio = 1.0_f32;
-            for seg in &timing_with_stops.speeds {
-                let start_time = timing_with_stops.get_time_for_beat(seg.beat);
-                let end_time = if seg.delay <= 0.0 {
-                    start_time
-                } else if seg.unit == SpeedUnit::Seconds {
-                    start_time + seg.delay
-                } else {
-                    timing_with_stops.get_time_for_beat(seg.beat + seg.delay)
-                };
-                runtime.push(SpeedRuntime {
-                    start_time,
-                    end_time,
-                    prev_ratio,
-                });
-                prev_ratio = seg.ratio;
-            }
-            timing_with_stops.speed_runtime = runtime;
-        }
+        timing_with_stops.rebuild_speed_runtime();
 
         if !timing_with_stops.scrolls.is_empty() {
             let mut prefixes = Vec::with_capacity(timing_with_stops.scrolls.len());
@@ -661,11 +681,15 @@ impl TimingData {
     }
 
     pub fn get_beat_info_from_time(&self, target_time_sec: f32) -> BeatInfo {
+        self.get_beat_info_from_time_ns(timing_ns_from_seconds(target_time_sec))
+    }
+
+    pub fn get_beat_info_from_time_ns(&self, target_time_ns: i64) -> BeatInfo {
         let mut args = GetBeatArgs::default();
-        args.elapsed_time = target_time_sec + self.global_offset_sec;
+        args.elapsed_time_ns = target_time_ns.saturating_add(self.global_offset_ns);
 
         let mut start = GetBeatStarts::default();
-        start.last_time = -self.beat0_offset_seconds() - self.beat0_group_offset_seconds();
+        start.last_time_ns = self.beat_start_time_ns();
 
         self.get_beat_internal(&mut start, &mut args, u32::MAX as usize);
 
@@ -681,18 +705,26 @@ impl TimingData {
         target_time_sec: f32,
         cache: &mut BeatInfoCache,
     ) -> BeatInfo {
-        let elapsed_time = target_time_sec + self.global_offset_sec;
-        if cache.global_offset_sec != self.global_offset_sec
-            || !cache.last_elapsed_time.is_finite()
-            || elapsed_time < cache.last_elapsed_time
+        self.get_beat_info_from_time_ns_cached(timing_ns_from_seconds(target_time_sec), cache)
+    }
+
+    pub fn get_beat_info_from_time_ns_cached(
+        &self,
+        target_time_ns: i64,
+        cache: &mut BeatInfoCache,
+    ) -> BeatInfo {
+        let elapsed_time_ns = target_time_ns.saturating_add(self.global_offset_ns);
+        if cache.global_offset_ns != self.global_offset_ns
+            || cache.last_elapsed_time_ns == INVALID_TIMING_NS
+            || elapsed_time_ns < cache.last_elapsed_time_ns
         {
             cache.reset(self);
         }
 
         let mut args = GetBeatArgs::default();
-        args.elapsed_time = elapsed_time;
+        args.elapsed_time_ns = elapsed_time_ns;
         self.get_beat_internal(&mut cache.start, &mut args, u32::MAX as usize);
-        cache.last_elapsed_time = elapsed_time;
+        cache.last_elapsed_time_ns = elapsed_time_ns;
 
         BeatInfo {
             beat: args.beat,
@@ -702,7 +734,11 @@ impl TimingData {
     }
 
     pub fn get_beat_for_time(&self, target_time_sec: f32) -> f32 {
-        self.get_beat_info_from_time(target_time_sec).beat
+        self.get_beat_for_time_ns(timing_ns_from_seconds(target_time_sec))
+    }
+
+    pub fn get_beat_for_time_ns(&self, target_time_ns: i64) -> f32 {
+        self.get_beat_info_from_time_ns(target_time_ns).beat
     }
 
     fn get_bpm_point_index_for_beat(&self, target_beat: f32) -> usize {
@@ -722,12 +758,17 @@ impl TimingData {
     }
 
     pub fn get_time_for_beat(&self, target_beat: f32) -> f32 {
-        self.get_time_for_beat_internal(target_beat) - self.global_offset_sec
+        timing_ns_to_seconds(self.get_time_for_beat_ns(target_beat))
     }
 
-    fn get_time_for_beat_internal(&self, target_beat: f32) -> f32 {
+    pub fn get_time_for_beat_ns(&self, target_beat: f32) -> i64 {
+        self.get_time_for_beat_internal_ns(target_beat)
+            .saturating_sub(self.global_offset_ns)
+    }
+
+    fn get_time_for_beat_internal_ns(&self, target_beat: f32) -> TimingNs {
         let mut starts = GetBeatStarts::default();
-        starts.last_time = -self.beat0_offset_seconds() - self.beat0_group_offset_seconds();
+        starts.last_time_ns = self.beat_start_time_ns();
         self.get_elapsed_time_internal(&mut starts, target_beat)
     }
 
@@ -772,11 +813,41 @@ impl TimingData {
 }
 
 impl TimingData {
-    fn beat0_offset_seconds(&self) -> f32 {
-        self.beat_to_time.first().map_or(0.0, |p| p.time_sec)
+    fn beat0_offset_ns(&self) -> TimingNs {
+        self.beat_to_time.first().map_or(0, |p| p.time_ns)
     }
-    const fn beat0_group_offset_seconds(&self) -> f32 {
-        self.global_offset_sec
+
+    fn beat_start_time_ns(&self) -> TimingNs {
+        self.beat0_offset_ns()
+            .saturating_neg()
+            .saturating_sub(self.global_offset_ns)
+    }
+
+    fn rebuild_speed_runtime(&mut self) {
+        if self.speeds.is_empty() {
+            self.speed_runtime.clear();
+            return;
+        }
+
+        let mut runtime = Vec::with_capacity(self.speeds.len());
+        let mut prev_ratio = 1.0_f32;
+        for seg in &self.speeds {
+            let start_time_ns = self.get_time_for_beat_ns(seg.beat);
+            let end_time_ns = if seg.delay <= 0.0 {
+                start_time_ns
+            } else if seg.unit == SpeedUnit::Seconds {
+                timing_ns_add_seconds(start_time_ns, seg.delay)
+            } else {
+                self.get_time_for_beat_ns(seg.beat + seg.delay)
+            };
+            runtime.push(SpeedRuntime {
+                start_time_ns,
+                end_time_ns,
+                prev_ratio,
+            });
+            prev_ratio = seg.ratio;
+        }
+        self.speed_runtime = runtime;
     }
 
     /// Update the global offset used for time⇄beat conversion, mirroring
@@ -787,35 +858,17 @@ impl TimingData {
         if (old - new_offset).abs() < f32::EPSILON {
             return;
         }
+        let new_offset_ns = timing_ns_from_seconds(new_offset);
         // Adjust beat0 offset so that beat→time mapping shifts by (old - new)
         // instead of being recomputed from raw timing data.
         if let Some(first) = Arc::make_mut(&mut self.beat_to_time).first_mut() {
-            first.time_sec += old - new_offset;
+            first.time_ns = first
+                .time_ns
+                .saturating_add(self.global_offset_ns.saturating_sub(new_offset_ns));
         }
         self.global_offset_sec = new_offset;
-
-        // Rebuild speed_runtime, since its start/end times are in song time.
-        if !self.speeds.is_empty() {
-            let mut runtime = Vec::with_capacity(self.speeds.len());
-            let mut prev_ratio = 1.0_f32;
-            for seg in &self.speeds {
-                let start_time = self.get_time_for_beat(seg.beat);
-                let end_time = if seg.delay <= 0.0 {
-                    start_time
-                } else if seg.unit == SpeedUnit::Seconds {
-                    start_time + seg.delay
-                } else {
-                    self.get_time_for_beat(seg.beat + seg.delay)
-                };
-                runtime.push(SpeedRuntime {
-                    start_time,
-                    end_time,
-                    prev_ratio,
-                });
-                prev_ratio = seg.ratio;
-            }
-            self.speed_runtime = runtime;
-        }
+        self.global_offset_ns = new_offset_ns;
+        self.rebuild_speed_runtime();
         // scroll_prefix depends only on beats/ratios, not absolute time.
     }
 
@@ -827,36 +880,15 @@ impl TimingData {
             return;
         }
         if let Some(first) = Arc::make_mut(&mut self.beat_to_time).first_mut() {
-            first.time_sec += delta_seconds;
+            first.time_ns = timing_ns_add_seconds(first.time_ns, delta_seconds);
         }
-
-        if !self.speeds.is_empty() {
-            let mut runtime = Vec::with_capacity(self.speeds.len());
-            let mut prev_ratio = 1.0_f32;
-            for seg in &self.speeds {
-                let start_time = self.get_time_for_beat(seg.beat);
-                let end_time = if seg.delay <= 0.0 {
-                    start_time
-                } else if seg.unit == SpeedUnit::Seconds {
-                    start_time + seg.delay
-                } else {
-                    self.get_time_for_beat(seg.beat + seg.delay)
-                };
-                runtime.push(SpeedRuntime {
-                    start_time,
-                    end_time,
-                    prev_ratio,
-                });
-                prev_ratio = seg.ratio;
-            }
-            self.speed_runtime = runtime;
-        }
+        self.rebuild_speed_runtime();
     }
 
-    fn get_elapsed_time_internal(&self, starts: &mut GetBeatStarts, beat: f32) -> f32 {
+    fn get_elapsed_time_internal(&self, starts: &mut GetBeatStarts, beat: f32) -> TimingNs {
         let mut start = *starts;
         self.get_elapsed_time_internal_mut(&mut start, beat, u32::MAX as usize);
-        start.last_time
+        start.last_time_ns
     }
 
     fn get_beat_internal(
@@ -889,16 +921,16 @@ impl TimingData {
             if event_type == TimingEvent::NotFound {
                 break;
             }
-            let time_to_next_event = if start.is_warping {
-                0.0
+            let time_to_next_event_ns = if start.is_warping {
+                0
             } else {
-                note_row_to_beat(event_row - start.last_row) / bps
+                timing_ns_from_seconds(note_row_to_beat(event_row - start.last_row) / bps)
             };
-            let next_event_time = start.last_time + time_to_next_event;
-            if args.elapsed_time < next_event_time {
+            let next_event_time_ns = start.last_time_ns.saturating_add(time_to_next_event_ns);
+            if args.elapsed_time_ns < next_event_time_ns {
                 break;
             }
-            start.last_time = next_event_time;
+            start.last_time_ns = next_event_time_ns;
 
             match event_type {
                 TimingEvent::WarpDest => start.is_warping = false,
@@ -909,14 +941,17 @@ impl TimingData {
                 }
                 TimingEvent::Delay | TimingEvent::StopDelay => {
                     let delay = delays[start.delay_idx];
-                    if args.elapsed_time < start.last_time + delay.duration {
+                    let delay_end_ns = start
+                        .last_time_ns
+                        .saturating_add(timing_ns_from_seconds(delay.duration));
+                    if args.elapsed_time_ns < delay_end_ns {
                         args.delay_out = true;
                         args.beat = delay.beat;
                         args.bps_out = bps;
                         start.last_row = event_row;
                         return;
                     }
-                    start.last_time += delay.duration;
+                    start.last_time_ns = delay_end_ns;
                     start.delay_idx += 1;
                     curr_segment += 1;
                     if event_type == TimingEvent::Delay {
@@ -926,14 +961,17 @@ impl TimingData {
                 }
                 TimingEvent::Stop => {
                     let stop = stops[start.stop_idx];
-                    if args.elapsed_time < start.last_time + stop.duration {
+                    let stop_end_ns = start
+                        .last_time_ns
+                        .saturating_add(timing_ns_from_seconds(stop.duration));
+                    if args.elapsed_time_ns < stop_end_ns {
                         args.freeze_out = true;
                         args.beat = stop.beat;
                         args.bps_out = bps;
                         start.last_row = event_row;
                         return;
                     }
-                    start.last_time += stop.duration;
+                    start.last_time_ns = stop_end_ns;
                     start.stop_idx += 1;
                     curr_segment += 1;
                 }
@@ -953,11 +991,11 @@ impl TimingData {
             }
             start.last_row = event_row;
         }
-        if args.elapsed_time == f32::MAX {
-            args.elapsed_time = start.last_time;
+        if args.elapsed_time_ns == INVALID_TIMING_NS {
+            args.elapsed_time_ns = start.last_time_ns;
         }
-        args.beat =
-            (args.elapsed_time - start.last_time).mul_add(bps, note_row_to_beat(start.last_row));
+        let delta_seconds = timing_ns_delta_seconds(args.elapsed_time_ns, start.last_time_ns);
+        args.beat = delta_seconds.mul_add(bps, note_row_to_beat(start.last_row));
         args.bps_out = bps;
     }
 
@@ -993,12 +1031,12 @@ impl TimingData {
             if event_type == TimingEvent::NotFound {
                 break;
             }
-            let time_to_next_event = if start.is_warping {
-                0.0
+            let time_to_next_event_ns = if start.is_warping {
+                0
             } else {
-                note_row_to_beat(event_row - start.last_row) / bps
+                timing_ns_from_seconds(note_row_to_beat(event_row - start.last_row) / bps)
             };
-            start.last_time += time_to_next_event;
+            start.last_time_ns = start.last_time_ns.saturating_add(time_to_next_event_ns);
 
             match event_type {
                 TimingEvent::WarpDest => start.is_warping = false,
@@ -1008,12 +1046,16 @@ impl TimingData {
                     curr_segment += 1;
                 }
                 TimingEvent::Stop | TimingEvent::StopDelay => {
-                    start.last_time += stops[start.stop_idx].duration;
+                    start.last_time_ns = start
+                        .last_time_ns
+                        .saturating_add(timing_ns_from_seconds(stops[start.stop_idx].duration));
                     start.stop_idx += 1;
                     curr_segment += 1;
                 }
                 TimingEvent::Delay => {
-                    start.last_time += delays[start.delay_idx].duration;
+                    start.last_time_ns = start
+                        .last_time_ns
+                        .saturating_add(timing_ns_from_seconds(delays[start.delay_idx].duration));
                     start.delay_idx += 1;
                     curr_segment += 1;
                 }
@@ -1049,6 +1091,10 @@ impl TimingData {
     }
 
     pub fn get_speed_multiplier(&self, beat: f32, time: f32) -> f32 {
+        self.get_speed_multiplier_ns(beat, timing_ns_from_seconds(time))
+    }
+
+    fn get_speed_multiplier_ns(&self, beat: f32, time_ns: TimingNs) -> f32 {
         if self.speeds.is_empty() {
             return 1.0;
         }
@@ -1059,22 +1105,26 @@ impl TimingData {
         let i = segment_index as usize;
         let seg = self.speeds[i];
         let rt = self.speed_runtime.get(i).copied().unwrap_or(SpeedRuntime {
-            start_time: self.get_time_for_beat(seg.beat),
-            end_time: if seg.unit == SpeedUnit::Seconds {
-                self.get_time_for_beat(seg.beat) + seg.delay
+            start_time_ns: self.get_time_for_beat_ns(seg.beat),
+            end_time_ns: if seg.unit == SpeedUnit::Seconds {
+                timing_ns_add_seconds(self.get_time_for_beat_ns(seg.beat), seg.delay)
             } else {
-                self.get_time_for_beat(seg.beat + seg.delay)
+                self.get_time_for_beat_ns(seg.beat + seg.delay)
             },
             prev_ratio: if i > 0 { self.speeds[i - 1].ratio } else { 1.0 },
         });
 
-        if time >= rt.end_time || seg.delay <= 0.0 {
+        if time_ns >= rt.end_time_ns || seg.delay <= 0.0 {
             return seg.ratio;
         }
-        if time < rt.start_time {
+        if time_ns < rt.start_time_ns {
             return rt.prev_ratio;
         }
-        let progress = (time - rt.start_time) / (rt.end_time - rt.start_time);
+        let duration_seconds = timing_ns_delta_seconds(rt.end_time_ns, rt.start_time_ns);
+        if duration_seconds <= 0.0 {
+            return seg.ratio;
+        }
+        let progress = timing_ns_delta_seconds(time_ns, rt.start_time_ns) / duration_seconds;
         (seg.ratio - rt.prev_ratio).mul_add(progress, rt.prev_ratio)
     }
 
@@ -1694,6 +1744,72 @@ mod tests {
             ((expected_window / HIST_BIN_MS).round() as usize * 2) + 1
         );
         assert!(hist.smoothed.iter().all(|(_, value)| value.abs() < 0.0001));
+    }
+
+    #[test]
+    fn beat_time_lookup_ns_round_trips_through_stops_and_delays() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0), (4.0, 60.0)],
+                stops: vec![StopSegment {
+                    beat: 4.0,
+                    duration: 0.250,
+                }],
+                delays: vec![DelaySegment {
+                    beat: 6.0,
+                    duration: 0.125,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+
+        let beat = 8.0;
+        let time_ns = timing.get_time_for_beat_ns(beat);
+        let time_sec = timing.get_time_for_beat(beat);
+
+        assert!((timing_ns_to_seconds(time_ns) - time_sec).abs() < 0.000_001);
+        assert!((timing.get_beat_for_time_ns(time_ns) - beat).abs() < 0.0001);
+    }
+
+    #[test]
+    fn beat_info_cache_uses_ns_timing_for_freezes_and_delays() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                stops: vec![StopSegment {
+                    beat: 4.0,
+                    duration: 0.250,
+                }],
+                delays: vec![DelaySegment {
+                    beat: 6.0,
+                    duration: 0.125,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let mut cache = BeatInfoCache::new(&timing);
+
+        let stop_midpoint = timing
+            .get_time_for_beat_ns(4.0)
+            .saturating_add(timing_ns_from_seconds(0.100));
+        let stop_info = timing.get_beat_info_from_time_ns_cached(stop_midpoint, &mut cache);
+        assert!(stop_info.is_in_freeze);
+        assert!(!stop_info.is_in_delay);
+        assert!((stop_info.beat - 4.0).abs() < 0.0001);
+
+        let delay_midpoint = timing
+            .get_time_for_beat_ns(6.0)
+            .saturating_add(timing_ns_from_seconds(0.050));
+        let delay_info = timing.get_beat_info_from_time_ns_cached(delay_midpoint, &mut cache);
+        assert!(!delay_info.is_in_freeze);
+        assert!(delay_info.is_in_delay);
+        assert!((delay_info.beat - 6.0).abs() < 0.0001);
     }
 
     #[test]

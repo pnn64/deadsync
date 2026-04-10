@@ -9027,7 +9027,9 @@ pub fn start_stage_music(state: &mut State) {
     state.current_music_time = start_time;
     state.current_music_time_ns = song_time_ns_from_seconds(start_time);
     state.current_music_time_display = state.display_clock.reset(start_time);
-    state.current_beat = state.timing.get_beat_for_time(start_time);
+    state.current_beat = state
+        .timing
+        .get_beat_for_time_ns(state.current_music_time_ns);
     state.current_beat_display = state.current_beat;
     for player in 0..state.num_players {
         let delay = state.global_visual_delay_seconds + state.player_visual_delay_seconds[player];
@@ -9624,14 +9626,16 @@ pub fn init(
     let mut hold_end_display_beat_cache = Vec::with_capacity(notes.len());
     for note in &notes {
         let timing_player = &timing_players[note_player_for_col(note.column)];
-        let note_time = timing_player.get_time_for_beat(note.beat);
+        let note_time_ns = timing_player.get_time_for_beat_ns(note.beat);
+        let note_time = song_time_ns_to_seconds(note_time_ns);
         note_time_cache.push(note_time);
-        note_time_cache_ns.push(song_time_ns_from_seconds(note_time));
+        note_time_cache_ns.push(note_time_ns);
         note_display_beat_cache.push(timing_player.get_displayed_beat(note.beat));
         if let Some(hold) = note.hold.as_ref() {
-            let end_time = timing_player.get_time_for_beat(hold.end_beat);
+            let end_time_ns = timing_player.get_time_for_beat_ns(hold.end_beat);
+            let end_time = song_time_ns_to_seconds(end_time_ns);
             hold_end_time_cache.push(Some(end_time));
-            hold_end_time_cache_ns.push(Some(song_time_ns_from_seconds(end_time)));
+            hold_end_time_cache_ns.push(Some(end_time_ns));
             hold_end_display_beat_cache.push(Some(timing_player.get_displayed_beat(hold.end_beat)));
         } else {
             hold_end_time_cache.push(None);
@@ -9831,7 +9835,7 @@ pub fn init(
         ms as f32 / 1000.0
     });
     let init_music_time = -start_delay;
-    let init_beat = timing.get_beat_for_time(init_music_time);
+    let init_beat = timing.get_beat_for_time_ns(song_time_ns_from_seconds(init_music_time));
     let current_music_time_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         init_music_time - global_visual_delay_seconds - player_visual_delay_seconds[player]
     });
@@ -12864,38 +12868,36 @@ fn mutate_timing_arc(timing: &mut Arc<TimingData>, mut apply: impl FnMut(&mut Ti
 fn refresh_timing_after_offset_change(state: &mut State) {
     let num_players = state.num_players;
     let cols_per_player = state.cols_per_player;
-    for (time, note) in state.note_time_cache.iter_mut().zip(&state.notes) {
-        let player = if num_players <= 1 || cols_per_player == 0 {
-            0
-        } else {
-            (note.column / cols_per_player).min(num_players.saturating_sub(1))
-        };
-        *time = state.timing_players[player].get_time_for_beat(note.beat);
-    }
-    for (time_ns, &time) in state
-        .note_time_cache_ns
+    for ((time, time_ns), note) in state
+        .note_time_cache
         .iter_mut()
-        .zip(&state.note_time_cache)
+        .zip(state.note_time_cache_ns.iter_mut())
+        .zip(&state.notes)
     {
-        *time_ns = song_time_ns_from_seconds(time);
-    }
-    for (time_opt, note) in state.hold_end_time_cache.iter_mut().zip(&state.notes) {
         let player = if num_players <= 1 || cols_per_player == 0 {
             0
         } else {
             (note.column / cols_per_player).min(num_players.saturating_sub(1))
         };
-        *time_opt = note
+        *time_ns = state.timing_players[player].get_time_for_beat_ns(note.beat);
+        *time = song_time_ns_to_seconds(*time_ns);
+    }
+    for ((time_opt, time_opt_ns), note) in state
+        .hold_end_time_cache
+        .iter_mut()
+        .zip(state.hold_end_time_cache_ns.iter_mut())
+        .zip(&state.notes)
+    {
+        let player = if num_players <= 1 || cols_per_player == 0 {
+            0
+        } else {
+            (note.column / cols_per_player).min(num_players.saturating_sub(1))
+        };
+        *time_opt_ns = note
             .hold
             .as_ref()
-            .map(|h| state.timing_players[player].get_time_for_beat(h.end_beat));
-    }
-    for (time_opt_ns, time_opt) in state
-        .hold_end_time_cache_ns
-        .iter_mut()
-        .zip(&state.hold_end_time_cache)
-    {
-        *time_opt_ns = time_opt.map(song_time_ns_from_seconds);
+            .map(|h| state.timing_players[player].get_time_for_beat_ns(h.end_beat));
+        *time_opt = time_opt_ns.map(song_time_ns_to_seconds);
     }
     for player in 0..state.num_players {
         let mine_note_time_ns = &mut state.mine_note_time_ns[player];
@@ -14217,7 +14219,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     {
         let beat_info = state
             .timing
-            .get_beat_info_from_time_cached(music_time_sec, &mut state.beat_info_cache);
+            .get_beat_info_from_time_ns_cached(music_time_ns, &mut state.beat_info_cache);
         state.current_beat = beat_info.beat;
         state.current_beat_display = state.timing.get_beat_for_time(display_music_time_sec);
         state.is_in_freeze = beat_info.is_in_freeze;
