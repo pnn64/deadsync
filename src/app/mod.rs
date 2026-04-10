@@ -1611,6 +1611,7 @@ fn prewarm_gameplay_assets(
     }
 
     let mut seen = HashSet::<String>::with_capacity(256);
+    let mut seen_song_lua_fonts = HashSet::<&'static str>::with_capacity(8);
     for noteskin in state.noteskin.iter().flatten() {
         noteskin.for_each_texture_key(|key| {
             if seen.insert(key.to_owned()) {
@@ -1655,37 +1656,53 @@ fn prewarm_gameplay_assets(
         }
     }
     for overlay in &state.song_lua_overlays {
-        let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } =
-            &overlay.kind
-        else {
-            continue;
-        };
-        let key = texture_path.to_string_lossy().into_owned();
-        if seen.insert(key.clone()) {
-            if song_lua_overlay_uses_repeat_sampler(overlay) {
-                match media_cache::load_banner_source_rgba(texture_path) {
-                    Ok(rgba) => {
-                        let sampler = SamplerDesc {
-                            wrap: SamplerWrap::Repeat,
-                            ..SamplerDesc::default()
-                        };
-                        if let Err(e) = assets
-                            .update_texture_for_key_with_sampler(backend, &key, &rgba, sampler)
-                        {
-                            warn!(
-                                "Failed to create repeating GPU texture for image {texture_path:?}: {e}. Skipping."
-                            );
+        match &overlay.kind {
+            crate::game::parsing::song_lua::SongLuaOverlayKind::BitmapText {
+                font_name,
+                font_path,
+                ..
+            } => {
+                if seen_song_lua_fonts.insert(*font_name)
+                    && assets.with_font(font_name, |_| ()).is_none()
+                    && let Err(err) = assets.load_font_from_ini_path(backend, *font_name, font_path)
+                {
+                    warn!(
+                        "Failed to load song lua bitmap font '{}': {}",
+                        font_path.display(),
+                        err
+                    );
+                }
+            }
+            crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } => {
+                let key = texture_path.to_string_lossy().into_owned();
+                if seen.insert(key.clone()) {
+                    if song_lua_overlay_uses_repeat_sampler(overlay) {
+                        match media_cache::load_banner_source_rgba(texture_path) {
+                            Ok(rgba) => {
+                                let sampler = SamplerDesc {
+                                    wrap: SamplerWrap::Repeat,
+                                    ..SamplerDesc::default()
+                                };
+                                if let Err(e) = assets.update_texture_for_key_with_sampler(
+                                    backend, &key, &rgba, sampler,
+                                ) {
+                                    warn!(
+                                        "Failed to create repeating GPU texture for image {texture_path:?}: {e}. Skipping."
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                                );
+                            }
                         }
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
-                        );
+                    } else {
+                        media_cache::ensure_banner_texture(assets, backend, texture_path);
                     }
                 }
-            } else {
-                media_cache::ensure_banner_texture(assets, backend, texture_path);
             }
+            _ => {}
         }
     }
     crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");

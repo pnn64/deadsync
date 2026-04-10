@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::engine::gfx::{BlendMode, MeshMode};
 use crate::engine::input::{InputEvent, VirtualAction};
-use crate::engine::present::actors::{Actor, SizeSpec};
+use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextContent};
 use crate::engine::present::anim::EffectState;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
@@ -1804,6 +1804,44 @@ fn build_song_lua_overlay_actor(
                 *visible = state.visible;
             }
             Some(actor)
+        }
+        SongLuaOverlayKind::BitmapText {
+            font_name,
+            text,
+            stroke_color,
+            ..
+        } => {
+            let font = if asset_manager.with_font(*font_name, |_| ()).is_some() {
+                *font_name
+            } else {
+                "miso"
+            };
+            Some(Actor::Text {
+                align: [0.5, 0.5],
+                offset: [state.x * x_scale, state.y * y_scale],
+                color: state.diffuse,
+                stroke_color: *stroke_color,
+                glow: [0.0, 0.0, 0.0, 0.0],
+                font,
+                content: TextContent::from(text.as_str()),
+                attributes: Vec::new(),
+                align_text: TextAlign::Center,
+                z,
+                scale: [size_scale_x * x_scale, size_scale_y * y_scale],
+                fit_width: None,
+                fit_height: None,
+                wrap_width_pixels: None,
+                max_width: None,
+                max_height: None,
+                max_w_pre_zoom: false,
+                max_h_pre_zoom: false,
+                clip: None,
+                blend: match state.blend {
+                    SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
+                    SongLuaOverlayBlendMode::Add => BlendMode::Add,
+                },
+                effect,
+            })
         }
         SongLuaOverlayKind::Quad => {
             let mut actor = if let Some([left, top, right, bottom]) = state.stretch_rect {

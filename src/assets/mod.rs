@@ -10,7 +10,7 @@ use crate::engine::present::font::{self, Font, FontLoadData, FontParseError};
 use image::RgbaImage;
 use log::debug;
 use std::collections::HashMap;
-use std::{error::Error as StdError, fmt};
+use std::{error::Error as StdError, fmt, path::Path};
 
 #[cfg(test)]
 pub(crate) use self::dynamic::{
@@ -171,6 +171,53 @@ impl AssetManager {
         F: FnOnce(&Font) -> R,
     {
         self.fonts.get(name).map(f)
+    }
+
+    fn register_parsed_font(
+        &mut self,
+        backend: &mut Backend,
+        name: &'static str,
+        font: Font,
+        required_textures: &[std::path::PathBuf],
+    ) -> Result<(), AssetError> {
+        for tex_path in required_textures {
+            let key = canonical_texture_key(tex_path);
+            if !self.has_texture_key(&key) {
+                let hints = font
+                    .texture_hints_map
+                    .get(&key)
+                    .map(|s| parse_texture_hints(s))
+                    .unwrap_or_default();
+                let mut image_data = open_image_fallback(tex_path)?.to_rgba8();
+                if !hints.is_default() {
+                    apply_texture_hints(&mut image_data, &hints);
+                }
+                let texture = backend.create_texture(&image_data, hints.sampler_desc())?;
+                register_texture_dims(&key, image_data.width(), image_data.height());
+                self.insert_texture(key.clone(), texture);
+                debug!("Loaded font texture: {key}");
+            }
+        }
+        self.register_font(name, font);
+        Ok(())
+    }
+
+    pub(crate) fn load_font_from_ini_path(
+        &mut self,
+        backend: &mut Backend,
+        name: &'static str,
+        ini_path: &Path,
+    ) -> Result<(), AssetError> {
+        if self.fonts.contains_key(name) {
+            return Ok(());
+        }
+        let FontLoadData {
+            font,
+            required_textures,
+        } = font::parse(&ini_path.to_string_lossy())?;
+        self.register_parsed_font(backend, name, font, &required_textures)?;
+        debug!("Loaded font '{name}' from '{}'", ini_path.display());
+        Ok(())
     }
 
     #[inline(always)]
@@ -354,26 +401,7 @@ impl AssetManager {
                 font.fallback_font_name = Some("emoji");
                 debug!("Font 'cjk' configured to use 'emoji' as fallback.");
             }
-
-            for tex_path in &required_textures {
-                let key = canonical_texture_key(tex_path);
-                if !self.has_texture_key(&key) {
-                    let hints = font
-                        .texture_hints_map
-                        .get(&key)
-                        .map(|s| parse_texture_hints(s))
-                        .unwrap_or_default();
-                    let mut image_data = open_image_fallback(tex_path)?.to_rgba8();
-                    if !hints.is_default() {
-                        apply_texture_hints(&mut image_data, &hints);
-                    }
-                    let texture = backend.create_texture(&image_data, hints.sampler_desc())?;
-                    register_texture_dims(&key, image_data.width(), image_data.height());
-                    self.insert_texture(key.clone(), texture);
-                    debug!("Loaded font texture: {key}");
-                }
-            }
-            self.register_font(name, font);
+            self.register_parsed_font(backend, name, font, &required_textures)?;
             debug!("Loaded font '{name}' from '{ini_path_str}'");
         }
         Ok(())

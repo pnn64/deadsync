@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 const LUA_PLAYERS: usize = 2;
 const SONG_LUA_NOTE_COLUMNS: usize = 4;
@@ -224,13 +225,25 @@ pub enum SongLuaOverlayBlendMode {
     Add,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SongLuaOverlayKind {
     ActorFrame,
     ActorFrameTexture,
-    ActorProxy { target: SongLuaProxyTarget },
-    AftSprite { capture_name: String },
-    Sprite { texture_path: PathBuf },
+    ActorProxy {
+        target: SongLuaProxyTarget,
+    },
+    AftSprite {
+        capture_name: String,
+    },
+    Sprite {
+        texture_path: PathBuf,
+    },
+    BitmapText {
+        font_name: &'static str,
+        font_path: PathBuf,
+        text: String,
+        stroke_color: Option<[f32; 4]>,
+    },
     Quad,
 }
 
@@ -2113,6 +2126,24 @@ fn read_overlay_actor(
             };
             SongLuaOverlayKind::Sprite { texture_path }
         }
+    } else if actor_type.eq_ignore_ascii_case("BitmapText") {
+        let Some(font_path) = actor
+            .get::<Option<String>>("Font")
+            .map_err(|err| err.to_string())?
+            .and_then(|font| resolve_actor_asset_path(actor, &font).ok())
+        else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::BitmapText {
+            font_name: song_lua_font_name(font_path.as_path()),
+            font_path,
+            text: actor
+                .get::<Option<String>>("Text")
+                .map_err(|err| err.to_string())?
+                .unwrap_or_default(),
+            stroke_color: read_actor_color_field(actor, "__songlua_stroke_color")?
+                .or_else(|| read_actor_color_field(actor, "StrokeColor").ok().flatten()),
+        }
     } else if actor_type.eq_ignore_ascii_case("Quad") {
         SongLuaOverlayKind::Quad
     } else {
@@ -2345,6 +2376,28 @@ fn resolve_actor_asset_path(actor: &Table, raw: &str) -> Result<PathBuf, String>
         }
     }
     Err(format!("actor asset '{}' could not be resolved", raw))
+}
+
+fn read_actor_color_field(actor: &Table, key: &str) -> Result<Option<[f32; 4]>, String> {
+    Ok(actor
+        .get::<Option<Table>>(key)
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec4(&value)))
+}
+
+fn song_lua_font_name(font_path: &Path) -> &'static str {
+    static SONG_LUA_FONT_NAMES: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+    let canonical = font_path.to_string_lossy().replace('\\', "/");
+    let cache = SONG_LUA_FONT_NAMES.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(&name) = guard.get(&canonical) {
+        return name;
+    }
+    let leaked = Box::leak(format!("songlua_font:{canonical}").into_boxed_str());
+    guard.insert(canonical, leaked);
+    leaked
 }
 
 fn capture_actor_command(
@@ -3549,13 +3602,25 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "finishtweening",
         "SetHeight",
         "SetWidth",
-        "strokecolor",
         "texturetranslate",
         "vanishpoint",
         "wag",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
+    actor.set(
+        "strokecolor",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(color) = read_color_args(&args) else {
+                    return Ok(actor.clone());
+                };
+                actor.set("__songlua_stroke_color", make_color_table(lua, color)?)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
     actor.set(
         "settext",
         lua.create_function({
@@ -5166,6 +5231,7 @@ return Def.ActorFrame{
     fn compile_song_lua_supports_bitmap_text_ctor() {
         let song_dir = test_dir("bitmap-text");
         let entry = song_dir.join("default.lua");
+        fs::write(song_dir.join("_komika axis 42px.ini"), b"placeholder").unwrap();
         fs::write(
             &entry,
             r##"
@@ -5189,7 +5255,17 @@ return Def.ActorFrame{
 
         let compiled =
             compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "BitmapText")).unwrap();
-        assert!(compiled.overlays.is_empty());
+        assert_eq!(compiled.overlays.len(), 1);
+        assert!(!compiled.overlays[0].initial_state.visible);
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::BitmapText {
+                ref font_path,
+                ref text,
+                stroke_color: Some([0.0, 0.0, 0.0, 1.0]),
+                ..
+            } if font_path.ends_with("_komika axis 42px.ini") && text == "3"
+        ));
     }
 
     #[test]
