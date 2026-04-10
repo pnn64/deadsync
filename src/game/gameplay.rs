@@ -547,6 +547,18 @@ fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
 }
 
 #[inline(always)]
+fn song_time_ns_add_seconds(time_ns: SongTimeNs, delta_seconds: f32) -> SongTimeNs {
+    if song_time_ns_invalid(time_ns) {
+        return INVALID_SONG_TIME_NS;
+    }
+    let delta_ns = song_time_ns_from_seconds(delta_seconds);
+    if song_time_ns_invalid(delta_ns) {
+        return INVALID_SONG_TIME_NS;
+    }
+    time_ns.saturating_add(delta_ns)
+}
+
+#[inline(always)]
 const fn input_queue_cap(num_cols: usize) -> usize {
     // Pre-size one backlog-warning bucket per 4-panel field so live gameplay
     // does not grow the queue before crossing its first pressure threshold.
@@ -6808,7 +6820,7 @@ pub struct State {
     pub song_offset_seconds: f32,
     pub initial_song_offset_seconds: f32,
     pub autosync_mode: AutosyncMode,
-    pub autosync_offset_samples: [f32; AUTOSYNC_OFFSET_SAMPLE_COUNT],
+    pub autosync_offset_samples: [SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT],
     pub autosync_offset_sample_count: usize,
     pub autosync_standard_deviation: f32,
     pub global_visual_delay_seconds: f32,
@@ -10211,7 +10223,7 @@ pub fn init(
         song_offset_seconds,
         initial_song_offset_seconds: song_offset_seconds,
         autosync_mode: AutosyncMode::Off,
-        autosync_offset_samples: [0.0; AUTOSYNC_OFFSET_SAMPLE_COUNT],
+        autosync_offset_samples: [0; AUTOSYNC_OFFSET_SAMPLE_COUNT],
         autosync_offset_sample_count: 0,
         autosync_standard_deviation: 0.0,
         global_visual_delay_seconds,
@@ -11233,13 +11245,15 @@ fn hit_mine(state: &mut State, column: usize, note_index: usize, time_error: f32
     }
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
+    let note_time_ns = state.note_time_cache_ns[note_index];
+    let hit_time_ns = song_time_ns_add_seconds(note_time_ns, time_error);
     debug!(
         "JUDGE MINE HIT: row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
         state.notes[note_index].row_index,
         column,
         state.notes[note_index].beat,
-        state.note_time_cache[note_index],
-        state.note_time_cache[note_index] + time_error,
+        song_time_ns_to_seconds(note_time_ns),
+        song_time_ns_to_seconds(hit_time_ns),
         (time_error / rate) * 1000.0,
         rate
     );
@@ -12165,8 +12179,9 @@ pub fn judge_a_tap(
 
             if rescore_early_hits && row_rescore_track_count == 1 {
                 let note_col = state.notes[note_index].column;
-                let row_note_time = state.note_time_cache[note_index];
-                let te_music = current_time - row_note_time;
+                let row_note_time_ns = state.note_time_cache_ns[note_index];
+                let row_note_time = song_time_ns_to_seconds(row_note_time_ns);
+                let te_music = song_time_ns_delta_seconds(current_time_ns, row_note_time_ns);
                 let te_real = te_music / rate;
                 let is_early = te_real < 0.0;
                 let is_bad = matches!(grade, JudgeGrade::Decent | JudgeGrade::WayOff);
@@ -12223,21 +12238,21 @@ pub fn judge_a_tap(
                             lead_in_s,
                         );
 
-                        if let Some(end_time) = state.hold_end_time_cache[note_index]
+                        if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
                             && matches!(
                                 state.notes[note_index].note_type,
                                 NoteType::Hold | NoteType::Roll
                             )
                         {
+                            let end_time = song_time_ns_to_seconds(end_time_ns);
                             start_active_hold(
                                 state,
                                 note_col,
                                 note_index,
                                 row_note_time,
-                                state.note_time_cache_ns[note_index],
+                                row_note_time_ns,
                                 end_time,
-                                state.hold_end_time_cache_ns[note_index]
-                                    .expect("hold end time ns cache missing for active hold"),
+                                end_time_ns,
                                 current_time,
                                 current_time_ns,
                             );
@@ -12257,7 +12272,10 @@ pub fn judge_a_tap(
 
                 let judgment_time_error_s =
                     live_autoplay_judgment_offset_s(state, player, window, te_real);
-                let judgment_event_time = row_note_time + judgment_time_error_s * rate;
+                let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
+                    row_note_time_ns,
+                    judgment_time_error_s * rate,
+                ));
                 let judgment = Judgment {
                     time_error_ms: judgment_time_error_s * 1000.0,
                     grade,
@@ -12284,21 +12302,21 @@ pub fn judge_a_tap(
 
                 trigger_completed_row_tap_explosions(state, player, note_row_index);
                 trigger_receptor_glow_pulse(state, note_col);
-                if let Some(end_time) = state.hold_end_time_cache[note_index]
+                if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
                     && matches!(
                         state.notes[note_index].note_type,
                         NoteType::Hold | NoteType::Roll
                     )
                 {
+                    let end_time = song_time_ns_to_seconds(end_time_ns);
                     start_active_hold(
                         state,
                         note_col,
                         note_index,
                         row_note_time,
-                        state.note_time_cache_ns[note_index],
+                        row_note_time_ns,
                         end_time,
-                        state.hold_end_time_cache_ns[note_index]
-                            .expect("hold end time ns cache missing for active hold"),
+                        end_time_ns,
                         current_time,
                         current_time_ns,
                     );
@@ -12314,8 +12332,9 @@ pub fn judge_a_tap(
 
             for &idx in &judge_indices[..judge_count] {
                 let note_col = state.notes[idx].column;
-                let row_note_time = state.note_time_cache[idx];
-                let te_music = current_time - row_note_time;
+                let row_note_time_ns = state.note_time_cache_ns[idx];
+                let row_note_time = song_time_ns_to_seconds(row_note_time_ns);
+                let te_music = song_time_ns_delta_seconds(current_time_ns, row_note_time_ns);
                 let te_real = te_music / rate;
                 let Some((grade, window)) = classify_player_tap_offset_s(state, player, te_real)
                 else {
@@ -12323,7 +12342,10 @@ pub fn judge_a_tap(
                 };
                 let judgment_time_error_s =
                     live_autoplay_judgment_offset_s(state, player, window, te_real);
-                let judgment_event_time = row_note_time + judgment_time_error_s * rate;
+                let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
+                    row_note_time_ns,
+                    judgment_time_error_s * rate,
+                ));
                 let judgment = Judgment {
                     time_error_ms: judgment_time_error_s * 1000.0,
                     grade,
@@ -12350,18 +12372,18 @@ pub fn judge_a_tap(
 
                 trigger_completed_row_tap_explosions(state, player, note_row_index);
                 trigger_receptor_glow_pulse(state, note_col);
-                if let Some(end_time) = state.hold_end_time_cache[idx]
+                if let Some(end_time_ns) = state.hold_end_time_cache_ns[idx]
                     && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
                 {
+                    let end_time = song_time_ns_to_seconds(end_time_ns);
                     start_active_hold(
                         state,
                         note_col,
                         idx,
                         row_note_time,
-                        state.note_time_cache_ns[idx],
+                        row_note_time_ns,
                         end_time,
-                        state.hold_end_time_cache_ns[idx]
-                            .expect("hold end time ns cache missing for active hold"),
+                        end_time_ns,
                         current_time,
                         current_time_ns,
                     );
@@ -12423,9 +12445,9 @@ pub fn judge_a_lift(
         return false;
     }
 
-    let note_time = state.note_time_cache[note_index];
-    let time_error_music =
-        song_time_ns_delta_seconds(current_time_ns, state.note_time_cache_ns[note_index]);
+    let note_time_ns = state.note_time_cache_ns[note_index];
+    let note_time = song_time_ns_to_seconds(note_time_ns);
+    let time_error_music = song_time_ns_delta_seconds(current_time_ns, note_time_ns);
     let time_error_real = time_error_music / rate;
     let abs_time_error = time_error_real.abs();
     if abs_time_error > way_off_window {
@@ -12522,7 +12544,10 @@ pub fn judge_a_lift(
 
     let judgment_time_error_s =
         live_autoplay_judgment_offset_s(state, player, window, time_error_real);
-    let judgment_event_time = note_time + judgment_time_error_s * rate;
+    let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
+        note_time_ns,
+        judgment_time_error_s * rate,
+    ));
     let judgment = Judgment {
         time_error_ms: judgment_time_error_s * 1000.0,
         grade,
@@ -12934,41 +12959,51 @@ fn cycle_autosync_mode(state: &mut State) {
 }
 
 #[inline(always)]
-fn autosync_mean(samples: &[f32; AUTOSYNC_OFFSET_SAMPLE_COUNT]) -> f32 {
-    let mut sum = 0.0_f32;
+fn autosync_mean_ns(samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT]) -> SongTimeNs {
+    let mut sum = 0i128;
     for value in samples {
-        sum += *value;
+        sum += i128::from(*value);
     }
-    sum / AUTOSYNC_OFFSET_SAMPLE_COUNT as f32
+    let count = AUTOSYNC_OFFSET_SAMPLE_COUNT as i128;
+    let rounded = if sum >= 0 {
+        (sum + count / 2) / count
+    } else {
+        (sum - count / 2) / count
+    };
+    rounded.clamp(i64::MIN as i128, i64::MAX as i128) as SongTimeNs
 }
 
 #[inline(always)]
-fn autosync_stddev(samples: &[f32; AUTOSYNC_OFFSET_SAMPLE_COUNT], mean: f32) -> f32 {
-    let mut dev = 0.0_f32;
+fn autosync_stddev_seconds(
+    samples: &[SongTimeNs; AUTOSYNC_OFFSET_SAMPLE_COUNT],
+    mean_ns: SongTimeNs,
+) -> f32 {
+    let mut dev = 0.0_f64;
     for value in samples {
-        let d = *value - mean;
+        let d = (*value - mean_ns) as f64 / SONG_TIME_NS_PER_SECOND;
         dev += d * d;
     }
-    (dev / AUTOSYNC_OFFSET_SAMPLE_COUNT as f32).sqrt()
+    (dev / AUTOSYNC_OFFSET_SAMPLE_COUNT as f64).sqrt() as f32
 }
 
 #[inline(always)]
-fn apply_autosync_offset_correction(state: &mut State, note_off_by_seconds: f32) {
-    if !note_off_by_seconds.is_finite() || state.autosync_mode == AutosyncMode::Off {
+fn apply_autosync_offset_correction(state: &mut State, note_off_by_ns: SongTimeNs) {
+    if song_time_ns_invalid(note_off_by_ns) || state.autosync_mode == AutosyncMode::Off {
         return;
     }
     let sample_ix = state
         .autosync_offset_sample_count
         .min(AUTOSYNC_OFFSET_SAMPLE_COUNT.saturating_sub(1));
-    state.autosync_offset_samples[sample_ix] = note_off_by_seconds;
+    state.autosync_offset_samples[sample_ix] = note_off_by_ns;
     state.autosync_offset_sample_count = state.autosync_offset_sample_count.saturating_add(1);
     if state.autosync_offset_sample_count < AUTOSYNC_OFFSET_SAMPLE_COUNT {
         return;
     }
 
-    let mean = autosync_mean(&state.autosync_offset_samples);
-    let stddev = autosync_stddev(&state.autosync_offset_samples, mean);
+    let mean_ns = autosync_mean_ns(&state.autosync_offset_samples);
+    let stddev = autosync_stddev_seconds(&state.autosync_offset_samples, mean_ns);
     if stddev < AUTOSYNC_STDDEV_MAX_SECONDS {
+        let mean = song_time_ns_to_seconds(mean_ns);
         match state.autosync_mode {
             AutosyncMode::Off => {}
             AutosyncMode::Song => {
@@ -13010,7 +13045,7 @@ fn apply_autosync_for_row_hits(
     let mut i = 0;
     while i < row_len {
         let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
-        let maybe_note_offset = {
+        let maybe_note_offset_ns = {
             let note = &state.notes[note_index];
             if note.column < col_start || note.column >= col_end {
                 None
@@ -13021,15 +13056,16 @@ fn apply_autosync_for_row_hits(
                         JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
                     ) {
                         // ITG's fNoteOffset is positive when stepping early.
-                        Some(-judgment.time_error_ms * 0.001)
+                        let offset_ns = song_time_ns_from_seconds(-judgment.time_error_ms * 0.001);
+                        (!song_time_ns_invalid(offset_ns)).then_some(offset_ns)
                     } else {
                         None
                     }
                 })
             }
         };
-        if let Some(note_off_by_seconds) = maybe_note_offset {
-            apply_autosync_offset_correction(state, note_off_by_seconds);
+        if let Some(note_off_by_ns) = maybe_note_offset_ns {
+            apply_autosync_offset_correction(state, note_off_by_ns);
         }
         i += 1;
     }
@@ -13967,15 +14003,13 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
         1.0
     };
     let music_time_sec = song_time_ns_to_seconds(music_time_ns);
-    let cutoff_time_ns = music_time_ns.saturating_sub(song_time_ns_from_seconds(
-        max_step_distance_seconds(&state.timing_profile, rate),
-    ));
+    let cutoff_time_ns =
+        music_time_ns.saturating_sub(max_step_distance_ns(&state.timing_profile, rate));
     for player in 0..state.num_players {
         let (note_start, note_end) = player_note_range(state, player);
         let should_score_miss = state.score_missed_holds_rolls[player];
         let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
         while cursor < note_end {
-            let note_time = state.note_time_cache[cursor];
             let note_time_ns = state.note_time_cache_ns[cursor];
             if note_time_ns > cutoff_time_ns {
                 break;
@@ -14032,6 +14066,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                 }
                 set_final_note_result(state, player, cursor, judgment);
                 if log::log_enabled!(log::Level::Debug) {
+                    let note_time = song_time_ns_to_seconds(note_time_ns);
                     let song_offset_s = state.song_offset_seconds;
                     let global_offset_s = effective_player_global_offset_seconds(state, player);
                     let lead_in_s = state.audio_lead_in_seconds.max(0.0);
