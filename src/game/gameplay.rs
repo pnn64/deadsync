@@ -5593,28 +5593,34 @@ pub fn score_invalid_reason_lines_for_chart(
     reasons
 }
 
-fn compute_end_times(
+fn compute_end_times_ns(
     notes: &[Note],
-    note_time_cache: &[f32],
-    hold_end_time_cache: &[Option<f32>],
+    note_time_cache_ns: &[SongTimeNs],
+    hold_end_time_cache_ns: &[Option<SongTimeNs>],
     rate: f32,
-) -> (f32, f32) {
-    let mut last_judgable_second = 0.0_f32;
-    let mut last_relevant_second = 0.0_f32;
+) -> (SongTimeNs, SongTimeNs) {
+    let mut last_judgable_time_ns = 0;
+    let mut last_relevant_time_ns = 0;
     for (i, note) in notes.iter().enumerate() {
-        let start = note_time_cache[i];
-        let end = hold_end_time_cache[i].unwrap_or(start);
-        last_relevant_second = last_relevant_second.max(end);
+        let start_time_ns = note_time_cache_ns[i];
+        if song_time_ns_invalid(start_time_ns) {
+            continue;
+        }
+        let end_time_ns = hold_end_time_cache_ns[i]
+            .filter(|&time_ns| !song_time_ns_invalid(time_ns))
+            .unwrap_or(start_time_ns);
+        last_relevant_time_ns = last_relevant_time_ns.max(end_time_ns);
         if note.can_be_judged {
-            last_judgable_second = last_judgable_second.max(end);
+            last_judgable_time_ns = last_judgable_time_ns.max(end_time_ns);
         }
     }
 
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
-    let max_step_distance = max_step_distance_seconds(&timing_profile, rate);
-    let notes_end_time = last_judgable_second + max_step_distance;
-    let music_end_time = last_relevant_second + max_step_distance;
-    (notes_end_time, music_end_time)
+    let max_step_distance_ns = max_step_distance_ns(&timing_profile, rate);
+    (
+        last_judgable_time_ns.saturating_add(max_step_distance_ns),
+        last_relevant_time_ns.saturating_add(max_step_distance_ns),
+    )
 }
 
 #[inline(always)]
@@ -5640,6 +5646,11 @@ fn max_step_distance_seconds(timing_profile: &TimingProfile, rate: f32) -> f32 {
         1.0
     };
     rate * late_note_resolution_window_s(timing_profile) + MAX_INPUT_LATENCY_SECONDS
+}
+
+#[inline(always)]
+fn max_step_distance_ns(timing_profile: &TimingProfile, rate: f32) -> SongTimeNs {
+    song_time_ns_from_seconds(max_step_distance_seconds(timing_profile, rate))
 }
 
 #[inline(always)]
@@ -7392,7 +7403,7 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
         debug_assert!(state.lane_note_indices[col].windows(2).all(|pair| {
             let left = pair[0];
             let right = pair[1];
-            left < right && state.note_time_cache[left] <= state.note_time_cache[right]
+            left < right && state.note_time_cache_ns[left] <= state.note_time_cache_ns[right]
         }));
         for &note_index in &state.lane_note_indices[col] {
             debug_assert!(note_index < state.notes.len());
@@ -9734,8 +9745,10 @@ pub fn init(
     });
 
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
-    let (notes_end_time, music_end_time) =
-        compute_end_times(&notes, &note_time_cache, &hold_end_time_cache, rate);
+    let (notes_end_time_ns, music_end_time_ns) =
+        compute_end_times_ns(&notes, &note_time_cache_ns, &hold_end_time_cache_ns, rate);
+    let notes_end_time = song_time_ns_to_seconds(notes_end_time_ns);
+    let music_end_time = song_time_ns_to_seconds(music_end_time_ns);
     let notes_len = notes.len();
     let mut column_scroll_dirs = [1.0_f32; MAX_COLS];
     for (player, player_profile) in player_profiles.iter().enumerate().take(num_players) {
@@ -10188,8 +10201,8 @@ pub fn init(
         hold_end_display_beat_cache,
         notes_end_time,
         music_end_time,
-        notes_end_time_ns: song_time_ns_from_seconds(notes_end_time),
-        music_end_time_ns: song_time_ns_from_seconds(music_end_time),
+        notes_end_time_ns,
+        music_end_time_ns,
         music_rate: rate,
         play_mine_sounds: config.mine_hit_sound,
         global_offset_seconds: config.global_offset_seconds,
@@ -12695,7 +12708,7 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
     let _ = now_music_time;
 }
 
-fn run_autoplay(state: &mut State, now_music_time: f32) {
+fn run_autoplay(state: &mut State, now_music_time_ns: SongTimeNs) {
     if !state.autoplay_enabled {
         return;
     }
@@ -12716,13 +12729,14 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
             while row_end < note_end && state.notes[row_end].row_index == row {
                 row_end += 1;
             }
-            let row_time = state.note_time_cache[cursor];
-            if row_time > now_music_time {
+            let row_time_ns = state.note_time_cache_ns[cursor];
+            if row_time_ns > now_music_time_ns {
                 break;
             }
+            let row_time = song_time_ns_to_seconds(row_time_ns);
             // Finalize any already-ended autoplay holds before a new warped
             // row on the same lane can replace the active hold slot.
-            settle_due_autoplay_active_holds(state, state.note_time_cache_ns[cursor]);
+            settle_due_autoplay_active_holds(state, row_time_ns);
             for idx in cursor..row_end {
                 let (result_is_some, is_fake, can_be_judged, note_type, col) = {
                     let note = &state.notes[idx];
@@ -12749,11 +12763,10 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
                 state.autoplay_used = true;
                 match note_type {
                     NoteType::Lift => {
-                        let _ =
-                            judge_a_lift(state, col, row_time, state.note_time_cache_ns[cursor]);
+                        let _ = judge_a_lift(state, col, row_time, row_time_ns);
                     }
                     NoteType::Tap | NoteType::Hold | NoteType::Roll => {
-                        let _ = judge_a_tap(state, col, row_time, state.note_time_cache_ns[cursor]);
+                        let _ = judge_a_tap(state, col, row_time, row_time_ns);
                     }
                     NoteType::Mine | NoteType::Fake => {}
                 }
@@ -12781,7 +12794,7 @@ fn run_autoplay(state: &mut State, now_music_time: f32) {
     }
 }
 
-fn run_replay(state: &mut State, _now_music_time: f32) {
+fn run_replay(state: &mut State) {
     if !state.autoplay_enabled || !state.replay_mode {
         return;
     }
@@ -12870,16 +12883,18 @@ fn refresh_timing_after_offset_change(state: &mut State) {
     }
     state.beat_info_cache.reset(&state.timing);
 
-    let (notes_end_time, music_end_time) = compute_end_times(
+    let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
         &state.notes,
-        &state.note_time_cache,
-        &state.hold_end_time_cache,
+        &state.note_time_cache_ns,
+        &state.hold_end_time_cache_ns,
         state.music_rate,
     );
+    let notes_end_time = song_time_ns_to_seconds(notes_end_time_ns);
+    let music_end_time = song_time_ns_to_seconds(music_end_time_ns);
     state.notes_end_time = notes_end_time;
     state.music_end_time = music_end_time;
-    state.notes_end_time_ns = song_time_ns_from_seconds(notes_end_time);
-    state.music_end_time_ns = song_time_ns_from_seconds(music_end_time);
+    state.notes_end_time_ns = notes_end_time_ns;
+    state.music_end_time_ns = music_end_time_ns;
 }
 
 #[inline(always)]
@@ -13332,12 +13347,12 @@ enum PlayerRowScanState {
 fn player_row_scan_state(
     notes: &[Note],
     row_entries: &[RowEntry],
-    note_time_cache: &[f32],
+    note_time_cache_ns: &[SongTimeNs],
     row_outcomes: &[Option<FinalizedRowOutcome>],
     row_entry_index: usize,
     col_start: usize,
     col_end: usize,
-    lookahead_time: f32,
+    lookahead_time_ns: SongTimeNs,
 ) -> PlayerRowScanState {
     let row_entry = &row_entries[row_entry_index];
     let mut has_notes_on_row = false;
@@ -13365,8 +13380,8 @@ fn player_row_scan_state(
     if finalized_row_outcome_for_entry(row_outcomes, row_entry_index).is_some() {
         return PlayerRowScanState::Finalized;
     }
-    let row_time = note_time_cache[row_entry.nonmine_note_indices[0]];
-    if row_time > lookahead_time {
+    let row_time_ns = note_time_cache_ns[row_entry.nonmine_note_indices[0]];
+    if row_time_ns > lookahead_time_ns {
         return PlayerRowScanState::BeyondLookahead;
     }
     if !is_row_complete {
@@ -13424,13 +13439,12 @@ where
 }
 
 fn update_judged_rows(state: &mut State) {
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
-    let lookahead_time =
-        state.current_music_time + max_step_distance_seconds(&state.timing_profile, rate);
+    let lookahead_time_ns = state
+        .current_music_time_ns
+        .saturating_add(max_step_distance_ns(
+            &state.timing_profile,
+            state.music_rate,
+        ));
     for player in 0..state.num_players {
         let (col_start, col_end) = player_col_range(state, player);
         let row_count = state.row_entries.len();
@@ -13440,12 +13454,12 @@ fn update_judged_rows(state: &mut State) {
                 player_row_scan_state(
                     &state.notes,
                     &state.row_entries,
-                    &state.note_time_cache,
+                    &state.note_time_cache_ns,
                     &state.finalized_row_outcomes[player],
                     idx,
                     col_start,
                     col_end,
-                    lookahead_time,
+                    lookahead_time_ns,
                 )
             })
         {
@@ -13457,12 +13471,12 @@ fn update_judged_rows(state: &mut State) {
                 player_row_scan_state(
                     &state.notes,
                     &state.row_entries,
-                    &state.note_time_cache,
+                    &state.note_time_cache_ns,
                     &state.finalized_row_outcomes[player],
                     idx,
                     col_start,
                     col_end,
-                    lookahead_time,
+                    lookahead_time_ns,
                 )
             });
     }
@@ -14199,9 +14213,9 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         None
     };
     if state.replay_mode {
-        run_replay(state, music_time_sec);
+        run_replay(state);
     } else {
-        run_autoplay(state, music_time_sec);
+        run_autoplay(state, music_time_ns);
     }
     if let Some(started) = autoplay_started {
         phase_timings.autoplay_us = elapsed_us_since(started);
@@ -15277,7 +15291,14 @@ mod tests {
                 nonmine_note_indices: vec![4, 5],
             },
         ];
-        let note_time_cache = vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0];
+        let note_time_cache_ns = vec![
+            song_time_ns_from_seconds(1.0),
+            song_time_ns_from_seconds(1.0),
+            song_time_ns_from_seconds(2.0),
+            song_time_ns_from_seconds(2.0),
+            song_time_ns_from_seconds(3.0),
+            song_time_ns_from_seconds(3.0),
+        ];
         let mut row_outcomes = vec![None; row_entries.len()];
         row_outcomes[0] = Some(FinalizedRowOutcome {
             final_grade: JudgeGrade::Great,
@@ -15287,12 +15308,12 @@ mod tests {
             player_row_scan_state(
                 &notes,
                 &row_entries,
-                &note_time_cache,
+                &note_time_cache_ns,
                 &row_outcomes,
                 idx,
                 0,
                 4,
-                3.5,
+                song_time_ns_from_seconds(3.5),
             )
         });
         assert_eq!(cursor, 1);
@@ -15301,12 +15322,12 @@ mod tests {
             player_row_scan_state(
                 &notes,
                 &row_entries,
-                &note_time_cache,
+                &note_time_cache_ns,
                 &row_outcomes,
                 idx,
                 0,
                 4,
-                3.5,
+                song_time_ns_from_seconds(3.5),
             )
         });
         assert_eq!(ready, Some((2, row3, false)));
@@ -15339,7 +15360,14 @@ mod tests {
                 nonmine_note_indices: vec![4, 5],
             },
         ];
-        let note_time_cache = vec![1.0, 1.0, 2.0, 2.0, 3.0, 3.0];
+        let note_time_cache_ns = vec![
+            song_time_ns_from_seconds(1.0),
+            song_time_ns_from_seconds(1.0),
+            song_time_ns_from_seconds(2.0),
+            song_time_ns_from_seconds(2.0),
+            song_time_ns_from_seconds(3.0),
+            song_time_ns_from_seconds(3.0),
+        ];
         let mut row_outcomes = vec![
             Some(FinalizedRowOutcome {
                 final_grade: JudgeGrade::Great,
@@ -15354,12 +15382,12 @@ mod tests {
             player_row_scan_state(
                 &notes,
                 &row_entries,
-                &note_time_cache,
+                &note_time_cache_ns,
                 &row_outcomes,
                 idx,
                 0,
                 4,
-                3.5,
+                song_time_ns_from_seconds(3.5),
             )
         });
         assert_eq!(pending_cursor, 1);
@@ -15371,12 +15399,12 @@ mod tests {
             player_row_scan_state(
                 &notes,
                 &row_entries,
-                &note_time_cache,
+                &note_time_cache_ns,
                 &row_outcomes,
                 idx,
                 0,
                 4,
-                3.5,
+                song_time_ns_from_seconds(3.5),
             )
         });
         assert_eq!(advanced_cursor, 3);
