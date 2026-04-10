@@ -370,7 +370,6 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     state.background_texture_key.clear();
     state.notes.clear();
     state.note_ranges.fill((0, 0));
-    state.note_spawn_cursor.fill(0);
     state.judged_row_cursor.fill(0);
     state.next_tap_miss_cursor.fill(0);
     state.next_mine_avoid_cursor.fill(0);
@@ -389,8 +388,8 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     state.decaying_hold_indices.clear();
     state.hold_decay_active.clear();
     state.replay_edges.clear();
-    for arrows in &mut state.arrows {
-        arrows.clear();
+    for note_indices in &mut state.lane_note_indices {
+        note_indices.clear();
     }
     for cues in &mut state.column_cues {
         cues.clear();

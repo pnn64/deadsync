@@ -19,10 +19,10 @@ use crate::game::gameplay::{
     effective_mini_percent_for_player, effective_perspective_effects_for_player,
     effective_scroll_effects_for_player, effective_scroll_speed_for_player,
     effective_visibility_effects_for_player, effective_visual_effects_for_player,
-    receptor_glow_visual_for_col, scroll_receptor_y,
+    receptor_glow_visual_for_col, row_hides_completed_note, scroll_receptor_y,
 };
 use crate::game::judgment::{HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
-use crate::game::note::{HoldResult, NoteType};
+use crate::game::note::{HoldResult, MineResult, NoteType};
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart, SpriteSlot,
 };
@@ -2634,6 +2634,62 @@ fn let_go_head_beat(note_beat: f32, end_beat: f32, last_held_beat: f32, visible_
         .min(visible_beat.max(note_beat))
 }
 
+#[inline(always)]
+fn note_window_bounds_by_time(
+    note_times: &[f32],
+    start: usize,
+    end: usize,
+    min_time: f32,
+    max_time: f32,
+) -> (usize, usize) {
+    let note_times = &note_times[start..end];
+    (
+        start + note_times.partition_point(|note_time| *note_time < min_time),
+        start + note_times.partition_point(|note_time| *note_time <= max_time),
+    )
+}
+
+#[inline(always)]
+fn note_window_bounds_by_display_beat(
+    note_display_beats: &[f32],
+    start: usize,
+    end: usize,
+    min_beat: f32,
+    max_beat: f32,
+) -> (usize, usize) {
+    let note_display_beats = &note_display_beats[start..end];
+    (
+        start + note_display_beats.partition_point(|beat| *beat < min_beat),
+        start + note_display_beats.partition_point(|beat| *beat <= max_beat),
+    )
+}
+
+#[inline(always)]
+fn lane_window_bounds_by_time(
+    note_indices: &[usize],
+    note_times: &[f32],
+    min_time: f32,
+    max_time: f32,
+) -> (usize, usize) {
+    (
+        note_indices.partition_point(|&note_index| note_times[note_index] < min_time),
+        note_indices.partition_point(|&note_index| note_times[note_index] <= max_time),
+    )
+}
+
+#[inline(always)]
+fn lane_window_bounds_by_display_beat(
+    note_indices: &[usize],
+    note_display_beats: &[f32],
+    min_beat: f32,
+    max_beat: f32,
+) -> (usize, usize) {
+    (
+        note_indices.partition_point(|&note_index| note_display_beats[note_index] < min_beat),
+        note_indices.partition_point(|&note_index| note_display_beats[note_index] <= max_beat),
+    )
+}
+
 pub fn build_bundles(
     state: &State,
     profile: &profile::Profile,
@@ -2971,6 +3027,77 @@ pub fn build_bundles(
                 effect_height,
                 accel,
             )
+        };
+        let (note_start, note_end) = state.note_ranges[player_idx];
+        let visible_time_range = match scroll_speed {
+            ScrollSpeedSetting::CMod(_) => {
+                let pps_chart = cmod_pps_opt.expect("cmod pps computed");
+                Some((
+                    current_time - draw_distance_after_targets / pps_chart * rate,
+                    current_time + draw_distance_before_targets / pps_chart * rate,
+                ))
+            }
+            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => None,
+        };
+        let visible_display_beat_range = match scroll_speed {
+            ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
+                let pixels_per_displayed_beat =
+                    ScrollSpeedSetting::ARROW_SPACING * field_zoom * beatmod_multiplier.abs();
+                if pixels_per_displayed_beat > f32::EPSILON {
+                    let current_chart_beat = state.current_beat_visible[player_idx];
+                    let mut min_beat =
+                        curr_disp_beat - draw_distance_after_targets / pixels_per_displayed_beat;
+                    let mut max_beat =
+                        curr_disp_beat + draw_distance_before_targets / pixels_per_displayed_beat;
+                    if beatmod_multiplier.abs() < 0.75 {
+                        let min_cap =
+                            timing.get_displayed_beat((current_chart_beat - 16.0).max(0.0));
+                        let max_cap = timing.get_displayed_beat(current_chart_beat + 16.0);
+                        min_beat = min_beat.max(min_cap);
+                        max_beat = max_beat.min(max_cap);
+                    }
+                    if max_beat < min_beat {
+                        max_beat = min_beat;
+                    }
+                    Some((min_beat, max_beat))
+                } else {
+                    None
+                }
+            }
+            ScrollSpeedSetting::CMod(_) => None,
+        };
+        let player_note_window_bounds = if let Some((min_time, max_time)) = visible_time_range {
+            note_window_bounds_by_time(
+                &state.note_time_cache,
+                note_start,
+                note_end,
+                min_time,
+                max_time,
+            )
+        } else if let Some((min_beat, max_beat)) = visible_display_beat_range {
+            note_window_bounds_by_display_beat(
+                &state.note_display_beat_cache,
+                note_start,
+                note_end,
+                min_beat,
+                max_beat,
+            )
+        } else {
+            (note_start, note_end)
+        };
+        let lane_note_window_bounds = |note_indices: &[usize]| -> (usize, usize) {
+            if let Some((min_time, max_time)) = visible_time_range {
+                lane_window_bounds_by_time(note_indices, &state.note_time_cache, min_time, max_time)
+            } else if let Some((min_beat, max_beat)) = visible_display_beat_range {
+                lane_window_bounds_by_display_beat(
+                    note_indices,
+                    &state.note_display_beat_cache,
+                    min_beat,
+                    max_beat,
+                )
+            } else {
+                (0, note_indices.len())
+            }
         };
         let tipsy_y_for_col =
             |local_col: usize| -> f32 { tipsy_y_extra(local_col, elapsed_screen, visual) };
@@ -3712,18 +3839,8 @@ pub fn build_bundles(
                 }
             }
         }
-        // Only consider notes that are currently in or near the lookahead window.
-        let notes_len = state.notes.len();
-        let (note_start, note_end) = state.note_ranges[player_idx];
-        let min_visible_index = state.arrows[col_start..col_end]
-            .iter()
-            .filter_map(|v| v.first())
-            .map(|a| a.note_index)
-            .min()
-            .unwrap_or(note_start);
-        let max_visible_index = state.note_spawn_cursor[player_idx]
-            .clamp(note_start, note_end)
-            .min(notes_len);
+        // Only consider notes that are currently in or near the visible window.
+        let (min_visible_index, max_visible_index) = player_note_window_bounds;
         let extra_hold_indices = state
             .active_holds
             .iter()
@@ -5298,10 +5415,11 @@ pub fn build_bundles(
         let draw_hold_same_row = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
         let draw_roll_same_row = ns.note_display_metrics.draw_roll_head_for_taps_on_same_row;
         let tap_same_row_means_hold = ns.note_display_metrics.tap_hold_roll_on_row_means_hold;
-        // Active arrows
+        // Visible tap and mine notes
         for col_idx in 0..num_cols {
             let col = col_start + col_idx;
-            let column_arrows = &state.arrows[col];
+            let column_note_indices = &state.lane_note_indices[col];
+            let (lane_note_start, lane_note_end) = lane_note_window_bounds(column_note_indices);
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
             let fill_slot = mine_ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
@@ -5313,26 +5431,30 @@ pub fn build_bundles(
                 .mine_frames
                 .get(col_idx)
                 .and_then(|slot| slot.as_ref());
-            for arrow in column_arrows {
+            for &note_index in &column_note_indices[lane_note_start..lane_note_end] {
+                let note = &state.notes[note_index];
+                if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                    continue;
+                }
+                if !note.is_fake {
+                    if matches!(note.note_type, NoteType::Mine) {
+                        if matches!(note.mine_result, Some(MineResult::Hit)) {
+                            continue;
+                        }
+                    } else if note.result.is_some()
+                        && row_hides_completed_note(state, player_idx, note.row_index)
+                    {
+                        continue;
+                    }
+                }
                 let raw_travel_offset = match scroll_speed {
                     ScrollSpeedSetting::CMod(_) => {
                         let pps_chart = cmod_pps_opt.expect("cmod pps computed");
-                        // SAFETY: `state.arrows` only stores note indices sourced
-                        // from `state.note_time_cache`, so `arrow.note_index` is
-                        // valid for this cache lookup.
-                        let note_time_chart =
-                            unsafe { *state.note_time_cache.get_unchecked(arrow.note_index) };
+                        let note_time_chart = state.note_time_cache[note_index];
                         (note_time_chart - current_time) / rate * pps_chart
                     }
                     ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                        // SAFETY: `state.arrows` only stores note indices sourced
-                        // from `state.note_display_beat_cache`, so `arrow.note_index`
-                        // is valid for this cache lookup.
-                        let note_disp_beat = unsafe {
-                            *state
-                                .note_display_beat_cache
-                                .get_unchecked(arrow.note_index)
-                        };
+                        let note_disp_beat = state.note_display_beat_cache[note_index];
                         (note_disp_beat - curr_disp_beat)
                             * ScrollSpeedSetting::ARROW_SPACING
                             * field_zoom
@@ -5345,12 +5467,6 @@ pub fn build_bundles(
                 if delta < -draw_distance_after_targets || delta > draw_distance_before_targets {
                     continue;
                 }
-                if matches!(arrow.note_type, NoteType::Hold | NoteType::Roll) {
-                    continue;
-                }
-                // SAFETY: `state.arrows` stores indices produced from `state.notes`,
-                // so `arrow.note_index` is in-bounds here.
-                let note = unsafe { state.notes.get_unchecked(arrow.note_index) };
                 let note_alpha = alpha_for_travel(col_idx, raw_travel_offset);
                 if note_alpha <= f32::EPSILON {
                     continue;
@@ -5358,7 +5474,7 @@ pub fn build_bundles(
                 let column_center_x = lane_center_x_from_travel(col_idx, raw_travel_offset);
                 let note_world_z = world_z_for_adjusted_travel(travel_offset);
                 let note_rot = calc_note_rotation_z(visual, note.beat, current_beat, false);
-                if matches!(arrow.note_type, NoteType::Mine) {
+                if matches!(note.note_type, NoteType::Mine) {
                     if fill_slot.is_none() && frame_slot.is_none() {
                         continue;
                     }
@@ -5523,13 +5639,7 @@ pub fn build_bundles(
                     continue;
                 }
                 let tap_note_part = tap_part_for_note_type(note.note_type);
-                // SAFETY: `state.arrows` only stores note indices sourced from
-                // `tap_row_hold_roll_flags`, so this cache lookup is in-bounds.
-                let tap_row_flags = unsafe {
-                    *state
-                        .tap_row_hold_roll_flags
-                        .get_unchecked(arrow.note_index)
-                };
+                let tap_row_flags = state.tap_row_hold_roll_flags[note_index];
                 let tap_replacement_roll =
                     if matches!(note.note_type, NoteType::Tap | NoteType::Lift) {
                         let same_row_has_hold = tap_row_flags & 0b01 != 0;

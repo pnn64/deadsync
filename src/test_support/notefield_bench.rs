@@ -1,8 +1,8 @@
 use crate::engine::present::actors::Actor;
 use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
 use crate::game::gameplay::{
-    self, ActiveHold, ActiveTapExplosion, Arrow, ColumnCue, ColumnCueColumn, ErrorBarText,
-    ErrorBarTick, MAX_COLS, MAX_PLAYERS,
+    self, ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
+    MAX_COLS, MAX_PLAYERS,
 };
 use crate::game::judgment::{JudgeGrade, TimingWindow};
 use crate::game::note::NoteType;
@@ -124,7 +124,6 @@ fn prime_visible_window(state: &mut gameplay::State) {
     state.current_music_time_visible[1] = time;
 
     for col in 0..MAX_COLS {
-        state.arrows[col].clear();
         state.tap_explosions[col] = None;
         state.active_holds[col] = None;
     }
@@ -143,16 +142,8 @@ fn prime_visible_window(state: &mut gameplay::State) {
             break;
         }
         end_cursor = idx + 1;
-        if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
-            state.arrows[note.column].push(Arrow {
-                beat: note.beat,
-                note_type: note.note_type,
-                note_index: idx,
-            });
-        }
     }
 
-    state.note_spawn_cursor[0] = end_cursor.max(note_start);
     state.next_tap_miss_cursor[0] = end_cursor.max(note_start);
 
     if let Some((note_index, note_type)) = state.notes[note_start..end_cursor]
