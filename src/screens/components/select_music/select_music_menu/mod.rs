@@ -26,6 +26,7 @@ pub enum Action {
     SortByMeter,
     SortByPopularity,
     SortByRecent,
+    SortByGenre,
     SwitchToSingle,
     SwitchToDouble,
     TestInput,
@@ -91,6 +92,11 @@ const ITEM_SORT_BY_RECENT: Item = Item {
     top_label: "Sort By",
     bottom_label: "Recently Played",
     action: Action::SortByRecent,
+};
+pub const ITEM_SORT_BY_GENRE: Item = Item {
+    top_label: "Sort By",
+    bottom_label: "Genre",
+    action: Action::SortByGenre,
 };
 pub const ITEM_SWITCH_TO_SINGLE: Item = Item {
     top_label: "Change Style To",
@@ -158,10 +164,11 @@ const ITEM_GO_BACK: Item = Item {
     action: Action::BackToMain,
 };
 
-pub const ITEMS_SORTS: [Item; 9] = [
+pub const ITEMS_SORTS: [Item; 10] = [
     ITEM_SORT_BY_GROUP,
     ITEM_SORT_BY_TITLE,
     ITEM_SORT_BY_ARTIST,
+    ITEM_SORT_BY_GENRE,
     ITEM_SORT_BY_BPM,
     ITEM_SORT_BY_LENGTH,
     ITEM_SORT_BY_METER,

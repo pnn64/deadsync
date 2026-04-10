@@ -29,6 +29,7 @@ pub struct SongData {
     pub translit_title: String,
     pub translit_subtitle: String,
     pub artist: String,
+    pub genre: String,
     pub banner_path: Option<PathBuf>,
     pub background_path: Option<PathBuf>,
     pub background_changes: Vec<SongBackgroundChange>,

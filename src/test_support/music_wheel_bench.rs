@@ -112,6 +112,7 @@ fn bench_song(pack_idx: usize, song_idx: usize) -> Arc<SongData> {
         translit_title: String::new(),
         translit_subtitle: String::new(),
         artist: format!("Bench Artist {}", pack_idx + 1),
+        genre: String::new(),
         banner_path: None,
         background_path: None,
         background_changes: Vec::new(),

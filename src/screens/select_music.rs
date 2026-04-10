@@ -808,6 +808,7 @@ enum WheelSortMode {
     Group,
     Title,
     Artist,
+    Genre,
     Bpm,
     Length,
     Meter,
@@ -882,6 +883,7 @@ pub struct State {
     group_entries: Vec<MusicWheelEntry>,
     title_entries: Vec<MusicWheelEntry>,
     artist_entries: Vec<MusicWheelEntry>,
+    genre_entries: Vec<MusicWheelEntry>,
     bpm_entries: Vec<MusicWheelEntry>,
     length_entries: Vec<MusicWheelEntry>,
     meter_entries: Vec<MusicWheelEntry>,
@@ -951,6 +953,7 @@ pub struct State {
     group_pack_song_counts: HashMap<String, usize>,
     title_pack_song_counts: HashMap<String, usize>,
     artist_pack_song_counts: HashMap<String, usize>,
+    genre_pack_song_counts: HashMap<String, usize>,
     bpm_pack_song_counts: HashMap<String, usize>,
     length_pack_song_counts: HashMap<String, usize>,
     meter_pack_song_counts: HashMap<String, usize>,
@@ -1520,6 +1523,55 @@ fn build_artist_grouped_entries(
     (entries, counts)
 }
 
+const UNKNOWN_GENRE_HEADER: &str = "Unknown Genre";
+
+fn build_genre_grouped_entries(
+    grouped_entries: &[MusicWheelEntry],
+) -> (Vec<MusicWheelEntry>, HashMap<String, usize>) {
+    let mut songs: Vec<Arc<SongData>> = grouped_entries
+        .iter()
+        .filter_map(|e| match e {
+            MusicWheelEntry::Song(song) => Some(song.clone()),
+            MusicWheelEntry::PackHeader { .. } => None,
+        })
+        .collect();
+
+    songs.sort_by_cached_key(|song| {
+        let genre = if song.genre.trim().is_empty() {
+            UNKNOWN_GENRE_HEADER.to_ascii_lowercase()
+        } else {
+            song.genre.to_ascii_lowercase()
+        };
+        (genre, song_title_sort_key(song.as_ref()))
+    });
+
+    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
+    let mut counts: HashMap<String, usize> = HashMap::with_capacity(32);
+    let mut current_group: Option<String> = None;
+    let mut header_idx = 0usize;
+
+    for song in songs {
+        let group_name = if song.genre.trim().is_empty() {
+            UNKNOWN_GENRE_HEADER.to_string()
+        } else {
+            song.genre.clone()
+        };
+        if current_group.as_deref() != Some(group_name.as_str()) {
+            entries.push(MusicWheelEntry::PackHeader {
+                name: group_name.clone(),
+                original_index: header_idx,
+                banner_path: None,
+            });
+            current_group = Some(group_name.clone());
+            header_idx += 1;
+        }
+        *counts.entry(group_name).or_insert(0) += 1;
+        entries.push(MusicWheelEntry::Song(song));
+    }
+
+    (entries, counts)
+}
+
 #[inline(always)]
 fn song_bpm_for_sort(song: &SongData) -> i32 {
     song_display_bpm_range(song).map_or(0, |(_lo, hi)| hi.max(0.0) as i32)
@@ -1907,6 +1959,14 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
                 .and_then(|song| group_name_for_song(&state.artist_entries, song))
                 .or_else(|| first_header_name(&state.artist_entries));
         }
+        WheelSortMode::Genre => {
+            state.all_entries = state.genre_entries.clone();
+            state.pack_song_counts = state.genre_pack_song_counts.clone();
+            state.expanded_pack_name = selected_song
+                .as_ref()
+                .and_then(|song| group_name_for_song(&state.genre_entries, song))
+                .or_else(|| first_header_name(&state.genre_entries));
+        }
         WheelSortMode::Bpm => {
             state.all_entries = state.bpm_entries.clone();
             state.pack_song_counts = state.bpm_pack_song_counts.clone();
@@ -2092,6 +2152,7 @@ pub fn init() -> State {
 
     let (title_entries, title_pack_song_counts) = build_title_grouped_entries(&all_entries);
     let (artist_entries, artist_pack_song_counts) = build_artist_grouped_entries(&all_entries);
+    let (genre_entries, genre_pack_song_counts) = build_genre_grouped_entries(&all_entries);
     let (bpm_entries, bpm_pack_song_counts) = build_bpm_grouped_entries(&all_entries);
     let (length_entries, length_pack_song_counts) = build_length_grouped_entries(&all_entries);
     let (meter_entries, meter_pack_song_counts) =
@@ -2111,6 +2172,7 @@ pub fn init() -> State {
         group_entries: all_entries,
         title_entries,
         artist_entries,
+        genre_entries,
         bpm_entries,
         length_entries,
         meter_entries,
@@ -2215,6 +2277,7 @@ pub fn init() -> State {
         group_pack_song_counts: pack_song_counts,
         title_pack_song_counts,
         artist_pack_song_counts,
+        genre_pack_song_counts,
         bpm_pack_song_counts,
         length_pack_song_counts,
         meter_pack_song_counts,
@@ -2305,6 +2368,7 @@ pub fn init_placeholder() -> State {
         group_entries: Vec::new(),
         title_entries: Vec::new(),
         artist_entries: Vec::new(),
+        genre_entries: Vec::new(),
         bpm_entries: Vec::new(),
         length_entries: Vec::new(),
         meter_entries: Vec::new(),
@@ -2409,6 +2473,7 @@ pub fn init_placeholder() -> State {
         group_pack_song_counts: HashMap::new(),
         title_pack_song_counts: HashMap::new(),
         artist_pack_song_counts: HashMap::new(),
+        genre_pack_song_counts: HashMap::new(),
         bpm_pack_song_counts: HashMap::new(),
         length_pack_song_counts: HashMap::new(),
         meter_pack_song_counts: HashMap::new(),
@@ -2675,11 +2740,12 @@ fn sort_submenu_index_for_mode(sort_mode: WheelSortMode) -> usize {
         WheelSortMode::Group => 0,
         WheelSortMode::Title => 1,
         WheelSortMode::Artist => 2,
-        WheelSortMode::Bpm => 3,
-        WheelSortMode::Length => 4,
-        WheelSortMode::Meter => 5,
-        WheelSortMode::Popularity => 6,
-        WheelSortMode::Recent => 7,
+        WheelSortMode::Genre => 3,
+        WheelSortMode::Bpm => 4,
+        WheelSortMode::Length => 5,
+        WheelSortMode::Meter => 6,
+        WheelSortMode::Popularity => 7,
+        WheelSortMode::Recent => 8,
     }
 }
 
@@ -5560,6 +5626,11 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
         }
         select_music_menu::Action::SortByRecent => {
             apply_wheel_sort(state, WheelSortMode::Recent);
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+        select_music_menu::Action::SortByGenre => {
+            apply_wheel_sort(state, WheelSortMode::Genre);
             hide_select_music_menu(state);
             ScreenAction::None
         }
@@ -8671,6 +8742,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: String::new(),
+            genre: String::new(),
             banner_path: None,
             background_path: None,
             background_changes: Vec::new(),

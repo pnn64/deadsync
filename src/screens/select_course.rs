@@ -752,6 +752,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         } else {
             meta.scripter.clone()
         },
+        genre: String::new(),
         banner_path: meta.banner_path.clone(),
         background_path: None,
         background_changes: Vec::new(),
