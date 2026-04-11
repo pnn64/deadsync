@@ -3798,28 +3798,46 @@ impl App {
         if self.state.screens.current_screen != CurrentScreen::Gameplay {
             return;
         }
-        let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
-            return;
-        };
-        let Some(next_change) = gs.song.background_changes.get(gs.next_background_change_ix) else {
-            return;
-        };
-        if gs.current_beat < next_change.start_beat {
-            return;
-        }
-        while let Some(change) = gs.song.background_changes.get(gs.next_background_change_ix) {
-            if gs.current_beat < change.start_beat {
-                break;
-            }
-            gs.next_background_change_ix += 1;
-        }
         let show_video_backgrounds = config::get().show_video_backgrounds;
-        let path_opt = gs
-            .song
-            .gameplay_background_path(gs.current_beat, show_video_backgrounds)
-            .cloned();
-        if path_opt != gs.current_background_path {
-            self.apply_dynamic_background(path_opt);
+        let desired_path = {
+            let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
+                return;
+            };
+            if let Some(next_change) = gs.song.background_changes.get(gs.next_background_change_ix)
+            {
+                if gs.current_beat >= next_change.start_beat {
+                    while let Some(change) =
+                        gs.song.background_changes.get(gs.next_background_change_ix)
+                    {
+                        if gs.current_beat < change.start_beat {
+                            break;
+                        }
+                        gs.next_background_change_ix += 1;
+                    }
+                }
+            }
+            let desired = gs
+                .song
+                .gameplay_background_path(gs.current_beat, show_video_backgrounds)
+                .cloned();
+            if desired != gs.current_background_path {
+                gs.current_background_path = desired.clone();
+            }
+            desired
+        };
+
+        let next_key = self.backend.as_mut().and_then(|backend| {
+            self.dynamic_media.sync_gameplay_background(
+                &mut self.asset_manager,
+                backend,
+                desired_path.as_deref(),
+                show_video_backgrounds,
+            )
+        });
+        if let Some(key) = next_key
+            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+        {
+            gs.background_texture_key = key;
         }
     }
 

@@ -189,6 +189,13 @@ impl AssetManager {
         self.texture_handles.contains_key(key)
     }
 
+    #[inline(always)]
+    pub fn has_uploaded_texture_key(&self, key: &str) -> bool {
+        self.texture_handles
+            .get(key)
+            .is_some_and(|handle| self.textures.contains_key(handle))
+    }
+
     pub fn take_textures(&mut self) -> HashMap<TextureHandle, GfxTexture> {
         self.texture_handles.clear();
         self.texture_handles_ascii_ci.clear();

@@ -35,6 +35,22 @@ enum BannerVideoPrepResult {
     },
 }
 
+struct PreparedGameplayBackground {
+    key: String,
+    path: PathBuf,
+    image: RgbaImage,
+    video: Option<video::Player>,
+}
+
+enum GameplayBackgroundPrepResult {
+    Ready(PreparedGameplayBackground),
+    Failed {
+        key: String,
+        path: PathBuf,
+        msg: String,
+    },
+}
+
 struct DynamicBannerState {
     key: String,
     path: PathBuf,
@@ -56,12 +72,18 @@ pub(crate) struct DynamicMedia {
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
     current_dynamic_background: Option<DynamicBackgroundState>,
+    pending_gameplay_background_preps: HashSet<String>,
+    gameplay_background_prep_tx: mpsc::Sender<GameplayBackgroundPrepResult>,
+    gameplay_background_prep_rx: mpsc::Receiver<GameplayBackgroundPrepResult>,
+    queued_gameplay_background: Option<DynamicBackgroundState>,
+    failed_gameplay_background_key: Option<String>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
 }
 
 impl DynamicMedia {
     pub(crate) fn new() -> Self {
         let (banner_video_prep_tx, banner_video_prep_rx) = mpsc::channel();
+        let (gameplay_background_prep_tx, gameplay_background_prep_rx) = mpsc::channel();
         Self {
             current_dynamic_banner: None,
             active_banner_videos: HashMap::new(),
@@ -72,6 +94,11 @@ impl DynamicMedia {
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: std::collections::HashSet::new(),
             current_dynamic_background: None,
+            pending_gameplay_background_preps: HashSet::new(),
+            gameplay_background_prep_tx,
+            gameplay_background_prep_rx,
+            queued_gameplay_background: None,
+            failed_gameplay_background_key: None,
             current_profile_avatars: std::array::from_fn(|_| None),
         }
     }
@@ -96,7 +123,7 @@ impl DynamicMedia {
                 .len()
                 .saturating_add(self.dynamic_pack_banner_keys.len())
                 .saturating_add(self.current_profile_avatars.len())
-                .saturating_add(4),
+                .saturating_add(5),
         );
         if let Some(state) = self.current_dynamic_banner.take() {
             keys.push(state.key);
@@ -113,6 +140,12 @@ impl DynamicMedia {
         if let Some(state) = self.current_dynamic_background.take() {
             keys.push(state.key);
         }
+        if let Some(state) = self.queued_gameplay_background.take() {
+            keys.push(state.key);
+        }
+        self.pending_gameplay_background_preps.clear();
+        self.failed_gameplay_background_key = None;
+        self.clear_gameplay_background_results();
         for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
             let ix = Self::side_ix(side);
             if let Some((key, _)) = self.current_profile_avatars[ix].take() {
@@ -341,6 +374,8 @@ impl DynamicMedia {
     ) -> String {
         const FALLBACK_KEY: &str = "__black";
 
+        self.reset_pending_gameplay_background(assets, backend);
+
         if let Some(path) = path_opt {
             let animate_video = crate::config::get().show_video_backgrounds;
             if self
@@ -474,6 +509,62 @@ impl DynamicMedia {
             self.destroy_current_dynamic_background(assets, backend);
             FALLBACK_KEY.to_string()
         }
+    }
+
+    pub(crate) fn sync_gameplay_background(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        desired_path: Option<&Path>,
+        animate_video: bool,
+    ) -> Option<String> {
+        const FALLBACK_KEY: &str = "__black";
+
+        let desired_key = desired_path.map(|path| path.to_string_lossy().into_owned());
+        if self.failed_gameplay_background_key.as_deref() != desired_key.as_deref() {
+            self.failed_gameplay_background_key = None;
+        }
+
+        if desired_key.is_none() {
+            self.reset_pending_gameplay_background(assets, backend);
+            self.destroy_current_dynamic_background(assets, backend);
+            return Some(FALLBACK_KEY.to_string());
+        }
+        let desired_key = desired_key.unwrap();
+
+        let failed = self.drain_gameplay_background_preps(assets, backend, &desired_key);
+        if failed {
+            self.reset_pending_gameplay_background(assets, backend);
+            self.failed_gameplay_background_key = Some(desired_key.clone());
+            self.destroy_current_dynamic_background(assets, backend);
+            return Some(FALLBACK_KEY.to_string());
+        }
+
+        self.drop_stale_queued_gameplay_background(assets, backend, &desired_key);
+        if self.promote_queued_gameplay_background(assets, backend, &desired_key) {
+            return Some(desired_key);
+        }
+
+        if self
+            .current_dynamic_background
+            .as_ref()
+            .is_some_and(|state| {
+                state.key == desired_key && assets.has_uploaded_texture_key(&state.key)
+            })
+            || self
+                .pending_gameplay_background_preps
+                .contains(&desired_key)
+            || self
+                .queued_gameplay_background
+                .as_ref()
+                .is_some_and(|state| state.key == desired_key)
+            || self.failed_gameplay_background_key.as_deref() == Some(desired_key.as_str())
+        {
+            return None;
+        }
+
+        self.spawn_gameplay_background_prep(desired_path.unwrap(), animate_video);
+        None
     }
 
     pub(crate) fn set_profile_avatar(
@@ -633,6 +724,17 @@ impl DynamicMedia {
         }
     }
 
+    fn reset_pending_gameplay_background(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+    ) {
+        self.pending_gameplay_background_preps.clear();
+        self.failed_gameplay_background_key = None;
+        self.clear_gameplay_background_results();
+        self.drop_stale_queued_gameplay_background(assets, backend, "");
+    }
+
     fn spawn_banner_video_prep(&mut self, path: &Path) {
         let key = path.to_string_lossy().into_owned();
         if !self.pending_banner_video_preps.insert(key.clone()) {
@@ -643,6 +745,20 @@ impl DynamicMedia {
         let tx = self.banner_video_prep_tx.clone();
         thread::spawn(move || {
             let result = prepare_banner_video(key, path);
+            let _ = tx.send(result);
+        });
+    }
+
+    fn spawn_gameplay_background_prep(&mut self, path: &Path, animate_video: bool) {
+        let key = path.to_string_lossy().into_owned();
+        if !self.pending_gameplay_background_preps.insert(key.clone()) {
+            return;
+        }
+
+        let path = path.to_path_buf();
+        let tx = self.gameplay_background_prep_tx.clone();
+        thread::spawn(move || {
+            let result = prepare_gameplay_background(key, path, animate_video);
             let _ = tx.send(result);
         });
     }
@@ -672,6 +788,92 @@ impl DynamicMedia {
                 }
             }
         }
+    }
+
+    fn drain_gameplay_background_preps(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        desired_key: &str,
+    ) -> bool {
+        let mut failed = false;
+        while let Ok(result) = self.gameplay_background_prep_rx.try_recv() {
+            match result {
+                GameplayBackgroundPrepResult::Ready(prepared) => {
+                    self.pending_gameplay_background_preps.remove(&prepared.key);
+                    if prepared.key != desired_key {
+                        continue;
+                    }
+                    self.drop_stale_queued_gameplay_background(assets, backend, desired_key);
+                    assets.queue_texture_upload(prepared.key.clone(), prepared.image);
+                    self.queued_gameplay_background = Some(DynamicBackgroundState {
+                        key: prepared.key,
+                        path: prepared.path,
+                        video: prepared.video,
+                    });
+                }
+                GameplayBackgroundPrepResult::Failed { key, path, msg } => {
+                    self.pending_gameplay_background_preps.remove(&key);
+                    if key != desired_key {
+                        continue;
+                    }
+                    warn!(
+                        "Failed to prepare gameplay background '{}': {msg}. Using fallback.",
+                        path.display()
+                    );
+                    failed = true;
+                }
+            }
+        }
+        failed
+    }
+
+    fn clear_gameplay_background_results(&mut self) {
+        while self.gameplay_background_prep_rx.try_recv().is_ok() {}
+    }
+
+    fn drop_stale_queued_gameplay_background(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        desired_key: &str,
+    ) {
+        let stale = self
+            .queued_gameplay_background
+            .as_ref()
+            .is_some_and(|state| state.key != desired_key);
+        if !stale {
+            return;
+        }
+        let Some(state) = self.queued_gameplay_background.take() else {
+            return;
+        };
+        if let Some((handle, texture)) = assets.remove_texture(&state.key) {
+            assets.dispose_texture(backend, handle, texture);
+        }
+    }
+
+    fn promote_queued_gameplay_background(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        desired_key: &str,
+    ) -> bool {
+        let ready = self
+            .queued_gameplay_background
+            .as_ref()
+            .is_some_and(|state| {
+                state.key == desired_key && assets.has_uploaded_texture_key(&state.key)
+            });
+        if !ready {
+            return false;
+        }
+        let Some(state) = self.queued_gameplay_background.take() else {
+            return false;
+        };
+        self.destroy_current_dynamic_background(assets, backend);
+        self.current_dynamic_background = Some(state);
+        true
     }
 
     fn destroy_current_profile_avatar_for_side(
@@ -718,6 +920,49 @@ fn prepare_banner_video(key: String, path: PathBuf) -> BannerVideoPrepResult {
         poster,
         player,
     })
+}
+
+fn prepare_gameplay_background(
+    key: String,
+    path: PathBuf,
+    animate_video: bool,
+) -> GameplayBackgroundPrepResult {
+    if dynamic::is_dynamic_video_path(&path) {
+        if animate_video {
+            return match video::open(&path, true) {
+                Ok(video) => GameplayBackgroundPrepResult::Ready(PreparedGameplayBackground {
+                    key,
+                    path,
+                    image: video.poster,
+                    video: Some(video.player),
+                }),
+                Err(msg) => GameplayBackgroundPrepResult::Failed { key, path, msg },
+            };
+        }
+        return match video::load_poster(&path) {
+            Ok(image) => GameplayBackgroundPrepResult::Ready(PreparedGameplayBackground {
+                key,
+                path,
+                image,
+                video: None,
+            }),
+            Err(msg) => GameplayBackgroundPrepResult::Failed { key, path, msg },
+        };
+    }
+
+    match open_image_fallback(&path) {
+        Ok(image) => GameplayBackgroundPrepResult::Ready(PreparedGameplayBackground {
+            key,
+            path,
+            image: image.to_rgba8(),
+            video: None,
+        }),
+        Err(msg) => GameplayBackgroundPrepResult::Failed {
+            key,
+            path,
+            msg: msg.to_string(),
+        },
+    }
 }
 
 impl Default for DynamicMedia {
