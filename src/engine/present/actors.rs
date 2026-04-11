@@ -1,4 +1,4 @@
-use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, TexturedMeshVertex};
+use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex, TMeshCacheKey, TexturedMeshVertex};
 use crate::engine::present::anim;
 use cgmath::Matrix4;
 use std::sync::Arc;
@@ -123,6 +123,7 @@ pub enum Actor {
         size: [SizeSpec; 2],
         texture: Arc<str>,
         vertices: Arc<[TexturedMeshVertex]>,
+        geom_cache_key: TMeshCacheKey,
         mode: MeshMode,
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],

@@ -3209,7 +3209,10 @@ fn show_sorts_submenu(state: &mut State) {
 }
 
 #[inline(always)]
-fn select_music_menu_items(state: &State, page: select_music_menu::Page) -> Vec<select_music_menu::Item> {
+fn select_music_menu_items(
+    state: &State,
+    page: select_music_menu::Page,
+) -> Vec<select_music_menu::Item> {
     if page == select_music_menu::Page::Sorts {
         return select_music_menu::ITEMS_SORTS.to_vec();
     }
@@ -3350,7 +3353,10 @@ fn show_profile_switch_overlay(state: &mut State) {
 fn restore_select_music_menu_after_profile_overlay(state: &mut State) {
     if config::get().use_category_select_music_menu {
         // Re-open categories menu, preserving expansion state if we still have it
-        if !matches!(state.select_music_menu, select_music_menu::State::Categories(_)) {
+        if !matches!(
+            state.select_music_menu,
+            select_music_menu::State::Categories(_)
+        ) {
             state.select_music_menu =
                 select_music_menu::State::Categories(select_music_menu::categories::open());
         }
@@ -3384,7 +3390,8 @@ fn cancel_song_search(state: &mut State) {
 
 fn start_song_search_results(state: &mut State, search_text: String) {
     clear_overlay_nav_hold(state);
-    state.song_search = select_music_menu::begin_song_search_results(&state.group_entries, search_text);
+    state.song_search =
+        select_music_menu::begin_song_search_results(&state.group_entries, search_text);
 }
 
 fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
@@ -4734,7 +4741,10 @@ fn update_overlay_nav_hold(state: &mut State) {
     };
 
     let overlay_active = state.select_music_menu.is_visible()
-        || matches!(state.song_search, select_music_menu::SongSearchState::Results(_));
+        || matches!(
+            state.song_search,
+            select_music_menu::SongSearchState::Results(_)
+        );
     if !overlay_active {
         clear_overlay_nav_hold(state);
         return;
@@ -4747,7 +4757,8 @@ fn update_overlay_nav_hold(state: &mut State) {
         return;
     }
 
-    let moved = if let select_music_menu::SongSearchState::Results(results) = &mut state.song_search {
+    let moved = if let select_music_menu::SongSearchState::Results(results) = &mut state.song_search
+    {
         if results.input_lock > 0.0 {
             false
         } else {
@@ -4797,7 +4808,8 @@ fn show_leaderboard_overlay(state: &mut State) {
 
     let chart_hash_p1 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P1);
     let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile::PlayerSide::P2);
-    if let Some(overlay) = select_music_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2) {
+    if let Some(overlay) = select_music_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2)
+    {
         state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
         state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
         state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
@@ -6178,11 +6190,17 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
 }
 
 fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if matches!(state.song_search, select_music_menu::SongSearchState::Hidden) {
+    if matches!(
+        state.song_search,
+        select_music_menu::SongSearchState::Hidden
+    ) {
         return ScreenAction::None;
     }
 
-    if matches!(state.song_search, select_music_menu::SongSearchState::TextEntry(_)) {
+    if matches!(
+        state.song_search,
+        select_music_menu::SongSearchState::TextEntry(_)
+    ) {
         if !ev.pressed {
             return ScreenAction::None;
         }
@@ -6246,7 +6264,9 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
     clear_overlay_nav_hold(state);
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
-            let picked = if let select_music_menu::SongSearchState::Results(results) = &state.song_search {
+            let picked = if let select_music_menu::SongSearchState::Results(results) =
+                &state.song_search
+            {
                 select_music_menu::song_search_focused_candidate(results).map(|c| c.song.clone())
             } else {
                 None
@@ -6645,7 +6665,10 @@ pub fn handle_raw_key_event(
         return ScreenAction::None;
     }
 
-    if !matches!(state.replay_overlay, select_music_menu::ReplayOverlayState::Hidden) {
+    if !matches!(
+        state.replay_overlay,
+        select_music_menu::ReplayOverlayState::Hidden
+    ) {
         if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
             state.song_search_ignore_next_back_select = true;
@@ -6668,8 +6691,10 @@ pub fn handle_raw_key_event(
     }
 
     if key.is_some_and(|key| key.pressed) {
-        if matches!(state.song_search, select_music_menu::SongSearchState::Results(_))
-            && key.is_some_and(|key| key.code == KeyCode::Escape)
+        if matches!(
+            state.song_search,
+            select_music_menu::SongSearchState::Results(_)
+        ) && key.is_some_and(|key| key.code == KeyCode::Escape)
         {
             cancel_song_search(state);
             return ScreenAction::None;
@@ -6755,8 +6780,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return ScreenAction::None;
     }
 
-    if matches!(state.song_search, select_music_menu::SongSearchState::Hidden)
-        && state.song_search_ignore_next_back_select
+    if matches!(
+        state.song_search,
+        select_music_menu::SongSearchState::Hidden
+    ) && state.song_search_ignore_next_back_select
     {
         if matches!(
             ev.action,
@@ -6774,7 +6801,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
     }
 
-    if !matches!(state.song_search, select_music_menu::SongSearchState::Hidden) {
+    if !matches!(
+        state.song_search,
+        select_music_menu::SongSearchState::Hidden
+    ) {
         return handle_song_search_input(state, ev);
     }
 
@@ -6793,7 +6823,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         return handle_sync_overlay_input(state, ev);
     }
 
-    if !matches!(state.replay_overlay, select_music_menu::ReplayOverlayState::Hidden) {
+    if !matches!(
+        state.replay_overlay,
+        select_music_menu::ReplayOverlayState::Hidden
+    ) {
         return handle_replay_overlay_input(state, ev);
     }
     if state.test_input_overlay_visible {
@@ -6862,7 +6895,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_start if ev.pressed => {
-                if try_open_select_music_menu_with_select_start(state, state.p1_select_held, ev.pressed) {
+                if try_open_select_music_menu_with_select_start(
+                    state,
+                    state.p1_select_held,
+                    ev.pressed,
+                ) {
                     ScreenAction::None
                 } else {
                     handle_confirm(state)
@@ -6886,7 +6923,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir_p2(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_start if ev.pressed => {
-                if try_open_select_music_menu_with_select_start(state, state.p2_select_held, ev.pressed) {
+                if try_open_select_music_menu_with_select_start(
+                    state,
+                    state.p2_select_held,
+                    ev.pressed,
+                ) {
                     ScreenAction::None
                 } else {
                     handle_confirm(state)
@@ -6915,7 +6956,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p2_start if ev.pressed => {
-                if try_open_select_music_menu_with_select_start(state, state.p2_select_held, ev.pressed) {
+                if try_open_select_music_menu_with_select_start(
+                    state,
+                    state.p2_select_held,
+                    ev.pressed,
+                ) {
                     ScreenAction::None
                 } else {
                     handle_confirm(state)
@@ -6941,7 +6986,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 handle_pad_dir(state, PadDir::Down, ev.pressed, ev.timestamp)
             }
             VirtualAction::p1_start if ev.pressed => {
-                if try_open_select_music_menu_with_select_start(state, state.p1_select_held, ev.pressed) {
+                if try_open_select_music_menu_with_select_start(
+                    state,
+                    state.p1_select_held,
+                    ev.pressed,
+                ) {
                     ScreenAction::None
                 } else {
                     handle_confirm(state)
@@ -7070,12 +7119,13 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             && state.select_music_menu_focus_anim_elapsed < select_music_menu::FOCUS_TWEEN_SECONDS
         {
             state.select_music_menu_focus_anim_elapsed =
-                (state.select_music_menu_focus_anim_elapsed + dt).min(select_music_menu::FOCUS_TWEEN_SECONDS);
+                (state.select_music_menu_focus_anim_elapsed + dt)
+                    .min(select_music_menu::FOCUS_TWEEN_SECONDS);
         }
         if let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu {
             if cat_state.focus_anim_elapsed < select_music_menu::categories::FOCUS_TWEEN_SECONDS {
-                cat_state.focus_anim_elapsed =
-                    (cat_state.focus_anim_elapsed + dt).min(select_music_menu::categories::FOCUS_TWEEN_SECONDS);
+                cat_state.focus_anim_elapsed = (cat_state.focus_anim_elapsed + dt)
+                    .min(select_music_menu::categories::FOCUS_TWEEN_SECONDS);
             }
         }
     }
@@ -7159,7 +7209,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             crate::screens::pack_sync::OverlayState::Hidden
         )
         || !matches!(state.sync_overlay, SyncOverlayState::Hidden)
-        || !matches!(state.replay_overlay, select_music_menu::ReplayOverlayState::Hidden)
+        || !matches!(
+            state.replay_overlay,
+            select_music_menu::ReplayOverlayState::Hidden
+        )
         || state.profile_switch_overlay.is_some()
         || state.test_input_overlay_visible;
     if overlays_block_delayed_updates && state.currently_playing_preview_path.is_some() {
@@ -7429,8 +7482,14 @@ pub fn allows_late_join(state: &State) -> bool {
         && state.out_prompt == OutPromptState::None
         && state.exit_prompt == ExitPromptState::None
         && state.select_music_menu.is_hidden()
-        && matches!(state.song_search, select_music_menu::SongSearchState::Hidden)
-        && matches!(state.replay_overlay, select_music_menu::ReplayOverlayState::Hidden)
+        && matches!(
+            state.song_search,
+            select_music_menu::SongSearchState::Hidden
+        )
+        && matches!(
+            state.replay_overlay,
+            select_music_menu::ReplayOverlayState::Hidden
+        )
         && matches!(
             state.leaderboard,
             select_music_menu::LeaderboardOverlayState::Hidden
@@ -8916,21 +8975,26 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     } = &state.select_music_menu
     {
         let items = select_music_menu_items(state, *page);
-        actors.extend(select_music_menu::build_overlay(select_music_menu::RenderParams {
-            items: items.as_slice(),
-            selected_index: *selected_index,
-            prev_selected_index: state.select_music_menu_prev_selected_index,
-            focus_anim_elapsed: state.select_music_menu_focus_anim_elapsed,
-            selected_color: color::simply_love_rgba(state.active_color_index),
-        }));
+        actors.extend(select_music_menu::build_overlay(
+            select_music_menu::RenderParams {
+                items: items.as_slice(),
+                selected_index: *selected_index,
+                prev_selected_index: state.select_music_menu_prev_selected_index,
+                focus_anim_elapsed: state.select_music_menu_focus_anim_elapsed,
+                selected_color: color::simply_love_rgba(state.active_color_index),
+            },
+        ));
     }
 
-    if let Some(leaderboard_overlay) = select_music_menu::build_leaderboard_overlay(&state.leaderboard) {
+    if let Some(leaderboard_overlay) =
+        select_music_menu::build_leaderboard_overlay(&state.leaderboard)
+    {
         actors.extend(leaderboard_overlay);
     }
-    if let Some(downloads_overlay) =
-        select_music_menu::build_downloads_overlay(&state.downloads_overlay, state.active_color_index)
-    {
+    if let Some(downloads_overlay) = select_music_menu::build_downloads_overlay(
+        &state.downloads_overlay,
+        state.active_color_index,
+    ) {
         actors.extend(downloads_overlay);
     }
 

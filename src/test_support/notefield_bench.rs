@@ -1,8 +1,8 @@
 use crate::engine::present::actors::Actor;
 use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
 use crate::game::gameplay::{
-    self, ActiveHold, ActiveTapExplosion, Arrow, ColumnCue, ColumnCueColumn, ErrorBarText,
-    ErrorBarTick, MAX_COLS, MAX_PLAYERS,
+    self, ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
+    MAX_COLS, MAX_PLAYERS,
 };
 use crate::game::judgment::{JudgeGrade, TimingWindow};
 use crate::game::note::NoteType;
@@ -113,18 +113,20 @@ pub fn fixture() -> NotefieldBenchFixture {
 fn prime_visible_window(state: &mut gameplay::State) {
     let beat = VISIBLE_BEAT;
     let time = state.timing_players[0].get_time_for_beat(beat);
+    let time_ns = state.timing_players[0].get_time_for_beat_ns(beat);
     state.total_elapsed_in_screen = 7.25;
     state.current_beat = beat;
     state.current_beat_display = beat;
-    state.current_music_time = time;
+    state.current_music_time_ns = time_ns;
     state.current_music_time_display = time;
     state.current_beat_visible[0] = beat;
     state.current_beat_visible[1] = beat;
+    state.current_music_time_visible_ns[0] = time_ns;
+    state.current_music_time_visible_ns[1] = time_ns;
     state.current_music_time_visible[0] = time;
     state.current_music_time_visible[1] = time;
 
     for col in 0..MAX_COLS {
-        state.arrows[col].clear();
         state.tap_explosions[col] = None;
         state.active_holds[col] = None;
     }
@@ -143,16 +145,8 @@ fn prime_visible_window(state: &mut gameplay::State) {
             break;
         }
         end_cursor = idx + 1;
-        if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
-            state.arrows[note.column].push(Arrow {
-                beat: note.beat,
-                note_type: note.note_type,
-                note_index: idx,
-            });
-        }
     }
 
-    state.note_spawn_cursor[0] = end_cursor.max(note_start);
     state.next_tap_miss_cursor[0] = end_cursor.max(note_start);
 
     if let Some((note_index, note_type)) = state.notes[note_start..end_cursor]
@@ -164,22 +158,17 @@ fn prime_visible_window(state: &mut gameplay::State) {
         })
     {
         let column = state.notes[note_index].column;
-        let end_time = state.hold_end_time_cache[note_index].unwrap_or(time + 1.0);
-        let start_time_ns =
-            (state.note_time_cache[note_index] as f64 * 1_000_000_000.0).round() as i64;
-        let end_time_ns = (end_time as f64 * 1_000_000_000.0).round() as i64;
-        let time_ns = (time as f64 * 1_000_000_000.0).round() as i64;
+        let end_time_ns = state.hold_end_time_cache_ns[note_index]
+            .unwrap_or_else(|| gameplay::song_time_ns_from_seconds(time + 1.0));
+        let start_time_ns = state.note_time_cache_ns[note_index];
         state.active_holds[column] = Some(ActiveHold {
             note_index,
-            start_time: state.note_time_cache[note_index],
             start_time_ns,
-            end_time,
             end_time_ns,
             note_type,
             let_go: false,
             is_pressed: true,
             life: 1.0,
-            last_update_time: time,
             last_update_time_ns: time_ns,
         });
     }

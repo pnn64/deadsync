@@ -409,14 +409,9 @@ pub struct InputEdge {
     pub stored_at: Instant,
     pub emitted_at: Instant,
     pub queued_at: Instant,
-    // Music time (seconds) at which this edge occurred, in the gameplay
-    // screen's timebase (includes music rate and global offset). Replay edges
-    // carry a concrete value; live gameplay fills this in from the audio clock
-    // snapshot at judgment time.
-    pub event_music_time: f32,
-    // Integer song time for the same event, in nanoseconds. Gameplay uses this
-    // for judgment-critical comparisons when the audio clock can provide a
-    // host-aligned conversion at capture time.
+    // Integer song time for this edge, in nanoseconds. Gameplay treats this as
+    // the authoritative judgment-time clock and reconstructs seconds only at
+    // presentation/logging boundaries.
     pub event_music_time_ns: i64,
 }
 

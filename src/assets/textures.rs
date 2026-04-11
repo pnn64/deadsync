@@ -709,13 +709,13 @@ impl AssetManager {
 
         let white_img = RgbaImage::from_raw(1, 1, vec![255, 255, 255, 255]).unwrap();
         let white_tex = backend.create_texture(&white_img, SamplerDesc::default())?;
-        self.insert_texture("__white".to_string(), white_tex);
+        self.insert_texture("__white".to_string(), white_tex, 1, 1);
         register_texture_dims("__white", 1, 1);
         debug!("Loaded built-in texture: __white");
 
         let black_img = RgbaImage::from_raw(1, 1, vec![0, 0, 0, 255]).unwrap();
         let black_tex = backend.create_texture(&black_img, SamplerDesc::default())?;
-        self.insert_texture("__black".to_string(), black_tex);
+        self.insert_texture("__black".to_string(), black_tex, 1, 1);
         register_texture_dims("__black", 1, 1);
         debug!("Loaded built-in texture: __black");
 
@@ -992,7 +992,7 @@ impl AssetManager {
                     let texture = backend.create_texture(&rgba, sampler)?;
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     debug!("Loaded texture: {key}");
-                    self.insert_texture(key, texture);
+                    self.insert_texture(key, texture, rgba.width(), rgba.height());
                 }
                 Err((key, msg)) => {
                     warn!("Failed to load texture for key '{key}': {msg}. Using fallback.");
@@ -1008,7 +1008,12 @@ impl AssetManager {
                     };
                     let texture = backend.create_texture(&fallback_image, sampler)?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
-                    self.insert_texture(key, texture);
+                    self.insert_texture(
+                        key,
+                        texture,
+                        fallback_image.width(),
+                        fallback_image.height(),
+                    );
                 }
             }
         }
@@ -1031,7 +1036,12 @@ impl AssetManager {
         if let Some(generated) = generated_texture(&key) {
             match backend.create_texture(generated.image.as_ref(), generated.sampler) {
                 Ok(texture) => {
-                    self.insert_texture(key, texture);
+                    self.insert_texture(
+                        key,
+                        texture,
+                        generated.image.width(),
+                        generated.image.height(),
+                    );
                 }
                 Err(e) => {
                     warn!("Failed to create GPU texture for generated key '{texture_key}': {e}");
@@ -1062,7 +1072,7 @@ impl AssetManager {
                 }
                 match backend.create_texture(&rgba, hints.sampler_desc()) {
                     Ok(texture) => {
-                        self.insert_texture(key.clone(), texture);
+                        self.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
                         register_texture_dims(&key, rgba.width(), rgba.height());
                     }
                     Err(e) => {
@@ -1072,27 +1082,6 @@ impl AssetManager {
             }
             Err(e) => {
                 warn!("Failed to open texture for key '{key}': {e}");
-            }
-        }
-    }
-
-    pub(crate) fn upload_pending_generated_textures(&mut self, backend: &mut Backend) {
-        for key in take_pending_generated_texture_keys() {
-            let Some(generated) = generated_texture(&key) else {
-                continue;
-            };
-            match backend.create_texture(generated.image.as_ref(), generated.sampler) {
-                Ok(texture) => {
-                    if let Some(old) = self.insert_texture(key.clone(), texture) {
-                        let mut old_map = HashMap::with_capacity(1);
-                        let handle = self.texture_handle_for_key(&key);
-                        old_map.insert(handle, old);
-                        backend.dispose_textures(&mut old_map);
-                    }
-                }
-                Err(e) => {
-                    warn!("Failed to create GPU texture for generated key '{key}': {e}");
-                }
             }
         }
     }

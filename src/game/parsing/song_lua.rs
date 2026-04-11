@@ -5,13 +5,16 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 const LUA_PLAYERS: usize = 2;
+const SONG_LUA_NOTE_COLUMNS: usize = 4;
 const SONG_LUA_PRODUCT_FAMILY: &str = "ITGmania";
 const SONG_LUA_PRODUCT_ID: &str = "ITGmania";
 const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
 const THEME_RECEPTOR_Y_STD: f32 = -125.0;
 const THEME_RECEPTOR_Y_REV: f32 = 145.0;
+const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
 const EASING_NAMES: &[&str] = &[
     "linear",
     "inQuad",
@@ -98,11 +101,12 @@ impl Default for SongLuaSpeedMod {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaPlayerContext {
     pub enabled: bool,
     pub difficulty: SongLuaDifficulty,
     pub speedmod: SongLuaSpeedMod,
+    pub noteskin_name: String,
     pub screen_x: f32,
     pub screen_y: f32,
 }
@@ -113,6 +117,7 @@ impl Default for SongLuaPlayerContext {
             enabled: true,
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
+            noteskin_name: crate::game::profile::NoteSkin::default().to_string(),
             screen_x: 320.0,
             screen_y: 240.0,
         }
@@ -140,7 +145,7 @@ impl SongLuaCompileContext {
             global_offset_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
-            players: [SongLuaPlayerContext::default(); LUA_PLAYERS],
+            players: std::array::from_fn(|_| SongLuaPlayerContext::default()),
             confusion_offset_available: true,
             confusion_available: true,
             amod_available: true,
@@ -220,13 +225,25 @@ pub enum SongLuaOverlayBlendMode {
     Add,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SongLuaOverlayKind {
     ActorFrame,
     ActorFrameTexture,
-    ActorProxy { target: SongLuaProxyTarget },
-    AftSprite { capture_name: String },
-    Sprite { texture_path: PathBuf },
+    ActorProxy {
+        target: SongLuaProxyTarget,
+    },
+    AftSprite {
+        capture_name: String,
+    },
+    Sprite {
+        texture_path: PathBuf,
+    },
+    BitmapText {
+        font_name: &'static str,
+        font_path: PathBuf,
+        text: String,
+        stroke_color: Option<[f32; 4]>,
+    },
     Quad,
 }
 
@@ -580,6 +597,38 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     globals.set("unpack", table.get::<Value>("unpack")?)?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
     globals.set(
+        "color",
+        lua.create_function(|lua, args: MultiValue| {
+            Ok(match read_color_call(&args) {
+                Some(color) => Value::Table(make_color_table(lua, color)?),
+                None => Value::Nil,
+            })
+        })?,
+    )?;
+    globals.set(
+        "lerp_color",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(percent) = args.front().cloned().and_then(read_f32) else {
+                return Ok(Value::Nil);
+            };
+            let Some(a) = args.get(1).cloned().and_then(read_color_value) else {
+                return Ok(Value::Nil);
+            };
+            let Some(b) = args.get(2).cloned().and_then(read_color_value) else {
+                return Ok(Value::Nil);
+            };
+            Ok(Value::Table(make_color_table(
+                lua,
+                [
+                    a[0] + (b[0] - a[0]) * percent,
+                    a[1] + (b[1] - a[1]) * percent,
+                    a[2] + (b[2] - a[2]) * percent,
+                    a[3] + (b[3] - a[3]) * percent,
+                ],
+            )?))
+        })?,
+    )?;
+    globals.set(
         "setfenv",
         lua.create_function(|_, (target, env): (Value, Table)| match target {
             Value::Function(function) => {
@@ -758,6 +807,8 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     let screen_height = context.screen_height.max(1.0);
     let screen_center_x = 0.5 * screen_width;
     let screen_center_y = 0.5 * screen_height;
+    globals.set("PLAYER_1", player_number_name(0))?;
+    globals.set("PLAYER_2", player_number_name(1))?;
     globals.set("SCREEN_WIDTH", screen_width.round() as i32)?;
     globals.set("SCREEN_HEIGHT", screen_height.round() as i32)?;
     globals.set("SCREEN_CENTER_X", screen_center_x)?;
@@ -811,16 +862,20 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     globals.set("PREFSMAN", prefsmgr)?;
     globals.set("THEME", create_theme_table(lua)?)?;
+    globals.set("NOTESKIN", create_noteskin_table(lua, context)?)?;
+    globals.set("ArrowEffects", create_arrow_effects_table(lua)?)?;
 
     let song = create_song_table(lua, context)?;
     let players = create_player_tables(lua, context)?;
     let gamestate = lua.create_table()?;
+    let enabled_players = create_enabled_players_table(lua, context.players.clone())?;
+    let human_players = enabled_players.clone();
     let song_clone = song.clone();
     gamestate.set(
         "GetCurrentSong",
         lua.create_function(move |_, _args: MultiValue| Ok(song_clone.clone()))?,
     )?;
-    let players_enabled = context.players;
+    let players_enabled = context.players.clone();
     gamestate.set(
         "IsPlayerEnabled",
         lua.create_function(move |_, args: MultiValue| {
@@ -829,6 +884,24 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
             };
             Ok(players_enabled[player].enabled)
         })?,
+    )?;
+    let human_players_enabled = context.players.clone();
+    gamestate.set(
+        "IsHumanPlayer",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                return Ok(false);
+            };
+            Ok(human_players_enabled[player].enabled)
+        })?,
+    )?;
+    gamestate.set(
+        "GetEnabledPlayers",
+        lua.create_function(move |_, _args: MultiValue| Ok(enabled_players.clone()))?,
+    )?;
+    gamestate.set(
+        "GetHumanPlayers",
+        lua.create_function(move |_, _args: MultiValue| Ok(human_players.clone()))?,
     )?;
     let player_states = players.player_states.clone();
     gamestate.set(
@@ -866,7 +939,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set("GAMESTATE", gamestate)?;
 
     let screenman = lua.create_table()?;
-    let top_screen = create_top_screen_table(lua, context.players)?;
+    let top_screen = create_top_screen_table(lua, context.players.clone())?;
     globals.set(
         "__songlua_top_screen_player_1",
         top_screen.players[0].clone(),
@@ -905,6 +978,75 @@ struct TopScreenLuaTables {
     players: [Table; LUA_PLAYERS],
 }
 
+#[inline(always)]
+fn song_lua_column_x(column_index: usize) -> f32 {
+    SONG_LUA_COLUMN_X.get(column_index).copied().unwrap_or(0.0)
+}
+
+fn create_arrow_effects_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "GetYOffset",
+        lua.create_function(|_, args: MultiValue| {
+            Ok(args
+                .get(2)
+                .cloned()
+                .and_then(read_f32)
+                .map(|beat| -64.0 * beat)
+                .unwrap_or(0.0_f32))
+        })?,
+    )?;
+    table.set(
+        "GetYPos",
+        lua.create_function(|_, args: MultiValue| {
+            Ok(args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32))
+        })?,
+    )?;
+    table.set(
+        "GetXPos",
+        lua.create_function(|_, args: MultiValue| {
+            let column_index = args
+                .get(1)
+                .cloned()
+                .and_then(read_f32)
+                .map(|value| value as isize - 1)
+                .filter(|value| *value >= 0)
+                .map(|value| value as usize)
+                .unwrap_or(0);
+            Ok(song_lua_column_x(column_index))
+        })?,
+    )?;
+    table.set(
+        "GetZPos",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetRotationX",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetRotationY",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetRotationZ",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetZoom",
+        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+    )?;
+    table.set(
+        "GetAlpha",
+        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+    )?;
+    table.set(
+        "GetGlow",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    Ok(table)
+}
+
 fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     if let Some(children) = actor.get::<Option<Table>>("__songlua_children")? {
         return Ok(children);
@@ -937,22 +1079,211 @@ fn copy_dummy_actor_tags(from: &Table, into: &Table) -> mlua::Result<()> {
 }
 
 fn create_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
-    let child = create_dummy_actor(lua, "ChildActor")?;
+    let parent_type = parent.get::<Option<String>>("__songlua_actor_type")?;
+    let player_index = parent.get::<Option<i64>>("__songlua_player_index")?;
+    let child = if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
+        && name.eq_ignore_ascii_case("NoteField")
+        && let Some(player_index) = player_index
+    {
+        create_note_field_actor(lua, player_index as usize)?
+    } else {
+        create_dummy_actor(lua, "ChildActor")?
+    };
     copy_dummy_actor_tags(parent, &child)?;
-    if parent
-        .get::<Option<String>>("__songlua_actor_type")?
+    child.set("__songlua_parent", parent.clone())?;
+    if parent_type
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
     {
         child.set("__songlua_player_child_name", name)?;
-    } else if parent
-        .get::<Option<String>>("__songlua_actor_type")?
+    } else if parent_type
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
     {
         child.set("__songlua_top_screen_child_name", name)?;
     }
     Ok(child)
+}
+
+fn create_note_field_actor(lua: &Lua, player_index: usize) -> mlua::Result<Table> {
+    let actor = create_dummy_actor(lua, "NoteField")?;
+    actor.set("__songlua_player_index", player_index as i64)?;
+    actor.set("__songlua_player_child_name", "NoteField")?;
+    actor.set("__songlua_state_x", 0.0_f32)?;
+    actor.set(
+        "__songlua_state_y",
+        0.5 * (THEME_RECEPTOR_Y_STD + THEME_RECEPTOR_Y_REV),
+    )?;
+    actor.set("__songlua_state_z", 0.0_f32)?;
+    Ok(actor)
+}
+
+fn note_field_column_actors(lua: &Lua, note_field: &Table) -> mlua::Result<Table> {
+    if let Some(columns) = note_field.get::<Option<Table>>("__songlua_note_columns")? {
+        return Ok(columns);
+    }
+    let columns = lua.create_table()?;
+    let player_index = note_field
+        .get::<Option<i64>>("__songlua_player_index")?
+        .unwrap_or(0) as usize;
+    for column_index in 0..SONG_LUA_NOTE_COLUMNS {
+        let column = create_note_column_actor(lua, note_field, player_index, column_index)?;
+        columns.raw_set(column_index + 1, column)?;
+    }
+    note_field.set("__songlua_note_columns", columns.clone())?;
+    Ok(columns)
+}
+
+fn create_note_column_actor(
+    lua: &Lua,
+    note_field: &Table,
+    player_index: usize,
+    column_index: usize,
+) -> mlua::Result<Table> {
+    let actor = create_dummy_actor(lua, "NoteColumnRenderer")?;
+    actor.set("__songlua_parent", note_field.clone())?;
+    actor.set("__songlua_player_index", player_index as i64)?;
+    actor.set("__songlua_state_x", song_lua_column_x(column_index))?;
+    actor.set("__songlua_state_y", 0.0_f32)?;
+    actor.set("__songlua_state_z", 0.0_f32)?;
+
+    let pos_handler = create_note_column_spline_handler(lua)?;
+    let rot_handler = create_note_column_spline_handler(lua)?;
+    let zoom_handler = create_note_column_spline_handler(lua)?;
+    actor.set(
+        "GetPosHandler",
+        lua.create_function(move |_, _args: MultiValue| Ok(pos_handler.clone()))?,
+    )?;
+    actor.set(
+        "GetRotHandler",
+        lua.create_function(move |_, _args: MultiValue| Ok(rot_handler.clone()))?,
+    )?;
+    actor.set(
+        "GetZoomHandler",
+        lua.create_function(move |_, _args: MultiValue| Ok(zoom_handler.clone()))?,
+    )?;
+    Ok(actor)
+}
+
+fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
+    let handler = lua.create_table()?;
+    let spline = create_cubic_spline_table(lua)?;
+    handler.set("__songlua_spline_mode", "NoteColumnSplineMode_Offset")?;
+    handler.set("__songlua_subtract_song_beat", false)?;
+    handler.set("__songlua_receptor_t", 0.0_f32)?;
+    handler.set("__songlua_beats_per_t", 1.0_f32)?;
+    handler.set(
+        "GetSpline",
+        lua.create_function(move |_, _args: MultiValue| Ok(spline.clone()))?,
+    )?;
+    handler.set(
+        "SetSplineMode",
+        lua.create_function({
+            let handler = handler.clone();
+            move |_, args: MultiValue| {
+                if let Some(mode) = args.get(1).cloned().and_then(read_string) {
+                    handler.set("__songlua_spline_mode", mode)?;
+                }
+                Ok(handler.clone())
+            }
+        })?,
+    )?;
+    handler.set(
+        "SetSubtractSongBeat",
+        lua.create_function({
+            let handler = handler.clone();
+            move |_, args: MultiValue| {
+                handler.set(
+                    "__songlua_subtract_song_beat",
+                    args.get(1).is_some_and(truthy),
+                )?;
+                Ok(handler.clone())
+            }
+        })?,
+    )?;
+    handler.set(
+        "SetReceptorT",
+        lua.create_function({
+            let handler = handler.clone();
+            move |_, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    handler.set("__songlua_receptor_t", value)?;
+                }
+                Ok(handler.clone())
+            }
+        })?,
+    )?;
+    handler.set(
+        "SetBeatsPerT",
+        lua.create_function({
+            let handler = handler.clone();
+            move |_, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    handler.set("__songlua_beats_per_t", value)?;
+                }
+                Ok(handler.clone())
+            }
+        })?,
+    )?;
+    Ok(handler)
+}
+
+fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
+    let spline = lua.create_table()?;
+    spline.set("__songlua_spline_size", 0_i64)?;
+    spline.set("__songlua_spline_points", lua.create_table()?)?;
+    spline.set(
+        "SetSize",
+        lua.create_function({
+            let spline = spline.clone();
+            move |_, args: MultiValue| {
+                if let Some(size) = args.get(1).cloned().and_then(read_f32) {
+                    spline.set("__songlua_spline_size", size.max(0.0).round() as i64)?;
+                }
+                Ok(spline.clone())
+            }
+        })?,
+    )?;
+    spline.set(
+        "SetPoint",
+        lua.create_function({
+            let spline = spline.clone();
+            move |lua, args: MultiValue| {
+                let Some(index) = args
+                    .get(1)
+                    .cloned()
+                    .and_then(read_f32)
+                    .map(|value| value.max(1.0).round() as i64)
+                else {
+                    return Ok(spline.clone());
+                };
+                let points = spline.get::<Table>("__songlua_spline_points")?;
+                match args.get(2) {
+                    Some(Value::Table(point)) => {
+                        points.raw_set(index, point.clone())?;
+                    }
+                    _ => {
+                        let point = lua.create_table()?;
+                        point.raw_set(1, 0.0_f32)?;
+                        point.raw_set(2, 0.0_f32)?;
+                        point.raw_set(3, 0.0_f32)?;
+                        points.raw_set(index, point)?;
+                    }
+                }
+                Ok(spline.clone())
+            }
+        })?,
+    )?;
+    spline.set(
+        "Solve",
+        lua.create_function({
+            let spline = spline.clone();
+            move |_, _args: MultiValue| Ok(spline.clone())
+        })?,
+    )?;
+    Ok(spline)
 }
 
 fn create_top_screen_table(
@@ -962,9 +1293,12 @@ fn create_top_screen_table(
     let top_screen = create_dummy_actor(lua, "TopScreen")?;
     let top_screen_for_get_child = top_screen.clone();
     let player_actors = [
-        create_top_screen_player_actor(lua, players[0], 0)?,
-        create_top_screen_player_actor(lua, players[1], 1)?,
+        create_top_screen_player_actor(lua, players[0].clone(), 0)?,
+        create_top_screen_player_actor(lua, players[1].clone(), 1)?,
     ];
+    for player_actor in &player_actors {
+        player_actor.set("__songlua_parent", top_screen.clone())?;
+    }
     let player_actors_for_get_child = player_actors.clone();
     top_screen.set(
         "GetChild",
@@ -1022,8 +1356,8 @@ fn create_player_tables(
     context: &SongLuaCompileContext,
 ) -> mlua::Result<PlayerLuaTables> {
     let player_states = [
-        create_player_state_table(lua, context.players[0])?,
-        create_player_state_table(lua, context.players[1])?,
+        create_player_state_table(lua, context.players[0].clone())?,
+        create_player_state_table(lua, context.players[1].clone())?,
     ];
     let steps = [
         create_steps_table(lua, context.players[0].difficulty)?,
@@ -1033,6 +1367,22 @@ fn create_player_tables(
         player_states,
         steps,
     })
+}
+
+fn create_enabled_players_table(
+    lua: &Lua,
+    players: [SongLuaPlayerContext; LUA_PLAYERS],
+) -> mlua::Result<Table> {
+    let enabled = lua.create_table()?;
+    let mut next_index = 1;
+    for (player_index, player) in players.into_iter().enumerate() {
+        if !player.enabled {
+            continue;
+        }
+        enabled.set(next_index, player_number_name(player_index))?;
+        next_index += 1;
+    }
+    Ok(enabled)
 }
 
 fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
@@ -1049,6 +1399,197 @@ fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
     theme.set("GetMetric", get_metric.clone())?;
     theme.set("GetMetricF", get_metric)?;
     Ok(theme)
+}
+
+fn create_noteskin_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
+    let noteskin = lua.create_table()?;
+    let default_noteskin = song_lua_default_noteskin_name(context);
+
+    let default_metric_skin = default_noteskin.clone();
+    noteskin.set(
+        "GetMetric",
+        lua.create_function(
+            move |lua, (_self, element, value): (Table, String, String)| {
+                let Some(metric) = crate::game::parsing::noteskin::song_lua_noteskin_metric(
+                    &default_metric_skin,
+                    &element,
+                    &value,
+                ) else {
+                    return Ok(Value::Nil);
+                };
+                Ok(Value::String(lua.create_string(&metric)?))
+            },
+        )?,
+    )?;
+    noteskin.set(
+        "GetMetricForNoteSkin",
+        lua.create_function(
+            move |lua, (_self, element, value, skin): (Table, String, String, String)| {
+                let Some(metric) = crate::game::parsing::noteskin::song_lua_noteskin_metric(
+                    &skin, &element, &value,
+                ) else {
+                    return Ok(Value::Nil);
+                };
+                Ok(Value::String(lua.create_string(&metric)?))
+            },
+        )?,
+    )?;
+
+    let default_metric_f_skin = default_noteskin.clone();
+    noteskin.set(
+        "GetMetricF",
+        lua.create_function(move |_, (_self, element, value): (Table, String, String)| {
+            Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_f(
+                &default_metric_f_skin,
+                &element,
+                &value,
+            )
+            .unwrap_or(0.0_f32))
+        })?,
+    )?;
+    noteskin.set(
+        "GetMetricFForNoteSkin",
+        lua.create_function(
+            move |_, (_self, element, value, skin): (Table, String, String, String)| {
+                Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_f(
+                    &skin, &element, &value,
+                )
+                .unwrap_or(0.0_f32))
+            },
+        )?,
+    )?;
+
+    let default_metric_b_skin = default_noteskin.clone();
+    noteskin.set(
+        "GetMetricB",
+        lua.create_function(move |_, (_self, element, value): (Table, String, String)| {
+            Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_b(
+                &default_metric_b_skin,
+                &element,
+                &value,
+            )
+            .unwrap_or(false))
+        })?,
+    )?;
+    noteskin.set(
+        "GetMetricBForNoteSkin",
+        lua.create_function(
+            move |_, (_self, element, value, skin): (Table, String, String, String)| {
+                Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_b(
+                    &skin, &element, &value,
+                )
+                .unwrap_or(false))
+            },
+        )?,
+    )?;
+
+    let default_path_skin = default_noteskin.clone();
+    noteskin.set(
+        "GetPath",
+        lua.create_function(
+            move |lua, (_self, button, element): (Table, String, String)| {
+                let path = song_lua_noteskin_path(&default_path_skin, &button, &element);
+                Ok(Value::String(lua.create_string(&path)?))
+            },
+        )?,
+    )?;
+    noteskin.set(
+        "GetPathForNoteSkin",
+        lua.create_function(
+            move |lua, (_self, button, element, skin): (Table, String, String, String)| {
+                let path = song_lua_noteskin_path(&skin, &button, &element);
+                Ok(Value::String(lua.create_string(&path)?))
+            },
+        )?,
+    )?;
+
+    let default_load_skin = default_noteskin.clone();
+    noteskin.set(
+        "LoadActor",
+        lua.create_function(
+            move |lua, (_self, button, element): (Table, String, String)| {
+                song_lua_noteskin_actor(lua, &default_load_skin, &button, &element)
+            },
+        )?,
+    )?;
+    noteskin.set(
+        "LoadActorForNoteSkin",
+        lua.create_function(
+            move |lua, (_self, button, element, skin): (Table, String, String, String)| {
+                song_lua_noteskin_actor(lua, &skin, &button, &element)
+            },
+        )?,
+    )?;
+
+    noteskin.set(
+        "DoesNoteSkinExist",
+        lua.create_function(|_, (_self, skin): (Table, String)| {
+            Ok(crate::game::parsing::noteskin::song_lua_noteskin_exists(
+                &skin,
+            ))
+        })?,
+    )?;
+    noteskin.set(
+        "GetNoteSkinNames",
+        lua.create_function(|lua, _args: MultiValue| {
+            let names = crate::game::parsing::noteskin::discover_itg_skins("dance");
+            let table = lua.create_table()?;
+            for (idx, name) in names.into_iter().enumerate() {
+                table.raw_set(idx + 1, name)?;
+            }
+            Ok(table)
+        })?,
+    )?;
+    Ok(noteskin)
+}
+
+fn song_lua_default_noteskin_name(context: &SongLuaCompileContext) -> String {
+    context
+        .players
+        .iter()
+        .find(|player| player.enabled)
+        .map(|player| player.noteskin_name.clone())
+        .or_else(|| {
+            context
+                .players
+                .first()
+                .map(|player| player.noteskin_name.clone())
+        })
+        .unwrap_or_else(|| crate::game::profile::NoteSkin::default().to_string())
+}
+
+fn song_lua_noteskin_path(skin: &str, button: &str, element: &str) -> String {
+    crate::game::parsing::noteskin::song_lua_noteskin_resolve_path(skin, button, element)
+        .map(|path| file_path_string(path.as_path()))
+        .unwrap_or_default()
+}
+
+fn song_lua_noteskin_actor(
+    lua: &Lua,
+    skin: &str,
+    button: &str,
+    element: &str,
+) -> mlua::Result<Table> {
+    let resolved =
+        crate::game::parsing::noteskin::song_lua_noteskin_resolve_path(skin, button, element);
+    let sprite_path = resolved
+        .as_ref()
+        .filter(|path| is_song_lua_image_path(path));
+    let actor = create_dummy_actor(
+        lua,
+        if sprite_path.is_some() {
+            "Sprite"
+        } else {
+            "Actor"
+        },
+    )?;
+    actor.set("__songlua_noteskin_name", skin.trim().to_ascii_lowercase())?;
+    actor.set("__songlua_noteskin_button", button)?;
+    actor.set("__songlua_noteskin_element", element)?;
+    if let Some(path) = sprite_path {
+        actor.set("Texture", file_path_string(path.as_path()))?;
+    }
+    Ok(actor)
 }
 
 #[inline(always)]
@@ -1093,6 +1634,50 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     install_speedmod_method(lua, &table, "MMod", player.speedmod, SongLuaSpeedMod::M)?;
     install_speedmod_method(lua, &table, "AMod", player.speedmod, SongLuaSpeedMod::A)?;
     install_speedmod_method(lua, &table, "XMod", player.speedmod, SongLuaSpeedMod::X)?;
+    table.set(
+        "Mirror",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    table.set(
+        "Left",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    table.set(
+        "Right",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    table.set(
+        "Skew",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "Tilt",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set(
+        "GetReversePercentForColumn",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    table.set("__songlua_noteskin_name", player.noteskin_name.clone())?;
+    table.set(
+        "NoteSkin",
+        lua.create_function(move |lua, args: MultiValue| {
+            let Some(owner) = args.front().and_then(|value| match value {
+                Value::Table(table) => Some(table.clone()),
+                _ => None,
+            }) else {
+                return Ok(Value::Nil);
+            };
+            if let Some(noteskin_name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                owner.set("__songlua_noteskin_name", noteskin_name)?;
+                return Ok(Value::Table(owner));
+            }
+            let noteskin_name = owner
+                .get::<Option<String>>("__songlua_noteskin_name")?
+                .unwrap_or_else(|| player.noteskin_name.clone());
+            Ok(Value::String(lua.create_string(&noteskin_name)?))
+        })?,
+    )?;
     let mt = lua.create_table()?;
     let fallback_owner = table.clone();
     mt.set(
@@ -1202,6 +1787,8 @@ fn install_def(lua: &Lua) -> mlua::Result<()> {
         ("Actor", "Actor"),
         ("ActorFrame", "ActorFrame"),
         ("Sprite", "Sprite"),
+        ("BitmapText", "BitmapText"),
+        ("Model", "Model"),
         ("Quad", "Quad"),
         ("ActorProxy", "ActorProxy"),
         ("ActorFrameTexture", "ActorFrameTexture"),
@@ -1337,6 +1924,7 @@ fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<(
         let Value::Table(child) = child? else {
             continue;
         };
+        child.set("__songlua_parent", actor.clone())?;
         run_actor_init_commands_for_table(lua, &child)?;
     }
     Ok(())
@@ -1350,6 +1938,7 @@ fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resul
         let Value::Table(child) = child? else {
             continue;
         };
+        child.set("__songlua_parent", actor.clone())?;
         run_actor_startup_commands_for_table(lua, &child)?;
     }
     Ok(())
@@ -1363,6 +1952,7 @@ fn run_actor_update_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Resul
         let Value::Table(child) = child? else {
             continue;
         };
+        child.set("__songlua_parent", actor.clone())?;
         run_actor_update_functions_for_table(lua, &child)?;
     }
     Ok(())
@@ -1380,11 +1970,8 @@ fn run_actor_named_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result
 }
 
 fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
-    let actor_type = actor.get::<Option<String>>("__songlua_actor_type")?;
-    Ok(!matches!(
-        actor_type.as_deref(),
-        Some("Sprite") | Some("Quad")
-    ))
+    let _ = actor;
+    Ok(true)
 }
 
 fn call_actor_function(lua: &Lua, actor: &Table, command: &Function) -> mlua::Result<()> {
@@ -1538,6 +2125,24 @@ fn read_overlay_actor(
                 return Ok(None);
             };
             SongLuaOverlayKind::Sprite { texture_path }
+        }
+    } else if actor_type.eq_ignore_ascii_case("BitmapText") {
+        let Some(font_path) = actor
+            .get::<Option<String>>("Font")
+            .map_err(|err| err.to_string())?
+            .and_then(|font| resolve_actor_asset_path(actor, &font).ok())
+        else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::BitmapText {
+            font_name: song_lua_font_name(font_path.as_path()),
+            font_path,
+            text: actor
+                .get::<Option<String>>("Text")
+                .map_err(|err| err.to_string())?
+                .unwrap_or_default(),
+            stroke_color: read_actor_color_field(actor, "__songlua_stroke_color")?
+                .or_else(|| read_actor_color_field(actor, "StrokeColor").ok().flatten()),
         }
     } else if actor_type.eq_ignore_ascii_case("Quad") {
         SongLuaOverlayKind::Quad
@@ -1771,6 +2376,28 @@ fn resolve_actor_asset_path(actor: &Table, raw: &str) -> Result<PathBuf, String>
         }
     }
     Err(format!("actor asset '{}' could not be resolved", raw))
+}
+
+fn read_actor_color_field(actor: &Table, key: &str) -> Result<Option<[f32; 4]>, String> {
+    Ok(actor
+        .get::<Option<Table>>(key)
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec4(&value)))
+}
+
+fn song_lua_font_name(font_path: &Path) -> &'static str {
+    static SONG_LUA_FONT_NAMES: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+    let canonical = font_path.to_string_lossy().replace('\\', "/");
+    let cache = SONG_LUA_FONT_NAMES.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(&name) = guard.get(&canonical) {
+        return name;
+    }
+    let leaked = Box::leak(format!("songlua_font:{canonical}").into_boxed_str());
+    guard.insert(canonical, leaked);
+    leaked
 }
 
 fn capture_actor_command(
@@ -2750,6 +3377,10 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         make_actor_capture_f32_method(lua, actor, "rot_z_deg", Some("rotationz"))?,
     )?;
     actor.set(
+        "baserotationz",
+        make_actor_capture_f32_method(lua, actor, "rot_z_deg", Some("rotationz"))?,
+    )?;
+    actor.set(
         "zoomx",
         make_actor_capture_f32_method(lua, actor, "zoom_x", Some("zoomx"))?,
     )?;
@@ -2769,6 +3400,18 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     return Ok(actor.clone());
                 };
                 capture_block_set_size(lua, &actor, [width, height])?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "z",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                    actor.set("__songlua_state_z", value)?;
+                }
                 Ok(actor.clone())
             }
         })?,
@@ -2947,6 +3590,7 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     for name in [
         "clearzbuffer",
+        "diffuseramp",
         "effectclock",
         "EnableAlphaBuffer",
         "EnableDepthBuffer",
@@ -2955,13 +3599,45 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "Create",
         "fardistz",
         "fov",
+        "finishtweening",
         "SetHeight",
         "SetWidth",
+        "texturetranslate",
+        "vanishpoint",
         "wag",
-        "z",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
+    actor.set(
+        "strokecolor",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(color) = read_color_args(&args) else {
+                    return Ok(actor.clone());
+                };
+                actor.set("__songlua_stroke_color", make_color_table(lua, color)?)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "settext",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                let text = match args.get(1).cloned() {
+                    Some(Value::String(text)) => text.to_str()?.to_string(),
+                    Some(Value::Integer(value)) => value.to_string(),
+                    Some(Value::Number(value)) => value.to_string(),
+                    Some(Value::Boolean(value)) => value.to_string(),
+                    _ => String::new(),
+                };
+                actor.set("Text", text)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
     actor.set(
         "diffuse",
         lua.create_function({
@@ -2972,6 +3648,43 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 };
                 capture_block_set_color(lua, &actor, color)?;
                 Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetDidTapNoteCallback",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                match args.get(1) {
+                    Some(Value::Function(function)) => {
+                        actor.set("__songlua_did_tap_note_callback", function.clone())?;
+                    }
+                    _ => {
+                        actor.set("__songlua_did_tap_note_callback", Value::Nil)?;
+                    }
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetColumnActors",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let is_note_field = actor
+                    .get::<Option<String>>("__songlua_player_child_name")?
+                    .as_deref()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("NoteField"))
+                    || actor
+                        .get::<Option<String>>("__songlua_actor_type")?
+                        .as_deref()
+                        .is_some_and(|kind| kind.eq_ignore_ascii_case("NoteField"));
+                if !is_note_field {
+                    return Ok(Value::Nil);
+                }
+                Ok(Value::Table(note_field_column_actors(lua, &actor)?))
             }
         })?,
     )?;
@@ -3067,6 +3780,17 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetName",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                Ok(Value::String(lua.create_string(
+                    actor.get::<Option<String>>("Name")?.unwrap_or_default(),
+                )?))
+            }
+        })?,
+    )?;
+    actor.set(
         "GetY",
         lua.create_function({
             let actor = actor.clone();
@@ -3079,7 +3803,105 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     actor.set(
         "GetZoom",
-        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_zoom")?
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetZ",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_z")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetRotationX",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_rot_x_deg")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetRotationY",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_rot_y_deg")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetRotationZ",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_rot_z_deg")?
+                    .unwrap_or(0.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetZoomX",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_zoom_x")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetZoomY",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_zoom_y")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetZoomZ",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<f32>>("__songlua_state_zoom_z")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
+                    .unwrap_or(1.0_f32))
+            }
+        })?,
+    )?;
+    actor.set(
+        "GetParent",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| {
+                Ok(actor
+                    .get::<Option<Table>>("__songlua_parent")?
+                    .unwrap_or_else(|| actor.clone()))
+            }
+        })?,
     )?;
     Ok(())
 }
@@ -3089,9 +3911,44 @@ fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let actor_clone = actor.clone();
     mt.set(
         "__concat",
-        lua.create_function(move |_, (_lhs, _rhs): (Value, Value)| Ok(actor_clone.clone()))?,
+        lua.create_function(move |lua, (_lhs, rhs): (Value, Value)| {
+            if let Value::Table(rhs) = rhs {
+                merge_actor_concat(lua, &actor_clone, &rhs)?;
+            }
+            Ok(actor_clone.clone())
+        })?,
     )?;
     let _ = actor.set_metatable(Some(mt));
+    Ok(())
+}
+
+fn merge_actor_concat(_lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()> {
+    let next_index = actor.raw_len() + 1;
+    let mut append_index = next_index;
+    for value in rhs.sequence_values::<Value>() {
+        actor.raw_set(append_index, value?)?;
+        append_index += 1;
+    }
+    for pair in rhs.pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let is_sequence_key = match key {
+            Value::Integer(index) => index >= 1,
+            Value::Number(index) => index.is_finite() && index >= 1.0 && index.fract() == 0.0,
+            _ => false,
+        };
+        if is_sequence_key {
+            continue;
+        }
+        if matches!(
+            &key,
+            Value::String(text)
+                if text.to_str().ok().is_some_and(|name|
+                    name == "__songlua_actor_type" || name == "__songlua_script_dir")
+        ) {
+            continue;
+        }
+        actor.set(key, value)?;
+    }
     Ok(())
 }
 
@@ -3142,15 +3999,17 @@ fn make_actor_tween_method(
 }
 
 fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {
-    if let Some(Value::Table(table)) = method_arg(args, 0) {
-        return table_vec4(table);
+    if let Some(color) = method_arg(args, 0).cloned().and_then(read_color_value) {
+        return Some(color);
     }
-    Some([
-        method_arg(args, 0).cloned().and_then(read_f32)?,
-        method_arg(args, 1).cloned().and_then(read_f32)?,
-        method_arg(args, 2).cloned().and_then(read_f32)?,
-        method_arg(args, 3).cloned().and_then(read_f32)?,
-    ])
+    let r = method_arg(args, 0).cloned().and_then(read_f32)?;
+    let g = method_arg(args, 1).cloned().and_then(read_f32)?;
+    let b = method_arg(args, 2).cloned().and_then(read_f32)?;
+    let a = method_arg(args, 3)
+        .cloned()
+        .and_then(read_f32)
+        .unwrap_or(1.0);
+    Some([r, g, b, a])
 }
 
 fn entry_file_path(path: &Path) -> Option<PathBuf> {
@@ -3792,6 +4651,86 @@ fn read_string(value: Value) -> Option<String> {
 }
 
 #[inline(always)]
+fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.raw_set(1, rgba[0])?;
+    table.raw_set(2, rgba[1])?;
+    table.raw_set(3, rgba[2])?;
+    table.raw_set(4, rgba[3])?;
+    Ok(table)
+}
+
+#[inline(always)]
+fn table_color(table: &Table) -> Option<[f32; 4]> {
+    Some([
+        table.raw_get::<f32>(1).ok()?,
+        table.raw_get::<f32>(2).ok()?,
+        table.raw_get::<f32>(3).ok()?,
+        table.raw_get::<Option<f32>>(4).ok()?.unwrap_or(1.0),
+    ])
+}
+
+fn parse_color_text(text: &str) -> Option<[f32; 4]> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    if let Some(hex) = text.strip_prefix('#') {
+        if matches!(hex.len(), 6 | 8) {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+            let a = if hex.len() == 8 {
+                u8::from_str_radix(&hex[6..8], 16).ok()? as f32 / 255.0
+            } else {
+                1.0
+            };
+            return Some([r, g, b, a]);
+        }
+    }
+    let parts = text
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    match parts.as_slice() {
+        [r, g, b] => Some([
+            r.parse::<f32>().ok()?,
+            g.parse::<f32>().ok()?,
+            b.parse::<f32>().ok()?,
+            1.0,
+        ]),
+        [r, g, b, a] => Some([
+            r.parse::<f32>().ok()?,
+            g.parse::<f32>().ok()?,
+            b.parse::<f32>().ok()?,
+            a.parse::<f32>().ok()?,
+        ]),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn read_color_value(value: Value) -> Option<[f32; 4]> {
+    match value {
+        Value::Table(table) => table_color(&table),
+        Value::String(text) => Some(parse_color_text(&text.to_str().ok()?).unwrap_or([1.0; 4])),
+        _ => None,
+    }
+}
+
+fn read_color_call(args: &MultiValue) -> Option<[f32; 4]> {
+    if let Some(color) = args.front().cloned().and_then(read_color_value) {
+        return Some(color);
+    }
+    let r = args.front().cloned().and_then(read_f32)?;
+    let g = args.get(1).cloned().and_then(read_f32)?;
+    let b = args.get(2).cloned().and_then(read_f32)?;
+    let a = args.get(3).cloned().and_then(read_f32).unwrap_or(1.0);
+    Some([r, g, b, a])
+}
+
+#[inline(always)]
 fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
     let offset = usize::from(matches!(args.front(), Some(Value::Table(_))));
     args.get(offset + index)
@@ -3853,12 +4792,38 @@ fn player_index_from_value(value: &Value) -> Option<usize> {
 }
 
 #[inline(always)]
+fn player_number_name(player: usize) -> &'static str {
+    match player {
+        0 => "PlayerNumber_P1",
+        1 => "PlayerNumber_P2",
+        _ => unreachable!("song lua only exposes two player numbers"),
+    }
+}
+
+#[inline(always)]
 fn song_dir_string(path: &Path) -> String {
     let mut text = path.to_string_lossy().replace('\\', "/");
     if !text.ends_with('/') {
         text.push('/');
     }
     text
+}
+
+#[inline(always)]
+fn file_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+#[inline(always)]
+fn is_song_lua_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp" | "qoi" | "tif" | "tiff"
+            )
+        })
 }
 
 #[inline(always)]
@@ -4065,6 +5030,281 @@ return Def.ActorFrame{}
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "ITGmania:ITGmania:1.2.0");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_enabled_player_globals() {
+        let song_dir = test_dir("player-globals");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local enabled = GAMESTATE:GetEnabledPlayers()
+local human = GAMESTATE:GetHumanPlayers()
+
+if PLAYER_1 ~= "PlayerNumber_P1" then
+    error("unexpected PLAYER_1: " .. tostring(PLAYER_1))
+end
+if PLAYER_2 ~= "PlayerNumber_P2" then
+    error("unexpected PLAYER_2: " .. tostring(PLAYER_2))
+end
+if #enabled ~= 1 or enabled[1] ~= PLAYER_1 then
+    error("unexpected enabled players")
+end
+if #human ~= 1 or human[1] ~= PLAYER_1 then
+    error("unexpected human players")
+end
+if not GAMESTATE:IsHumanPlayer(PLAYER_1) then
+    error("PLAYER_1 should be human")
+end
+if GAMESTATE:IsHumanPlayer(PLAYER_2) then
+    error("PLAYER_2 should be disabled")
+end
+
+mod_actions = {
+    {4, enabled[1], true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Player Globals");
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: false,
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "PlayerNumber_P1");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_player_noteskin_name() {
+        let song_dir = test_dir("player-noteskin");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+if string.lower(po:NoteSkin()) ~= "cyber" then
+    error("unexpected NoteSkin getter: " .. tostring(po:NoteSkin()))
+end
+po:NoteSkin("lambda")
+if po:NoteSkin() ~= "lambda" then
+    error("unexpected NoteSkin setter: " .. tostring(po:NoteSkin()))
+end
+mod_actions = {
+    {4, po:NoteSkin(), true},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Player Noteskin");
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                noteskin_name: "cyber".to_string(),
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: false,
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "lambda");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_noteskin_helpers() {
+        let song_dir = test_dir("noteskin-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local x = NOTESKIN:GetMetricF("", "TapNoteNoteColorTextureCoordSpacingX")
+local y = NOTESKIN:GetMetricFForNoteSkin("", "TapNoteNoteColorTextureCoordSpacingY", "cyber")
+local vivid = NOTESKIN:GetMetricBForNoteSkin("", "TapNoteAnimationIsVivid", "cyber")
+local path = NOTESKIN:GetPathForNoteSkin("Down", "Tap Explosion Bright W1", "cyber")
+local actor = NOTESKIN:LoadActorForNoteSkin("Down", "Tap Explosion Bright W1", "cyber")
+
+if math.abs(x - 0.125) > 0.0001 then
+    error("unexpected noteskin metric x: " .. tostring(x))
+end
+if math.abs(y - 0.0) > 0.0001 then
+    error("unexpected noteskin metric y: " .. tostring(y))
+end
+if vivid ~= false then
+    error("unexpected noteskin vivid flag: " .. tostring(vivid))
+end
+if type(path) ~= "string" or path == "" then
+    error("expected noteskin path")
+end
+if type(actor) ~= "table" then
+    error("expected noteskin actor table")
+end
+
+mod_actions = {
+    {4, tostring(vivid) .. ":" .. tostring(x), true},
+}
+
+return Def.ActorFrame{
+    actor..{
+        Name="NoteskinExplosion",
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Noteskin Helpers");
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                noteskin_name: "cyber".to_string(),
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: false,
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "false:0.125");
+        assert!(
+            compiled.overlays.iter().any(|overlay| {
+                overlay.name.as_deref() == Some("NoteskinExplosion")
+                    && matches!(overlay.kind, SongLuaOverlayKind::Sprite { .. })
+            }),
+            "noteskin actor should materialize as a sprite overlay when it resolves to an image"
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_runs_concat_noteskin_sprite_oncommand() {
+        let song_dir = test_dir("noteskin-concat-oncommand");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {}
+
+return Def.ActorFrame{
+    NOTESKIN:LoadActorForNoteSkin("Down", "Tap Explosion Bright W1", "cyber")..{
+        Name="ConcatNoteskin",
+        OnCommand=function(self)
+            mod_actions = {
+                {4, self:GetName(), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Noteskin Concat"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "ConcatNoteskin");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_bitmap_text_ctor() {
+        let song_dir = test_dir("bitmap-text");
+        let entry = song_dir.join("default.lua");
+        fs::write(song_dir.join("_komika axis 42px.ini"), b"placeholder").unwrap();
+        fs::write(
+            &entry,
+            r##"
+return Def.ActorFrame{
+    Def.BitmapText{
+        Name="Countdown",
+        Font="_komika axis 42px.ini",
+        Text="",
+        OnCommand=function(self)
+            self:visible(false)
+                :z(10)
+                :strokecolor(color("#000000"))
+                :settext(3)
+                :finishtweening()
+        end,
+    },
+}
+"##,
+        )
+        .unwrap();
+
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "BitmapText")).unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert!(!compiled.overlays[0].initial_state.visible);
+        assert!(matches!(
+            compiled.overlays[0].kind,
+            SongLuaOverlayKind::BitmapText {
+                ref font_path,
+                ref text,
+                stroke_color: Some([0.0, 0.0, 0.0, 1.0]),
+                ..
+            } if font_path.ends_with("_komika axis 42px.ini") && text == "3"
+        ));
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_color_helpers() {
+        let song_dir = test_dir("color-helpers");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r##"
+local c1 = color("#00000080")
+local c2 = color("1,0.5,0.25")
+local c3 = color(0.25, 0.5, 0.75, 1)
+local mix = lerp_color(0.5, c1, c3)
+
+local function approx(a, b)
+    return math.abs(a - b) < 0.001
+end
+
+if not approx(c1[4], 128 / 255) then
+    error("unexpected hex alpha: " .. tostring(c1[4]))
+end
+if c2[4] ~= 1 then
+    error("numeric string alpha default mismatch")
+end
+if not approx(mix[1], 0.125) or not approx(mix[2], 0.25) or not approx(mix[3], 0.375) then
+    error("unexpected lerp color")
+end
+
+return Def.ActorFrame{}
+"##,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Color Helpers"),
+        )
+        .unwrap();
+        assert!(compiled.overlays.is_empty());
     }
 
     #[test]
@@ -4399,6 +5639,63 @@ return Def.ActorFrame{
         assert_eq!(overlay.initial_state.x, 123.0);
         assert_eq!(overlay.initial_state.y, 234.0);
         assert_eq!(overlay.initial_state.size, Some([48.0, 64.0]));
+    }
+
+    #[test]
+    fn compile_song_lua_supports_notefield_column_api() {
+        let song_dir = test_dir("notefield-column-api");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    InitCommand=function(self)
+        self:SetUpdateFunction(function(actor)
+            local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+            local pp = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+            local nf = pp:GetChild("NoteField")
+            local cols = nf:GetColumnActors()
+            if type(cols) ~= "table" or #cols ~= 4 then
+                error("expected four note columns")
+            end
+            nf:SetDidTapNoteCallback(function() end)
+            local zh = cols[1]:GetZoomHandler()
+            zh:SetSplineMode("NoteColumnSplineMode_Offset")
+                :SetSubtractSongBeat(false)
+                :SetReceptorT(0.0)
+                :SetBeatsPerT(1/48)
+            local spline = zh:GetSpline()
+            spline:SetSize(2)
+            spline:SetPoint(1, {0, 0, 0})
+            spline:SetPoint(2, {-1, -1, -1})
+            spline:Solve()
+            local po = ps:GetPlayerOptions("ModsLevel_Song")
+            if po:Mirror() ~= false or po:Left() ~= false or po:Right() ~= false then
+                error("unexpected lane permutation")
+            end
+            if po:Skew() ~= 0 or po:Tilt() ~= 0 then
+                error("unexpected skew or tilt")
+            end
+            if po:GetReversePercentForColumn(0) ~= 0 then
+                error("unexpected reverse percent")
+            end
+            mod_actions = {
+                {4, string.format("%.0f:%.0f", ArrowEffects.GetXPos(ps, 1, 0), ArrowEffects.GetYPos(ps, 1, 0)), true},
+            }
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "NoteField Column API"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "-96:0");
     }
 
     #[test]

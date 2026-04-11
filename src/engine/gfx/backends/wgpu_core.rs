@@ -1,10 +1,11 @@
 use crate::engine::gfx::{
-    BlendMode, ClockDomainTrace, DrawStats, MeshMode, ObjectType, PresentModePolicy,
-    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    Texture as RendererTexture, TextureHandle,
+    BlendMode, ClockDomainTrace, DrawStats, PresentModePolicy, PresentModeTrace, PresentStats,
+    RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey, Texture as RendererTexture,
+    TextureHandle,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use crate::engine::space::ortho_for_window;
-use cgmath::{Matrix4, Vector4};
+use cgmath::Matrix4;
 use image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{
@@ -23,6 +24,7 @@ use winit::window::Window;
 
 const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
+const WGPU_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Api {
@@ -157,37 +159,8 @@ pub struct Texture {
     bind_group_repeat: Arc<wgpu::BindGroup>,
 }
 
-struct SpriteRun {
-    start: u32,
-    count: u32,
-    blend: BlendMode,
-    bind_group: Arc<wgpu::BindGroup>,
-    key: u64,
-    camera: u8,
-}
-
-struct TexturedMeshRun {
-    vertex_start: u32,
-    vertex_count: u32,
-    geom_key: u64,
-    instance_start: u32,
-    instance_count: u32,
-    mode: MeshMode,
-    blend: BlendMode,
-    bind_group: Arc<wgpu::BindGroup>,
-    key: u64,
-    camera: u8,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TMeshGeomKey {
-    ptr: usize,
-    len: usize,
-}
-
-#[derive(Clone, Copy)]
-struct FrameTMeshGeom {
-    vertex_start: u32,
+struct CachedTMeshGeom {
+    buffer: Arc<wgpu::Buffer>,
     vertex_count: u32,
 }
 
@@ -196,18 +169,6 @@ struct PresentCompletion {
     present_id: u32,
     host_ns: u64,
     interval_ns: u64,
-}
-
-enum Op {
-    Sprite(SpriteRun),
-    TexturedMesh(TexturedMeshRun),
-    Mesh {
-        start: u32,
-        count: u32,
-        mode: MeshMode,
-        blend: BlendMode,
-        camera: u8,
-    },
 }
 
 struct OwnedWindowHandle(pub Arc<Window>);
@@ -255,11 +216,9 @@ pub struct State {
     index_count: u32,
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
-    scratch_instances: Vec<InstanceRaw>,
-    scratch_mesh_vertices: Vec<crate::engine::gfx::MeshVertex>,
-    scratch_tmesh_vertices: Vec<TexturedMeshVertexRaw>,
-    scratch_tmesh_instances: Vec<TexturedMeshInstanceRaw>,
-    scratch_ops: Vec<Op>,
+    prep: DrawScratch,
+    cached_tmesh: HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh_bytes: usize,
     mesh_vertex_buffer: wgpu::Buffer,
     mesh_vertex_capacity: usize,
     tmesh_vertex_buffer: wgpu::Buffer,
@@ -542,11 +501,15 @@ fn init(
         index_count: indices.len() as u32,
         instance_buffer,
         instance_capacity,
-        scratch_instances: Vec::with_capacity(instance_capacity),
-        scratch_mesh_vertices: Vec::with_capacity(mesh_vertex_capacity),
-        scratch_tmesh_vertices: Vec::with_capacity(tmesh_vertex_capacity),
-        scratch_tmesh_instances: Vec::with_capacity(tmesh_instance_capacity),
-        scratch_ops: Vec::with_capacity(64),
+        prep: DrawScratch::with_capacity(
+            instance_capacity,
+            mesh_vertex_capacity,
+            tmesh_vertex_capacity,
+            tmesh_instance_capacity,
+            64,
+        ),
+        cached_tmesh: HashMap::new(),
+        cached_tmesh_bytes: 0,
         mesh_vertex_buffer,
         mesh_vertex_capacity,
         tmesh_vertex_buffer,
@@ -880,18 +843,6 @@ pub fn update_texture(
 }
 
 #[inline(always)]
-fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 4], [f32; 2], [f32; 2]) {
-    let center = [m[3][0], m[3][1], m[3][2], 0.0];
-    let c0 = [m[0][0], m[0][1]];
-    let c1 = [m[1][0], m[1][1]];
-    let sx = c0[0].hypot(c0[1]).max(1e-12);
-    let sy = c1[0].hypot(c1[1]).max(1e-12);
-    let cos_t = c0[0] / sx;
-    let sin_t = c0[1] / sx;
-    (center, [sx, sy], [sin_t, cos_t])
-}
-
-#[inline(always)]
 fn pick_tex(api: Api, tex: &RendererTexture) -> Option<&Texture> {
     match (api, tex) {
         #[cfg(not(target_pointer_width = "32"))]
@@ -901,6 +852,52 @@ fn pick_tex(api: Api, tex: &RendererTexture) -> Option<&Texture> {
         (Api::DirectX, RendererTexture::DirectX(t)) => Some(t),
         _ => None,
     }
+}
+
+fn ensure_cached_tmesh(
+    device: &wgpu::Device,
+    cached_tmesh: &mut HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh_bytes: &mut usize,
+    cache_key: TMeshCacheKey,
+    vertices: &[crate::engine::gfx::TexturedMeshVertex],
+) -> bool {
+    if let Some(entry) = cached_tmesh.get(&cache_key) {
+        return entry.vertex_count == vertices.len() as u32;
+    }
+
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertexRaw>();
+    if bytes > WGPU_TMESH_CACHE_MAX_BYTES
+        || cached_tmesh_bytes.saturating_add(bytes) > WGPU_TMESH_CACHE_MAX_BYTES
+    {
+        return false;
+    }
+
+    let mut raw = Vec::with_capacity(vertices.len());
+    for v in vertices {
+        raw.push(TexturedMeshVertexRaw {
+            pos: v.pos,
+            uv: v.uv,
+            color: v.color,
+            tex_matrix_scale: v.tex_matrix_scale,
+        });
+    }
+
+    let buffer = Arc::new(
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("wgpu cached textured-mesh vertex buffer"),
+            contents: cast_slice(raw.as_slice()),
+            usage: wgpu::BufferUsages::VERTEX,
+        }),
+    );
+    cached_tmesh.insert(
+        cache_key,
+        CachedTMeshGeom {
+            buffer,
+            vertex_count: raw.len() as u32,
+        },
+    );
+    *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
+    true
 }
 
 #[inline(always)]
@@ -938,236 +935,56 @@ pub fn draw(
     }
 
     let api = state.api;
-    let objects_len = render_list.objects.len();
-
     {
-        let instances = &mut state.scratch_instances;
-        instances.clear();
-        if instances.capacity() < objects_len {
-            instances.reserve(objects_len - instances.capacity());
-        }
-
-        let mesh_vertices = &mut state.scratch_mesh_vertices;
-        mesh_vertices.clear();
-        let want_mesh = objects_len.saturating_mul(4);
-        if mesh_vertices.capacity() < want_mesh {
-            mesh_vertices.reserve(want_mesh - mesh_vertices.capacity());
-        }
-
-        let tmesh_vertices = &mut state.scratch_tmesh_vertices;
-        tmesh_vertices.clear();
-        let want_tmesh = objects_len.saturating_mul(4);
-        if tmesh_vertices.capacity() < want_tmesh {
-            tmesh_vertices.reserve(want_tmesh - tmesh_vertices.capacity());
-        }
-        let tmesh_instances = &mut state.scratch_tmesh_instances;
-        tmesh_instances.clear();
-        if tmesh_instances.capacity() < objects_len {
-            tmesh_instances.reserve(objects_len - tmesh_instances.capacity());
-        }
-        let mut tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom> = HashMap::new();
-        tmesh_geom.reserve(objects_len);
-
-        let ops = &mut state.scratch_ops;
-        ops.clear();
-        if ops.capacity() < objects_len {
-            ops.reserve(objects_len - ops.capacity());
-        }
-
-        for obj in &render_list.objects {
-            match &obj.object_type {
-                ObjectType::Sprite {
-                    tint,
-                    uv_scale,
-                    uv_offset,
-                    local_offset,
-                    local_offset_rot_sin_cos,
-                    edge_fade,
-                    ..
-                } => {
-                    let tex = textures
-                        .get(&obj.texture_handle)
-                        .and_then(|t| pick_tex(api, t));
-                    let Some(tex) = tex else {
-                        continue;
-                    };
-
-                    let model: [[f32; 4]; 4] = obj.transform.into();
-                    let (center, size, sincos) = decompose_2d(model);
-                    let start = instances.len() as u32;
-                    instances.push(InstanceRaw {
-                        center,
-                        size,
-                        rot_sin_cos: sincos,
-                        tint: *tint,
-                        uv_scale: *uv_scale,
-                        uv_offset: *uv_offset,
-                        local_offset: *local_offset,
-                        local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
-                        edge_fade: *edge_fade,
-                    });
-
-                    if let Some(Op::Sprite(last)) = ops.last_mut()
-                        && last.key == tex.id
-                        && last.blend == obj.blend
-                        && last.camera == obj.camera
-                    {
-                        last.count += 1;
-                        continue;
-                    }
-
-                    ops.push(Op::Sprite(SpriteRun {
-                        start,
-                        count: 1,
-                        blend: obj.blend,
-                        bind_group: tex.bind_group.clone(),
-                        key: tex.id,
-                        camera: obj.camera,
-                    }));
-                }
-                ObjectType::Mesh { vertices, mode } => {
-                    if vertices.is_empty() {
-                        continue;
-                    }
-                    let start = mesh_vertices.len() as u32;
-                    mesh_vertices.reserve(vertices.len());
-                    for v in vertices.iter() {
-                        let p = obj.transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
-                        mesh_vertices.push(crate::engine::gfx::MeshVertex {
-                            pos: [p.x, p.y],
-                            color: v.color,
-                        });
-                    }
-
-                    ops.push(Op::Mesh {
-                        start,
-                        count: vertices.len() as u32,
-                        mode: *mode,
-                        blend: obj.blend,
-                        camera: obj.camera,
-                    });
-                }
-                ObjectType::TexturedMesh {
-                    vertices,
-                    mode,
-                    uv_scale,
-                    uv_offset,
-                    uv_tex_shift,
-                    ..
-                } => {
-                    if vertices.is_empty() {
-                        continue;
-                    }
-                    let tex = textures
-                        .get(&obj.texture_handle)
-                        .and_then(|t| pick_tex(api, t));
-                    let Some(tex) = tex else {
-                        continue;
-                    };
-                    let geom_key = TMeshGeomKey {
-                        ptr: vertices.as_ptr() as usize,
-                        len: vertices.len(),
-                    };
-                    let resolved_geom = if let Some(geom) = tmesh_geom.get(&geom_key) {
-                        *geom
-                    } else {
-                        let start = tmesh_vertices.len() as u32;
-                        let count = vertices.len() as u32;
-                        tmesh_vertices.reserve(vertices.len());
-                        for v in vertices.iter() {
-                            tmesh_vertices.push(TexturedMeshVertexRaw {
-                                pos: v.pos,
-                                uv: v.uv,
-                                tex_matrix_scale: v.tex_matrix_scale,
-                                color: v.color,
-                            });
-                        }
-                        let geom = FrameTMeshGeom {
-                            vertex_start: start,
-                            vertex_count: count,
-                        };
-                        tmesh_geom.insert(geom_key, geom);
-                        geom
-                    };
-                    let vertex_start = resolved_geom.vertex_start;
-                    let vertex_count = resolved_geom.vertex_count;
-                    let geom_run_key = ((vertex_start as u64) << 32) | (vertex_count as u64);
-                    let instance_start = tmesh_instances.len() as u32;
-                    let model: [[f32; 4]; 4] = obj.transform.into();
-                    tmesh_instances.push(TexturedMeshInstanceRaw {
-                        model_col0: model[0],
-                        model_col1: model[1],
-                        model_col2: model[2],
-                        model_col3: model[3],
-                        uv_scale: *uv_scale,
-                        uv_offset: *uv_offset,
-                        uv_tex_shift: *uv_tex_shift,
-                    });
-                    let key = tex.id.wrapping_shl(1) | 1;
-                    if let Some(Op::TexturedMesh(last)) = ops.last_mut()
-                        && last.key == key
-                        && last.blend == obj.blend
-                        && last.camera == obj.camera
-                        && last.mode == *mode
-                        && last.geom_key == geom_run_key
-                        && last.vertex_count == vertex_count
-                        && last.instance_start + last.instance_count == instance_start
-                    {
-                        last.instance_count += 1;
-                        continue;
-                    }
-
-                    ops.push(Op::TexturedMesh(TexturedMeshRun {
-                        vertex_start,
-                        vertex_count,
-                        geom_key: geom_run_key,
-                        instance_start,
-                        instance_count: 1,
-                        mode: *mode,
-                        blend: obj.blend,
-                        bind_group: tex.bind_group_repeat.clone(),
-                        key,
-                        camera: obj.camera,
-                    }));
-                }
-            }
-        }
+        let prep = &mut state.prep;
+        let device = &state.device;
+        let cached_tmesh = &mut state.cached_tmesh;
+        let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
+        let _prep_stats = draw_prep::prepare(render_list, prep, |cache_key, vertices| {
+            ensure_cached_tmesh(
+                device,
+                cached_tmesh,
+                cached_tmesh_bytes,
+                cache_key,
+                vertices,
+            )
+        });
     }
 
-    let instance_len = state.scratch_instances.len();
+    let instance_len = state.prep.sprite_instances.len();
     ensure_instance_capacity(state, instance_len);
     if instance_len > 0 {
         state.queue.write_buffer(
             &state.instance_buffer,
             0,
-            cast_slice(state.scratch_instances.as_slice()),
+            cast_slice(state.prep.sprite_instances.as_slice()),
         );
     }
-    let mesh_len = state.scratch_mesh_vertices.len();
+    let mesh_len = state.prep.mesh_vertices.len();
     ensure_mesh_vertex_capacity(state, mesh_len);
     if mesh_len > 0 {
         state.queue.write_buffer(
             &state.mesh_vertex_buffer,
             0,
-            cast_slice(state.scratch_mesh_vertices.as_slice()),
+            cast_slice(state.prep.mesh_vertices.as_slice()),
         );
     }
-    let tmesh_len = state.scratch_tmesh_vertices.len();
+    let tmesh_len = state.prep.tmesh_vertices.len();
     ensure_tmesh_vertex_capacity(state, tmesh_len);
     if tmesh_len > 0 {
         state.queue.write_buffer(
             &state.tmesh_vertex_buffer,
             0,
-            cast_slice(state.scratch_tmesh_vertices.as_slice()),
+            cast_slice(state.prep.tmesh_vertices.as_slice()),
         );
     }
-    let tmesh_instance_len = state.scratch_tmesh_instances.len();
+    let tmesh_instance_len = state.prep.tmesh_instances.len();
     ensure_tmesh_instance_capacity(state, tmesh_instance_len);
     if tmesh_instance_len > 0 {
         state.queue.write_buffer(
             &state.tmesh_instance_buffer,
             0,
-            cast_slice(state.scratch_tmesh_instances.as_slice()),
+            cast_slice(state.prep.tmesh_instances.as_slice()),
         );
     }
     upload_projections(state, &render_list.cameras);
@@ -1232,10 +1049,16 @@ pub fn draw(
         let mut last_blend: Option<BlendMode> = None;
         let mut last_bind: Option<u64> = None;
         let mut last_camera: Option<u8> = None;
-        let mut last_tmesh_geom_key: Option<u64> = None;
-        for op in &state.scratch_ops {
+        let mut last_tmesh_source: Option<TexturedMeshSource> = None;
+        for op in &state.prep.ops {
             match op {
-                Op::Sprite(run) => {
+                DrawOp::Sprite(run) => {
+                    let Some(tex) = textures
+                        .get(&run.texture_handle)
+                        .and_then(|texture| pick_tex(api, texture))
+                    else {
+                        continue;
+                    };
                     if last_kind != Some(0) {
                         pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
                         pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
@@ -1247,7 +1070,7 @@ pub fn draw(
                         last_blend = None;
                         last_bind = None;
                         last_camera = None;
-                        last_tmesh_geom_key = None;
+                        last_tmesh_source = None;
                     }
                     if last_blend != Some(run.blend) {
                         pass.set_pipeline(state.pipelines.get(run.blend));
@@ -1265,20 +1088,18 @@ pub fn draw(
                         );
                         last_camera = Some(run.camera);
                     }
-                    if last_bind != Some(run.key) {
-                        pass.set_bind_group(texture_group, Some(run.bind_group.as_ref()), &[]);
-                        last_bind = Some(run.key);
+                    if last_bind != Some(tex.id) {
+                        pass.set_bind_group(texture_group, Some(tex.bind_group.as_ref()), &[]);
+                        last_bind = Some(tex.id);
                     }
-                    pass.draw_indexed(0..state.index_count, 0, run.start..(run.start + run.count));
+                    pass.draw_indexed(
+                        0..state.index_count,
+                        0,
+                        run.instance_start..(run.instance_start + run.instance_count),
+                    );
                 }
-                Op::Mesh {
-                    start,
-                    count,
-                    mode,
-                    blend,
-                    camera,
-                } => {
-                    if *count == 0 {
+                DrawOp::Mesh(run) => {
+                    if run.vertex_count == 0 {
                         continue;
                     }
                     if last_kind != Some(1) {
@@ -1287,38 +1108,47 @@ pub fn draw(
                         last_blend = None;
                         last_bind = None;
                         last_camera = None;
-                        last_tmesh_geom_key = None;
+                        last_tmesh_source = None;
                     }
-                    if last_blend != Some(*blend) {
-                        pass.set_pipeline(state.mesh_pipelines.get(*blend));
-                        last_blend = Some(*blend);
+                    if last_blend != Some(run.blend) {
+                        pass.set_pipeline(state.mesh_pipelines.get(run.blend));
+                        last_blend = Some(run.blend);
                     }
-                    if last_camera != Some(*camera) {
+                    if last_camera != Some(run.camera) {
                         set_camera(
                             &mut pass,
                             &state.proj,
-                            *camera,
+                            run.camera,
                             camera_count,
                             &render_list.cameras,
                             state.projection,
                         );
-                        last_camera = Some(*camera);
+                        last_camera = Some(run.camera);
                     }
-                    match mode {
-                        MeshMode::Triangles => pass.draw(*start..(*start + *count), 0..1),
+                    match run.mode {
+                        crate::engine::gfx::MeshMode::Triangles => pass.draw(
+                            run.vertex_start..(run.vertex_start + run.vertex_count),
+                            0..1,
+                        ),
                     }
                 }
-                Op::TexturedMesh(run) => {
-                    if run.vertex_count == 0 || run.instance_count == 0 {
+                DrawOp::TexturedMesh(run) => {
+                    if run.source.vertex_count() == 0 || run.instance_count == 0 {
                         continue;
                     }
+                    let Some(tex) = textures
+                        .get(&run.texture_handle)
+                        .and_then(|texture| pick_tex(api, texture))
+                    else {
+                        continue;
+                    };
                     if last_kind != Some(2) {
                         pass.set_vertex_buffer(1, state.tmesh_instance_buffer.slice(..));
                         last_kind = Some(2);
                         last_blend = None;
                         last_bind = None;
                         last_camera = None;
-                        last_tmesh_geom_key = None;
+                        last_tmesh_source = None;
                     }
                     if last_blend != Some(run.blend) {
                         pass.set_pipeline(state.tmesh_pipelines.get(run.blend));
@@ -1336,18 +1166,33 @@ pub fn draw(
                         );
                         last_camera = Some(run.camera);
                     }
-                    if last_bind != Some(run.key) {
-                        pass.set_bind_group(texture_group, Some(run.bind_group.as_ref()), &[]);
-                        last_bind = Some(run.key);
+                    let bind_key = tex.id.wrapping_shl(1) | 1;
+                    if last_bind != Some(bind_key) {
+                        pass.set_bind_group(
+                            texture_group,
+                            Some(tex.bind_group_repeat.as_ref()),
+                            &[],
+                        );
+                        last_bind = Some(bind_key);
                     }
-                    if last_tmesh_geom_key != Some(run.geom_key) {
-                        pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
-                        last_tmesh_geom_key = Some(run.geom_key);
+                    if last_tmesh_source != Some(run.source) {
+                        match run.source {
+                            TexturedMeshSource::Transient { .. } => {
+                                pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
+                            }
+                            TexturedMeshSource::Cached { cache_key, .. } => {
+                                let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                                    continue;
+                                };
+                                pass.set_vertex_buffer(0, entry.buffer.slice(..));
+                            }
+                        }
+                        last_tmesh_source = Some(run.source);
                     }
-                    let draw_start = run.vertex_start;
-                    let draw_end = draw_start + run.vertex_count;
+                    let draw_start = run.source.vertex_start();
+                    let draw_end = draw_start + run.source.vertex_count();
                     match run.mode {
-                        MeshMode::Triangles => pass.draw(
+                        crate::engine::gfx::MeshMode::Triangles => pass.draw(
                             draw_start..draw_end,
                             run.instance_start..(run.instance_start + run.instance_count),
                         ),
@@ -1530,9 +1375,9 @@ pub fn draw(
     }
 
     let mut tmesh_vpf = 0u32;
-    for op in &state.scratch_ops {
-        if let Op::TexturedMesh(run) = op {
-            let tri_count = run.vertex_count / 3;
+    for op in &state.prep.ops {
+        if let DrawOp::TexturedMesh(run) = op {
+            let tri_count = run.source.vertex_count() / 3;
             tmesh_vpf = tmesh_vpf.saturating_add(tri_count.saturating_mul(run.instance_count));
         }
     }

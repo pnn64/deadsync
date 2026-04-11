@@ -1074,6 +1074,7 @@ fn build_actor_recursive<'a>(
             size,
             texture,
             vertices,
+            geom_cache_key,
             mode,
             uv_scale,
             uv_offset,
@@ -1097,6 +1098,7 @@ fn build_actor_recursive<'a>(
                 object_type: renderer::ObjectType::TexturedMesh {
                     texture_id: std::borrow::Cow::Borrowed(texture.as_ref()),
                     vertices: std::borrow::Cow::Borrowed(vertices.as_ref()),
+                    geom_cache_key: *geom_cache_key,
                     mode: *mode,
                     uv_scale: *uv_scale,
                     uv_offset: *uv_offset,
@@ -1172,7 +1174,11 @@ fn build_actor_recursive<'a>(
                         }
                         *vertices = std::borrow::Cow::Owned(out);
                     }
-                    renderer::ObjectType::TexturedMesh { vertices, .. } => {
+                    renderer::ObjectType::TexturedMesh {
+                        vertices,
+                        geom_cache_key,
+                        ..
+                    } => {
                         let sc = *color;
                         let mut out = Vec::with_capacity(vertices.len());
                         for v in vertices.iter() {
@@ -1188,6 +1194,7 @@ fn build_actor_recursive<'a>(
                                 ],
                             });
                         }
+                        *geom_cache_key = renderer::INVALID_TMESH_CACHE_KEY;
                         *vertices = std::borrow::Cow::Owned(out);
                     }
                 }
@@ -2486,6 +2493,7 @@ fn clip_rotated_sprite_object_to_world_rect(obj: &mut RenderObject<'_>, clip: Wo
     obj.object_type = renderer::ObjectType::TexturedMesh {
         texture_id: std::borrow::Cow::Owned(texture_id),
         vertices: std::borrow::Cow::Owned(out),
+        geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
         mode: renderer::MeshMode::Triangles,
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],

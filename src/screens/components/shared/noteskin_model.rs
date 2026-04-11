@@ -127,6 +127,7 @@ fn actor_from_vertices(
     slot: &SpriteSlot,
     xy: [f32; 2],
     vertices: Arc<[TexturedMeshVertex]>,
+    geom_cache_key: crate::engine::gfx::TMeshCacheKey,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
@@ -140,6 +141,7 @@ fn actor_from_vertices(
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         texture: slot.texture_key_shared(),
         vertices,
+        geom_cache_key,
         mode: MeshMode::Triangles,
         uv_scale,
         uv_offset,
@@ -175,6 +177,7 @@ fn actor_from_draw(
         slot,
         xy,
         vertices,
+        crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -202,14 +205,16 @@ pub(crate) fn noteskin_model_actor_from_draw_cached(
     }
 
     let tint = model_tint(color, draw);
-    let vertices = cache.get_or_insert_with(slot, size, rotation_deg, draw, tint, || {
-        build_model_vertices(slot, model, size, rotation_deg, draw, tint)
-    });
+    let (geom_cache_key, vertices) =
+        cache.get_or_insert_with(slot, size, rotation_deg, draw, tint, || {
+            build_model_vertices(slot, model, size, rotation_deg, draw, tint)
+        });
     let (uv_scale, uv_offset, uv_tex_shift) = model_uv_params(slot, uv_rect);
     Some(actor_from_vertices(
         slot,
         xy,
         vertices,
+        geom_cache_key,
         uv_scale,
         uv_offset,
         uv_tex_shift,

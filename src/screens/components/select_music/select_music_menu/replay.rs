@@ -19,7 +19,6 @@ const GS_LEADERBOARD_PANE_CENTER_Y: f32 = -15.0;
 const GS_LEADERBOARD_DIM_ALPHA: f32 = 0.875;
 const GS_LEADERBOARD_Z: i16 = 1480;
 
-
 #[derive(Clone, Debug)]
 pub struct ReplayOverlayStateData {
     pub entries: Vec<scores::MachineReplayEntry>,
@@ -48,7 +47,7 @@ pub struct ReplayStartPayload {
     pub replay: Vec<scores::ReplayEdge>,
     pub name: String,
     pub score: f64,
-    pub replay_beat0_time_seconds: f32,
+    pub replay_beat0_time_ns: i64,
 }
 
 fn replay_total_items(state: &ReplayOverlayStateData) -> usize {
@@ -147,13 +146,13 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
                 *state = ReplayOverlayState::Hidden;
                 ReplayInputOutcome::Closed
             } else {
-                let (replay, name, score, replay_beat0_time_seconds) = {
+                let (replay, name, score, replay_beat0_time_ns) = {
                     let entry = &overlay.entries[selected];
                     (
                         entry.replay.clone(),
                         entry.name.clone(),
                         entry.score,
-                        entry.replay_beat0_time_seconds,
+                        entry.replay_beat0_time_ns,
                     )
                 };
                 *state = ReplayOverlayState::Hidden;
@@ -161,7 +160,7 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
                     replay,
                     name,
                     score,
-                    replay_beat0_time_seconds,
+                    replay_beat0_time_ns,
                 })
             }
         }

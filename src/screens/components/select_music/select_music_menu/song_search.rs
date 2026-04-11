@@ -64,7 +64,6 @@ struct SongSearchFilter {
     bpm_tier: Option<i32>,
 }
 
-
 pub fn begin_song_search_prompt() -> SongSearchState {
     SongSearchState::TextEntry(SongSearchTextEntryState {
         query: String::new(),
@@ -574,4 +573,3 @@ fn build_song_search_candidates(
 
     out
 }
-
