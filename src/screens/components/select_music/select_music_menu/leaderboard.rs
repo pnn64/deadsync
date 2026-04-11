@@ -58,7 +58,6 @@ pub enum LeaderboardInputOutcome {
     Closed,
 }
 
-
 fn gs_machine_pane(chart_hash: Option<&str>) -> scores::LeaderboardPane {
     let entries = chart_hash
         .map(|h| scores::get_machine_leaderboard_local(h, GS_LEADERBOARD_NUM_ENTRIES))
@@ -635,4 +634,3 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
 
     Some(actors)
 }
-

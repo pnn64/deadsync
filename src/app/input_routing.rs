@@ -52,9 +52,7 @@ impl App {
         &mut self,
         event_loop: &ActiveEventLoop,
     ) -> Result<bool, Box<dyn Error>> {
-        if !matches!(self.state.shell.transition, TransitionState::Idle)
-            || self.state.screens.current_screen == CurrentScreen::Init
-        {
+        if !matches!(self.state.shell.transition, TransitionState::Idle) {
             input::clear_debounce_state();
             return Ok(false);
         }
@@ -141,8 +139,7 @@ impl App {
 
     #[inline(always)]
     pub(super) fn sync_gameplay_input_capture(&self) {
-        let capture_enabled =
-            self.accepts_live_input() && self.state.screens.current_screen != CurrentScreen::Init;
+        let capture_enabled = self.accepts_live_input();
         #[cfg(windows)]
         let capture_enabled = capture_enabled
             && self.state.screens.current_screen == CurrentScreen::Gameplay

@@ -1,7 +1,8 @@
 use crate::engine::gfx::{
-    BlendMode, ClockDomainTrace, DrawStats, MeshMode, MeshVertex, ObjectType, PresentModePolicy,
-    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
+    BlendMode, ClockDomainTrace, DrawStats, MeshVertex, PresentModePolicy, PresentModeTrace,
+    PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
     Texture as RendererTexture, TextureHandle,
+    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
 };
 use crate::engine::space::ortho_for_window;
 use ash::{
@@ -10,7 +11,7 @@ use ash::{
     khr::{calibrated_timestamps, surface, swapchain},
     vk,
 };
-use cgmath::{Matrix4, Vector4};
+use cgmath::Matrix4;
 use image::RgbaImage;
 use log::{debug, error, info, warn};
 use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc, time::Instant};
@@ -27,6 +28,7 @@ const MAX_FRAMES_IN_FLIGHT: usize = 3;
 const DESCRIPTOR_POOL_SET_CAPACITY: u32 = 1024;
 const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
+const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 #[cfg(windows)]
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
@@ -74,18 +76,6 @@ struct TexturedMeshInstanceGpu {
     uv_tex_shift: [f32; 2], // offset 80
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct TMeshGeomKey {
-    ptr: usize,
-    len: usize,
-}
-
-#[derive(Clone, Copy)]
-struct FrameTMeshGeom {
-    vertex_start: u32,
-    vertex_count: u32,
-}
-
 struct PipelinePair {
     layout: vk::PipelineLayout,
     pipe: vk::Pipeline,
@@ -121,6 +111,17 @@ impl Drop for Texture {
 struct BufferResource {
     buffer: vk::Buffer,
     memory: vk::DeviceMemory,
+}
+
+struct SubmittedTextureUpload {
+    frame: usize,
+    cmd: vk::CommandBuffer,
+    staging: Vec<BufferResource>,
+}
+
+struct CachedTMeshGeom {
+    buffer: BufferResource,
+    vertex_count: u32,
 }
 
 struct SwapchainResources {
@@ -240,9 +241,12 @@ pub struct State {
     tmesh_instance_ring_ptr: *mut TexturedMeshInstanceGpu, // persistently mapped pointer
     tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
-    scratch_tmesh_geom: HashMap<TMeshGeomKey, FrameTMeshGeom>,
+    prep: DrawScratch,
+    cached_tmesh: HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh_bytes: usize,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
+    submitted_tex_uploads: Vec<SubmittedTextureUpload>, // retired when the tagged frame slot completes
     present_telemetry: PresentTelemetryState,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
@@ -383,9 +387,12 @@ pub fn init(
         tmesh_instance_ring_ptr: std::ptr::null_mut(),
         tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
-        scratch_tmesh_geom: HashMap::new(),
+        prep: DrawScratch::with_capacity(256, 1024, 1024, 256, 64),
+        cached_tmesh: HashMap::new(),
+        cached_tmesh_bytes: 0,
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
+        submitted_tex_uploads: Vec::new(),
         present_telemetry,
         screenshot_requested: false,
         captured_frame: None,
@@ -1131,7 +1138,7 @@ fn begin_pending_texture_upload_cmd(
         .command_pool(state.command_pool)
         .command_buffer_count(1);
     // SAFETY: `state.command_pool` belongs to this device and remains alive until the command
-    // buffer is ended, submitted, and freed by `flush_pending_texture_uploads`.
+    // buffer is ended, submitted, and later retired from `submitted_tex_uploads`.
     let cmd = unsafe { device.allocate_command_buffers(&alloc_info)?[0] };
     let begin_info =
         vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
@@ -1143,31 +1150,66 @@ fn begin_pending_texture_upload_cmd(
     Ok(cmd)
 }
 
-fn flush_pending_texture_uploads(state: &mut State) -> Result<(), Box<dyn Error>> {
+fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
+    let device = state.device.as_ref().unwrap();
+    let mut keep = Vec::with_capacity(state.submitted_tex_uploads.len());
+    for batch in mem::take(&mut state.submitted_tex_uploads) {
+        if batch.frame != frame {
+            keep.push(batch);
+            continue;
+        }
+        unsafe {
+            device.free_command_buffers(state.command_pool, &[batch.cmd]);
+        }
+        for staging in batch.staging {
+            destroy_buffer(device, &staging);
+        }
+    }
+    state.submitted_tex_uploads = keep;
+}
+
+fn retire_all_submitted_texture_uploads(state: &mut State) {
+    let device = state.device.as_ref().unwrap();
+    for batch in mem::take(&mut state.submitted_tex_uploads) {
+        unsafe {
+            device.free_command_buffers(state.command_pool, &[batch.cmd]);
+        }
+        for staging in batch.staging {
+            destroy_buffer(device, &staging);
+        }
+    }
+}
+
+fn submit_pending_texture_uploads(state: &mut State, frame: usize) -> Result<(), Box<dyn Error>> {
     let Some(cmd) = state.pending_tex_upload_cmd.take() else {
         return Ok(());
     };
 
     let device = state.device.as_ref().unwrap();
-    // SAFETY: `cmd` is a primary command buffer allocated from `state.command_pool` and all
-    // queued staging buffers stay alive until after `queue_wait_idle` returns.
+    let staging = mem::take(&mut state.pending_tex_staging);
+    // SAFETY: `cmd` is a primary command buffer allocated from `state.command_pool`, the upload
+    // queue is the same graphics queue used for frame submissions, and the staged buffers are kept
+    // alive in `submitted_tex_uploads` until the tagged frame slot is known complete.
     unsafe {
         device.end_command_buffer(cmd)?;
         let submit = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
         device.queue_submit(state.queue, &[submit], vk::Fence::null())?;
-        device.queue_wait_idle(state.queue)?;
-        device.free_command_buffers(state.command_pool, &[cmd]);
     }
-
-    for staging in state.pending_tex_staging.drain(..) {
-        destroy_buffer(device, &staging);
-    }
+    state.submitted_tex_uploads.push(SubmittedTextureUpload {
+        frame,
+        cmd,
+        staging,
+    });
 
     Ok(())
 }
 
 pub fn flush_pending_uploads(state: &mut State) -> Result<(), Box<dyn Error>> {
-    flush_pending_texture_uploads(state)
+    submit_pending_texture_uploads(state, state.current_frame)
+}
+
+pub fn retire_submitted_uploads(state: &mut State) {
+    retire_all_submitted_texture_uploads(state)
 }
 
 pub fn create_texture(
@@ -1380,7 +1422,6 @@ pub fn draw(
     }
 
     let mut stats = DrawStats::default();
-    flush_pending_texture_uploads(state)?;
 
     if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
         return Ok(stats);
@@ -1388,43 +1429,39 @@ pub fn draw(
     stats.present_stats.mode = vk_present_mode_trace(state.swapchain_resources.present_mode);
     stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
-    #[inline(always)]
-    fn decompose_2d(m: [[f32; 4]; 4]) -> ([f32; 4], [f32; 2], [f32; 2]) {
-        let center = [m[3][0], m[3][1], m[3][2], 0.0];
-        let c0 = [m[0][0], m[0][1]];
-        let c1 = [m[1][0], m[1][1]];
-        let sx = c0[0].hypot(c0[1]).max(1e-12);
-        let sy = c1[0].hypot(c1[1]).max(1e-12);
-        let cos_t = c0[0] / sx;
-        let sin_t = c0[1] / sx;
-        (center, [sx, sy], [sin_t, cos_t])
+    {
+        let prep = &mut state.prep;
+        let instance = &state.instance;
+        let device = Arc::clone(state.device.as_ref().unwrap());
+        let pdevice = state.pdevice;
+        let cached_tmesh = &mut state.cached_tmesh;
+        let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
+        let _prep_stats =
+            draw_prep::prepare(
+                render_list,
+                prep,
+                |cache_key, vertices| match ensure_cached_tmesh(
+                    instance,
+                    device.as_ref(),
+                    pdevice,
+                    cached_tmesh,
+                    cached_tmesh_bytes,
+                    cache_key,
+                    vertices,
+                ) {
+                    Ok(cached) => cached,
+                    Err(e) => {
+                        warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {e}");
+                        false
+                    }
+                },
+            );
     }
 
-    let (needed_instances, needed_mesh_vertices, needed_tmesh_vertices, needed_tmesh_instances) = {
-        let mut inst: usize = 0;
-        let mut mesh: usize = 0;
-        let mut tmesh: usize = 0;
-        let mut tmesh_inst: usize = 0;
-        for o in &render_list.objects {
-            match &o.object_type {
-                ObjectType::Sprite { .. } => inst += 1,
-                ObjectType::Mesh { vertices, mode } => {
-                    if *mode == MeshMode::Triangles {
-                        mesh += vertices.len();
-                    }
-                }
-                ObjectType::TexturedMesh { vertices, mode, .. } => {
-                    if *mode == MeshMode::Triangles {
-                        tmesh += vertices.len();
-                        if !vertices.is_empty() {
-                            tmesh_inst += 1;
-                        }
-                    }
-                }
-            }
-        }
-        (inst, mesh, tmesh, tmesh_inst)
-    };
+    let needed_instances = state.prep.sprite_instances.len();
+    let needed_mesh_vertices = state.prep.mesh_vertices.len();
+    let needed_tmesh_vertices = state.prep.tmesh_vertices.len();
+    let needed_tmesh_instances = state.prep.tmesh_instances.len();
 
     let base_first_instance = if needed_instances > 0 {
         Some(ensure_instance_ring_capacity(state, needed_instances)?)
@@ -1450,39 +1487,6 @@ pub fn draw(
         None
     };
 
-    struct SpriteRun {
-        set: vk::DescriptorSet,
-        start: u32,
-        count: u32,
-        camera: u8,
-    }
-    struct MeshDraw {
-        start: u32,
-        count: u32,
-        camera: u8,
-    }
-    struct TexturedMeshDraw {
-        set: vk::DescriptorSet,
-        vertex_start: u32,
-        vertex_count: u32,
-        geom_key: u64,
-        instance_start: u32,
-        instance_count: u32,
-        camera: u8,
-    }
-
-    enum Op {
-        Sprite(SpriteRun),
-        Mesh(MeshDraw),
-        TexturedMesh(TexturedMeshDraw),
-    }
-
-    let mut ops: Vec<Op> = Vec::with_capacity(render_list.objects.len());
-    let mut sprite_written: u32 = 0;
-    let mut mesh_written: u32 = 0;
-    let mut tmesh_written: u32 = 0;
-    let mut tmesh_instance_written: u32 = 0;
-
     // SAFETY: We wait on the current frame fence before reusing its command buffer or writing into
     // this frame's ring-buffer slice, so the GPU is done reading prior submissions. All Vulkan
     // handles referenced below are owned by `state` and remain alive through submission/present,
@@ -1498,6 +1502,8 @@ pub fn draw(
         stats.gpu_wait_us = stats
             .gpu_wait_us
             .saturating_add(elapsed_us_since(wait_started));
+        retire_submitted_texture_uploads(state, state.current_frame);
+        submit_pending_texture_uploads(state, state.current_frame)?;
 
         let acquire_started = Instant::now();
         let (image_index, acquired_suboptimal) = match state
@@ -1554,187 +1560,65 @@ pub fn draw(
         let tmesh_instance_base_ptr = base_first_tmesh_instance.map_or(std::ptr::null_mut(), |b| {
             state.tmesh_instance_ring_ptr.add(b as usize)
         });
-        let tmesh_geom = &mut state.scratch_tmesh_geom;
-        tmesh_geom.clear();
-        if tmesh_geom.capacity() < needed_tmesh_instances {
-            tmesh_geom.reserve(needed_tmesh_instances - tmesh_geom.capacity());
+        if needed_instances > 0 {
+            debug_assert!(!inst_base_ptr.is_null(), "instance ring missing");
+            for (ix, inst) in state.prep.sprite_instances.iter().enumerate() {
+                std::ptr::write(
+                    inst_base_ptr.add(ix),
+                    InstanceData {
+                        center: inst.center,
+                        size: inst.size,
+                        rot_sin_cos: inst.rot_sin_cos,
+                        tint: inst.tint,
+                        uv_scale: inst.uv_scale,
+                        uv_offset: inst.uv_offset,
+                        local_offset: inst.local_offset,
+                        local_offset_rot_sin_cos: inst.local_offset_rot_sin_cos,
+                        edge_fade: inst.edge_fade,
+                    },
+                );
+            }
         }
-
-        for obj in &render_list.objects {
-            match &obj.object_type {
-                ObjectType::Sprite {
-                    tint,
-                    uv_scale,
-                    uv_offset,
-                    local_offset,
-                    local_offset_rot_sin_cos,
-                    edge_fade,
-                    ..
-                } => {
-                    let set_opt = textures.get(&obj.texture_handle).and_then(|t| {
-                        if let RendererTexture::Vulkan(tex) = t {
-                            Some(tex.descriptor_set)
-                        } else {
-                            None
-                        }
-                    });
-                    let Some(set) = set_opt else {
-                        continue;
-                    };
-
-                    debug_assert!(!inst_base_ptr.is_null(), "instance ring missing");
-                    let model: [[f32; 4]; 4] = obj.transform.into();
-                    let (center, size, sincos) = decompose_2d(model);
-                    std::ptr::write(
-                        inst_base_ptr.add(sprite_written as usize),
-                        InstanceData {
-                            center,
-                            size,
-                            rot_sin_cos: sincos,
-                            tint: *tint,
-                            uv_scale: *uv_scale,
-                            uv_offset: *uv_offset,
-                            local_offset: *local_offset,
-                            local_offset_rot_sin_cos: *local_offset_rot_sin_cos,
-                            edge_fade: *edge_fade,
-                        },
-                    );
-
-                    if let Some(Op::Sprite(run)) = ops.last_mut()
-                        && run.set == set
-                        && run.camera == obj.camera
-                    {
-                        run.count += 1;
-                    } else {
-                        ops.push(Op::Sprite(SpriteRun {
-                            set,
-                            start: sprite_written,
-                            count: 1,
-                            camera: obj.camera,
-                        }));
-                    }
-                    sprite_written += 1;
-                }
-                ObjectType::Mesh { vertices, mode } => {
-                    if *mode != MeshMode::Triangles {
-                        continue;
-                    }
-                    if vertices.is_empty() {
-                        continue;
-                    }
-                    debug_assert!(!mesh_base_ptr.is_null(), "mesh ring missing");
-
-                    let start = mesh_written;
-                    for v in vertices.iter() {
-                        let p = obj.transform * Vector4::new(v.pos[0], v.pos[1], 0.0, 1.0);
-                        std::ptr::write(
-                            mesh_base_ptr.add(mesh_written as usize),
-                            MeshVertex {
-                                pos: [p.x, p.y],
-                                color: v.color,
-                            },
-                        );
-                        mesh_written += 1;
-                    }
-                    ops.push(Op::Mesh(MeshDraw {
-                        start,
-                        count: mesh_written - start,
-                        camera: obj.camera,
-                    }));
-                }
-                ObjectType::TexturedMesh {
-                    vertices,
-                    mode,
-                    uv_scale,
-                    uv_offset,
-                    uv_tex_shift,
-                    ..
-                } => {
-                    if *mode != MeshMode::Triangles || vertices.is_empty() {
-                        continue;
-                    }
-                    let set_opt = textures.get(&obj.texture_handle).and_then(|t| {
-                        if let RendererTexture::Vulkan(tex) = t {
-                            Some(tex.descriptor_set_repeat)
-                        } else {
-                            None
-                        }
-                    });
-                    let Some(set) = set_opt else {
-                        continue;
-                    };
-
-                    debug_assert!(
-                        !tmesh_instance_base_ptr.is_null(),
-                        "textured mesh instance ring missing"
-                    );
-                    let geom_key = TMeshGeomKey {
-                        ptr: vertices.as_ptr() as usize,
-                        len: vertices.len(),
-                    };
-                    let geom = if let Some(&geom) = tmesh_geom.get(&geom_key) {
-                        geom
-                    } else {
-                        debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
-                        let start = tmesh_written;
-                        for v in vertices.iter() {
-                            std::ptr::write(
-                                tmesh_base_ptr.add(tmesh_written as usize),
-                                TexturedMeshVertexGpu {
-                                    pos: v.pos,
-                                    uv: v.uv,
-                                    color: v.color,
-                                    tex_matrix_scale: v.tex_matrix_scale,
-                                },
-                            );
-                            tmesh_written += 1;
-                        }
-                        let geom = FrameTMeshGeom {
-                            vertex_start: start,
-                            vertex_count: tmesh_written - start,
-                        };
-                        tmesh_geom.insert(geom_key, geom);
-                        geom
-                    };
-                    let vertex_start = geom.vertex_start;
-                    let vertex_count = geom.vertex_count;
-                    let geom_run_key = ((vertex_start as u64) << 32) | u64::from(vertex_count);
-                    let instance_start = tmesh_instance_written;
-                    let model: [[f32; 4]; 4] = obj.transform.into();
-                    std::ptr::write(
-                        tmesh_instance_base_ptr.add(tmesh_instance_written as usize),
-                        TexturedMeshInstanceGpu {
-                            model_col0: model[0],
-                            model_col1: model[1],
-                            model_col2: model[2],
-                            model_col3: model[3],
-                            uv_scale: *uv_scale,
-                            uv_offset: *uv_offset,
-                            uv_tex_shift: *uv_tex_shift,
-                        },
-                    );
-                    tmesh_instance_written += 1;
-
-                    if let Some(Op::TexturedMesh(run)) = ops.last_mut()
-                        && run.set == set
-                        && run.camera == obj.camera
-                        && run.geom_key == geom_run_key
-                        && run.vertex_count == vertex_count
-                        && run.instance_start + run.instance_count == instance_start
-                    {
-                        run.instance_count += 1;
-                    } else {
-                        ops.push(Op::TexturedMesh(TexturedMeshDraw {
-                            set,
-                            vertex_start,
-                            vertex_count,
-                            geom_key: geom_run_key,
-                            instance_start,
-                            instance_count: 1,
-                            camera: obj.camera,
-                        }));
-                    }
-                }
+        if needed_mesh_vertices > 0 {
+            debug_assert!(!mesh_base_ptr.is_null(), "mesh ring missing");
+            std::ptr::copy_nonoverlapping(
+                state.prep.mesh_vertices.as_ptr(),
+                mesh_base_ptr,
+                needed_mesh_vertices,
+            );
+        }
+        if needed_tmesh_vertices > 0 {
+            debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
+            for (ix, vertex) in state.prep.tmesh_vertices.iter().enumerate() {
+                std::ptr::write(
+                    tmesh_base_ptr.add(ix),
+                    TexturedMeshVertexGpu {
+                        pos: vertex.pos,
+                        uv: vertex.uv,
+                        color: vertex.color,
+                        tex_matrix_scale: vertex.tex_matrix_scale,
+                    },
+                );
+            }
+        }
+        if needed_tmesh_instances > 0 {
+            debug_assert!(
+                !tmesh_instance_base_ptr.is_null(),
+                "textured mesh instance ring missing"
+            );
+            for (ix, inst) in state.prep.tmesh_instances.iter().enumerate() {
+                std::ptr::write(
+                    tmesh_instance_base_ptr.add(ix),
+                    TexturedMeshInstanceGpu {
+                        model_col0: inst.model_col0,
+                        model_col1: inst.model_col1,
+                        model_col2: inst.model_col2,
+                        model_col3: inst.model_col3,
+                        uv_scale: inst.uv_scale,
+                        uv_offset: inst.uv_offset,
+                        uv_tex_shift: inst.uv_tex_shift,
+                    },
+                );
             }
         }
         stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
@@ -1780,11 +1664,21 @@ pub fn draw(
         let mut bound = Bound::None;
         let mut last_set = vk::DescriptorSet::null();
         let mut last_camera: Option<u8> = None;
-        let mut last_tmesh_geom_key: Option<u64> = None;
+        let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut vertices_drawn: u32 = 0;
-        for op in ops {
+        for op in &state.prep.ops {
             match op {
-                Op::Sprite(run) => {
+                DrawOp::Sprite(run) => {
+                    let set_opt = textures.get(&run.texture_handle).and_then(|t| {
+                        if let RendererTexture::Vulkan(tex) = t {
+                            Some(tex.descriptor_set)
+                        } else {
+                            None
+                        }
+                    });
+                    let Some(set) = set_opt else {
+                        continue;
+                    };
                     if !matches!(bound, Bound::Sprite) {
                         device.cmd_bind_pipeline(
                             cmd,
@@ -1799,7 +1693,7 @@ pub fn draw(
                         bound = Bound::Sprite;
                         last_set = vk::DescriptorSet::null();
                         last_camera = None;
-                        last_tmesh_geom_key = None;
+                        last_tmesh_source = None;
                     }
 
                     if last_camera != Some(run.camera) {
@@ -1819,23 +1713,23 @@ pub fn draw(
                         last_camera = Some(run.camera);
                     }
 
-                    if last_set != run.set {
+                    if last_set != set {
                         device.cmd_bind_descriptor_sets(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
                             state.sprite_pipeline_layout,
                             0,
-                            &[run.set],
+                            &[set],
                             &[],
                         );
-                        last_set = run.set;
+                        last_set = set;
                     }
 
-                    let first_instance = base_first_instance.unwrap_or(0) + run.start;
-                    device.cmd_draw_indexed(cmd, 6, run.count, 0, 0, first_instance);
-                    vertices_drawn = vertices_drawn.saturating_add(4 * run.count);
+                    let first_instance = base_first_instance.unwrap_or(0) + run.instance_start;
+                    device.cmd_draw_indexed(cmd, 6, run.instance_count, 0, 0, first_instance);
+                    vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
                 }
-                Op::Mesh(draw) => {
+                DrawOp::Mesh(draw) => {
                     if !matches!(bound, Bound::Mesh) {
                         device.cmd_bind_pipeline(
                             cmd,
@@ -1846,7 +1740,7 @@ pub fn draw(
                         device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
                         bound = Bound::Mesh;
                         last_camera = None;
-                        last_tmesh_geom_key = None;
+                        last_tmesh_source = None;
                     }
 
                     if last_camera != Some(draw.camera) {
@@ -1866,11 +1760,21 @@ pub fn draw(
                         last_camera = Some(draw.camera);
                     }
 
-                    let first_vertex = base_first_vertex.unwrap_or(0) + draw.start;
-                    device.cmd_draw(cmd, draw.count, 1, first_vertex, 0);
-                    vertices_drawn = vertices_drawn.saturating_add(draw.count);
+                    let first_vertex = base_first_vertex.unwrap_or(0) + draw.vertex_start;
+                    device.cmd_draw(cmd, draw.vertex_count, 1, first_vertex, 0);
+                    vertices_drawn = vertices_drawn.saturating_add(draw.vertex_count);
                 }
-                Op::TexturedMesh(draw) => {
+                DrawOp::TexturedMesh(draw) => {
+                    let set_opt = textures.get(&draw.texture_handle).and_then(|t| {
+                        if let RendererTexture::Vulkan(tex) = t {
+                            Some(tex.descriptor_set_repeat)
+                        } else {
+                            None
+                        }
+                    });
+                    let Some(set) = set_opt else {
+                        continue;
+                    };
                     if !matches!(bound, Bound::TexturedMesh) {
                         device.cmd_bind_pipeline(
                             cmd,
@@ -1882,15 +1786,27 @@ pub fn draw(
                         bound = Bound::TexturedMesh;
                         last_set = vk::DescriptorSet::null();
                         last_camera = None;
-                        last_tmesh_geom_key = None;
+                        last_tmesh_source = None;
                     }
 
-                    if last_tmesh_geom_key != Some(draw.geom_key) {
-                        let Some(vb) = state.tmesh_ring.as_ref().map(|ring| ring.buffer) else {
-                            continue;
+                    if last_tmesh_source != Some(draw.source) {
+                        let vb = match draw.source {
+                            TexturedMeshSource::Transient { .. } => {
+                                let Some(vb) = state.tmesh_ring.as_ref().map(|ring| ring.buffer)
+                                else {
+                                    continue;
+                                };
+                                vb
+                            }
+                            TexturedMeshSource::Cached { cache_key, .. } => {
+                                let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                                    continue;
+                                };
+                                entry.buffer.buffer
+                            }
                         };
                         device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
-                        last_tmesh_geom_key = Some(draw.geom_key);
+                        last_tmesh_source = Some(draw.source);
                     }
 
                     if last_camera != Some(draw.camera) {
@@ -1910,29 +1826,34 @@ pub fn draw(
                         last_camera = Some(draw.camera);
                     }
 
-                    if last_set != draw.set {
+                    if last_set != set {
                         device.cmd_bind_descriptor_sets(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
                             state.textured_mesh_pipeline_layout,
                             0,
-                            &[draw.set],
+                            &[set],
                             &[],
                         );
-                        last_set = draw.set;
+                        last_set = set;
                     }
 
-                    let first_vertex = base_first_tmesh_vertex.unwrap_or(0) + draw.vertex_start;
+                    let first_vertex = match draw.source {
+                        TexturedMeshSource::Transient { vertex_start, .. } => {
+                            base_first_tmesh_vertex.unwrap_or(0) + vertex_start
+                        }
+                        TexturedMeshSource::Cached { .. } => 0,
+                    };
                     let first_instance =
                         base_first_tmesh_instance.unwrap_or(0) + draw.instance_start;
                     device.cmd_draw(
                         cmd,
-                        draw.vertex_count,
+                        draw.source.vertex_count(),
                         draw.instance_count,
                         first_vertex,
                         first_instance,
                     );
-                    let tri_count = draw.vertex_count / 3;
+                    let tri_count = draw.source.vertex_count() / 3;
                     vertices_drawn = vertices_drawn
                         .saturating_add(tri_count.saturating_mul(draw.instance_count));
                 }
@@ -2169,8 +2090,8 @@ pub fn draw(
 
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up Vulkan resources...");
-    if let Err(e) = flush_pending_texture_uploads(state) {
-        error!("Failed to flush pending texture uploads during cleanup: {e}");
+    if let Err(e) = submit_pending_texture_uploads(state, state.current_frame) {
+        error!("Failed to submit pending texture uploads during cleanup: {e}");
     }
     // SAFETY: If a logical device still exists, waiting for idle guarantees no in-flight work
     // still references resources we are about to destroy below.
@@ -2179,6 +2100,7 @@ pub fn cleanup(state: &mut State) {
             let _ = device.device_wait_idle();
         }
     }
+    retire_all_submitted_texture_uploads(state);
 
     // SAFETY: The device is idle, so it is valid to tear down swapchain resources, mapped rings,
     // pipelines, descriptor pools/layouts, the device, and finally the instance-owned objects.
@@ -2242,6 +2164,10 @@ pub fn cleanup(state: &mut State) {
             }
             destroy_buffer(state.device.as_ref().unwrap(), &ring);
         }
+        for geom in state.cached_tmesh.drain().map(|(_, geom)| geom) {
+            destroy_buffer(state.device.as_ref().unwrap(), &geom.buffer);
+        }
+        state.cached_tmesh_bytes = 0;
         for sampler in state.sampler_cache.values() {
             state
                 .device
@@ -2906,6 +2832,66 @@ fn destroy_buffer(device: &Device, buffer: &BufferResource) {
         device.destroy_buffer(buffer.buffer, None);
         device.free_memory(buffer.memory, None);
     }
+}
+
+fn ensure_cached_tmesh(
+    instance: &Instance,
+    device: &Device,
+    pdevice: vk::PhysicalDevice,
+    cached_tmesh: &mut HashMap<TMeshCacheKey, CachedTMeshGeom>,
+    cached_tmesh_bytes: &mut usize,
+    cache_key: TMeshCacheKey,
+    vertices: &[crate::engine::gfx::TexturedMeshVertex],
+) -> Result<bool, Box<dyn Error>> {
+    if let Some(entry) = cached_tmesh.get(&cache_key) {
+        return Ok(entry.vertex_count == vertices.len() as u32);
+    }
+
+    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertexGpu>();
+    if bytes > VULKAN_TMESH_CACHE_MAX_BYTES
+        || cached_tmesh_bytes.saturating_add(bytes) > VULKAN_TMESH_CACHE_MAX_BYTES
+    {
+        return Ok(false);
+    }
+
+    let size = bytes as vk::DeviceSize;
+    let (buffer, memory) = create_gpu_buffer(
+        instance,
+        device,
+        pdevice,
+        size,
+        vk::BufferUsageFlags::VERTEX_BUFFER,
+        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+    )?;
+
+    // SAFETY: `memory` is a HOST_VISIBLE allocation created on this device and the
+    // mapped range is fully written with initialized vertex data before unmapping.
+    unsafe {
+        let mapped = device.map_memory(memory, 0, size, vk::MemoryMapFlags::empty())?;
+        let dst = mapped.cast::<TexturedMeshVertexGpu>();
+        for (ix, vertex) in vertices.iter().enumerate() {
+            std::ptr::write(
+                dst.add(ix),
+                TexturedMeshVertexGpu {
+                    pos: vertex.pos,
+                    uv: vertex.uv,
+                    color: vertex.color,
+                    tex_matrix_scale: vertex.tex_matrix_scale,
+                },
+            );
+        }
+        device.unmap_memory(memory);
+    }
+
+    cached_tmesh.insert(
+        cache_key,
+        CachedTMeshGeom {
+            buffer: BufferResource { buffer, memory },
+            vertex_count: vertices.len() as u32,
+        },
+    );
+    *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
+    Ok(true)
 }
 
 fn find_memory_type(

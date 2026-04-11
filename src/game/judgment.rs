@@ -205,9 +205,9 @@ struct ExScoreCounts {
 
 fn compute_ex_score_counts(
     notes: &[Note],
-    note_times: &[f32],
-    hold_end_times: &[Option<f32>],
-    fail_time: Option<f32>,
+    note_times_ns: &[i64],
+    hold_end_times_ns: &[Option<i64>],
+    fail_time_ns: Option<i64>,
 ) -> ExScoreCounts {
     let mut windows = WindowCounts::default();
     let mut w010: u32 = 0;
@@ -217,9 +217,9 @@ fn compute_ex_score_counts(
     while idx < len {
         let row_index = notes[idx].row_index;
 
-        let row_time = note_times.get(idx).copied().unwrap_or(0.0);
-        let row_is_playable = match fail_time {
-            Some(t) => row_time <= t,
+        let row_time_ns = note_times_ns.get(idx).copied().unwrap_or(0);
+        let row_is_playable = match fail_time_ns {
+            Some(t) => row_time_ns <= t,
             None => true,
         };
 
@@ -271,11 +271,11 @@ fn compute_ex_score_counts(
             continue;
         }
 
-        if let Some(ft) = fail_time {
+        if let Some(ft) = fail_time_ns {
             let relevant_time = if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
-                hold_end_times.get(i).and_then(|t| *t).unwrap_or(0.0)
+                hold_end_times_ns.get(i).and_then(|t| *t).unwrap_or(0)
             } else {
-                note_times.get(i).copied().unwrap_or(0.0)
+                note_times_ns.get(i).copied().unwrap_or(0)
             };
             if relevant_time > ft {
                 continue;
@@ -441,16 +441,16 @@ pub fn predictive_hard_ex_score_percents(data: &ExScoreData) -> (f64, f64, f64) 
 /// has failed the song.
 pub fn calculate_ex_score_from_notes(
     notes: &[Note],
-    note_times: &[f32],
-    hold_end_times: &[Option<f32>],
+    note_times_ns: &[i64],
+    hold_end_times_ns: &[Option<i64>],
     total_steps: u32,
     holds_total: u32,
     rolls_total: u32,
     mines_total: u32,
-    fail_time: Option<f32>,
+    fail_time_ns: Option<i64>,
     _mines_disabled: bool,
 ) -> f64 {
-    let counts = compute_ex_score_counts(notes, note_times, hold_end_times, fail_time);
+    let counts = compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns);
     ex_score_percent(&ExScoreData {
         counts: counts.windows,
         counts_10ms: WindowCounts::default(),
@@ -468,16 +468,16 @@ pub fn calculate_ex_score_from_notes(
 
 pub fn calculate_hard_ex_score_from_notes(
     notes: &[Note],
-    note_times: &[f32],
-    hold_end_times: &[Option<f32>],
+    note_times_ns: &[i64],
+    hold_end_times_ns: &[Option<i64>],
     total_steps: u32,
     holds_total: u32,
     rolls_total: u32,
     mines_total: u32,
-    fail_time: Option<f32>,
+    fail_time_ns: Option<i64>,
     _mines_disabled: bool,
 ) -> f64 {
-    let counts = compute_ex_score_counts(notes, note_times, hold_end_times, fail_time);
+    let counts = compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns);
     hard_ex_score_percent(&ExScoreData {
         counts: counts.windows,
         counts_10ms: WindowCounts {
@@ -751,7 +751,7 @@ mod tests {
             notes.push(make_mine(row_index.saturating_add(i as usize)));
         }
 
-        let note_times = vec![0.0_f32; notes.len()];
+        let note_times = vec![0_i64; notes.len()];
         let hold_end_times = vec![None; notes.len()];
         let ex = calculate_ex_score_from_notes(
             &notes,
@@ -843,7 +843,7 @@ mod tests {
             notes.push(make_mine(row_index.saturating_add(i as usize)));
         }
 
-        let note_times = vec![0.0_f32; notes.len()];
+        let note_times = vec![0_i64; notes.len()];
         let hold_end_times = vec![None; notes.len()];
         let ex = calculate_ex_score_from_notes(
             &notes,
@@ -912,7 +912,7 @@ mod tests {
             ));
         }
 
-        let note_times = vec![0.0_f32; notes.len()];
+        let note_times = vec![0_i64; notes.len()];
         let hold_end_times = vec![None; notes.len()];
         let ex = calculate_ex_score_from_notes(
             &notes,
@@ -980,7 +980,7 @@ mod tests {
             notes.push(make_mine(row_index.saturating_add(i as usize)));
         }
 
-        let note_times = vec![0.0_f32; notes.len()];
+        let note_times = vec![0_i64; notes.len()];
         let hold_end_times = vec![None; notes.len()];
         let hard_ex = calculate_hard_ex_score_from_notes(
             &notes,

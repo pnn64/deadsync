@@ -12,7 +12,7 @@ use self::input_routing::{GameplayQueuedEvent, gameplay_raw_key_event};
 use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
-use crate::assets::AssetManager;
+use crate::assets::{AssetManager, TextureUploadBudget};
 use crate::config::{self, DisplayMode, dirs};
 use crate::engine::display;
 use crate::engine::gfx::{
@@ -95,6 +95,8 @@ const GAMEPLAY_EVENT_TRACE_INTERVAL: Duration = Duration::from_secs(1);
 const GAMEPLAY_EVENT_BATCH_SLOW_US: u32 = 1_000;
 const GAMEPLAY_EVENT_BATCH_BURST_KEYS: u32 = 8;
 const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 131_072;
+const LIVE_TEXTURE_UPLOAD_MAX_OPS: usize = 2;
+const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 const STUTTER_DIAG_DUMP_WINDOW_NS: u64 = 500_000_000;
 const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
 const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
@@ -1611,6 +1613,7 @@ fn prewarm_gameplay_assets(
     }
 
     let mut seen = HashSet::<String>::with_capacity(256);
+    let mut seen_song_lua_fonts = HashSet::<&'static str>::with_capacity(8);
     for noteskin in state.noteskin.iter().flatten() {
         noteskin.for_each_texture_key(|key| {
             if seen.insert(key.to_owned()) {
@@ -1655,37 +1658,53 @@ fn prewarm_gameplay_assets(
         }
     }
     for overlay in &state.song_lua_overlays {
-        let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } =
-            &overlay.kind
-        else {
-            continue;
-        };
-        let key = texture_path.to_string_lossy().into_owned();
-        if seen.insert(key.clone()) {
-            if song_lua_overlay_uses_repeat_sampler(overlay) {
-                match media_cache::load_banner_source_rgba(texture_path) {
-                    Ok(rgba) => {
-                        let sampler = SamplerDesc {
-                            wrap: SamplerWrap::Repeat,
-                            ..SamplerDesc::default()
-                        };
-                        if let Err(e) = assets
-                            .update_texture_for_key_with_sampler(backend, &key, &rgba, sampler)
-                        {
-                            warn!(
-                                "Failed to create repeating GPU texture for image {texture_path:?}: {e}. Skipping."
-                            );
+        match &overlay.kind {
+            crate::game::parsing::song_lua::SongLuaOverlayKind::BitmapText {
+                font_name,
+                font_path,
+                ..
+            } => {
+                if seen_song_lua_fonts.insert(*font_name)
+                    && assets.with_font(font_name, |_| ()).is_none()
+                    && let Err(err) = assets.load_font_from_ini_path(backend, *font_name, font_path)
+                {
+                    warn!(
+                        "Failed to load song lua bitmap font '{}': {}",
+                        font_path.display(),
+                        err
+                    );
+                }
+            }
+            crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite { texture_path } => {
+                let key = texture_path.to_string_lossy().into_owned();
+                if seen.insert(key.clone()) {
+                    if song_lua_overlay_uses_repeat_sampler(overlay) {
+                        match media_cache::load_banner_source_rgba(texture_path) {
+                            Ok(rgba) => {
+                                let sampler = SamplerDesc {
+                                    wrap: SamplerWrap::Repeat,
+                                    ..SamplerDesc::default()
+                                };
+                                if let Err(e) = assets.update_texture_for_key_with_sampler(
+                                    backend, &key, &rgba, sampler,
+                                ) {
+                                    warn!(
+                                        "Failed to create repeating GPU texture for image {texture_path:?}: {e}. Skipping."
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
+                                );
+                            }
                         }
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to load song lua texture source {texture_path:?}: {e}. Skipping."
-                        );
+                    } else {
+                        media_cache::ensure_banner_texture(assets, backend, texture_path);
                     }
                 }
-            } else {
-                media_cache::ensure_banner_texture(assets, backend, texture_path);
             }
+            _ => {}
         }
     }
     crate::engine::audio::preload_sfx("assets/sounds/boom.ogg");
@@ -2555,21 +2574,24 @@ impl App {
         let active_banner_video_paths = self.active_banner_video_paths();
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
-            let gameplay_time = self
-                .state
-                .screens
-                .gameplay_state
-                .as_ref()
-                .map(|state| state.current_music_time);
+            let gameplay_time = self.state.screens.gameplay_state.as_ref().map(|state| {
+                crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
+            });
             self.dynamic_media.sync_active_banner_videos(
                 &mut self.asset_manager,
                 backend,
                 &active_banner_video_paths,
             );
             self.dynamic_media
-                .update_video_frames(&mut self.asset_manager, backend, gameplay_time);
-            self.asset_manager
-                .upload_pending_generated_textures(backend);
+                .queue_video_frames(&mut self.asset_manager, gameplay_time);
+            self.asset_manager.queue_pending_generated_textures();
+            self.asset_manager.drain_texture_uploads(
+                backend,
+                TextureUploadBudget {
+                    max_uploads: LIVE_TEXTURE_UPLOAD_MAX_OPS,
+                    max_bytes: LIVE_TEXTURE_UPLOAD_MAX_BYTES,
+                },
+            );
             upload_us = elapsed_us_since(upload_started);
         }
         let fonts = self.asset_manager.fonts();
@@ -3776,28 +3798,46 @@ impl App {
         if self.state.screens.current_screen != CurrentScreen::Gameplay {
             return;
         }
-        let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
-            return;
-        };
-        let Some(next_change) = gs.song.background_changes.get(gs.next_background_change_ix) else {
-            return;
-        };
-        if gs.current_beat < next_change.start_beat {
-            return;
-        }
-        while let Some(change) = gs.song.background_changes.get(gs.next_background_change_ix) {
-            if gs.current_beat < change.start_beat {
-                break;
-            }
-            gs.next_background_change_ix += 1;
-        }
         let show_video_backgrounds = config::get().show_video_backgrounds;
-        let path_opt = gs
-            .song
-            .gameplay_background_path(gs.current_beat, show_video_backgrounds)
-            .cloned();
-        if path_opt != gs.current_background_path {
-            self.apply_dynamic_background(path_opt);
+        let desired_path = {
+            let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
+                return;
+            };
+            if let Some(next_change) = gs.song.background_changes.get(gs.next_background_change_ix)
+            {
+                if gs.current_beat >= next_change.start_beat {
+                    while let Some(change) =
+                        gs.song.background_changes.get(gs.next_background_change_ix)
+                    {
+                        if gs.current_beat < change.start_beat {
+                            break;
+                        }
+                        gs.next_background_change_ix += 1;
+                    }
+                }
+            }
+            let desired = gs
+                .song
+                .gameplay_background_path(gs.current_beat, show_video_backgrounds)
+                .cloned();
+            if desired != gs.current_background_path {
+                gs.current_background_path = desired.clone();
+            }
+            desired
+        };
+
+        let next_key = self.backend.as_mut().and_then(|backend| {
+            self.dynamic_media.sync_gameplay_background(
+                &mut self.asset_manager,
+                backend,
+                desired_path.as_deref(),
+                show_video_backgrounds,
+            )
+        });
+        if let Some(key) = next_key
+            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
+        {
+            gs.background_texture_key = key;
         }
     }
 
@@ -5085,10 +5125,7 @@ impl App {
         use winit::event::ElementState;
         use winit::keyboard::PhysicalKey;
 
-        if input::unix_raw_keyboard_backend_active()
-            || !self.accepts_live_input()
-            || self.state.screens.current_screen == CurrentScreen::Init
-        {
+        if input::unix_raw_keyboard_backend_active() || !self.accepts_live_input() {
             return;
         }
         let PhysicalKey::Code(code) = key_event.physical_key else {
@@ -5111,7 +5148,7 @@ impl App {
     #[inline(always)]
     fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
         let is_transitioning = !matches!(self.state.shell.transition, TransitionState::Idle);
-        if is_transitioning || self.state.screens.current_screen == CurrentScreen::Init {
+        if is_transitioning {
             input::clear_debounce_state();
             self.clear_gameplay_input_events();
             return;
@@ -5597,14 +5634,13 @@ impl App {
                         lane_index: e.lane_index,
                         pressed: e.pressed,
                         source: e.source,
-                        event_music_time: e.event_music_time,
-                        event_music_time_ns: i64::MIN,
+                        event_music_time_ns: e.event_music_time_ns,
                     })
                     .collect::<Vec<_>>()
             });
             let replay_offsets = replay_pending.as_ref().map(|payload| {
                 crate::game::gameplay::ReplayOffsetSnapshot {
-                    beat0_time_seconds: payload.replay_beat0_time_seconds,
+                    beat0_time_ns: payload.replay_beat0_time_ns,
                 }
             });
             let replay_status_text = replay_pending.as_ref().map(|payload| {

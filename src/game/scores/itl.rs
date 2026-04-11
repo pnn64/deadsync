@@ -409,13 +409,15 @@ pub fn save_itl_data_from_gameplay(
         let (start, end) = gs.note_ranges[player_idx];
         let ex_percent = judgment::calculate_ex_score_from_notes(
             &gs.notes[start..end],
-            &gs.note_time_cache[start..end],
-            &gs.hold_end_time_cache[start..end],
+            &gs.note_time_cache_ns[start..end],
+            &gs.hold_end_time_cache_ns[start..end],
             gs.total_steps[player_idx],
             gs.holds_total[player_idx],
             gs.rolls_total[player_idx],
             gs.mines_total[player_idx],
-            gs.players[player_idx].fail_time,
+            gs.players[player_idx]
+                .fail_time
+                .map(gameplay::song_time_ns_from_seconds),
             false,
         );
         let current_run_ex = ex_hundredths(ex_percent);
@@ -532,13 +534,15 @@ pub(super) fn current_score_hundredths(gs: &gameplay::State, player_idx: usize) 
     let (start, end) = gs.note_ranges[player_idx];
     let ex_percent = judgment::calculate_ex_score_from_notes(
         &gs.notes[start..end],
-        &gs.note_time_cache[start..end],
-        &gs.hold_end_time_cache[start..end],
+        &gs.note_time_cache_ns[start..end],
+        &gs.hold_end_time_cache_ns[start..end],
         gs.total_steps[player_idx],
         gs.holds_total[player_idx],
         gs.rolls_total[player_idx],
         gs.mines_total[player_idx],
-        gs.players[player_idx].fail_time,
+        gs.players[player_idx]
+            .fail_time
+            .map(gameplay::song_time_ns_from_seconds),
         false,
     );
     ex_hundredths(ex_percent)

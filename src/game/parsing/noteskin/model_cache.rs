@@ -1,7 +1,7 @@
 use super::{ModelDrawState, SpriteSlot};
-use crate::engine::gfx::TexturedMeshVertex;
+use crate::engine::gfx::{TMeshCacheKey, TexturedMeshVertex};
 use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
+use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::sync::Arc;
 use twox_hash::XxHash64;
 
@@ -46,19 +46,20 @@ impl ModelMeshCache {
         draw: ModelDrawState,
         tint: [f32; 4],
         build: F,
-    ) -> Arc<[TexturedMeshVertex]>
+    ) -> (TMeshCacheKey, Arc<[TexturedMeshVertex]>)
     where
         F: FnOnce() -> Arc<[TexturedMeshVertex]>,
     {
         let key = model_cache_key(slot, size, rotation_deg, draw, tint);
+        let geom_cache_key = hashed_model_cache_key(&key);
         if let Some(vertices) = self.entries.get(&key) {
-            return vertices.clone();
+            return (geom_cache_key, vertices.clone());
         }
         let vertices = build();
         if self.entries.len() < MODEL_MESH_CACHE_LIMIT {
             self.entries.insert(key, vertices.clone());
         }
-        vertices
+        (geom_cache_key, vertices)
     }
 }
 
@@ -106,4 +107,11 @@ fn model_cache_key(
             norm_bits(tint[3]),
         ],
     }
+}
+
+#[inline(always)]
+fn hashed_model_cache_key(key: &ModelMeshCacheKey) -> TMeshCacheKey {
+    let mut hasher = XxHash64::default();
+    key.hash(&mut hasher);
+    hasher.finish().max(1)
 }

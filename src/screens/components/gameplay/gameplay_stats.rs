@@ -301,11 +301,11 @@ pub fn prewarm_text_layout(
             cache.prewarm_text(fonts, "wendy_screenevaluation", bright.as_ref(), None);
         }
     }
-    let end_seconds = state
-        .music_end_time
-        .max(state.notes_end_time)
-        .ceil()
-        .max(0.0) as u32;
+    let end_seconds = crate::game::gameplay::song_time_ns_to_seconds(
+        state.music_end_time_ns.max(state.notes_end_time_ns),
+    )
+    .ceil()
+    .max(0.0) as u32;
     let mode = game_time_mode(end_seconds as f32);
     for second in 0..=end_seconds.min(TIME_PREWARM_CAP_S) {
         let key = (second, mode);

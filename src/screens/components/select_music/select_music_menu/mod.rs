@@ -107,37 +107,37 @@ pub const ITEM_SORT_BY_GENRE: Item = Item {
 };
 pub const ITEM_SORT_BY_TOP_GRADES: Item = Item {
     top_label: "Sort By",
-    bottom_label: "Top Grades",
+    bottom_label: "Machine Top Scores",
     action: Action::SortByTopGrades,
 };
 pub const ITEM_SORT_BY_POPULARITY_P1: Item = Item {
-    top_label: "Popularity",
-    bottom_label: "P1",
+    top_label: "Sort By",
+    bottom_label: "P1 Most Played",
     action: Action::SortByPopularityP1,
 };
 pub const ITEM_SORT_BY_POPULARITY_P2: Item = Item {
-    top_label: "Popularity",
-    bottom_label: "P2",
+    top_label: "Sort By",
+    bottom_label: "P2 Most Played",
     action: Action::SortByPopularityP2,
 };
 pub const ITEM_SORT_BY_RECENT_P1: Item = Item {
-    top_label: "Recent",
-    bottom_label: "P1",
+    top_label: "Sort By",
+    bottom_label: "P1 Recent Songs",
     action: Action::SortByRecentP1,
 };
 pub const ITEM_SORT_BY_RECENT_P2: Item = Item {
-    top_label: "Recent",
-    bottom_label: "P2",
+    top_label: "Sort By",
+    bottom_label: "P2 Recent Songs",
     action: Action::SortByRecentP2,
 };
 pub const ITEM_SORT_BY_TOP_GRADES_P1: Item = Item {
-    top_label: "Top Grades",
-    bottom_label: "P1",
+    top_label: "Sort By",
+    bottom_label: "P1 Clear Rank",
     action: Action::SortByTopGradesP1,
 };
 pub const ITEM_SORT_BY_TOP_GRADES_P2: Item = Item {
-    top_label: "Top Grades",
-    bottom_label: "P2",
+    top_label: "Sort By",
+    bottom_label: "P2 Clear Rank",
     action: Action::SortByTopGradesP2,
 };
 pub const ITEM_SWITCH_TO_SINGLE: Item = Item {
