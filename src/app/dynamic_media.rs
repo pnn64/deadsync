@@ -668,6 +668,10 @@ impl DynamicMedia {
                 .as_ref()
                 .is_some_and(|state| state.key == key)
             || self
+                .queued_gameplay_background
+                .as_ref()
+                .is_some_and(|state| state.key == key)
+            || self
                 .current_profile_avatars
                 .iter()
                 .flatten()
@@ -1026,6 +1030,25 @@ mod tests {
         let key = "avatar.png".to_string();
         media.current_profile_avatars[0] = Some((key.clone(), PathBuf::from(&key)));
         assert!(media.texture_key_in_use(&key));
+    }
+
+    #[test]
+    fn queued_gameplay_background_counts_as_dynamic_texture_owner() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let key = "queued-bg.mp4".to_string();
+
+        assets.reserve_texture_handle(key.clone());
+        media.queued_gameplay_background = Some(DynamicBackgroundState {
+            key: key.clone(),
+            path: PathBuf::from(&key),
+            video: None,
+        });
+
+        let removed = media.take_releasable_texture(&mut assets, &key);
+
+        assert!(removed.is_none());
+        assert!(assets.has_texture_key(&key));
     }
 
     #[test]
