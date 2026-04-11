@@ -5,12 +5,34 @@ use crate::engine::{
     video,
 };
 use crate::game::profile;
+use image::RgbaImage;
 use log::warn;
-use std::{collections::HashMap, path::PathBuf, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+    sync::mpsc,
+    thread,
+    time::Instant,
+};
 
 struct DynamicVideoState {
     player: video::Player,
     started_at: Instant,
+}
+
+struct PreparedBannerVideo {
+    key: String,
+    poster: RgbaImage,
+    player: video::Player,
+}
+
+enum BannerVideoPrepResult {
+    Ready(PreparedBannerVideo),
+    Failed {
+        key: String,
+        path: PathBuf,
+        msg: String,
+    },
 }
 
 struct DynamicBannerState {
@@ -27,6 +49,9 @@ struct DynamicBackgroundState {
 pub(crate) struct DynamicMedia {
     current_dynamic_banner: Option<DynamicBannerState>,
     active_banner_videos: HashMap<String, DynamicVideoState>,
+    pending_banner_video_preps: HashSet<String>,
+    banner_video_prep_tx: mpsc::Sender<BannerVideoPrepResult>,
+    banner_video_prep_rx: mpsc::Receiver<BannerVideoPrepResult>,
     current_dynamic_cdtitle: Option<(String, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
@@ -36,9 +61,13 @@ pub(crate) struct DynamicMedia {
 
 impl DynamicMedia {
     pub(crate) fn new() -> Self {
+        let (banner_video_prep_tx, banner_video_prep_rx) = mpsc::channel();
         Self {
             current_dynamic_banner: None,
             active_banner_videos: HashMap::new(),
+            pending_banner_video_preps: HashSet::new(),
+            banner_video_prep_tx,
+            banner_video_prep_rx,
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: std::collections::HashSet::new(),
@@ -276,7 +305,7 @@ impl DynamicMedia {
         backend: &mut Backend,
         desired_paths: &[PathBuf],
     ) {
-        let mut desired = std::collections::HashSet::<String>::with_capacity(desired_paths.len());
+        let mut desired = HashSet::<String>::with_capacity(desired_paths.len());
         for path in desired_paths {
             if !dynamic::is_dynamic_video_path(path) {
                 continue;
@@ -289,32 +318,18 @@ impl DynamicMedia {
             self.active_banner_videos.remove(&key);
             self.release_texture_key(assets, backend, key);
         }
+        self.drain_banner_video_preps(assets, &desired);
         for path in desired_paths {
             if !dynamic::is_dynamic_video_path(path) {
                 continue;
             }
             let key = path.to_string_lossy().into_owned();
-            if self.active_banner_videos.contains_key(&key) {
+            if self.active_banner_videos.contains_key(&key)
+                || self.pending_banner_video_preps.contains(&key)
+            {
                 continue;
             }
-            media_cache::queue_banner_texture(assets, path);
-            if !assets.has_texture_key(&key) {
-                continue;
-            }
-            match video::open_player(path, true) {
-                Ok(player) => {
-                    self.active_banner_videos.insert(
-                        key,
-                        DynamicVideoState {
-                            player,
-                            started_at: Instant::now(),
-                        },
-                    );
-                }
-                Err(e) => {
-                    warn!("Failed to start banner video '{}': {e}", path.display());
-                }
-            }
+            self.spawn_banner_video_prep(path);
         }
     }
 
@@ -618,6 +633,47 @@ impl DynamicMedia {
         }
     }
 
+    fn spawn_banner_video_prep(&mut self, path: &Path) {
+        let key = path.to_string_lossy().into_owned();
+        if !self.pending_banner_video_preps.insert(key.clone()) {
+            return;
+        }
+
+        let path = path.to_path_buf();
+        let tx = self.banner_video_prep_tx.clone();
+        thread::spawn(move || {
+            let result = prepare_banner_video(key, path);
+            let _ = tx.send(result);
+        });
+    }
+
+    fn drain_banner_video_preps(&mut self, assets: &mut AssetManager, desired: &HashSet<String>) {
+        while let Ok(result) = self.banner_video_prep_rx.try_recv() {
+            match result {
+                BannerVideoPrepResult::Ready(prepared) => {
+                    self.pending_banner_video_preps.remove(&prepared.key);
+                    if !desired.contains(&prepared.key) {
+                        continue;
+                    }
+                    assets.queue_texture_upload(prepared.key.clone(), prepared.poster);
+                    self.active_banner_videos.insert(
+                        prepared.key,
+                        DynamicVideoState {
+                            player: prepared.player,
+                            started_at: Instant::now(),
+                        },
+                    );
+                }
+                BannerVideoPrepResult::Failed { key, path, msg } => {
+                    self.pending_banner_video_preps.remove(&key);
+                    if desired.contains(&key) {
+                        warn!("Failed to start banner video '{}': {msg}", path.display());
+                    }
+                }
+            }
+        }
+    }
+
     fn destroy_current_profile_avatar_for_side(
         &mut self,
         assets: &mut AssetManager,
@@ -631,6 +687,37 @@ impl DynamicMedia {
             self.release_texture_key(assets, backend, key);
         }
     }
+}
+
+fn prepare_banner_video(key: String, path: PathBuf) -> BannerVideoPrepResult {
+    if !media_cache::banner_cache_options().enabled {
+        return match video::open(&path, true) {
+            Ok(video) => BannerVideoPrepResult::Ready(PreparedBannerVideo {
+                key,
+                poster: video.poster,
+                player: video.player,
+            }),
+            Err(msg) => BannerVideoPrepResult::Failed { key, path, msg },
+        };
+    }
+
+    let poster = match media_cache::load_banner_source_rgba(&path) {
+        Ok(rgba) => rgba,
+        Err(msg) => {
+            return BannerVideoPrepResult::Failed { key, path, msg };
+        }
+    };
+    let player = match video::open_player(&path, true) {
+        Ok(player) => player,
+        Err(msg) => {
+            return BannerVideoPrepResult::Failed { key, path, msg };
+        }
+    };
+    BannerVideoPrepResult::Ready(PreparedBannerVideo {
+        key,
+        poster,
+        player,
+    })
 }
 
 impl Default for DynamicMedia {
@@ -694,5 +781,26 @@ mod tests {
         let key = "avatar.png".to_string();
         media.current_profile_avatars[0] = Some((key.clone(), PathBuf::from(&key)));
         assert!(media.texture_key_in_use(&key));
+    }
+
+    #[test]
+    fn failed_banner_video_prep_clears_pending_key() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let key = "banner.mp4".to_string();
+        media.pending_banner_video_preps.insert(key.clone());
+        media
+            .banner_video_prep_tx
+            .send(BannerVideoPrepResult::Failed {
+                key: key.clone(),
+                path: PathBuf::from(&key),
+                msg: "failed".to_string(),
+            })
+            .unwrap();
+
+        media.drain_banner_video_preps(&mut assets, &HashSet::from([key.clone()]));
+
+        assert!(!media.pending_banner_video_preps.contains(&key));
+        assert!(!media.active_banner_videos.contains_key(&key));
     }
 }

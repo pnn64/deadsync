@@ -76,23 +76,6 @@ pub(crate) fn ensure_banner_texture(assets: &mut AssetManager, backend: &mut Bac
     }
 }
 
-pub(crate) fn queue_banner_texture(assets: &mut AssetManager, path: &Path) {
-    let key = path.to_string_lossy().into_owned();
-    if assets.has_texture_key(&key) {
-        return;
-    }
-
-    let rgba = match load_banner_source_rgba(path) {
-        Ok(rgba) => rgba,
-        Err(e) => {
-            warn!("Failed to load banner source {path:?}: {e}. Skipping.");
-            return;
-        }
-    };
-
-    assets.queue_texture_upload(key, rgba);
-}
-
 enum DynamicImagePrewarmOutcome {
     Built { path: PathBuf, millis: f64 },
     Reused { path: PathBuf, millis: f64 },
