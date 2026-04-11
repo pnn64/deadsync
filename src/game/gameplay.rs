@@ -5746,13 +5746,13 @@ pub struct ColumnCue {
 #[derive(Clone, Debug)]
 pub struct JudgmentRenderInfo {
     pub judgment: Judgment,
-    pub judged_at: Instant,
+    pub started_at_screen_s: f32,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct HoldJudgmentRenderInfo {
     pub result: HoldResult,
-    pub triggered_at: Instant,
+    pub started_at_screen_s: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -11398,7 +11398,7 @@ fn handle_hold_let_go(
     }
     state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
         result: HoldResult::LetGo,
-        triggered_at: Instant::now(),
+        started_at_screen_s: state.total_elapsed_in_screen,
     });
     if !scoring_blocked {
         let current_music_time = current_music_time_s(state);
@@ -11723,7 +11723,7 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
     trigger_tap_explosion(state, column, JudgeGrade::Excellent);
     state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
         result: HoldResult::Held,
-        triggered_at: Instant::now(),
+        started_at_screen_s: state.total_elapsed_in_screen,
     });
 }
 
@@ -12018,7 +12018,7 @@ fn error_bar_register_tap(
 fn set_last_judgment(state: &mut State, player: usize, judgment: Judgment) {
     state.players[player].last_judgment = Some(JudgmentRenderInfo {
         judgment,
-        judged_at: Instant::now(),
+        started_at_screen_s: state.total_elapsed_in_screen,
     });
 }
 
@@ -13726,7 +13726,7 @@ fn emit_pending_missed_hold_feedback(state: &mut State, current_time_ns: SongTim
             if column < state.num_cols {
                 state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
                     result: HoldResult::Missed,
-                    triggered_at: Instant::now(),
+                    started_at_screen_s: state.total_elapsed_in_screen,
                 });
             }
         }
@@ -13868,7 +13868,8 @@ fn tick_visual_effects(state: &mut State, delta_time: f32) {
     }
     for slot in &mut state.hold_judgments {
         if let Some(render_info) = slot
-            && render_info.triggered_at.elapsed().as_secs_f32() >= HOLD_JUDGMENT_TOTAL_DURATION
+            && state.total_elapsed_in_screen - render_info.started_at_screen_s
+                >= HOLD_JUDGMENT_TOTAL_DURATION
         {
             *slot = None;
         }
@@ -14427,38 +14428,39 @@ fn update_danger_fx(state: &mut State) {
 mod tests {
     use super::{
         COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, DisplayClockDiagRing, FinalizedRowOutcome,
-        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, HoldToExitKey, INSERT_MASK_BIT_MINES,
-        MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
-        ScrollSpeedSetting, SongClockSnapshot, TickMode, TurnRng, active_hold_counts_as_pressed,
-        add_provisional_early_score, advance_hold_last_held, advance_hold_life_ns,
-        advance_judged_row_cursor, apply_global_offset_delta, apply_mines_insert,
-        apply_song_offset_delta, autoplay_random_offset_s_for_window, build_assist_clap_rows,
-        build_attack_mask_windows_for_player, build_column_cues_for_player, build_row_grids,
-        closest_lane_note_ns, collect_edge_judge_indices, completed_row_final_judgment,
-        completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
-        crossed_mine_bounds_ns, effective_appearance_effects_for_player,
-        effective_player_global_offset_seconds, enforce_max_simultaneous_notes,
-        finalize_row_judgment, finalized_row_outcome_for_cached_row,
-        frame_stable_display_music_time, handle_input, input_queue_cap, lane_edge_judges_lift,
-        lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
-        lane_press_started, lane_release_finished, late_note_resolution_window_s,
-        live_autoplay_enabled_from_flags, max_step_distance_seconds, mine_window_bounds_ns,
-        music_time_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode,
-        parse_attack_mods, parse_song_lua_runtime_mods,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
-        recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
+        FrameStableDisplayClock, GAMEPLAY_INPUT_BACKLOG_WARN, HoldJudgmentRenderInfo,
+        HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC,
+        RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode, TurnRng,
+        active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
+        advance_hold_life_ns, advance_judged_row_cursor, apply_global_offset_delta,
+        apply_mines_insert, apply_song_offset_delta, autoplay_random_offset_s_for_window,
+        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
+        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
+        completed_row_final_judgment, completed_row_flash_note_indices_and_grade,
+        count_rescore_tracks_on_row, crossed_mine_bounds_ns,
+        effective_appearance_effects_for_player, effective_player_global_offset_seconds,
+        enforce_max_simultaneous_notes, finalize_row_judgment,
+        finalized_row_outcome_for_cached_row, frame_stable_display_music_time, handle_input,
+        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
+        lane_note_window_bounds_ns, lane_press_started, lane_release_finished,
+        late_note_resolution_window_s, live_autoplay_enabled_from_flags, max_step_distance_seconds,
+        mine_window_bounds_ns, music_time_from_song_clock, mutate_timing_arc,
+        next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
+        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, recent_step_tracks, recompute_player_totals,
+        refresh_active_attack_masks, refresh_timing_after_offset_change,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
         row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
         single_runtime_player_is_p2, song_time_ns_from_seconds, song_time_ns_to_seconds,
         stage_music_cut, step_calories, suppress_final_bad_rescore_visual, tick_mode_status_line,
-        turn_option_bits, update_lane_count,
+        tick_visual_effects, turn_option_bits, update_lane_count,
     };
     use crate::engine::input::{InputEvent, InputSource, VirtualAction};
     use crate::engine::present::color;
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
     use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
-    use crate::game::note::{HoldData, Note, NoteType};
+    use crate::game::note::{HoldData, HoldResult, Note, NoteType};
     use crate::game::parsing::notes::ParsedNote;
     use crate::game::profile;
     use crate::game::song::SongData;
@@ -15523,8 +15525,29 @@ mod tests {
                     .expect("row-final judgment should update the judgment sprite");
                 assert_eq!(last.judgment.grade, JudgeGrade::Decent);
                 assert_eq!(last.judgment.time_error_ms, 96.0);
+                assert_eq!(last.started_at_screen_s, 12.0);
             },
         );
+    }
+
+    #[test]
+    fn hold_judgment_cleanup_uses_screen_time_boundary() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        state.total_elapsed_in_screen = 5.0;
+        state.hold_judgments[0] = Some(HoldJudgmentRenderInfo {
+            result: HoldResult::Held,
+            started_at_screen_s: 4.201,
+        });
+        tick_visual_effects(&mut state, 0.0);
+        assert!(state.hold_judgments[0].is_some());
+
+        state.hold_judgments[0] = Some(HoldJudgmentRenderInfo {
+            result: HoldResult::Held,
+            started_at_screen_s: 4.2,
+        });
+        tick_visual_effects(&mut state, 0.0);
+        assert!(state.hold_judgments[0].is_none());
     }
 
     #[test]

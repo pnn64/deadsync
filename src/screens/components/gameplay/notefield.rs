@@ -6890,7 +6890,7 @@ pub fn build_bundles(
         if let Some(judgment_texture) = resolved_judgment_texture(profile) {
             let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(judgment_texture);
             let judgment = &render_info.judgment;
-            let elapsed = render_info.judged_at.elapsed().as_secs_f32();
+            let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
             if elapsed < 0.9 {
                 let zoom = if elapsed < 0.1 {
                     let t = elapsed / 0.1;
@@ -6950,7 +6950,7 @@ pub fn build_bundles(
         let Some(render_info) = hold_judgment.as_ref() else {
             continue;
         };
-        let elapsed = render_info.triggered_at.elapsed().as_secs_f32();
+        let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
         if elapsed >= HOLD_JUDGMENT_TOTAL_DURATION {
             continue;
         }
