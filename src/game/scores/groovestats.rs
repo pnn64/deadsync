@@ -789,13 +789,15 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
         let (start, end) = gs.note_ranges[player_idx];
         let ex = judgment::calculate_ex_score_from_notes(
             &gs.notes[start..end],
-            &gs.note_time_cache[start..end],
-            &gs.hold_end_time_cache[start..end],
+            &gs.note_time_cache_ns[start..end],
+            &gs.hold_end_time_cache_ns[start..end],
             gs.total_steps[player_idx],
             gs.holds_total[player_idx],
             gs.rolls_total[player_idx],
             gs.mines_total[player_idx],
-            gs.players[player_idx].fail_time,
+            gs.players[player_idx]
+                .fail_time
+                .map(gameplay::song_time_ns_from_seconds),
             false,
         );
         parts.push("FA+".to_string());

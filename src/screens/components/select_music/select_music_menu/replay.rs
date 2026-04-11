@@ -47,7 +47,7 @@ pub struct ReplayStartPayload {
     pub replay: Vec<scores::ReplayEdge>,
     pub name: String,
     pub score: f64,
-    pub replay_beat0_time_seconds: f32,
+    pub replay_beat0_time_ns: i64,
 }
 
 fn replay_total_items(state: &ReplayOverlayStateData) -> usize {
@@ -146,13 +146,13 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
                 *state = ReplayOverlayState::Hidden;
                 ReplayInputOutcome::Closed
             } else {
-                let (replay, name, score, replay_beat0_time_seconds) = {
+                let (replay, name, score, replay_beat0_time_ns) = {
                     let entry = &overlay.entries[selected];
                     (
                         entry.replay.clone(),
                         entry.name.clone(),
                         entry.score,
-                        entry.replay_beat0_time_seconds,
+                        entry.replay_beat0_time_ns,
                     )
                 };
                 *state = ReplayOverlayState::Hidden;
@@ -160,7 +160,7 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
                     replay,
                     name,
                     score,
-                    replay_beat0_time_seconds,
+                    replay_beat0_time_ns,
                 })
             }
         }

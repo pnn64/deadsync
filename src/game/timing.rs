@@ -1327,7 +1327,7 @@ fn is_stream_beat(beat: f32, stream_segments: &[StreamSegment]) -> bool {
 #[inline(always)]
 pub fn build_scatter_points(
     notes: &[Note],
-    note_time_cache: &[f32],
+    note_time_cache_ns: &[i64],
     col_offset: usize,
     cols_per_player: usize,
     stream_segments: &[StreamSegment],
@@ -1384,7 +1384,11 @@ pub fn build_scatter_points(
             row_start = row_end;
             continue;
         };
-        let t = note_time_cache.get(idx).copied().unwrap_or(0.0);
+        let t = note_time_cache_ns
+            .get(idx)
+            .copied()
+            .map(|time_ns| (time_ns as f64 * 1.0e-9) as f32)
+            .unwrap_or(0.0);
         let offset_ms = if judgment.grade == JudgeGrade::Miss {
             None
         } else {
@@ -1723,9 +1727,9 @@ mod tests {
             test_note(10, 0, JudgeGrade::Decent, -45.0),
             test_note(10, 1, JudgeGrade::Great, 12.0),
         ];
-        let note_time_cache = vec![1.0, 1.0];
+        let note_time_cache_ns = vec![1_000_000_000, 1_000_000_000];
 
-        let scatter = build_scatter_points(&notes, &note_time_cache, 0, 4, &[]);
+        let scatter = build_scatter_points(&notes, &note_time_cache_ns, 0, 4, &[]);
 
         assert_eq!(scatter.len(), 1);
         assert_eq!(scatter[0].offset_ms, Some(12.0));

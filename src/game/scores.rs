@@ -1171,7 +1171,7 @@ const LOCAL_SCORE_VERSION_V1: u16 = 1;
 
 #[derive(Debug, Clone, Copy, Encode, Decode)]
 struct LocalReplayEdgeV1 {
-    event_music_time: f32,
+    event_music_time_ns: gameplay::SongTimeNs,
     lane: u8,
     pressed: bool,
     // 0 = Keyboard, 1 = Gamepad
@@ -1199,7 +1199,7 @@ struct LocalScoreEntryHeaderV1 {
     mines_total: u32,
     hands_achieved: u32,
     fail_time: Option<f32>,
-    beat0_time_seconds: f32,
+    beat0_time_ns: gameplay::SongTimeNs,
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
@@ -1222,7 +1222,7 @@ struct LocalScoreEntryV1 {
     mines_total: u32,
     hands_achieved: u32,
     fail_time: Option<f32>,
-    beat0_time_seconds: f32,
+    beat0_time_ns: gameplay::SongTimeNs,
     replay: Vec<LocalReplayEdgeV1>,
 }
 
@@ -1554,7 +1554,7 @@ fn append_local_score_on_disk(
         mines_total: entry.mines_total,
         hands_achieved: entry.hands_achieved,
         fail_time: entry.fail_time,
-        beat0_time_seconds: entry.beat0_time_seconds,
+        beat0_time_ns: entry.beat0_time_ns,
     };
     let loaded_snapshot = {
         let mut state = LOCAL_SCORE_CACHE.lock().unwrap();
@@ -1598,7 +1598,10 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
     out.reserve(gs.replay_edges.len().min(4096));
     for e in &gs.replay_edges {
         let lane = e.lane_index as usize;
-        if lane < col_start || lane >= col_end || !e.event_music_time.is_finite() {
+        if lane < col_start
+            || lane >= col_end
+            || gameplay::song_time_ns_invalid(e.event_music_time_ns)
+        {
             continue;
         }
         let source = match e.source {
@@ -1606,7 +1609,7 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
             InputSource::Gamepad => 1,
         };
         out.push(LocalReplayEdgeV1 {
-            event_music_time: e.event_music_time,
+            event_music_time_ns: e.event_music_time_ns,
             lane: (lane - col_start) as u8,
             pressed: e.pressed,
             source,
@@ -1687,8 +1690,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
 
         let (start, end) = gs.note_ranges[player_idx];
         let notes = &gs.notes[start..end];
-        let note_times = &gs.note_time_cache[start..end];
-        let hold_end_times = &gs.hold_end_time_cache[start..end];
+        let note_times = &gs.note_time_cache_ns[start..end];
+        let hold_end_times = &gs.hold_end_time_cache_ns[start..end];
 
         let ex_score_percent = judgment::calculate_ex_score_from_notes(
             notes,
@@ -1698,7 +1701,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             gs.holds_total[player_idx],
             gs.rolls_total[player_idx],
             gs.mines_total[player_idx],
-            p.fail_time,
+            p.fail_time.map(gameplay::song_time_ns_from_seconds),
             mines_disabled,
         );
         let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
@@ -1709,7 +1712,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             gs.holds_total[player_idx],
             gs.rolls_total[player_idx],
             gs.mines_total[player_idx],
-            p.fail_time,
+            p.fail_time.map(gameplay::song_time_ns_from_seconds),
             mines_disabled,
         );
 
@@ -1740,7 +1743,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             mines_total: gs.mines_total[player_idx],
             hands_achieved: p.hands_achieved,
             fail_time: p.fail_time,
-            beat0_time_seconds: gs.timing_players[player_idx].get_time_for_beat(0.0),
+            beat0_time_ns: gs.timing_players[player_idx].get_time_for_beat_ns(0.0),
             replay,
         };
 
@@ -1888,7 +1891,7 @@ pub fn save_local_summary_score_for_side(
         mines_total: 0,
         hands_achieved: 0,
         fail_time: (summary.grade == Grade::Failed).then_some(0.0),
-        beat0_time_seconds: 0.0,
+        beat0_time_ns: 0,
         replay: Vec::new(),
     };
     append_local_score_on_disk(
@@ -1928,7 +1931,7 @@ pub fn leaderboard_rank_for_score(entries: &[LeaderboardEntry], score_percent: f
 
 #[derive(Debug, Clone, Copy)]
 pub struct ReplayEdge {
-    pub event_music_time: f32,
+    pub event_music_time_ns: gameplay::SongTimeNs,
     pub lane_index: u8,
     pub pressed: bool,
     pub source: InputSource,
@@ -1941,7 +1944,7 @@ pub struct MachineReplayEntry {
     pub score: f64, // 0..10000
     pub date: String,
     pub is_fail: bool,
-    pub replay_beat0_time_seconds: f32,
+    pub replay_beat0_time_ns: gameplay::SongTimeNs,
     pub replay: Vec<ReplayEdge>,
 }
 
@@ -2951,7 +2954,7 @@ struct MachineReplayPlay {
     score_percent: f64,
     played_at_ms: i64,
     is_fail: bool,
-    replay_beat0_time_seconds: f32,
+    replay_beat0_time_ns: gameplay::SongTimeNs,
     replay: Vec<LocalReplayEdgeV1>,
 }
 
@@ -3023,7 +3026,7 @@ fn push_machine_replays_from_dir(
             score_percent: full.score_percent,
             played_at_ms,
             is_fail: grade_from_code(full.grade_code) == Grade::Failed || full.fail_time.is_some(),
-            replay_beat0_time_seconds: full.beat0_time_seconds,
+            replay_beat0_time_ns: full.beat0_time_ns,
             replay: full.replay,
         });
     }
@@ -3152,7 +3155,7 @@ pub fn get_machine_replays_local(chart_hash: &str, max_entries: usize) -> Vec<Ma
     for (i, play) in plays.into_iter().take(take_len).enumerate() {
         let mut replay = Vec::with_capacity(play.replay.len());
         for edge in play.replay {
-            if !edge.event_music_time.is_finite() {
+            if gameplay::song_time_ns_invalid(edge.event_music_time_ns) {
                 continue;
             }
             let source = if edge.source == 1 {
@@ -3161,7 +3164,7 @@ pub fn get_machine_replays_local(chart_hash: &str, max_entries: usize) -> Vec<Ma
                 InputSource::Keyboard
             };
             replay.push(ReplayEdge {
-                event_music_time: edge.event_music_time,
+                event_music_time_ns: edge.event_music_time_ns,
                 lane_index: edge.lane,
                 pressed: edge.pressed,
                 source,
@@ -3173,7 +3176,7 @@ pub fn get_machine_replays_local(chart_hash: &str, max_entries: usize) -> Vec<Ma
             score: (play.score_percent * 10000.0).round(),
             date: local_score_date_string(play.played_at_ms),
             is_fail: play.is_fail,
-            replay_beat0_time_seconds: play.replay_beat0_time_seconds,
+            replay_beat0_time_ns: play.replay_beat0_time_ns,
             replay,
         });
     }
@@ -4178,7 +4181,7 @@ mod tests {
             mines_total: 0,
             hands_achieved: 0,
             fail_time: Some(12.0),
-            beat0_time_seconds: 0.0,
+            beat0_time_ns: 0,
         };
 
         let cached = cached_local_score_from_header(&header);

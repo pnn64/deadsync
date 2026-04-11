@@ -520,12 +520,12 @@ const INVALID_SONG_TIME_NS: SongTimeNs = i64::MIN;
 const SONG_TIME_NS_PER_SECOND: f64 = 1_000_000_000.0;
 
 #[inline(always)]
-const fn song_time_ns_invalid(time_ns: SongTimeNs) -> bool {
+pub(crate) const fn song_time_ns_invalid(time_ns: SongTimeNs) -> bool {
     time_ns == INVALID_SONG_TIME_NS
 }
 
 #[inline(always)]
-fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
+pub(crate) fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
     if !seconds.is_finite() {
         return INVALID_SONG_TIME_NS;
     }
@@ -534,7 +534,7 @@ fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
 }
 
 #[inline(always)]
-fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
+pub(crate) fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
     if song_time_ns_invalid(time_ns) {
         return f32::NAN;
     }
@@ -556,6 +556,11 @@ fn song_time_ns_add_seconds(time_ns: SongTimeNs, delta_seconds: f32) -> SongTime
         return INVALID_SONG_TIME_NS;
     }
     time_ns.saturating_add(delta_ns)
+}
+
+#[inline(always)]
+fn current_music_time_s(state: &State) -> f32 {
+    song_time_ns_to_seconds(state.current_music_time_ns)
 }
 
 #[inline(always)]
@@ -5777,15 +5782,12 @@ pub struct ActiveComboMilestone {
 #[derive(Clone, Debug)]
 pub struct ActiveHold {
     pub note_index: usize,
-    pub start_time: f32,
     pub start_time_ns: SongTimeNs,
-    pub end_time: f32,
     pub end_time_ns: SongTimeNs,
     pub note_type: NoteType,
     pub let_go: bool,
     pub is_pressed: bool,
     pub life: f32,
-    pub last_update_time: f32,
     pub last_update_time_ns: SongTimeNs,
 }
 
@@ -5809,7 +5811,7 @@ const fn column_cue_is_mine(note: &Note) -> Option<bool> {
 fn build_column_cues_for_player(
     notes: &[Note],
     note_range: (usize, usize),
-    note_time_cache: &[f32],
+    note_time_cache_ns: &[SongTimeNs],
     col_start: usize,
     col_end: usize,
     first_visible_time: f32,
@@ -5833,7 +5835,7 @@ fn build_column_cues_for_player(
                 && let Some(is_mine) = column_cue_is_mine(note)
             {
                 if !has_row_time {
-                    row_time = note_time_cache[i];
+                    row_time = song_time_ns_to_seconds(note_time_cache_ns[i]);
                     has_row_time = true;
                 }
                 columns.push(ColumnCueColumn {
@@ -6487,7 +6489,6 @@ pub struct RecordedLaneEdge {
     pub lane_index: u8,
     pub pressed: bool,
     pub source: InputSource,
-    pub event_music_time: f32,
     pub event_music_time_ns: SongTimeNs,
 }
 
@@ -6496,13 +6497,12 @@ pub struct ReplayInputEdge {
     pub lane_index: u8,
     pub pressed: bool,
     pub source: InputSource,
-    pub event_music_time: f32,
     pub event_music_time_ns: SongTimeNs,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct ReplayOffsetSnapshot {
-    pub beat0_time_seconds: f32,
+    pub beat0_time_ns: SongTimeNs,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -6799,8 +6799,7 @@ pub struct State {
     pub note_ranges: [(usize, usize); MAX_PLAYERS],
     pub audio_lead_in_seconds: f32,
     pub current_beat: f32,
-    pub current_music_time: f32,
-    current_music_time_ns: SongTimeNs,
+    pub current_music_time_ns: SongTimeNs,
     pub current_beat_display: f32,
     pub current_music_time_display: f32,
     display_clock: FrameStableDisplayClock,
@@ -6808,16 +6807,12 @@ pub struct State {
     pub lane_note_indices: [Vec<usize>; MAX_COLS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     finalized_row_outcomes: [Vec<Option<FinalizedRowOutcome>>; MAX_PLAYERS],
-    pub note_time_cache: Vec<f32>,
     pub note_time_cache_ns: Vec<SongTimeNs>,
     pub note_display_beat_cache: Vec<f32>,
-    pub hold_end_time_cache: Vec<Option<f32>>,
     pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
     pub hold_end_display_beat_cache: Vec<Option<f32>>,
-    pub notes_end_time: f32,
-    pub music_end_time: f32,
-    notes_end_time_ns: SongTimeNs,
-    music_end_time_ns: SongTimeNs,
+    pub notes_end_time_ns: SongTimeNs,
+    pub music_end_time_ns: SongTimeNs,
     pub music_rate: f32,
     pub play_mine_sounds: bool,
     pub global_offset_seconds: f32,
@@ -7353,10 +7348,8 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
         "invalid cols_per_player={}",
         state.cols_per_player
     );
-    debug_assert_eq!(state.notes.len(), state.note_time_cache.len());
     debug_assert_eq!(state.notes.len(), state.note_time_cache_ns.len());
     debug_assert_eq!(state.notes.len(), state.note_display_beat_cache.len());
-    debug_assert_eq!(state.notes.len(), state.hold_end_time_cache.len());
     debug_assert_eq!(state.notes.len(), state.hold_end_time_cache_ns.len());
     debug_assert_eq!(state.notes.len(), state.hold_end_display_beat_cache.len());
     debug_assert_eq!(state.notes.len(), state.hold_decay_active.len());
@@ -8692,7 +8685,6 @@ pub fn queue_input_edge(
         stored_at,
         emitted_at,
         queued_at,
-        song_time_ns_to_seconds(event_music_time_ns),
         event_music_time_ns,
         state.replay_capture_enabled,
     );
@@ -9031,7 +9023,6 @@ fn start_stage_music_audio(state: &State) {
 
 pub fn start_stage_music(state: &mut State) {
     let start_time = -state.audio_lead_in_seconds.max(0.0);
-    state.current_music_time = start_time;
     state.current_music_time_ns = song_time_ns_from_seconds(start_time);
     state.current_music_time_display = state.display_clock.reset(start_time);
     let display_time_ns = song_time_ns_from_seconds(state.current_music_time_display);
@@ -9057,7 +9048,6 @@ fn push_input_edge(
     source: InputSource,
     lane: Lane,
     pressed: bool,
-    event_music_time: f32,
     event_music_time_ns: SongTimeNs,
     record_replay: bool,
 ) {
@@ -9072,7 +9062,6 @@ fn push_input_edge(
         now,
         now,
         now,
-        event_music_time,
         event_music_time_ns,
         record_replay,
     );
@@ -9089,7 +9078,6 @@ fn push_input_edge_timed(
     stored_at: Instant,
     emitted_at: Instant,
     queued_at: Instant,
-    event_music_time: f32,
     event_music_time_ns: SongTimeNs,
     record_replay: bool,
 ) {
@@ -9106,7 +9094,6 @@ fn push_input_edge_timed(
         stored_at,
         emitted_at,
         queued_at,
-        event_music_time,
         event_music_time_ns,
     });
     if log::log_enabled!(log::Level::Debug) {
@@ -9114,7 +9101,9 @@ fn push_input_edge_timed(
         if pending_len >= GAMEPLAY_INPUT_BACKLOG_WARN {
             debug!(
                 "Gameplay input queue pressure: pending_edges={}, num_cols={}, music_time={:.3}",
-                pending_len, state.num_cols, state.current_music_time
+                pending_len,
+                state.num_cols,
+                current_music_time_s(state)
             );
         }
     }
@@ -9367,13 +9356,13 @@ pub fn init(
     }
     let mut replay_input = Vec::with_capacity(replay_edges.len());
     let replay_offsets = replay_offsets.unwrap_or(ReplayOffsetSnapshot {
-        beat0_time_seconds: timing_players[0].get_time_for_beat(0.0),
+        beat0_time_ns: timing_players[0].get_time_for_beat_ns(0.0),
     });
     let mut replay_out_of_order = false;
     let mut replay_prev_time_ns = INVALID_SONG_TIME_NS;
     for edge in replay_edges {
         let lane = edge.lane_index as usize;
-        if lane >= num_cols || !edge.event_music_time.is_finite() {
+        if lane >= num_cols || song_time_ns_invalid(edge.event_music_time_ns) {
             continue;
         }
         let player = if num_players <= 1 || cols_per_player == 0 {
@@ -9381,16 +9370,16 @@ pub fn init(
         } else {
             (lane / cols_per_player).min(num_players.saturating_sub(1))
         };
-        let replay_beat0_shift = if replay_offsets.beat0_time_seconds.is_finite() {
-            timing_players[player].get_time_for_beat(0.0) - replay_offsets.beat0_time_seconds
+        let replay_beat0_shift_ns = if song_time_ns_invalid(replay_offsets.beat0_time_ns) {
+            0
         } else {
-            0.0
+            timing_players[player]
+                .get_time_for_beat_ns(0.0)
+                .saturating_sub(replay_offsets.beat0_time_ns)
         };
-        let event_music_time = edge.event_music_time + replay_beat0_shift;
-        if !event_music_time.is_finite() {
-            continue;
-        }
-        let event_music_time_ns = song_time_ns_from_seconds(event_music_time);
+        let event_music_time_ns = edge
+            .event_music_time_ns
+            .saturating_add(replay_beat0_shift_ns);
         if !song_time_ns_invalid(replay_prev_time_ns) && event_music_time_ns < replay_prev_time_ns {
             replay_out_of_order = true;
         }
@@ -9399,20 +9388,11 @@ pub fn init(
             lane_index: edge.lane_index,
             pressed: edge.pressed,
             source: edge.source,
-            event_music_time,
             event_music_time_ns,
         });
     }
     if replay_out_of_order {
-        replay_input.sort_by(|a, b| {
-            a.event_music_time_ns
-                .cmp(&b.event_music_time_ns)
-                .then_with(|| {
-                    a.event_music_time
-                        .partial_cmp(&b.event_music_time)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-        });
+        replay_input.sort_by(|a, b| a.event_music_time_ns.cmp(&b.event_music_time_ns));
     }
     let replay_mode = !replay_input.is_empty();
     if replay_mode {
@@ -9627,27 +9607,20 @@ pub fn init(
     };
 
     let cache_build_started = Instant::now();
-    let mut note_time_cache = Vec::with_capacity(notes.len());
     let mut note_time_cache_ns = Vec::with_capacity(notes.len());
     let mut note_display_beat_cache = Vec::with_capacity(notes.len());
-    let mut hold_end_time_cache = Vec::with_capacity(notes.len());
     let mut hold_end_time_cache_ns = Vec::with_capacity(notes.len());
     let mut hold_end_display_beat_cache = Vec::with_capacity(notes.len());
     for note in &notes {
         let timing_player = &timing_players[note_player_for_col(note.column)];
         let note_time_ns = timing_player.get_time_for_beat_ns(note.beat);
-        let note_time = song_time_ns_to_seconds(note_time_ns);
-        note_time_cache.push(note_time);
         note_time_cache_ns.push(note_time_ns);
         note_display_beat_cache.push(timing_player.get_displayed_beat(note.beat));
         if let Some(hold) = note.hold.as_ref() {
             let end_time_ns = timing_player.get_time_for_beat_ns(hold.end_beat);
-            let end_time = song_time_ns_to_seconds(end_time_ns);
-            hold_end_time_cache.push(Some(end_time));
             hold_end_time_cache_ns.push(Some(end_time_ns));
             hold_end_display_beat_cache.push(Some(timing_player.get_displayed_beat(hold.end_beat)));
         } else {
-            hold_end_time_cache.push(None);
             hold_end_time_cache_ns.push(None);
             hold_end_display_beat_cache.push(None);
         }
@@ -9693,8 +9666,8 @@ pub fn init(
     let timing_prep_started = Instant::now();
     let first_second = notes
         .iter()
-        .zip(&note_time_cache)
-        .filter_map(|(n, &t)| n.can_be_judged.then_some(t))
+        .zip(&note_time_cache_ns)
+        .filter_map(|(n, &t_ns)| n.can_be_judged.then_some(song_time_ns_to_seconds(t_ns)))
         .reduce(f32::min)
         .unwrap_or(0.0);
     // ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
@@ -9772,8 +9745,6 @@ pub fn init(
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
     let (notes_end_time_ns, music_end_time_ns) =
         compute_end_times_ns(&notes, &note_time_cache_ns, &hold_end_time_cache_ns, rate);
-    let notes_end_time = song_time_ns_to_seconds(notes_end_time_ns);
-    let music_end_time = song_time_ns_to_seconds(music_end_time_ns);
     let notes_len = notes.len();
     let mut column_scroll_dirs = [1.0_f32; MAX_COLS];
     for (player, player_profile) in player_profiles.iter().enumerate().take(num_players) {
@@ -9823,7 +9794,8 @@ pub fn init(
         }
     }
     let pending_edges_capacity = input_queue_cap(num_cols);
-    let replay_seconds = (music_end_time + start_delay).max(notes_end_time + start_delay);
+    let replay_seconds = (song_time_ns_to_seconds(music_end_time_ns) + start_delay)
+        .max(song_time_ns_to_seconds(notes_end_time_ns) + start_delay);
     let replay_capture_enabled = !replay_mode && config.machine_enable_replays;
     let replay_edges_capacity = [
         0,
@@ -9907,7 +9879,7 @@ pub fn init(
         column_cues[player] = build_column_cues_for_player(
             &notes,
             note_ranges[player],
-            &note_time_cache,
+            &note_time_cache_ns,
             col_start,
             col_end,
             current_music_time_visible[player],
@@ -10211,7 +10183,6 @@ pub fn init(
         note_ranges,
         audio_lead_in_seconds: start_delay,
         current_beat: init_beat,
-        current_music_time: init_music_time,
         current_music_time_ns: song_time_ns_from_seconds(init_music_time),
         current_beat_display: init_beat,
         current_music_time_display: init_music_time,
@@ -10220,14 +10191,10 @@ pub fn init(
         lane_note_indices,
         judged_row_cursor: [0; MAX_PLAYERS],
         finalized_row_outcomes: std::array::from_fn(|_| vec![None; row_entries.len()]),
-        note_time_cache,
         note_time_cache_ns,
         note_display_beat_cache,
-        hold_end_time_cache,
         hold_end_time_cache_ns,
         hold_end_display_beat_cache,
-        notes_end_time,
-        music_end_time,
         notes_end_time_ns,
         music_end_time_ns,
         music_rate: rate,
@@ -11241,6 +11208,7 @@ fn hit_mine(state: &mut State, column: usize, note_index: usize, time_error: f32
 
     let scoring_blocked = autoplay_blocks_scoring(state);
     state.notes[note_index].mine_result = Some(MineResult::Hit);
+    let current_music_time = current_music_time_s(state);
     if !scoring_blocked {
         state.players[player].mines_hit = state.players[player].mines_hit.saturating_add(1);
     }
@@ -11248,7 +11216,7 @@ fn hit_mine(state: &mut State, column: usize, note_index: usize, time_error: f32
     if !scoring_blocked {
         apply_life_change(
             &mut state.players[player],
-            state.current_music_time,
+            current_music_time,
             LIFE_HIT_MINE,
         );
         capture_failed_ex_score_inputs(state, player);
@@ -11433,11 +11401,8 @@ fn handle_hold_let_go(
         triggered_at: Instant::now(),
     });
     if !scoring_blocked {
-        apply_life_change(
-            &mut state.players[player],
-            state.current_music_time,
-            LIFE_LET_GO,
-        );
+        let current_music_time = current_music_time_s(state);
+        apply_life_change(&mut state.players[player], current_music_time, LIFE_LET_GO);
         capture_failed_ex_score_inputs(state, player);
     }
     if updated_possible_scoring && !is_state_dead(state, player) {
@@ -11569,11 +11534,8 @@ fn start_active_hold(
     state: &mut State,
     column: usize,
     note_index: usize,
-    start_time: f32,
     start_time_ns: SongTimeNs,
-    end_time: f32,
     end_time_ns: SongTimeNs,
-    current_time: f32,
     current_time_ns: SongTimeNs,
 ) {
     if let Some(hold) = state.notes[note_index].hold.as_mut() {
@@ -11583,15 +11545,12 @@ fn start_active_hold(
     }
     state.active_holds[column] = Some(ActiveHold {
         note_index,
-        start_time,
         start_time_ns,
-        end_time,
         end_time_ns,
         note_type: state.notes[note_index].note_type,
         let_go: false,
         is_pressed: true,
         life: MAX_HOLD_LIFE,
-        last_update_time: current_time,
         last_update_time_ns: current_time_ns,
     });
 }
@@ -11678,7 +11637,6 @@ fn integrate_active_hold_to_time(state: &mut State, column: usize, target_time_n
                         }
                     }
                     active.last_update_time_ns = final_time_ns;
-                    active.last_update_time = song_time_ns_to_seconds(final_time_ns);
                 }
 
                 if !active.let_go {
@@ -11752,11 +11710,8 @@ fn handle_hold_success(state: &mut State, column: usize, note_index: usize) {
         _ => {}
     }
     if !scoring_blocked {
-        apply_life_change(
-            &mut state.players[player],
-            state.current_music_time,
-            LIFE_HELD,
-        );
+        let current_music_time = current_music_time_s(state);
+        apply_life_change(&mut state.players[player], current_music_time, LIFE_HELD);
         capture_failed_ex_score_inputs(state, player);
     }
     if updated_scoring {
@@ -11796,7 +11751,6 @@ fn refresh_roll_life_on_step(state: &mut State, column: usize, event_time_ns: So
     active.last_update_time_ns = active
         .last_update_time_ns
         .max(event_time_ns.min(active.end_time_ns));
-    active.last_update_time = song_time_ns_to_seconds(active.last_update_time_ns);
     hold.life = MAX_HOLD_LIFE;
     hold.let_go_started_at = None;
     hold.let_go_starting_life = 0.0;
@@ -12217,10 +12171,11 @@ pub fn judge_a_tap(
                             judgment.clone(),
                         );
                         let life_delta = judge_life_delta(grade);
+                        let current_music_time = current_music_time_s(state);
                         {
                             let p = &mut state.players[player];
                             if !scoring_blocked {
-                                apply_life_change(p, state.current_music_time, life_delta);
+                                apply_life_change(p, current_music_time, life_delta);
                             }
                         }
                         if !scoring_blocked {
@@ -12249,7 +12204,7 @@ pub fn judge_a_tap(
                             global_offset_s,
                             row_note_time,
                             current_time,
-                            state.current_music_time,
+                            current_music_time_s(state),
                             rate,
                             lead_in_s,
                         );
@@ -12260,16 +12215,12 @@ pub fn judge_a_tap(
                                 NoteType::Hold | NoteType::Roll
                             )
                         {
-                            let end_time = song_time_ns_to_seconds(end_time_ns);
                             start_active_hold(
                                 state,
                                 note_col,
                                 note_index,
-                                row_note_time,
                                 row_note_time_ns,
-                                end_time,
                                 end_time_ns,
-                                current_time,
                                 current_time_ns,
                             );
                         }
@@ -12311,7 +12262,7 @@ pub fn judge_a_tap(
                     global_offset_s,
                     row_note_time,
                     judgment_event_time,
-                    state.current_music_time,
+                    current_music_time_s(state),
                     rate,
                     lead_in_s,
                 );
@@ -12324,16 +12275,12 @@ pub fn judge_a_tap(
                         NoteType::Hold | NoteType::Roll
                     )
                 {
-                    let end_time = song_time_ns_to_seconds(end_time_ns);
                     start_active_hold(
                         state,
                         note_col,
                         note_index,
-                        row_note_time,
                         row_note_time_ns,
-                        end_time,
                         end_time_ns,
-                        current_time,
                         current_time_ns,
                     );
                 }
@@ -12381,7 +12328,7 @@ pub fn judge_a_tap(
                     global_offset_s,
                     row_note_time,
                     judgment_event_time,
-                    state.current_music_time,
+                    current_music_time_s(state),
                     rate,
                     lead_in_s,
                 );
@@ -12391,16 +12338,12 @@ pub fn judge_a_tap(
                 if let Some(end_time_ns) = state.hold_end_time_cache_ns[idx]
                     && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
                 {
-                    let end_time = song_time_ns_to_seconds(end_time_ns);
                     start_active_hold(
                         state,
                         note_col,
                         idx,
-                        row_note_time,
                         row_note_time_ns,
-                        end_time,
                         end_time_ns,
-                        current_time,
                         current_time_ns,
                     );
                 }
@@ -12513,9 +12456,10 @@ pub fn judge_a_lift(
                 };
                 register_provisional_early_result(state, player, note_index, judgment.clone());
                 let life_delta = judge_life_delta(grade);
+                let current_music_time = current_music_time_s(state);
                 if !scoring_blocked {
                     let p = &mut state.players[player];
-                    apply_life_change(p, state.current_music_time, life_delta);
+                    apply_life_change(p, current_music_time, life_delta);
                     capture_failed_ex_score_inputs(state, player);
                 }
                 render_provisional_early_rescore_feedback(
@@ -12539,7 +12483,7 @@ pub fn judge_a_lift(
                     global_offset_s,
                     note_time,
                     current_time,
-                    state.current_music_time,
+                    current_music_time_s(state),
                     rate,
                     lead_in_s,
                 );
@@ -12583,7 +12527,7 @@ pub fn judge_a_lift(
         global_offset_s,
         note_time,
         judgment_event_time,
-        state.current_music_time,
+        current_music_time_s(state),
         rate,
         lead_in_s,
     );
@@ -12857,7 +12801,6 @@ fn run_replay(state: &mut State) {
             edge.source,
             lane,
             edge.pressed,
-            edge.event_music_time,
             edge.event_music_time_ns,
             false,
         );
@@ -12880,26 +12823,15 @@ fn mutate_timing_arc(timing: &mut Arc<TimingData>, mut apply: impl FnMut(&mut Ti
 fn refresh_timing_after_offset_change(state: &mut State) {
     let num_players = state.num_players;
     let cols_per_player = state.cols_per_player;
-    for ((time, time_ns), note) in state
-        .note_time_cache
-        .iter_mut()
-        .zip(state.note_time_cache_ns.iter_mut())
-        .zip(&state.notes)
-    {
+    for (time_ns, note) in state.note_time_cache_ns.iter_mut().zip(&state.notes) {
         let player = if num_players <= 1 || cols_per_player == 0 {
             0
         } else {
             (note.column / cols_per_player).min(num_players.saturating_sub(1))
         };
         *time_ns = state.timing_players[player].get_time_for_beat_ns(note.beat);
-        *time = song_time_ns_to_seconds(*time_ns);
     }
-    for ((time_opt, time_opt_ns), note) in state
-        .hold_end_time_cache
-        .iter_mut()
-        .zip(state.hold_end_time_cache_ns.iter_mut())
-        .zip(&state.notes)
-    {
+    for (time_opt_ns, note) in state.hold_end_time_cache_ns.iter_mut().zip(&state.notes) {
         let player = if num_players <= 1 || cols_per_player == 0 {
             0
         } else {
@@ -12909,7 +12841,6 @@ fn refresh_timing_after_offset_change(state: &mut State) {
             .hold
             .as_ref()
             .map(|h| state.timing_players[player].get_time_for_beat_ns(h.end_beat));
-        *time_opt = time_opt_ns.map(song_time_ns_to_seconds);
     }
     for player in 0..state.num_players {
         let mine_note_time_ns = &mut state.mine_note_time_ns[player];
@@ -12928,10 +12859,6 @@ fn refresh_timing_after_offset_change(state: &mut State) {
         &state.hold_end_time_cache_ns,
         state.music_rate,
     );
-    let notes_end_time = song_time_ns_to_seconds(notes_end_time_ns);
-    let music_end_time = song_time_ns_to_seconds(music_end_time_ns);
-    state.notes_end_time = notes_end_time;
-    state.music_end_time = music_end_time;
     state.notes_end_time_ns = notes_end_time_ns;
     state.music_end_time_ns = music_end_time_ns;
 }
@@ -13334,6 +13261,7 @@ fn finalize_row_judgment(
         return;
     }
     let show_final_visual = !suppress_final_early_bad_visual;
+    let current_music_time = current_music_time_s(state);
     {
         let p = &mut state.players[player];
         let grade_ix = display_judge_ix(final_grade);
@@ -13344,7 +13272,7 @@ fn finalize_row_judgment(
         }
         let life_delta = judge_life_delta(final_grade);
         if !skip_life_change {
-            apply_life_change(p, state.current_music_time, life_delta);
+            apply_life_change(p, current_music_time, life_delta);
         }
         apply_row_combo_state(p, final_grade, player_row_note_count, 1);
         if !row_has_miss && !row_has_wayoff {
@@ -13374,7 +13302,7 @@ fn finalize_row_judgment(
         // Arrow Cloud's gameplay HUD uses the row-final JudgmentMessage for
         // offset/error-bar visuals, not individual note hits inside a chord.
         set_last_judgment(state, player, final_judgment.clone());
-        error_bar_register_tap(state, player, &final_judgment, state.current_music_time);
+        error_bar_register_tap(state, player, &final_judgment, current_music_time_s(state));
     }
     if !skip_life_change {
         capture_failed_ex_score_inputs(state, player);
@@ -13568,25 +13496,16 @@ fn process_input_edges(
                         )
                     });
         }
-        if !edge.event_music_time.is_finite() {
-            edge.event_music_time = song_time_ns_to_seconds(edge.event_music_time_ns);
-            if !edge.event_music_time.is_finite() {
-                edge.event_music_time = music_time_from_song_clock(
-                    song_clock,
-                    edge.captured_at,
-                    edge.captured_host_nanos,
-                );
-            }
+        if song_time_ns_invalid(edge.event_music_time_ns) {
+            continue;
         }
-        if edge.event_music_time.is_finite() {
-            integrate_active_hold_to_time(state, lane_idx, edge.event_music_time_ns);
-        }
-        if edge.record_replay && edge.event_music_time.is_finite() {
+        let event_music_time = song_time_ns_to_seconds(edge.event_music_time_ns);
+        integrate_active_hold_to_time(state, lane_idx, edge.event_music_time_ns);
+        if edge.record_replay {
             state.replay_edges.push(RecordedLaneEdge {
                 lane_index: lane_idx as u8,
                 pressed: edge.pressed,
                 source: edge.source,
-                event_music_time: edge.event_music_time,
                 event_music_time_ns: edge.event_music_time_ns,
             });
         }
@@ -13618,8 +13537,8 @@ fn process_input_edges(
                     capture_to_queue_us,
                     capture_to_process_us,
                     pending.len() + state.pending_edges.len() + 1,
-                    state.current_music_time,
-                    edge.event_music_time,
+                    current_music_time_s(state),
+                    event_music_time,
                 );
             }
         }
@@ -13669,7 +13588,6 @@ fn process_input_edges(
         }
 
         if lane_edge_judges_tap(edge.pressed) {
-            let event_music_time = edge.event_music_time;
             let event_music_time_ns = edge.event_music_time_ns;
             let hit_note = if trace_enabled {
                 let started = Instant::now();
@@ -13694,7 +13612,6 @@ fn process_input_edges(
                 state.receptor_bop_timers[lane_idx] = 0.11;
             }
         } else if lane_edge_judges_lift(edge.pressed, was_down) {
-            let event_music_time = edge.event_music_time;
             let hit_lift =
                 judge_a_lift(state, lane_idx, event_music_time, edge.event_music_time_ns);
             if hit_lift && state.tick_mode == TickMode::Hit {
@@ -13781,16 +13698,20 @@ fn queue_missed_hold_feedback(state: &mut State, note_index: usize) {
 }
 
 #[inline(always)]
-fn emit_pending_missed_hold_feedback(state: &mut State, current_time: f32) {
+fn emit_pending_missed_hold_feedback(state: &mut State, current_time_ns: SongTimeNs) {
     let mut i = 0usize;
     while i < state.pending_missed_hold_indices.len() {
         let note_index = state.pending_missed_hold_indices[i];
-        let Some(end_time) = state.hold_end_time_cache.get(note_index).and_then(|t| *t) else {
+        let Some(end_time_ns) = state
+            .hold_end_time_cache_ns
+            .get(note_index)
+            .and_then(|t| *t)
+        else {
             state.pending_missed_hold_feedback[note_index] = false;
             state.pending_missed_hold_indices.swap_remove(i);
             continue;
         };
-        if current_time < end_time {
+        if current_time_ns < end_time_ns {
             i += 1;
             continue;
         }
@@ -14174,7 +14095,6 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
     song_clock.song_time_ns = music_time_ns;
     song_clock.song_time = music_time_sec;
     state.current_music_time_ns = music_time_ns;
-    state.current_music_time = music_time_sec;
     let target_display_music_time_sec = music_time_sec;
     let display_diag_host_nanos = if song_clock.valid_at_host_nanos != 0 {
         song_clock.valid_at_host_nanos
@@ -14332,7 +14252,7 @@ pub fn update(state: &mut State, delta_time: f32) -> GameplayAction {
         None
     };
     decay_let_go_hold_life(state);
-    emit_pending_missed_hold_feedback(state, music_time_sec);
+    emit_pending_missed_hold_feedback(state, music_time_ns);
     if let Some(started) = hold_decay_started {
         phase_timings.hold_decay_us = elapsed_us_since(started);
     }
@@ -14897,21 +14817,24 @@ mod tests {
 
         let song_offset_before = song_state.song_offset_seconds;
         let global_offset_before = global_state.global_offset_seconds;
-        let song_before = song_state.note_time_cache[0];
-        let global_before = global_state.note_time_cache[0];
+        let song_before = song_state.note_time_cache_ns[0];
+        let global_before = global_state.note_time_cache_ns[0];
 
         assert!(apply_song_offset_delta(&mut song_state, 0.010));
         assert!(apply_global_offset_delta(&mut global_state, 0.010));
 
-        let song_after = song_state.note_time_cache[0];
-        let global_after = global_state.note_time_cache[0];
+        let song_after = song_state.note_time_cache_ns[0];
+        let global_after = global_state.note_time_cache_ns[0];
 
         assert!((song_state.song_offset_seconds - (song_offset_before + 0.010)).abs() <= 1e-6);
         assert!(
             (global_state.global_offset_seconds - (global_offset_before + 0.010)).abs() <= 1e-6
         );
-        assert!((song_before - song_after - 0.010).abs() <= 1e-6);
-        assert!((global_before - global_after - 0.010).abs() <= 1e-6);
+        assert_eq!(song_before - song_after, song_time_ns_from_seconds(0.010));
+        assert_eq!(
+            global_before - global_after,
+            song_time_ns_from_seconds(0.010)
+        );
     }
 
     #[test]
@@ -14928,17 +14851,17 @@ mod tests {
 
         let machine_before = state.global_offset_seconds;
         let effective_before = effective_player_global_offset_seconds(&state, 0);
-        let note_before = state.note_time_cache[0];
+        let note_before = state.note_time_cache_ns[0];
 
         assert!((effective_before - (machine_before + shift)).abs() <= 1e-6);
         assert!(apply_global_offset_delta(&mut state, 0.010));
 
         let effective_after = effective_player_global_offset_seconds(&state, 0);
-        let note_after = state.note_time_cache[0];
+        let note_after = state.note_time_cache_ns[0];
 
         assert!((state.global_offset_seconds - (machine_before + 0.010)).abs() <= 1e-6);
         assert!((effective_after - (state.global_offset_seconds + shift)).abs() <= 1e-6);
-        assert!((note_before - note_after - 0.010).abs() <= 1e-6);
+        assert_eq!(note_before - note_after, song_time_ns_from_seconds(0.010));
     }
 
     #[test]
@@ -15545,13 +15468,12 @@ mod tests {
                     row_index,
                     nonmine_note_indices: vec![0, 1],
                 }];
-                state.note_time_cache = vec![1.0, 1.0];
                 state.note_time_cache_ns = vec![
                     song_time_ns_from_seconds(1.0),
                     song_time_ns_from_seconds(1.0),
                 ];
                 state.finalized_row_outcomes = std::array::from_fn(|_| vec![None; 1]);
-                state.current_music_time = 1.096;
+                state.current_music_time_ns = song_time_ns_from_seconds(1.096);
                 state.total_elapsed_in_screen = 12.0;
 
                 set_final_note_result(
@@ -16950,10 +16872,10 @@ mod tests {
             fake_note,
             test_note(2, 192, NoteType::Tap),
         ];
-        let note_time_cache = [1.0_f32, 2.0_f32, 4.0_f32];
+        let note_time_cache_ns = [1_000_000_000_i64, 2_000_000_000, 4_000_000_000];
 
         let cues =
-            build_column_cues_for_player(&notes, (0, notes.len()), &note_time_cache, 0, 4, 0.0);
+            build_column_cues_for_player(&notes, (0, notes.len()), &note_time_cache_ns, 0, 4, 0.0);
 
         assert_eq!(cues.len(), 2);
         assert!((cues[0].start_time - 0.0).abs() <= 1e-6);

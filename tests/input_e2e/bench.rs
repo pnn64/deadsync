@@ -360,7 +360,7 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     state.hold_to_exit_aborted_at = None;
     state.total_elapsed_in_screen = 0.0;
     state.current_beat = 0.0;
-    state.current_music_time = 0.0;
+    state.current_music_time_ns = 0;
     state.current_beat_display = 0.0;
     state.current_music_time_display = 0.0;
     state.current_beat_visible.fill(0.0);
@@ -379,12 +379,12 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
         row_map_cache.clear();
     }
     state.tap_row_hold_roll_flags.clear();
-    state.note_time_cache.clear();
+    state.note_time_cache_ns.clear();
     state.note_display_beat_cache.clear();
-    state.hold_end_time_cache.clear();
+    state.hold_end_time_cache_ns.clear();
     state.hold_end_display_beat_cache.clear();
-    state.notes_end_time = 3_600.0;
-    state.music_end_time = 3_600.0;
+    state.notes_end_time_ns = 3_600_000_000_000;
+    state.music_end_time_ns = 3_600_000_000_000;
     state.decaying_hold_indices.clear();
     state.hold_decay_active.clear();
     state.replay_edges.clear();

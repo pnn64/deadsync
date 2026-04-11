@@ -2572,12 +2572,9 @@ impl App {
         let active_banner_video_paths = self.active_banner_video_paths();
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
-            let gameplay_time = self
-                .state
-                .screens
-                .gameplay_state
-                .as_ref()
-                .map(|state| state.current_music_time);
+            let gameplay_time = self.state.screens.gameplay_state.as_ref().map(|state| {
+                crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
+            });
             self.dynamic_media.sync_active_banner_videos(
                 &mut self.asset_manager,
                 backend,
@@ -5611,14 +5608,13 @@ impl App {
                         lane_index: e.lane_index,
                         pressed: e.pressed,
                         source: e.source,
-                        event_music_time: e.event_music_time,
-                        event_music_time_ns: i64::MIN,
+                        event_music_time_ns: e.event_music_time_ns,
                     })
                     .collect::<Vec<_>>()
             });
             let replay_offsets = replay_pending.as_ref().map(|payload| {
                 crate::game::gameplay::ReplayOffsetSnapshot {
-                    beat0_time_seconds: payload.replay_beat0_time_seconds,
+                    beat0_time_ns: payload.replay_beat0_time_ns,
                 }
             });
             let replay_status_text = replay_pending.as_ref().map(|payload| {

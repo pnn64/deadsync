@@ -1013,8 +1013,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             let noteskin = gs.noteskin[player_idx].take();
             let (start, end) = gs.note_ranges[player_idx];
             let notes = &gs.notes[start..end];
-            let note_times = &gs.note_time_cache[start..end];
-            let hold_end_times = &gs.hold_end_time_cache[start..end];
+            let note_times = &gs.note_time_cache_ns[start..end];
+            let hold_end_times = &gs.hold_end_time_cache_ns[start..end];
             let p = &gs.players[player_idx];
             let prof = &gs.player_profiles[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
@@ -1152,7 +1152,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 gs.holds_total[player_idx],
                 gs.rolls_total[player_idx],
                 gs.mines_total[player_idx],
-                p.fail_time,
+                p.fail_time
+                    .map(crate::game::gameplay::song_time_ns_from_seconds),
                 mines_disabled,
             );
             let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
@@ -1163,7 +1164,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 gs.holds_total[player_idx],
                 gs.rolls_total[player_idx],
                 gs.mines_total[player_idx],
-                p.fail_time,
+                p.fail_time
+                    .map(crate::game::gameplay::song_time_ns_from_seconds),
                 mines_disabled,
             );
 

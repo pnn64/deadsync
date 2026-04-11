@@ -466,13 +466,14 @@ fn arrowcloud_lifebar_points(gs: &gameplay::State, player_idx: usize) -> Vec<Arr
         return Vec::new();
     }
     let (start, end) = gs.note_ranges[player_idx];
-    let note_times = &gs.note_time_cache[start..end];
+    let note_times = &gs.note_time_cache_ns[start..end];
     let first_second = gs.density_graph_first_second.min(0.0);
     let last_second = gs.density_graph_last_second.max(first_second);
     let chart_start_second = note_times
         .iter()
+        .find(|&&t| !gameplay::song_time_ns_invalid(t))
         .copied()
-        .find(|t| t.is_finite())
+        .map(gameplay::song_time_ns_to_seconds)
         .unwrap_or(first_second);
     let duration = (last_second - first_second).max(0.0);
     let step = duration / ARROWCLOUD_LIFEBAR_POINTS as f32;
@@ -514,7 +515,7 @@ fn arrowcloud_timing_data_from_scatter(
 fn arrowcloud_timing_data(gs: &gameplay::State, player_idx: usize) -> Vec<ArrowCloudTimingDatum> {
     let (start, end) = gs.note_ranges[player_idx];
     let notes = &gs.notes[start..end];
-    let note_times = &gs.note_time_cache[start..end];
+    let note_times = &gs.note_time_cache_ns[start..end];
     let col_offset = player_idx.saturating_mul(gs.cols_per_player);
     let stream_segments = gameplay::stream_segments_for_results(gs, player_idx);
     let scatter = crate::game::timing::build_scatter_points(

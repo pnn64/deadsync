@@ -1943,7 +1943,9 @@ pub fn prewarm_text_layout(
 
     let mut max_combo = 0u32;
     let mut max_measure_len = 0i32;
-    let music_end_seconds = state.music_end_time.ceil().max(0.0) as i32;
+    let music_end_seconds = crate::game::gameplay::song_time_ns_to_seconds(state.music_end_time_ns)
+        .ceil()
+        .max(0.0) as i32;
 
     for player in 0..state.num_players {
         let profile = &state.player_profiles[player];
@@ -7088,15 +7090,12 @@ mod tests {
     fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
         let active = ActiveHold {
             note_index: 42,
-            start_time: 100.0,
             start_time_ns: 100_000_000_000,
-            end_time: 12.0,
             end_time_ns: 12_000_000_000,
             note_type: NoteType::Hold,
             let_go: false,
             is_pressed: true,
             life: 1.0,
-            last_update_time: 100.0,
             last_update_time_ns: 100_000_000_000,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 99.99, 100.0);
@@ -7108,15 +7107,12 @@ mod tests {
     fn hold_head_render_flags_switch_to_active_at_receptor() {
         let mut active = ActiveHold {
             note_index: 42,
-            start_time: 100.0,
             start_time_ns: 100_000_000_000,
-            end_time: 12.0,
             end_time_ns: 12_000_000_000,
             note_type: NoteType::Hold,
             let_go: false,
             is_pressed: true,
             life: 1.0,
-            last_update_time: 100.0,
             last_update_time_ns: 100_000_000_000,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
@@ -7134,15 +7130,12 @@ mod tests {
     fn roll_head_render_flags_stay_active_between_taps() {
         let active = ActiveHold {
             note_index: 42,
-            start_time: 100.0,
             start_time_ns: 100_000_000_000,
-            end_time: 12.0,
             end_time_ns: 12_000_000_000,
             note_type: NoteType::Roll,
             let_go: false,
             is_pressed: false,
             life: 1.0,
-            last_update_time: 100.0,
             last_update_time_ns: 100_000_000_000,
         };
         let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
@@ -7154,28 +7147,22 @@ mod tests {
     fn hold_head_render_flags_require_engaged_life_state() {
         let exhausted = ActiveHold {
             note_index: 7,
-            start_time: 100.0,
             start_time_ns: 100_000_000_000,
-            end_time: 8.0,
             end_time_ns: 8_000_000_000,
             note_type: NoteType::Roll,
             let_go: false,
             is_pressed: true,
             life: 0.0,
-            last_update_time: 100.0,
             last_update_time_ns: 100_000_000_000,
         };
         let let_go = ActiveHold {
             note_index: 7,
-            start_time: 100.0,
             start_time_ns: 100_000_000_000,
-            end_time: 8.0,
             end_time_ns: 8_000_000_000,
             note_type: NoteType::Roll,
             let_go: true,
             is_pressed: true,
             life: 1.0,
-            last_update_time: 100.0,
             last_update_time_ns: 100_000_000_000,
         };
         assert_eq!(
