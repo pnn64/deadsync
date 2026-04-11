@@ -16,7 +16,6 @@ struct ModelMeshCacheKey {
     rot: [u32; 3],
     zoom: [u32; 3],
     vert_align: u32,
-    tint: [u32; 4],
 }
 
 #[derive(Default)]
@@ -44,13 +43,12 @@ impl ModelMeshCache {
         size: [f32; 2],
         rotation_deg: f32,
         draw: ModelDrawState,
-        tint: [f32; 4],
         build: F,
     ) -> (TMeshCacheKey, Arc<[TexturedMeshVertex]>)
     where
         F: FnOnce() -> Arc<[TexturedMeshVertex]>,
     {
-        let key = model_cache_key(slot, size, rotation_deg, draw, tint);
+        let key = model_cache_key(slot, size, rotation_deg, draw);
         let geom_cache_key = hashed_model_cache_key(&key);
         if let Some(vertices) = self.entries.get(&key) {
             return (geom_cache_key, vertices.clone());
@@ -78,7 +76,6 @@ fn model_cache_key(
     size: [f32; 2],
     rotation_deg: f32,
     draw: ModelDrawState,
-    tint: [f32; 4],
 ) -> ModelMeshCacheKey {
     ModelMeshCacheKey {
         slot: slot as *const SpriteSlot,
@@ -100,12 +97,6 @@ fn model_cache_key(
             norm_bits(draw.zoom[2]),
         ],
         vert_align: norm_bits(draw.vert_align),
-        tint: [
-            norm_bits(tint[0]),
-            norm_bits(tint[1]),
-            norm_bits(tint[2]),
-            norm_bits(tint[3]),
-        ],
     }
 }
 
@@ -114,4 +105,58 @@ fn hashed_model_cache_key(key: &ModelMeshCacheKey) -> TMeshCacheKey {
     let mut hasher = XxHash64::default();
     key.hash(&mut hasher);
     hasher.finish().max(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::parsing::noteskin::{
+        ModelAutoRotKey, ModelMesh, ModelTweenSegment, SpriteDefinition, SpriteSource,
+    };
+
+    fn test_slot() -> SpriteSlot {
+        SpriteSlot {
+            def: SpriteDefinition::default(),
+            base_rot_sin_cos: [0.0, 1.0],
+            source_size: [64, 64],
+            source: Arc::new(SpriteSource::Atlas {
+                texture_key: Arc::from("test"),
+                tex_dims: (64, 64),
+            }),
+            uv_velocity: [0.0, 0.0],
+            uv_offset: [0.0, 0.0],
+            note_color_translate: false,
+            model: Some(Arc::new(ModelMesh {
+                vertices: Arc::from([]),
+                bounds: [0.0; 6],
+            })),
+            model_draw: ModelDrawState::default(),
+            model_timeline: Arc::<[ModelTweenSegment]>::from([]),
+            model_effect: crate::engine::present::anim::EffectState::default(),
+            model_auto_rot_total_frames: 0.0,
+            model_auto_rot_z_keys: Arc::<[ModelAutoRotKey]>::from([]),
+        }
+    }
+
+    #[test]
+    fn cached_geometry_reuses_key_across_tints() {
+        let slot = test_slot();
+        let size = [48.0, 64.0];
+        let draw = ModelDrawState::default();
+        let mut cache = ModelMeshCache::default();
+        let mut builds = 0usize;
+
+        let (key_a, verts_a) = cache.get_or_insert_with(&slot, size, 15.0, draw, || {
+            builds += 1;
+            Arc::from(vec![TexturedMeshVertex::default()])
+        });
+        let (key_b, verts_b) = cache.get_or_insert_with(&slot, size, 15.0, draw, || {
+            builds += 1;
+            Arc::from(vec![TexturedMeshVertex::default()])
+        });
+
+        assert_eq!(builds, 1);
+        assert_eq!(key_a, key_b);
+        assert!(Arc::ptr_eq(&verts_a, &verts_b));
+    }
 }

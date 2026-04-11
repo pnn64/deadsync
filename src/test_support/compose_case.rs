@@ -22,6 +22,10 @@ use twox_hash::XxHash64;
 
 const CASE_VERSION: u32 = 2;
 
+fn default_textured_mesh_tint() -> [f32; 4] {
+    [1.0; 4]
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComposeCase {
     pub version: u32,
@@ -160,6 +164,8 @@ pub enum ActorSnapshot {
         offset: [f32; 2],
         size: [SizeSpecSnapshot; 2],
         texture: String,
+        #[serde(default = "default_textured_mesh_tint")]
+        tint: [f32; 4],
         vertices: Vec<TexturedMeshVertex>,
         mode: MeshModeSnapshot,
         uv_scale: [f32; 2],
@@ -304,6 +310,8 @@ pub enum RenderObjectTypeSnapshot {
     },
     TexturedMesh {
         texture_id: String,
+        #[serde(default = "default_textured_mesh_tint")]
+        tint: [f32; 4],
         vertices: Vec<TexturedMeshVertex>,
         mode: MeshModeSnapshot,
         uv_scale: [f32; 2],
@@ -903,6 +911,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             offset,
             size,
             texture,
+            tint,
             vertices,
             mode,
             uv_scale,
@@ -917,6 +926,7 @@ fn actor_snapshot(actor: &Actor) -> ActorSnapshot {
             offset: *offset,
             size: size.map(SizeSpecSnapshot::from),
             texture: texture.to_string(),
+            tint: *tint,
             vertices: vertices.to_vec(),
             mode: MeshModeSnapshot::from(*mode),
             uv_scale: *uv_scale,
@@ -1100,6 +1110,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             offset,
             size,
             texture,
+            tint,
             vertices,
             mode,
             uv_scale,
@@ -1114,6 +1125,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             world_z: 0.0,
             size: size.map(SizeSpec::from),
             texture: Arc::from(texture.as_str()),
+            tint: *tint,
             vertices: Arc::from(vertices.clone()),
             geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
             mode: MeshMode::from(*mode),
@@ -1194,6 +1206,7 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
             },
             ObjectType::TexturedMesh {
                 texture_id,
+                tint,
                 vertices,
                 mode,
                 uv_scale,
@@ -1202,6 +1215,7 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
                 ..
             } => RenderObjectTypeSnapshot::TexturedMesh {
                 texture_id: texture_id.to_string(),
+                tint: *tint,
                 vertices: vertices.to_vec(),
                 mode: MeshModeSnapshot::from(*mode),
                 uv_scale: *uv_scale,
@@ -1255,6 +1269,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
             },
             RenderObjectTypeSnapshot::TexturedMesh {
                 texture_id,
+                tint,
                 vertices,
                 mode,
                 uv_scale,
@@ -1262,6 +1277,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
                 uv_tex_shift,
             } => ObjectType::TexturedMesh {
                 texture_id: Cow::Owned(texture_id.clone()),
+                tint: *tint,
                 vertices: Cow::Owned(vertices.clone()),
                 geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
                 mode: MeshMode::from(*mode),

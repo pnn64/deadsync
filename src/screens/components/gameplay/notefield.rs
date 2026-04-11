@@ -1191,6 +1191,7 @@ fn hold_strip_actor(
         world_z: 0.0,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         texture,
+        tint: [1.0; 4],
         vertices,
         geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
         mode: MeshMode::Triangles,

@@ -16,9 +16,10 @@ struct VertexIn {
     @location(5) model_col1: vec4<f32>,
     @location(6) model_col2: vec4<f32>,
     @location(7) model_col3: vec4<f32>,
-    @location(8) uv_scale: vec2<f32>,
-    @location(9) uv_offset: vec2<f32>,
-    @location(10) uv_tex_shift: vec2<f32>,
+    @location(8) tint: vec4<f32>,
+    @location(9) uv_scale: vec2<f32>,
+    @location(10) uv_offset: vec2<f32>,
+    @location(11) uv_tex_shift: vec2<f32>,
 };
 
 struct VertexOut {
@@ -40,7 +41,7 @@ fn vs_main(input: VertexIn) -> VertexOut {
     out.uv = input.uv * input.uv_scale
         + input.uv_offset
         + input.uv_tex_shift * (input.tex_matrix_scale - vec2<f32>(1.0, 1.0));
-    out.color = input.color;
+    out.color = input.color * input.tint;
     return out;
 }
 

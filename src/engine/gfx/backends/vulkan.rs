@@ -71,9 +71,10 @@ struct TexturedMeshInstanceGpu {
     model_col1: [f32; 4],   // offset 16
     model_col2: [f32; 4],   // offset 32
     model_col3: [f32; 4],   // offset 48
-    uv_scale: [f32; 2],     // offset 64
-    uv_offset: [f32; 2],    // offset 72
-    uv_tex_shift: [f32; 2], // offset 80
+    tint: [f32; 4],         // offset 64
+    uv_scale: [f32; 2],     // offset 80
+    uv_offset: [f32; 2],    // offset 88
+    uv_tex_shift: [f32; 2], // offset 96
 }
 
 struct PipelinePair {
@@ -1671,6 +1672,7 @@ pub fn draw(
                         model_col1: inst.model_col1,
                         model_col2: inst.model_col2,
                         model_col3: inst.model_col3,
+                        tint: inst.tint,
                         uv_scale: inst.uv_scale,
                         uv_offset: inst.uv_offset,
                         uv_tex_shift: inst.uv_tex_shift,
@@ -2636,7 +2638,7 @@ fn vertex_input_descriptions_mesh() -> (
 #[inline(always)]
 fn vertex_input_descriptions_tmesh() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 11],
+    [vk::VertexInputAttributeDescription; 12],
 ) {
     let b0 = vk::VertexInputBindingDescription::default()
         .binding(0)
@@ -2687,21 +2689,26 @@ fn vertex_input_descriptions_tmesh() -> (
         .location(7)
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(48);
-    let a_uv_scale = vk::VertexInputAttributeDescription::default()
+    let a_tint = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(8)
-        .format(vk::Format::R32G32_SFLOAT)
+        .format(vk::Format::R32G32B32A32_SFLOAT)
         .offset(64);
-    let a_uv_offset = vk::VertexInputAttributeDescription::default()
+    let a_uv_scale = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(9)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(72);
-    let a_uv_tex_shift = vk::VertexInputAttributeDescription::default()
+        .offset(80);
+    let a_uv_offset = vk::VertexInputAttributeDescription::default()
         .binding(1)
         .location(10)
         .format(vk::Format::R32G32_SFLOAT)
-        .offset(80);
+        .offset(88);
+    let a_uv_tex_shift = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(11)
+        .format(vk::Format::R32G32_SFLOAT)
+        .offset(96);
 
     (
         [b0, b1],
@@ -2714,6 +2721,7 @@ fn vertex_input_descriptions_tmesh() -> (
             a_model1,
             a_model2,
             a_model3,
+            a_tint,
             a_uv_scale,
             a_uv_offset,
             a_uv_tex_shift,

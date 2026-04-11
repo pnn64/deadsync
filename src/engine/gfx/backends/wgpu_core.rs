@@ -96,6 +96,7 @@ struct TexturedMeshInstanceRaw {
     model_col1: [f32; 4],
     model_col2: [f32; 4],
     model_col3: [f32; 4],
+    tint: [f32; 4],
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
@@ -2081,14 +2082,15 @@ const TMESH_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
     3 => Float32x2, // tex-matrix scale
 ];
 
-const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
+const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![
     4 => Float32x4, // model column 0
     5 => Float32x4, // model column 1
     6 => Float32x4, // model column 2
     7 => Float32x4, // model column 3
-    8 => Float32x2, // uv scale
-    9 => Float32x2, // uv offset
-    10 => Float32x2, // uv texture-matrix shift
+    8 => Float32x4, // tint
+    9 => Float32x2, // uv scale
+    10 => Float32x2, // uv offset
+    11 => Float32x2, // uv texture-matrix shift
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![

@@ -96,6 +96,7 @@ pub enum ObjectType<'a> {
     #[allow(dead_code)]
     TexturedMesh {
         texture_id: Cow<'a, str>,
+        tint: [f32; 4],
         vertices: Cow<'a, [TexturedMeshVertex]>,
         geom_cache_key: TMeshCacheKey,
         mode: MeshMode,
