@@ -130,7 +130,7 @@ impl DynamicMedia {
                 Ok(texture) => {
                     let path_key = path.to_string_lossy();
                     let key = format!("__cdtitle::{path_key}");
-                    assets.insert_texture(key.clone(), texture);
+                    assets.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     self.current_dynamic_cdtitle = Some((key.clone(), path));
                     Some(key)
@@ -193,7 +193,7 @@ impl DynamicMedia {
 
             match backend.create_texture(&rgba, SamplerDesc::default()) {
                 Ok(texture) => {
-                    assets.insert_texture(key.clone(), texture);
+                    assets.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     if banner_cache_opts.enabled {
                         self.dynamic_pack_banner_keys.insert(key.clone());
@@ -242,7 +242,13 @@ impl DynamicMedia {
 
             match backend.create_texture(&rgba, SamplerDesc::default()) {
                 Ok(texture) => {
-                    assets.set_texture_for_key(backend, key.clone(), texture);
+                    assets.set_texture_for_key(
+                        backend,
+                        key.clone(),
+                        texture,
+                        rgba.width(),
+                        rgba.height(),
+                    );
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     self.current_dynamic_banner = Some(DynamicBannerState {
                         key: key.clone(),
@@ -291,7 +297,7 @@ impl DynamicMedia {
             if self.active_banner_videos.contains_key(&key) {
                 continue;
             }
-            media_cache::ensure_banner_texture(assets, backend, path);
+            media_cache::queue_banner_texture(assets, path);
             if !assets.has_texture_key(&key) {
                 continue;
             }
@@ -350,7 +356,13 @@ impl DynamicMedia {
                             .create_texture(&video.poster, SamplerDesc::default())
                         {
                             Ok(texture) => {
-                                assets.set_texture_for_key(backend, key.clone(), texture);
+                                assets.set_texture_for_key(
+                                    backend,
+                                    key.clone(),
+                                    texture,
+                                    video.info.width,
+                                    video.info.height,
+                                );
                                 register_texture_dims(&key, video.info.width, video.info.height);
                                 self.current_dynamic_background = Some(DynamicBackgroundState {
                                     key: key.clone(),
@@ -378,7 +390,13 @@ impl DynamicMedia {
                 match video::load_poster(&path) {
                     Ok(rgba) => match backend.create_texture(&rgba, SamplerDesc::default()) {
                         Ok(texture) => {
-                            assets.set_texture_for_key(backend, key.clone(), texture);
+                            assets.set_texture_for_key(
+                                backend,
+                                key.clone(),
+                                texture,
+                                rgba.width(),
+                                rgba.height(),
+                            );
                             register_texture_dims(&key, rgba.width(), rgba.height());
                             self.current_dynamic_background = Some(DynamicBackgroundState {
                                 key: key.clone(),
@@ -415,7 +433,13 @@ impl DynamicMedia {
             match backend.create_texture(&rgba, SamplerDesc::default()) {
                 Ok(texture) => {
                     let key = path.to_string_lossy().into_owned();
-                    assets.set_texture_for_key(backend, key.clone(), texture);
+                    assets.set_texture_for_key(
+                        backend,
+                        key.clone(),
+                        texture,
+                        rgba.width(),
+                        rgba.height(),
+                    );
                     register_texture_dims(&key, rgba.width(), rgba.height());
                     self.current_dynamic_background = Some(DynamicBackgroundState {
                         key: key.clone(),
@@ -478,10 +502,9 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn update_video_frames(
+    pub(crate) fn queue_video_frames(
         &mut self,
         assets: &mut AssetManager,
-        backend: &mut Backend,
         gameplay_time_sec: Option<f32>,
     ) {
         let banner_frames: Vec<_> = self
@@ -496,9 +519,7 @@ impl DynamicMedia {
             })
             .collect();
         for (key, frame) in banner_frames {
-            if let Err(e) = assets.update_texture_for_key(backend, &key, &frame) {
-                warn!("Failed to update dynamic video banner '{}': {e}", key);
-            }
+            assets.queue_texture_upload(key, frame);
         }
 
         let background_frame = self.current_dynamic_background.as_mut().and_then(|state| {
@@ -508,10 +529,8 @@ impl DynamicMedia {
                 .take_due_frame(play_time)
                 .map(|frame| (state.key.clone(), frame))
         });
-        if let Some((key, frame)) = background_frame
-            && let Err(e) = assets.update_texture_for_key(backend, &key, &frame)
-        {
-            warn!("Failed to update dynamic video background '{}': {e}", key);
+        if let Some((key, frame)) = background_frame {
+            assets.queue_texture_upload(key, frame);
         }
     }
 

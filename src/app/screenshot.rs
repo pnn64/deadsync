@@ -192,8 +192,12 @@ impl App {
         }
 
         let texture = backend.create_texture(image, crate::engine::gfx::SamplerDesc::default())?;
-        self.asset_manager
-            .insert_texture(SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(), texture);
+        self.asset_manager.insert_texture(
+            SCREENSHOT_PREVIEW_TEXTURE_KEY.to_string(),
+            texture,
+            image.width(),
+            image.height(),
+        );
         assets::register_texture_dims(
             SCREENSHOT_PREVIEW_TEXTURE_KEY,
             image.width(),

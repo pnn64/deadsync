@@ -12,7 +12,7 @@ use self::input_routing::{GameplayQueuedEvent, gameplay_raw_key_event};
 use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
-use crate::assets::AssetManager;
+use crate::assets::{AssetManager, TextureUploadBudget};
 use crate::config::{self, DisplayMode, dirs};
 use crate::engine::display;
 use crate::engine::gfx::{
@@ -95,6 +95,8 @@ const GAMEPLAY_EVENT_TRACE_INTERVAL: Duration = Duration::from_secs(1);
 const GAMEPLAY_EVENT_BATCH_SLOW_US: u32 = 1_000;
 const GAMEPLAY_EVENT_BATCH_BURST_KEYS: u32 = 8;
 const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 131_072;
+const LIVE_TEXTURE_UPLOAD_MAX_OPS: usize = 2;
+const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 const STUTTER_DIAG_DUMP_WINDOW_NS: u64 = 500_000_000;
 const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
 const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
@@ -2581,9 +2583,15 @@ impl App {
                 &active_banner_video_paths,
             );
             self.dynamic_media
-                .update_video_frames(&mut self.asset_manager, backend, gameplay_time);
-            self.asset_manager
-                .upload_pending_generated_textures(backend);
+                .queue_video_frames(&mut self.asset_manager, gameplay_time);
+            self.asset_manager.queue_pending_generated_textures();
+            self.asset_manager.drain_texture_uploads(
+                backend,
+                TextureUploadBudget {
+                    max_uploads: LIVE_TEXTURE_UPLOAD_MAX_OPS,
+                    max_bytes: LIVE_TEXTURE_UPLOAD_MAX_BYTES,
+                },
+            );
             upload_us = elapsed_us_since(upload_started);
         }
         let fonts = self.asset_manager.fonts();

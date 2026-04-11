@@ -8,9 +8,9 @@ use crate::engine::gfx::{
 };
 use crate::engine::present::font::{self, Font, FontLoadData, FontParseError};
 use image::RgbaImage;
-use log::debug;
-use std::collections::HashMap;
-use std::{error::Error as StdError, fmt, path::Path};
+use log::{debug, warn};
+use std::collections::{HashMap, VecDeque};
+use std::{error::Error as StdError, fmt, path::Path, sync::Arc};
 
 #[cfg(test)]
 pub(crate) use self::dynamic::{
@@ -18,8 +18,6 @@ pub(crate) use self::dynamic::{
     dynamic_image_cache_path_for, load_or_build_cached_dynamic_image, save_cached_banner_image,
     save_raw_cached_banner_image,
 };
-use self::textures::apply_texture_hints;
-use self::textures::ascii_ci_hash;
 #[cfg(test)]
 pub(crate) use self::textures::parse_texture_resolution_hint;
 pub use self::textures::{
@@ -28,6 +26,9 @@ pub use self::textures::{
     register_generated_texture, register_texture_dims, resolve_texture_choice, sprite_sheet_dims,
     strip_sprite_hints, texture_dims, texture_source_dims_from_real,
     texture_source_frame_dims_from_real,
+};
+use self::textures::{
+    apply_texture_hints, ascii_ci_hash, generated_texture, take_pending_generated_texture_keys,
 };
 
 #[derive(Debug)]
@@ -77,22 +78,96 @@ impl From<Box<dyn StdError>> for AssetError {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct TextureUploadBudget {
+    pub max_uploads: usize,
+    pub max_bytes: usize,
+}
+
+struct PendingTextureUpload {
+    image: Arc<RgbaImage>,
+    sampler: SamplerDesc,
+    bytes: usize,
+}
+
+#[derive(Default)]
+struct TextureUploadQueue {
+    order: VecDeque<String>,
+    entries: HashMap<String, PendingTextureUpload>,
+    queued_bytes: usize,
+}
+
+impl TextureUploadQueue {
+    fn push(&mut self, key: String, image: Arc<RgbaImage>, sampler: SamplerDesc) {
+        let bytes = image.as_raw().len();
+        if let Some(old) = self.entries.insert(
+            key.clone(),
+            PendingTextureUpload {
+                image,
+                sampler,
+                bytes,
+            },
+        ) {
+            self.queued_bytes = self.queued_bytes.saturating_sub(old.bytes);
+        } else {
+            self.order.push_back(key);
+        }
+        self.queued_bytes = self.queued_bytes.saturating_add(bytes);
+    }
+
+    fn remove(&mut self, key: &str) {
+        if let Some(old) = self.entries.remove(key) {
+            self.queued_bytes = self.queued_bytes.saturating_sub(old.bytes);
+        }
+    }
+
+    fn pop_next(
+        &mut self,
+        budget: TextureUploadBudget,
+        drained_uploads: usize,
+        drained_bytes: usize,
+    ) -> Option<(String, PendingTextureUpload)> {
+        while let Some(key) = self.order.pop_front() {
+            let Some(upload) = self.entries.remove(&key) else {
+                continue;
+            };
+            let next_bytes = drained_bytes.saturating_add(upload.bytes);
+            let fits_budget =
+                drained_uploads < budget.max_uploads && next_bytes <= budget.max_bytes;
+            let allow_first =
+                drained_uploads == 0 && budget.max_uploads > 0 && budget.max_bytes > 0;
+            if fits_budget || allow_first {
+                self.queued_bytes = self.queued_bytes.saturating_sub(upload.bytes);
+                return Some((key, upload));
+            }
+            self.entries.insert(key.clone(), upload);
+            self.order.push_front(key);
+            return None;
+        }
+        None
+    }
+}
+
 pub struct AssetManager {
     textures: HashMap<TextureHandle, GfxTexture>,
+    uploaded_texture_dims: HashMap<TextureHandle, TexMeta>,
     texture_handles: HashMap<String, TextureHandle>,
     texture_handles_ascii_ci: HashMap<u64, TextureHandle>,
     next_texture_handle: TextureHandle,
     fonts: HashMap<&'static str, Font>,
+    pending_texture_uploads: TextureUploadQueue,
 }
 
 impl AssetManager {
     pub fn new() -> Self {
         Self {
             textures: HashMap::new(),
+            uploaded_texture_dims: HashMap::new(),
             texture_handles: HashMap::new(),
             texture_handles_ascii_ci: HashMap::new(),
             next_texture_handle: 1,
             fonts: HashMap::new(),
+            pending_texture_uploads: TextureUploadQueue::default(),
         }
     }
 
@@ -117,6 +192,7 @@ impl AssetManager {
     pub fn take_textures(&mut self) -> HashMap<TextureHandle, GfxTexture> {
         self.texture_handles.clear();
         self.texture_handles_ascii_ci.clear();
+        self.uploaded_texture_dims.clear();
         std::mem::take(&mut self.textures)
     }
 
@@ -194,7 +270,12 @@ impl AssetManager {
                 }
                 let texture = backend.create_texture(&image_data, hints.sampler_desc())?;
                 register_texture_dims(&key, image_data.width(), image_data.height());
-                self.insert_texture(key.clone(), texture);
+                self.insert_texture(
+                    key.clone(),
+                    texture,
+                    image_data.width(),
+                    image_data.height(),
+                );
                 debug!("Loaded font texture: {key}");
             }
         }
@@ -243,14 +324,25 @@ impl AssetManager {
         &mut self,
         key: String,
         texture: GfxTexture,
+        width: u32,
+        height: u32,
     ) -> Option<GfxTexture> {
         let handle = self.reserve_texture_handle(key);
+        self.uploaded_texture_dims.insert(
+            handle,
+            TexMeta {
+                w: width,
+                h: height,
+            },
+        );
         self.textures.insert(handle, texture)
     }
 
     pub(crate) fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, GfxTexture)> {
+        self.pending_texture_uploads.remove(key);
         let handle = self.texture_handles.remove(key)?;
         self.rebuild_texture_handle_aliases();
+        self.uploaded_texture_dims.remove(&handle);
         self.textures
             .remove(&handle)
             .map(|texture| (handle, texture))
@@ -272,8 +364,18 @@ impl AssetManager {
         backend: &mut Backend,
         key: String,
         texture: GfxTexture,
+        width: u32,
+        height: u32,
     ) -> TextureHandle {
+        self.pending_texture_uploads.remove(&key);
         let handle = self.reserve_texture_handle(key);
+        self.uploaded_texture_dims.insert(
+            handle,
+            TexMeta {
+                w: width,
+                h: height,
+            },
+        );
         if let Some(old) = self.textures.insert(handle, texture) {
             self.dispose_texture(backend, handle, old);
         }
@@ -286,9 +388,10 @@ impl AssetManager {
         key: &str,
         rgba: &RgbaImage,
     ) -> Result<(), AssetError> {
-        let dims = texture_dims(key);
+        self.pending_texture_uploads.remove(key);
         let handle = self.texture_handles.get(key).copied();
-        if let (Some(meta), Some(handle)) = (dims, handle)
+        if let Some(handle) = handle
+            && let Some(meta) = self.uploaded_texture_dims.get(&handle).copied()
             && meta.w == rgba.width()
             && meta.h == rgba.height()
             && let Some(texture) = self.textures.get_mut(&handle)
@@ -298,7 +401,13 @@ impl AssetManager {
         }
 
         let texture = backend.create_texture(rgba, SamplerDesc::default())?;
-        self.set_texture_for_key(backend, key.to_string(), texture);
+        self.set_texture_for_key(
+            backend,
+            key.to_string(),
+            texture,
+            rgba.width(),
+            rgba.height(),
+        );
         register_texture_dims(key, rgba.width(), rgba.height());
         Ok(())
     }
@@ -310,10 +419,102 @@ impl AssetManager {
         rgba: &RgbaImage,
         sampler: SamplerDesc,
     ) -> Result<(), AssetError> {
+        self.pending_texture_uploads.remove(key);
         let texture = backend.create_texture(rgba, sampler)?;
-        self.set_texture_for_key(backend, key.to_string(), texture);
+        self.set_texture_for_key(
+            backend,
+            key.to_string(),
+            texture,
+            rgba.width(),
+            rgba.height(),
+        );
         register_texture_dims(key, rgba.width(), rgba.height());
         Ok(())
+    }
+
+    fn queue_texture_upload_shared(
+        &mut self,
+        key: String,
+        image: Arc<RgbaImage>,
+        sampler: SamplerDesc,
+    ) {
+        self.reserve_texture_handle(key.clone());
+        register_texture_dims(&key, image.width(), image.height());
+        self.pending_texture_uploads.push(key, image, sampler);
+    }
+
+    pub(crate) fn queue_texture_upload(&mut self, key: String, image: RgbaImage) {
+        self.queue_texture_upload_with_sampler(key, image, SamplerDesc::default());
+    }
+
+    pub(crate) fn queue_texture_upload_with_sampler(
+        &mut self,
+        key: String,
+        image: RgbaImage,
+        sampler: SamplerDesc,
+    ) {
+        self.queue_texture_upload_shared(key, Arc::new(image), sampler);
+    }
+
+    pub(crate) fn queue_pending_generated_textures(&mut self) {
+        for key in take_pending_generated_texture_keys() {
+            let Some(generated) = generated_texture(&key) else {
+                continue;
+            };
+            self.queue_texture_upload_shared(key, generated.image, generated.sampler);
+        }
+    }
+
+    pub(crate) fn drain_texture_uploads(
+        &mut self,
+        backend: &mut Backend,
+        budget: TextureUploadBudget,
+    ) {
+        let mut drained_uploads = 0usize;
+        let mut drained_bytes = 0usize;
+        while let Some((key, upload)) =
+            self.pending_texture_uploads
+                .pop_next(budget, drained_uploads, drained_bytes)
+        {
+            drained_uploads = drained_uploads.saturating_add(1);
+            drained_bytes = drained_bytes.saturating_add(upload.bytes);
+
+            let handle = self.texture_handles.get(&key).copied();
+            let mut updated = false;
+            if let Some(handle) = handle
+                && let Some(meta) = self.uploaded_texture_dims.get(&handle).copied()
+                && meta.w == upload.image.width()
+                && meta.h == upload.image.height()
+                && let Some(texture) = self.textures.get_mut(&handle)
+            {
+                match backend.update_texture(texture, upload.image.as_ref()) {
+                    Ok(()) => {
+                        updated = true;
+                    }
+                    Err(e) => {
+                        warn!("Failed to update queued GPU texture for key '{key}': {e}");
+                    }
+                }
+            }
+            if updated {
+                continue;
+            }
+
+            match backend.create_texture(upload.image.as_ref(), upload.sampler) {
+                Ok(texture) => {
+                    self.set_texture_for_key(
+                        backend,
+                        key,
+                        texture,
+                        upload.image.width(),
+                        upload.image.height(),
+                    );
+                }
+                Err(e) => {
+                    warn!("Failed to create queued GPU texture for key '{key}': {e}");
+                }
+            }
+        }
     }
 
     fn note_texture_handle_alias(&mut self, key: &str, handle: TextureHandle) {
@@ -467,6 +668,10 @@ mod tests {
         test_rgba(color).save(path).unwrap();
     }
 
+    fn blank_rgba(width: u32, height: u32) -> RgbaImage {
+        RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
+    }
+
     #[test]
     fn parses_texture_resolution_hint_from_parenthetical_res_tag() {
         assert_eq!(
@@ -586,5 +791,93 @@ mod tests {
 
         assert!(cache_path.is_file());
         assert!(!stale_path.exists());
+    }
+
+    #[test]
+    fn texture_upload_queue_replaces_existing_key_without_dup_order() {
+        let mut queue = TextureUploadQueue::default();
+        queue.push(
+            "shared".to_string(),
+            Arc::new(blank_rgba(1, 1)),
+            SamplerDesc::default(),
+        );
+        queue.push(
+            "shared".to_string(),
+            Arc::new(blank_rgba(2, 2)),
+            SamplerDesc::default(),
+        );
+        queue.push(
+            "other".to_string(),
+            Arc::new(blank_rgba(1, 1)),
+            SamplerDesc::default(),
+        );
+
+        assert_eq!(queue.entries.len(), 2);
+        assert_eq!(queue.queued_bytes, (2 * 2 * 4 + 1 * 1 * 4) as usize);
+
+        let budget = TextureUploadBudget {
+            max_uploads: 4,
+            max_bytes: 64,
+        };
+        let (first_key, first) = queue.pop_next(budget, 0, 0).unwrap();
+        assert_eq!(first_key, "shared");
+        assert_eq!(first.bytes, (2 * 2 * 4) as usize);
+
+        let (second_key, second) = queue.pop_next(budget, 1, first.bytes).unwrap();
+        assert_eq!(second_key, "other");
+        assert_eq!(second.bytes, 4);
+        assert!(
+            queue
+                .pop_next(budget, 2, first.bytes + second.bytes)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn texture_upload_queue_allows_one_oversize_upload_then_stops_at_budget() {
+        let mut queue = TextureUploadQueue::default();
+        queue.push(
+            "big".to_string(),
+            Arc::new(blank_rgba(3, 1)),
+            SamplerDesc::default(),
+        );
+        queue.push(
+            "small".to_string(),
+            Arc::new(blank_rgba(1, 1)),
+            SamplerDesc::default(),
+        );
+
+        let budget = TextureUploadBudget {
+            max_uploads: 1,
+            max_bytes: 8,
+        };
+        let (first_key, first) = queue.pop_next(budget, 0, 0).unwrap();
+        assert_eq!(first_key, "big");
+        assert_eq!(first.bytes, 12);
+        assert!(queue.pop_next(budget, 1, first.bytes).is_none());
+        assert!(queue.entries.contains_key("small"));
+    }
+
+    #[test]
+    fn remove_texture_cancels_pending_upload_for_reserved_handle() {
+        let mut assets = AssetManager::new();
+        assets.queue_texture_upload("queued".to_string(), blank_rgba(2, 2));
+
+        assert!(assets.has_texture_key("queued"));
+        assert!(
+            assets
+                .pending_texture_uploads
+                .entries
+                .contains_key("queued")
+        );
+
+        assert!(assets.remove_texture("queued").is_none());
+        assert!(!assets.has_texture_key("queued"));
+        assert!(
+            !assets
+                .pending_texture_uploads
+                .entries
+                .contains_key("queued")
+        );
     }
 }
