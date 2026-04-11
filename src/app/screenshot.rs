@@ -188,7 +188,7 @@ impl App {
         {
             let mut old_map = HashMap::with_capacity(1);
             old_map.insert(handle, old);
-            backend.dispose_textures(&mut old_map);
+            backend.retire_textures(&mut old_map);
         }
 
         let texture = backend.create_texture(image, crate::engine::gfx::SamplerDesc::default())?;

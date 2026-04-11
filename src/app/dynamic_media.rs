@@ -698,7 +698,7 @@ impl DynamicMedia {
         key: String,
     ) {
         if let Some((handle, texture)) = self.take_releasable_texture(assets, &key) {
-            assets.dispose_texture(backend, handle, texture);
+            assets.retire_texture(backend, handle, texture);
         }
     }
 
@@ -853,7 +853,7 @@ impl DynamicMedia {
             return;
         };
         if let Some((handle, texture)) = assets.remove_texture(&state.key) {
-            assets.dispose_texture(backend, handle, texture);
+            assets.retire_texture(backend, handle, texture);
         }
     }
 

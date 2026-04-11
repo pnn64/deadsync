@@ -119,6 +119,11 @@ struct SubmittedTextureUpload {
     staging: Vec<BufferResource>,
 }
 
+struct RetiredTexture {
+    retire_after_present_id: u32,
+    _texture: Texture,
+}
+
 struct CachedTMeshGeom {
     buffer: BufferResource,
     vertex_count: u32,
@@ -247,6 +252,8 @@ pub struct State {
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
     submitted_tex_uploads: Vec<SubmittedTextureUpload>, // retired when the tagged frame slot completes
+    retired_textures: Vec<RetiredTexture>,
+    last_submitted_present_id: u32,
     present_telemetry: PresentTelemetryState,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
@@ -393,6 +400,8 @@ pub fn init(
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
         submitted_tex_uploads: Vec::new(),
+        retired_textures: Vec::new(),
+        last_submitted_present_id: 0,
         present_telemetry,
         screenshot_requested: false,
         captured_frame: None,
@@ -1212,6 +1221,53 @@ pub fn retire_submitted_uploads(state: &mut State) {
     retire_all_submitted_texture_uploads(state)
 }
 
+#[inline(always)]
+fn completed_present_id(state: &State) -> u32 {
+    state
+        .present_telemetry
+        .last_completed
+        .map_or(0, |timing| timing.present_id)
+}
+
+fn retire_completed_textures(state: &mut State) {
+    let completed = completed_present_id(state);
+    if completed == 0 {
+        return;
+    }
+
+    let mut keep = Vec::with_capacity(state.retired_textures.len());
+    for retired in mem::take(&mut state.retired_textures) {
+        if retired.retire_after_present_id != 0 && retired.retire_after_present_id > completed {
+            keep.push(retired);
+        }
+    }
+    state.retired_textures = keep;
+}
+
+pub fn retire_textures(state: &mut State, textures: Vec<Texture>) {
+    if textures.is_empty() {
+        return;
+    }
+
+    let retire_after_present_id = state.last_submitted_present_id;
+    let completed = completed_present_id(state);
+    if retire_after_present_id == 0 || retire_after_present_id <= completed {
+        drop(textures);
+        return;
+    }
+
+    state
+        .retired_textures
+        .extend(textures.into_iter().map(|texture| RetiredTexture {
+            retire_after_present_id,
+            _texture: texture,
+        }));
+}
+
+pub fn retire_all_textures(state: &mut State) {
+    state.retired_textures.clear();
+}
+
 pub fn create_texture(
     state: &mut State,
     image: &RgbaImage,
@@ -1525,6 +1581,7 @@ pub fn draw(
         };
         stats.acquire_us = elapsed_us_since(acquire_started);
         record_cpu_present_completion(state, image_index);
+        retire_completed_textures(state);
 
         let in_flight = state.images_in_flight[image_index as usize];
         if in_flight != vk::Fence::null() {
@@ -2008,6 +2065,8 @@ pub fn draw(
         }
         calibrate_present_clock(state);
         poll_past_presentation_timing(state);
+        state.last_submitted_present_id = submitted_present_id;
+        retire_completed_textures(state);
         stats.present_stats = snapshot_present_stats(
             state,
             waited_for_image,
@@ -2101,6 +2160,7 @@ pub fn cleanup(state: &mut State) {
         }
     }
     retire_all_submitted_texture_uploads(state);
+    retire_all_textures(state);
 
     // SAFETY: The device is idle, so it is valid to tear down swapchain resources, mapped rings,
     // pipelines, descriptor pools/layouts, the device, and finally the instance-owned objects.

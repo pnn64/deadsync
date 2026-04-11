@@ -355,7 +355,7 @@ impl AssetManager {
             .map(|texture| (handle, texture))
     }
 
-    pub(crate) fn dispose_texture(
+    pub(crate) fn retire_texture(
         &mut self,
         backend: &mut Backend,
         handle: TextureHandle,
@@ -363,7 +363,7 @@ impl AssetManager {
     ) {
         let mut textures = HashMap::with_capacity(1);
         textures.insert(handle, texture);
-        backend.dispose_textures(&mut textures);
+        backend.retire_textures(&mut textures);
     }
 
     pub(crate) fn set_texture_for_key(
@@ -384,7 +384,7 @@ impl AssetManager {
             },
         );
         if let Some(old) = self.textures.insert(handle, texture) {
-            self.dispose_texture(backend, handle, old);
+            self.retire_texture(backend, handle, old);
         }
         handle
     }
