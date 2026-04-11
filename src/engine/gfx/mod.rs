@@ -502,6 +502,7 @@ impl Backend {
                         let _ = device.device_wait_idle();
                     }
                 }
+                vulkan::retire_submitted_uploads(state);
             }
             #[cfg(not(target_pointer_width = "32"))]
             BackendImpl::VulkanWgpu(state) => {

@@ -113,6 +113,12 @@ struct BufferResource {
     memory: vk::DeviceMemory,
 }
 
+struct SubmittedTextureUpload {
+    frame: usize,
+    cmd: vk::CommandBuffer,
+    staging: Vec<BufferResource>,
+}
+
 struct CachedTMeshGeom {
     buffer: BufferResource,
     vertex_count: u32,
@@ -240,6 +246,7 @@ pub struct State {
     cached_tmesh_bytes: usize,
     pending_tex_upload_cmd: Option<vk::CommandBuffer>, // batched texture upload cmd
     pending_tex_staging: Vec<BufferResource>, // keep staging alive until upload batch flush
+    submitted_tex_uploads: Vec<SubmittedTextureUpload>, // retired when the tagged frame slot completes
     present_telemetry: PresentTelemetryState,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
@@ -385,6 +392,7 @@ pub fn init(
         cached_tmesh_bytes: 0,
         pending_tex_upload_cmd: None,
         pending_tex_staging: Vec::new(),
+        submitted_tex_uploads: Vec::new(),
         present_telemetry,
         screenshot_requested: false,
         captured_frame: None,
@@ -1130,7 +1138,7 @@ fn begin_pending_texture_upload_cmd(
         .command_pool(state.command_pool)
         .command_buffer_count(1);
     // SAFETY: `state.command_pool` belongs to this device and remains alive until the command
-    // buffer is ended, submitted, and freed by `flush_pending_texture_uploads`.
+    // buffer is ended, submitted, and later retired from `submitted_tex_uploads`.
     let cmd = unsafe { device.allocate_command_buffers(&alloc_info)?[0] };
     let begin_info =
         vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
@@ -1142,31 +1150,66 @@ fn begin_pending_texture_upload_cmd(
     Ok(cmd)
 }
 
-fn flush_pending_texture_uploads(state: &mut State) -> Result<(), Box<dyn Error>> {
+fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
+    let device = state.device.as_ref().unwrap();
+    let mut keep = Vec::with_capacity(state.submitted_tex_uploads.len());
+    for batch in mem::take(&mut state.submitted_tex_uploads) {
+        if batch.frame != frame {
+            keep.push(batch);
+            continue;
+        }
+        unsafe {
+            device.free_command_buffers(state.command_pool, &[batch.cmd]);
+        }
+        for staging in batch.staging {
+            destroy_buffer(device, &staging);
+        }
+    }
+    state.submitted_tex_uploads = keep;
+}
+
+fn retire_all_submitted_texture_uploads(state: &mut State) {
+    let device = state.device.as_ref().unwrap();
+    for batch in mem::take(&mut state.submitted_tex_uploads) {
+        unsafe {
+            device.free_command_buffers(state.command_pool, &[batch.cmd]);
+        }
+        for staging in batch.staging {
+            destroy_buffer(device, &staging);
+        }
+    }
+}
+
+fn submit_pending_texture_uploads(state: &mut State, frame: usize) -> Result<(), Box<dyn Error>> {
     let Some(cmd) = state.pending_tex_upload_cmd.take() else {
         return Ok(());
     };
 
     let device = state.device.as_ref().unwrap();
-    // SAFETY: `cmd` is a primary command buffer allocated from `state.command_pool` and all
-    // queued staging buffers stay alive until after `queue_wait_idle` returns.
+    let staging = mem::take(&mut state.pending_tex_staging);
+    // SAFETY: `cmd` is a primary command buffer allocated from `state.command_pool`, the upload
+    // queue is the same graphics queue used for frame submissions, and the staged buffers are kept
+    // alive in `submitted_tex_uploads` until the tagged frame slot is known complete.
     unsafe {
         device.end_command_buffer(cmd)?;
         let submit = vk::SubmitInfo::default().command_buffers(std::slice::from_ref(&cmd));
         device.queue_submit(state.queue, &[submit], vk::Fence::null())?;
-        device.queue_wait_idle(state.queue)?;
-        device.free_command_buffers(state.command_pool, &[cmd]);
     }
-
-    for staging in state.pending_tex_staging.drain(..) {
-        destroy_buffer(device, &staging);
-    }
+    state.submitted_tex_uploads.push(SubmittedTextureUpload {
+        frame,
+        cmd,
+        staging,
+    });
 
     Ok(())
 }
 
 pub fn flush_pending_uploads(state: &mut State) -> Result<(), Box<dyn Error>> {
-    flush_pending_texture_uploads(state)
+    submit_pending_texture_uploads(state, state.current_frame)
+}
+
+pub fn retire_submitted_uploads(state: &mut State) {
+    retire_all_submitted_texture_uploads(state)
 }
 
 pub fn create_texture(
@@ -1379,7 +1422,6 @@ pub fn draw(
     }
 
     let mut stats = DrawStats::default();
-    flush_pending_texture_uploads(state)?;
 
     if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
         return Ok(stats);
@@ -1460,6 +1502,8 @@ pub fn draw(
         stats.gpu_wait_us = stats
             .gpu_wait_us
             .saturating_add(elapsed_us_since(wait_started));
+        retire_submitted_texture_uploads(state, state.current_frame);
+        submit_pending_texture_uploads(state, state.current_frame)?;
 
         let acquire_started = Instant::now();
         let (image_index, acquired_suboptimal) = match state
@@ -2046,8 +2090,8 @@ pub fn draw(
 
 pub fn cleanup(state: &mut State) {
     info!("Cleaning up Vulkan resources...");
-    if let Err(e) = flush_pending_texture_uploads(state) {
-        error!("Failed to flush pending texture uploads during cleanup: {e}");
+    if let Err(e) = submit_pending_texture_uploads(state, state.current_frame) {
+        error!("Failed to submit pending texture uploads during cleanup: {e}");
     }
     // SAFETY: If a logical device still exists, waiting for idle guarantees no in-flight work
     // still references resources we are about to destroy below.
@@ -2056,6 +2100,7 @@ pub fn cleanup(state: &mut State) {
             let _ = device.device_wait_idle();
         }
     }
+    retire_all_submitted_texture_uploads(state);
 
     // SAFETY: The device is idle, so it is valid to tear down swapchain resources, mapped rings,
     // pipelines, descriptor pools/layouts, the device, and finally the instance-owned objects.
