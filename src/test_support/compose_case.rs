@@ -1115,6 +1115,7 @@ fn actor_runtime(actor: &ActorSnapshot, name_map: &HashMap<String, &'static str>
             size: size.map(SizeSpec::from),
             texture: Arc::from(texture.as_str()),
             vertices: Arc::from(vertices.clone()),
+            geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
             mode: MeshMode::from(*mode),
             uv_scale: *uv_scale,
             uv_offset: *uv_offset,
@@ -1198,6 +1199,7 @@ fn render_object_snapshot(render: &RenderObject<'_>) -> RenderObjectSnapshot {
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
+                ..
             } => RenderObjectTypeSnapshot::TexturedMesh {
                 texture_id: texture_id.to_string(),
                 vertices: vertices.to_vec(),
@@ -1261,6 +1263,7 @@ fn render_object_runtime(render: &RenderObjectSnapshot) -> RenderObject<'static>
             } => ObjectType::TexturedMesh {
                 texture_id: Cow::Owned(texture_id.clone()),
                 vertices: Cow::Owned(vertices.clone()),
+                geom_cache_key: crate::engine::gfx::INVALID_TMESH_CACHE_KEY,
                 mode: MeshMode::from(*mode),
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,

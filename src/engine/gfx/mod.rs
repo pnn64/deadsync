@@ -14,6 +14,8 @@ use winit::window::Window;
 // --- Public Data Contract ---
 pub type TextureHandle = u64;
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
+pub type TMeshCacheKey = u64;
+pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
 
 #[derive(Clone)]
 pub struct RenderList<'a> {
@@ -95,6 +97,7 @@ pub enum ObjectType<'a> {
     TexturedMesh {
         texture_id: Cow<'a, str>,
         vertices: Cow<'a, [TexturedMeshVertex]>,
+        geom_cache_key: TMeshCacheKey,
         mode: MeshMode,
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],

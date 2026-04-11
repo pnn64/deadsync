@@ -1,8 +1,8 @@
 use deadsync::engine::gfx::draw_prep::{
-    self, DrawOp, GlScratch, PrepareStats, SpriteInstanceRaw, TexturedMeshInstanceRaw,
-    TexturedMeshVertexRaw,
+    self, DrawOp, DrawScratch, PrepareStats, SpriteInstanceRaw, TexturedMeshInstanceRaw,
+    TexturedMeshSource, TexturedMeshVertexRaw,
 };
-use deadsync::engine::gfx::{BlendMode, MeshMode, RenderList, TextureHandle};
+use deadsync::engine::gfx::{BlendMode, MeshMode, MeshVertex, RenderList, TextureHandle};
 use deadsync::engine::present::compose;
 use deadsync::test_support::{compose_case, compose_scenarios};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -85,7 +85,9 @@ struct VerificationResult {
 #[derive(serde::Serialize)]
 struct PlanSnapshot {
     dynamic_upload_vertices: u64,
+    cached_upload_vertices: u64,
     sprite_instances: Vec<SpriteInstanceRaw>,
+    mesh_vertices: Vec<MeshVertex>,
     tmesh_vertices: Vec<TexturedMeshVertexRaw>,
     tmesh_instances: Vec<TexturedMeshInstanceRaw>,
     ops: Vec<PlanOpSnapshot>,
@@ -101,18 +103,33 @@ enum PlanOpSnapshot {
         camera: u8,
     },
     Mesh {
-        index: usize,
-    },
-    TexturedMesh {
         vertex_start: u32,
         vertex_count: u32,
-        geom_key: u64,
+        mode: &'static str,
+        blend: &'static str,
+        camera: u8,
+    },
+    TexturedMesh {
+        source: PlanTMeshSourceSnapshot,
         instance_start: u32,
         instance_count: u32,
         mode: &'static str,
         blend: &'static str,
         texture: u64,
         camera: u8,
+    },
+}
+
+#[derive(serde::Serialize)]
+enum PlanTMeshSourceSnapshot {
+    Transient {
+        vertex_start: u32,
+        vertex_count: u32,
+        geom_key: u64,
+    },
+    Cached {
+        cache_key: u64,
+        vertex_count: u32,
     },
 }
 
@@ -324,14 +341,15 @@ fn benchmark_draw(
         write_json(std::path::Path::new(path), &initial.snapshot)?;
     }
 
-    let mut scratch = GlScratch::with_capacity(
+    let mut scratch = DrawScratch::with_capacity(
         initial.snapshot.sprite_instances.len().max(256),
+        initial.snapshot.mesh_vertices.len().max(1024),
         initial.snapshot.tmesh_vertices.len().max(1024),
         initial.snapshot.tmesh_instances.len().max(256),
         initial.snapshot.ops.len().max(64),
     );
     for _ in 0..warmup {
-        let stats = draw_prep::prepare_gl(&render, &mut scratch, Some);
+        let stats = draw_prep::prepare(&render, &mut scratch, |_, _| true);
         black_box(checksum_plan(&scratch, stats));
     }
 
@@ -339,7 +357,7 @@ fn benchmark_draw(
     let started = Instant::now();
     let mut checksum = 0u64;
     for _ in 0..iters {
-        let stats = draw_prep::prepare_gl(black_box(&render), &mut scratch, Some);
+        let stats = draw_prep::prepare(black_box(&render), &mut scratch, |_, _| true);
         checksum = checksum
             .wrapping_mul(131)
             .wrapping_add(checksum_plan(&scratch, stats));
@@ -376,17 +394,19 @@ struct BuiltPlan {
 }
 
 fn build_plan(render: &RenderList<'_>) -> Result<BuiltPlan, Box<dyn Error>> {
-    let mut scratch = GlScratch::with_capacity(256, 1024, 256, 64);
-    let stats = draw_prep::prepare_gl(render, &mut scratch, Some);
+    let mut scratch = DrawScratch::with_capacity(256, 1024, 1024, 256, 64);
+    let stats = draw_prep::prepare(render, &mut scratch, |_, _| true);
     Ok(BuiltPlan {
         snapshot: plan_snapshot(&scratch, stats),
     })
 }
 
-fn plan_snapshot(scratch: &GlScratch<u64>, stats: PrepareStats) -> PlanSnapshot {
+fn plan_snapshot(scratch: &DrawScratch, stats: PrepareStats) -> PlanSnapshot {
     PlanSnapshot {
         dynamic_upload_vertices: stats.dynamic_upload_vertices,
+        cached_upload_vertices: stats.cached_upload_vertices,
         sprite_instances: scratch.sprite_instances.clone(),
+        mesh_vertices: scratch.mesh_vertices.clone(),
         tmesh_vertices: scratch.tmesh_vertices.clone(),
         tmesh_instances: scratch.tmesh_instances.clone(),
         ops: scratch
@@ -397,19 +417,23 @@ fn plan_snapshot(scratch: &GlScratch<u64>, stats: PrepareStats) -> PlanSnapshot 
                     instance_start: run.instance_start,
                     instance_count: run.instance_count,
                     blend: blend_name(run.blend),
-                    texture: run.texture,
+                    texture: run.texture_handle,
                     camera: run.camera,
                 },
-                DrawOp::Mesh(index) => PlanOpSnapshot::Mesh { index },
-                DrawOp::TexturedMesh(run) => PlanOpSnapshot::TexturedMesh {
+                DrawOp::Mesh(run) => PlanOpSnapshot::Mesh {
                     vertex_start: run.vertex_start,
                     vertex_count: run.vertex_count,
-                    geom_key: run.geom_key,
+                    mode: mesh_mode_name(run.mode),
+                    blend: blend_name(run.blend),
+                    camera: run.camera,
+                },
+                DrawOp::TexturedMesh(run) => PlanOpSnapshot::TexturedMesh {
+                    source: tmesh_source_snapshot(run.source),
                     instance_start: run.instance_start,
                     instance_count: run.instance_count,
                     mode: mesh_mode_name(run.mode),
                     blend: blend_name(run.blend),
-                    texture: run.texture,
+                    texture: run.texture_handle,
                     camera: run.camera,
                 },
             })
@@ -417,11 +441,17 @@ fn plan_snapshot(scratch: &GlScratch<u64>, stats: PrepareStats) -> PlanSnapshot 
     }
 }
 
-fn checksum_plan(scratch: &GlScratch<u64>, stats: PrepareStats) -> u64 {
+fn checksum_plan(scratch: &DrawScratch, stats: PrepareStats) -> u64 {
     let mut sum = stats.dynamic_upload_vertices;
     sum = sum
         .wrapping_mul(131)
+        .wrapping_add(stats.cached_upload_vertices);
+    sum = sum
+        .wrapping_mul(131)
         .wrapping_add(scratch.sprite_instances.len() as u64);
+    sum = sum
+        .wrapping_mul(131)
+        .wrapping_add(scratch.mesh_vertices.len() as u64);
     sum = sum
         .wrapping_mul(131)
         .wrapping_add(scratch.tmesh_vertices.len() as u64);
@@ -431,12 +461,51 @@ fn checksum_plan(scratch: &GlScratch<u64>, stats: PrepareStats) -> u64 {
     sum = sum.wrapping_mul(131).wrapping_add(scratch.ops.len() as u64);
     if let Some(first) = scratch.ops.first() {
         sum = sum.wrapping_mul(131).wrapping_add(match *first {
-            DrawOp::Sprite(run) => run.texture,
-            DrawOp::Mesh(index) => index as u64,
-            DrawOp::TexturedMesh(run) => run.geom_key ^ run.texture,
+            DrawOp::Sprite(run) => run.texture_handle,
+            DrawOp::Mesh(run) => {
+                u64::from(run.vertex_start)
+                    ^ (u64::from(run.vertex_count) << 32)
+                    ^ u64::from(run.camera)
+            }
+            DrawOp::TexturedMesh(run) => tmesh_source_hash(run.source) ^ run.texture_handle,
         });
     }
     sum
+}
+
+fn tmesh_source_snapshot(source: TexturedMeshSource) -> PlanTMeshSourceSnapshot {
+    match source {
+        TexturedMeshSource::Transient {
+            vertex_start,
+            vertex_count,
+            geom_key,
+        } => PlanTMeshSourceSnapshot::Transient {
+            vertex_start,
+            vertex_count,
+            geom_key,
+        },
+        TexturedMeshSource::Cached {
+            cache_key,
+            vertex_count,
+        } => PlanTMeshSourceSnapshot::Cached {
+            cache_key,
+            vertex_count,
+        },
+    }
+}
+
+fn tmesh_source_hash(source: TexturedMeshSource) -> u64 {
+    match source {
+        TexturedMeshSource::Transient {
+            vertex_start,
+            vertex_count,
+            geom_key,
+        } => geom_key ^ u64::from(vertex_start) ^ (u64::from(vertex_count) << 32),
+        TexturedMeshSource::Cached {
+            cache_key,
+            vertex_count,
+        } => cache_key ^ (u64::from(vertex_count) << 32),
+    }
 }
 
 fn plan_snapshot_hash(snapshot: &PlanSnapshot) -> Result<String, Box<dyn Error>> {
