@@ -485,7 +485,6 @@ pub struct State {
     row_tweens: Vec<RowTween>,
     pane_transition: PaneTransition,
     menu_lr_chord: screen_input::MenuLrChordTracker,
-    menu_lr_undo: [i8; PLAYER_SLOTS],
 }
 
 // Format music rate like Simply Love wants:
@@ -2963,7 +2962,6 @@ pub fn init(
         row_tweens,
         pane_transition: PaneTransition::None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
-        menu_lr_undo: [0; PLAYER_SLOTS],
     }
 }
 
@@ -3023,7 +3021,6 @@ fn session_active_players() -> [bool; PLAYER_SLOTS] {
 #[inline(always)]
 fn arcade_options_navigation_active() -> bool {
     crate::config::get().arcade_options_navigation
-        && !screen_input::dedicated_three_key_nav_enabled()
 }
 
 #[inline(always)]
@@ -6340,21 +6337,6 @@ fn handle_arcade_start_event(
     None
 }
 
-#[inline(always)]
-fn undo_three_key_nav(
-    state: &mut State,
-    asset_manager: &AssetManager,
-    active: [bool; PLAYER_SLOTS],
-    player_idx: usize,
-    undo: i8,
-) {
-    match undo {
-        1 => move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Down),
-        -1 => move_selection_vertical(state, asset_manager, active, player_idx, NavDirection::Up),
-        _ => {}
-    }
-}
-
 fn handle_start_event(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -6374,7 +6356,6 @@ fn handle_start_event(
     let row = state.rows.get(row_index)?;
     let row_name = row.name.clone();
     let row_supports_inline = row_supports_inline_nav(row);
-    let row_has_choices = !row.choices.is_empty();
     if row_supports_inline {
         let changed = commit_inline_focus_selection(state, asset_manager, player_idx, row_index);
         if changed && !row_toggles_with_start(row_name.as_str()) {
@@ -6472,13 +6453,6 @@ fn handle_start_event(
             }
         }
     }
-    if screen_input::dedicated_three_key_nav_enabled()
-        && row_index + 1 < num_rows
-        && row_has_choices
-    {
-        apply_choice_delta(state, asset_manager, player_idx, 1);
-        return finish_start_without_action(state, active, player_idx, should_focus_exit);
-    }
     finish_start_without_action(state, active, player_idx, should_focus_exit)
 }
 
@@ -6488,35 +6462,14 @@ pub fn handle_input(
     ev: &InputEvent,
 ) -> ScreenAction {
     let active = session_active_players();
-    if arcade_options_navigation_active() {
+    let dedicated_three_key = screen_input::dedicated_three_key_nav_enabled();
+    let arcade_style = crate::config::get().arcade_options_navigation;
+    if arcade_options_navigation_active() || dedicated_three_key {
         screen_input::track_menu_lr_chord(&mut state.menu_lr_chord, ev);
     }
-    let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
-    if screen_input::dedicated_three_key_nav_enabled() {
-        match ev.action {
-            VirtualAction::p1_left | VirtualAction::p1_menu_left if !ev.pressed => {
-                state.menu_lr_undo[P1] = 0;
-                handle_nav_event(state, asset_manager, active, P1, NavDirection::Up, false);
-                return ScreenAction::None;
-            }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right if !ev.pressed => {
-                state.menu_lr_undo[P1] = 0;
-                handle_nav_event(state, asset_manager, active, P1, NavDirection::Down, false);
-                return ScreenAction::None;
-            }
-            VirtualAction::p2_left | VirtualAction::p2_menu_left if !ev.pressed => {
-                state.menu_lr_undo[P2] = 0;
-                handle_nav_event(state, asset_manager, active, P2, NavDirection::Up, false);
-                return ScreenAction::None;
-            }
-            VirtualAction::p2_right | VirtualAction::p2_menu_right if !ev.pressed => {
-                state.menu_lr_undo[P2] = 0;
-                handle_nav_event(state, asset_manager, active, P2, NavDirection::Down, false);
-                return ScreenAction::None;
-            }
-            _ => {}
-        }
-    }
+    let three_key_action = (!dedicated_three_key)
+        .then(|| screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev))
+        .flatten();
     if state.pane_transition.is_active() {
         if let Some((side, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
             let player_idx = screen_input::player_side_ix(side);
@@ -6549,7 +6502,6 @@ pub fn handle_input(
                     NavDirection::Up,
                     true,
                 );
-                state.menu_lr_undo[player_idx] = 1;
                 ScreenAction::None
             }
             screen_input::ThreeKeyMenuAction::Next => {
@@ -6561,11 +6513,9 @@ pub fn handle_input(
                     NavDirection::Down,
                     true,
                 );
-                state.menu_lr_undo[player_idx] = -1;
                 ScreenAction::None
             }
             screen_input::ThreeKeyMenuAction::Confirm => {
-                state.menu_lr_undo[player_idx] = 0;
                 clear_nav_hold(state, player_idx);
                 if let Some(action) = handle_start_event(state, asset_manager, active, player_idx) {
                     return action;
@@ -6573,14 +6523,6 @@ pub fn handle_input(
                 ScreenAction::None
             }
             screen_input::ThreeKeyMenuAction::Cancel => {
-                undo_three_key_nav(
-                    state,
-                    asset_manager,
-                    active,
-                    player_idx,
-                    state.menu_lr_undo[player_idx],
-                );
-                state.menu_lr_undo[player_idx] = 0;
                 clear_nav_hold(state, player_idx);
                 ScreenAction::Navigate(state.return_screen)
             }
@@ -6594,9 +6536,6 @@ pub fn handle_input(
             return ScreenAction::Navigate(state.return_screen);
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
-            if arcade_options_navigation_active() {
-                return ScreenAction::None;
-            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6607,9 +6546,6 @@ pub fn handle_input(
             );
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
-            if arcade_options_navigation_active() {
-                return ScreenAction::None;
-            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6640,6 +6576,30 @@ pub fn handle_input(
             );
         }
         VirtualAction::p1_start if ev.pressed => {
+            if dedicated_three_key {
+                // Match ITGmania ScreenOptions NAV_THREE_KEY:
+                // left/right change values, Start advances rows, and
+                // Left+Right+Start moves to the previous row.
+                if arcade_style {
+                    if screen_input::menu_lr_both_held(
+                        &state.menu_lr_chord,
+                        crate::game::profile::PlayerSide::P1,
+                    ) {
+                        handle_arcade_prev_event(state, asset_manager, active, P1);
+                        return ScreenAction::None;
+                    }
+                    if let Some(action) =
+                        handle_arcade_start_event(state, asset_manager, active, P1)
+                    {
+                        return action;
+                    }
+                    return ScreenAction::None;
+                }
+                if let Some(action) = handle_start_event(state, asset_manager, active, P1) {
+                    return action;
+                }
+                return ScreenAction::None;
+            }
             if arcade_options_navigation_active() {
                 if screen_input::menu_lr_both_held(
                     &state.menu_lr_chord,
@@ -6657,14 +6617,15 @@ pub fn handle_input(
                 return action;
             }
         }
-        VirtualAction::p1_select if ev.pressed && arcade_options_navigation_active() => {
+        VirtualAction::p1_select
+            if ev.pressed
+                && (arcade_options_navigation_active()
+                    || (dedicated_three_key && arcade_style)) =>
+        {
             handle_arcade_prev_event(state, asset_manager, active, P1);
             return ScreenAction::None;
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
-            if arcade_options_navigation_active() {
-                return ScreenAction::None;
-            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6675,9 +6636,6 @@ pub fn handle_input(
             );
         }
         VirtualAction::p2_down | VirtualAction::p2_menu_down => {
-            if arcade_options_navigation_active() {
-                return ScreenAction::None;
-            }
             handle_nav_event(
                 state,
                 asset_manager,
@@ -6708,6 +6666,27 @@ pub fn handle_input(
             );
         }
         VirtualAction::p2_start if ev.pressed => {
+            if dedicated_three_key {
+                if arcade_style {
+                    if screen_input::menu_lr_both_held(
+                        &state.menu_lr_chord,
+                        crate::game::profile::PlayerSide::P2,
+                    ) {
+                        handle_arcade_prev_event(state, asset_manager, active, P2);
+                        return ScreenAction::None;
+                    }
+                    if let Some(action) =
+                        handle_arcade_start_event(state, asset_manager, active, P2)
+                    {
+                        return action;
+                    }
+                    return ScreenAction::None;
+                }
+                if let Some(action) = handle_start_event(state, asset_manager, active, P2) {
+                    return action;
+                }
+                return ScreenAction::None;
+            }
             if arcade_options_navigation_active() {
                 if screen_input::menu_lr_both_held(
                     &state.menu_lr_chord,
@@ -6725,7 +6704,11 @@ pub fn handle_input(
                 return action;
             }
         }
-        VirtualAction::p2_select if ev.pressed && arcade_options_navigation_active() => {
+        VirtualAction::p2_select
+            if ev.pressed
+                && (arcade_options_navigation_active()
+                    || (dedicated_three_key && arcade_style)) =>
+        {
             handle_arcade_prev_event(state, asset_manager, active, P2);
             return ScreenAction::None;
         }

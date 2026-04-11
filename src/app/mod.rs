@@ -5102,9 +5102,7 @@ impl App {
         use winit::event::ElementState;
         use winit::keyboard::PhysicalKey;
 
-        if input::unix_raw_keyboard_backend_active()
-            || !self.accepts_live_input()
-        {
+        if input::unix_raw_keyboard_backend_active() || !self.accepts_live_input() {
             return;
         }
         let PhysicalKey::Code(code) = key_event.physical_key else {
