@@ -585,6 +585,7 @@ struct SerializableSongData {
     translit_title: String,
     translit_subtitle: String,
     artist: String,
+    genre: String,
     banner_path: Option<String>,
     background_path: Option<String>,
     background_changes: Vec<SerializableSongBackgroundChange>,
@@ -650,6 +651,7 @@ struct CachedSongMeta {
     translit_title: String,
     translit_subtitle: String,
     artist: String,
+    genre: String,
     banner_path: Option<String>,
     background_path: Option<String>,
     background_changes: Vec<SerializableSongBackgroundChange>,
@@ -953,6 +955,7 @@ fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -> So
         translit_title: song.translit_title,
         translit_subtitle: song.translit_subtitle,
         artist: song.artist,
+        genre: song.genre,
         banner_path: song.banner_path.map(PathBuf::from),
         background_path: song.background_path.map(PathBuf::from),
         background_changes: song
@@ -998,6 +1001,7 @@ fn build_cached_song_meta(
         translit_title: song.translit_title.clone(),
         translit_subtitle: song.translit_subtitle.clone(),
         artist: song.artist.clone(),
+        genre: song.genre.clone(),
         banner_path: song.banner_path.clone(),
         background_path: song.background_path.clone(),
         background_changes: song.background_changes.clone(),
@@ -1031,6 +1035,7 @@ fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
         translit_title: song.translit_title,
         translit_subtitle: song.translit_subtitle,
         artist: song.artist,
+        genre: song.genre,
         banner_path: song.banner_path.map(PathBuf::from),
         background_path: song.background_path.map(PathBuf::from),
         background_changes: song
@@ -1967,6 +1972,7 @@ fn parse_and_process_song_file(
             translit_title: summary.titletranslit_str,
             translit_subtitle: summary.subtitletranslit_str,
             artist: summary.artist_str,
+            genre: extract_genre_tag(&simfile_data),
             banner_path: banner_path.map(|p| p.to_string_lossy().into_owned()),
             background_path: background_path_opt.map(|p| p.to_string_lossy().into_owned()),
             background_changes,
@@ -1996,6 +2002,26 @@ fn parse_and_process_song_file(
         },
         content_hash,
     ))
+}
+
+/// Extracts the `#GENRE:` tag value from raw simfile bytes.
+/// Returns an empty string if the tag is not found.
+fn extract_genre_tag(data: &[u8]) -> String {
+    let tag = b"#GENRE:";
+    let data_len = data.len();
+    let tag_len = tag.len();
+    for i in 0..data_len.saturating_sub(tag_len) {
+        if data[i..i + tag_len].eq_ignore_ascii_case(tag) {
+            let start = i + tag_len;
+            let mut end = start;
+            while end < data_len && data[end] != b';' && data[end] != b'\n' && data[end] != b'\r'
+            {
+                end += 1;
+            }
+            return String::from_utf8_lossy(&data[start..end]).trim().to_string();
+        }
+    }
+    String::new()
 }
 
 /// Computes the length of the music file in seconds when the decode layer supports it.

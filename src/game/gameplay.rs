@@ -14635,6 +14635,7 @@ mod tests {
             translit_title: String::new(),
             translit_subtitle: String::new(),
             artist: "Tests".to_string(),
+            genre: String::new(),
             banner_path: None,
             background_path: None,
             background_changes: Vec::new(),
