@@ -34,6 +34,8 @@ pub enum Action {
     SortByRecentP2,
     SortByTopGradesP1,
     SortByTopGradesP2,
+    ToggleFavorite,
+    SortByFavorites,
     SwitchToSingle,
     SwitchToDouble,
     TestInput,
@@ -199,6 +201,16 @@ pub const ITEM_SHOW_LEADERBOARD: Item = Item {
     top_label: "GrooveStats",
     bottom_label: "Leaderboard",
     action: Action::ShowLeaderboard,
+};
+pub const ITEM_TOGGLE_FAVORITE: Item = Item {
+    top_label: "I'm Lovin' It",
+    bottom_label: "Add Favorite",
+    action: Action::ToggleFavorite,
+};
+pub const ITEM_SORT_BY_FAVORITES: Item = Item {
+    top_label: "Check Out My Mix Tape",
+    bottom_label: "Favorites",
+    action: Action::SortByFavorites,
 };
 const ITEM_GO_BACK: Item = Item {
     top_label: "Options",
