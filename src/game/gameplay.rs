@@ -18,8 +18,8 @@ use crate::game::parsing::song_lua::{
 use crate::game::scores;
 use crate::game::song::SongData;
 use crate::game::timing::{
-    BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile,
-    classify_offset_s_with_disabled_windows, largest_enabled_tap_window_s,
+    BeatInfoCache, ROWS_PER_BEAT, TimingData, TimingProfile, TimingProfileNs,
+    classify_offset_ns_with_disabled_windows, largest_enabled_tap_window_ns,
 };
 use crate::game::{
     profile::{self, TimingTickMode as TickMode},
@@ -6770,6 +6770,34 @@ impl Default for GameplayUpdateTraceState {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct PlayerJudgmentTiming {
+    profile: TimingProfile,
+    profile_music_ns: TimingProfileNs,
+    disabled_windows: [bool; 5],
+    largest_tap_window_music_ns: SongTimeNs,
+}
+
+impl Default for PlayerJudgmentTiming {
+    fn default() -> Self {
+        Self {
+            profile: TimingProfile::default_itg_with_fa_plus(),
+            profile_music_ns: TimingProfileNs::default(),
+            disabled_windows: [false; 5],
+            largest_tap_window_music_ns: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct NoteHitEval {
+    note_time_ns: SongTimeNs,
+    note_time_s: f32,
+    measured_offset_s: f32,
+    grade: JudgeGrade,
+    window: TimingWindow,
+}
+
 pub struct State {
     pub song: Arc<SongData>,
     pub song_full_title: Arc<str>,
@@ -6788,6 +6816,7 @@ pub struct State {
     pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
     pub beat_info_cache: BeatInfoCache,
     pub timing_profile: TimingProfile,
+    player_judgment_timing: [PlayerJudgmentTiming; MAX_PLAYERS],
     pub notes: Vec<Note>,
     pub note_ranges: [(usize, usize); MAX_PLAYERS],
     pub audio_lead_in_seconds: f32,
@@ -8144,7 +8173,11 @@ fn live_autoplay_judgment_offset_s(
     if !live_autoplay_enabled(state) {
         return measured_offset_s;
     }
-    let timing_profile = timing_profile_for_player(state, player_idx);
+    let timing_profile = if player_idx < state.num_players {
+        state.player_judgment_timing[player_idx].profile
+    } else {
+        state.timing_profile
+    };
     autoplay_random_offset_s_for_window(&mut state.autoplay_rng, timing_profile, window)
 }
 
@@ -9622,6 +9655,9 @@ pub fn init(
     });
 
     let timing_profile = TimingProfile::default_itg_with_fa_plus();
+    let player_judgment_timing = std::array::from_fn(|player| {
+        build_player_judgment_timing(timing_profile, &player_profiles[player], rate)
+    });
     let (notes_end_time_ns, music_end_time_ns) =
         compute_end_times_ns(&notes, &note_time_cache_ns, &hold_end_time_cache_ns, rate);
     let notes_len = notes.len();
@@ -9995,6 +10031,7 @@ pub fn init(
         timing_players,
         beat_info_cache,
         timing_profile,
+        player_judgment_timing,
         notes,
         note_ranges,
         audio_lead_in_seconds: start_delay,
@@ -10396,43 +10433,106 @@ pub fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
 }
 
 #[inline(always)]
-fn player_disabled_timing_windows(state: &State, player_idx: usize) -> [bool; 5] {
-    if player_idx >= state.num_players {
-        return profile::TimingWindowsOption::default().disabled_windows();
+fn build_player_judgment_timing(
+    mut timing_profile: TimingProfile,
+    player_profile: &profile::Profile,
+    music_rate: f32,
+) -> PlayerJudgmentTiming {
+    let base_fa_plus_s = timing_profile
+        .fa_plus_window_s
+        .unwrap_or(timing_profile.windows_s[0]);
+    timing_profile.fa_plus_window_s = Some(if player_profile.custom_fantastic_window {
+        profile_custom_window_ms(player_profile) / 1000.0
+    } else {
+        base_fa_plus_s
+    });
+    let disabled_windows = player_profile.timing_windows.disabled_windows();
+    let profile_music_ns = TimingProfileNs::from_profile_scaled(&timing_profile, music_rate);
+    let largest_tap_window_music_ns =
+        largest_enabled_tap_window_ns(&profile_music_ns, &disabled_windows)
+            .unwrap_or(profile_music_ns.windows_ns[2]);
+
+    PlayerJudgmentTiming {
+        profile: timing_profile,
+        profile_music_ns,
+        disabled_windows,
+        largest_tap_window_music_ns,
     }
-    state.player_profiles[player_idx]
-        .timing_windows
-        .disabled_windows()
 }
 
 #[inline(always)]
-fn timing_profile_for_player(state: &State, player_idx: usize) -> TimingProfile {
-    let mut timing_profile = state.timing_profile;
-    timing_profile.fa_plus_window_s = Some(player_fa_plus_window_s(state, player_idx));
-    timing_profile
+fn player_largest_tap_window_ns(state: &State, player_idx: usize) -> SongTimeNs {
+    if player_idx >= state.num_players {
+        return 0;
+    }
+    state.player_judgment_timing[player_idx].largest_tap_window_music_ns
 }
 
 #[inline(always)]
-fn player_largest_tap_window_s(state: &State, player_idx: usize) -> f32 {
-    let timing_profile = timing_profile_for_player(state, player_idx);
-    largest_enabled_tap_window_s(
-        &timing_profile,
-        &player_disabled_timing_windows(state, player_idx),
-    )
-    .unwrap_or(timing_profile.windows_s[2])
-}
-
-#[inline(always)]
-fn classify_player_tap_offset_s(
+fn classify_player_tap_offset_ns(
     state: &State,
     player_idx: usize,
-    offset_s: f32,
+    offset_music_ns: SongTimeNs,
 ) -> Option<(JudgeGrade, TimingWindow)> {
-    let timing_profile = timing_profile_for_player(state, player_idx);
-    classify_offset_s_with_disabled_windows(
-        offset_s,
-        &timing_profile,
-        &player_disabled_timing_windows(state, player_idx),
+    if player_idx >= state.num_players {
+        return None;
+    }
+    let timing = state.player_judgment_timing[player_idx];
+    classify_offset_ns_with_disabled_windows(
+        offset_music_ns,
+        &timing.profile_music_ns,
+        &timing.disabled_windows,
+    )
+}
+
+#[inline(always)]
+fn note_hit_eval(
+    state: &State,
+    player_idx: usize,
+    note_time_ns: SongTimeNs,
+    current_time_ns: SongTimeNs,
+    rate: f32,
+) -> Option<NoteHitEval> {
+    if player_idx >= state.num_players {
+        return None;
+    }
+    let timing = state.player_judgment_timing[player_idx];
+    let measured_offset_music_ns = current_time_ns.saturating_sub(note_time_ns);
+    if i128::from(measured_offset_music_ns).abs() > i128::from(timing.largest_tap_window_music_ns) {
+        return None;
+    }
+    let (grade, window) =
+        classify_player_tap_offset_ns(state, player_idx, measured_offset_music_ns)?;
+    Some(NoteHitEval {
+        note_time_ns,
+        note_time_s: song_time_ns_to_seconds(note_time_ns),
+        measured_offset_s: song_time_ns_delta_seconds(current_time_ns, note_time_ns) / rate,
+        grade,
+        window,
+    })
+}
+
+#[inline(always)]
+fn build_final_note_hit_judgment(
+    state: &mut State,
+    player_idx: usize,
+    hit: NoteHitEval,
+    rate: f32,
+) -> (Judgment, f32) {
+    let judgment_time_error_s =
+        live_autoplay_judgment_offset_s(state, player_idx, hit.window, hit.measured_offset_s);
+    let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
+        hit.note_time_ns,
+        judgment_time_error_s * rate,
+    ));
+    (
+        Judgment {
+            time_error_ms: judgment_time_error_s * 1000.0,
+            grade: hit.grade,
+            window: Some(hit.window),
+            miss_because_held: false,
+        },
+        judgment_event_time,
     )
 }
 
@@ -10997,16 +11097,22 @@ fn apply_hold_success_combo_state(_p: &mut PlayerRuntime) {
     // ITG dance/pump scoring does not let Held / Roll Held reset miss combo.
 }
 
-fn hit_mine(state: &mut State, column: usize, note_index: usize, time_error: f32) -> bool {
+fn hit_mine(
+    state: &mut State,
+    column: usize,
+    note_index: usize,
+    time_error_music_ns: SongTimeNs,
+) -> bool {
     let player = player_for_col(state, column);
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
         1.0
     };
-    let abs_time_error = (time_error / rate).abs();
-    let mine_window = state.timing_profile.mine_window_s;
-    if abs_time_error > mine_window {
+    let mine_window_music_ns = state.player_judgment_timing[player]
+        .profile_music_ns
+        .mine_window_ns;
+    if i128::from(time_error_music_ns).abs() > i128::from(mine_window_music_ns) {
         return false;
     }
     if state.notes[note_index].mine_result.is_some() || state.notes[note_index].is_fake {
@@ -11040,7 +11146,7 @@ fn hit_mine(state: &mut State, column: usize, note_index: usize, time_error: f32
     state.receptor_glow_timers[column] = 0.0;
     trigger_mine_explosion(state, column);
     let note_time_ns = state.note_time_cache_ns[note_index];
-    let hit_time_ns = song_time_ns_add_seconds(note_time_ns, time_error);
+    let hit_time_ns = note_time_ns.saturating_add(time_error_music_ns);
     debug!(
         "JUDGE MINE HIT: row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
         state.notes[note_index].row_index,
@@ -11048,7 +11154,7 @@ fn hit_mine(state: &mut State, column: usize, note_index: usize, time_error: f32
         state.notes[note_index].beat,
         song_time_ns_to_seconds(note_time_ns),
         song_time_ns_to_seconds(hit_time_ns),
-        (time_error / rate) * 1000.0,
+        song_time_ns_delta_seconds(time_error_music_ns, 0) / rate * 1000.0,
         rate
     );
     if updated_scoring {
@@ -11062,16 +11168,12 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time_ns: So
     if song_time_ns_invalid(current_time_ns) {
         return false;
     }
-    let mine_window = state.timing_profile.mine_window_s;
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
-    let search_radius_ns = song_time_ns_from_seconds(mine_window * rate);
-    let start_t_ns = current_time_ns.saturating_sub(search_radius_ns);
-    let end_t_ns = current_time_ns.saturating_add(search_radius_ns);
     let player = player_for_col(state, column);
+    let mine_window_music_ns = state.player_judgment_timing[player]
+        .profile_music_ns
+        .mine_window_ns;
+    let start_t_ns = current_time_ns.saturating_sub(mine_window_music_ns);
+    let end_t_ns = current_time_ns.saturating_add(mine_window_music_ns);
     let mine_ix = &state.mine_note_ix[player];
     let mine_times_ns = &state.mine_note_time_ns[player];
     let (start_idx, end_idx) = mine_window_bounds_ns(mine_times_ns, start_t_ns, end_t_ns);
@@ -11090,8 +11192,7 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time_ns: So
         }
         let signed_err_ns = current_time_ns.saturating_sub(mine_times_ns[i]);
         let abs_err_ns = (signed_err_ns as i128).unsigned_abs();
-        let time_error = song_time_ns_delta_seconds(current_time_ns, mine_times_ns[i]);
-        if (time_error / rate).abs() <= mine_window {
+        if abs_err_ns <= i128::from(mine_window_music_ns) as u128 {
             match best {
                 Some((_, best_err_ns)) if abs_err_ns >= (best_err_ns as i128).unsigned_abs() => {}
                 _ => best = Some((idx, signed_err_ns)),
@@ -11101,8 +11202,7 @@ fn try_hit_mine_while_held(state: &mut State, column: usize, current_time_ns: So
     let Some((note_index, time_error_ns)) = best else {
         return false;
     };
-    let time_error = song_time_ns_delta_seconds(time_error_ns, 0);
-    hit_mine(state, column, note_index, time_error)
+    hit_mine(state, column, note_index, time_error_ns)
 }
 
 #[inline(always)]
@@ -11118,13 +11218,10 @@ fn try_hit_crossed_mines_while_held(
     {
         return false;
     }
-    let mine_window = state.timing_profile.mine_window_s;
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
     let player = player_for_col(state, column);
+    let mine_window_music_ns = state.player_judgment_timing[player]
+        .profile_music_ns
+        .mine_window_ns;
     // ITG checks held mines as rows are crossed. Match that by only considering
     // mines whose note time crossed between previous and current music time.
     let (start_idx, end_idx) = crossed_mine_bounds_ns(
@@ -11152,12 +11249,11 @@ fn try_hit_crossed_mines_while_held(
         if !is_mine || !can_be_judged || already_scored || is_fake || note_column != column {
             continue;
         }
-        let time_error = song_time_ns_delta_seconds(current_time_ns, note_time_ns);
-        let abs_err = (time_error / rate).abs();
-        if abs_err > mine_window {
+        let time_error_music_ns = current_time_ns.saturating_sub(note_time_ns);
+        if i128::from(time_error_music_ns).abs() > i128::from(mine_window_music_ns) {
             continue;
         }
-        if hit_mine(state, column, note_index, time_error) {
+        if hit_mine(state, column, note_index, time_error_music_ns) {
             hit_any = true;
         }
     }
@@ -11859,7 +11955,6 @@ pub fn judge_a_tap(
     current_time: f32,
     current_time_ns: SongTimeNs,
 ) -> bool {
-    let mine_window = state.timing_profile.mine_window_s;
     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
         state.music_rate
     } else {
@@ -11872,11 +11967,10 @@ pub fn judge_a_tap(
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
     let (col_start, col_end) = player_col_range(state, player);
-    let way_off_window = player_largest_tap_window_s(state, player);
-    let way_off_window_music = way_off_window * rate;
-    let mine_window_music = mine_window * rate;
-    let search_window_music = way_off_window_music.max(mine_window_music);
-    let search_window_ns = song_time_ns_from_seconds(search_window_music);
+    let timing = state.player_judgment_timing[player];
+    let search_window_ns = timing
+        .largest_tap_window_music_ns
+        .max(timing.profile_music_ns.mine_window_ns);
     let search_start_time_ns = current_time_ns.saturating_sub(search_window_ns);
     let search_end_time_ns = current_time_ns.saturating_add(search_window_ns);
     let lane_notes = &state.lane_note_indices[column];
@@ -11896,16 +11990,14 @@ pub fn judge_a_tap(
     ) {
         let note_row_index = state.notes[note_index].row_index;
         let note_type = state.notes[note_index].note_type;
-        let time_error_music =
-            song_time_ns_delta_seconds(current_time_ns, state.note_time_cache_ns[note_index]);
-        let time_error_real = time_error_music / rate;
-        let abs_time_error = time_error_real.abs();
+        let time_error_music_ns =
+            current_time_ns.saturating_sub(state.note_time_cache_ns[note_index]);
 
         if matches!(note_type, NoteType::Mine) {
             if state.notes[note_index].is_fake {
                 return false;
             }
-            if hit_mine(state, column, note_index, time_error_music) {
+            if hit_mine(state, column, note_index, time_error_music_ns) {
                 return true;
             }
             return false;
@@ -11919,248 +12011,221 @@ pub fn judge_a_tap(
             return mine_hit_on_press;
         }
 
-        if abs_time_error <= way_off_window {
-            let Some(row_entry) = row_entry_for_cached_row(
-                &state.row_entries,
-                &state.row_map_cache[player],
-                note_row_index,
-            ) else {
-                debug_assert!(false, "missing row cache for row {note_row_index}");
-                return false;
-            };
-            let row_rescore_track_count =
-                count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
-            let row_note_count = row_entry
-                .nonmine_note_indices
-                .iter()
-                .filter(|&&idx| {
-                    let row_note = &state.notes[idx];
-                    row_note.column >= col_start
-                        && row_note.column < col_end
-                        && row_note.result.is_none()
-                        && row_note.note_type != NoteType::Lift
-                })
-                .count();
-            let Some((grade, window)) =
-                classify_player_tap_offset_s(state, player, time_error_real)
-            else {
-                return mine_hit_on_press;
-            };
-            let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
-                (
-                    state.song_offset_seconds,
-                    effective_player_global_offset_seconds(state, player),
-                    state.audio_lead_in_seconds.max(0.0),
-                    audio::get_music_stream_position_seconds(),
-                )
-            } else {
-                (0.0, 0.0, 0.0, 0.0)
-            };
+        let Some(hit) = note_hit_eval(
+            state,
+            player,
+            state.note_time_cache_ns[note_index],
+            current_time_ns,
+            rate,
+        ) else {
+            return mine_hit_on_press;
+        };
+        let Some(row_entry) = row_entry_for_cached_row(
+            &state.row_entries,
+            &state.row_map_cache[player],
+            note_row_index,
+        ) else {
+            debug_assert!(false, "missing row cache for row {note_row_index}");
+            return false;
+        };
+        let row_rescore_track_count =
+            count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
+        let row_note_count = row_entry
+            .nonmine_note_indices
+            .iter()
+            .filter(|&&idx| {
+                let row_note = &state.notes[idx];
+                row_note.column >= col_start
+                    && row_note.column < col_end
+                    && row_note.result.is_none()
+                    && row_note.note_type != NoteType::Lift
+            })
+            .count();
+        let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
+            (
+                state.song_offset_seconds,
+                effective_player_global_offset_seconds(state, player),
+                state.audio_lead_in_seconds.max(0.0),
+                audio::get_music_stream_position_seconds(),
+            )
+        } else {
+            (0.0, 0.0, 0.0, 0.0)
+        };
 
-            if rescore_early_hits && row_rescore_track_count == 1 {
-                let note_col = state.notes[note_index].column;
-                let row_note_time_ns = state.note_time_cache_ns[note_index];
-                let row_note_time = song_time_ns_to_seconds(row_note_time_ns);
-                let te_music = song_time_ns_delta_seconds(current_time_ns, row_note_time_ns);
-                let te_real = te_music / rate;
-                let is_early = te_real < 0.0;
-                let is_bad = matches!(grade, JudgeGrade::Decent | JudgeGrade::WayOff);
+        if rescore_early_hits && row_rescore_track_count == 1 {
+            let note_col = state.notes[note_index].column;
+            let is_early = hit.measured_offset_s < 0.0;
+            let is_bad = matches!(hit.grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
-                if is_early && is_bad {
-                    if state.notes[note_index].early_result.is_none() {
-                        let judgment = Judgment {
-                            time_error_ms: te_real * 1000.0,
-                            grade,
-                            window: Some(window),
-                            miss_because_held: false,
-                        };
-                        register_provisional_early_result(
-                            state,
-                            player,
-                            note_index,
-                            judgment.clone(),
-                        );
-                        let life_delta = judge_life_delta(grade);
-                        let current_music_time = current_music_time_s(state);
-                        {
-                            let p = &mut state.players[player];
-                            if !scoring_blocked {
-                                apply_life_change(p, current_music_time, life_delta);
-                            }
-                        }
+            if is_early && is_bad {
+                if state.notes[note_index].early_result.is_none() {
+                    let judgment = Judgment {
+                        time_error_ms: hit.measured_offset_s * 1000.0,
+                        grade: hit.grade,
+                        window: Some(hit.window),
+                        miss_because_held: false,
+                    };
+                    register_provisional_early_result(state, player, note_index, judgment.clone());
+                    let life_delta = judge_life_delta(hit.grade);
+                    let current_music_time = current_music_time_s(state);
+                    {
+                        let p = &mut state.players[player];
                         if !scoring_blocked {
-                            capture_failed_ex_score_inputs(state, player);
-                        }
-                        render_provisional_early_rescore_feedback(
-                            state,
-                            player,
-                            note_col,
-                            &judgment,
-                            current_time,
-                            hide_early_dw_judgments,
-                            hide_early_dw_flash,
-                        );
-                        // Zmod parity: provisional early W4/W5 (with Rescore Early Hits enabled)
-                        // should immediately drive EarlyHit-style visuals, but the later finalized
-                        // W4/W5 should not produce a second bad popup/tick.
-                        log_timing_hit_detail(
-                            timing_hit_log,
-                            stream_pos_s,
-                            grade,
-                            note_row_index,
-                            note_col,
-                            state.notes[note_index].beat,
-                            song_offset_s,
-                            global_offset_s,
-                            row_note_time,
-                            current_time,
-                            current_music_time_s(state),
-                            rate,
-                            lead_in_s,
-                        );
-
-                        if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
-                            && matches!(
-                                state.notes[note_index].note_type,
-                                NoteType::Hold | NoteType::Roll
-                            )
-                        {
-                            start_active_hold(
-                                state,
-                                note_col,
-                                note_index,
-                                row_note_time_ns,
-                                end_time_ns,
-                                current_time_ns,
-                            );
+                            apply_life_change(p, current_music_time, life_delta);
                         }
                     }
-                    return true;
-                }
-
-                if state.notes[note_index].early_result.is_some()
-                    && !matches!(
-                        grade,
-                        JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-                    )
-                {
-                    return true;
-                }
-
-                let judgment_time_error_s =
-                    live_autoplay_judgment_offset_s(state, player, window, te_real);
-                let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
-                    row_note_time_ns,
-                    judgment_time_error_s * rate,
-                ));
-                let judgment = Judgment {
-                    time_error_ms: judgment_time_error_s * 1000.0,
-                    grade,
-                    window: Some(window),
-                    miss_because_held: false,
-                };
-                set_final_note_result(state, player, note_index, judgment.clone());
-
-                log_timing_hit_detail(
-                    timing_hit_log,
-                    stream_pos_s,
-                    grade,
-                    note_row_index,
-                    note_col,
-                    state.notes[note_index].beat,
-                    song_offset_s,
-                    global_offset_s,
-                    row_note_time,
-                    judgment_event_time,
-                    current_music_time_s(state),
-                    rate,
-                    lead_in_s,
-                );
-
-                trigger_completed_row_tap_explosions(state, player, note_row_index);
-                trigger_receptor_glow_pulse(state, note_col);
-                if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
-                    && matches!(
-                        state.notes[note_index].note_type,
-                        NoteType::Hold | NoteType::Roll
-                    )
-                {
-                    start_active_hold(
+                    if !scoring_blocked {
+                        capture_failed_ex_score_inputs(state, player);
+                    }
+                    render_provisional_early_rescore_feedback(
                         state,
+                        player,
                         note_col,
-                        note_index,
-                        row_note_time_ns,
-                        end_time_ns,
-                        current_time_ns,
+                        &judgment,
+                        current_time,
+                        hide_early_dw_judgments,
+                        hide_early_dw_flash,
                     );
+                    // Zmod parity: provisional early W4/W5 (with Rescore Early Hits enabled)
+                    // should immediately drive EarlyHit-style visuals, but the later finalized
+                    // W4/W5 should not produce a second bad popup/tick.
+                    log_timing_hit_detail(
+                        timing_hit_log,
+                        stream_pos_s,
+                        hit.grade,
+                        note_row_index,
+                        note_col,
+                        state.notes[note_index].beat,
+                        song_offset_s,
+                        global_offset_s,
+                        hit.note_time_s,
+                        current_time,
+                        current_music_time_s(state),
+                        rate,
+                        lead_in_s,
+                    );
+
+                    if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
+                        && matches!(
+                            state.notes[note_index].note_type,
+                            NoteType::Hold | NoteType::Roll
+                        )
+                    {
+                        start_active_hold(
+                            state,
+                            note_col,
+                            note_index,
+                            hit.note_time_ns,
+                            end_time_ns,
+                            current_time_ns,
+                        );
+                    }
                 }
                 return true;
             }
 
-            let Some((judge_indices, judge_count)) =
-                collect_edge_judge_indices(row_note_count, note_index)
-            else {
-                return false;
-            };
+            if state.notes[note_index].early_result.is_some()
+                && !matches!(
+                    hit.grade,
+                    JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+                )
+            {
+                return true;
+            }
 
-            for &idx in &judge_indices[..judge_count] {
-                let note_col = state.notes[idx].column;
-                let row_note_time_ns = state.note_time_cache_ns[idx];
-                let row_note_time = song_time_ns_to_seconds(row_note_time_ns);
-                let te_music = song_time_ns_delta_seconds(current_time_ns, row_note_time_ns);
-                let te_real = te_music / rate;
-                let Some((grade, window)) = classify_player_tap_offset_s(state, player, te_real)
-                else {
-                    continue;
-                };
-                let judgment_time_error_s =
-                    live_autoplay_judgment_offset_s(state, player, window, te_real);
-                let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
-                    row_note_time_ns,
-                    judgment_time_error_s * rate,
-                ));
-                let judgment = Judgment {
-                    time_error_ms: judgment_time_error_s * 1000.0,
-                    grade,
-                    window: Some(window),
-                    miss_because_held: false,
-                };
-                set_final_note_result(state, player, idx, judgment.clone());
+            let (judgment, judgment_event_time) =
+                build_final_note_hit_judgment(state, player, hit, rate);
+            set_final_note_result(state, player, note_index, judgment.clone());
 
-                log_timing_hit_detail(
-                    timing_hit_log,
-                    stream_pos_s,
-                    grade,
-                    note_row_index,
+            log_timing_hit_detail(
+                timing_hit_log,
+                stream_pos_s,
+                hit.grade,
+                note_row_index,
+                note_col,
+                state.notes[note_index].beat,
+                song_offset_s,
+                global_offset_s,
+                hit.note_time_s,
+                judgment_event_time,
+                current_music_time_s(state),
+                rate,
+                lead_in_s,
+            );
+
+            trigger_completed_row_tap_explosions(state, player, note_row_index);
+            trigger_receptor_glow_pulse(state, note_col);
+            if let Some(end_time_ns) = state.hold_end_time_cache_ns[note_index]
+                && matches!(
+                    state.notes[note_index].note_type,
+                    NoteType::Hold | NoteType::Roll
+                )
+            {
+                start_active_hold(
+                    state,
                     note_col,
-                    state.notes[idx].beat,
-                    song_offset_s,
-                    global_offset_s,
-                    row_note_time,
-                    judgment_event_time,
-                    current_music_time_s(state),
-                    rate,
-                    lead_in_s,
+                    note_index,
+                    hit.note_time_ns,
+                    end_time_ns,
+                    current_time_ns,
                 );
-
-                trigger_completed_row_tap_explosions(state, player, note_row_index);
-                trigger_receptor_glow_pulse(state, note_col);
-                if let Some(end_time_ns) = state.hold_end_time_cache_ns[idx]
-                    && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
-                {
-                    start_active_hold(
-                        state,
-                        note_col,
-                        idx,
-                        row_note_time_ns,
-                        end_time_ns,
-                        current_time_ns,
-                    );
-                }
             }
             return true;
         }
-        return mine_hit_on_press;
+
+        let Some((judge_indices, judge_count)) =
+            collect_edge_judge_indices(row_note_count, note_index)
+        else {
+            return false;
+        };
+
+        for &idx in &judge_indices[..judge_count] {
+            let note_col = state.notes[idx].column;
+            let Some(hit) = note_hit_eval(
+                state,
+                player,
+                state.note_time_cache_ns[idx],
+                current_time_ns,
+                rate,
+            ) else {
+                continue;
+            };
+            let (judgment, judgment_event_time) =
+                build_final_note_hit_judgment(state, player, hit, rate);
+            set_final_note_result(state, player, idx, judgment.clone());
+
+            log_timing_hit_detail(
+                timing_hit_log,
+                stream_pos_s,
+                hit.grade,
+                note_row_index,
+                note_col,
+                state.notes[idx].beat,
+                song_offset_s,
+                global_offset_s,
+                hit.note_time_s,
+                judgment_event_time,
+                current_music_time_s(state),
+                rate,
+                lead_in_s,
+            );
+
+            trigger_completed_row_tap_explosions(state, player, note_row_index);
+            trigger_receptor_glow_pulse(state, note_col);
+            if let Some(end_time_ns) = state.hold_end_time_cache_ns[idx]
+                && matches!(state.notes[idx].note_type, NoteType::Hold | NoteType::Roll)
+            {
+                start_active_hold(
+                    state,
+                    note_col,
+                    idx,
+                    hit.note_time_ns,
+                    end_time_ns,
+                    current_time_ns,
+                );
+            }
+        }
+        return true;
     }
     if live_autoplay_enabled(state) {
         false
@@ -12188,9 +12253,7 @@ pub fn judge_a_lift(
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
-    let way_off_window = player_largest_tap_window_s(state, player);
-    let way_off_window_music = way_off_window * rate;
-    let search_window_ns = song_time_ns_from_seconds(way_off_window_music);
+    let search_window_ns = player_largest_tap_window_ns(state, player);
     let search_start_time_ns = current_time_ns.saturating_sub(search_window_ns);
     let search_end_time_ns = current_time_ns.saturating_add(search_window_ns);
     let lane_notes = &state.lane_note_indices[column];
@@ -12214,16 +12277,13 @@ pub fn judge_a_lift(
         return false;
     }
 
-    let note_time_ns = state.note_time_cache_ns[note_index];
-    let note_time = song_time_ns_to_seconds(note_time_ns);
-    let time_error_music = song_time_ns_delta_seconds(current_time_ns, note_time_ns);
-    let time_error_real = time_error_music / rate;
-    let abs_time_error = time_error_real.abs();
-    if abs_time_error > way_off_window {
-        return false;
-    }
-
-    let Some((grade, window)) = classify_player_tap_offset_s(state, player, time_error_real) else {
+    let Some(hit) = note_hit_eval(
+        state,
+        player,
+        state.note_time_cache_ns[note_index],
+        current_time_ns,
+        rate,
+    ) else {
         return false;
     };
     let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
@@ -12253,19 +12313,19 @@ pub fn judge_a_lift(
         let (col_start, col_end) = player_col_range(state, player);
         let row_rescore_track_count =
             count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
-        let is_early = time_error_real < 0.0;
-        let is_bad = matches!(grade, JudgeGrade::Decent | JudgeGrade::WayOff);
+        let is_early = hit.measured_offset_s < 0.0;
+        let is_bad = matches!(hit.grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
         if row_rescore_track_count == 1 && is_early && is_bad {
             if state.notes[note_index].early_result.is_none() {
                 let judgment = Judgment {
-                    time_error_ms: time_error_real * 1000.0,
-                    grade,
-                    window: Some(window),
+                    time_error_ms: hit.measured_offset_s * 1000.0,
+                    grade: hit.grade,
+                    window: Some(hit.window),
                     miss_because_held: false,
                 };
                 register_provisional_early_result(state, player, note_index, judgment.clone());
-                let life_delta = judge_life_delta(grade);
+                let life_delta = judge_life_delta(hit.grade);
                 let current_music_time = current_music_time_s(state);
                 if !scoring_blocked {
                     let p = &mut state.players[player];
@@ -12285,13 +12345,13 @@ pub fn judge_a_lift(
                 log_timing_hit_detail(
                     timing_hit_log,
                     stream_pos_s,
-                    grade,
+                    hit.grade,
                     note_row_index,
                     note_col,
                     note_beat,
                     song_offset_s,
                     global_offset_s,
-                    note_time,
+                    hit.note_time_s,
                     current_time,
                     current_music_time_s(state),
                     rate,
@@ -12304,7 +12364,7 @@ pub fn judge_a_lift(
         if row_rescore_track_count == 1
             && state.notes[note_index].early_result.is_some()
             && !matches!(
-                grade,
+                hit.grade,
                 JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
             )
         {
@@ -12312,30 +12372,19 @@ pub fn judge_a_lift(
         }
     }
 
-    let judgment_time_error_s =
-        live_autoplay_judgment_offset_s(state, player, window, time_error_real);
-    let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
-        note_time_ns,
-        judgment_time_error_s * rate,
-    ));
-    let judgment = Judgment {
-        time_error_ms: judgment_time_error_s * 1000.0,
-        grade,
-        window: Some(window),
-        miss_because_held: false,
-    };
+    let (judgment, judgment_event_time) = build_final_note_hit_judgment(state, player, hit, rate);
     set_final_note_result(state, player, note_index, judgment.clone());
 
     log_timing_hit_detail(
         timing_hit_log,
         stream_pos_s,
-        grade,
+        hit.grade,
         note_row_index,
         note_col,
         note_beat,
         song_offset_s,
         global_offset_s,
-        note_time,
+        hit.note_time_s,
         judgment_event_time,
         current_music_time_s(state),
         rate,
@@ -13555,17 +13604,11 @@ fn track_held_miss_windows(
     inputs: &[bool; MAX_COLS],
     music_time_ns: SongTimeNs,
 ) {
-    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
     for player in 0..state.num_players {
-        let largest_window = player_largest_tap_window_s(state, player);
-        if largest_window <= 0.0 {
+        let largest_window_ns = player_largest_tap_window_ns(state, player);
+        if largest_window_ns <= 0 {
             continue;
         }
-        let largest_window_ns = song_time_ns_from_seconds(largest_window * rate);
         let future_cutoff_time_ns = music_time_ns.saturating_add(largest_window_ns);
         let (col_start, col_end) = player_col_range(state, player);
         let (note_start, note_end) = player_note_range(state, player);
@@ -14245,20 +14288,20 @@ mod tests {
         advance_hold_life_ns, advance_judged_row_cursor, apply_global_offset_delta,
         apply_mines_insert, apply_song_offset_delta, autoplay_random_offset_s_for_window,
         build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
-        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
-        completed_row_final_judgment, completed_row_flash_note_indices_and_grade,
-        count_rescore_tracks_on_row, crossed_mine_bounds_ns,
-        effective_appearance_effects_for_player, effective_player_global_offset_seconds,
-        enforce_max_simultaneous_notes, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row, frame_stable_display_music_time, handle_input,
-        input_queue_cap, lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
-        lane_note_window_bounds_ns, lane_press_started, lane_release_finished,
-        late_note_resolution_window_s, live_autoplay_enabled_from_flags, max_step_distance_seconds,
-        mine_window_bounds_ns, music_time_from_song_clock, mutate_timing_arc,
-        next_ready_row_in_lookahead, next_tick_mode, parse_attack_mods,
-        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
-        player_row_scan_state, recent_step_tracks, recompute_player_totals,
-        refresh_active_attack_masks, refresh_timing_after_offset_change,
+        build_player_judgment_timing, build_row_grids, closest_lane_note_ns,
+        collect_edge_judge_indices, completed_row_final_judgment,
+        completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
+        crossed_mine_bounds_ns, effective_appearance_effects_for_player,
+        effective_player_global_offset_seconds, enforce_max_simultaneous_notes,
+        finalize_row_judgment, finalized_row_outcome_for_cached_row,
+        frame_stable_display_music_time, handle_input, input_queue_cap, lane_edge_judges_lift,
+        lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
+        lane_press_started, lane_release_finished, late_note_resolution_window_s,
+        live_autoplay_enabled_from_flags, max_step_distance_seconds, mine_window_bounds_ns,
+        music_time_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode,
+        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
+        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
+        recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
         row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
         score_missed_holds_and_rolls, scored_hold_totals_with_carry, set_final_note_result,
@@ -16722,5 +16765,58 @@ mod tests {
         assert!((cues[1].duration - 3.0).abs() <= 1e-6);
         assert_eq!(cues[1].columns.len(), 1);
         assert_eq!(cues[1].columns[0].column, 2);
+    }
+
+    #[test]
+    fn note_hit_eval_scales_windows_in_music_time_ns() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        state.music_rate = 1.5;
+        state.player_judgment_timing = std::array::from_fn(|player| {
+            build_player_judgment_timing(
+                state.timing_profile,
+                &state.player_profiles[player],
+                state.music_rate,
+            )
+        });
+
+        let note_time_ns = song_time_ns_from_seconds(2.0);
+        let great_edge_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[2];
+        let way_off_edge_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[4];
+
+        let on_great_edge =
+            note_hit_eval(&state, 0, note_time_ns, note_time_ns + great_edge_ns, 1.5)
+                .expect("great edge should still judge");
+        assert_eq!(on_great_edge.grade, JudgeGrade::Great);
+        assert_eq!(on_great_edge.window, TimingWindow::W3);
+
+        assert!(
+            note_hit_eval(
+                &state,
+                0,
+                note_time_ns,
+                note_time_ns + way_off_edge_ns + 1,
+                1.5
+            )
+            .is_none(),
+            "offsets beyond the scaled way-off edge should miss",
+        );
+    }
+
+    #[test]
+    fn note_hit_eval_matches_tap_and_lift_zero_offsets() {
+        let state = regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let tap_time_ns = song_time_ns_from_seconds(1.0);
+        let lift_time_ns = song_time_ns_from_seconds(2.0);
+
+        let tap_hit =
+            note_hit_eval(&state, 0, tap_time_ns, tap_time_ns, 1.0).expect("tap hit should judge");
+        let lift_hit = note_hit_eval(&state, 0, lift_time_ns, lift_time_ns, 1.0)
+            .expect("lift hit should judge");
+
+        assert_eq!(tap_hit.grade, lift_hit.grade);
+        assert_eq!(tap_hit.window, lift_hit.window);
+        assert_eq!(tap_hit.measured_offset_s, 0.0);
+        assert_eq!(lift_hit.measured_offset_s, 0.0);
     }
 }
