@@ -567,6 +567,45 @@ pub fn played_chart_counts_for_machine() -> Vec<(String, u32)> {
     ranked
 }
 
+/// Returns chart hashes ordered by latest local play time for a single profile.
+pub fn recent_played_chart_hashes_for_profile(profile_id: &str) -> Vec<String> {
+    let profiles_root = dirs::app_dirs().profiles_root();
+    let local_root = profiles_root.join(profile_id).join("scores").join("local");
+    if !local_root.is_dir() {
+        return Vec::new();
+    }
+
+    let mut latest_by_chart: HashMap<String, i64> = HashMap::new();
+    collect_recent_plays_in_root(&local_root, &mut latest_by_chart);
+
+    let mut ranked: Vec<(i64, String)> = latest_by_chart
+        .into_iter()
+        .map(|(chart_hash, played_at_ms)| (played_at_ms, chart_hash))
+        .collect();
+    ranked.sort_unstable_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    ranked
+        .into_iter()
+        .map(|(_, chart_hash)| chart_hash)
+        .collect()
+}
+
+/// Returns `(chart_hash, play_count)` pairs for a single profile, ordered by
+/// play count descending.
+pub fn played_chart_counts_for_profile(profile_id: &str) -> Vec<(String, u32)> {
+    let profiles_root = dirs::app_dirs().profiles_root();
+    let local_root = profiles_root.join(profile_id).join("scores").join("local");
+    if !local_root.is_dir() {
+        return Vec::new();
+    }
+
+    let mut counts_by_chart: HashMap<String, u32> = HashMap::new();
+    collect_play_counts_in_root(&local_root, &mut counts_by_chart);
+
+    let mut ranked: Vec<(String, u32)> = counts_by_chart.into_iter().collect();
+    ranked.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    ranked
+}
+
 #[inline(always)]
 fn shard2_for_hash(hash: &str) -> &str {
     if hash.len() >= 2 { &hash[..2] } else { "00" }
