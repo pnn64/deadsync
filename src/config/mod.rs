@@ -49,7 +49,7 @@ use crate::engine::gfx::{BackendType, PresentModePolicy};
 use crate::engine::input::WindowsPadBackend;
 use crate::engine::logging;
 use log::{info, warn};
-use nod::{BiasCfg, BiasKernel, KernelTarget};
+use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;
 
 const DEFAULT_MACHINE_NOTESKIN: &str = "cel";

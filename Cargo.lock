@@ -945,7 +945,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "deadsync"
-version = "0.3.367"
+version = "0.3.368"
 dependencies = [
  "alsa",
  "ash",
@@ -2387,8 +2387,8 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 
 [[package]]
 name = "null-or-die"
-version = "0.0.22"
-source = "git+https://github.com/pnn64/null-or-die?branch=main#0d4519a4d77260e7696ce22cbe682f1d18e4a26c"
+version = "0.0.23"
+source = "git+https://github.com/pnn64/null-or-die?branch=main#f64bd318604bbc03df351e5811f576c057cc1f5a"
 dependencies = [
  "clap",
  "lewton",
@@ -3640,9 +3640,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.37"
+version = "0.23.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "758025cb5fccfd3bc2fd74708fd4682be41d99e5dff73c377c0646c6012c73a4"
+checksum = "69f9466fb2c14ea04357e91413efb882e2a6d4a406e625449bc0a5d360d53a21"
 dependencies = [
  "log",
  "once_cell",

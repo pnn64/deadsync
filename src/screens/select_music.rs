@@ -33,7 +33,7 @@ use crate::screens::components::{
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
-use nod::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
+use null_or_die::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
 use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
 use std::cmp::Reverse;
@@ -757,7 +757,7 @@ impl ReloadUiState {
 
 enum SyncWorkerMsg {
     Event(BiasStreamEvent),
-    Finished(Result<nod::api::SyncChartResult, String>),
+    Finished(Result<null_or_die::api::SyncChartResult, String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -4219,7 +4219,7 @@ fn sync_overlay_apply_event(
 
 fn sync_overlay_apply_result(
     overlay: &mut SyncOverlayStateData,
-    result: Result<nod::api::SyncChartResult, String>,
+    result: Result<null_or_die::api::SyncChartResult, String>,
     refresh: &mut SyncOverlayRefresh,
 ) {
     match result {
@@ -5734,7 +5734,7 @@ fn show_sync_overlay(state: &mut State) {
     let (tx, rx) = mpsc::sync_channel::<SyncWorkerMsg>(SYNC_OVERLAY_MAX_PENDING_MSGS);
     std::thread::spawn(move || {
         let tx_done = tx.clone();
-        let result = nod::api::analyze_chart_stream(
+        let result = null_or_die::api::analyze_chart_stream(
             simfile_path_thread.as_path(),
             chart_ix,
             &cfg,
