@@ -7,6 +7,7 @@ use crate::game::scores::{
 };
 use crate::game::timing::WindowCounts;
 use crate::screens::components::gameplay::gameplay_stats;
+use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,17 +15,13 @@ use std::sync::Arc;
 pub const SCENARIO_NAME: &str = "gameplay-stats-double";
 
 pub struct GameplayStatsDoubleBenchFixture {
-    base: notefield_bench::NotefieldBenchFixture,
+    state: gameplay_screen::State,
     asset_manager: AssetManager,
 }
 
 impl GameplayStatsDoubleBenchFixture {
     pub fn build(&self) -> Vec<Actor> {
-        gameplay_stats::build_double_step_stats(
-            self.base.state(),
-            &self.asset_manager,
-            screen_center_x(),
-        )
+        gameplay_stats::build_double_step_stats(&self.state, &self.asset_manager, screen_center_x())
     }
 }
 
@@ -105,13 +102,17 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
         });
     }
 
+    let (state, _) = base.into_parts();
+    let mut state = gameplay_screen::State::from_gameplay(state);
+    gameplay_stats::refresh_density_graph_meshes(&mut state);
+
     let mut asset_manager = AssetManager::new();
     for (name, font) in compose_scenarios::bench_fonts() {
         asset_manager.register_font(name, font);
     }
 
     GameplayStatsDoubleBenchFixture {
-        base,
+        state,
         asset_manager,
     }
 }

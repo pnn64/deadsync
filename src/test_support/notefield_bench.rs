@@ -40,6 +40,10 @@ impl NotefieldBenchFixture {
         &self.profile
     }
 
+    pub fn into_parts(self) -> (gameplay::State, profile::Profile) {
+        (self.state, self.profile)
+    }
+
     pub fn build(&self, retained: bool) -> Vec<Actor> {
         if !retained {
             for cache in &self.state.notefield_model_cache {

@@ -8,10 +8,11 @@ use crate::engine::present::compose::TextLayoutCache;
 use crate::engine::present::density;
 use crate::engine::present::font;
 use crate::engine::space::*;
-use crate::game::gameplay::{self, State};
+use crate::game::gameplay;
 use crate::game::judgment::{self, JudgeGrade};
 use crate::game::profile;
 use crate::screens::components::shared::gs_scorebox;
+use crate::screens::gameplay::State;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
@@ -71,58 +72,60 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
 }
 
 fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize) {
-    let graph_w = state.density_graph_graph_w;
-    let graph_h = state.density_graph_graph_h;
-    let scaled_width = state.density_graph_scaled_width;
-    if player_idx >= state.num_players
+    let gameplay = &mut state.gameplay;
+    let render = &mut state.density_graph;
+    let graph_w = gameplay.density_graph_graph_w;
+    let graph_h = gameplay.density_graph_graph_h;
+    let scaled_width = gameplay.density_graph_scaled_width;
+    if player_idx >= gameplay.num_players
         || graph_w <= 0.0_f32
         || graph_h <= 0.0_f32
         || scaled_width <= 0.0_f32
     {
-        state.density_graph_mesh[player_idx] = None;
-        state.density_graph_life_mesh[player_idx] = None;
-        state.density_graph_mesh_offset_px[player_idx] = 0;
-        state.density_graph_life_mesh_offset_px[player_idx] = 0;
-        state.density_graph_life_dirty[player_idx] = false;
+        render.mesh[player_idx] = None;
+        render.life_mesh[player_idx] = None;
+        render.mesh_offset_px[player_idx] = 0;
+        render.life_mesh_offset_px[player_idx] = 0;
+        gameplay.density_graph_life_dirty[player_idx] = false;
         return;
     }
 
-    let offset = (state.density_graph_u0 * scaled_width).clamp(0.0_f32, scaled_width);
+    let offset = (gameplay.density_graph_u0 * scaled_width).clamp(0.0_f32, scaled_width);
     let offset_px = offset.floor() as i32;
     let offset_px_f = offset_px as f32;
 
-    if offset_px != state.density_graph_mesh_offset_px[player_idx] {
-        state.density_graph_mesh_offset_px[player_idx] = offset_px;
+    if offset_px != render.mesh_offset_px[player_idx] {
+        render.mesh_offset_px[player_idx] = offset_px;
         density::update_density_hist_mesh(
-            &mut state.density_graph_mesh[player_idx],
-            state.density_graph_cache[player_idx].as_ref(),
+            &mut render.mesh[player_idx],
+            render.cache[player_idx].as_ref(),
             offset_px_f,
             graph_w,
         );
     }
 
-    let prev_offset_px = state.density_graph_life_mesh_offset_px[player_idx];
+    let prev_offset_px = render.life_mesh_offset_px[player_idx];
     let offset_changed = offset_px != prev_offset_px;
-    if !offset_changed && !state.density_graph_life_dirty[player_idx] {
+    if !offset_changed && !gameplay.density_graph_life_dirty[player_idx] {
         return;
     }
 
-    state.density_graph_life_mesh_offset_px[player_idx] = offset_px;
-    state.density_graph_life_dirty[player_idx] = false;
+    render.life_mesh_offset_px[player_idx] = offset_px;
+    gameplay.density_graph_life_dirty[player_idx] = false;
     if offset_px > prev_offset_px {
         clip_density_life_points(
-            &mut state.density_graph_life_points[player_idx],
+            &mut gameplay.density_graph_life_points[player_idx],
             offset_px_f,
         );
     }
-    if state.density_graph_life_points[player_idx].len() < 2 {
-        state.density_graph_life_mesh[player_idx] = None;
+    if gameplay.density_graph_life_points[player_idx].len() < 2 {
+        render.life_mesh[player_idx] = None;
         return;
     }
 
     density::update_density_life_mesh(
-        &mut state.density_graph_life_mesh[player_idx],
-        &state.density_graph_life_points[player_idx],
+        &mut render.life_mesh[player_idx],
+        &gameplay.density_graph_life_points[player_idx],
         offset_px_f,
         graph_w,
         2.0_f32,
@@ -2140,7 +2143,7 @@ fn build_side_pane(
                 z(59)
             ));
 
-            if let Some(mesh) = &state.density_graph_mesh[player_idx]
+            if let Some(mesh) = &state.density_graph.mesh[player_idx]
                 && !mesh.is_empty()
             {
                 actors.push(Actor::Mesh {
@@ -2155,7 +2158,7 @@ fn build_side_pane(
                 });
             }
 
-            if let Some(mesh) = &state.density_graph_life_mesh[player_idx]
+            if let Some(mesh) = &state.density_graph.life_mesh[player_idx]
                 && !mesh.is_empty()
             {
                 actors.push(Actor::Mesh {

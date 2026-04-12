@@ -1,20 +1,22 @@
 use crate::act;
 use crate::assets::AssetManager;
-use crate::engine::gfx::{BlendMode, MeshMode};
+use crate::engine::gfx::{BlendMode, MeshMode, MeshVertex};
 use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::{Actor, SizeSpec, TextAlign, TextContent};
 use crate::engine::present::anim::EffectState;
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::engine::present::compose::TextLayoutCache;
+use crate::engine::present::density::{self, DensityHistCache};
 use crate::engine::present::font;
 use crate::engine::space::widescale;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use crate::game::chart::{ChartData, GameplayChartData};
 use crate::game::parsing::song_lua::{
     SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
     SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaProxyTarget,
 };
-use crate::game::profile;
+use crate::game::{profile, scroll::ScrollSpeedSetting, song::SongData};
 use crate::screens::components::gameplay::{gameplay_stats, notefield};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::lobby_hud;
@@ -23,6 +25,7 @@ use crate::screens::{Screen, ScreenAction};
 use cgmath::{Deg, Matrix4, Vector3};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -30,12 +33,164 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 
 use crate::game::gameplay::{
-    GameplayAction, GameplayExit, TRANSITION_IN_DURATION, TRANSITION_OUT_DELAY,
-    TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION, effective_visibility_effects_for_player,
-    handle_input as gameplay_handle_input, timing_tick_status_line, toggle_flash_text,
-    update as gameplay_update,
+    self as gameplay_core, CourseDisplayCarry, CourseDisplayTotals, GameplayAction, GameplayExit,
+    LeadInTiming, MAX_PLAYERS, ReplayInputEdge, ReplayOffsetSnapshot, TRANSITION_IN_DURATION,
+    TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION,
+    effective_visibility_effects_for_player, handle_input as gameplay_handle_input,
+    timing_tick_status_line, toggle_flash_text, update as gameplay_update,
 };
-pub use crate::game::gameplay::{State, init};
+
+pub struct DensityGraphRenderState {
+    pub cache: [Option<DensityHistCache>; MAX_PLAYERS],
+    pub mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub mesh_offset_px: [i32; MAX_PLAYERS],
+    pub life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+    pub life_mesh_offset_px: [i32; MAX_PLAYERS],
+    pub top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
+}
+
+impl DensityGraphRenderState {
+    fn from_gameplay(state: &gameplay_core::State) -> Self {
+        let top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|player| {
+            let graph_w = state.density_graph_top_w[player];
+            let graph_h =
+                state.density_graph_top_h * state.density_graph_top_scale_y[player].clamp(0.0, 1.0);
+            if player >= state.num_players || graph_w <= 0.0 || graph_h <= 0.0 {
+                return None;
+            }
+
+            let chart = state.charts[player].as_ref();
+            let verts = density::build_density_histogram_mesh(
+                &chart.measure_nps_vec,
+                chart.max_nps,
+                &chart.measure_seconds_vec,
+                state.density_graph_first_second,
+                state.density_graph_last_second,
+                graph_w,
+                graph_h,
+                0.0,
+                graph_w,
+                None,
+                1.0,
+            );
+            if verts.is_empty() {
+                None
+            } else {
+                Some(Arc::from(verts.into_boxed_slice()))
+            }
+        });
+
+        let cache: [Option<DensityHistCache>; MAX_PLAYERS] = std::array::from_fn(|player| {
+            if player >= state.num_players
+                || state.density_graph_graph_w <= 0.0
+                || state.density_graph_graph_h <= 0.0
+            {
+                return None;
+            }
+
+            let chart = state.charts[player].as_ref();
+            density::build_density_histogram_cache(
+                &chart.measure_nps_vec,
+                chart.max_nps,
+                &chart.measure_seconds_vec,
+                state.density_graph_first_second,
+                state.density_graph_last_second,
+                state.density_graph_scaled_width,
+                state.density_graph_graph_h,
+                None,
+                1.0,
+            )
+        });
+
+        let mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|player| {
+            if player >= state.num_players || cache[player].is_none() {
+                return None;
+            }
+            let mut mesh = None;
+            density::update_density_hist_mesh(
+                &mut mesh,
+                cache[player].as_ref(),
+                0.0,
+                state.density_graph_graph_w,
+            );
+            mesh
+        });
+
+        Self {
+            cache,
+            mesh,
+            mesh_offset_px: [0; MAX_PLAYERS],
+            life_mesh: std::array::from_fn(|_| None),
+            life_mesh_offset_px: [0; MAX_PLAYERS],
+            top_mesh,
+        }
+    }
+}
+
+pub struct State {
+    pub(crate) gameplay: gameplay_core::State,
+    pub density_graph: DensityGraphRenderState,
+}
+
+impl State {
+    pub fn from_gameplay(gameplay: gameplay_core::State) -> Self {
+        let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
+        Self {
+            gameplay,
+            density_graph,
+        }
+    }
+}
+
+impl Deref for State {
+    type Target = gameplay_core::State;
+
+    fn deref(&self) -> &Self::Target {
+        &self.gameplay
+    }
+}
+
+impl DerefMut for State {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.gameplay
+    }
+}
+
+pub fn init(
+    song: Arc<SongData>,
+    charts: [Arc<ChartData>; MAX_PLAYERS],
+    gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
+    active_color_index: i32,
+    music_rate: f32,
+    scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+    player_profiles: [profile::Profile; MAX_PLAYERS],
+    replay_edges: Option<Vec<ReplayInputEdge>>,
+    replay_offsets: Option<ReplayOffsetSnapshot>,
+    replay_status_text: Option<Arc<str>>,
+    stage_intro_text: Arc<str>,
+    lead_in_timing: Option<LeadInTiming>,
+    course_display_carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
+    course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    combo_carry: [u32; MAX_PLAYERS],
+) -> State {
+    State::from_gameplay(gameplay_core::init(
+        song,
+        charts,
+        gameplay_charts,
+        active_color_index,
+        music_rate,
+        scroll_speed,
+        player_profiles,
+        replay_edges,
+        replay_offsets,
+        replay_status_text,
+        stage_intro_text,
+        lead_in_timing,
+        course_display_carry,
+        course_display_totals,
+        combo_carry,
+    ))
+}
 
 #[inline(always)]
 const fn screen_for_exit(exit: GameplayExit) -> Screen {
@@ -2825,7 +2980,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
             z(84)
         ));
 
-        if let Some(mesh) = &state.density_graph_top_mesh[player_idx]
+        if let Some(mesh) = &state.density_graph.top_mesh[player_idx]
             && !mesh.is_empty()
         {
             actors.push(Actor::Mesh {

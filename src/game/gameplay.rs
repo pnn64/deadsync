@@ -1,12 +1,8 @@
 use crate::engine::audio;
-use crate::engine::gfx::MeshVertex;
 use crate::engine::input::{
     InputEdge, InputEvent, InputSource, Lane, VirtualAction, lane_from_action,
 };
-use crate::engine::present::{
-    color,
-    density::{self, DensityHistCache},
-};
+use crate::engine::present::color;
 use crate::engine::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
@@ -6955,19 +6951,13 @@ pub struct State {
     pub density_graph_scaled_width: f32,
     pub density_graph_u0: f32,
     pub density_graph_u_window: f32,
-    pub density_graph_cache: [Option<DensityHistCache>; MAX_PLAYERS],
-    pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
-    pub density_graph_mesh_offset_px: [i32; MAX_PLAYERS],
     pub density_graph_life_update_rate: f32,
     pub density_graph_life_next_update_elapsed: f32,
     pub density_graph_life_points: [Vec<[f32; 2]>; MAX_PLAYERS],
-    pub density_graph_life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
-    pub density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS],
     pub density_graph_life_dirty: [bool; MAX_PLAYERS],
     pub density_graph_top_h: f32,
     pub density_graph_top_w: [f32; MAX_PLAYERS],
     pub density_graph_top_scale_y: [f32; MAX_PLAYERS],
-    pub density_graph_top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
 
     pub hold_to_exit_key: Option<HoldToExitKey>,
     pub hold_to_exit_start: Option<Instant>,
@@ -9938,66 +9928,6 @@ pub fn init(
         }
         scale
     };
-    let density_graph_top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
-        std::array::from_fn(|p| {
-            let graph_w = density_graph_top_w[p];
-            let graph_h = density_graph_top_h * density_graph_top_scale_y[p].clamp(0.0, 1.0);
-            if p >= num_players || graph_w <= 0.0 || graph_h <= 0.0 {
-                return None;
-            }
-            let chart = charts[p].as_ref();
-            let verts = density::build_density_histogram_mesh(
-                &chart.measure_nps_vec,
-                chart.max_nps,
-                &chart.measure_seconds_vec,
-                density_graph_first_second,
-                density_graph_last_second,
-                graph_w,
-                graph_h,
-                0.0,
-                graph_w,
-                None,
-                1.0,
-            );
-            if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            }
-        });
-
-    let density_graph_cache: [Option<DensityHistCache>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if !density_graph_enabled || p >= num_players {
-            return None;
-        }
-        let chart = charts[p].as_ref();
-        density::build_density_histogram_cache(
-            &chart.measure_nps_vec,
-            chart.max_nps,
-            &chart.measure_seconds_vec,
-            density_graph_first_second,
-            density_graph_last_second,
-            density_graph_scaled_width,
-            density_graph_graph_h,
-            None,
-            1.0,
-        )
-    });
-    let density_graph_mesh_offset_px: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
-    let density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if !density_graph_enabled || p >= num_players {
-            return None;
-        }
-        let mut mesh = None;
-        density::update_density_hist_mesh(
-            &mut mesh,
-            density_graph_cache[p].as_ref(),
-            0.0_f32,
-            density_graph_graph_w,
-        );
-        mesh
-    });
-
     let mut density_graph_life_update_rate = 0.25_f32;
     if density_graph_enabled && !timing.has_bpm_changes() {
         let bpm = timing.first_bpm();
@@ -10020,9 +9950,6 @@ pub fn init(
             Vec::new()
         }
     });
-    let density_graph_life_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
-        std::array::from_fn(|_| None);
-    let density_graph_life_mesh_offset_px: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let density_graph_life_dirty: [bool; MAX_PLAYERS] = [false; MAX_PLAYERS];
     let graph_prep_ms = graph_prep_started.elapsed().as_secs_f64() * 1000.0;
 
@@ -10216,19 +10143,13 @@ pub fn init(
         density_graph_scaled_width,
         density_graph_u0,
         density_graph_u_window,
-        density_graph_cache,
-        density_graph_mesh,
-        density_graph_mesh_offset_px,
         density_graph_life_update_rate,
         density_graph_life_next_update_elapsed,
         density_graph_life_points,
-        density_graph_life_mesh,
-        density_graph_life_mesh_offset_px,
         density_graph_life_dirty,
         density_graph_top_h,
         density_graph_top_w,
         density_graph_top_scale_y,
-        density_graph_top_mesh,
         hold_to_exit_key: None,
         hold_to_exit_start: None,
         hold_to_exit_aborted_at: None,

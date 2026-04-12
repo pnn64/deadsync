@@ -2357,7 +2357,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_health)
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
             .unwrap_or_default();
         let present = self.state.shell.last_present_stats;
         let interval_ns = if present.actual_interval_ns != 0 {
@@ -4256,7 +4256,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_health)
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
             .unwrap_or_default();
         let display_error_us_i64 =
             (f64::from(display_clock.error_seconds) * 1_000_000.0).round() as i64;
@@ -4436,7 +4436,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_stutter_diag_trigger_seq)
+            .map(|gs| crate::game::gameplay::display_clock_stutter_diag_trigger_seq(gs))
             .unwrap_or(0);
         let audio_triggered =
             audio_trigger_seq > self.state.shell.stutter_diag.last_audio_trigger_seq;
@@ -4517,7 +4517,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_health)
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
             .unwrap_or_default();
         let display_error_ms = display_clock.error_seconds * 1000.0;
         let mut dominant = ("redraw_delivery", request_to_redraw_us);
@@ -4700,7 +4700,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(crate::game::gameplay::display_clock_health)
+            .map(|gs| crate::game::gameplay::display_clock_health(gs))
             .unwrap_or_default();
         let display_error_us_i64 =
             (f64::from(display_clock.error_seconds) * 1_000_000.0).round() as i64;
