@@ -6802,7 +6802,6 @@ impl Default for GameplayUpdateTraceState {
 
 #[derive(Clone, Copy, Debug)]
 struct PlayerJudgmentTiming {
-    profile: TimingProfile,
     profile_music_ns: TimingProfileNs,
     disabled_windows: [bool; 5],
     largest_tap_window_music_ns: SongTimeNs,
@@ -6811,7 +6810,6 @@ struct PlayerJudgmentTiming {
 impl Default for PlayerJudgmentTiming {
     fn default() -> Self {
         Self {
-            profile: TimingProfile::default_itg_with_fa_plus(),
             profile_music_ns: TimingProfileNs::default(),
             disabled_windows: [false; 5],
             largest_tap_window_music_ns: 0,
@@ -6822,8 +6820,7 @@ impl Default for PlayerJudgmentTiming {
 #[derive(Clone, Copy, Debug)]
 struct NoteHitEval {
     note_time_ns: SongTimeNs,
-    note_time_s: f32,
-    measured_offset_s: f32,
+    measured_offset_music_ns: SongTimeNs,
     grade: JudgeGrade,
     window: TimingWindow,
 }
@@ -8158,60 +8155,59 @@ fn settle_due_autoplay_active_holds(state: &mut State, cutoff_time_ns: SongTimeN
 }
 
 #[inline(always)]
-fn random_range_f32(rng: &mut TurnRng, min: f32, max: f32) -> f32 {
-    if !min.is_finite() || !max.is_finite() {
-        return 0.0;
-    }
+fn random_range_song_time_ns(rng: &mut TurnRng, min: SongTimeNs, max: SongTimeNs) -> SongTimeNs {
     if max <= min {
         return min;
     }
-    min + (max - min) * rng.next_f32_unit()
+    let span = i128::from(max) - i128::from(min);
+    let offset = (span as f64 * f64::from(rng.next_f32_unit())).floor() as i128;
+    clamp_song_time_ns(i128::from(min) + offset)
 }
 
 #[inline(always)]
-fn autoplay_random_offset_s_for_window(
+fn autoplay_random_offset_music_ns_for_window(
     rng: &mut TurnRng,
-    timing_profile: TimingProfile,
+    timing_profile: TimingProfileNs,
     window: TimingWindow,
-) -> f32 {
-    let w0 = timing_profile.fa_plus_window_s.unwrap_or(0.0);
+) -> SongTimeNs {
+    let w0 = timing_profile.fa_plus_window_ns.unwrap_or(0);
     let (inner, outer) = match window {
-        TimingWindow::W0 => (0.0, w0),
-        TimingWindow::W1 => (w0, timing_profile.windows_s[0]),
-        TimingWindow::W2 => (timing_profile.windows_s[0], timing_profile.windows_s[1]),
-        TimingWindow::W3 => (timing_profile.windows_s[1], timing_profile.windows_s[2]),
-        TimingWindow::W4 => (timing_profile.windows_s[2], timing_profile.windows_s[3]),
-        TimingWindow::W5 => (timing_profile.windows_s[3], timing_profile.windows_s[4]),
+        TimingWindow::W0 => (0, w0),
+        TimingWindow::W1 => (w0, timing_profile.windows_ns[0]),
+        TimingWindow::W2 => (timing_profile.windows_ns[0], timing_profile.windows_ns[1]),
+        TimingWindow::W3 => (timing_profile.windows_ns[1], timing_profile.windows_ns[2]),
+        TimingWindow::W4 => (timing_profile.windows_ns[2], timing_profile.windows_ns[3]),
+        TimingWindow::W5 => (timing_profile.windows_ns[3], timing_profile.windows_ns[4]),
     };
-    if !outer.is_finite() || outer <= 0.0 {
-        return 0.0;
+    if outer <= 0 {
+        return 0;
     }
-    if !inner.is_finite() || inner <= 0.0 || inner >= outer {
-        return random_range_f32(rng, -outer, outer);
+    if inner <= 0 || inner >= outer {
+        return random_range_song_time_ns(rng, -outer, outer);
     }
     if rng.next_u32() & 1 == 0 {
-        random_range_f32(rng, -outer, -inner)
+        random_range_song_time_ns(rng, -outer, -inner)
     } else {
-        random_range_f32(rng, inner, outer)
+        random_range_song_time_ns(rng, inner, outer)
     }
 }
 
 #[inline(always)]
-fn live_autoplay_judgment_offset_s(
+fn live_autoplay_judgment_offset_music_ns(
     state: &mut State,
     player_idx: usize,
     window: TimingWindow,
-    measured_offset_s: f32,
-) -> f32 {
+    measured_offset_music_ns: SongTimeNs,
+) -> SongTimeNs {
     if !live_autoplay_enabled(state) {
-        return measured_offset_s;
+        return measured_offset_music_ns;
     }
     let timing_profile = if player_idx < state.num_players {
-        state.player_judgment_timing[player_idx].profile
+        state.player_judgment_timing[player_idx].profile_music_ns
     } else {
-        state.timing_profile
+        TimingProfileNs::from_profile_scaled(&state.timing_profile, state.music_rate)
     };
-    autoplay_random_offset_s_for_window(&mut state.autoplay_rng, timing_profile, window)
+    autoplay_random_offset_music_ns_for_window(&mut state.autoplay_rng, timing_profile, window)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -10464,7 +10460,6 @@ fn build_player_judgment_timing(
             .unwrap_or(profile_music_ns.windows_ns[2]);
 
     PlayerJudgmentTiming {
-        profile: timing_profile,
         profile_music_ns,
         disabled_windows,
         largest_tap_window_music_ns,
@@ -10502,7 +10497,6 @@ fn note_hit_eval(
     player_idx: usize,
     note_time_ns: SongTimeNs,
     current_time_ns: SongTimeNs,
-    rate: f32,
 ) -> Option<NoteHitEval> {
     if player_idx >= state.num_players {
         return None;
@@ -10516,11 +10510,15 @@ fn note_hit_eval(
         classify_player_tap_offset_ns(state, player_idx, measured_offset_music_ns)?;
     Some(NoteHitEval {
         note_time_ns,
-        note_time_s: song_time_ns_to_seconds(note_time_ns),
-        measured_offset_s: song_time_ns_delta_seconds(current_time_ns, note_time_ns) / rate,
+        measured_offset_music_ns,
         grade,
         window,
     })
+}
+
+#[inline(always)]
+fn judgment_time_error_ms_from_music_ns(offset_music_ns: SongTimeNs, rate: f32) -> f32 {
+    song_time_ns_delta_seconds(offset_music_ns, 0) / normalized_song_rate(rate) * 1000.0
 }
 
 #[inline(always)]
@@ -10529,21 +10527,22 @@ fn build_final_note_hit_judgment(
     player_idx: usize,
     hit: NoteHitEval,
     rate: f32,
-) -> (Judgment, f32) {
-    let judgment_time_error_s =
-        live_autoplay_judgment_offset_s(state, player_idx, hit.window, hit.measured_offset_s);
-    let judgment_event_time = song_time_ns_to_seconds(song_time_ns_add_seconds(
-        hit.note_time_ns,
-        judgment_time_error_s * rate,
-    ));
+) -> (Judgment, SongTimeNs) {
+    let judgment_offset_music_ns = live_autoplay_judgment_offset_music_ns(
+        state,
+        player_idx,
+        hit.window,
+        hit.measured_offset_music_ns,
+    );
+    let judgment_event_time_ns = hit.note_time_ns.saturating_add(judgment_offset_music_ns);
     (
         Judgment {
-            time_error_ms: judgment_time_error_s * 1000.0,
+            time_error_ms: judgment_time_error_ms_from_music_ns(judgment_offset_music_ns, rate),
             grade: hit.grade,
             window: Some(hit.window),
             miss_because_held: false,
         },
-        judgment_event_time,
+        judgment_event_time_ns,
     )
 }
 
@@ -11165,7 +11164,7 @@ fn hit_mine(
         state.notes[note_index].beat,
         song_time_ns_to_seconds(note_time_ns),
         song_time_ns_to_seconds(hit_time_ns),
-        song_time_ns_delta_seconds(time_error_music_ns, 0) / rate * 1000.0,
+        judgment_time_error_ms_from_music_ns(time_error_music_ns, rate),
         rate
     );
     if updated_scoring {
@@ -12027,7 +12026,6 @@ pub fn judge_a_tap(
             player,
             state.note_time_cache_ns[note_index],
             current_time_ns,
-            rate,
         ) else {
             return mine_hit_on_press;
         };
@@ -12065,13 +12063,16 @@ pub fn judge_a_tap(
 
         if rescore_early_hits && row_rescore_track_count == 1 {
             let note_col = state.notes[note_index].column;
-            let is_early = hit.measured_offset_s < 0.0;
+            let is_early = hit.measured_offset_music_ns < 0;
             let is_bad = matches!(hit.grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
             if is_early && is_bad {
                 if state.notes[note_index].early_result.is_none() {
                     let judgment = Judgment {
-                        time_error_ms: hit.measured_offset_s * 1000.0,
+                        time_error_ms: judgment_time_error_ms_from_music_ns(
+                            hit.measured_offset_music_ns,
+                            rate,
+                        ),
                         grade: hit.grade,
                         window: Some(hit.window),
                         miss_because_held: false,
@@ -12109,7 +12110,7 @@ pub fn judge_a_tap(
                         state.notes[note_index].beat,
                         song_offset_s,
                         global_offset_s,
-                        hit.note_time_s,
+                        song_time_ns_to_seconds(hit.note_time_ns),
                         current_time,
                         current_music_time_s(state),
                         rate,
@@ -12157,8 +12158,8 @@ pub fn judge_a_tap(
                 state.notes[note_index].beat,
                 song_offset_s,
                 global_offset_s,
-                hit.note_time_s,
-                judgment_event_time,
+                song_time_ns_to_seconds(hit.note_time_ns),
+                song_time_ns_to_seconds(judgment_event_time),
                 current_music_time_s(state),
                 rate,
                 lead_in_s,
@@ -12197,7 +12198,6 @@ pub fn judge_a_tap(
                 player,
                 state.note_time_cache_ns[idx],
                 current_time_ns,
-                rate,
             ) else {
                 continue;
             };
@@ -12214,8 +12214,8 @@ pub fn judge_a_tap(
                 state.notes[idx].beat,
                 song_offset_s,
                 global_offset_s,
-                hit.note_time_s,
-                judgment_event_time,
+                song_time_ns_to_seconds(hit.note_time_ns),
+                song_time_ns_to_seconds(judgment_event_time),
                 current_music_time_s(state),
                 rate,
                 lead_in_s,
@@ -12293,7 +12293,6 @@ pub fn judge_a_lift(
         player,
         state.note_time_cache_ns[note_index],
         current_time_ns,
-        rate,
     ) else {
         return false;
     };
@@ -12324,13 +12323,16 @@ pub fn judge_a_lift(
         let (col_start, col_end) = player_col_range(state, player);
         let row_rescore_track_count =
             count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
-        let is_early = hit.measured_offset_s < 0.0;
+        let is_early = hit.measured_offset_music_ns < 0;
         let is_bad = matches!(hit.grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
         if row_rescore_track_count == 1 && is_early && is_bad {
             if state.notes[note_index].early_result.is_none() {
                 let judgment = Judgment {
-                    time_error_ms: hit.measured_offset_s * 1000.0,
+                    time_error_ms: judgment_time_error_ms_from_music_ns(
+                        hit.measured_offset_music_ns,
+                        rate,
+                    ),
                     grade: hit.grade,
                     window: Some(hit.window),
                     miss_because_held: false,
@@ -12362,7 +12364,7 @@ pub fn judge_a_lift(
                     note_beat,
                     song_offset_s,
                     global_offset_s,
-                    hit.note_time_s,
+                    song_time_ns_to_seconds(hit.note_time_ns),
                     current_time,
                     current_music_time_s(state),
                     rate,
@@ -12395,8 +12397,8 @@ pub fn judge_a_lift(
         note_beat,
         song_offset_s,
         global_offset_s,
-        hit.note_time_s,
-        judgment_event_time,
+        song_time_ns_to_seconds(hit.note_time_ns),
+        song_time_ns_to_seconds(judgment_event_time),
         current_music_time_s(state),
         rate,
         lead_in_s,
@@ -13826,15 +13828,14 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                 (note.row_index, note.column, note.beat)
             };
             {
-                let time_err_music = song_time_ns_delta_seconds(music_time_ns, note_time_ns);
-                let time_err_real = time_err_music / rate;
+                let miss_offset_music_ns = music_time_ns.saturating_sub(note_time_ns);
                 let miss_because_held = state
                     .tap_miss_held_window
                     .get(cursor)
                     .copied()
                     .unwrap_or(false);
                 let miss = Judgment {
-                    time_error_ms: time_err_real * 1000.0,
+                    time_error_ms: judgment_time_error_ms_from_music_ns(miss_offset_music_ns, rate),
                     grade: JudgeGrade::Miss,
                     window: None,
                     miss_because_held,
@@ -14293,7 +14294,7 @@ mod tests {
         RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode, TurnRng,
         active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
         advance_hold_life_ns, advance_judged_row_cursor, apply_global_offset_delta,
-        apply_mines_insert, apply_song_offset_delta, autoplay_random_offset_s_for_window,
+        apply_mines_insert, apply_song_offset_delta, autoplay_random_offset_music_ns_for_window,
         build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
         build_player_judgment_timing, build_row_grids, closest_lane_note_ns,
         collect_edge_judge_indices, completed_row_final_judgment,
@@ -14305,8 +14306,8 @@ mod tests {
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
         lane_press_started, lane_release_finished, late_note_resolution_window_s,
         live_autoplay_enabled_from_flags, max_step_distance_seconds, mine_window_bounds_ns,
-        music_time_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode,
-        note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
+        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_hit_eval,
+        parse_attack_mods, parse_song_lua_runtime_mods,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
         recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
@@ -14325,7 +14326,7 @@ mod tests {
     use crate::game::profile;
     use crate::game::song::SongData;
     use crate::game::timing::{
-        ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile, TimingSegments,
+        ROWS_PER_BEAT, StopSegment, TimingData, TimingProfile, TimingProfileNs, TimingSegments,
     };
     use rssp::{TechCounts, stats::ArrowStats};
     use std::path::PathBuf;
@@ -14987,9 +14988,11 @@ mod tests {
         let mut rng = TurnRng::new(1);
         let mut profile = TimingProfile::default_itg_with_fa_plus();
         profile.fa_plus_window_s = None;
-        let outer = profile.windows_s[0];
+        let profile_ns = TimingProfileNs::from_profile_scaled(&profile, 1.0);
+        let outer = profile_ns.windows_ns[0];
         for _ in 0..32 {
-            let offset = autoplay_random_offset_s_for_window(&mut rng, profile, TimingWindow::W1);
+            let offset =
+                autoplay_random_offset_music_ns_for_window(&mut rng, profile_ns, TimingWindow::W1);
             assert!(offset.abs() <= outer);
         }
     }
@@ -14998,10 +15001,14 @@ mod tests {
     fn autoplay_random_offset_w1_excludes_w0_band_when_enabled() {
         let mut rng = TurnRng::new(2);
         let profile = TimingProfile::default_itg_with_fa_plus();
-        let inner = profile.fa_plus_window_s.expect("default profile has W0");
-        let outer = profile.windows_s[0];
+        let profile_ns = TimingProfileNs::from_profile_scaled(&profile, 1.0);
+        let inner = profile_ns
+            .fa_plus_window_ns
+            .expect("default profile has W0");
+        let outer = profile_ns.windows_ns[0];
         for _ in 0..32 {
-            let offset = autoplay_random_offset_s_for_window(&mut rng, profile, TimingWindow::W1);
+            let offset =
+                autoplay_random_offset_music_ns_for_window(&mut rng, profile_ns, TimingWindow::W1);
             assert!(offset.abs() >= inner);
             assert!(offset.abs() <= outer);
         }
@@ -16796,21 +16803,13 @@ mod tests {
         let great_edge_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[2];
         let way_off_edge_ns = state.player_judgment_timing[0].profile_music_ns.windows_ns[4];
 
-        let on_great_edge =
-            note_hit_eval(&state, 0, note_time_ns, note_time_ns + great_edge_ns, 1.5)
-                .expect("great edge should still judge");
+        let on_great_edge = note_hit_eval(&state, 0, note_time_ns, note_time_ns + great_edge_ns)
+            .expect("great edge should still judge");
         assert_eq!(on_great_edge.grade, JudgeGrade::Great);
         assert_eq!(on_great_edge.window, TimingWindow::W3);
 
         assert!(
-            note_hit_eval(
-                &state,
-                0,
-                note_time_ns,
-                note_time_ns + way_off_edge_ns + 1,
-                1.5
-            )
-            .is_none(),
+            note_hit_eval(&state, 0, note_time_ns, note_time_ns + way_off_edge_ns + 1).is_none(),
             "offsets beyond the scaled way-off edge should miss",
         );
     }
@@ -16822,13 +16821,13 @@ mod tests {
         let lift_time_ns = song_time_ns_from_seconds(2.0);
 
         let tap_hit =
-            note_hit_eval(&state, 0, tap_time_ns, tap_time_ns, 1.0).expect("tap hit should judge");
-        let lift_hit = note_hit_eval(&state, 0, lift_time_ns, lift_time_ns, 1.0)
-            .expect("lift hit should judge");
+            note_hit_eval(&state, 0, tap_time_ns, tap_time_ns).expect("tap hit should judge");
+        let lift_hit =
+            note_hit_eval(&state, 0, lift_time_ns, lift_time_ns).expect("lift hit should judge");
 
         assert_eq!(tap_hit.grade, lift_hit.grade);
         assert_eq!(tap_hit.window, lift_hit.window);
-        assert_eq!(tap_hit.measured_offset_s, 0.0);
-        assert_eq!(lift_hit.measured_offset_s, 0.0);
+        assert_eq!(tap_hit.measured_offset_music_ns, 0);
+        assert_eq!(lift_hit.measured_offset_music_ns, 0);
     }
 }
