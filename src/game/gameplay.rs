@@ -870,20 +870,22 @@ struct FinalizedRowOutcome {
 
 #[inline(always)]
 fn finalized_row_outcome_for_entry(
-    row_outcomes: &[Option<FinalizedRowOutcome>],
+    row_entries: &[RowEntry],
     row_entry_index: usize,
 ) -> Option<FinalizedRowOutcome> {
-    row_outcomes.get(row_entry_index).copied().flatten()
+    row_entries
+        .get(row_entry_index)
+        .and_then(|row_entry| row_entry.final_outcome)
 }
 
 #[inline(always)]
 fn finalized_row_outcome_for_cached_row(
+    row_entries: &[RowEntry],
     row_map_cache: &[u32],
-    row_outcomes: &[Option<FinalizedRowOutcome>],
     row_index: usize,
 ) -> Option<FinalizedRowOutcome> {
     let row_entry_index = row_entry_index_for_cached_row(row_map_cache, row_index)?;
-    finalized_row_outcome_for_entry(row_outcomes, row_entry_index)
+    finalized_row_outcome_for_entry(row_entries, row_entry_index)
 }
 
 #[inline(always)]
@@ -902,27 +904,15 @@ fn row_entry_for_cached_row<'a>(
 fn completed_row_final_judgment<'a>(
     notes: &'a [Note],
     row_entry: &RowEntry,
-    col_start: usize,
-    col_end: usize,
 ) -> Option<&'a Judgment> {
     let mut row_judgments: [Option<&Judgment>; MAX_COLS] = [None; MAX_COLS];
     let mut row_judgment_count = 0usize;
-    let mut has_player_notes = false;
 
     for &note_index in &row_entry.nonmine_note_indices {
-        let note = &notes[note_index];
-        if note.column < col_start || note.column >= col_end {
-            continue;
-        }
-        has_player_notes = true;
-        let judgment = note.result.as_ref()?;
+        let judgment = notes[note_index].result.as_ref()?;
         debug_assert!(row_judgment_count < row_judgments.len());
         row_judgments[row_judgment_count] = Some(judgment);
         row_judgment_count += 1;
-    }
-
-    if !has_player_notes {
-        return None;
     }
 
     judgment::aggregate_row_final_judgment(
@@ -946,21 +936,14 @@ const fn row_final_grade_hides_note(grade: JudgeGrade) -> bool {
 fn completed_row_flash_note_indices_and_grade(
     notes: &[Note],
     row_entry: &RowEntry,
-    col_start: usize,
-    col_end: usize,
 ) -> Option<([usize; MAX_COLS], usize, JudgeGrade)> {
-    let Some(final_judgment) = completed_row_final_judgment(notes, row_entry, col_start, col_end)
-    else {
+    let Some(final_judgment) = completed_row_final_judgment(notes, row_entry) else {
         return None;
     };
 
     let mut out = [usize::MAX; MAX_COLS];
     let mut len = 0usize;
     for &note_index in &row_entry.nonmine_note_indices {
-        let note = &notes[note_index];
-        if note.column < col_start || note.column >= col_end {
-            continue;
-        }
         debug_assert!(len < out.len());
         out[len] = note_index;
         len += 1;
@@ -971,8 +954,8 @@ fn completed_row_flash_note_indices_and_grade(
 #[inline(always)]
 pub fn row_hides_completed_note(state: &State, player: usize, row_index: usize) -> bool {
     finalized_row_outcome_for_cached_row(
+        &state.row_entries,
         &state.row_map_cache[player],
-        &state.finalized_row_outcomes[player],
         row_index,
     )
     .is_some_and(|outcome| row_final_grade_hides_note(outcome.final_grade))
@@ -980,14 +963,13 @@ pub fn row_hides_completed_note(state: &State, player: usize, row_index: usize) 
 
 #[inline(always)]
 fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_index: usize) {
-    let (col_start, col_end) = player_col_range(state, player);
     let Some((flash_note_indices, flash_count, flash_grade)) = ({
         let Some(row_entry) =
             row_entry_for_cached_row(&state.row_entries, &state.row_map_cache[player], row_index)
         else {
             return;
         };
-        completed_row_flash_note_indices_and_grade(&state.notes, row_entry, col_start, col_end)
+        completed_row_flash_note_indices_and_grade(&state.notes, row_entry)
     }) else {
         return;
     };
@@ -999,22 +981,45 @@ fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_in
 }
 
 #[inline(always)]
-fn count_rescore_tracks_on_row(
+fn count_rescore_tracks_on_row(row_entry: &RowEntry) -> usize {
+    usize::from(row_entry.rescore_track_count)
+}
+
+fn build_row_entry(
+    row_index: usize,
+    nonmine_note_indices: Vec<usize>,
     notes: &[Note],
-    row_entry: &RowEntry,
-    col_start: usize,
-    col_end: usize,
-) -> usize {
-    row_entry
-        .nonmine_note_indices
-        .iter()
-        .filter(|&&idx| {
-            let note = &notes[idx];
-            note.column >= col_start
-                && note.column < col_end
-                && counts_for_early_rescore(note.note_type)
-        })
-        .count()
+    note_time_cache_ns: &[SongTimeNs],
+) -> RowEntry {
+    debug_assert!(!nonmine_note_indices.is_empty());
+    let time_ns = note_time_cache_ns[nonmine_note_indices[0]];
+    let mut rescore_track_count = 0u8;
+    let mut unresolved_count = 0u8;
+    let mut unresolved_nonlift_count = 0u8;
+    let mut had_provisional_early_hit = false;
+    for &note_index in &nonmine_note_indices {
+        let note = &notes[note_index];
+        if counts_for_early_rescore(note.note_type) {
+            rescore_track_count = rescore_track_count.saturating_add(1);
+        }
+        if note.result.is_none() {
+            unresolved_count = unresolved_count.saturating_add(1);
+            if note.note_type != NoteType::Lift {
+                unresolved_nonlift_count = unresolved_nonlift_count.saturating_add(1);
+            }
+        }
+        had_provisional_early_hit |= note.early_result.is_some();
+    }
+    RowEntry {
+        row_index,
+        time_ns,
+        nonmine_note_indices,
+        rescore_track_count,
+        unresolved_count,
+        unresolved_nonlift_count,
+        had_provisional_early_hit,
+        final_outcome: None,
+    }
 }
 
 #[inline(always)]
@@ -5746,8 +5751,14 @@ pub fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplayTotals
 #[derive(Clone, Debug)]
 pub struct RowEntry {
     row_index: usize,
+    time_ns: SongTimeNs,
     // Non-mine, non-fake, judgable notes on this row
     nonmine_note_indices: Vec<usize>,
+    rescore_track_count: u8,
+    unresolved_count: u8,
+    unresolved_nonlift_count: u8,
+    had_provisional_early_hit: bool,
+    final_outcome: Option<FinalizedRowOutcome>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -6847,8 +6858,8 @@ pub struct State {
     display_clock: FrameStableDisplayClock,
     display_clock_diag: DisplayClockDiagRing,
     pub lane_note_indices: [Vec<usize>; MAX_COLS],
+    pub row_entry_ranges: [(usize, usize); MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
-    finalized_row_outcomes: [Vec<Option<FinalizedRowOutcome>>; MAX_PLAYERS],
     pub note_time_cache_ns: Vec<SongTimeNs>,
     pub note_display_beat_cache: Vec<f32>,
     pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
@@ -6886,6 +6897,7 @@ pub struct State {
 
     // Optimization: Per-player direct row lookup instead of HashMap
     pub row_map_cache: [Vec<u32>; MAX_PLAYERS],
+    pub note_row_entry_indices: Vec<u32>,
     // Bit flags per note index:
     // bit0 => same row contains a hold start, bit1 => same row contains a roll start.
     pub tap_row_hold_roll_flags: Vec<u8>,
@@ -7380,9 +7392,16 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
     debug_assert_eq!(state.notes.len(), state.hold_end_time_cache_ns.len());
     debug_assert_eq!(state.notes.len(), state.hold_end_display_beat_cache.len());
     debug_assert_eq!(state.notes.len(), state.hold_decay_active.len());
+    debug_assert_eq!(state.notes.len(), state.note_row_entry_indices.len());
     for player in 0..state.num_players {
         let (start, end) = state.note_ranges[player];
         debug_assert!(start <= end && end <= state.notes.len());
+        let (row_start, row_end) = state.row_entry_ranges[player];
+        debug_assert!(row_start <= row_end && row_end <= state.row_entries.len());
+        debug_assert!(
+            state.judged_row_cursor[player] >= row_start
+                && state.judged_row_cursor[player] <= row_end
+        );
         debug_assert!(
             state.next_tap_miss_cursor[player] >= start
                 && state.next_tap_miss_cursor[player] <= end
@@ -7422,6 +7441,10 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
     for (row_entry_index, row_entry) in state.row_entries.iter().enumerate() {
         let first_note_index = row_entry.nonmine_note_indices[0];
         let player = player_for_col(state, state.notes[first_note_index].column);
+        debug_assert!(
+            row_entry_index >= state.row_entry_ranges[player].0
+                && row_entry_index < state.row_entry_ranges[player].1
+        );
         debug_assert_eq!(
             state.row_map_cache[player]
                 .get(row_entry.row_index)
@@ -7430,6 +7453,10 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
         );
         for &note_index in &row_entry.nonmine_note_indices {
             debug_assert!(note_index < state.notes.len());
+            debug_assert_eq!(
+                state.note_row_entry_indices[note_index],
+                row_entry_index as u32
+            );
             let note = &state.notes[note_index];
             debug_assert_eq!(note.row_index, row_entry.row_index);
             debug_assert!(note.can_be_judged);
@@ -9541,37 +9568,48 @@ pub fn init(
     debug!("Parsed {} notes from chart data.", notes.len());
 
     let mut row_entries: Vec<RowEntry> = Vec::with_capacity(notes.len() / 2);
+    let mut row_entry_ranges = [(0usize, 0usize); MAX_PLAYERS];
     let mut row_map_cache: [Vec<u32>; MAX_PLAYERS] =
         std::array::from_fn(|_| vec![u32::MAX; max_row_index + 1]);
+    let mut note_row_entry_indices = vec![u32::MAX; notes.len()];
     let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
-    let mut cursor = 0usize;
-    while cursor < notes.len() {
-        let row_index = notes[cursor].row_index;
-        let row_start = cursor;
-        let mut row_flags = 0u8;
-        let mut nonmine_note_indices = Vec::with_capacity(4);
-        while cursor < notes.len() && notes[cursor].row_index == row_index {
-            let note = &notes[cursor];
-            match note.note_type {
-                NoteType::Hold => row_flags |= 0b01,
-                NoteType::Roll => row_flags |= 0b10,
-                _ => {}
+    for player in 0..num_players {
+        let row_range_start = row_entries.len();
+        let (note_start, note_end) = note_ranges[player];
+        let mut cursor = note_start;
+        while cursor < note_end {
+            let row_index = notes[cursor].row_index;
+            let row_start = cursor;
+            let mut row_flags = 0u8;
+            let mut nonmine_note_indices = Vec::with_capacity(4);
+            while cursor < note_end && notes[cursor].row_index == row_index {
+                let note = &notes[cursor];
+                match note.note_type {
+                    NoteType::Hold => row_flags |= 0b01,
+                    NoteType::Roll => row_flags |= 0b10,
+                    _ => {}
+                }
+                if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
+                    nonmine_note_indices.push(cursor);
+                }
+                cursor += 1;
             }
-            if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-                nonmine_note_indices.push(cursor);
+            if !nonmine_note_indices.is_empty() {
+                let row_entry_index = row_entries.len() as u32;
+                row_map_cache[player][row_index] = row_entry_index;
+                for &note_index in &nonmine_note_indices {
+                    note_row_entry_indices[note_index] = row_entry_index;
+                }
+                row_entries.push(build_row_entry(
+                    row_index,
+                    nonmine_note_indices,
+                    &notes,
+                    &note_time_cache_ns,
+                ));
             }
-            cursor += 1;
+            tap_row_hold_roll_flags[row_start..cursor].fill(row_flags);
         }
-        if !nonmine_note_indices.is_empty() {
-            let row_entry_index = row_entries.len() as u32;
-            let player = note_player_for_col(notes[nonmine_note_indices[0]].column);
-            row_map_cache[player][row_index] = row_entry_index;
-            row_entries.push(RowEntry {
-                row_index,
-                nonmine_note_indices,
-            });
-        }
-        tap_row_hold_roll_flags[row_start..cursor].fill(row_flags);
+        row_entry_ranges[player] = (row_range_start, row_entries.len());
     }
     let cache_build_ms = cache_build_started.elapsed().as_secs_f64() * 1000.0;
 
@@ -9673,6 +9711,8 @@ pub fn init(
 
     let note_range_start: [usize; MAX_PLAYERS] =
         std::array::from_fn(|player| note_ranges[player].0);
+    let row_entry_range_start: [usize; MAX_PLAYERS] =
+        std::array::from_fn(|player| row_entry_ranges[player].0);
     let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
     let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
     for player in 0..num_players {
@@ -10042,8 +10082,8 @@ pub fn init(
         display_clock: FrameStableDisplayClock::new(song_time_ns_from_seconds(init_music_time)),
         display_clock_diag: DisplayClockDiagRing::new(),
         lane_note_indices,
-        judged_row_cursor: [0; MAX_PLAYERS],
-        finalized_row_outcomes: std::array::from_fn(|_| vec![None; row_entries.len()]),
+        row_entry_ranges,
+        judged_row_cursor: row_entry_range_start,
         note_time_cache_ns,
         note_display_beat_cache,
         hold_end_time_cache_ns,
@@ -10079,6 +10119,7 @@ pub fn init(
         mini_indicator_target_score_percent,
         mini_indicator_rival_score_percent,
         row_map_cache,
+        note_row_entry_indices,
         tap_row_hold_roll_flags,
         decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
         hold_decay_active: vec![false; notes_len],
@@ -10862,6 +10903,36 @@ fn remove_provisional_early_score(p: &mut PlayerRuntime, grade: JudgeGrade) {
 }
 
 #[inline(always)]
+fn mark_row_provisional_early_result(state: &mut State, note_index: usize) {
+    let Some(&row_entry_index) = state.note_row_entry_indices.get(note_index) else {
+        return;
+    };
+    if row_entry_index == u32::MAX {
+        return;
+    }
+    if let Some(row_entry) = state.row_entries.get_mut(row_entry_index as usize) {
+        row_entry.had_provisional_early_hit = true;
+    }
+}
+
+#[inline(always)]
+fn mark_row_note_finalized(state: &mut State, note_index: usize) {
+    let Some(&row_entry_index) = state.note_row_entry_indices.get(note_index) else {
+        return;
+    };
+    if row_entry_index == u32::MAX {
+        return;
+    }
+    let Some(row_entry) = state.row_entries.get_mut(row_entry_index as usize) else {
+        return;
+    };
+    row_entry.unresolved_count = row_entry.unresolved_count.saturating_sub(1);
+    if state.notes[note_index].note_type != NoteType::Lift {
+        row_entry.unresolved_nonlift_count = row_entry.unresolved_nonlift_count.saturating_sub(1);
+    }
+}
+
+#[inline(always)]
 fn register_provisional_early_result(
     state: &mut State,
     player: usize,
@@ -10873,16 +10944,19 @@ fn register_provisional_early_result(
     }
     add_provisional_early_score(&mut state.players[player], judgment.grade);
     state.notes[note_index].early_result = Some(judgment);
+    mark_row_provisional_early_result(state, note_index);
 }
 
 #[inline(always)]
 fn set_final_note_result(state: &mut State, player: usize, note_index: usize, judgment: Judgment) {
-    if state.notes[note_index].result.is_none()
-        && let Some(early) = state.notes[note_index].early_result.as_ref()
-    {
+    let was_unjudged = state.notes[note_index].result.is_none();
+    if was_unjudged && let Some(early) = state.notes[note_index].early_result.as_ref() {
         remove_provisional_early_score(&mut state.players[player], early.grade);
     }
     state.notes[note_index].result = Some(judgment);
+    if was_unjudged {
+        mark_row_note_finalized(state, note_index);
+    }
 }
 
 const fn grade_to_window(grade: JudgeGrade) -> Option<&'static str> {
@@ -11965,7 +12039,6 @@ pub fn judge_a_tap(
     let hide_early_dw_judgments = state.player_profiles[player].hide_early_dw_judgments;
     let hide_early_dw_flash = state.player_profiles[player].hide_early_dw_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
-    let (col_start, col_end) = player_col_range(state, player);
     let timing = state.player_judgment_timing[player];
     let search_window_ns = timing
         .largest_tap_window_music_ns
@@ -12026,19 +12099,8 @@ pub fn judge_a_tap(
             debug_assert!(false, "missing row cache for row {note_row_index}");
             return false;
         };
-        let row_rescore_track_count =
-            count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
-        let row_note_count = row_entry
-            .nonmine_note_indices
-            .iter()
-            .filter(|&&idx| {
-                let row_note = &state.notes[idx];
-                row_note.column >= col_start
-                    && row_note.column < col_end
-                    && row_note.result.is_none()
-                    && row_note.note_type != NoteType::Lift
-            })
-            .count();
+        let row_rescore_track_count = count_rescore_tracks_on_row(row_entry);
+        let row_note_count = usize::from(row_entry.unresolved_nonlift_count);
         let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
             (
                 state.song_offset_seconds,
@@ -12310,9 +12372,7 @@ pub fn judge_a_lift(
             debug_assert!(false, "missing row cache for row {note_row_index}");
             return false;
         };
-        let (col_start, col_end) = player_col_range(state, player);
-        let row_rescore_track_count =
-            count_rescore_tracks_on_row(&state.notes, row_entry, col_start, col_end);
+        let row_rescore_track_count = count_rescore_tracks_on_row(row_entry);
         let is_early = hit.measured_offset_music_ns < 0;
         let is_bad = matches!(hit.grade, JudgeGrade::Decent | JudgeGrade::WayOff);
 
@@ -12705,6 +12765,11 @@ fn refresh_timing_after_offset_change(state: &mut State) {
             .as_ref()
             .map(|h| state.timing_players[player].get_time_for_beat_ns(h.end_beat));
     }
+    for row_entry in &mut state.row_entries {
+        if let Some(&note_index) = row_entry.nonmine_note_indices.first() {
+            row_entry.time_ns = state.note_time_cache_ns[note_index];
+        }
+    }
     for player in 0..state.num_players {
         let mine_note_time_ns = &mut state.mine_note_time_ns[player];
         mine_note_time_ns.clear();
@@ -12826,12 +12891,7 @@ fn apply_autosync_offset_correction(state: &mut State, note_off_by_ns: SongTimeN
 }
 
 #[inline(always)]
-fn apply_autosync_for_row_hits(
-    state: &mut State,
-    row_entry_index: usize,
-    col_start: usize,
-    col_end: usize,
-) {
+fn apply_autosync_for_row_hits(state: &mut State, row_entry_index: usize) {
     if state.replay_mode
         || autoplay_blocks_scoring(state)
         || state.autosync_mode == AutosyncMode::Off
@@ -12849,24 +12909,20 @@ fn apply_autosync_for_row_hits(
     let mut i = 0;
     while i < row_len {
         let note_index = state.row_entries[row_entry_index].nonmine_note_indices[i];
-        let maybe_note_offset_ns = {
-            let note = &state.notes[note_index];
-            if note.column < col_start || note.column >= col_end {
-                None
-            } else {
-                note.result.as_ref().and_then(|judgment| {
-                    if matches!(
-                        judgment.grade,
-                        JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
-                    ) {
-                        // ITG's fNoteOffset is positive when stepping early.
-                        Some(-judgment.time_error_music_ns)
-                    } else {
-                        None
-                    }
-                })
-            }
-        };
+        let maybe_note_offset_ns = state.notes[note_index]
+            .result
+            .as_ref()
+            .and_then(|judgment| {
+                if matches!(
+                    judgment.grade,
+                    JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
+                ) {
+                    // ITG's fNoteOffset is positive when stepping early.
+                    Some(-judgment.time_error_music_ns)
+                } else {
+                    None
+                }
+            });
         if let Some(note_off_by_ns) = maybe_note_offset_ns {
             apply_autosync_offset_correction(state, note_off_by_ns);
         }
@@ -13093,12 +13149,7 @@ fn finalize_row_judgment(
     let row_notes = &state.row_entries[row_entry_index].nonmine_note_indices;
     let Some(final_judgment) =
         judgment::aggregate_row_final_judgment(row_notes.iter().filter_map(|&note_index| {
-            let note = &state.notes[note_index];
-            if note.column < col_start || note.column >= col_end {
-                return None;
-            }
-            debug_assert!(note.result.is_some());
-            let judgment = note.result.as_ref()?;
+            let judgment = state.notes[note_index].result.as_ref()?;
             player_row_note_count = player_row_note_count.saturating_add(1);
             row_has_miss |= judgment.grade == JudgeGrade::Miss;
             row_has_wayoff |= judgment.grade == JudgeGrade::WayOff;
@@ -13109,10 +13160,9 @@ fn finalize_row_judgment(
         return;
     };
     let scoring_blocked = autoplay_blocks_scoring(state);
-    apply_autosync_for_row_hits(state, row_entry_index, col_start, col_end);
+    apply_autosync_for_row_hits(state, row_entry_index);
     let final_grade = final_judgment.grade;
-    state.finalized_row_outcomes[player][row_entry_index] =
-        Some(FinalizedRowOutcome { final_grade });
+    state.row_entries[row_entry_index].final_outcome = Some(FinalizedRowOutcome { final_grade });
     record_display_window_counts(state, player, &final_judgment);
     let suppress_final_early_bad_visual =
         suppress_final_bad_rescore_visual(skip_life_change, final_grade);
@@ -13173,7 +13223,6 @@ fn finalize_row_judgment(
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PlayerRowScanState {
-    NoNotes,
     BeyondLookahead,
     Pending,
     Ready {
@@ -13185,51 +13234,23 @@ enum PlayerRowScanState {
 
 #[inline(always)]
 fn player_row_scan_state(
-    notes: &[Note],
     row_entries: &[RowEntry],
-    note_time_cache_ns: &[SongTimeNs],
-    row_outcomes: &[Option<FinalizedRowOutcome>],
     row_entry_index: usize,
-    col_start: usize,
-    col_end: usize,
     lookahead_time_ns: SongTimeNs,
 ) -> PlayerRowScanState {
     let row_entry = &row_entries[row_entry_index];
-    let mut has_notes_on_row = false;
-    let mut is_row_complete = true;
-    let mut skip_life_change = false;
-    let row_len = row_entry.nonmine_note_indices.len();
-    let mut i = 0;
-    while i < row_len {
-        let note_index = row_entry.nonmine_note_indices[i];
-        let note = &notes[note_index];
-        if note.column >= col_start && note.column < col_end {
-            has_notes_on_row = true;
-            if note.result.is_none() {
-                is_row_complete = false;
-                break;
-            }
-            skip_life_change |= note.early_result.is_some();
-        }
-        i += 1;
-    }
-
-    if !has_notes_on_row {
-        return PlayerRowScanState::NoNotes;
-    }
-    if finalized_row_outcome_for_entry(row_outcomes, row_entry_index).is_some() {
+    if row_entry.final_outcome.is_some() {
         return PlayerRowScanState::Finalized;
     }
-    let row_time_ns = note_time_cache_ns[row_entry.nonmine_note_indices[0]];
-    if row_time_ns > lookahead_time_ns {
+    if row_entry.time_ns > lookahead_time_ns {
         return PlayerRowScanState::BeyondLookahead;
     }
-    if !is_row_complete {
+    if row_entry.unresolved_count != 0 {
         return PlayerRowScanState::Pending;
     }
     PlayerRowScanState::Ready {
         row_index: row_entry.row_index,
-        skip_life_change,
+        skip_life_change: row_entry.had_provisional_early_hit,
     }
 }
 
@@ -13250,9 +13271,7 @@ where
                 row_index,
                 skip_life_change,
             } => return Some((row_entry_index, row_index, skip_life_change)),
-            PlayerRowScanState::NoNotes
-            | PlayerRowScanState::Pending
-            | PlayerRowScanState::Finalized => {}
+            PlayerRowScanState::Pending | PlayerRowScanState::Finalized => {}
         }
         row_entry_index += 1;
     }
@@ -13267,7 +13286,7 @@ where
     let mut next_cursor = cursor;
     while next_cursor < row_count {
         match row_state(next_cursor) {
-            PlayerRowScanState::NoNotes | PlayerRowScanState::Finalized => {
+            PlayerRowScanState::Finalized => {
                 next_cursor += 1;
             }
             PlayerRowScanState::BeyondLookahead
@@ -13286,39 +13305,22 @@ fn update_judged_rows(state: &mut State) {
             state.music_rate,
         ));
     for player in 0..state.num_players {
-        let (col_start, col_end) = player_col_range(state, player);
-        let row_count = state.row_entries.len();
-        let mut scan_start = state.judged_row_cursor[player];
+        let (row_start, row_end) = state.row_entry_ranges[player];
+        let row_count = row_end;
+        let mut scan_start = state.judged_row_cursor[player].max(row_start);
         while let Some((row_entry_index, row_index, skip_life_change)) =
             next_ready_row_in_lookahead(scan_start, row_count, |idx| {
-                player_row_scan_state(
-                    &state.notes,
-                    &state.row_entries,
-                    &state.note_time_cache_ns,
-                    &state.finalized_row_outcomes[player],
-                    idx,
-                    col_start,
-                    col_end,
-                    lookahead_time_ns,
-                )
+                player_row_scan_state(&state.row_entries, idx, lookahead_time_ns)
             })
         {
             finalize_row_judgment(state, player, row_index, row_entry_index, skip_life_change);
             scan_start = row_entry_index + 1;
         }
-        state.judged_row_cursor[player] =
-            advance_judged_row_cursor(state.judged_row_cursor[player], row_count, |idx| {
-                player_row_scan_state(
-                    &state.notes,
-                    &state.row_entries,
-                    &state.note_time_cache_ns,
-                    &state.finalized_row_outcomes[player],
-                    idx,
-                    col_start,
-                    col_end,
-                    lookahead_time_ns,
-                )
-            });
+        state.judged_row_cursor[player] = advance_judged_row_cursor(
+            state.judged_row_cursor[player].max(row_start),
+            row_count,
+            |idx| player_row_scan_state(&state.row_entries, idx, lookahead_time_ns),
+        );
     }
 }
 
@@ -14285,10 +14287,11 @@ mod tests {
         HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS, MAX_PLAYERS, REPLAY_EDGE_RATE_PER_SEC,
         RowEntry, ScrollEffects, ScrollSpeedSetting, SongClockSnapshot, TickMode, TurnRng,
         active_hold_counts_as_pressed, add_provisional_early_score, advance_hold_last_held,
-        advance_hold_life_ns, advance_judged_row_cursor, apply_global_offset_delta,
-        apply_mines_insert, apply_song_offset_delta, autoplay_random_offset_music_ns_for_window,
-        build_assist_clap_rows, build_attack_mask_windows_for_player, build_column_cues_for_player,
-        build_player_judgment_timing, build_row_grids, closest_lane_note_ns,
+        advance_hold_life_ns, advance_judged_row_cursor, apply_autosync_for_row_hits,
+        apply_global_offset_delta, apply_mines_insert, apply_song_offset_delta,
+        autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
+        build_attack_mask_windows_for_player, build_column_cues_for_player,
+        build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
         collect_edge_judge_indices, completed_row_final_judgment,
         completed_row_flash_note_indices_and_grade, count_rescore_tracks_on_row,
         crossed_mine_bounds_ns, effective_appearance_effects_for_player,
@@ -14298,8 +14301,8 @@ mod tests {
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
         lane_press_started, lane_release_finished, late_note_resolution_window_ns,
         live_autoplay_enabled_from_flags, max_step_distance_ns, mine_window_bounds_ns,
-        mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_hit_eval,
-        parse_attack_mods, parse_song_lua_runtime_mods,
+        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
+        next_tick_mode, note_hit_eval, parse_attack_mods, parse_song_lua_runtime_mods,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
         recompute_player_totals, refresh_active_attack_masks, refresh_timing_after_offset_change,
         remove_provisional_early_score, replay_edge_cap, row_entry_for_cached_row,
@@ -14312,7 +14315,7 @@ mod tests {
     use crate::engine::input::{InputEvent, InputSource, VirtualAction};
     use crate::engine::present::color;
     use crate::game::chart::{ChartData, GameplayChartData, StaminaCounts};
-    use crate::game::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use crate::game::note::{HoldData, HoldResult, Note, NoteType};
     use crate::game::parsing::notes::ParsedNote;
     use crate::game::profile;
@@ -14570,6 +14573,24 @@ mod tests {
             None,
             [0; MAX_PLAYERS],
         )
+    }
+
+    fn test_row_entry(
+        notes: &[Note],
+        row_index: usize,
+        nonmine_note_indices: Vec<usize>,
+    ) -> RowEntry {
+        let note_time_cache_ns = vec![0; notes.len()];
+        build_row_entry(row_index, nonmine_note_indices, notes, &note_time_cache_ns)
+    }
+
+    fn test_row_entry_with_times(
+        notes: &[Note],
+        note_time_cache_ns: &[super::SongTimeNs],
+        row_index: usize,
+        nonmine_note_indices: Vec<usize>,
+    ) -> RowEntry {
+        build_row_entry(row_index, nonmine_note_indices, notes, note_time_cache_ns)
     }
 
     fn test_input_event(action: VirtualAction) -> InputEvent {
@@ -15015,15 +15036,9 @@ mod tests {
             judged_note(0, row_index, NoteType::Tap),
             test_note(1, row_index, NoteType::Tap),
         ];
-        let row_entries = [RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        }];
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        assert_eq!(
-            count_rescore_tracks_on_row(&notes, &row_entries[0], 0, 4),
-            2
-        );
+        assert_eq!(count_rescore_tracks_on_row(&row_entry), 2);
     }
 
     #[test]
@@ -15033,24 +15048,19 @@ mod tests {
             test_note(0, row_index, NoteType::Tap),
             test_note(1, row_index, NoteType::Lift),
         ];
-        let row_entries = [RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        }];
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        assert_eq!(
-            count_rescore_tracks_on_row(&notes, &row_entries[0], 0, 4),
-            2
-        );
+        assert_eq!(count_rescore_tracks_on_row(&row_entry), 2);
     }
 
     #[test]
     fn cached_row_entry_lookup_uses_row_map_cache() {
         let row_index = 48usize;
-        let row_entries = vec![RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        }];
+        let notes = vec![
+            test_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Tap),
+        ];
+        let row_entries = vec![test_row_entry(&notes, row_index, vec![0, 1])];
         let mut row_map_cache = vec![u32::MAX; row_index + 1];
         row_map_cache[row_index] = 0;
 
@@ -15064,15 +15074,15 @@ mod tests {
     #[test]
     fn cached_row_entry_lookup_keeps_duplicate_rows_player_specific() {
         let row_index = 48usize;
+        let notes = vec![
+            test_note(0, row_index, NoteType::Tap),
+            test_note(1, row_index, NoteType::Tap),
+            test_note(4, row_index, NoteType::Tap),
+            test_note(5, row_index, NoteType::Tap),
+        ];
         let row_entries = vec![
-            RowEntry {
-                row_index,
-                nonmine_note_indices: vec![0, 1],
-            },
-            RowEntry {
-                row_index,
-                nonmine_note_indices: vec![2, 3],
-            },
+            test_row_entry(&notes, row_index, vec![0, 1]),
+            test_row_entry(&notes, row_index, vec![2, 3]),
         ];
         let mut row_map_cache: [Vec<u32>; MAX_PLAYERS] =
             std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
@@ -15091,15 +15101,16 @@ mod tests {
     #[test]
     fn finalized_row_outcome_lookup_uses_row_map_cache() {
         let row_index = 48usize;
+        let notes = vec![test_note(0, row_index, NoteType::Tap)];
+        let mut row_entries = vec![test_row_entry(&notes, row_index, vec![0])];
+        row_entries[0].final_outcome = Some(FinalizedRowOutcome {
+            final_grade: JudgeGrade::Great,
+        });
         let mut row_map_cache = vec![u32::MAX; row_index + 1];
         row_map_cache[row_index] = 0;
-        let row_outcomes = vec![Some(FinalizedRowOutcome {
-            final_grade: JudgeGrade::Great,
-        })];
 
-        let outcome =
-            finalized_row_outcome_for_cached_row(&row_map_cache, &row_outcomes, row_index)
-                .expect("expected cached finalized row outcome");
+        let outcome = finalized_row_outcome_for_cached_row(&row_entries, &row_map_cache, row_index)
+            .expect("expected cached finalized row outcome");
 
         assert_eq!(outcome.final_grade, JudgeGrade::Great);
     }
@@ -15117,20 +15128,6 @@ mod tests {
             note_with_judgment(0, row3, NoteType::Tap, JudgeGrade::Great, -6.0),
             note_with_judgment(2, row3, NoteType::Tap, JudgeGrade::Excellent, 4.0),
         ];
-        let row_entries = vec![
-            RowEntry {
-                row_index: row1,
-                nonmine_note_indices: vec![0, 1],
-            },
-            RowEntry {
-                row_index: row2,
-                nonmine_note_indices: vec![2, 3],
-            },
-            RowEntry {
-                row_index: row3,
-                nonmine_note_indices: vec![4, 5],
-            },
-        ];
         let note_time_cache_ns = vec![
             song_time_ns_from_seconds(1.0),
             song_time_ns_from_seconds(1.0),
@@ -15139,36 +15136,22 @@ mod tests {
             song_time_ns_from_seconds(3.0),
             song_time_ns_from_seconds(3.0),
         ];
-        let mut row_outcomes = vec![None; row_entries.len()];
-        row_outcomes[0] = Some(FinalizedRowOutcome {
+        let mut row_entries = vec![
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row1, vec![0, 1]),
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row2, vec![2, 3]),
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row3, vec![4, 5]),
+        ];
+        row_entries[0].final_outcome = Some(FinalizedRowOutcome {
             final_grade: JudgeGrade::Great,
         });
 
         let cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
-            player_row_scan_state(
-                &notes,
-                &row_entries,
-                &note_time_cache_ns,
-                &row_outcomes,
-                idx,
-                0,
-                4,
-                song_time_ns_from_seconds(3.5),
-            )
+            player_row_scan_state(&row_entries, idx, song_time_ns_from_seconds(3.5))
         });
         assert_eq!(cursor, 1);
 
         let ready = next_ready_row_in_lookahead(cursor, row_entries.len(), |idx| {
-            player_row_scan_state(
-                &notes,
-                &row_entries,
-                &note_time_cache_ns,
-                &row_outcomes,
-                idx,
-                0,
-                4,
-                song_time_ns_from_seconds(3.5),
-            )
+            player_row_scan_state(&row_entries, idx, song_time_ns_from_seconds(3.5))
         });
         assert_eq!(ready, Some((2, row3, false)));
     }
@@ -15186,20 +15169,6 @@ mod tests {
             note_with_judgment(0, row3, NoteType::Tap, JudgeGrade::Great, -6.0),
             note_with_judgment(2, row3, NoteType::Tap, JudgeGrade::Excellent, 4.0),
         ];
-        let row_entries = vec![
-            RowEntry {
-                row_index: row1,
-                nonmine_note_indices: vec![0, 1],
-            },
-            RowEntry {
-                row_index: row2,
-                nonmine_note_indices: vec![2, 3],
-            },
-            RowEntry {
-                row_index: row3,
-                nonmine_note_indices: vec![4, 5],
-            },
-        ];
         let note_time_cache_ns = vec![
             song_time_ns_from_seconds(1.0),
             song_time_ns_from_seconds(1.0),
@@ -15208,44 +15177,28 @@ mod tests {
             song_time_ns_from_seconds(3.0),
             song_time_ns_from_seconds(3.0),
         ];
-        let mut row_outcomes = vec![
-            Some(FinalizedRowOutcome {
-                final_grade: JudgeGrade::Great,
-            }),
-            None,
-            Some(FinalizedRowOutcome {
-                final_grade: JudgeGrade::Great,
-            }),
+        let mut row_entries = vec![
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row1, vec![0, 1]),
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row2, vec![2, 3]),
+            test_row_entry_with_times(&notes, &note_time_cache_ns, row3, vec![4, 5]),
         ];
+        row_entries[0].final_outcome = Some(FinalizedRowOutcome {
+            final_grade: JudgeGrade::Great,
+        });
+        row_entries[2].final_outcome = Some(FinalizedRowOutcome {
+            final_grade: JudgeGrade::Great,
+        });
 
         let pending_cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
-            player_row_scan_state(
-                &notes,
-                &row_entries,
-                &note_time_cache_ns,
-                &row_outcomes,
-                idx,
-                0,
-                4,
-                song_time_ns_from_seconds(3.5),
-            )
+            player_row_scan_state(&row_entries, idx, song_time_ns_from_seconds(3.5))
         });
         assert_eq!(pending_cursor, 1);
 
-        row_outcomes[1] = Some(FinalizedRowOutcome {
+        row_entries[1].final_outcome = Some(FinalizedRowOutcome {
             final_grade: JudgeGrade::Great,
         });
         let advanced_cursor = advance_judged_row_cursor(0, row_entries.len(), |idx| {
-            player_row_scan_state(
-                &notes,
-                &row_entries,
-                &note_time_cache_ns,
-                &row_outcomes,
-                idx,
-                0,
-                4,
-                song_time_ns_from_seconds(3.5),
-            )
+            player_row_scan_state(&row_entries, idx, song_time_ns_from_seconds(3.5))
         });
         assert_eq!(advanced_cursor, 3);
     }
@@ -15257,12 +15210,9 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             test_note(1, row_index, NoteType::Tap),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        assert!(completed_row_final_judgment(&notes, &row_entry, 0, 4).is_none());
+        assert!(completed_row_final_judgment(&notes, &row_entry).is_none());
     }
 
     #[test]
@@ -15272,12 +15222,9 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Excellent, 8.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        let judgment = completed_row_final_judgment(&notes, &row_entry, 0, 4)
+        let judgment = completed_row_final_judgment(&notes, &row_entry)
             .expect("completed jump should have a final row judgment");
 
         assert_eq!(judgment.grade, JudgeGrade::Excellent);
@@ -15295,14 +15242,11 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::WayOff, 140.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&decent_notes, row_index, vec![0, 1]);
 
-        let decent = completed_row_final_judgment(&decent_notes, &row_entry, 0, 4)
+        let decent = completed_row_final_judgment(&decent_notes, &row_entry)
             .expect("completed row should produce a final Decent");
-        let wayoff = completed_row_final_judgment(&wayoff_notes, &row_entry, 0, 4)
+        let wayoff = completed_row_final_judgment(&wayoff_notes, &row_entry)
             .expect("completed row should produce a final Way Off");
 
         assert_eq!(decent.grade, JudgeGrade::Decent);
@@ -15330,15 +15274,21 @@ mod tests {
                     test_note(0, row_index, NoteType::Tap),
                     test_note(1, row_index, NoteType::Tap),
                 ];
-                state.row_entries = vec![RowEntry {
-                    row_index,
-                    nonmine_note_indices: vec![0, 1],
-                }];
                 state.note_time_cache_ns = vec![
                     song_time_ns_from_seconds(1.0),
                     song_time_ns_from_seconds(1.0),
                 ];
-                state.finalized_row_outcomes = std::array::from_fn(|_| vec![None; 1]);
+                state.row_entries = vec![test_row_entry_with_times(
+                    &state.notes,
+                    &state.note_time_cache_ns,
+                    row_index,
+                    vec![0, 1],
+                )];
+                state.row_entry_ranges = [(0, 1), (0, 0)];
+                state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
+                state.row_map_cache[0][row_index] = 0;
+                state.note_row_entry_indices = vec![0, 0];
+                state.judged_row_cursor = [0; MAX_PLAYERS];
                 state.current_music_time_ns = song_time_ns_from_seconds(1.096);
                 state.total_elapsed_in_screen = 12.0;
 
@@ -15417,14 +15367,17 @@ mod tests {
             window: Some(TimingWindow::W3),
             miss_because_held: false,
         });
-        state.row_entries = vec![RowEntry {
+        state.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
+        state.row_entries = vec![test_row_entry_with_times(
+            &state.notes,
+            &state.note_time_cache_ns,
             row_index,
-            nonmine_note_indices: vec![0],
-        }];
+            vec![0],
+        )];
         state.autosync_offset_samples = [autosync_offset_ns; super::AUTOSYNC_OFFSET_SAMPLE_COUNT];
         state.autosync_offset_sample_count = super::AUTOSYNC_OFFSET_SAMPLE_COUNT - 1;
 
-        apply_autosync_for_row_hits(&mut state, 0, 0, 4);
+        apply_autosync_for_row_hits(&mut state, 0);
 
         assert!((state.song_offset_seconds - 0.015).abs() <= 1e-6);
         assert_eq!(state.autosync_offset_sample_count, 0);
@@ -15457,12 +15410,9 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             test_note(1, row_index, NoteType::Tap),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        assert!(completed_row_flash_note_indices_and_grade(&notes, &row_entry, 0, 4).is_none());
+        assert!(completed_row_flash_note_indices_and_grade(&notes, &row_entry).is_none());
     }
 
     #[test]
@@ -15472,13 +15422,10 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Excellent, 8.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
         let (hide_indices, hide_count, final_grade) =
-            completed_row_flash_note_indices_and_grade(&notes, &row_entry, 0, 4)
+            completed_row_flash_note_indices_and_grade(&notes, &row_entry)
                 .expect("completed jump should produce a row-final grade");
 
         assert!(row_final_grade_hides_note(final_grade));
@@ -15494,14 +15441,10 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Great, -12.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Decent, 96.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
-        let (_, _, final_grade) =
-            completed_row_flash_note_indices_and_grade(&notes, &row_entry, 0, 4)
-                .expect("completed jump should produce a row-final grade");
+        let (_, _, final_grade) = completed_row_flash_note_indices_and_grade(&notes, &row_entry)
+            .expect("completed jump should produce a row-final grade");
         assert!(!row_final_grade_hides_note(final_grade));
     }
 
@@ -15512,13 +15455,10 @@ mod tests {
             note_with_judgment(0, row_index, NoteType::Tap, JudgeGrade::Decent, -96.0),
             note_with_judgment(1, row_index, NoteType::Tap, JudgeGrade::Great, 42.0),
         ];
-        let row_entry = RowEntry {
-            row_index,
-            nonmine_note_indices: vec![0, 1],
-        };
+        let row_entry = test_row_entry(&notes, row_index, vec![0, 1]);
 
         let (flash_indices, flash_count, flash_grade) =
-            completed_row_flash_note_indices_and_grade(&notes, &row_entry, 0, 4)
+            completed_row_flash_note_indices_and_grade(&notes, &row_entry)
                 .expect("completed jump should flash every lane with the final row grade");
 
         assert_eq!(flash_grade, JudgeGrade::Great);

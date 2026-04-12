@@ -369,6 +369,7 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     state.background_texture_key.clear();
     state.notes.clear();
     state.note_ranges.fill((0, 0));
+    state.row_entry_ranges.fill((0, 0));
     state.judged_row_cursor.fill(0);
     state.next_tap_miss_cursor.fill(0);
     state.next_mine_avoid_cursor.fill(0);
@@ -377,6 +378,7 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     for row_map_cache in &mut state.row_map_cache {
         row_map_cache.clear();
     }
+    state.note_row_entry_indices.clear();
     state.tap_row_hold_roll_flags.clear();
     state.note_time_cache_ns.clear();
     state.note_display_beat_cache.clear();
