@@ -152,6 +152,13 @@ const CHORD_DOWN: u8 = 1 << 1;
 const MENU_CHORD_LEFT: u8 = 1 << 0;
 const MENU_CHORD_RIGHT: u8 = 1 << 1;
 
+// Simply Love [ScreenSelectMusic] Code* metrics:
+// Favorite1 = "Right,Down,Left,Up,Right"
+// Favorite2 = "Left,Down,Right,Up,Left"
+const FAVORITE_CODE_P1: [PadDir; 5] = [PadDir::Right, PadDir::Down, PadDir::Left, PadDir::Up, PadDir::Right];
+const FAVORITE_CODE_P2: [PadDir; 5] = [PadDir::Left, PadDir::Down, PadDir::Right, PadDir::Up, PadDir::Left];
+const FAVORITE_CODE_TIMEOUT_SECS: f32 = 2.0;
+
 // Simply Love [ScreenSelectMusic] [MusicWheel]: RecentSongsToShow=30.
 const RECENT_SONGS_TO_SHOW: usize = 30;
 const POPULAR_SONGS_TO_SHOW: usize = 50;
@@ -927,6 +934,10 @@ pub struct State {
     p2_select_held: bool,
     menu_chord_left_pressed_at: Option<Instant>,
     menu_chord_right_pressed_at: Option<Instant>,
+    favorite_code_p1_index: usize,
+    favorite_code_p1_last_input: Option<Instant>,
+    favorite_code_p2_index: usize,
+    favorite_code_p2_last_input: Option<Instant>,
     last_steps_nav_dir_p1: Option<PadDir>,
     last_steps_nav_time_p1: Option<Instant>,
     last_steps_nav_dir_p2: Option<PadDir>,
@@ -2721,6 +2732,10 @@ pub fn init() -> State {
         p2_select_held: false,
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
+        favorite_code_p1_index: 0,
+        favorite_code_p1_last_input: None,
+        favorite_code_p2_index: 0,
+        favorite_code_p2_last_input: None,
         last_steps_nav_dir_p1: None,
         last_steps_nav_time_p1: None,
         last_steps_nav_dir_p2: None,
@@ -2933,6 +2948,10 @@ pub fn init_placeholder() -> State {
         p2_select_held: false,
         menu_chord_left_pressed_at: None,
         menu_chord_right_pressed_at: None,
+        favorite_code_p1_index: 0,
+        favorite_code_p1_last_input: None,
+        favorite_code_p2_index: 0,
+        favorite_code_p2_last_input: None,
         last_steps_nav_dir_p1: None,
         last_steps_nav_time_p1: None,
         last_steps_nav_dir_p2: None,
@@ -3099,6 +3118,69 @@ fn clear_menu_chord(state: &mut State) {
     state.menu_chord_mask = 0;
     state.menu_chord_left_pressed_at = None;
     state.menu_chord_right_pressed_at = None;
+}
+
+fn check_favorite_code(state: &mut State, dir: PadDir, timestamp: Instant, is_p1: bool) {
+    let (code, index, last_input) = if is_p1 {
+        (
+            &FAVORITE_CODE_P1,
+            &mut state.favorite_code_p1_index,
+            &mut state.favorite_code_p1_last_input,
+        )
+    } else {
+        (
+            &FAVORITE_CODE_P2,
+            &mut state.favorite_code_p2_index,
+            &mut state.favorite_code_p2_last_input,
+        )
+    };
+
+    if let Some(last) = *last_input {
+        if timestamp.duration_since(last).as_secs_f32() > FAVORITE_CODE_TIMEOUT_SECS {
+            *index = 0;
+        }
+    }
+
+    if code[*index] == dir {
+        *index += 1;
+        *last_input = Some(timestamp);
+        if *index >= code.len() {
+            *index = 0;
+            *last_input = None;
+            toggle_favorite_for_selected_song(state, is_p1);
+        }
+    } else if code[0] == dir {
+        *index = 1;
+        *last_input = Some(timestamp);
+    } else {
+        *index = 0;
+        *last_input = None;
+    }
+}
+
+fn toggle_favorite_for_selected_song(state: &mut State, is_p1: bool) {
+    let side = if is_p1 {
+        profile::PlayerSide::P1
+    } else {
+        profile::PlayerSide::P2
+    };
+    if let Some(song) = selected_song_arc(state) {
+        let target_chart_type = profile::get_session_play_style().chart_type();
+        if let Some(chart) =
+            chart_for_steps_index(&song, target_chart_type, state.selected_steps_index)
+        {
+            let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
+            let (fav_entries, fav_counts) =
+                build_favorites_grouped_entries(&state.group_entries);
+            state.favorites_entries = fav_entries;
+            state.favorites_pack_song_counts = fav_counts;
+            audio::play_sfx(if is_now_fav {
+                "assets/sounds/start.ogg"
+            } else {
+                "assets/sounds/start.ogg"
+            });
+        }
+    }
 }
 
 #[inline(always)]
@@ -6410,6 +6492,9 @@ pub fn handle_pad_dir(
     timestamp: Instant,
 ) -> ScreenAction {
     if pressed {
+        // Track favorite code sequence (Simply Love: Favorite1/Favorite2 codes)
+        check_favorite_code(state, dir, timestamp, true);
+        check_favorite_code(state, dir, timestamp, false);
         match dir {
             PadDir::Right => {
                 // Simply Love [ScreenSelectMusic]: CodeSortList4 = "Left-Right".

@@ -38,6 +38,11 @@ const LAMP_PULSE_LERP_TO_WHITE: f32 = 0.70;
 const NEW_BADGE_PULSE_PERIOD: f32 = 1.2;
 const NEW_BADGE_COLOR: [f32; 4] = [0.3, 1.0, 0.3, 1.0];
 const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const HEART_PULSE_PERIOD: f32 = 0.8;
+const HEART_COLOR_P1: [f32; 4] = [0.3, 0.5, 1.0, 1.0]; // blue
+const HEART_COLOR_P2: [f32; 4] = [1.0, 0.47, 0.47, 1.0]; // pink (#ff7777)
+const HEART_ZOOM_SINGLE: f32 = 0.06;
+const HEART_ZOOM_DUAL: f32 = 0.045;
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
 // Simply Love and Arrow Cloud both use zoom(0.2) for the single-line ITL wheel value.
@@ -676,6 +681,60 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                         }
                     }
 
+                    // Favorite heart icon
+                    {
+                        let p1_joined =
+                            profile::is_session_side_joined(profile::PlayerSide::P1);
+                        let p2_joined =
+                            profile::is_session_side_joined(profile::PlayerSide::P2);
+                        let p1_fav = p1_joined
+                            && info.charts.iter().any(|c| {
+                                profile::is_favorite(profile::PlayerSide::P1, &c.short_hash)
+                            });
+                        let p2_fav = p2_joined
+                            && info.charts.iter().any(|c| {
+                                profile::is_favorite(profile::PlayerSide::P2, &c.short_hash)
+                            });
+                        let both_joined = p1_joined && p2_joined;
+                        let heart_x = title_x_local - widescale(12.0, 16.0);
+                        let heart_pulse_t = {
+                            let t = (p.selection_animation_timer / HEART_PULSE_PERIOD).fract();
+                            (t * std::f32::consts::TAU).sin() * 0.5 + 0.5
+                        };
+                        if p1_fav {
+                            let heart_y = if both_joined {
+                                half_item_h - 6.0
+                            } else {
+                                half_item_h
+                            };
+                            let col = lerp_color(HEART_COLOR_P1, [1.0, 1.0, 1.0, 1.0], heart_pulse_t);
+                            let zm = if both_joined { HEART_ZOOM_DUAL } else { HEART_ZOOM_SINGLE };
+                            slot_children.push(act!(sprite("heart.png"):
+                                align(0.5, 0.5):
+                                xy(heart_x, heart_y):
+                                zoom(zm):
+                                diffuse(col[0], col[1], col[2], col[3]):
+                                z(3)
+                            ));
+                        }
+                        if p2_fav {
+                            let heart_y = if both_joined {
+                                half_item_h + 6.0
+                            } else {
+                                half_item_h
+                            };
+                            let col = lerp_color(HEART_COLOR_P2, [1.0, 1.0, 1.0, 1.0], heart_pulse_t);
+                            let zm = if both_joined { HEART_ZOOM_DUAL } else { HEART_ZOOM_SINGLE };
+                            slot_children.push(act!(sprite("heart.png"):
+                                align(0.5, 0.5):
+                                xy(heart_x, heart_y):
+                                zoom(zm):
+                                diffuse(col[0], col[1], col[2], col[3]):
+                                z(3)
+                            ));
+                        }
+                    }
+
                     actors.push(Actor::Frame {
                         align: [0.0, 0.5],
                         offset: [highlight_left_world, y_center_item],
@@ -749,8 +808,28 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
     }
 
     // Selection highlight overlay (Simply Love: Graphics/MusicWheel highlight.lua + [MusicWheel] HighlightOnCommand)
-    let highlight_c1: [f32; 4] = [0.8, 0.8, 0.8, 0.15];
-    let highlight_c2: [f32; 4] = [0.8, 0.8, 0.8, 0.05];
+    let selected_is_favorite = if let Some(MusicWheelEntry::Song(info)) =
+        p.entries.get(p.selected_index)
+    {
+        let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+        let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+        info.charts.iter().any(|c| {
+            (p1_joined && profile::is_favorite(profile::PlayerSide::P1, &c.short_hash))
+                || (p2_joined && profile::is_favorite(profile::PlayerSide::P2, &c.short_hash))
+        })
+    } else {
+        false
+    };
+    let highlight_c1: [f32; 4] = if selected_is_favorite {
+        [1.0, 0.75, 0.80, 0.20] // pink tint
+    } else {
+        [0.8, 0.8, 0.8, 0.15]
+    };
+    let highlight_c2: [f32; 4] = if selected_is_favorite {
+        [1.0, 0.75, 0.80, 0.08]
+    } else {
+        [0.8, 0.8, 0.8, 0.05]
+    };
     let highlight_col = lerp_color(highlight_c1, highlight_c2, anim_t);
     actors.push(act!(quad:
         align(0.0, 0.5):
