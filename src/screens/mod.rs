@@ -2,6 +2,7 @@ pub mod components;
 pub mod credits;
 pub mod evaluation;
 pub mod evaluation_summary;
+pub(crate) mod favorite_code;
 pub mod gameover;
 pub mod gameplay;
 pub mod init;
