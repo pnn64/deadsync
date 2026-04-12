@@ -1996,8 +1996,7 @@ fn build_top_grades_grouped_entries(
                 continue;
             }
             for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-                let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side)
-                else {
+                let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side) else {
                     continue;
                 };
                 if score.grade != scores::Grade::Failed || score.score_percent > 0.0 {
@@ -2145,7 +2144,11 @@ fn build_popularity_grouped_entries_for_profile(
         original_index: 0,
         banner_path: None,
     });
-    entries.extend(ranked.into_iter().map(|(song, _)| MusicWheelEntry::Song(song)));
+    entries.extend(
+        ranked
+            .into_iter()
+            .map(|(song, _)| MusicWheelEntry::Song(song)),
+    );
 
     let mut counts: HashMap<String, usize> = HashMap::with_capacity(1);
     counts.insert(header, count);

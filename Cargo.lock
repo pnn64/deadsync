@@ -945,7 +945,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "deadsync"
-version = "0.3.358"
+version = "0.3.359"
 dependencies = [
  "alsa",
  "ash",
@@ -3558,8 +3558,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.3.67"
-source = "git+https://github.com/pnn64/rssp?branch=main#7eed7bc482854cd9ee7ca000b7a71c150eee83d8"
+version = "0.3.68"
+source = "git+https://github.com/pnn64/rssp?branch=main#fe57861617b7f9b8d0398e9d665544b303dd37e5"
 dependencies = [
  "png",
  "serde_json",
