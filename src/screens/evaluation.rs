@@ -34,7 +34,7 @@ use std::sync::Arc;
 use std::thread::LocalKey;
 use std::time::Instant;
 
-use crate::engine::input::{InputEvent, VirtualAction};
+use crate::engine::input::{InputEvent, PadDir, VirtualAction};
 use crate::game::profile;
 use crate::screens::ScreenAction;
 // Keyboard handling is centralized in app via virtual actions
@@ -48,6 +48,11 @@ const EVAL_STAGE_IN_BLACK_DELAY_SECONDS: f32 = 0.2;
 const EVAL_STAGE_IN_BLACK_FADE_SECONDS: f32 = 0.5;
 const EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS: f32 = 0.4;
 const EVAL_STAGE_IN_TEXT_HOLD_SECONDS: f32 = 0.6;
+
+// Simply Love Favorite1/Favorite2 pad codes (same as ScreenSelectMusic)
+const FAVORITE_CODE_P1: [PadDir; 5] = [PadDir::Right, PadDir::Down, PadDir::Left, PadDir::Up, PadDir::Right];
+const FAVORITE_CODE_P2: [PadDir; 5] = [PadDir::Left, PadDir::Down, PadDir::Right, PadDir::Up, PadDir::Left];
+const FAVORITE_CODE_TIMEOUT_SECS: f32 = 2.0;
 const EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS: f32 = 0.4;
 const EVAL_STAGE_IN_TOTAL_SECONDS: f32 = EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS
     + EVAL_STAGE_IN_TEXT_HOLD_SECONDS
@@ -965,6 +970,10 @@ pub struct State {
     active_graph: [EvalGraphPane; MAX_PLAYERS],
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; MAX_PLAYERS],
+    favorite_code_p1_index: usize,
+    favorite_code_p1_last_input: Option<Instant>,
+    favorite_code_p2_index: usize,
+    favorite_code_p2_last_input: Option<Instant>,
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
@@ -1458,6 +1467,10 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
+        favorite_code_p1_index: 0,
+        favorite_code_p1_last_input: None,
+        favorite_code_p2_index: 0,
+        favorite_code_p2_last_input: None,
     }
 }
 
@@ -1524,6 +1537,10 @@ pub fn init_from_score_info(
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
+        favorite_code_p1_index: 0,
+        favorite_code_p1_last_input: None,
+        favorite_code_p2_index: 0,
+        favorite_code_p2_last_input: None,
     }
 }
 
@@ -1990,6 +2007,76 @@ fn barely_marker_sample(si: &ScoreInfo) -> Option<(f32, f32)> {
     Some((t, min_life))
 }
 
+fn pad_dir_from_action(action: VirtualAction) -> Option<(PadDir, bool)> {
+    match action {
+        VirtualAction::p1_left => Some((PadDir::Left, true)),
+        VirtualAction::p1_right => Some((PadDir::Right, true)),
+        VirtualAction::p1_up => Some((PadDir::Up, true)),
+        VirtualAction::p1_down => Some((PadDir::Down, true)),
+        VirtualAction::p2_left => Some((PadDir::Left, false)),
+        VirtualAction::p2_right => Some((PadDir::Right, false)),
+        VirtualAction::p2_up => Some((PadDir::Up, false)),
+        VirtualAction::p2_down => Some((PadDir::Down, false)),
+        _ => None,
+    }
+}
+
+fn check_eval_favorite_code(state: &mut State, dir: PadDir, timestamp: Instant, is_p1: bool) {
+    let (code, index, last_input) = if is_p1 {
+        (
+            &FAVORITE_CODE_P1,
+            &mut state.favorite_code_p1_index,
+            &mut state.favorite_code_p1_last_input,
+        )
+    } else {
+        (
+            &FAVORITE_CODE_P2,
+            &mut state.favorite_code_p2_index,
+            &mut state.favorite_code_p2_last_input,
+        )
+    };
+
+    if let Some(last) = *last_input {
+        if timestamp.duration_since(last).as_secs_f32() > FAVORITE_CODE_TIMEOUT_SECS {
+            *index = 0;
+        }
+    }
+
+    if code[*index] == dir {
+        *index += 1;
+        *last_input = Some(timestamp);
+        if *index >= code.len() {
+            *index = 0;
+            *last_input = None;
+            // Toggle favorite for the chart that was just played
+            let side = if is_p1 {
+                profile::PlayerSide::P1
+            } else {
+                profile::PlayerSide::P2
+            };
+            // Find score_info for this side
+            for si in state.score_info.iter().flatten() {
+                if si.side == side {
+                    let is_now_fav =
+                        profile::toggle_favorite(side, &si.chart.short_hash);
+                    crate::engine::audio::play_sfx(if is_now_fav {
+                        "assets/sounds/start.ogg"
+                    } else {
+                        "assets/sounds/start.ogg"
+                    });
+                    break;
+                }
+            }
+        }
+    } else if code[0] == dir {
+        *index = 1;
+        *last_input = Some(timestamp);
+    } else {
+        *index = 0;
+        *last_input = None;
+    }
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     let chord_side = if crate::config::get().three_key_navigation {
         state.menu_lr_chord.update(ev)
@@ -2004,6 +2091,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         && let Some(side) = screen_input::menu_lr_side(ev.action)
     {
         state.menu_lr_undo[side_idx(side)] = 0;
+    }
+    // Track favorite pad code on arrow presses (not menu buttons)
+    if ev.pressed {
+        if let Some((dir, is_p1)) = pad_dir_from_action(ev.action) {
+            check_eval_favorite_code(state, dir, ev.timestamp, is_p1);
+        }
     }
     if evaluation_lobby_lock_text().is_some() {
         match ev.action {
