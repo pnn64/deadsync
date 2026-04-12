@@ -1434,12 +1434,14 @@ mod tests {
     fn groovestats_rescore_targets_only_include_rescued_final_windows() {
         let way_off = judgment::Judgment {
             time_error_ms: -18.0,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(-18.0, 1.0),
             grade: judgment::JudgeGrade::WayOff,
             window: Some(judgment::TimingWindow::W5),
             miss_because_held: false,
         };
         let great = judgment::Judgment {
             time_error_ms: -10.0,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(-10.0, 1.0),
             grade: judgment::JudgeGrade::Great,
             window: Some(judgment::TimingWindow::W3),
             miss_because_held: false,

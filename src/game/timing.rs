@@ -1639,6 +1639,10 @@ mod tests {
             row_index,
             result: Some(Judgment {
                 time_error_ms,
+                time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(
+                    time_error_ms,
+                    1.0,
+                ),
                 grade,
                 window,
                 miss_because_held: false,

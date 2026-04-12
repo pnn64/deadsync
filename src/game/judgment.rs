@@ -41,11 +41,35 @@ pub const fn judge_grade_ix(grade: JudgeGrade) -> usize {
 #[derive(Clone, Debug)]
 pub struct Judgment {
     pub time_error_ms: f32,
+    // Signed offset in music-time nanoseconds; authoritative gameplay timing unit.
+    pub time_error_music_ns: i64,
     pub grade: JudgeGrade,            // The grade of this specific note
     pub window: Option<TimingWindow>, // Optional detailed window (W0-W5) for FA+/EX-style features
     // ITGmania parity: tap notes that are missed while the corresponding input is still held.
     // This is not a distinct tap note score in ITGmania; it is tracked as a separate flag.
     pub miss_because_held: bool,
+}
+
+#[inline(always)]
+pub fn judgment_time_error_ms_from_music_ns(time_error_music_ns: i64, music_rate: f32) -> f32 {
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    (time_error_music_ns as f64 / 1_000_000.0 / f64::from(rate)) as f32
+}
+
+#[inline(always)]
+pub fn judgment_time_error_music_ns_from_ms(time_error_ms: f32, music_rate: f32) -> i64 {
+    let rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    (f64::from(time_error_ms) * f64::from(rate) * 1_000_000.0)
+        .round()
+        .clamp((i64::MIN + 1) as f64, i64::MAX as f64) as i64
 }
 
 /// Aggregates per-note judgments on a single row into the final row judgment,
@@ -77,7 +101,7 @@ where
         match chosen {
             None => chosen = Some(j),
             Some(current) => {
-                if j.time_error_ms >= current.time_error_ms {
+                if j.time_error_music_ns >= current.time_error_music_ns {
                     chosen = Some(j);
                 }
             }
@@ -525,6 +549,7 @@ mod tests {
             row_index,
             result: Some(Judgment {
                 time_error_ms,
+                time_error_music_ns: judgment_time_error_music_ns_from_ms(time_error_ms, 1.0),
                 grade,
                 window: None,
                 miss_because_held: false,
@@ -612,12 +637,14 @@ mod tests {
     fn row_judgment_uses_last_tap_offset_instead_of_worst_absolute_offset() {
         let early = Judgment {
             time_error_ms: -45.0,
+            time_error_music_ns: judgment_time_error_music_ns_from_ms(-45.0, 1.0),
             grade: JudgeGrade::Decent,
             window: Some(TimingWindow::W4),
             miss_because_held: false,
         };
         let late = Judgment {
             time_error_ms: 12.0,
+            time_error_music_ns: judgment_time_error_music_ns_from_ms(12.0, 1.0),
             grade: JudgeGrade::Great,
             window: Some(TimingWindow::W3),
             miss_because_held: false,
@@ -634,12 +661,14 @@ mod tests {
     fn row_judgment_keeps_miss_priority_over_later_hits() {
         let miss = Judgment {
             time_error_ms: 180.0,
+            time_error_music_ns: judgment_time_error_music_ns_from_ms(180.0, 1.0),
             grade: JudgeGrade::Miss,
             window: None,
             miss_because_held: false,
         };
         let late = Judgment {
             time_error_ms: 15.0,
+            time_error_music_ns: judgment_time_error_music_ns_from_ms(15.0, 1.0),
             grade: JudgeGrade::Great,
             window: Some(TimingWindow::W3),
             miss_because_held: false,

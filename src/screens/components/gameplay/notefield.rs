@@ -7082,6 +7082,10 @@ mod tests {
     fn fantastic_judgment(window: TimingWindow, time_error_ms: f32) -> Judgment {
         Judgment {
             time_error_ms,
+            time_error_music_ns: crate::game::judgment::judgment_time_error_music_ns_from_ms(
+                time_error_ms,
+                1.0,
+            ),
             grade: JudgeGrade::Fantastic,
             window: Some(window),
             miss_because_held: false,
@@ -7666,6 +7670,9 @@ mod tests {
         let excellent = Judgment {
             grade: JudgeGrade::Excellent,
             time_error_ms: 18.0,
+            time_error_music_ns: crate::game::judgment::judgment_time_error_music_ns_from_ms(
+                18.0, 1.0,
+            ),
             window: Some(TimingWindow::W1),
             miss_because_held: false,
         };

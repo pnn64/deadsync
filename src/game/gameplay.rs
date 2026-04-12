@@ -7,7 +7,9 @@ use crate::engine::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
 use crate::game::chart::{ChartData, GameplayChartData};
-use crate::game::judgment::{self, JudgeGrade, Judgment, TimingWindow};
+use crate::game::judgment::{
+    self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
+};
 use crate::game::note::{HoldData, HoldResult, MineResult, Note, NoteType};
 use crate::game::parsing::noteskin::{self, ModelMeshCache, Noteskin, Style};
 use crate::game::parsing::song_lua::{
@@ -10508,11 +10510,6 @@ fn note_hit_eval(
 }
 
 #[inline(always)]
-fn judgment_time_error_ms_from_music_ns(offset_music_ns: SongTimeNs, rate: f32) -> f32 {
-    song_time_ns_delta_seconds(offset_music_ns, 0) / normalized_song_rate(rate) * 1000.0
-}
-
-#[inline(always)]
 fn build_final_note_hit_judgment(
     state: &mut State,
     player_idx: usize,
@@ -10529,6 +10526,7 @@ fn build_final_note_hit_judgment(
     (
         Judgment {
             time_error_ms: judgment_time_error_ms_from_music_ns(judgment_offset_music_ns, rate),
+            time_error_music_ns: judgment_offset_music_ns,
             grade: hit.grade,
             window: Some(hit.window),
             miss_because_held: false,
@@ -12064,6 +12062,7 @@ pub fn judge_a_tap(
                             hit.measured_offset_music_ns,
                             rate,
                         ),
+                        time_error_music_ns: hit.measured_offset_music_ns,
                         grade: hit.grade,
                         window: Some(hit.window),
                         miss_because_held: false,
@@ -12324,6 +12323,7 @@ pub fn judge_a_lift(
                         hit.measured_offset_music_ns,
                         rate,
                     ),
+                    time_error_music_ns: hit.measured_offset_music_ns,
                     grade: hit.grade,
                     window: Some(hit.window),
                     miss_because_held: false,
@@ -12860,8 +12860,7 @@ fn apply_autosync_for_row_hits(
                         JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
                     ) {
                         // ITG's fNoteOffset is positive when stepping early.
-                        let offset_ns = song_time_ns_from_seconds(-judgment.time_error_ms * 0.001);
-                        (!song_time_ns_invalid(offset_ns)).then_some(offset_ns)
+                        Some(-judgment.time_error_music_ns)
                     } else {
                         None
                     }
@@ -13828,6 +13827,7 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                     .unwrap_or(false);
                 let miss = Judgment {
                     time_error_ms: judgment_time_error_ms_from_music_ns(miss_offset_music_ns, rate),
+                    time_error_music_ns: miss_offset_music_ns,
                     grade: JudgeGrade::Miss,
                     window: None,
                     miss_because_held,
@@ -14403,6 +14403,7 @@ mod tests {
         let mut note = test_note(column, row_index, note_type);
         note.result = Some(Judgment {
             time_error_ms: 0.0,
+            time_error_music_ns: 0,
             grade: JudgeGrade::Great,
             window: None,
             miss_because_held: false,
@@ -14420,6 +14421,7 @@ mod tests {
         let mut note = test_note(column, row_index, note_type);
         note.result = Some(Judgment {
             time_error_ms,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(time_error_ms, 1.0),
             grade,
             window: None,
             miss_because_held: false,
@@ -15346,6 +15348,9 @@ mod tests {
                     0,
                     Judgment {
                         time_error_ms: -12.0,
+                        time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(
+                            -12.0, 1.0,
+                        ),
                         grade: JudgeGrade::Great,
                         window: Some(TimingWindow::W3),
                         miss_because_held: false,
@@ -15357,6 +15362,9 @@ mod tests {
                     1,
                     Judgment {
                         time_error_ms: 96.0,
+                        time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(
+                            96.0, 1.0,
+                        ),
                         grade: JudgeGrade::Decent,
                         window: Some(TimingWindow::W4),
                         miss_because_held: false,
@@ -15390,6 +15398,36 @@ mod tests {
                 assert_eq!(last.started_at_screen_s, 12.0);
             },
         );
+    }
+
+    #[test]
+    fn autosync_row_hits_use_music_time_offsets_at_rate() {
+        let mut state =
+            regression_state([profile::Profile::default(), profile::Profile::default()]);
+        let row_index = 48usize;
+        let autosync_offset_ns = song_time_ns_from_seconds(0.015);
+
+        state.music_rate = 1.5;
+        state.autosync_mode = super::AutosyncMode::Song;
+        state.notes = vec![test_note(0, row_index, NoteType::Tap)];
+        state.notes[0].result = Some(Judgment {
+            time_error_ms: -10.0,
+            time_error_music_ns: -autosync_offset_ns,
+            grade: JudgeGrade::Great,
+            window: Some(TimingWindow::W3),
+            miss_because_held: false,
+        });
+        state.row_entries = vec![RowEntry {
+            row_index,
+            nonmine_note_indices: vec![0],
+        }];
+        state.autosync_offset_samples = [autosync_offset_ns; super::AUTOSYNC_OFFSET_SAMPLE_COUNT];
+        state.autosync_offset_sample_count = super::AUTOSYNC_OFFSET_SAMPLE_COUNT - 1;
+
+        apply_autosync_for_row_hits(&mut state, 0, 0, 4);
+
+        assert!((state.song_offset_seconds - 0.015).abs() <= 1e-6);
+        assert_eq!(state.autosync_offset_sample_count, 0);
     }
 
     #[test]

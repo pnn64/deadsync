@@ -596,6 +596,10 @@ mod tests {
     fn judgment(grade: JudgeGrade, window: Option<TimingWindow>, time_error_ms: f32) -> Judgment {
         Judgment {
             time_error_ms,
+            time_error_music_ns: crate::game::judgment::judgment_time_error_music_ns_from_ms(
+                time_error_ms,
+                1.0,
+            ),
             grade,
             window,
             miss_because_held: false,
