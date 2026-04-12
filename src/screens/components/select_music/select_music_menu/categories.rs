@@ -13,18 +13,19 @@ const HEIGHT: f32 = 204.0;
 const HEADER_Y_OFFSET: f32 = -114.0;
 const ITEM_SPACING: f32 = 36.0;
 const DIM_ALPHA: f32 = 0.8;
-const HINT_Y_OFFSET: f32 = 124.0;
+const HINT_Y_OFFSET: f32 = 120.0;
 const HINT_TEXT: &str = "PRESS &SELECT; TO CANCEL";
 const WHEEL_SLOTS: usize = 9;
 const FONT_TOP: &str = "miso";
 const FONT_BOTTOM: &str = "wendy";
-const CATEGORY_INDENT: f32 = 30.0;
+const CATEGORY_INDENT: f32 = 16.0;
 
 pub const FOCUS_TWEEN_SECONDS: f32 = 0.15;
 
 const UNFOCUSED_ROW_BG: [f32; 4] = [0.2, 0.2, 0.2, 1.0];
 const FOCUSED_ROW_BG: [f32; 4] = [0.35, 0.35, 0.35, 1.0];
-const GO_BACK_COLOR: [f32; 3] = [1.0, 0.25, 0.25];
+const GO_BACK_COLOR_UNFOCUSED: [f32; 3] = [0.494, 0.055, 0.075]; // #7E0E13
+const GO_BACK_COLOR_FOCUSED: [f32; 3] = [1.0, 0.6, 0.6]; // Simply Love GainFocus
 const TEXT_UNFOCUSED_GRAY: f32 = 0.533;
 const TEXT_FOCUSED_WHITE: f32 = 1.0;
 
@@ -118,7 +119,7 @@ pub fn build_entries(
 
     entries.push(Entry::CategoryHeader {
         category: Category::Sorts,
-        label: "Sorts",
+        label: "Sorts...",
     });
     if categories.is_expanded(Category::Sorts) {
         for item in items_sorts {
@@ -129,7 +130,7 @@ pub fn build_entries(
     if let Some(profile_items) = items_profile {
         entries.push(Entry::CategoryHeader {
             category: Category::Profile,
-            label: "Profile",
+            label: "Profile...",
         });
         if categories.is_expanded(Category::Profile) {
             for item in profile_items {
@@ -140,7 +141,7 @@ pub fn build_entries(
 
     entries.push(Entry::CategoryHeader {
         category: Category::Advanced,
-        label: "Advanced",
+        label: "Advanced...",
     });
     if categories.is_expanded(Category::Advanced) {
         for item in items_advanced {
@@ -151,7 +152,7 @@ pub fn build_entries(
     if let Some(style_items) = items_styles {
         entries.push(Entry::CategoryHeader {
             category: Category::Styles,
-            label: "Styles",
+            label: "Styles...",
         });
         if categories.is_expanded(Category::Styles) {
             for item in style_items {
@@ -273,31 +274,14 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
         z(1450)
     ));
 
-    // Header: "OPTIONS"
-    actors.push(act!(quad:
-        align(0.5, 0.5): xy(cx, cy + HEADER_Y_OFFSET):
-        zoomto(WIDTH + 2.0, 22.0):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(1451)
-    ));
-    actors.push(act!(text:
-        font(FONT_BOTTOM):
-        settext("OPTIONS"):
-        align(0.5, 0.5):
-        xy(cx, cy + HEADER_Y_OFFSET):
-        zoom(0.4):
-        diffuse(0.0, 0.0, 0.0, 1.0):
-        z(1452):
-        horizalign(center)
-    ));
-
-    // Menu box border + fill
+    // White border around the menu area (2px)
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx, cy):
-        zoomto(WIDTH + 2.0, HEIGHT + 2.0):
+        zoomto(WIDTH + 4.0, HEIGHT + 4.0):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(1451)
     ));
+    // Black fill inside the border
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx, cy):
         zoomto(WIDTH, HEIGHT):
@@ -307,11 +291,11 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
 
     // Hint text below the menu
     actors.push(act!(text:
-        font(FONT_TOP):
+        font(FONT_BOTTOM):
         settext(HINT_TEXT):
         align(0.5, 0.5):
         xy(cx, cy + HINT_Y_OFFSET):
-        zoom(0.7):
+        zoom(0.29):
         diffuse(1.0, 1.0, 1.0, 0.7):
         z(1451):
         horizalign(center)
@@ -350,31 +334,57 @@ fn render_row(
     clip_rect: &[f32; 4],
 ) {
     let focus_lerp = (1.0 - slot_pos.abs()).clamp(0.0, 1.0);
-    let row_alpha = (3.0 - slot_pos.abs()).clamp(0.0, 1.0);
-    if row_alpha <= 0.0 {
+    let row_alpha = 1.0_f32;
+    let half_height = HEIGHT * 0.5;
+    let y = slot_pos.mul_add(ITEM_SPACING, cy);
+    let row_half = (ITEM_SPACING - 2.0) * 0.5;
+    let row_top = y - row_half;
+    let row_bot = y + row_half;
+    let box_top = cy - half_height;
+    let box_bot = cy + half_height;
+    // Skip rows entirely outside the box
+    if row_top >= box_bot || row_bot <= box_top {
         return;
     }
-    let y = slot_pos.mul_add(ITEM_SPACING, cy);
+    // Compute visible portion for partially clipped rows
+    let vis_top = row_top.max(box_top);
+    let vis_bot = row_bot.min(box_bot);
+    let vis_h = vis_bot - vis_top;
+    let vis_cy = (vis_top + vis_bot) * 0.5;
     let left_x = cx - WIDTH * 0.5 + 12.0;
 
-    // Row background quad
-    let bg = lerp_color(UNFOCUSED_ROW_BG, FOCUSED_ROW_BG, focus_lerp);
-    let bg_alpha = row_alpha * 0.6;
-    actors.push(act!(quad:
-        align(0.5, 0.5): xy(cx, y):
-        zoomto(WIDTH - 4.0, ITEM_SPACING - 2.0):
-        diffuse(bg[0], bg[1], bg[2], bg_alpha):
-        z(1453)
-    ));
+    // Row background: category headers get gray bg, others get black
+    let is_category_header = matches!(entry, Entry::CategoryHeader { .. });
+    if is_category_header {
+        let bg = lerp_color(UNFOCUSED_ROW_BG, FOCUSED_ROW_BG, focus_lerp);
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(cx, vis_cy):
+            zoomto(WIDTH, vis_h):
+            diffuse(bg[0], bg[1], bg[2], row_alpha):
+            z(1453)
+        ));
+    } else {
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(cx, vis_cy):
+            zoomto(WIDTH, vis_h):
+            diffuse(0.0, 0.0, 0.0, row_alpha):
+            z(1453)
+        ));
+    }
+
+    // Only render text/icons if most of the row is visible
+    if vis_h < ITEM_SPACING * 0.6 {
+        return;
+    }
 
     match entry {
         Entry::CategoryHeader { label, .. } => {
             let tint = lerp_scalar(TEXT_UNFOCUSED_GRAY, TEXT_FOCUSED_WHITE, focus_lerp);
-            // Folder icon
+            // Folder icon (128px source, ~26px display at 0.20 zoom)
             actors.push(act!(sprite("folder-solid.png"):
                 align(0.0, 0.5):
-                xy(left_x - 4.0, y):
-                zoom(0.2):
+                xy(left_x - 6.0, y):
+                zoom(0.20):
                 diffuse(tint, tint, tint, row_alpha):
                 z(1454)
             ));
@@ -383,7 +393,7 @@ fn render_row(
                 font(FONT_BOTTOM):
                 settext(*label):
                 align(0.0, 0.5):
-                xy(left_x + 24.0, y):
+                xy(left_x + 27.0, y):
                 zoom(0.4):
                 maxwidth((WIDTH - 50.0) / 0.4):
                 diffuse(tint, tint, tint, row_alpha):
@@ -425,10 +435,10 @@ fn render_item_text(
             font(FONT_TOP):
             settext(item.top_label):
             align(0.0, 1.0):
-            xy(x, y - 2.0):
-            zoom(0.65):
-            maxwidth(max_w / 0.65):
-            diffuse(tint[0], tint[1], tint[2], row_alpha * 0.7):
+            xy(x, y - 5.0):
+            zoom(0.58):
+            maxwidth(max_w / 0.58):
+            diffuse(tint[0], tint[1], tint[2], row_alpha * 0.85):
             z(1454):
             horizalign(left)
         );
@@ -439,9 +449,9 @@ fn render_item_text(
         font(FONT_BOTTOM):
         settext(item.bottom_label):
         align(0.0, 0.5):
-        xy(x, y + 6.0):
-        zoom(0.35):
-        maxwidth(max_w / 0.35):
+        xy(x, y + 4.0):
+        zoom(0.39):
+        maxwidth(max_w / 0.39):
         diffuse(tint[0], tint[1], tint[2], row_alpha):
         z(1454):
         horizalign(left)
@@ -453,7 +463,11 @@ fn render_item_text(
 #[inline(always)]
 fn item_tint(item: &Item, focus_lerp: f32) -> [f32; 3] {
     if matches!(item.action, Action::BackToMain) {
-        GO_BACK_COLOR
+        [
+            lerp_scalar(GO_BACK_COLOR_UNFOCUSED[0], GO_BACK_COLOR_FOCUSED[0], focus_lerp),
+            lerp_scalar(GO_BACK_COLOR_UNFOCUSED[1], GO_BACK_COLOR_FOCUSED[1], focus_lerp),
+            lerp_scalar(GO_BACK_COLOR_UNFOCUSED[2], GO_BACK_COLOR_FOCUSED[2], focus_lerp),
+        ]
     } else {
         let v = lerp_scalar(TEXT_UNFOCUSED_GRAY, TEXT_FOCUSED_WHITE, focus_lerp);
         [v, v, v]

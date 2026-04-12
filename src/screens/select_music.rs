@@ -3329,7 +3329,8 @@ fn build_category_item_lists(
     let single_player_joined = p1_joined ^ p2_joined;
 
     // Standalone items (top-level, no category)
-    let mut standalone = Vec::with_capacity(6);
+    let mut standalone = Vec::with_capacity(8);
+    standalone.push(select_music_menu::ITEM_GO_BACK_STANDALONE);
     standalone.push(select_music_menu::ITEM_SWITCH_PROFILE);
     standalone.push(select_music_menu::ITEM_SONG_SEARCH);
     if has_song_selected {
@@ -6296,8 +6297,13 @@ fn handle_categories_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAct
 
 fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) -> ScreenAction {
     match action {
-        select_music_menu::Action::OpenSorts | select_music_menu::Action::BackToMain => {
-            // These are classic-only navigation actions; no-op in categories
+        select_music_menu::Action::OpenSorts => {
+            // Classic-only navigation action; no-op in categories
+            ScreenAction::None
+        }
+        select_music_menu::Action::BackToMain => {
+            // In categories mode, this closes the menu (used by "Go Back" item)
+            hide_select_music_menu(state);
             ScreenAction::None
         }
         select_music_menu::Action::SortByGroup => {
