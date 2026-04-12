@@ -2,6 +2,7 @@ use crate::game::parsing::notes::ParsedNote;
 use crate::game::timing::{TimingData, TimingSegments};
 use rssp::TechCounts;
 use rssp::stats::ArrowStats;
+use std::path::PathBuf;
 
 /// Chart-level display BPM override parsed from `#DISPLAYBPM` inside a `#NOTEDATA` block.
 #[derive(Clone, Debug)]
@@ -38,6 +39,8 @@ pub struct ChartData {
     pub chart_name: String,
     pub meter: u32,
     pub step_artist: String,
+    /// Effective gameplay music path for this chart, after song-level fallback.
+    pub music_path: Option<PathBuf>,
     pub short_hash: String,
     pub stats: ArrowStats,
     pub tech_counts: TechCounts,

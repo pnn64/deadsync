@@ -33,7 +33,7 @@ use crate::screens::components::{
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
-use null_or_die::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
+use nod::{BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation, KernelTarget};
 use rssp::bpm::parse_bpm_map;
 use std::cell::RefCell;
 use std::cmp::Reverse;
@@ -757,7 +757,7 @@ impl ReloadUiState {
 
 enum SyncWorkerMsg {
     Event(BiasStreamEvent),
-    Finished(Result<null_or_die::api::SyncChartResult, String>),
+    Finished(Result<nod::api::SyncChartResult, String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1135,12 +1135,51 @@ fn chart_ix_for_steps_index(
     edits_sorted.get(edit_index).copied()
 }
 
+#[inline]
+fn chart_music_path<'a>(
+    song: &'a SongData,
+    chart_type: &str,
+    steps_index: usize,
+) -> Option<&'a PathBuf> {
+    chart_for_steps_index(song, chart_type, steps_index).and_then(|chart| chart.music_path.as_ref())
+}
+
+fn sync_versus_music_selection(state: &mut State, song: &SongData, chart_type: &str) {
+    let p1_changed = state.cached_steps_index_p1 != state.selected_steps_index;
+    let p2_changed = state.cached_steps_index_p2 != state.p2_selected_steps_index;
+    if !p1_changed && !p2_changed {
+        return;
+    }
+
+    let p1_music = chart_music_path(song, chart_type, state.selected_steps_index);
+    let p2_music = chart_music_path(song, chart_type, state.p2_selected_steps_index);
+    if p1_music == p2_music {
+        return;
+    }
+
+    if p2_changed {
+        state.selected_steps_index = state.p2_selected_steps_index;
+        if state.selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+            state.preferred_difficulty_index = state.selected_steps_index;
+        }
+    } else {
+        state.p2_selected_steps_index = state.selected_steps_index;
+        if state.p2_selected_steps_index < color::FILE_DIFFICULTY_NAMES.len() {
+            state.p2_preferred_difficulty_index = state.p2_selected_steps_index;
+        }
+    }
+}
+
 fn ensure_chart_cache_for_song(
     state: &mut State,
     song: &Arc<SongData>,
     chart_type: &'static str,
     is_versus: bool,
 ) {
+    if is_versus {
+        sync_versus_music_selection(state, song.as_ref(), chart_type);
+    }
+
     let song_changed = state
         .cached_song
         .as_ref()
@@ -3663,7 +3702,7 @@ fn sync_overlay_apply_event(
 
 fn sync_overlay_apply_result(
     overlay: &mut SyncOverlayStateData,
-    result: Result<null_or_die::api::SyncChartResult, String>,
+    result: Result<nod::api::SyncChartResult, String>,
     refresh: &mut SyncOverlayRefresh,
 ) {
     match result {
@@ -5178,7 +5217,7 @@ fn show_sync_overlay(state: &mut State) {
     let (tx, rx) = mpsc::sync_channel::<SyncWorkerMsg>(SYNC_OVERLAY_MAX_PENDING_MSGS);
     std::thread::spawn(move || {
         let tx_done = tx.clone();
-        let result = null_or_die::api::analyze_chart_stream(
+        let result = nod::api::analyze_chart_stream(
             simfile_path_thread.as_path(),
             chart_ix,
             &cfg,

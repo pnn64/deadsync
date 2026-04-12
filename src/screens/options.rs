@@ -33,7 +33,7 @@ use crate::engine::present::color;
 use crate::engine::present::font;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{heart_bg, screen_bar};
-use null_or_die::{BiasKernel, KernelTarget};
+use nod::{BiasKernel, KernelTarget};
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;

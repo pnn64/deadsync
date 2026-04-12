@@ -171,6 +171,7 @@ fn bench_chart() -> ChartData {
         chart_name: String::new(),
         meter: 15,
         step_artist: String::new(),
+        music_path: None,
         short_hash: "pane-stats-bench".to_string(),
         stats: ArrowStats {
             total_arrows: 0,

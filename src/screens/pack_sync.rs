@@ -11,7 +11,7 @@ use crate::game::chart::ChartData;
 use crate::screens::SongOffsetSyncChange;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
-use null_or_die::{BiasStreamCfg, BiasStreamEvent, GraphOrientation};
+use nod::{BiasStreamCfg, BiasStreamEvent, GraphOrientation};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -549,7 +549,7 @@ pub(crate) fn begin(state: &mut OverlayState, pack_name: String, targets: Vec<Ta
                     let _ = tx.send(WorkerMsg::RowStarted { index });
                     let mut total_beats = 0usize;
                     let mut last_sent = 0usize;
-                    let result = null_or_die::api::analyze_chart_stream(
+                    let result = nod::api::analyze_chart_stream(
                         target.simfile_path.as_path(),
                         target.chart_ix,
                         cfg.as_ref(),

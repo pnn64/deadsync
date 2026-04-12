@@ -9008,7 +9008,7 @@ fn stage_music_cut(lead_in_seconds: f32) -> audio::Cut {
 }
 
 fn start_stage_music_audio(state: &State) {
-    let Some(music_path) = state.song.music_path.as_ref() else {
+    let Some(music_path) = state.charts[0].music_path.as_ref() else {
         return;
     };
     let lead_in = state.audio_lead_in_seconds.max(0.0);
@@ -14582,6 +14582,7 @@ mod tests {
             chart_name: String::new(),
             meter: 12,
             step_artist: String::new(),
+            music_path: None,
             short_hash: "double-p2-regression".to_string(),
             stats: ArrowStats {
                 total_arrows: 2,
@@ -14922,6 +14923,7 @@ mod tests {
             chart_name: String::new(),
             meter: 10,
             step_artist: String::new(),
+            music_path: None,
             short_hash: String::new(),
             stats,
             tech_counts: TechCounts::default(),
