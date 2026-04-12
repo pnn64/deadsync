@@ -3303,6 +3303,102 @@ fn show_sorts_submenu(state: &mut State) {
     state.select_music_menu_focus_anim_elapsed = 0.0;
 }
 
+/// Build the item lists for each category section used by the categories-based menu.
+/// Returns (standalone, sorts, profile, advanced, styles).
+fn build_category_item_lists(
+    state: &State,
+) -> (
+    Vec<select_music_menu::Item>,
+    Vec<select_music_menu::Item>,
+    Option<Vec<select_music_menu::Item>>,
+    Vec<select_music_menu::Item>,
+    Option<Vec<select_music_menu::Item>>,
+) {
+    let replays_enabled = config::get().machine_enable_replays;
+    let downloads_enabled = crate::game::online::downloads::sort_menu_available();
+    let has_song_selected = matches!(
+        state.entries.get(state.selected_index),
+        Some(MusicWheelEntry::Song(_))
+    );
+    let has_pack_selected = matches!(
+        state.entries.get(state.selected_index),
+        Some(MusicWheelEntry::PackHeader { .. })
+    );
+    let p1_joined = profile::is_session_side_joined(profile::PlayerSide::P1);
+    let p2_joined = profile::is_session_side_joined(profile::PlayerSide::P2);
+    let single_player_joined = p1_joined ^ p2_joined;
+
+    // Standalone items (top-level, no category)
+    let mut standalone = Vec::with_capacity(6);
+    standalone.push(select_music_menu::ITEM_SWITCH_PROFILE);
+    standalone.push(select_music_menu::ITEM_SONG_SEARCH);
+    if has_song_selected {
+        standalone.push(select_music_menu::ITEM_SHOW_LEADERBOARD);
+        standalone.push(select_music_menu::ITEM_TOGGLE_FAVORITE);
+    }
+    // Favorites shortcut (only when favorites exist)
+    let any_has_favorites = state.favorites_entries.len() > 1;
+    if any_has_favorites {
+        standalone.push(select_music_menu::ITEM_SORT_BY_FAVORITES);
+    }
+
+    // Sorts category
+    let sorts = select_music_menu::ITEMS_SORTS[..select_music_menu::ITEMS_SORTS.len() - 1].to_vec();
+
+    // Profile category (per-player sorts, only if profile loaded)
+    let p1_has_profile =
+        p1_joined && profile::active_local_profile_id_for_side(profile::PlayerSide::P1).is_some();
+    let p2_has_profile =
+        p2_joined && profile::active_local_profile_id_for_side(profile::PlayerSide::P2).is_some();
+    let profile_items = if p1_has_profile || p2_has_profile {
+        let mut items = Vec::with_capacity(7);
+        if p1_has_profile {
+            items.push(select_music_menu::ITEM_SORT_BY_POPULARITY_P1);
+            items.push(select_music_menu::ITEM_SORT_BY_RECENT_P1);
+            items.push(select_music_menu::ITEM_SORT_BY_TOP_GRADES_P1);
+        }
+        if p2_has_profile {
+            items.push(select_music_menu::ITEM_SORT_BY_POPULARITY_P2);
+            items.push(select_music_menu::ITEM_SORT_BY_RECENT_P2);
+            items.push(select_music_menu::ITEM_SORT_BY_TOP_GRADES_P2);
+        }
+        Some(items)
+    } else {
+        None
+    };
+
+    // Advanced category
+    let mut advanced = Vec::with_capacity(8);
+    advanced.push(select_music_menu::ITEM_TEST_INPUT);
+    advanced.push(select_music_menu::ITEM_RELOAD_SONGS_COURSES);
+    advanced.push(select_music_menu::ITEM_SHOW_LOBBIES);
+    if downloads_enabled {
+        advanced.push(select_music_menu::ITEM_VIEW_DOWNLOADS);
+    }
+    if has_pack_selected {
+        advanced.push(select_music_menu::ITEM_SYNC_PACK);
+    }
+    if has_song_selected {
+        advanced.push(select_music_menu::ITEM_SYNC_SONG);
+        if replays_enabled {
+            advanced.push(select_music_menu::ITEM_PLAY_REPLAY);
+        }
+    }
+
+    // Styles category
+    let styles = match (profile::get_session_play_style(), single_player_joined) {
+        (profile::PlayStyle::Single, true) => {
+            Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE])
+        }
+        (profile::PlayStyle::Double, true) => {
+            Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE])
+        }
+        _ => None,
+    };
+
+    (standalone, sorts, profile_items, advanced, styles)
+}
+
 #[inline(always)]
 fn select_music_menu_items(
     state: &State,
@@ -6109,6 +6205,11 @@ fn select_music_menu_activate(state: &mut State) -> ScreenAction {
 }
 
 fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    // Delegate to categories handler if in categories mode
+    if let select_music_menu::State::Categories(_) = &state.select_music_menu {
+        return handle_categories_menu_input(state, ev);
+    }
+
     let Some(dir) = overlay_nav_dir(ev.action) else {
         if !ev.pressed {
             return ScreenAction::None;
@@ -6149,6 +6250,48 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
     let _ = select_music_menu_move(state, overlay_nav_delta(dir));
     start_overlay_nav_hold(state, dir);
     ScreenAction::None
+}
+
+fn handle_categories_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    let select_music_menu::State::Categories(ref cat_state) = state.select_music_menu else {
+        return ScreenAction::None;
+    };
+
+    let (standalone, sorts, profile, advanced, styles) = build_category_item_lists(state);
+    let entries = select_music_menu::categories::build_entries(
+        &standalone,
+        &sorts,
+        profile.as_deref(),
+        &advanced,
+        styles.as_deref(),
+        &cat_state.categories,
+    );
+
+    let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu else {
+        return ScreenAction::None;
+    };
+
+    let outcome = select_music_menu::categories::handle_input(cat_state, &entries, ev);
+    match outcome {
+        select_music_menu::categories::InputOutcome::None => ScreenAction::None,
+        select_music_menu::categories::InputOutcome::Moved => {
+            audio::play_sfx("assets/sounds/change.ogg");
+            ScreenAction::None
+        }
+        select_music_menu::categories::InputOutcome::ToggleCategory(_) => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            ScreenAction::None
+        }
+        select_music_menu::categories::InputOutcome::ActivateAction(action) => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            dispatch_menu_action(state, action)
+        }
+        select_music_menu::categories::InputOutcome::Close => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            hide_select_music_menu(state);
+            ScreenAction::None
+        }
+    }
 }
 
 fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) -> ScreenAction {
@@ -9124,6 +9267,28 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
                 prev_selected_index: state.select_music_menu_prev_selected_index,
                 focus_anim_elapsed: state.select_music_menu_focus_anim_elapsed,
                 selected_color: color::simply_love_rgba(state.active_color_index),
+            },
+        ));
+    }
+
+    if let select_music_menu::State::Categories(ref cat_state) = state.select_music_menu {
+        let (standalone, sorts, profile, advanced, styles) = build_category_item_lists(state);
+        let entries = select_music_menu::categories::build_entries(
+            &standalone,
+            &sorts,
+            profile.as_deref(),
+            &advanced,
+            styles.as_deref(),
+            &cat_state.categories,
+        );
+        actors.extend(select_music_menu::categories::build_overlay(
+            select_music_menu::categories::RenderParams {
+                entries: &entries,
+                selected_index: cat_state.selected_index,
+                prev_selected_index: cat_state.prev_selected_index,
+                focus_anim_elapsed: cat_state.focus_anim_elapsed,
+                selected_color: color::simply_love_rgba(state.active_color_index),
+                categories: &cat_state.categories,
             },
         ));
     }

@@ -1,11 +1,32 @@
 use std::collections::HashSet;
 
-use crate::engine::input::InputEvent;
+use crate::act;
+use crate::engine::input::{InputEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
+use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 
-use super::{Action, Item};
+use super::{Action, Item, scroll_dir, set_text_clip_rect};
+
+// --- Layout constants (matching Simply Love SortMenu) ---
+const WIDTH: f32 = 210.0;
+const HEIGHT: f32 = 204.0;
+const HEADER_Y_OFFSET: f32 = -114.0;
+const ITEM_SPACING: f32 = 36.0;
+const DIM_ALPHA: f32 = 0.8;
+const HINT_Y_OFFSET: f32 = 124.0;
+const HINT_TEXT: &str = "PRESS &SELECT; TO CANCEL";
+const WHEEL_SLOTS: usize = 9;
+const FONT_TOP: &str = "miso";
+const FONT_BOTTOM: &str = "wendy";
+const CATEGORY_INDENT: f32 = 30.0;
 
 pub const FOCUS_TWEEN_SECONDS: f32 = 0.15;
+
+const UNFOCUSED_ROW_BG: [f32; 4] = [0.2, 0.2, 0.2, 1.0];
+const FOCUSED_ROW_BG: [f32; 4] = [0.35, 0.35, 0.35, 1.0];
+const GO_BACK_COLOR: [f32; 3] = [1.0, 0.25, 0.25];
+const TEXT_UNFOCUSED_GRAY: f32 = 0.533;
+const TEXT_FOCUSED_WHITE: f32 = 1.0;
 
 // --- Types ---
 
@@ -47,6 +68,14 @@ impl Default for CategoryState {
 }
 
 impl CategoryState {
+    pub fn toggle(&mut self, category: Category) {
+        if self.expanded.contains(&category) {
+            self.expanded.remove(&category);
+        } else {
+            self.expanded.insert(category);
+        }
+    }
+
     pub fn is_expanded(&self, category: Category) -> bool {
         self.expanded.contains(&category)
     }
@@ -74,15 +103,64 @@ pub fn open() -> VisibleState {
 
 /// Build the flattened entry list based on current category expansion state.
 pub fn build_entries(
-    _items_standalone: &[Item],
-    _items_sorts: &[Item],
-    _items_profile: Option<&[Item]>,
-    _items_advanced: &[Item],
-    _items_styles: Option<&[Item]>,
-    _categories: &CategoryState,
+    items_standalone: &[Item],
+    items_sorts: &[Item],
+    items_profile: Option<&[Item]>,
+    items_advanced: &[Item],
+    items_styles: Option<&[Item]>,
+    categories: &CategoryState,
 ) -> Vec<Entry> {
-    // TODO: implement collapsible category entry building
-    Vec::new()
+    let mut entries = Vec::new();
+
+    for item in items_standalone {
+        entries.push(Entry::StandaloneItem(*item));
+    }
+
+    entries.push(Entry::CategoryHeader {
+        category: Category::Sorts,
+        label: "Sorts",
+    });
+    if categories.is_expanded(Category::Sorts) {
+        for item in items_sorts {
+            entries.push(Entry::CategoryItem(*item));
+        }
+    }
+
+    if let Some(profile_items) = items_profile {
+        entries.push(Entry::CategoryHeader {
+            category: Category::Profile,
+            label: "Profile",
+        });
+        if categories.is_expanded(Category::Profile) {
+            for item in profile_items {
+                entries.push(Entry::CategoryItem(*item));
+            }
+        }
+    }
+
+    entries.push(Entry::CategoryHeader {
+        category: Category::Advanced,
+        label: "Advanced",
+    });
+    if categories.is_expanded(Category::Advanced) {
+        for item in items_advanced {
+            entries.push(Entry::CategoryItem(*item));
+        }
+    }
+
+    if let Some(style_items) = items_styles {
+        entries.push(Entry::CategoryHeader {
+            category: Category::Styles,
+            label: "Styles",
+        });
+        if categories.is_expanded(Category::Styles) {
+            for item in style_items {
+                entries.push(Entry::CategoryItem(*item));
+            }
+        }
+    }
+
+    entries
 }
 
 // --- Input handling ---
@@ -95,13 +173,78 @@ pub enum InputOutcome {
     Close,
 }
 
-pub fn handle_input(
-    _state: &mut VisibleState,
-    _entries: &[Entry],
-    _ev: &InputEvent,
-) -> InputOutcome {
-    // TODO: implement category menu input handling
-    InputOutcome::None
+pub fn handle_input(state: &mut VisibleState, entries: &[Entry], ev: &InputEvent) -> InputOutcome {
+    if !ev.pressed {
+        return InputOutcome::None;
+    }
+
+    match ev.action {
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => {
+            if move_selection(state, entries.len(), -1) {
+                InputOutcome::Moved
+            } else {
+                InputOutcome::None
+            }
+        }
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => {
+            if move_selection(state, entries.len(), 1) {
+                InputOutcome::Moved
+            } else {
+                InputOutcome::None
+            }
+        }
+        VirtualAction::p1_start | VirtualAction::p2_start => activate(state, entries),
+        VirtualAction::p1_back
+        | VirtualAction::p2_back
+        | VirtualAction::p1_select
+        | VirtualAction::p2_select => InputOutcome::Close,
+        _ => InputOutcome::None,
+    }
+}
+
+fn move_selection(state: &mut VisibleState, len: usize, delta: isize) -> bool {
+    if len <= 1 {
+        return false;
+    }
+    let old = state.selected_index.min(len - 1);
+    let next = ((old as isize + delta).rem_euclid(len as isize)) as usize;
+    if next == old {
+        return false;
+    }
+    state.prev_selected_index = old;
+    state.selected_index = next;
+    state.focus_anim_elapsed = 0.0;
+    true
+}
+
+fn activate(state: &mut VisibleState, entries: &[Entry]) -> InputOutcome {
+    if entries.is_empty() {
+        return InputOutcome::Close;
+    }
+    let idx = state.selected_index.min(entries.len() - 1);
+    match &entries[idx] {
+        Entry::CategoryHeader { category, .. } => {
+            state.categories.toggle(*category);
+            InputOutcome::ToggleCategory(*category)
+        }
+        Entry::CategoryItem(item) | Entry::StandaloneItem(item) => {
+            InputOutcome::ActivateAction(item.action)
+        }
+    }
 }
 
 // --- Rendering ---
@@ -115,7 +258,219 @@ pub struct RenderParams<'a> {
     pub categories: &'a CategoryState,
 }
 
-pub fn build_overlay(_p: RenderParams<'_>) -> Vec<Actor> {
-    // TODO: implement category menu rendering
-    Vec::new()
+pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
+    let mut actors = Vec::new();
+    let cx = screen_center_x();
+    let cy = screen_center_y();
+    let clip_rect = [cx - WIDTH * 0.5, cy - HEIGHT * 0.5, WIDTH, HEIGHT];
+    let selected_index = p.selected_index.min(p.entries.len().saturating_sub(1));
+
+    // Background dim
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0):
+        zoomto(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, DIM_ALPHA):
+        z(1450)
+    ));
+
+    // Header: "OPTIONS"
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(cx, cy + HEADER_Y_OFFSET):
+        zoomto(WIDTH + 2.0, 22.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1451)
+    ));
+    actors.push(act!(text:
+        font(FONT_BOTTOM):
+        settext("OPTIONS"):
+        align(0.5, 0.5):
+        xy(cx, cy + HEADER_Y_OFFSET):
+        zoom(0.4):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(1452):
+        horizalign(center)
+    ));
+
+    // Menu box border + fill
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(cx, cy):
+        zoomto(WIDTH + 2.0, HEIGHT + 2.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1451)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(cx, cy):
+        zoomto(WIDTH, HEIGHT):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(1452)
+    ));
+
+    // Hint text below the menu
+    actors.push(act!(text:
+        font(FONT_TOP):
+        settext(HINT_TEXT):
+        align(0.5, 0.5):
+        xy(cx, cy + HINT_Y_OFFSET):
+        zoom(0.7):
+        diffuse(1.0, 1.0, 1.0, 0.7):
+        z(1451):
+        horizalign(center)
+    ));
+
+    if !p.entries.is_empty() {
+        let focus_t = (p.focus_anim_elapsed / FOCUS_TWEEN_SECONDS.max(1e-6)).clamp(0.0, 1.0);
+        let scroll_dir_val = scroll_dir(
+            p.entries.len(),
+            p.prev_selected_index.min(p.entries.len() - 1),
+            selected_index,
+        ) as f32;
+        let scroll_shift = scroll_dir_val * (1.0 - focus_t);
+
+        let half_slots = (WHEEL_SLOTS / 2) as f32;
+        for slot in 0..WHEEL_SLOTS {
+            let slot_pos = slot as f32 - half_slots + scroll_shift;
+            let entry_offset = slot as isize - (WHEEL_SLOTS / 2) as isize;
+            let entry_idx = ((selected_index as isize + entry_offset)
+                .rem_euclid(p.entries.len() as isize)) as usize;
+            let entry = &p.entries[entry_idx];
+
+            render_row(&mut actors, entry, slot_pos, cx, cy, &clip_rect);
+        }
+    }
+
+    actors
+}
+
+fn render_row(
+    actors: &mut Vec<Actor>,
+    entry: &Entry,
+    slot_pos: f32,
+    cx: f32,
+    cy: f32,
+    clip_rect: &[f32; 4],
+) {
+    let focus_lerp = (1.0 - slot_pos.abs()).clamp(0.0, 1.0);
+    let row_alpha = (3.0 - slot_pos.abs()).clamp(0.0, 1.0);
+    if row_alpha <= 0.0 {
+        return;
+    }
+    let y = slot_pos.mul_add(ITEM_SPACING, cy);
+    let left_x = cx - WIDTH * 0.5 + 12.0;
+
+    // Row background quad
+    let bg = lerp_color(UNFOCUSED_ROW_BG, FOCUSED_ROW_BG, focus_lerp);
+    let bg_alpha = row_alpha * 0.6;
+    actors.push(act!(quad:
+        align(0.5, 0.5): xy(cx, y):
+        zoomto(WIDTH - 4.0, ITEM_SPACING - 2.0):
+        diffuse(bg[0], bg[1], bg[2], bg_alpha):
+        z(1453)
+    ));
+
+    match entry {
+        Entry::CategoryHeader { label, .. } => {
+            let tint = lerp_scalar(TEXT_UNFOCUSED_GRAY, TEXT_FOCUSED_WHITE, focus_lerp);
+            // Folder icon
+            actors.push(act!(sprite("folder-solid.png"):
+                align(0.0, 0.5):
+                xy(left_x - 4.0, y):
+                zoom(0.2):
+                diffuse(tint, tint, tint, row_alpha):
+                z(1454)
+            ));
+            // Category label
+            let mut label_actor = act!(text:
+                font(FONT_BOTTOM):
+                settext(*label):
+                align(0.0, 0.5):
+                xy(left_x + 24.0, y):
+                zoom(0.4):
+                maxwidth((WIDTH - 50.0) / 0.4):
+                diffuse(tint, tint, tint, row_alpha):
+                z(1454):
+                horizalign(left)
+            );
+            set_text_clip_rect(&mut label_actor, *clip_rect);
+            actors.push(label_actor);
+        }
+        Entry::CategoryItem(item) => {
+            let indent_x = left_x + CATEGORY_INDENT;
+            let tint = item_tint(item, focus_lerp);
+            render_item_text(actors, item, indent_x, y, row_alpha, &tint, clip_rect, true);
+        }
+        Entry::StandaloneItem(item) => {
+            let tint = item_tint(item, focus_lerp);
+            render_item_text(actors, item, left_x, y, row_alpha, &tint, clip_rect, false);
+        }
+    }
+}
+
+fn render_item_text(
+    actors: &mut Vec<Actor>,
+    item: &Item,
+    x: f32,
+    y: f32,
+    row_alpha: f32,
+    tint: &[f32; 3],
+    clip_rect: &[f32; 4],
+    indented: bool,
+) {
+    let max_w = if indented {
+        WIDTH - CATEGORY_INDENT - 28.0
+    } else {
+        WIDTH - 28.0
+    };
+    if !item.top_label.is_empty() {
+        let mut top = act!(text:
+            font(FONT_TOP):
+            settext(item.top_label):
+            align(0.0, 1.0):
+            xy(x, y - 2.0):
+            zoom(0.65):
+            maxwidth(max_w / 0.65):
+            diffuse(tint[0], tint[1], tint[2], row_alpha * 0.7):
+            z(1454):
+            horizalign(left)
+        );
+        set_text_clip_rect(&mut top, *clip_rect);
+        actors.push(top);
+    }
+    let mut bottom = act!(text:
+        font(FONT_BOTTOM):
+        settext(item.bottom_label):
+        align(0.0, 0.5):
+        xy(x, y + 6.0):
+        zoom(0.35):
+        maxwidth(max_w / 0.35):
+        diffuse(tint[0], tint[1], tint[2], row_alpha):
+        z(1454):
+        horizalign(left)
+    );
+    set_text_clip_rect(&mut bottom, *clip_rect);
+    actors.push(bottom);
+}
+
+#[inline(always)]
+fn item_tint(item: &Item, focus_lerp: f32) -> [f32; 3] {
+    if matches!(item.action, Action::BackToMain) {
+        GO_BACK_COLOR
+    } else {
+        let v = lerp_scalar(TEXT_UNFOCUSED_GRAY, TEXT_FOCUSED_WHITE, focus_lerp);
+        [v, v, v]
+    }
+}
+
+#[inline(always)]
+fn lerp_scalar(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
+#[inline(always)]
+fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
+    [
+        lerp_scalar(a[0], b[0], t),
+        lerp_scalar(a[1], b[1], t),
+        lerp_scalar(a[2], b[2], t),
+        lerp_scalar(a[3], b[3], t),
+    ]
 }
