@@ -5,6 +5,7 @@ use crate::engine::present::actors::{Actor, SizeSpec};
 use crate::engine::present::cache::{TextCache, cached_text};
 use crate::engine::present::color;
 use crate::engine::present::compose::TextLayoutCache;
+use crate::engine::present::density;
 use crate::engine::present::font;
 use crate::engine::space::*;
 use crate::game::gameplay::{self, State};
@@ -42,6 +43,98 @@ static TIME_SONG_RIGHT_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::f
 static TIME_REMAINING_RIGHT_TEXT: LazyLock<Arc<str>> =
     LazyLock::new(|| Arc::<str>::from("remaining "));
 static SLASH_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from("/"));
+
+#[inline(always)]
+fn step_stats_player_idx(state: &State, player_side: profile::PlayerSide) -> usize {
+    match (state.num_players, player_side) {
+        (2, profile::PlayerSide::P2) => 1,
+        _ => 0,
+    }
+}
+
+fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
+    let first_visible = points.partition_point(|p| p[0] < offset);
+    if first_visible == 0 {
+        return;
+    }
+    if first_visible >= points.len() {
+        points.clear();
+        return;
+    }
+
+    let a = points[first_visible - 1];
+    let b = points[first_visible];
+    let dx = (b[0] - a[0]).max(0.000_001_f32);
+    let t = ((offset - a[0]) / dx).clamp(0.0_f32, 1.0_f32);
+    points[first_visible - 1] = [offset, a[1] + (b[1] - a[1]) * t];
+    points.drain(0..(first_visible - 1));
+}
+
+fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize) {
+    let graph_w = state.density_graph_graph_w;
+    let graph_h = state.density_graph_graph_h;
+    let scaled_width = state.density_graph_scaled_width;
+    if player_idx >= state.num_players
+        || graph_w <= 0.0_f32
+        || graph_h <= 0.0_f32
+        || scaled_width <= 0.0_f32
+    {
+        state.density_graph_mesh[player_idx] = None;
+        state.density_graph_life_mesh[player_idx] = None;
+        state.density_graph_mesh_offset_px[player_idx] = 0;
+        state.density_graph_life_mesh_offset_px[player_idx] = 0;
+        state.density_graph_life_dirty[player_idx] = false;
+        return;
+    }
+
+    let offset = (state.density_graph_u0 * scaled_width).clamp(0.0_f32, scaled_width);
+    let offset_px = offset.floor() as i32;
+    let offset_px_f = offset_px as f32;
+
+    if offset_px != state.density_graph_mesh_offset_px[player_idx] {
+        state.density_graph_mesh_offset_px[player_idx] = offset_px;
+        density::update_density_hist_mesh(
+            &mut state.density_graph_mesh[player_idx],
+            state.density_graph_cache[player_idx].as_ref(),
+            offset_px_f,
+            graph_w,
+        );
+    }
+
+    let prev_offset_px = state.density_graph_life_mesh_offset_px[player_idx];
+    let offset_changed = offset_px != prev_offset_px;
+    if !offset_changed && !state.density_graph_life_dirty[player_idx] {
+        return;
+    }
+
+    state.density_graph_life_mesh_offset_px[player_idx] = offset_px;
+    state.density_graph_life_dirty[player_idx] = false;
+    if offset_px > prev_offset_px {
+        clip_density_life_points(
+            &mut state.density_graph_life_points[player_idx],
+            offset_px_f,
+        );
+    }
+    if state.density_graph_life_points[player_idx].len() < 2 {
+        state.density_graph_life_mesh[player_idx] = None;
+        return;
+    }
+
+    density::update_density_life_mesh(
+        &mut state.density_graph_life_mesh[player_idx],
+        &state.density_graph_life_points[player_idx],
+        offset_px_f,
+        graph_w,
+        2.0_f32,
+        [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
+    );
+}
+
+pub fn refresh_density_graph_meshes(state: &mut State) {
+    for player_idx in 0..state.num_players {
+        refresh_density_graph_meshes_for_player(state, player_idx);
+    }
+}
 
 #[inline(always)]
 fn cached_padded_num(count: u32, digits: usize) -> Arc<str> {
@@ -1619,10 +1712,7 @@ fn build_side_pane(
         profile::PlayerSide::P1 => 1.0,
         profile::PlayerSide::P2 => -1.0,
     };
-    let player_idx = match (state.num_players, player_side) {
-        (2, profile::PlayerSide::P2) => 1,
-        _ => 0,
-    };
+    let player_idx = step_stats_player_idx(state, player_side);
     let judgments_local_x = if layout.is_ultrawide && state.num_players > 1 {
         154.0 * x_sign
     } else if layout.note_field_is_centered && wide {

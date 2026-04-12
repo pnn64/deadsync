@@ -1721,7 +1721,7 @@ fn prewarm_gameplay_text_layout_cache(
     assets: &AssetManager,
     metrics: &Metrics,
     cache: &mut crate::engine::present::compose::TextLayoutCache,
-    state: &gameplay::State,
+    state: &mut gameplay::State,
 ) {
     let started = Instant::now();
     cache.configure(
@@ -1731,6 +1731,7 @@ fn prewarm_gameplay_text_layout_cache(
     cache.begin_frame_stats();
 
     let fonts = assets.fonts();
+    crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
     let actors = gameplay::get_actors(state, assets);
     let _ = crate::engine::present::compose::build_screen_cached(
         &actors,
@@ -3995,7 +3996,7 @@ impl App {
         ));
     }
 
-    fn get_current_actors(&self) -> (Vec<Actor>, [f32; 4]) {
+    fn get_current_actors(&mut self) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
 
@@ -4020,7 +4021,8 @@ impl App {
                 menu::get_actors(&self.state.screens.menu_state, screen_alpha_multiplier)
             }
             CurrentScreen::Gameplay => {
-                if let Some(gs) = &self.state.screens.gameplay_state {
+                if let Some(gs) = &mut self.state.screens.gameplay_state {
+                    crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
                     gameplay::get_actors(gs, &self.asset_manager)
                 } else {
                     vec![]
@@ -4835,7 +4837,7 @@ impl App {
         }
     }
 
-    fn capture_compose_case_now(&self) {
+    fn capture_compose_case_now(&mut self) {
         let total_elapsed = Instant::now()
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
@@ -5900,7 +5902,7 @@ impl App {
                     };
                 let combo_carry = self.state.session.combo_carry;
                 let init_started = Instant::now();
-                let gs = gameplay::init(
+                let mut gs = gameplay::init(
                     song_arc,
                     charts,
                     gameplay_charts,
@@ -5937,7 +5939,7 @@ impl App {
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
-                    &gs,
+                    &mut gs,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;

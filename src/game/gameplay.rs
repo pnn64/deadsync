@@ -6677,9 +6677,6 @@ struct GameplayUpdatePhaseTimings {
     judged_rows_us: u32,
     density_us: u32,
     density_sample_us: u32,
-    density_hist_mesh_us: u32,
-    density_life_mesh_us: u32,
-    density_clip_us: u32,
     danger_us: u32,
     untracked_us: u32,
 }
@@ -7112,9 +7109,6 @@ fn accumulate_phase_max(dst: &mut GameplayUpdatePhaseTimings, src: &GameplayUpda
     dst.judged_rows_us = dst.judged_rows_us.max(src.judged_rows_us);
     dst.density_us = dst.density_us.max(src.density_us);
     dst.density_sample_us = dst.density_sample_us.max(src.density_sample_us);
-    dst.density_hist_mesh_us = dst.density_hist_mesh_us.max(src.density_hist_mesh_us);
-    dst.density_life_mesh_us = dst.density_life_mesh_us.max(src.density_life_mesh_us);
-    dst.density_clip_us = dst.density_clip_us.max(src.density_clip_us);
     dst.danger_us = dst.danger_us.max(src.danger_us);
     dst.untracked_us = dst.untracked_us.max(src.untracked_us);
 }
@@ -7221,7 +7215,7 @@ fn trace_gameplay_update(
         state.update_trace.summary_slow_frames =
             state.update_trace.summary_slow_frames.saturating_add(1);
         debug!(
-            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3} other:{:.3}] input_sub_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}]",
+            "Gameplay slow frame={} t={:.3}s total={:.3}ms hot={}({:.3}ms) pending={} decays={} phases_ms=[pre:{:.3} auto:{:.3} input:{:.3} held:{:.3} holds:{:.3} decay:{:.3} vis:{:.3} spawn:{:.3} mine:{:.3} tmiss:{:.3} cull:{:.3} judged:{:.3} density:{:.3} danger:{:.3} other:{:.3}] input_sub_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] density_sub_ms=[sample:{:.3}]",
             frame_counter,
             music_time_sec,
             total_us as f32 / 1000.0,
@@ -7249,10 +7243,7 @@ fn trace_gameplay_update(
             phases.input_glow_us as f32 / 1000.0,
             phases.input_judge_us as f32 / 1000.0,
             phases.input_roll_us as f32 / 1000.0,
-            phases.density_sample_us as f32 / 1000.0,
-            phases.density_hist_mesh_us as f32 / 1000.0,
-            phases.density_life_mesh_us as f32 / 1000.0,
-            phases.density_clip_us as f32 / 1000.0
+            phases.density_sample_us as f32 / 1000.0
         );
     }
 
@@ -7267,7 +7258,7 @@ fn trace_gameplay_update(
         let summary_peak_pending_edges = state.update_trace.summary_peak_pending_edges;
         let (summary_hot_name, summary_hot_us) = max_phase_name_and_us(&summary_max_phase);
         trace!(
-            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] input_latency_us=[samples:{} cap_store_avg:{:.1} cap_store_max:{} store_emit_avg:{:.1} store_emit_max:{} emit_queue_avg:{:.1} emit_queue_max:{} queue_proc_avg:{:.1} queue_proc_max:{} cap_proc_avg:{:.1} cap_proc_max:{}] density_sub_max_ms=[sample:{:.3} hist_mesh:{:.3} life_mesh:{:.3} clip:{:.3}] other_max={:.3}",
+            "Gameplay trace summary: frames={} slow={} max_total={:.3}ms max_hot={}({:.3}ms) peak_pending={} input_sub_max_ms=[queue:{:.3} state:{:.3} glow:{:.3} judge:{:.3} roll:{:.3}] input_latency_us=[samples:{} cap_store_avg:{:.1} cap_store_max:{} store_emit_avg:{:.1} store_emit_max:{} emit_queue_avg:{:.1} emit_queue_max:{} queue_proc_avg:{:.1} queue_proc_max:{} cap_proc_avg:{:.1} cap_proc_max:{}] density_sub_max_ms=[sample:{:.3}] other_max={:.3}",
             summary_frames,
             summary_slow_frames,
             summary_max_total_us as f32 / 1000.0,
@@ -7306,9 +7297,6 @@ fn trace_gameplay_update(
             ),
             summary_input_latency.capture_to_process_max_us,
             summary_max_phase.density_sample_us as f32 / 1000.0,
-            summary_max_phase.density_hist_mesh_us as f32 / 1000.0,
-            summary_max_phase.density_life_mesh_us as f32 / 1000.0,
-            summary_max_phase.density_clip_us as f32 / 1000.0,
             summary_max_phase.untracked_us as f32 / 1000.0
         );
         state.update_trace.summary_elapsed_s = 0.0;
@@ -8385,24 +8373,6 @@ fn push_density_life_point(points: &mut Vec<[f32; 2]>, x: f32, y: f32) -> bool {
     true
 }
 
-fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
-    let first_visible = points.partition_point(|p| p[0] < offset);
-    if first_visible == 0 {
-        return;
-    }
-    if first_visible >= points.len() {
-        points.clear();
-        return;
-    }
-
-    let a = points[first_visible - 1];
-    let b = points[first_visible];
-    let dx = (b[0] - a[0]).max(0.000_001_f32);
-    let t = ((offset - a[0]) / dx).clamp(0.0_f32, 1.0_f32);
-    points[first_visible - 1] = [offset, a[1] + (b[1] - a[1]) * t];
-    points.drain(0..(first_visible - 1));
-}
-
 fn update_density_graph(
     state: &mut State,
     current_music_time: f32,
@@ -8414,9 +8384,6 @@ fn update_density_graph(
     let scaled_width = state.density_graph_scaled_width;
     if graph_w <= 0.0_f32 || graph_h <= 0.0_f32 || scaled_width <= 0.0_f32 {
         state.density_graph_u0 = 0.0_f32;
-        for player in 0..state.num_players {
-            state.density_graph_mesh[player] = None;
-        }
         return;
     }
 
@@ -8443,9 +8410,6 @@ fn update_density_graph(
     }
 
     state.density_graph_u0 = u0;
-    let offset = (u0 * scaled_width).clamp(0.0_f32, scaled_width);
-    let offset_px = offset.floor() as i32;
-    let offset_px_f = offset_px as f32;
 
     let next_t = state.density_graph_life_next_update_elapsed;
     if state.density_graph_life_update_rate > 0.0_f32 && state.total_elapsed_in_screen >= next_t {
@@ -8481,81 +8445,6 @@ fn update_density_graph(
         }
         if let Some(started) = sample_started {
             add_elapsed_us(&mut phase_timings.density_sample_us, started);
-        }
-    }
-
-    for player in 0..state.num_players {
-        if offset_px == state.density_graph_mesh_offset_px[player] {
-            continue;
-        }
-        if trace_enabled {
-            let started = Instant::now();
-            state.density_graph_mesh_offset_px[player] = offset_px;
-            density::update_density_hist_mesh(
-                &mut state.density_graph_mesh[player],
-                state.density_graph_cache[player].as_ref(),
-                offset_px as f32,
-                graph_w,
-            );
-            add_elapsed_us(&mut phase_timings.density_hist_mesh_us, started);
-        } else {
-            state.density_graph_mesh_offset_px[player] = offset_px;
-            density::update_density_hist_mesh(
-                &mut state.density_graph_mesh[player],
-                state.density_graph_cache[player].as_ref(),
-                offset_px as f32,
-                graph_w,
-            );
-        }
-    }
-
-    for player in 0..state.num_players {
-        let prev_offset_px = state.density_graph_life_mesh_offset_px[player];
-        let offset_changed = offset_px != prev_offset_px;
-        if !offset_changed && !state.density_graph_life_dirty[player] {
-            continue;
-        }
-        state.density_graph_life_mesh_offset_px[player] = offset_px;
-        state.density_graph_life_dirty[player] = false;
-        let should_clip = offset_px > prev_offset_px;
-
-        if trace_enabled {
-            if should_clip {
-                let clip_started = Instant::now();
-                clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
-                add_elapsed_us(&mut phase_timings.density_clip_us, clip_started);
-            }
-            if state.density_graph_life_points[player].len() < 2 {
-                state.density_graph_life_mesh[player] = None;
-                continue;
-            }
-
-            let mesh_started = Instant::now();
-            density::update_density_life_mesh(
-                &mut state.density_graph_life_mesh[player],
-                &state.density_graph_life_points[player],
-                offset_px_f,
-                graph_w,
-                2.0_f32,
-                [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
-            );
-            add_elapsed_us(&mut phase_timings.density_life_mesh_us, mesh_started);
-        } else {
-            if should_clip {
-                clip_density_life_points(&mut state.density_graph_life_points[player], offset_px_f);
-            }
-            if state.density_graph_life_points[player].len() < 2 {
-                state.density_graph_life_mesh[player] = None;
-                continue;
-            }
-            density::update_density_life_mesh(
-                &mut state.density_graph_life_mesh[player],
-                &state.density_graph_life_points[player],
-                offset_px_f,
-                graph_w,
-                2.0_f32,
-                [1.0_f32, 1.0_f32, 1.0_f32, 0.8_f32],
-            );
         }
     }
 }
