@@ -1106,7 +1106,7 @@ fn build_actor_recursive<'a>(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                 },
-                texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                texture_handle: assets::texture_handle(texture.as_ref()),
                 transform,
                 blend: *blend,
                 z: 0,
@@ -1188,7 +1188,7 @@ fn build_actor_recursive<'a>(
 
                 out.push(renderer::RenderObject {
                     object_type: obj_type,
-                    texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                    texture_handle: obj.texture_handle,
                     transform: t_world * obj.transform,
                     blend: obj.blend,
                     // Draw behind the original to ensure correct order without
@@ -1378,7 +1378,7 @@ fn build_actor_recursive<'a>(
                                 local_offset_rot_sin_cos,
                                 edge_fade,
                             },
-                            texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                            texture_handle: assets::texture_handle(stroke_key),
                             transform,
                             blend: *blend,
                             z: layer,
@@ -1840,7 +1840,7 @@ fn push_sprite<'a>(
             local_offset_rot_sin_cos,
             edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
         },
-        texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+        texture_handle: assets::texture_handle(if is_solid { "__white" } else { texture_id }),
         transform,
         blend,
         z: 0,
@@ -2088,15 +2088,14 @@ fn layout_text<'a>(
                     quad_w, 0.0, 0.0, 0.0, 0.0, quad_h, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, center_x,
                     center_y, 0.0, 1.0,
                 );
+                // SAFETY: `glyph.texture_key` was captured from cached font storage
+                // when the layout was built and remains valid for this render-list
+                // assembly pass.
+                let texture_key = unsafe { str_from_cached_ptr(glyph.texture_key) };
 
                 out.push(RenderObject {
                     object_type: renderer::ObjectType::Sprite {
-                        // SAFETY: `glyph.texture_key` was captured from cached font
-                        // storage when the layout was built and remains valid for
-                        // the lifetime of this render-list assembly pass.
-                        texture_id: std::borrow::Cow::Borrowed(unsafe {
-                            str_from_cached_ptr(glyph.texture_key)
-                        }),
+                        texture_id: std::borrow::Cow::Borrowed(texture_key),
                         tint: glyph_tint(attributes, glyph.char_index),
                         uv_scale: glyph.uv_scale,
                         uv_offset: glyph.uv_offset,
@@ -2104,7 +2103,7 @@ fn layout_text<'a>(
                         local_offset_rot_sin_cos: [0.0, 1.0],
                         edge_fade: [0.0; 4],
                     },
-                    texture_handle: renderer::INVALID_TEXTURE_HANDLE,
+                    texture_handle: assets::texture_handle(texture_key),
                     transform,
                     blend: BlendMode::Alpha,
                     z: 0,

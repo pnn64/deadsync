@@ -1,6 +1,8 @@
 use crate::assets::AssetManager;
 use crate::config::dirs;
-use crate::engine::gfx::{Backend, SamplerDesc, SamplerFilter, SamplerWrap};
+use crate::engine::gfx::{
+    Backend, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerFilter, SamplerWrap, TextureHandle,
+};
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::{debug, warn};
 use std::{
@@ -485,6 +487,12 @@ static TEX_META: std::sync::LazyLock<RwLock<HashMap<String, TexMeta>>> =
 static SHEET_DIMS: std::sync::LazyLock<RwLock<HashMap<String, (u32, u32)>>> =
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 
+static TEXTURE_HANDLES: std::sync::LazyLock<RwLock<HashMap<String, TextureHandle>>> =
+    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+
+static TEXTURE_HANDLE_ALIASES: std::sync::LazyLock<RwLock<HashMap<u64, TextureHandle>>> =
+    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
+
 #[derive(Clone)]
 pub(crate) struct GeneratedTexture {
     pub image: Arc<RgbaImage>,
@@ -495,6 +503,57 @@ static GENERATED_TEXTURES: std::sync::LazyLock<RwLock<HashMap<String, GeneratedT
     std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
 static GENERATED_TEXTURES_PENDING: std::sync::LazyLock<Mutex<HashSet<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
+
+fn note_texture_handle_alias(
+    aliases: &mut HashMap<u64, TextureHandle>,
+    key: &str,
+    handle: TextureHandle,
+) {
+    let folded = ascii_ci_hash(key);
+    match aliases.get_mut(&folded) {
+        Some(existing) if *existing != handle => *existing = INVALID_TEXTURE_HANDLE,
+        Some(_) => {}
+        None => {
+            aliases.insert(folded, handle);
+        }
+    }
+}
+
+fn rebuild_texture_handle_aliases(
+    handles: &HashMap<String, TextureHandle>,
+    aliases: &mut HashMap<u64, TextureHandle>,
+) {
+    aliases.clear();
+    aliases.reserve(handles.len());
+    for (key, &handle) in handles {
+        note_texture_handle_alias(aliases, key, handle);
+    }
+}
+
+pub(crate) fn register_texture_handle(key: &str, handle: TextureHandle) {
+    let mut handles = TEXTURE_HANDLES.write().unwrap();
+    let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
+    let replaced = handles.insert(key.to_string(), handle);
+    if replaced.is_some_and(|old| old != handle) {
+        rebuild_texture_handle_aliases(&handles, &mut aliases);
+    } else if replaced.is_none() {
+        note_texture_handle_alias(&mut aliases, key, handle);
+    }
+}
+
+pub(crate) fn remove_texture_handle(key: &str) {
+    let mut handles = TEXTURE_HANDLES.write().unwrap();
+    if handles.remove(key).is_none() {
+        return;
+    }
+    let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
+    rebuild_texture_handle_aliases(&handles, &mut aliases);
+}
+
+pub(crate) fn clear_texture_handles() {
+    TEXTURE_HANDLES.write().unwrap().clear();
+    TEXTURE_HANDLE_ALIASES.write().unwrap().clear();
+}
 
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     let sheet = parse_sprite_sheet_dims(key);
@@ -516,6 +575,27 @@ pub fn sprite_sheet_dims(key: &str) -> (u32, u32) {
     let dims = parse_sprite_sheet_dims(key);
     SHEET_DIMS.write().unwrap().insert(key.to_string(), dims);
     dims
+}
+
+pub fn texture_handle(key: &str) -> TextureHandle {
+    if let Some(handle) = TEXTURE_HANDLES.read().unwrap().get(key).copied() {
+        return handle;
+    }
+    if let Some(handle) = TEXTURE_HANDLE_ALIASES
+        .read()
+        .unwrap()
+        .get(&ascii_ci_hash(key))
+        .copied()
+        && handle != INVALID_TEXTURE_HANDLE
+    {
+        return handle;
+    }
+    TEXTURE_HANDLES
+        .read()
+        .unwrap()
+        .iter()
+        .find_map(|(candidate, handle)| candidate.eq_ignore_ascii_case(key).then_some(*handle))
+        .unwrap_or(INVALID_TEXTURE_HANDLE)
 }
 
 pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerDesc) {
@@ -1084,5 +1164,32 @@ impl AssetManager {
                 warn!("Failed to open texture for key '{key}': {e}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn texture_handle_lookup_tracks_registry_lifecycle() {
+        clear_texture_handles();
+
+        register_texture_handle("Graphics/Banner.png", 17);
+        assert_eq!(texture_handle("Graphics/Banner.png"), 17);
+        assert_eq!(texture_handle("graphics/banner.png"), 17);
+
+        remove_texture_handle("Graphics/Banner.png");
+        assert_eq!(
+            texture_handle("graphics/banner.png"),
+            crate::engine::gfx::INVALID_TEXTURE_HANDLE
+        );
+
+        register_texture_handle("Other.png", 23);
+        clear_texture_handles();
+        assert_eq!(
+            texture_handle("other.png"),
+            crate::engine::gfx::INVALID_TEXTURE_HANDLE
+        );
     }
 }

@@ -24,11 +24,12 @@ pub use self::textures::{
     TexMeta, TextureChoice, TextureHints, canonical_texture_key, hold_judgment_texture_choices,
     judgment_texture_choices, open_image_fallback, parse_sprite_sheet_dims, parse_texture_hints,
     register_generated_texture, register_texture_dims, resolve_texture_choice, sprite_sheet_dims,
-    strip_sprite_hints, texture_dims, texture_source_dims_from_real,
+    strip_sprite_hints, texture_dims, texture_handle, texture_source_dims_from_real,
     texture_source_frame_dims_from_real,
 };
 use self::textures::{
-    apply_texture_hints, ascii_ci_hash, generated_texture, take_pending_generated_texture_keys,
+    apply_texture_hints, clear_texture_handles, generated_texture, register_texture_handle,
+    remove_texture_handle, take_pending_generated_texture_keys,
 };
 
 #[derive(Debug)]
@@ -152,7 +153,6 @@ pub struct AssetManager {
     textures: HashMap<TextureHandle, GfxTexture>,
     uploaded_texture_dims: HashMap<TextureHandle, TexMeta>,
     texture_handles: HashMap<String, TextureHandle>,
-    texture_handles_ascii_ci: HashMap<u64, TextureHandle>,
     next_texture_handle: TextureHandle,
     fonts: HashMap<&'static str, Font>,
     pending_texture_uploads: TextureUploadQueue,
@@ -164,7 +164,6 @@ impl AssetManager {
             textures: HashMap::new(),
             uploaded_texture_dims: HashMap::new(),
             texture_handles: HashMap::new(),
-            texture_handles_ascii_ci: HashMap::new(),
             next_texture_handle: 1,
             fonts: HashMap::new(),
             pending_texture_uploads: TextureUploadQueue::default(),
@@ -198,25 +197,14 @@ impl AssetManager {
 
     pub fn take_textures(&mut self) -> HashMap<TextureHandle, GfxTexture> {
         self.texture_handles.clear();
-        self.texture_handles_ascii_ci.clear();
+        clear_texture_handles();
         self.uploaded_texture_dims.clear();
         std::mem::take(&mut self.textures)
     }
 
     #[inline(always)]
     pub fn texture_handle_for_key(&self, key: &str) -> TextureHandle {
-        if let Some(handle) = self.texture_handles.get(key) {
-            return *handle;
-        }
-        if let Some(handle) = self.texture_handles_ascii_ci.get(&ascii_ci_hash(key))
-            && *handle != INVALID_TEXTURE_HANDLE
-        {
-            return *handle;
-        }
-        self.texture_handles
-            .iter()
-            .find_map(|(candidate, handle)| candidate.eq_ignore_ascii_case(key).then_some(*handle))
-            .unwrap_or(INVALID_TEXTURE_HANDLE)
+        texture_handle(key)
     }
 
     pub fn resolve_render_textures(&self, render: &mut RenderList<'_>) {
@@ -321,7 +309,7 @@ impl AssetManager {
             None => {
                 let handle = self.alloc_texture_handle();
                 self.texture_handles.insert(key.clone(), handle);
-                self.note_texture_handle_alias(&key, handle);
+                register_texture_handle(&key, handle);
                 handle
             }
         }
@@ -348,7 +336,7 @@ impl AssetManager {
     pub(crate) fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, GfxTexture)> {
         self.pending_texture_uploads.remove(key);
         let handle = self.texture_handles.remove(key)?;
-        self.rebuild_texture_handle_aliases();
+        remove_texture_handle(key);
         self.uploaded_texture_dims.remove(&handle);
         self.textures
             .remove(&handle)
@@ -519,33 +507,6 @@ impl AssetManager {
                 }
                 Err(e) => {
                     warn!("Failed to create queued GPU texture for key '{key}': {e}");
-                }
-            }
-        }
-    }
-
-    fn note_texture_handle_alias(&mut self, key: &str, handle: TextureHandle) {
-        let folded = ascii_ci_hash(key);
-        match self.texture_handles_ascii_ci.get_mut(&folded) {
-            Some(existing) if *existing != handle => *existing = INVALID_TEXTURE_HANDLE,
-            Some(_) => {}
-            None => {
-                self.texture_handles_ascii_ci.insert(folded, handle);
-            }
-        }
-    }
-
-    fn rebuild_texture_handle_aliases(&mut self) {
-        self.texture_handles_ascii_ci.clear();
-        self.texture_handles_ascii_ci
-            .reserve(self.texture_handles.len());
-        for (key, &handle) in &self.texture_handles {
-            let folded = ascii_ci_hash(key);
-            match self.texture_handles_ascii_ci.get_mut(&folded) {
-                Some(existing) if *existing != handle => *existing = INVALID_TEXTURE_HANDLE,
-                Some(_) => {}
-                None => {
-                    self.texture_handles_ascii_ci.insert(folded, handle);
                 }
             }
         }
