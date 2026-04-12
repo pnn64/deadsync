@@ -38,8 +38,7 @@ enum BannerVideoPrepResult {
 struct PreparedGameplayBackground {
     key: String,
     path: PathBuf,
-    image: RgbaImage,
-    video: Option<video::Player>,
+    player: video::Player,
 }
 
 enum GameplayBackgroundPrepResult {
@@ -72,10 +71,10 @@ pub(crate) struct DynamicMedia {
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
     current_dynamic_background: Option<DynamicBackgroundState>,
+    gameplay_background_keys: HashSet<String>,
     pending_gameplay_background_preps: HashSet<String>,
     gameplay_background_prep_tx: mpsc::Sender<GameplayBackgroundPrepResult>,
     gameplay_background_prep_rx: mpsc::Receiver<GameplayBackgroundPrepResult>,
-    queued_gameplay_background: Option<DynamicBackgroundState>,
     failed_gameplay_background_key: Option<String>,
     current_profile_avatars: [Option<(String, PathBuf)>; 2],
 }
@@ -94,10 +93,10 @@ impl DynamicMedia {
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: std::collections::HashSet::new(),
             current_dynamic_background: None,
+            gameplay_background_keys: HashSet::new(),
             pending_gameplay_background_preps: HashSet::new(),
             gameplay_background_prep_tx,
             gameplay_background_prep_rx,
-            queued_gameplay_background: None,
             failed_gameplay_background_key: None,
             current_profile_avatars: std::array::from_fn(|_| None),
         }
@@ -140,9 +139,7 @@ impl DynamicMedia {
         if let Some(state) = self.current_dynamic_background.take() {
             keys.push(state.key);
         }
-        if let Some(state) = self.queued_gameplay_background.take() {
-            keys.push(state.key);
-        }
+        keys.extend(self.gameplay_background_keys.drain());
         self.pending_gameplay_background_preps.clear();
         self.failed_gameplay_background_key = None;
         self.clear_gameplay_background_results();
@@ -374,18 +371,20 @@ impl DynamicMedia {
     ) -> String {
         const FALLBACK_KEY: &str = "__black";
 
-        self.reset_pending_gameplay_background(assets, backend);
+        self.failed_gameplay_background_key = None;
+        self.reset_pending_gameplay_background();
 
         if let Some(path) = path_opt {
             let animate_video = crate::config::get().show_video_backgrounds;
+            let key = path.to_string_lossy().into_owned();
+            let wants_video = animate_video && dynamic::is_dynamic_video_path(&path);
             if self
                 .current_dynamic_background
                 .as_ref()
                 .is_some_and(|state| {
                     state.path == path
                         && assets.has_texture_key(&state.key)
-                        && (state.video.is_some()
-                            == (animate_video && dynamic::is_dynamic_video_path(&path)))
+                        && (state.video.is_some() == wants_video)
                 })
             {
                 return self
@@ -398,9 +397,31 @@ impl DynamicMedia {
 
             self.destroy_current_dynamic_background(assets, backend);
 
+            if assets.has_texture_key(&key) {
+                let video = if wants_video {
+                    match video::open_player(&path, true) {
+                        Ok(player) => Some(player),
+                        Err(e) => {
+                            warn!(
+                                "Failed to start video background '{}': {e}. Using prewarmed poster.",
+                                path.display()
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+                self.current_dynamic_background = Some(DynamicBackgroundState {
+                    key: key.clone(),
+                    path,
+                    video,
+                });
+                return key;
+            }
+
             if dynamic::is_dynamic_video_path(&path) {
-                let key = path.to_string_lossy().into_owned();
-                if animate_video {
+                if wants_video {
                     match video::open(&path, true) {
                         Ok(video) => match backend
                             .create_texture(&video.poster, SamplerDesc::default())
@@ -525,46 +546,115 @@ impl DynamicMedia {
             self.failed_gameplay_background_key = None;
         }
 
-        if desired_key.is_none() {
-            self.reset_pending_gameplay_background(assets, backend);
+        let Some(path) = desired_path else {
+            self.failed_gameplay_background_key = None;
+            self.reset_pending_gameplay_background();
             self.destroy_current_dynamic_background(assets, backend);
             return Some(FALLBACK_KEY.to_string());
-        }
+        };
         let desired_key = desired_key.unwrap();
+        let wants_video = animate_video && dynamic::is_dynamic_video_path(path);
 
-        let failed = self.drain_gameplay_background_preps(assets, backend, &desired_key);
-        if failed {
-            self.reset_pending_gameplay_background(assets, backend);
-            self.failed_gameplay_background_key = Some(desired_key.clone());
+        if wants_video {
+            self.drain_gameplay_background_preps(&desired_key);
+        } else {
+            self.reset_pending_gameplay_background();
+        }
+
+        if !assets.has_texture_key(&desired_key) {
+            if self.failed_gameplay_background_key.as_deref() != Some(desired_key.as_str()) {
+                warn!(
+                    "Gameplay background '{}' was not prewarmed; using fallback.",
+                    path.display()
+                );
+                self.failed_gameplay_background_key = Some(desired_key.clone());
+            }
             self.destroy_current_dynamic_background(assets, backend);
             return Some(FALLBACK_KEY.to_string());
         }
 
-        self.drop_stale_queued_gameplay_background(assets, backend, &desired_key);
-        if self.promote_queued_gameplay_background(assets, backend, &desired_key) {
-            return Some(desired_key);
-        }
-
-        if self
+        let current_matches = self
             .current_dynamic_background
             .as_ref()
             .is_some_and(|state| {
-                state.key == desired_key && assets.has_uploaded_texture_key(&state.key)
-            })
-            || self
-                .pending_gameplay_background_preps
-                .contains(&desired_key)
-            || self
-                .queued_gameplay_background
-                .as_ref()
-                .is_some_and(|state| state.key == desired_key)
-            || self.failed_gameplay_background_key.as_deref() == Some(desired_key.as_str())
-        {
+                state.path == path
+                    && state.key == desired_key
+                    && (state.video.is_some() == wants_video)
+            });
+        if current_matches {
             return None;
         }
 
-        self.spawn_gameplay_background_prep(desired_path.unwrap(), animate_video);
+        let current_path_matches = self
+            .current_dynamic_background
+            .as_ref()
+            .is_some_and(|state| state.path == path && state.key == desired_key);
+        if current_path_matches && !wants_video {
+            if let Some(state) = self.current_dynamic_background.as_mut() {
+                state.video = None;
+            }
+            return None;
+        }
+        if !current_path_matches {
+            self.destroy_current_dynamic_background(assets, backend);
+            self.current_dynamic_background = Some(DynamicBackgroundState {
+                key: desired_key.clone(),
+                path: path.to_path_buf(),
+                video: None,
+            });
+            if wants_video
+                && !self
+                    .pending_gameplay_background_preps
+                    .contains(&desired_key)
+                && self.failed_gameplay_background_key.as_deref() != Some(desired_key.as_str())
+            {
+                self.spawn_gameplay_background_prep(path);
+            }
+            return Some(desired_key);
+        }
+
+        if wants_video
+            && !self
+                .pending_gameplay_background_preps
+                .contains(&desired_key)
+            && self.failed_gameplay_background_key.as_deref() != Some(desired_key.as_str())
+        {
+            self.spawn_gameplay_background_prep(path);
+        }
         None
+    }
+
+    pub(crate) fn set_gameplay_background_keys<I>(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        keys: I,
+    ) where
+        I: IntoIterator<Item = String>,
+    {
+        let next = keys.into_iter().collect::<HashSet<_>>();
+        let stale = self
+            .gameplay_background_keys
+            .difference(&next)
+            .cloned()
+            .collect::<Vec<_>>();
+        self.gameplay_background_keys = next;
+        for key in stale {
+            self.release_texture_key(assets, backend, key);
+        }
+    }
+
+    pub(crate) fn clear_gameplay_backgrounds(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+    ) {
+        self.destroy_current_dynamic_background(assets, backend);
+        self.reset_pending_gameplay_background();
+        self.failed_gameplay_background_key = None;
+        for key in std::mem::take(&mut self.gameplay_background_keys) {
+            self.release_texture_key(assets, backend, key);
+        }
     }
 
     pub(crate) fn set_profile_avatar(
@@ -667,10 +757,7 @@ impl DynamicMedia {
                 .current_dynamic_background
                 .as_ref()
                 .is_some_and(|state| state.key == key)
-            || self
-                .queued_gameplay_background
-                .as_ref()
-                .is_some_and(|state| state.key == key)
+            || self.gameplay_background_keys.contains(key)
             || self
                 .current_profile_avatars
                 .iter()
@@ -728,15 +815,9 @@ impl DynamicMedia {
         }
     }
 
-    fn reset_pending_gameplay_background(
-        &mut self,
-        assets: &mut AssetManager,
-        backend: &mut Backend,
-    ) {
+    fn reset_pending_gameplay_background(&mut self) {
         self.pending_gameplay_background_preps.clear();
-        self.failed_gameplay_background_key = None;
         self.clear_gameplay_background_results();
-        self.drop_stale_queued_gameplay_background(assets, backend, "");
     }
 
     fn spawn_banner_video_prep(&mut self, path: &Path) {
@@ -753,7 +834,7 @@ impl DynamicMedia {
         });
     }
 
-    fn spawn_gameplay_background_prep(&mut self, path: &Path, animate_video: bool) {
+    fn spawn_gameplay_background_prep(&mut self, path: &Path) {
         let key = path.to_string_lossy().into_owned();
         if !self.pending_gameplay_background_preps.insert(key.clone()) {
             return;
@@ -762,7 +843,7 @@ impl DynamicMedia {
         let path = path.to_path_buf();
         let tx = self.gameplay_background_prep_tx.clone();
         thread::spawn(move || {
-            let result = prepare_gameplay_background(key, path, animate_video);
+            let result = prepare_gameplay_background(key, path);
             let _ = tx.send(result);
         });
     }
@@ -794,13 +875,7 @@ impl DynamicMedia {
         }
     }
 
-    fn drain_gameplay_background_preps(
-        &mut self,
-        assets: &mut AssetManager,
-        backend: &mut Backend,
-        desired_key: &str,
-    ) -> bool {
-        let mut failed = false;
+    fn drain_gameplay_background_preps(&mut self, desired_key: &str) {
         while let Ok(result) = self.gameplay_background_prep_rx.try_recv() {
             match result {
                 GameplayBackgroundPrepResult::Ready(prepared) => {
@@ -808,13 +883,19 @@ impl DynamicMedia {
                     if prepared.key != desired_key {
                         continue;
                     }
-                    self.drop_stale_queued_gameplay_background(assets, backend, desired_key);
-                    assets.queue_texture_upload(prepared.key.clone(), prepared.image);
-                    self.queued_gameplay_background = Some(DynamicBackgroundState {
-                        key: prepared.key,
-                        path: prepared.path,
-                        video: prepared.video,
-                    });
+                    self.failed_gameplay_background_key = None;
+                    if let Some(state) = self.current_dynamic_background.as_mut()
+                        && state.key == prepared.key
+                        && state.path == prepared.path
+                    {
+                        state.video = Some(prepared.player);
+                    } else {
+                        self.current_dynamic_background = Some(DynamicBackgroundState {
+                            key: prepared.key,
+                            path: prepared.path,
+                            video: Some(prepared.player),
+                        });
+                    }
                 }
                 GameplayBackgroundPrepResult::Failed { key, path, msg } => {
                     self.pending_gameplay_background_preps.remove(&key);
@@ -822,64 +903,18 @@ impl DynamicMedia {
                         continue;
                     }
                     warn!(
-                        "Failed to prepare gameplay background '{}': {msg}. Using fallback.",
+                        "Failed to start gameplay background video '{}': {msg}. Keeping prewarmed poster.",
                         path.display()
                     );
-                    failed = true;
+                    self.failed_gameplay_background_key = Some(key);
                 }
             }
         }
-        failed
     }
 
     fn clear_gameplay_background_results(&mut self) {
         while self.gameplay_background_prep_rx.try_recv().is_ok() {}
     }
-
-    fn drop_stale_queued_gameplay_background(
-        &mut self,
-        assets: &mut AssetManager,
-        backend: &mut Backend,
-        desired_key: &str,
-    ) {
-        let stale = self
-            .queued_gameplay_background
-            .as_ref()
-            .is_some_and(|state| state.key != desired_key);
-        if !stale {
-            return;
-        }
-        let Some(state) = self.queued_gameplay_background.take() else {
-            return;
-        };
-        if let Some((handle, texture)) = assets.remove_texture(&state.key) {
-            assets.retire_texture(backend, handle, texture);
-        }
-    }
-
-    fn promote_queued_gameplay_background(
-        &mut self,
-        assets: &mut AssetManager,
-        backend: &mut Backend,
-        desired_key: &str,
-    ) -> bool {
-        let ready = self
-            .queued_gameplay_background
-            .as_ref()
-            .is_some_and(|state| {
-                state.key == desired_key && assets.has_uploaded_texture_key(&state.key)
-            });
-        if !ready {
-            return false;
-        }
-        let Some(state) = self.queued_gameplay_background.take() else {
-            return false;
-        };
-        self.destroy_current_dynamic_background(assets, backend);
-        self.current_dynamic_background = Some(state);
-        true
-    }
-
     fn destroy_current_profile_avatar_for_side(
         &mut self,
         assets: &mut AssetManager,
@@ -926,46 +961,12 @@ fn prepare_banner_video(key: String, path: PathBuf) -> BannerVideoPrepResult {
     })
 }
 
-fn prepare_gameplay_background(
-    key: String,
-    path: PathBuf,
-    animate_video: bool,
-) -> GameplayBackgroundPrepResult {
-    if dynamic::is_dynamic_video_path(&path) {
-        if animate_video {
-            return match video::open(&path, true) {
-                Ok(video) => GameplayBackgroundPrepResult::Ready(PreparedGameplayBackground {
-                    key,
-                    path,
-                    image: video.poster,
-                    video: Some(video.player),
-                }),
-                Err(msg) => GameplayBackgroundPrepResult::Failed { key, path, msg },
-            };
+fn prepare_gameplay_background(key: String, path: PathBuf) -> GameplayBackgroundPrepResult {
+    match video::open_player(&path, true) {
+        Ok(player) => {
+            GameplayBackgroundPrepResult::Ready(PreparedGameplayBackground { key, path, player })
         }
-        return match video::load_poster(&path) {
-            Ok(image) => GameplayBackgroundPrepResult::Ready(PreparedGameplayBackground {
-                key,
-                path,
-                image,
-                video: None,
-            }),
-            Err(msg) => GameplayBackgroundPrepResult::Failed { key, path, msg },
-        };
-    }
-
-    match open_image_fallback(&path) {
-        Ok(image) => GameplayBackgroundPrepResult::Ready(PreparedGameplayBackground {
-            key,
-            path,
-            image: image.to_rgba8(),
-            video: None,
-        }),
-        Err(msg) => GameplayBackgroundPrepResult::Failed {
-            key,
-            path,
-            msg: msg.to_string(),
-        },
+        Err(msg) => GameplayBackgroundPrepResult::Failed { key, path, msg },
     }
 }
 
@@ -1033,17 +1034,13 @@ mod tests {
     }
 
     #[test]
-    fn queued_gameplay_background_counts_as_dynamic_texture_owner() {
+    fn gameplay_background_pool_counts_as_dynamic_texture_owner() {
         let mut assets = AssetManager::new();
         let mut media = DynamicMedia::new();
         let key = "queued-bg.mp4".to_string();
 
         assets.reserve_texture_handle(key.clone());
-        media.queued_gameplay_background = Some(DynamicBackgroundState {
-            key: key.clone(),
-            path: PathBuf::from(&key),
-            video: None,
-        });
+        media.gameplay_background_keys.insert(key.clone());
 
         let removed = media.take_releasable_texture(&mut assets, &key);
 

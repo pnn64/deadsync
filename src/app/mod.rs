@@ -1612,6 +1612,21 @@ fn prewarm_gameplay_assets(
                 .any(|block| uses_repeat_delta(&block.delta))
     }
 
+    fn gameplay_background_paths(state: &gameplay::State) -> Vec<&PathBuf> {
+        let mut paths =
+            Vec::with_capacity(1usize.saturating_add(state.song.background_changes.len()));
+        if let Some(path) = state.song.background_path.as_ref() {
+            paths.push(path);
+        }
+        for change in &state.song.background_changes {
+            let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
+                continue;
+            };
+            paths.push(path);
+        }
+        paths
+    }
+
     let mut seen = HashSet::<String>::with_capacity(256);
     let mut seen_song_lua_fonts = HashSet::<&'static str>::with_capacity(8);
     for noteskin in state.noteskin.iter().flatten() {
@@ -1642,16 +1657,7 @@ fn prewarm_gameplay_assets(
             }
         });
     }
-    if let Some(path) = state.song.background_path.as_ref() {
-        let key = path.to_string_lossy().into_owned();
-        if seen.insert(key) {
-            media_cache::ensure_banner_texture(assets, backend, path);
-        }
-    }
-    for change in &state.song.background_changes {
-        let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
-            continue;
-        };
+    for path in gameplay_background_paths(state) {
         let key = path.to_string_lossy().into_owned();
         if seen.insert(key) {
             media_cache::ensure_banner_texture(assets, backend, path);
@@ -1750,6 +1756,20 @@ fn prewarm_gameplay_text_layout_cache(
         stats.shared_aliases,
         started.elapsed().as_secs_f64() * 1000.0,
     );
+}
+
+fn gameplay_background_keys(state: &gameplay::State) -> Vec<String> {
+    let mut keys = Vec::with_capacity(1usize.saturating_add(state.song.background_changes.len()));
+    if let Some(path) = state.song.background_path.as_ref() {
+        keys.push(path.to_string_lossy().into_owned());
+    }
+    for change in &state.song.background_changes {
+        let crate::game::song::SongBackgroundChangeTarget::File(path) = &change.target else {
+            continue;
+        };
+        keys.push(path.to_string_lossy().into_owned());
+    }
+    keys
 }
 
 fn total_gameplay_elapsed(stages: &[stage_stats::StageSummary]) -> f32 {
@@ -5595,6 +5615,13 @@ impl App {
         target: CurrentScreen,
     ) -> Vec<Command> {
         let mut commands = Vec::new();
+        if prev == CurrentScreen::Gameplay
+            && target != CurrentScreen::Gameplay
+            && let Some(backend) = self.backend.as_mut()
+        {
+            self.dynamic_media
+                .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
+        }
         if target == CurrentScreen::Gameplay {
             crate::engine::audio::stop_music();
             if prev != CurrentScreen::Gameplay {
@@ -5895,6 +5922,11 @@ impl App {
                 let asset_prewarm_started = Instant::now();
                 if let Some(backend) = self.backend.as_mut() {
                     prewarm_gameplay_assets(&mut self.asset_manager, backend, &gs);
+                    self.dynamic_media.set_gameplay_background_keys(
+                        &mut self.asset_manager,
+                        backend,
+                        gameplay_background_keys(&gs),
+                    );
                     if let Some(path) = gs.song.banner_path.as_ref() {
                         media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
                     }
@@ -6823,6 +6855,7 @@ mod tests {
             chart_name: String::new(),
             meter: 9,
             step_artist: String::new(),
+            music_path: None,
             short_hash: hash.to_string(),
             stats: rssp::stats::ArrowStats::default(),
             tech_counts: rssp::TechCounts::default(),

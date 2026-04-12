@@ -945,7 +945,7 @@ checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
 name = "deadsync"
-version = "0.3.355"
+version = "0.3.356"
 dependencies = [
  "alsa",
  "ash",
@@ -2388,7 +2388,7 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 [[package]]
 name = "null-or-die"
 version = "0.0.22"
-source = "git+https://github.com/pnn64/null-or-die?rev=f0f5d01#f0f5d0184c5d15d12b05c912d6f99f8d13537140"
+source = "git+https://github.com/pnn64/null-or-die?branch=main#0d4519a4d77260e7696ce22cbe682f1d18e4a26c"
 dependencies = [
  "clap",
  "lewton",
@@ -3086,9 +3086,9 @@ dependencies = [
 
 [[package]]
 name = "pkg-config"
-version = "0.3.32"
+version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
+checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "plain"
@@ -3558,8 +3558,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.3.66"
-source = "git+https://github.com/pnn64/rssp?rev=ac9cd58#ac9cd583493e3e3c849828155622126e3d44e9ad"
+version = "0.3.67"
+source = "git+https://github.com/pnn64/rssp?branch=main#7eed7bc482854cd9ee7ca000b7a71c150eee83d8"
 dependencies = [
  "png",
  "serde_json",
