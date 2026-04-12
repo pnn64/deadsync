@@ -5674,33 +5674,24 @@ fn compute_end_times_ns(
 }
 
 #[inline(always)]
-fn late_note_resolution_window_s(timing_profile: &TimingProfile) -> f32 {
+fn late_note_resolution_window_ns(timing_profile: &TimingProfile, rate: f32) -> SongTimeNs {
     // Mirror ITG's shared late-resolution window from Player::GetMaxStepDistanceSeconds():
     // late taps, missed hold heads, and avoided mines all wait for the largest
     // relevant gameplay window instead of resolving on their own local window.
-    timing_profile
-        .windows_s
-        .iter()
-        .copied()
-        .fold(0.0_f32, f32::max)
-        .max(timing_profile.mine_window_s)
-        .max(TIMING_WINDOW_SECONDS_HOLD)
-        .max(TIMING_WINDOW_SECONDS_ROLL)
-}
-
-#[inline(always)]
-fn max_step_distance_seconds(timing_profile: &TimingProfile, rate: f32) -> f32 {
-    let rate = if rate.is_finite() && rate > 0.0 {
-        rate
-    } else {
-        1.0
-    };
-    rate * late_note_resolution_window_s(timing_profile) + MAX_INPUT_LATENCY_SECONDS
+    let profile_music_ns = TimingProfileNs::from_profile_scaled(timing_profile, rate);
+    profile_music_ns
+        .windows_ns
+        .into_iter()
+        .fold(0, i64::max)
+        .max(profile_music_ns.mine_window_ns)
+        .max(scaled_song_time_ns(TIMING_WINDOW_SECONDS_HOLD, rate))
+        .max(scaled_song_time_ns(TIMING_WINDOW_SECONDS_ROLL, rate))
 }
 
 #[inline(always)]
 fn max_step_distance_ns(timing_profile: &TimingProfile, rate: f32) -> SongTimeNs {
-    song_time_ns_from_seconds(max_step_distance_seconds(timing_profile, rate))
+    late_note_resolution_window_ns(timing_profile, rate)
+        .saturating_add(song_time_ns_from_seconds(MAX_INPUT_LATENCY_SECONDS))
 }
 
 #[inline(always)]
@@ -13755,8 +13746,9 @@ fn mine_avoid_log_enabled() -> bool {
 
 #[inline(always)]
 fn apply_time_based_mine_avoidance(state: &mut State, music_time_ns: SongTimeNs) {
-    let cutoff_time_ns = music_time_ns.saturating_sub(song_time_ns_from_seconds(
-        max_step_distance_seconds(&state.timing_profile, state.music_rate),
+    let cutoff_time_ns = music_time_ns.saturating_sub(max_step_distance_ns(
+        &state.timing_profile,
+        state.music_rate,
     ));
     let music_time_sec = song_time_ns_to_seconds(music_time_ns);
     let log_mine_avoid = mine_avoid_log_enabled();
@@ -14304,8 +14296,8 @@ mod tests {
         finalize_row_judgment, finalized_row_outcome_for_cached_row,
         frame_stable_display_music_time_ns, handle_input, input_queue_cap, lane_edge_judges_lift,
         lane_edge_judges_tap, lane_edge_matches_note_type, lane_note_window_bounds_ns,
-        lane_press_started, lane_release_finished, late_note_resolution_window_s,
-        live_autoplay_enabled_from_flags, max_step_distance_seconds, mine_window_bounds_ns,
+        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
+        live_autoplay_enabled_from_flags, max_step_distance_ns, mine_window_bounds_ns,
         mutate_timing_arc, next_ready_row_in_lookahead, next_tick_mode, note_hit_eval,
         parse_attack_mods, parse_song_lua_runtime_mods,
         player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, recent_step_tracks,
@@ -15680,14 +15672,21 @@ mod tests {
     fn late_note_resolution_window_matches_itg_max_step_distance_window() {
         let timing_profile = TimingProfile::default_itg_with_fa_plus();
 
-        assert!((late_note_resolution_window_s(&timing_profile) - 0.35).abs() <= 1e-6);
+        assert!(
+            (song_time_ns_to_seconds(late_note_resolution_window_ns(&timing_profile, 1.0)) - 0.35)
+                .abs()
+                <= 1e-6
+        );
     }
 
     #[test]
     fn max_step_distance_scales_with_music_rate() {
         let timing_profile = TimingProfile::default_itg_with_fa_plus();
 
-        assert!((max_step_distance_seconds(&timing_profile, 1.5) - 0.525).abs() <= 1e-6);
+        assert!(
+            (song_time_ns_to_seconds(max_step_distance_ns(&timing_profile, 1.5)) - 0.525).abs()
+                <= 1e-6
+        );
     }
 
     #[test]
