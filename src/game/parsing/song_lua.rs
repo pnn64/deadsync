@@ -2151,7 +2151,8 @@ fn run_guarded_actor_command(
         ))
     });
     active.set(name, Value::Nil)?;
-    result
+    result?;
+    drain_actor_command_queue(lua, actor)
 }
 
 fn actor_active_commands(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
@@ -2161,6 +2162,32 @@ fn actor_active_commands(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let active = lua.create_table()?;
     actor.set("__songlua_active_commands", active.clone())?;
     Ok(active)
+}
+
+fn actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    if let Some(queue) = actor.get::<Option<Table>>("__songlua_command_queue")? {
+        return Ok(queue);
+    }
+    let queue = lua.create_table()?;
+    actor.set("__songlua_command_queue", queue.clone())?;
+    Ok(queue)
+}
+
+fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let queue = actor_command_queue(lua, actor)?;
+    while queue.raw_len() > 0 {
+        let Some(name) = queue.raw_get::<Option<String>>(1)? else {
+            break;
+        };
+        let len = queue.raw_len();
+        for index in 1..len {
+            let value = queue.raw_get::<Value>(index + 1)?;
+            queue.raw_set(index, value)?;
+        }
+        queue.raw_set(len, Value::Nil)?;
+        run_actor_named_command(lua, actor, &format!("{name}Command"))?;
+    }
+    Ok(())
 }
 
 fn actor_debug_label(actor: &Table) -> String {
@@ -3316,8 +3343,15 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let Some(name) = args.get(1).cloned().and_then(read_string) else {
                     return Ok(actor.clone());
                 };
-                let command_name = format!("{name}Command");
-                run_actor_named_command(lua, &actor, &command_name)?;
+                let active = actor_active_commands(lua, &actor)?;
+                if active
+                    .get::<Option<bool>>(format!("{name}Command"))?
+                    .unwrap_or(false)
+                {
+                    return Ok(actor.clone());
+                }
+                let queue = actor_command_queue(lua, &actor)?;
+                queue.raw_set(queue.raw_len() + 1, name)?;
                 Ok(actor.clone())
             }
         })?,
@@ -6033,6 +6067,43 @@ return Def.ActorFrame{
         let compiled = compile_song_lua(
             &entry,
             &SongLuaCompileContext::new(&song_dir, "Set Draw Function"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "true");
+    }
+
+    #[test]
+    fn compile_song_lua_defers_queuecommand_until_after_oncommand() {
+        let song_dir = test_dir("queuecommand-order");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local child_ready = false
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:queuecommand("BeginUpdate")
+    end,
+    BeginUpdateCommand=function(self)
+        mod_actions = {
+            {1, tostring(child_ready), true},
+        }
+    end,
+    Def.ActorFrame{
+        OnCommand=function(self)
+            child_ready = true
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Queuecommand Order"),
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
