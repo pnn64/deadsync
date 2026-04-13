@@ -2205,8 +2205,7 @@ impl ScreensState {
                 }
                 self.evaluation_state.gameplay_elapsed =
                     total_gameplay_elapsed(&session.played_stages);
-                let results_became_ready =
-                    evaluation::update(&mut self.evaluation_state, delta_time);
+                evaluation::update(&mut self.evaluation_state, delta_time);
                 let action = if let Some(delay) = self.evaluation_state.auto_advance_seconds
                     && self.evaluation_state.screen_elapsed >= delay
                     && self.player_options_state.is_some()
@@ -2215,7 +2214,7 @@ impl ScreensState {
                 } else {
                     None
                 };
-                (action, results_became_ready)
+                (action, false)
             }
             CurrentScreen::EvaluationSummary => {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
@@ -2564,15 +2563,12 @@ impl App {
                     == CurrentScreen::Gameplay
                     && self.state.gameplay_offset_save_prompt.is_some();
                 if !gameplay_prompt_active {
-                    let (action, eval_results_ready) = self.state.screens.step_idle(
+                    let (action, _) = self.state.screens.step_idle(
                         delta_time,
                         redraw_started,
                         &self.state.session,
                         &self.asset_manager,
                     );
-                    if eval_results_ready {
-                        self.finalize_entered_evaluation();
-                    }
                     if let Some(action) = action
                         && !matches!(action, ScreenAction::None)
                     {
@@ -6099,12 +6095,19 @@ impl App {
                 |gs| gs.active_color_index,
             );
             self.state.screens.evaluation_state = gameplay_results
-                .map(evaluation::init_deferred)
+                .map(|gs| evaluation::init(Some(gs)))
                 .unwrap_or_else(|| evaluation::init(None));
             self.state.screens.evaluation_state.active_color_index = color_idx;
             self.state.screens.evaluation_state.return_to_course =
                 self.state.session.course_run.is_some();
             self.state.screens.evaluation_state.auto_advance_seconds = None;
+            if let Some(start) = self.state.session.session_start_time {
+                self.state.screens.evaluation_state.session_elapsed =
+                    Instant::now().duration_since(start).as_secs_f32();
+            }
+            self.state.screens.evaluation_state.gameplay_elapsed =
+                total_gameplay_elapsed(&self.state.session.played_stages);
+            self.finalize_entered_evaluation();
         }
 
         if target == CurrentScreen::EvaluationSummary {
