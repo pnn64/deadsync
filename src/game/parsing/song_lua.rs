@@ -3759,6 +3759,50 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "SetSize",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(width) = args.get(1).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let Some(height) = args.get(2).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                capture_block_set_size(lua, &actor, [width, height])?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetWidth",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(width) = args.get(1).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let (_, height) = actor_base_size(&actor)?;
+                capture_block_set_size(lua, &actor, [width, height])?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "SetHeight",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                let Some(height) = args.get(1).cloned().and_then(read_f32) else {
+                    return Ok(actor.clone());
+                };
+                let (width, _) = actor_base_size(&actor)?;
+                capture_block_set_size(lua, &actor, [width, height])?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "z",
         lua.create_function({
             let actor = actor.clone();
@@ -3954,8 +3998,6 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         "fardistz",
         "fov",
         "finishtweening",
-        "SetHeight",
-        "SetWidth",
         "texturetranslate",
         "vanishpoint",
         "wag",
@@ -6178,6 +6220,38 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "10:20");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_actor_set_size_methods() {
+        let song_dir = test_dir("actor-set-size");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        OnCommand=function(self)
+            self:SetSize(10, 20)
+            self:SetWidth(30)
+            self:SetHeight(40)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Actor Set Size"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "30:40");
     }
 
     #[test]
