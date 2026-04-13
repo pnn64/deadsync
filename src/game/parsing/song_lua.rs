@@ -1,4 +1,5 @@
 use crate::engine::present::anim::EffectMode;
+use image::image_dimensions;
 use log::debug;
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::collections::HashMap;
@@ -2079,6 +2080,9 @@ fn make_actor_ctor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Function
             .get::<Option<String>>("__songlua_script_dir")?
         {
             table.set("__songlua_script_dir", script_dir)?;
+        }
+        if let Some(song_dir) = lua.globals().get::<Option<String>>("__songlua_song_dir")? {
+            table.set("__songlua_song_dir", song_dir)?;
         }
         install_actor_methods(lua, &table)?;
         install_actor_metatable(lua, &table)?;
@@ -4184,6 +4188,20 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "GetWidth",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| Ok(actor_base_size(&actor)?.0)
+        })?,
+    )?;
+    actor.set(
+        "GetHeight",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, _args: MultiValue| Ok(actor_base_size(&actor)?.1)
+        })?,
+    )?;
+    actor.set(
         "GetZ",
         lua.create_function({
             let actor = actor.clone();
@@ -4277,6 +4295,54 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
+    if let Some(size) = actor
+        .get::<Option<Table>>("__songlua_state_size")?
+        .and_then(|value| table_vec2(&value))
+    {
+        return Ok((size[0].abs(), size[1].abs()));
+    }
+    if let Some(rect) = actor
+        .get::<Option<Table>>("__songlua_state_stretch_rect")?
+        .and_then(|value| table_vec4(&value))
+    {
+        return Ok(((rect[2] - rect[0]).abs(), (rect[3] - rect[1]).abs()));
+    }
+    if let Some(path) = actor_texture_path(actor)?
+        && let Ok((width, height)) = image_dimensions(&path)
+    {
+        return Ok((width as f32, height as f32));
+    }
+    Ok((1.0, 1.0))
+}
+
+fn actor_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
+    let Some(texture) = actor.get::<Option<String>>("Texture")? else {
+        return Ok(None);
+    };
+    let texture = texture.trim();
+    if texture.is_empty() {
+        return Ok(None);
+    }
+    let raw = Path::new(texture);
+    if raw.is_absolute() && raw.exists() {
+        return Ok(Some(raw.to_path_buf()));
+    }
+    if let Some(script_dir) = actor.get::<Option<String>>("__songlua_script_dir")? {
+        let candidate = Path::new(&script_dir).join(texture);
+        if candidate.exists() {
+            return Ok(Some(candidate));
+        }
+    }
+    if let Some(song_dir) = actor.get::<Option<String>>("__songlua_song_dir")? {
+        let candidate = Path::new(&song_dir).join(texture);
+        if candidate.exists() {
+            return Ok(Some(candidate));
+        }
+    }
+    Ok(None)
+}
+
 fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let mt = lua.create_table()?;
     let actor_clone = actor.clone();
@@ -4314,7 +4380,9 @@ fn merge_actor_concat(_lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()
             &key,
             Value::String(text)
                 if text.to_str().ok().is_some_and(|name|
-                    name == "__songlua_actor_type" || name == "__songlua_script_dir")
+                    name == "__songlua_actor_type"
+                        || name == "__songlua_script_dir"
+                        || name == "__songlua_song_dir")
         ) {
             continue;
         }
@@ -6078,6 +6146,38 @@ return Def.ActorFrame{}
             compiled.messages[0].message,
             "Beginner:Edit:Hard:Difficulty_Hard"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_reads_sprite_image_dimensions() {
+        let song_dir = test_dir("sprite-dimensions");
+        let image_path = song_dir.join("panel.png");
+        image::RgbaImage::new(10, 20).save(&image_path).unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Sprite{
+        Texture="panel.png",
+        OnCommand=function(self)
+            mod_actions = {
+                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+            }
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sprite Dimensions"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "10:20");
     }
 
     #[test]
