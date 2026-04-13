@@ -1,10 +1,11 @@
 use crate::act;
+use crate::engine::audio;
 use crate::engine::input::{InputEvent, RawKeyboardEvent, VirtualAction};
 use crate::engine::present::actors::Actor;
 use crate::engine::present::color;
 use crate::engine::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use crate::game::online::lobbies;
-use winit::keyboard::KeyCode;
+use std::time::{Duration, Instant};
 
 const DIM_ALPHA: f32 = 0.875;
 const OVERLAY_Z: i16 = 1480;
@@ -23,10 +24,185 @@ const ACTION_BUTTON_STEP: f32 = 62.0;
 const STATUS_Y: f32 = -172.0;
 const TITLE_Y: f32 = -192.0;
 const FOOTER_Y: f32 = 188.0;
-const PASSWORD_PROMPT_W: f32 = 430.0;
-const PASSWORD_PROMPT_H: f32 = 170.0;
-const PASSWORD_PROMPT_CURSOR_PERIOD: f32 = 0.8;
-const PASSWORD_PROMPT_MAX_LEN: usize = 32;
+const PASSWORD_PROMPT_W: f32 = 560.0;
+const PASSWORD_PROMPT_H: f32 = 210.0;
+const PASSWORD_PROMPT_VALUE_W: f32 = 430.0;
+const PASSWORD_PROMPT_VALUE_H: f32 = 40.0;
+const PASSWORD_PROMPT_TITLE_Y: f32 = -72.0;
+const PASSWORD_PROMPT_HINT_Y: f32 = -46.0;
+const PASSWORD_PROMPT_VALUE_Y: f32 = -14.0;
+const PASSWORD_PROMPT_WHEEL_Y: f32 = 38.0;
+const PASSWORD_PROMPT_FOOTER_Y: f32 = 90.0;
+const PASSWORD_PROMPT_WHEEL_X_OFF: f32 = 52.0;
+const PASSWORD_WHEEL_CHAR_WIDTH: f32 = 52.0;
+const PASSWORD_WHEEL_NUM_ITEMS: usize = 7;
+const PASSWORD_WHEEL_FOCUS_POS: usize = 3;
+const PASSWORD_WHEEL_SLIDE_SECONDS: f32 = 0.075;
+const PASSWORD_PROMPT_MAX_LEN: usize = lobbies::LOBBY_PASSWORD_MAX_LEN;
+const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
+const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_nanos(66_666_667);
+const PASSWORD_CHARS: [&str; 28] = [
+    "&BACK;", "&OK;", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O",
+    "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+];
+
+#[derive(Clone, Copy, Debug)]
+struct WheelItem {
+    info_index: usize,
+    x: f32,
+    x0: f32,
+    x1: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NavDirection {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Debug)]
+struct PasswordWheel {
+    info_pos: i32,
+    anim_elapsed: Option<f32>,
+    items: [WheelItem; PASSWORD_WHEEL_NUM_ITEMS],
+}
+
+#[inline(always)]
+fn wrap_info_index(info_pos: i32, slot_index1: usize, len: usize) -> usize {
+    let len_i = len as i32;
+    let idx1 = (info_pos - 1 + slot_index1 as i32).rem_euclid(len_i) + 1;
+    (idx1 - 1) as usize
+}
+
+#[inline(always)]
+fn slot_x(slot_index1: usize) -> f32 {
+    let center = (PASSWORD_WHEEL_NUM_ITEMS as f32 / 2.0).ceil();
+    PASSWORD_WHEEL_CHAR_WIDTH * (slot_index1 as f32 - center)
+}
+
+impl PasswordWheel {
+    fn new(starting_char_index1: i32) -> Self {
+        let len = PASSWORD_CHARS.len();
+        let start_pos = starting_char_index1 - PASSWORD_WHEEL_FOCUS_POS as i32;
+
+        Self {
+            info_pos: start_pos,
+            anim_elapsed: None,
+            items: std::array::from_fn(|i| {
+                let slot = i + 1;
+                let x = slot_x(slot);
+                WheelItem {
+                    info_index: wrap_info_index(start_pos, slot, len),
+                    x,
+                    x0: x,
+                    x1: x,
+                }
+            }),
+        }
+    }
+
+    #[inline(always)]
+    fn focused_info_index(&self) -> usize {
+        self.items[PASSWORD_WHEEL_FOCUS_POS - 1].info_index
+    }
+
+    fn finish_tweens(&mut self) {
+        let Some(t) = self.anim_elapsed else {
+            return;
+        };
+        let p = (t / PASSWORD_WHEEL_SLIDE_SECONDS).clamp(0.0, 1.0);
+        for it in &mut self.items {
+            it.x = it.x0 + (it.x1 - it.x0) * p;
+            it.x0 = it.x;
+        }
+        self.anim_elapsed = None;
+    }
+
+    fn start_tween_to_slots(&mut self) {
+        for (i, it) in self.items.iter_mut().enumerate() {
+            let slot = i + 1;
+            it.x0 = it.x;
+            it.x1 = slot_x(slot);
+        }
+        self.anim_elapsed = Some(0.0);
+    }
+
+    fn sync_info_indices(&mut self) {
+        let len = PASSWORD_CHARS.len();
+        for (i, it) in self.items.iter_mut().enumerate() {
+            let slot = i + 1;
+            it.info_index = wrap_info_index(self.info_pos, slot, len);
+        }
+    }
+
+    fn scroll_by(&mut self, dir: i32) {
+        if dir == 0 || PASSWORD_CHARS.is_empty() {
+            return;
+        }
+
+        self.finish_tweens();
+        self.info_pos = self.info_pos.saturating_add(dir);
+        if dir > 0 {
+            self.items.rotate_left(dir as usize);
+        } else {
+            self.items.rotate_right((-dir) as usize);
+        }
+        self.sync_info_indices();
+
+        if dir < 0 {
+            let spawn_x = slot_x(1) - PASSWORD_WHEEL_CHAR_WIDTH;
+            let it = &mut self.items[0];
+            it.x = spawn_x;
+            it.x0 = spawn_x;
+            it.x1 = spawn_x;
+        }
+        self.start_tween_to_slots();
+    }
+
+    fn scroll_to_pos(&mut self, focused_char_index1: i32) {
+        if PASSWORD_CHARS.is_empty() {
+            return;
+        }
+
+        let start_pos = focused_char_index1 - PASSWORD_WHEEL_FOCUS_POS as i32;
+        let shift_amount = start_pos - self.info_pos;
+        if shift_amount == 0 {
+            return;
+        }
+
+        self.finish_tweens();
+        self.info_pos = start_pos;
+
+        if shift_amount.abs() < PASSWORD_WHEEL_NUM_ITEMS as i32 {
+            if shift_amount > 0 {
+                self.items.rotate_left(shift_amount as usize);
+            } else {
+                self.items.rotate_right((-shift_amount) as usize);
+            }
+        }
+
+        self.sync_info_indices();
+        self.start_tween_to_slots();
+    }
+
+    fn update(&mut self, dt: f32) {
+        let Some(t) = &mut self.anim_elapsed else {
+            return;
+        };
+        *t = (*t + dt).max(0.0);
+        let p = (*t / PASSWORD_WHEEL_SLIDE_SECONDS).clamp(0.0, 1.0);
+        for it in &mut self.items {
+            it.x = it.x0 + (it.x1 - it.x0) * p;
+        }
+        if p >= 1.0 {
+            for it in &mut self.items {
+                it.x = it.x1;
+                it.x0 = it.x;
+            }
+            self.anim_elapsed = None;
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 enum PasswordPromptMode {
@@ -38,7 +214,10 @@ enum PasswordPromptMode {
 struct PasswordPromptState {
     mode: PasswordPromptMode,
     value: String,
-    blink_t: f32,
+    wheel: PasswordWheel,
+    nav_key_held_direction: Option<NavDirection>,
+    nav_key_held_since: Option<Instant>,
+    nav_key_last_scrolled_at: Option<Instant>,
 }
 
 #[derive(Clone, Debug)]
@@ -105,7 +284,8 @@ pub fn update_overlay(state: &mut OverlayState, dt: f32) {
     }
 
     if let Some(prompt) = overlay.password_prompt.as_mut() {
-        prompt.blink_t = (prompt.blink_t + dt.max(0.0)) % PASSWORD_PROMPT_CURSOR_PERIOD;
+        update_password_prompt_hold(prompt);
+        prompt.wheel.update(dt);
     }
 
     if overlay.notice_time_left > 0.0 {
@@ -117,18 +297,18 @@ pub fn update_overlay(state: &mut OverlayState, dt: f32) {
 }
 
 pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
-    if !ev.pressed {
-        return InputOutcome::None;
-    }
-
     let OverlayState::Visible(overlay) = state else {
         return InputOutcome::None;
     };
 
-    let snapshot = lobbies::snapshot();
     if overlay.password_prompt.is_some() {
         return handle_password_prompt_input(overlay, ev);
     }
+    if !ev.pressed {
+        return InputOutcome::None;
+    }
+
+    let snapshot = lobbies::snapshot();
     if snapshot.joined_lobby.is_some() {
         match ev.action {
             VirtualAction::p1_left
@@ -282,45 +462,14 @@ pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
 
 pub fn handle_raw_key(
     state: &mut OverlayState,
-    key: Option<&RawKeyboardEvent>,
-    text: Option<&str>,
+    _key: Option<&RawKeyboardEvent>,
+    _text: Option<&str>,
 ) -> InputOutcome {
     let OverlayState::Visible(overlay) = state else {
         return InputOutcome::None;
     };
     if overlay.password_prompt.is_none() {
         return InputOutcome::None;
-    }
-
-    if key.is_some_and(|key| key.pressed) {
-        match key.unwrap().code {
-            KeyCode::Backspace => {
-                clear_notice(overlay);
-                let Some(prompt) = overlay.password_prompt.as_mut() else {
-                    return InputOutcome::None;
-                };
-                password_prompt_backspace(prompt);
-                return InputOutcome::None;
-            }
-            KeyCode::Escape => {
-                clear_notice(overlay);
-                overlay.password_prompt = None;
-                return InputOutcome::None;
-            }
-            KeyCode::Enter | KeyCode::NumpadEnter => {
-                clear_notice(overlay);
-                return submit_password_prompt(overlay);
-            }
-            _ => {}
-        }
-    }
-
-    if let Some(text) = text {
-        clear_notice(overlay);
-        let Some(prompt) = overlay.password_prompt.as_mut() else {
-            return InputOutcome::None;
-        };
-        password_prompt_add_text(prompt, text);
     }
 
     InputOutcome::None
@@ -435,7 +584,12 @@ pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Ve
         &select_color,
     ));
     if let Some(prompt) = overlay.password_prompt.as_ref() {
-        actors.extend(build_password_prompt(center_x, center_y, prompt));
+        actors.extend(build_password_prompt(
+            center_x,
+            center_y,
+            prompt,
+            &select_color,
+        ));
     }
     Some(actors)
 }
@@ -717,12 +871,16 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
     out
 }
 
-fn build_password_prompt(center_x: f32, center_y: f32, prompt: &PasswordPromptState) -> Vec<Actor> {
+fn build_password_prompt(
+    center_x: f32,
+    center_y: f32,
+    prompt: &PasswordPromptState,
+    select_color: &[f32; 4],
+) -> Vec<Actor> {
     let mut actors = Vec::new();
     let title = password_prompt_title(prompt);
     let hint = password_prompt_hint(prompt);
-    let footer = password_prompt_footer();
-    let value = masked_password_value(prompt);
+    let value = password_prompt_value(prompt);
 
     actors.push(act!(quad:
         align(0.5, 0.5):
@@ -738,12 +896,20 @@ fn build_password_prompt(center_x: f32, center_y: f32, prompt: &PasswordPromptSt
         diffuse(0.08, 0.08, 0.08, 0.98):
         z(OVERLAY_Z + 6)
     ));
+    actors.extend(build_box_row(
+        center_x,
+        center_y + PASSWORD_PROMPT_VALUE_Y,
+        PASSWORD_PROMPT_VALUE_W,
+        PASSWORD_PROMPT_VALUE_H,
+        false,
+        select_color,
+    ));
     actors.push(act!(text:
-        font("wendy"):
+        font("miso"):
         settext(title):
         align(0.5, 0.5):
-        xy(center_x, center_y - 50.0):
-        zoom(0.46):
+        xy(center_x, center_y + PASSWORD_PROMPT_TITLE_Y):
+        zoom(0.85):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(OVERLAY_Z + 7):
         horizalign(center)
@@ -752,35 +918,60 @@ fn build_password_prompt(center_x: f32, center_y: f32, prompt: &PasswordPromptSt
         font("miso"):
         settext(hint):
         align(0.5, 0.5):
-        xy(center_x, center_y - 10.0):
-        zoom(0.8):
-        maxwidth(PASSWORD_PROMPT_W - 36.0):
+        xy(center_x, center_y + PASSWORD_PROMPT_HINT_Y):
+        zoom(0.55):
+        maxwidth(PASSWORD_PROMPT_W - 92.0):
         diffuse(0.8, 0.8, 0.8, 1.0):
         z(OVERLAY_Z + 7):
         horizalign(center)
     ));
     actors.push(act!(text:
-        font("miso"):
+        font("wendy_white"):
         settext(value):
         align(0.5, 0.5):
-        xy(center_x, center_y + 26.0):
-        zoom(1.0):
-        maxwidth(PASSWORD_PROMPT_W - 40.0):
-        diffuse(0.4, 1.0, 0.4, 1.0):
+        xy(center_x, center_y + PASSWORD_PROMPT_VALUE_Y):
+        zoom(0.55):
+        maxwidth(PASSWORD_PROMPT_VALUE_W - 40.0):
+        diffuse(
+            if prompt.value.is_empty() { 0.75 } else { 1.0 },
+            if prompt.value.is_empty() { 0.75 } else { 1.0 },
+            if prompt.value.is_empty() { 0.75 } else { 1.0 },
+            1.0
+        ):
         z(OVERLAY_Z + 7):
         horizalign(center)
     ));
-    actors.push(act!(text:
-        font("miso"):
-        settext(footer):
+    actors.push(act!(quad:
         align(0.5, 0.5):
-        xy(center_x, center_y + 58.0):
-        zoom(0.78):
-        maxwidth(PASSWORD_PROMPT_W - 36.0):
-        diffuse(0.75, 0.75, 0.75, 1.0):
-        z(OVERLAY_Z + 7):
-        horizalign(center)
+        xy(center_x, center_y + PASSWORD_PROMPT_WHEEL_Y + 18.0):
+        zoomto(48.0, 2.0):
+        diffuse(select_color[0], select_color[1], select_color[2], 1.0):
+        z(OVERLAY_Z + 7)
     ));
+    for item_index in 1..=PASSWORD_WHEEL_NUM_ITEMS {
+        let item = &prompt.wheel.items[item_index - 1];
+        let visible = item_index < (PASSWORD_WHEEL_NUM_ITEMS - 1);
+        let alpha = if visible { 1.0 } else { 0.0 };
+        let shade = if item_index == PASSWORD_WHEEL_FOCUS_POS {
+            1.0
+        } else {
+            0.3
+        };
+        actors.push(act!(text:
+            font("wendy_white"):
+            settext(PASSWORD_CHARS[item.info_index]):
+            align(0.5, 0.5):
+            xy(
+                center_x + PASSWORD_PROMPT_WHEEL_X_OFF + item.x,
+                center_y + PASSWORD_PROMPT_WHEEL_Y
+            ):
+            zoom(0.5):
+            diffuse(shade, shade, shade, alpha):
+            z(OVERLAY_Z + 7):
+            horizalign(center)
+        ));
+    }
+    push_password_prompt_footer(&mut actors, center_x, center_y);
     actors
 }
 
@@ -815,9 +1006,38 @@ fn build_box_row(
     ]
 }
 
+fn push_password_prompt_footer(actors: &mut Vec<Actor>, center_x: f32, center_y: f32) {
+    let y = center_y + PASSWORD_PROMPT_FOOTER_Y;
+    for (icon_x, text_x, icon, label) in [
+        (-110.0, -90.0, "&BACK;", "remove"),
+        (18.0, 38.0, "&OK;", "confirm"),
+    ] {
+        actors.push(act!(text:
+            font("wendy_white"):
+            settext(icon):
+            align(0.5, 0.5):
+            xy(center_x + icon_x, y):
+            zoom(0.42):
+            diffuse(0.75, 0.75, 0.75, 1.0):
+            z(OVERLAY_Z + 7):
+            horizalign(center)
+        ));
+        actors.push(act!(text:
+            font("miso"):
+            settext(label):
+            align(0.0, 0.5):
+            xy(center_x + text_x, y):
+            zoom(0.6):
+            diffuse(0.75, 0.75, 0.75, 1.0):
+            z(OVERLAY_Z + 7):
+            horizalign(left)
+        ));
+    }
+}
+
 fn close_hint(overlay: &OverlayStateData, snapshot: &lobbies::Snapshot) -> &'static str {
     if overlay.password_prompt.is_some() {
-        return "TYPE TO ENTER PASSWORD    ENTER/START: CONFIRM    ESC/BACK: CANCEL";
+        return "&MENULEFT;/&MENURIGHT;: PICK    &START;: CHOOSE    &BACK;: CANCEL";
     }
     if snapshot.joined_lobby.is_some() {
         "START: SELECT ACTION    BACK/SELECT: CLOSE"
@@ -833,10 +1053,16 @@ fn status_text(overlay: &OverlayStateData, snapshot: &lobbies::Snapshot) -> Stri
     if let Some(prompt) = overlay.password_prompt.as_ref() {
         return match &prompt.mode {
             PasswordPromptMode::CreateLobby => {
-                "Enter a password, or leave it blank for a public lobby.".to_string()
+                format!(
+                    "Choose up to {} uppercase letters, or leave it blank for a public lobby.",
+                    PASSWORD_PROMPT_MAX_LEN
+                )
             }
             PasswordPromptMode::JoinLobby { code } => {
-                format!("Enter the password for lobby {code}.")
+                format!(
+                    "Enter the {}-letter uppercase password for lobby {code}.",
+                    PASSWORD_PROMPT_MAX_LEN
+                )
             }
         };
     }
@@ -926,7 +1152,10 @@ fn begin_password_prompt_create() -> PasswordPromptState {
     PasswordPromptState {
         mode: PasswordPromptMode::CreateLobby,
         value: String::new(),
-        blink_t: 0.0,
+        wheel: PasswordWheel::new(3),
+        nav_key_held_direction: None,
+        nav_key_held_since: None,
+        nav_key_last_scrolled_at: None,
     }
 }
 
@@ -937,22 +1166,161 @@ fn begin_password_prompt_join(code: &str) -> PasswordPromptState {
             code: code.to_string(),
         },
         value: String::new(),
-        blink_t: 0.0,
+        wheel: PasswordWheel::new(3),
+        nav_key_held_direction: None,
+        nav_key_held_since: None,
+        nav_key_last_scrolled_at: None,
     }
+}
+
+fn reset_nav_hold(prompt: &mut PasswordPromptState) {
+    prompt.nav_key_held_direction = None;
+    prompt.nav_key_held_since = None;
+    prompt.nav_key_last_scrolled_at = None;
+}
+
+fn on_nav_press(prompt: &mut PasswordPromptState, dir: NavDirection) {
+    let now = Instant::now();
+    prompt.nav_key_held_direction = Some(dir);
+    prompt.nav_key_held_since = Some(now);
+    prompt.nav_key_last_scrolled_at = Some(now);
+}
+
+fn on_nav_release(prompt: &mut PasswordPromptState, dir: NavDirection) {
+    if prompt.nav_key_held_direction == Some(dir) {
+        reset_nav_hold(prompt);
+    }
+}
+
+fn update_password_prompt_hold(prompt: &mut PasswordPromptState) {
+    let Some(dir) = prompt.nav_key_held_direction else {
+        return;
+    };
+    let Some(held_since) = prompt.nav_key_held_since else {
+        return;
+    };
+    let Some(last_at) = prompt.nav_key_last_scrolled_at else {
+        return;
+    };
+
+    let now = Instant::now();
+    if now.duration_since(held_since) < NAV_INITIAL_HOLD_DELAY {
+        return;
+    }
+    if now.duration_since(last_at) < NAV_REPEAT_SCROLL_INTERVAL {
+        return;
+    }
+
+    let dist = match dir {
+        NavDirection::Left => -1,
+        NavDirection::Right => 1,
+    };
+    prompt.wheel.scroll_by(dist);
+    prompt.nav_key_last_scrolled_at = Some(now);
+    audio::play_sfx("assets/sounds/change.ogg");
 }
 
 fn handle_password_prompt_input(overlay: &mut OverlayStateData, ev: &InputEvent) -> InputOutcome {
     match ev.action {
-        VirtualAction::p1_start | VirtualAction::p2_start => {
-            clear_notice(overlay);
-            submit_password_prompt(overlay)
+        VirtualAction::p1_left
+        | VirtualAction::p1_up
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_left
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_left
+        | VirtualAction::p2_menu_up => {
+            if ev.pressed {
+                clear_notice(overlay);
+            }
+            let Some(prompt) = overlay.password_prompt.as_mut() else {
+                return InputOutcome::None;
+            };
+            if ev.pressed {
+                if prompt.nav_key_held_direction != Some(NavDirection::Left) {
+                    prompt.wheel.scroll_by(-1);
+                    on_nav_press(prompt, NavDirection::Left);
+                    audio::play_sfx("assets/sounds/change.ogg");
+                }
+            } else {
+                on_nav_release(prompt, NavDirection::Left);
+            }
+            InputOutcome::None
         }
-        VirtualAction::p1_back
-        | VirtualAction::p2_back
-        | VirtualAction::p1_select
-        | VirtualAction::p2_select => {
+        VirtualAction::p1_right
+        | VirtualAction::p1_down
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_right
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_right
+        | VirtualAction::p2_menu_down => {
+            if ev.pressed {
+                clear_notice(overlay);
+            }
+            let Some(prompt) = overlay.password_prompt.as_mut() else {
+                return InputOutcome::None;
+            };
+            if ev.pressed {
+                if prompt.nav_key_held_direction != Some(NavDirection::Right) {
+                    prompt.wheel.scroll_by(1);
+                    on_nav_press(prompt, NavDirection::Right);
+                    audio::play_sfx("assets/sounds/change.ogg");
+                }
+            } else {
+                on_nav_release(prompt, NavDirection::Right);
+            }
+            InputOutcome::None
+        }
+        VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
+            clear_notice(overlay);
+            let selected = overlay
+                .password_prompt
+                .as_ref()
+                .map(password_prompt_selected)
+                .unwrap_or("&OK;");
+            match selected {
+                "&OK;" => submit_password_prompt(overlay),
+                "&BACK;" => {
+                    let Some(prompt) = overlay.password_prompt.as_mut() else {
+                        return InputOutcome::None;
+                    };
+                    if password_prompt_backspace(prompt) {
+                        audio::play_sfx("assets/sounds/change_value.ogg");
+                    } else {
+                        audio::play_sfx("assets/sounds/boom.ogg");
+                    }
+                    InputOutcome::None
+                }
+                ch => {
+                    let Some(prompt) = overlay.password_prompt.as_mut() else {
+                        return InputOutcome::None;
+                    };
+                    if password_prompt_add_char(prompt, ch) {
+                        audio::play_sfx("assets/sounds/start.ogg");
+                    } else {
+                        audio::play_sfx("assets/sounds/boom.ogg");
+                    }
+                    InputOutcome::None
+                }
+            }
+        }
+        VirtualAction::p1_select | VirtualAction::p2_select if ev.pressed => {
+            clear_notice(overlay);
+            let Some(prompt) = overlay.password_prompt.as_mut() else {
+                return InputOutcome::None;
+            };
+            if password_prompt_backspace(prompt) {
+                audio::play_sfx("assets/sounds/change_value.ogg");
+            } else {
+                audio::play_sfx("assets/sounds/boom.ogg");
+            }
+            InputOutcome::None
+        }
+        VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
             clear_notice(overlay);
             overlay.password_prompt = None;
+            audio::play_sfx("assets/sounds/change_value.ogg");
             InputOutcome::None
         }
         _ => InputOutcome::None,
@@ -970,9 +1338,13 @@ fn submit_password_prompt(overlay: &mut OverlayStateData) -> InputOutcome {
                 overlay.password_prompt = Some(PasswordPromptState {
                     mode: PasswordPromptMode::JoinLobby { code },
                     value: String::new(),
-                    blink_t: 0.0,
+                    wheel: PasswordWheel::new(3),
+                    nav_key_held_direction: None,
+                    nav_key_held_since: None,
+                    nav_key_last_scrolled_at: None,
                 });
                 set_notice(overlay, "Enter the lobby password.");
+                audio::play_sfx("assets/sounds/boom.ogg");
                 InputOutcome::None
             } else {
                 InputOutcome::JoinRequested {
@@ -984,56 +1356,42 @@ fn submit_password_prompt(overlay: &mut OverlayStateData) -> InputOutcome {
     }
 }
 
-fn password_prompt_add_text(prompt: &mut PasswordPromptState, text: &str) {
-    let mut len = prompt.value.chars().count();
-    for ch in text.chars() {
-        if ch.is_control() {
-            continue;
-        }
-        if len >= PASSWORD_PROMPT_MAX_LEN {
-            break;
-        }
-        prompt.value.push(ch);
-        len += 1;
+#[inline(always)]
+fn password_prompt_selected(prompt: &PasswordPromptState) -> &'static str {
+    PASSWORD_CHARS
+        .get(prompt.wheel.focused_info_index())
+        .copied()
+        .unwrap_or("&OK;")
+}
+
+fn password_prompt_add_char(prompt: &mut PasswordPromptState, ch: &str) -> bool {
+    if prompt.value.len() >= PASSWORD_PROMPT_MAX_LEN {
+        return false;
     }
+    prompt.value.push_str(ch);
+    if prompt.value.len() >= PASSWORD_PROMPT_MAX_LEN {
+        prompt.wheel.scroll_to_pos(2);
+    }
+    true
 }
 
 #[inline(always)]
-fn password_prompt_backspace(prompt: &mut PasswordPromptState) {
-    let _ = prompt.value.pop();
+fn password_prompt_backspace(prompt: &mut PasswordPromptState) -> bool {
+    prompt.value.pop().is_some()
 }
 
 fn password_prompt_title(prompt: &PasswordPromptState) -> String {
     match &prompt.mode {
-        PasswordPromptMode::CreateLobby => "Create Lobby".to_string(),
+        PasswordPromptMode::CreateLobby => "Create Lobby Password (Optional)".to_string(),
         PasswordPromptMode::JoinLobby { code } => format!("Join {code}"),
     }
 }
 
-fn password_prompt_hint(prompt: &PasswordPromptState) -> String {
-    match &prompt.mode {
-        PasswordPromptMode::CreateLobby => {
-            "Type a password to lock the lobby. Leave it blank to create a public lobby."
-                .to_string()
-        }
-        PasswordPromptMode::JoinLobby { .. } => "Type the lobby password.".to_string(),
-    }
-}
-
 #[inline(always)]
-fn password_prompt_footer() -> &'static str {
-    "Keyboard input only. ENTER/START: CONFIRM    ESC/BACK: CANCEL"
+fn password_prompt_hint(_prompt: &PasswordPromptState) -> &'static str {
+    "Use &MENULEFT;/&MENURIGHT; to pick characters, then press &START;."
 }
 
-fn masked_password_value(prompt: &PasswordPromptState) -> String {
-    let cursor = if prompt.blink_t < PASSWORD_PROMPT_CURSOR_PERIOD * 0.5 {
-        "▮"
-    } else {
-        " "
-    };
-    let mut masked = "*".repeat(prompt.value.chars().count());
-    if prompt.value.chars().count() < PASSWORD_PROMPT_MAX_LEN {
-        masked.push_str(cursor);
-    }
-    format!("> {masked}")
+fn password_prompt_value(prompt: &PasswordPromptState) -> String {
+    prompt.value.clone()
 }
