@@ -6280,6 +6280,12 @@ fn handle_categories_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAct
             ScreenAction::None
         }
         select_music_menu::categories::InputOutcome::ToggleCategory(_) => {
+            // Reset selection to the category header (index 0) when entering/leaving a category
+            if let select_music_menu::State::Categories(ref mut cat_state) = state.select_music_menu {
+                cat_state.selected_index = 0;
+                cat_state.prev_selected_index = 0;
+                cat_state.focus_anim_elapsed = select_music_menu::categories::FOCUS_TWEEN_SECONDS;
+            }
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }

@@ -18,7 +18,7 @@ const HINT_TEXT: &str = "PRESS &SELECT; TO CANCEL";
 const WHEEL_SLOTS: usize = 9;
 const FONT_TOP: &str = "miso";
 const FONT_BOTTOM: &str = "wendy";
-const CATEGORY_INDENT: f32 = 16.0;
+const CATEGORY_INDENT: f32 = 8.0;
 
 pub const FOCUS_TWEEN_SECONDS: f32 = 0.15;
 
@@ -111,6 +111,34 @@ pub fn build_entries(
     items_styles: Option<&[Item]>,
     categories: &CategoryState,
 ) -> Vec<Entry> {
+    // If a category is expanded, show ONLY that category header + its items
+    // (wrapping/repeating in the wheel). This matches Simply Love's behavior.
+    if categories.is_expanded(Category::Sorts) {
+        let mut entries = vec![Entry::CategoryHeader { category: Category::Sorts, label: "Sorts..." }];
+        for item in items_sorts { entries.push(Entry::CategoryItem(*item)); }
+        return entries;
+    }
+    if categories.is_expanded(Category::Profile) {
+        if let Some(profile_items) = items_profile {
+            let mut entries = vec![Entry::CategoryHeader { category: Category::Profile, label: "Profile..." }];
+            for item in profile_items { entries.push(Entry::CategoryItem(*item)); }
+            return entries;
+        }
+    }
+    if categories.is_expanded(Category::Advanced) {
+        let mut entries = vec![Entry::CategoryHeader { category: Category::Advanced, label: "Advanced..." }];
+        for item in items_advanced { entries.push(Entry::CategoryItem(*item)); }
+        return entries;
+    }
+    if categories.is_expanded(Category::Styles) {
+        if let Some(style_items) = items_styles {
+            let mut entries = vec![Entry::CategoryHeader { category: Category::Styles, label: "Styles..." }];
+            for item in style_items { entries.push(Entry::CategoryItem(*item)); }
+            return entries;
+        }
+    }
+
+    // No category expanded — show all standalone items + collapsed category headers
     let mut entries = Vec::new();
 
     for item in items_standalone {
@@ -121,44 +149,24 @@ pub fn build_entries(
         category: Category::Sorts,
         label: "Sorts...",
     });
-    if categories.is_expanded(Category::Sorts) {
-        for item in items_sorts {
-            entries.push(Entry::CategoryItem(*item));
-        }
-    }
 
-    if let Some(profile_items) = items_profile {
+    if items_profile.is_some() {
         entries.push(Entry::CategoryHeader {
             category: Category::Profile,
             label: "Profile...",
         });
-        if categories.is_expanded(Category::Profile) {
-            for item in profile_items {
-                entries.push(Entry::CategoryItem(*item));
-            }
-        }
     }
 
     entries.push(Entry::CategoryHeader {
         category: Category::Advanced,
         label: "Advanced...",
     });
-    if categories.is_expanded(Category::Advanced) {
-        for item in items_advanced {
-            entries.push(Entry::CategoryItem(*item));
-        }
-    }
 
-    if let Some(style_items) = items_styles {
+    if items_styles.is_some() {
         entries.push(Entry::CategoryHeader {
             category: Category::Styles,
             label: "Styles...",
         });
-        if categories.is_expanded(Category::Styles) {
-            for item in style_items {
-                entries.push(Entry::CategoryItem(*item));
-            }
-        }
     }
 
     entries
@@ -372,19 +380,25 @@ fn render_row(
         ));
     }
 
-    // Only render text/icons if most of the row is visible
-    if vis_h < ITEM_SPACING * 0.6 {
-        return;
-    }
+    // Render text/icons at the row's original center position (may extend beyond box)
+    let icon_size = 128.0 * 0.20; // folder icon rendered size
+    let icon_top = y - icon_size * 0.5;
+    let icon_bot = y + icon_size * 0.5;
+    let box_top = cy - half_height;
+    let box_bot = cy + half_height;
+    let crop_top = if icon_top < box_top { (box_top - icon_top) / icon_size } else { 0.0 };
+    let crop_bottom = if icon_bot > box_bot { (icon_bot - box_bot) / icon_size } else { 0.0 };
 
     match entry {
         Entry::CategoryHeader { label, .. } => {
             let tint = lerp_scalar(TEXT_UNFOCUSED_GRAY, TEXT_FOCUSED_WHITE, focus_lerp);
-            // Folder icon (128px source, ~26px display at 0.20 zoom)
+            // Folder icon — clipped to box boundary
             actors.push(act!(sprite("folder-solid.png"):
                 align(0.0, 0.5):
                 xy(left_x - 6.0, y):
                 zoom(0.20):
+                croptop(crop_top):
+                cropbottom(crop_bottom):
                 diffuse(tint, tint, tint, row_alpha):
                 z(1454)
             ));
