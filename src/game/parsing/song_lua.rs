@@ -1893,7 +1893,51 @@ fn install_def(lua: &Lua) -> mlua::Result<()> {
         def.set(name, make_actor_ctor(lua, actor_type)?)?;
     }
     globals.set("Def", def)?;
+    globals.set("ActorFrame", create_actorframe_class_table(lua)?)?;
     Ok(())
+}
+
+fn create_actorframe_class_table(lua: &Lua) -> mlua::Result<Table> {
+    let class = lua.create_table()?;
+    class.set(
+        "fardistz",
+        lua.create_function(|_, args: MultiValue| {
+            let Some(actor) = args.front().and_then(|value| match value {
+                Value::Table(table) => Some(table.clone()),
+                _ => None,
+            }) else {
+                return Ok(Value::Nil);
+            };
+            let Value::Function(method) = actor.get::<Value>("fardistz")? else {
+                return Ok(Value::Nil);
+            };
+            let _ = method.call::<Value>(args)?;
+            Ok(Value::Table(actor))
+        })?,
+    )?;
+    class.set(
+        "GetChildAt",
+        lua.create_function(|_, args: MultiValue| {
+            let Some(actor) = args.front().and_then(|value| match value {
+                Value::Table(table) => Some(table.clone()),
+                _ => None,
+            }) else {
+                return Ok(Value::Nil);
+            };
+            let Some(index) = args.get(1).and_then(|value| match value {
+                Value::Integer(value) if *value >= 1 => Some(*value as usize),
+                Value::Number(value) if value.is_finite() && *value >= 1.0 => Some(*value as usize),
+                _ => None,
+            }) else {
+                return Ok(Value::Nil);
+            };
+            Ok(match actor.raw_get::<Option<Value>>(index)? {
+                Some(Value::Table(child)) => Value::Table(child),
+                _ => Value::Nil,
+            })
+        })?,
+    )?;
+    Ok(class)
 }
 
 fn make_actor_ctor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Function> {
@@ -3818,6 +3862,27 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let child = create_named_child_actor(lua, &actor, &name)?;
                 children.set(name.as_str(), child.clone())?;
                 Ok(Value::Table(child))
+            }
+        })?,
+    )?;
+    actor.set(
+        "RunCommandsOnChildren",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                let Some(command) = method_arg(&args, 0).cloned().and_then(|value| match value {
+                    Value::Function(function) => Some(function),
+                    _ => None,
+                }) else {
+                    return Ok(actor.clone());
+                };
+                for index in 1..=actor.raw_len() {
+                    let Some(Value::Table(child)) = actor.raw_get::<Option<Value>>(index)? else {
+                        continue;
+                    };
+                    let _ = command.call::<Value>(child)?;
+                }
+                Ok(actor.clone())
             }
         })?,
     )?;
@@ -5841,6 +5906,52 @@ return Def.ActorFrame{}
             compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Fileman")).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "table:0");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_actorframe_class_methods() {
+        let song_dir = test_dir("actorframe-class");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local child = Def.ActorFrame{Name="child"}
+local root = Def.ActorFrame{
+    child,
+    Def.ActorFrame{
+        InitCommand=function(self)
+            local getchildat = ActorFrame.GetChildAt or function(actor, index)
+                local res = nil
+                actor:RunCommandsOnChildren(function(candidate)
+                    if candidate:GetParent() == actor and res == nil then
+                        index = index - 1
+                        if index == 0 then
+                            res = candidate
+                        end
+                    end
+                end)
+                return res
+            end
+            local picked = getchildat(self, 1)
+            mod_actions = {
+                {1, string.format("%s:%s", tostring(ActorFrame.fardistz ~= nil), picked and picked:GetName() or "nil"), true},
+            }
+        end,
+    },
+}
+
+return root
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "ActorFrame Class"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "true:child");
     }
 
     #[test]
