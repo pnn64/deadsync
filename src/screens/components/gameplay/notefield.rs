@@ -2655,36 +2655,6 @@ fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
 }
 
 #[inline(always)]
-fn note_window_bounds_by_time_ns(
-    note_times_ns: &[SongTimeNs],
-    start: usize,
-    end: usize,
-    min_time_ns: SongTimeNs,
-    max_time_ns: SongTimeNs,
-) -> (usize, usize) {
-    let note_times_ns = &note_times_ns[start..end];
-    (
-        start + note_times_ns.partition_point(|&note_time_ns| note_time_ns < min_time_ns),
-        start + note_times_ns.partition_point(|&note_time_ns| note_time_ns <= max_time_ns),
-    )
-}
-
-#[inline(always)]
-fn note_window_bounds_by_display_beat(
-    note_display_beats: &[f32],
-    start: usize,
-    end: usize,
-    min_beat: f32,
-    max_beat: f32,
-) -> (usize, usize) {
-    let note_display_beats = &note_display_beats[start..end];
-    (
-        start + note_display_beats.partition_point(|beat| *beat < min_beat),
-        start + note_display_beats.partition_point(|beat| *beat <= max_beat),
-    )
-}
-
-#[inline(always)]
 fn lane_window_bounds_by_time_ns(
     note_indices: &[usize],
     note_times_ns: &[SongTimeNs],
@@ -2708,6 +2678,53 @@ fn lane_window_bounds_by_display_beat(
         note_indices.partition_point(|&note_index| note_display_beats[note_index] < min_beat),
         note_indices.partition_point(|&note_index| note_display_beats[note_index] <= max_beat),
     )
+}
+
+#[inline(always)]
+fn lane_hold_window_bounds_by_time_ns(
+    hold_indices: &[usize],
+    note_times_ns: &[SongTimeNs],
+    hold_end_time_ns: &[Option<SongTimeNs>],
+    min_time_ns: SongTimeNs,
+    max_time_ns: SongTimeNs,
+) -> (usize, usize) {
+    let (mut start, end) =
+        lane_window_bounds_by_time_ns(hold_indices, note_times_ns, min_time_ns, max_time_ns);
+    // Hold-only lane lists are sorted by head time. For valid charts, same-lane
+    // hold bodies do not overlap, so walking backward until the previous hold no
+    // longer reaches the visible boundary matches ITG's inclusive hold range.
+    while start > 0 {
+        let prev_note_index = hold_indices[start - 1];
+        let prev_end_time_ns =
+            hold_end_time_ns[prev_note_index].unwrap_or(note_times_ns[prev_note_index]);
+        if prev_end_time_ns < min_time_ns {
+            break;
+        }
+        start -= 1;
+    }
+    (start, end)
+}
+
+#[inline(always)]
+fn lane_hold_window_bounds_by_display_beat(
+    hold_indices: &[usize],
+    note_display_beats: &[f32],
+    hold_end_display_beats: &[Option<f32>],
+    min_beat: f32,
+    max_beat: f32,
+) -> (usize, usize) {
+    let (mut start, end) =
+        lane_window_bounds_by_display_beat(hold_indices, note_display_beats, min_beat, max_beat);
+    while start > 0 {
+        let prev_note_index = hold_indices[start - 1];
+        let prev_end_beat =
+            hold_end_display_beats[prev_note_index].unwrap_or(note_display_beats[prev_note_index]);
+        if prev_end_beat < min_beat {
+            break;
+        }
+        start -= 1;
+    }
+    (start, end)
 }
 
 pub fn build_bundles(
@@ -3096,26 +3113,6 @@ pub fn build_bundles(
             }
             ScrollSpeedSetting::CMod(_) => None,
         };
-        let player_note_window_bounds =
-            if let Some((min_time_ns, max_time_ns)) = visible_time_range_ns {
-                note_window_bounds_by_time_ns(
-                    &state.note_time_cache_ns,
-                    note_start,
-                    note_end,
-                    min_time_ns,
-                    max_time_ns,
-                )
-            } else if let Some((min_beat, max_beat)) = visible_display_beat_range {
-                note_window_bounds_by_display_beat(
-                    &state.note_display_beat_cache,
-                    note_start,
-                    note_end,
-                    min_beat,
-                    max_beat,
-                )
-            } else {
-                (note_start, note_end)
-            };
         let lane_note_window_bounds = |note_indices: &[usize]| -> (usize, usize) {
             if let Some((min_time_ns, max_time_ns)) = visible_time_range_ns {
                 lane_window_bounds_by_time_ns(
@@ -3133,6 +3130,27 @@ pub fn build_bundles(
                 )
             } else {
                 (0, note_indices.len())
+            }
+        };
+        let lane_hold_window_bounds = |hold_indices: &[usize]| -> (usize, usize) {
+            if let Some((min_time_ns, max_time_ns)) = visible_time_range_ns {
+                lane_hold_window_bounds_by_time_ns(
+                    hold_indices,
+                    &state.note_time_cache_ns,
+                    &state.hold_end_time_cache_ns,
+                    min_time_ns,
+                    max_time_ns,
+                )
+            } else if let Some((min_beat, max_beat)) = visible_display_beat_range {
+                lane_hold_window_bounds_by_display_beat(
+                    hold_indices,
+                    &state.note_display_beat_cache,
+                    &state.hold_end_display_beat_cache,
+                    min_beat,
+                    max_beat,
+                )
+            } else {
+                (0, hold_indices.len())
             }
         };
         let tipsy_y_for_col =
@@ -3871,8 +3889,42 @@ pub fn build_bundles(
                 }
             }
         }
-        // Only consider notes that are currently in or near the visible window.
-        let (min_visible_index, max_visible_index) = player_note_window_bounds;
+        // Build hold visibility from hold-only lane ranges so long holds whose
+        // heads are already off-screen still stay drawable while their bodies
+        // overlap the visible window.
+        let lane_hold_visible_bounds: [(usize, usize); MAX_COLS] = from_fn(|i| {
+            if i >= num_cols {
+                return (0, 0);
+            }
+            lane_hold_window_bounds(&state.lane_hold_indices[col_start + i])
+        });
+        let mut hold_visible_range: Option<(usize, usize)> = None;
+        for (local_col, &(lane_start, lane_end)) in
+            lane_hold_visible_bounds[..num_cols].iter().enumerate()
+        {
+            if lane_start >= lane_end {
+                continue;
+            }
+            let lane_hold_indices = &state.lane_hold_indices[col_start + local_col];
+            let lane_min_note_index = lane_hold_indices[lane_start];
+            let lane_max_note_index = lane_hold_indices[lane_end - 1].saturating_add(1);
+            hold_visible_range = Some(match hold_visible_range {
+                Some((curr_min, curr_max)) => (
+                    curr_min.min(lane_min_note_index),
+                    curr_max.max(lane_max_note_index),
+                ),
+                None => (lane_min_note_index, lane_max_note_index),
+            });
+        }
+        let hold_visible_in_lane = |note_index: usize, local_col: usize| -> bool {
+            let (lane_start, lane_end) = lane_hold_visible_bounds[local_col];
+            if lane_start >= lane_end {
+                return false;
+            }
+            state.lane_hold_indices[col_start + local_col][lane_start..lane_end]
+                .binary_search(&note_index)
+                .is_ok()
+        };
         let extra_hold_indices = state
             .active_holds
             .iter()
@@ -3881,18 +3933,40 @@ pub fn build_bundles(
             .filter(|&idx| {
                 idx >= note_start
                     && idx < note_end
-                    && (idx < min_visible_index || idx >= max_visible_index)
+                    && hold_visible_range
+                        .map(|(min_visible_index, max_visible_index)| {
+                            idx < min_visible_index || idx >= max_visible_index
+                        })
+                        .unwrap_or(true)
             });
 
         // Render holds in the visible window, plus any active/decaying holds outside it.
         // This avoids per-frame allocations and hashing for deduping.
-        for note_index in (min_visible_index..max_visible_index).chain(extra_hold_indices) {
+        for note_index in hold_visible_range
+            .into_iter()
+            .flat_map(|(min_visible_index, max_visible_index)| min_visible_index..max_visible_index)
+            .chain(extra_hold_indices)
+        {
             let note = &state.notes[note_index];
             if note.column < col_start || note.column >= col_end {
                 continue;
             }
             let local_col = note.column - col_start;
             if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                continue;
+            }
+            let is_active_extra = state.active_holds[note.column]
+                .as_ref()
+                .is_some_and(|active| active.note_index == note_index);
+            let is_decaying_extra = state
+                .hold_decay_active
+                .get(note_index)
+                .copied()
+                .unwrap_or(false);
+            if !hold_visible_in_lane(note_index, local_col)
+                && !is_active_extra
+                && !is_decaying_extra
+            {
                 continue;
             }
             let Some(hold) = &note.hold else {
@@ -7062,7 +7136,8 @@ mod tests {
         actual_grade_points_with_provisional, add_provisional_early_bad_counts_to_ex_score,
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hallway_judgment_zoom, hold_head_render_flags, hold_segment_pose,
-        hold_tail_cap_bounds, hud_layout_ys, hud_y, let_go_head_beat,
+        hold_tail_cap_bounds, hud_layout_ys, hud_y, lane_hold_window_bounds_by_display_beat,
+        lane_hold_window_bounds_by_time_ns, let_go_head_beat,
         maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size, note_world_z,
         note_x_extra, offset_center, predictive_itg_percents, push_transform_parts,
         receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tipsy_y_extra,
@@ -7191,6 +7266,40 @@ mod tests {
     fn let_go_head_beat_uses_last_held_once_visible_clock_has_caught_up() {
         let beat = let_go_head_beat(100.0, 108.0, 102.0, 103.0);
         assert!((beat - 102.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn lane_hold_window_by_time_includes_previous_overlapping_hold() {
+        let hold_indices = [0usize, 1, 2];
+        let note_times_ns = [10i64, 26, 40];
+        let hold_end_time_ns = [Some(25i64), Some(35), Some(60)];
+        assert_eq!(
+            lane_hold_window_bounds_by_time_ns(
+                &hold_indices,
+                &note_times_ns,
+                &hold_end_time_ns,
+                30,
+                45,
+            ),
+            (1, 3)
+        );
+    }
+
+    #[test]
+    fn lane_hold_window_by_display_beat_includes_previous_overlapping_hold() {
+        let hold_indices = [0usize, 1, 2];
+        let note_display_beats = [10.0f32, 26.0, 40.0];
+        let hold_end_display_beats = [Some(25.0f32), Some(35.0), Some(60.0)];
+        assert_eq!(
+            lane_hold_window_bounds_by_display_beat(
+                &hold_indices,
+                &note_display_beats,
+                &hold_end_display_beats,
+                30.0,
+                45.0,
+            ),
+            (1, 3)
+        );
     }
 
     #[test]

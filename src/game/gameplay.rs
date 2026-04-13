@@ -6858,6 +6858,7 @@ pub struct State {
     display_clock: FrameStableDisplayClock,
     display_clock_diag: DisplayClockDiagRing,
     pub lane_note_indices: [Vec<usize>; MAX_COLS],
+    pub lane_hold_indices: [Vec<usize>; MAX_COLS],
     pub row_entry_ranges: [(usize, usize); MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     pub note_time_cache_ns: Vec<SongTimeNs>,
@@ -7475,9 +7476,23 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             debug_assert!(note_index < state.notes.len());
             debug_assert_eq!(state.notes[note_index].column, col);
         }
+        debug_assert!(state.lane_hold_indices[col].windows(2).all(|pair| {
+            let left = pair[0];
+            let right = pair[1];
+            left < right && state.note_time_cache_ns[left] <= state.note_time_cache_ns[right]
+        }));
+        for &note_index in &state.lane_hold_indices[col] {
+            debug_assert!(note_index < state.notes.len());
+            debug_assert_eq!(state.notes[note_index].column, col);
+            debug_assert!(matches!(
+                state.notes[note_index].note_type,
+                NoteType::Hold | NoteType::Roll
+            ));
+        }
     }
     for col in state.num_cols..MAX_COLS {
         debug_assert!(state.lane_note_indices[col].is_empty());
+        debug_assert!(state.lane_hold_indices[col].is_empty());
     }
     let mut lane_positions = [0usize; MAX_COLS];
     for (note_index, note) in state.notes.iter().enumerate() {
@@ -9730,11 +9745,15 @@ pub fn init(
     }
     let next_mine_ix_cursor: [usize; MAX_PLAYERS] = [0; MAX_PLAYERS];
     let mut lane_note_counts = [0usize; MAX_COLS];
+    let mut lane_hold_counts = [0usize; MAX_COLS];
     let mut replay_cells = 0usize;
     for note in &notes {
         let col = note.column;
         if col < num_cols && col < MAX_COLS {
             lane_note_counts[col] = lane_note_counts[col].saturating_add(1);
+            if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                lane_hold_counts[col] = lane_hold_counts[col].saturating_add(1);
+            }
         }
         if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
             replay_cells = replay_cells.saturating_add(1);
@@ -9742,10 +9761,15 @@ pub fn init(
     }
     let mut lane_note_indices: [Vec<usize>; MAX_COLS] =
         std::array::from_fn(|col| Vec::with_capacity(lane_note_counts[col]));
+    let mut lane_hold_indices: [Vec<usize>; MAX_COLS] =
+        std::array::from_fn(|col| Vec::with_capacity(lane_hold_counts[col]));
     for (note_index, note) in notes.iter().enumerate() {
         let col = note.column;
         if col < num_cols && col < MAX_COLS {
             lane_note_indices[col].push(note_index);
+            if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                lane_hold_indices[col].push(note_index);
+            }
         }
     }
     let pending_edges_capacity = input_queue_cap(num_cols);
@@ -10082,6 +10106,7 @@ pub fn init(
         display_clock: FrameStableDisplayClock::new(song_time_ns_from_seconds(init_music_time)),
         display_clock_diag: DisplayClockDiagRing::new(),
         lane_note_indices,
+        lane_hold_indices,
         row_entry_ranges,
         judged_row_cursor: row_entry_range_start,
         note_time_cache_ns,
@@ -13527,14 +13552,16 @@ fn decay_let_go_hold_life(state: &mut State) {
         };
         if window <= 0.0 {
             hold.life = 0.0;
-            i += 1;
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
             continue;
         }
         let start_time = hold.let_go_started_at.unwrap();
         let base_life = hold.let_go_starting_life.clamp(0.0, MAX_HOLD_LIFE);
         if base_life <= 0.0 {
             hold.life = 0.0;
-            i += 1;
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
             continue;
         }
         let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -13546,6 +13573,11 @@ fn decay_let_go_hold_life(state: &mut State) {
             song_time_ns_delta_seconds(state.current_music_time_ns, start_time).max(0.0);
         let elapsed_real = elapsed_music / rate;
         hold.life = (base_life - elapsed_real / window).max(0.0);
+        if hold.life <= f32::EPSILON {
+            state.hold_decay_active[note_index] = false;
+            state.decaying_hold_indices.swap_remove(i);
+            continue;
+        }
         i += 1;
     }
 }
