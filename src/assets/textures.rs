@@ -785,6 +785,10 @@ impl AssetManager {
             ("circle.png".to_string(), "circle.png".to_string()),
             ("swoosh.png".to_string(), "swoosh.png".to_string()),
             ("heart.png".to_string(), "heart.png".to_string()),
+            (
+                "fave-icon.png".to_string(),
+                "fave-icon.png".to_string(),
+            ),
             ("GrooveStats.png".to_string(), "GrooveStats.png".to_string()),
             ("arrowcloud.png".to_string(), "arrowcloud.png".to_string()),
             ("ITL.png".to_string(), "ITL.png".to_string()),
