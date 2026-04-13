@@ -3516,6 +3516,20 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         })?,
     )?;
     actor.set(
+        "SetDrawFunction",
+        lua.create_function({
+            let actor = actor.clone();
+            move |_, args: MultiValue| {
+                if let Some(Value::Function(function)) = args.get(1).cloned() {
+                    actor.set("__songlua_draw_function", function)?;
+                } else {
+                    actor.set("__songlua_draw_function", Value::Nil)?;
+                }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
         "cropbottom",
         make_actor_capture_f32_method(lua, actor, "cropbottom", None)?,
     )?;
@@ -5988,6 +6002,41 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.info.unsupported_function_eases, 1);
+    }
+
+    #[test]
+    fn compile_song_lua_accepts_set_draw_function() {
+        let song_dir = test_dir("set-draw-function");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local function draw_fn(self)
+    self:visible(true)
+end
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:SetDrawFunction(draw_fn)
+        self:queuecommand("Ready")
+    end,
+    ReadyCommand=function(self)
+        mod_actions = {
+            {1, tostring(self ~= nil), true},
+        }
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Set Draw Function"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "true");
     }
 
     #[test]
