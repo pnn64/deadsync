@@ -86,7 +86,7 @@ fn build_body_lines(
 
     let show_ready_icons = current_screen_name.eq_ignore_ascii_case("ScreenGameplay")
         && !joined.players.is_empty()
-        && !joined.players.iter().all(|player| player.ready);
+        && !joined.players.iter().all(gameplay_player_ready);
 
     for (display_index, (_, player)) in ordered_players.into_iter().enumerate() {
         if display_index > 0 {
@@ -98,7 +98,11 @@ fn build_body_lines(
             truncate_text(player.label.as_str(), 22)
         );
         if show_ready_icons {
-            player_line.push_str(if player.ready { " [✔]" } else { " [ ]" });
+            player_line.push_str(if gameplay_player_ready(player) {
+                " [✔]"
+            } else {
+                " [❌]"
+            });
         }
         if !player.screen_name.eq_ignore_ascii_case(current_screen_name) {
             player_line.push_str(" - in ");
@@ -166,6 +170,11 @@ fn ordered_players(joined: &lobbies::JoinedLobby) -> Vec<(usize, &lobbies::Lobby
 fn is_score_screen(screen_name: &str) -> bool {
     screen_name.eq_ignore_ascii_case("ScreenGameplay")
         || screen_name.eq_ignore_ascii_case("ScreenEvaluationStage")
+}
+
+#[inline(always)]
+fn gameplay_player_ready(player: &lobbies::LobbyPlayer) -> bool {
+    player.screen_name.eq_ignore_ascii_case("ScreenGameplay") && player.ready
 }
 
 fn display_screen_name(screen_name: &str) -> String {
@@ -247,4 +256,57 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
     out.extend(text.chars().take(keep));
     out.push_str("...");
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_player(label: &str, screen_name: &str, ready: bool) -> lobbies::LobbyPlayer {
+        lobbies::LobbyPlayer {
+            label: label.to_string(),
+            ready,
+            screen_name: screen_name.to_string(),
+            judgments: None,
+            score: None,
+            ex_score: None,
+        }
+    }
+
+    fn test_joined(players: Vec<lobbies::LobbyPlayer>) -> lobbies::JoinedLobby {
+        lobbies::JoinedLobby {
+            code: "ABCD".to_string(),
+            players,
+            song_info: None,
+        }
+    }
+
+    #[test]
+    fn gameplay_panel_treats_non_gameplay_players_as_not_ready() {
+        let joined = test_joined(vec![
+            test_player("Local", "ScreenGameplay", true),
+            test_player("Remote", "ScreenSelectMusic", true),
+        ]);
+
+        let lines = build_body_lines(&joined, "ScreenGameplay", false, None);
+
+        assert!(lines.iter().any(|line| line.contains("1. Local [✔]")));
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("2. Remote [❌] - in SelectMusic"))
+        );
+    }
+
+    #[test]
+    fn gameplay_panel_uses_cross_for_unready_gameplay_players() {
+        let joined = test_joined(vec![
+            test_player("Local", "ScreenGameplay", true),
+            test_player("Remote", "ScreenGameplay", false),
+        ]);
+
+        let lines = build_body_lines(&joined, "ScreenGameplay", false, None);
+
+        assert!(lines.iter().any(|line| line.contains("2. Remote [❌]")));
+    }
 }
