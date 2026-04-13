@@ -646,6 +646,7 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     }
     globals.set("unpack", table.get::<Value>("unpack")?)?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
+    globals.set("debug", create_debug_table(lua)?)?;
     globals.set(
         "color",
         lua.create_function(|lua, args: MultiValue| {
@@ -752,6 +753,43 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     )?;
     globals.set("FILEMAN", fileman)?;
     Ok(())
+}
+
+fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
+    let debug = lua.create_table()?;
+    debug.set(
+        "getinfo",
+        lua.create_function(|lua, args: MultiValue| {
+            let globals = lua.globals();
+            let source = globals
+                .get::<Option<String>>("__songlua_current_script_path")?
+                .map(|path| format!("@{path}"))
+                .unwrap_or_else(|| "=[songlua]".to_string());
+            let info = lua.create_table()?;
+            info.set("source", source)?;
+            info.set("short_src", info.get::<String>("source")?)?;
+            info.set("what", "Lua")?;
+            info.set("currentline", 0)?;
+            info.set("linedefined", 0)?;
+            info.set("lastlinedefined", 0)?;
+            if args.front().is_some() {
+                info.set("namewhat", "")?;
+            }
+            Ok(info)
+        })?,
+    )?;
+    debug.set(
+        "traceback",
+        lua.create_function(|_, args: MultiValue| {
+            let message = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            Ok(message)
+        })?,
+    )?;
+    Ok(debug)
 }
 
 fn resolve_compat_path(song_dir: &Path, raw_path: &str) -> PathBuf {
@@ -898,6 +936,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         song_dir_string(context.song_dir.as_path()),
     )?;
     globals.set("__songlua_script_dir", Value::Nil)?;
+    globals.set("__songlua_current_script_path", Value::Nil)?;
 
     let player_options = lua.create_table()?;
     player_options.set("ConfusionOffset", context.confusion_offset_available)?;
@@ -2028,11 +2067,14 @@ fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Fun
         .set_environment(chunk_env.clone());
     let inner = chunk.into_function()?;
     let script_dir = path.parent().unwrap_or(song_dir).to_path_buf();
+    let script_path = file_path_string(path);
     let chunk_env_for_call = chunk_env;
     lua.create_function(move |lua, args: MultiValue| {
         call_with_script_dir(lua, &script_dir, || {
-            call_with_chunk_env(lua, &chunk_env_for_call, || {
-                inner.call::<Value>(args.clone())
+            call_with_script_path(lua, &script_path, || {
+                call_with_chunk_env(lua, &chunk_env_for_call, || {
+                    inner.call::<Value>(args.clone())
+                })
             })
         })
     })
@@ -3195,6 +3237,19 @@ fn call_with_script_dir<T>(
     )?;
     let result = f();
     globals.set("__songlua_script_dir", previous)?;
+    result
+}
+
+fn call_with_script_path<T>(
+    lua: &Lua,
+    script_path: &str,
+    f: impl FnOnce() -> mlua::Result<T>,
+) -> mlua::Result<T> {
+    let globals = lua.globals();
+    let previous = globals.get::<Value>("__songlua_current_script_path")?;
+    globals.set("__songlua_current_script_path", script_path)?;
+    let result = f();
+    globals.set("__songlua_current_script_path", previous)?;
     result
 }
 
@@ -5084,7 +5139,7 @@ mod tests {
     use super::{
         EffectMode, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
         SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaProxyTarget,
-        SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
+        SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua, file_path_string,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -5860,6 +5915,43 @@ return Def.ActorFrame{}
 
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "854:480:true:true");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_debug_getinfo_source() {
+        let song_dir = test_dir("debug-getinfo");
+        let lua_dir = song_dir.join("lua");
+        fs::create_dir_all(&lua_dir).unwrap();
+        fs::write(
+            lua_dir.join("child.lua"),
+            r#"
+local info = debug.getinfo(1)
+mod_actions = {
+    {1, info.source, true},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return assert(loadfile(GAMESTATE:GetCurrentSong():GetSongDir() .. "lua/child.lua"))()
+"#,
+        )
+        .unwrap();
+
+        let compiled = compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Debug Getinfo"),
+        )
+        .unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            format!("@{}", file_path_string(&lua_dir.join("child.lua")))
+        );
     }
 
     #[test]
