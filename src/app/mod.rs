@@ -3381,28 +3381,25 @@ impl App {
         true
     }
 
-    fn prepare_player_options_for_gameplay_restart(&mut self) -> bool {
-        let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
-            return false;
-        };
-
+    fn prepare_restart_player_options(
+        &mut self,
+        song: Arc<crate::game::song::SongData>,
+        chart_hashes: [&str; crate::game::gameplay::MAX_PLAYERS],
+        music_rate: f32,
+        scroll_speed: [ScrollSpeedSetting; crate::game::gameplay::MAX_PLAYERS],
+        active_color_index: i32,
+    ) -> bool {
         let play_style = profile::get_session_play_style();
         let player_side = profile::get_session_player_side();
         let target_chart_type = play_style.chart_type();
         let fallback_steps = self.state.session.preferred_difficulty_index;
 
-        let p1_steps = select_music::steps_index_for_chart_hash(
-            &gs.song,
-            target_chart_type,
-            gs.charts[0].short_hash.as_str(),
-        )
-        .unwrap_or(fallback_steps);
-        let p2_steps = select_music::steps_index_for_chart_hash(
-            &gs.song,
-            target_chart_type,
-            gs.charts[1].short_hash.as_str(),
-        )
-        .unwrap_or(fallback_steps);
+        let p1_steps =
+            select_music::steps_index_for_chart_hash(&song, target_chart_type, chart_hashes[0])
+                .unwrap_or(fallback_steps);
+        let p2_steps =
+            select_music::steps_index_for_chart_hash(&song, target_chart_type, chart_hashes[1])
+                .unwrap_or(fallback_steps);
 
         let chart_steps_index = match play_style {
             profile::PlayStyle::Versus => [p1_steps, p2_steps],
@@ -3414,16 +3411,15 @@ impl App {
         };
 
         let mut po_state = player_options::init(
-            gs.song.clone(),
+            song,
             chart_steps_index,
             chart_steps_index,
-            gs.active_color_index,
+            active_color_index,
             CurrentScreen::Gameplay,
             None,
         );
-        po_state.music_rate = gs.music_rate;
-        po_state.player_profiles.clone_from(&gs.player_profiles);
-        po_state.speed_mod = std::array::from_fn(|i| match gs.scroll_speed[i] {
+        po_state.music_rate = music_rate;
+        po_state.speed_mod = std::array::from_fn(|i| match scroll_speed[i] {
             ScrollSpeedSetting::XMod(v) => player_options::SpeedMod {
                 mod_type: "X".to_string(),
                 value: v,
@@ -3441,6 +3437,62 @@ impl App {
         true
     }
 
+    fn prepare_player_options_for_gameplay_restart(&mut self) -> bool {
+        if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
+            let song = gs.song.clone();
+            let chart_hashes = [
+                gs.charts[0].short_hash.clone(),
+                gs.charts[1].short_hash.clone(),
+            ];
+            let music_rate = gs.music_rate;
+            let scroll_speed = gs.scroll_speed;
+            let active_color_index = gs.active_color_index;
+            return self.prepare_restart_player_options(
+                song,
+                [chart_hashes[0].as_str(), chart_hashes[1].as_str()],
+                music_rate,
+                scroll_speed,
+                active_color_index,
+            );
+        }
+
+        if self.state.screens.current_screen != CurrentScreen::Evaluation {
+            return false;
+        }
+
+        let score_info = &self.state.screens.evaluation_state.score_info;
+        let Some(song) = score_info
+            .iter()
+            .find_map(|entry| entry.as_ref().map(|si| si.song.clone()))
+        else {
+            return false;
+        };
+
+        let chart_hashes: [String; crate::game::gameplay::MAX_PLAYERS] =
+            std::array::from_fn(|idx| {
+                score_info[idx]
+                    .as_ref()
+                    .map_or_else(String::new, |si| si.chart.short_hash.clone())
+            });
+        let music_rate = score_info
+            .iter()
+            .find_map(|entry| entry.as_ref().map(|si| si.music_rate))
+            .unwrap_or(1.0);
+        let scroll_speed = std::array::from_fn(|idx| {
+            score_info[idx]
+                .as_ref()
+                .map_or(ScrollSpeedSetting::default(), |si| si.speed_mod)
+        });
+        let active_color_index = self.state.screens.evaluation_state.active_color_index;
+        self.prepare_restart_player_options(
+            song,
+            [chart_hashes[0].as_str(), chart_hashes[1].as_str()],
+            music_rate,
+            scroll_speed,
+            active_color_index,
+        )
+    }
+
     fn try_gameplay_restart(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
         if self.prepare_player_options_for_gameplay_restart() {
             let restart_count = self.state.session.gameplay_restart_count.saturating_add(1);
@@ -3453,7 +3505,7 @@ impl App {
             }
             true
         } else {
-            log::warn!("Ignored {label} restart: no active gameplay state.");
+            log::warn!("Ignored {label} restart: no restartable stage state.");
             false
         }
     }
@@ -5096,6 +5148,17 @@ impl App {
                 return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+            if App::raw_keyboard_restart_screen(self.state.screens.current_screen)
+                && raw_key.pressed
+                && !raw_key.repeat
+                && raw_key.code == KeyCode::KeyR
+                && self.state.shell.ctrl_held
+                && config::get().keyboard_features
+                && self.state.session.course_run.is_none()
+            {
+                self.try_gameplay_restart(event_loop, "Ctrl+R");
+                return true;
+            }
             if raw_key.pressed
                 && !raw_key.repeat
                 && raw_key.code == KeyCode::F5
@@ -6969,6 +7032,15 @@ mod tests {
         assert!(!foreground_input_active(false, true));
         assert!(!foreground_input_active(true, false));
         assert!(!foreground_input_active(false, false));
+    }
+
+    #[test]
+    fn raw_keyboard_restart_screen_matches_zmod_restart_flow() {
+        assert!(App::raw_keyboard_restart_screen(CurrentScreen::Gameplay));
+        assert!(App::raw_keyboard_restart_screen(CurrentScreen::Evaluation));
+        assert!(!App::raw_keyboard_restart_screen(
+            CurrentScreen::EvaluationSummary,
+        ));
     }
 
     #[test]

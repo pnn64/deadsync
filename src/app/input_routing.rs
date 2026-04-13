@@ -48,6 +48,11 @@ pub(super) fn gameplay_raw_key_event(
 }
 
 impl App {
+    #[inline(always)]
+    pub(super) const fn raw_keyboard_restart_screen(screen: CurrentScreen) -> bool {
+        matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Evaluation)
+    }
+
     pub(super) fn flush_due_input_events(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -142,7 +147,7 @@ impl App {
         let capture_enabled = self.accepts_live_input();
         #[cfg(windows)]
         let capture_enabled = capture_enabled
-            && self.state.screens.current_screen == CurrentScreen::Gameplay
+            && Self::raw_keyboard_restart_screen(self.state.screens.current_screen)
             && matches!(self.state.shell.transition, TransitionState::Idle);
         input::set_raw_keyboard_capture_enabled(capture_enabled);
     }

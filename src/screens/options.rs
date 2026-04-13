@@ -1462,7 +1462,7 @@ pub const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     },
     Item {
         name: MACHINE_ROW_KEYBOARD_FEATURES,
-        help: &["Enable keyboard-only shortcuts like Ctrl+R restart in gameplay."],
+        help: &["Enable keyboard-only shortcuts like Ctrl+R restart in gameplay and evaluation."],
     },
     Item {
         name: MACHINE_ROW_VIDEO_BGS,

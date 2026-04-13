@@ -148,7 +148,7 @@ pub struct Config {
     pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
     pub use_category_select_music_menu: bool,
-    /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart.
+    /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart in gameplay/evaluation.
     pub keyboard_features: bool,
     /// Enable or disable animated gameplay background videos.
     pub show_video_backgrounds: bool,
