@@ -911,6 +911,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
         })?,
     )?;
     globals.set("PREFSMAN", prefsmgr)?;
+    globals.set("DISPLAY", create_display_table(lua, context)?)?;
     globals.set("THEME", create_theme_table(lua)?)?;
     globals.set("NOTESKIN", create_noteskin_table(lua, context)?)?;
     globals.set("ArrowEffects", create_arrow_effects_table(lua)?)?;
@@ -1449,6 +1450,44 @@ fn create_theme_table(lua: &Lua) -> mlua::Result<Table> {
     theme.set("GetMetric", get_metric.clone())?;
     theme.set("GetMetricF", get_metric)?;
     Ok(theme)
+}
+
+fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
+    let display = lua.create_table()?;
+    let width = context.screen_width.max(1.0).round() as i32;
+    let height = context.screen_height.max(1.0).round() as i32;
+    let specs = lua.create_table()?;
+
+    display.set(
+        "GetDisplayWidth",
+        lua.create_function(move |_, _args: MultiValue| Ok(width))?,
+    )?;
+    display.set(
+        "GetDisplayHeight",
+        lua.create_function(move |_, _args: MultiValue| Ok(height))?,
+    )?;
+    display.set(
+        "GetFPS",
+        lua.create_function(|_, _args: MultiValue| Ok(60))?,
+    )?;
+    display.set("GetVPF", lua.create_function(|_, _args: MultiValue| Ok(1))?)?;
+    display.set(
+        "GetCumFPS",
+        lua.create_function(|_, _args: MultiValue| Ok(60))?,
+    )?;
+    display.set(
+        "GetDisplaySpecs",
+        lua.create_function(move |_, _args: MultiValue| Ok(specs.clone()))?,
+    )?;
+    display.set(
+        "SupportsRenderToTexture",
+        lua.create_function(|_, _args: MultiValue| Ok(true))?,
+    )?;
+    display.set(
+        "SupportsFullscreenBorderlessWindow",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    Ok(display)
 }
 
 fn create_noteskin_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
@@ -5650,6 +5689,41 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_exposes_display_compat_globals() {
+        let song_dir = test_dir("display-compat");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%d:%d:%s:%s",
+            DISPLAY:GetDisplayWidth(),
+            DISPLAY:GetDisplayHeight(),
+            tostring(DISPLAY.SupportsRenderToTexture ~= nil),
+            tostring(DISPLAY:SupportsRenderToTexture())
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Display Compat");
+        context.screen_width = 854.0;
+        context.screen_height = 480.0;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "854:480:true:true");
+    }
+
+    #[test]
     fn compile_song_lua_exposes_top_screen_player_positions() {
         let song_dir = test_dir("overlay-player-position");
         let entry = song_dir.join("default.lua");
@@ -6401,5 +6475,18 @@ return Def.ActorFrame{
                 .iter()
                 .any(|overlay| matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }))
         );
+    }
+
+    #[test]
+    fn compile_song_lua_supports_vector_field_sample_if_present() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../lua-songs/Vector Field");
+        let entry = root.join("template/main.lua");
+        if !entry.is_file() {
+            return;
+        }
+
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&root, "Vector Field")).unwrap();
+        assert!(!compiled.overlays.is_empty());
     }
 }
