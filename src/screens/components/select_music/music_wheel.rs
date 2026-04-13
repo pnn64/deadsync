@@ -41,8 +41,8 @@ const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const HEART_PULSE_PERIOD: f32 = 0.8;
 const HEART_COLOR_P1: [f32; 4] = [0.3, 0.5, 1.0, 1.0]; // blue
 const HEART_COLOR_P2: [f32; 4] = [1.0, 0.47, 0.47, 1.0]; // pink (#ff7777)
-const HEART_ZOOM_SINGLE: f32 = 0.06;
-const HEART_ZOOM_DUAL: f32 = 0.045;
+const HEART_ZOOM_SINGLE: f32 = 0.039;  // 512 * 0.039 ≈ 20px
+const HEART_ZOOM_DUAL: f32 = 0.029;    // 512 * 0.029 ≈ 15px
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
 // Simply Love and Arrow Cloud both use zoom(0.2) for the single-line ITL wheel value.
@@ -696,7 +696,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                                 profile::is_favorite(profile::PlayerSide::P2, &c.short_hash)
                             });
                         let both_joined = p1_joined && p2_joined;
-                        let heart_x = title_x_local - widescale(12.0, 16.0);
+                        let heart_x = -23.0_f32;
                         let heart_pulse_t = {
                             let t = (p.selection_animation_timer / HEART_PULSE_PERIOD).fract();
                             (t * std::f32::consts::TAU).sin() * 0.5 + 0.5
@@ -709,7 +709,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             };
                             let col = lerp_color(HEART_COLOR_P1, [1.0, 1.0, 1.0, 1.0], heart_pulse_t);
                             let zm = if both_joined { HEART_ZOOM_DUAL } else { HEART_ZOOM_SINGLE };
-                            slot_children.push(act!(sprite("heart.png"):
+                            slot_children.push(act!(sprite("fave-icon.png"):
                                 align(0.5, 0.5):
                                 xy(heart_x, heart_y):
                                 zoom(zm):
@@ -725,7 +725,7 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
                             };
                             let col = lerp_color(HEART_COLOR_P2, [1.0, 1.0, 1.0, 1.0], heart_pulse_t);
                             let zm = if both_joined { HEART_ZOOM_DUAL } else { HEART_ZOOM_SINGLE };
-                            slot_children.push(act!(sprite("heart.png"):
+                            slot_children.push(act!(sprite("fave-icon.png"):
                                 align(0.5, 0.5):
                                 xy(heart_x, heart_y):
                                 zoom(zm):
