@@ -680,10 +680,19 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     )?;
     globals.set(
         "setfenv",
-        lua.create_function(|_, (target, env): (Value, Table)| match target {
+        lua.create_function(|lua, (target, env): (Value, Table)| match target {
             Value::Function(function) => {
                 let _ = function.set_environment(env.clone())?;
                 Ok(Value::Function(function))
+            }
+            Value::Integer(_) | Value::Number(_) => {
+                if let Some(current_env) = lua
+                    .globals()
+                    .get::<Option<Table>>("__songlua_current_chunk_env")?
+                {
+                    current_env.set("__songlua_env_target", env)?;
+                }
+                Ok(target)
             }
             _ => Ok(target),
         })?,
@@ -708,10 +717,9 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
                 return Ok(Value::Nil);
             };
             let path = resolve_compat_path(&listing_song_dir, raw_path.as_str());
-            if !path.exists() {
-                return Ok(Value::Nil);
-            }
-            let entries = if path.is_dir() {
+            let entries = if !path.exists() {
+                Vec::new()
+            } else if path.is_dir() {
                 let mut entries = fs::read_dir(&path)
                     .map_err(mlua::Error::external)?
                     .filter_map(Result::ok)
@@ -1973,11 +1981,16 @@ fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result<Fun
     let chunk = lua
         .load(&source)
         .set_name(path.to_string_lossy().as_ref())
-        .set_environment(chunk_env);
+        .set_environment(chunk_env.clone());
     let inner = chunk.into_function()?;
     let script_dir = path.parent().unwrap_or(song_dir).to_path_buf();
+    let chunk_env_for_call = chunk_env;
     lua.create_function(move |lua, args: MultiValue| {
-        call_with_script_dir(lua, &script_dir, || inner.call::<Value>(args.clone()))
+        call_with_script_dir(lua, &script_dir, || {
+            call_with_chunk_env(lua, &chunk_env_for_call, || {
+                inner.call::<Value>(args.clone())
+            })
+        })
     })
 }
 
@@ -3111,6 +3124,19 @@ fn call_with_script_dir<T>(
     )?;
     let result = f();
     globals.set("__songlua_script_dir", previous)?;
+    result
+}
+
+fn call_with_chunk_env<T>(
+    lua: &Lua,
+    chunk_env: &Table,
+    f: impl FnOnce() -> mlua::Result<T>,
+) -> mlua::Result<T> {
+    let globals = lua.globals();
+    let previous = globals.get::<Value>("__songlua_current_chunk_env")?;
+    globals.set("__songlua_current_chunk_env", chunk_env.clone())?;
+    let result = f();
+    globals.set("__songlua_current_chunk_env", previous)?;
     result
 }
 
@@ -5721,6 +5747,100 @@ return Def.ActorFrame{}
 
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "854:480:true:true");
+    }
+
+    #[test]
+    fn compile_song_lua_supports_xero_chunk_env_switching() {
+        let song_dir = test_dir("xero-chunk-env");
+        let template_dir = song_dir.join("template");
+        fs::create_dir_all(&template_dir).unwrap();
+        fs::write(
+            template_dir.join("std.lua"),
+            r#"
+local xero = setmetatable(xero, xero)
+xero.__index = _G
+
+function xero:__call(f)
+    setfenv(f or 2, self)
+    return f
+end
+
+xero()
+
+local stringbuilder_mt = {
+    __index = {
+        build = table.concat,
+    },
+    __call = function(self, value)
+        table.insert(self, tostring(value))
+        return self
+    end,
+}
+
+function stringbuilder()
+    return setmetatable({}, stringbuilder_mt)
+end
+
+return Def.Actor{}
+"#,
+        )
+        .unwrap();
+        fs::write(
+            template_dir.join("template.lua"),
+            r#"
+xero()
+
+local sb = stringbuilder()
+sb("ok")
+mod_actions = {
+    {1, sb:build(), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+        let entry = template_dir.join("main.lua");
+        fs::write(
+            &entry,
+            r#"
+_G.xero = {}
+
+return Def.ActorFrame{
+    assert(loadfile(GAMESTATE:GetCurrentSong():GetSongDir()..'template/std.lua'))(),
+    assert(loadfile(GAMESTATE:GetCurrentSong():GetSongDir()..'template/template.lua'))(),
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Xero")).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "ok");
+    }
+
+    #[test]
+    fn compile_song_lua_returns_empty_fileman_listing_for_missing_dir() {
+        let song_dir = test_dir("fileman-empty-listing");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local listing = FILEMAN:GetDirListing(GAMESTATE:GetCurrentSong():GetSongDir() .. "plugins/")
+mod_actions = {
+    {1, string.format("%s:%d", type(listing), #listing), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Fileman")).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "table:0");
     }
 
     #[test]
