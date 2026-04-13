@@ -928,6 +928,7 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     let screen_center_y = 0.5 * screen_height;
     globals.set("PLAYER_1", player_number_name(0))?;
     globals.set("PLAYER_2", player_number_name(1))?;
+    globals.set("Difficulty", create_difficulty_table(lua)?)?;
     globals.set("SCREEN_WIDTH", screen_width.round() as i32)?;
     globals.set("SCREEN_HEIGHT", screen_height.round() as i32)?;
     globals.set("SCREEN_CENTER_X", screen_center_x)?;
@@ -949,6 +950,16 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     globals.set(
         "ProductVersion",
         lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_PRODUCT_VERSION))?,
+    )?;
+    globals.set(
+        "ToEnumShortString",
+        lua.create_function(|lua, value: String| {
+            let short = value
+                .split_once('_')
+                .map(|(_, short)| short)
+                .unwrap_or(value.as_str());
+            Ok(Value::String(lua.create_string(short)?))
+        })?,
     )?;
     globals.set(
         "ASPECT_SCALE_FACTOR",
@@ -1087,6 +1098,24 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     )?;
     globals.set("MESSAGEMAN", messageman)?;
     Ok(())
+}
+
+fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    for (idx, difficulty) in [
+        SongLuaDifficulty::Beginner,
+        SongLuaDifficulty::Easy,
+        SongLuaDifficulty::Medium,
+        SongLuaDifficulty::Hard,
+        SongLuaDifficulty::Challenge,
+        SongLuaDifficulty::Edit,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        table.raw_set(idx + 1, difficulty.sm_name())?;
+    }
+    Ok(table)
 }
 
 struct PlayerLuaTables {
@@ -6012,6 +6041,43 @@ return Def.ActorFrame{}
 
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "Display BPMs:120:180:150:200");
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_difficulty_enum_globals() {
+        let song_dir = test_dir("difficulty-enum");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%s:%s:%s:%s",
+            ToEnumShortString(Difficulty[1]),
+            ToEnumShortString(Difficulty[#Difficulty]),
+            ToEnumShortString(GAMESTATE:GetCurrentSteps(PLAYER_1):GetDifficulty()),
+            Difficulty[4]
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Difficulty Enum");
+        context.players[0].difficulty = SongLuaDifficulty::Hard;
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(
+            compiled.messages[0].message,
+            "Beginner:Edit:Hard:Difficulty_Hard"
+        );
     }
 
     #[test]
