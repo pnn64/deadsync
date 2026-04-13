@@ -6859,6 +6859,7 @@ pub struct State {
     display_clock_diag: DisplayClockDiagRing,
     pub lane_note_indices: [Vec<usize>; MAX_COLS],
     pub lane_hold_indices: [Vec<usize>; MAX_COLS],
+    pub lane_note_display_beat_sorted: [bool; MAX_COLS],
     pub row_entry_ranges: [(usize, usize); MAX_PLAYERS],
     pub judged_row_cursor: [usize; MAX_PLAYERS],
     pub note_time_cache_ns: Vec<SongTimeNs>,
@@ -7472,6 +7473,15 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
             let right = pair[1];
             left < right && state.note_time_cache_ns[left] <= state.note_time_cache_ns[right]
         }));
+        let note_display_beat_sorted = state.lane_note_indices[col].windows(2).all(|pair| {
+            let left = pair[0];
+            let right = pair[1];
+            state.note_display_beat_cache[left] <= state.note_display_beat_cache[right]
+        });
+        debug_assert_eq!(
+            state.lane_note_display_beat_sorted[col],
+            note_display_beat_sorted
+        );
         for &note_index in &state.lane_note_indices[col] {
             debug_assert!(note_index < state.notes.len());
             debug_assert_eq!(state.notes[note_index].column, col);
@@ -7493,6 +7503,7 @@ fn debug_validate_hot_state(state: &State, delta_time: f32, music_time_sec: f32)
     for col in state.num_cols..MAX_COLS {
         debug_assert!(state.lane_note_indices[col].is_empty());
         debug_assert!(state.lane_hold_indices[col].is_empty());
+        debug_assert!(state.lane_note_display_beat_sorted[col]);
     }
     let mut lane_positions = [0usize; MAX_COLS];
     for (note_index, note) in state.notes.iter().enumerate() {
@@ -9772,6 +9783,12 @@ pub fn init(
             }
         }
     }
+    let mut lane_note_display_beat_sorted = [true; MAX_COLS];
+    for col in 0..num_cols {
+        lane_note_display_beat_sorted[col] = lane_note_indices[col]
+            .windows(2)
+            .all(|pair| note_display_beat_cache[pair[0]] <= note_display_beat_cache[pair[1]]);
+    }
     let pending_edges_capacity = input_queue_cap(num_cols);
     let replay_seconds = (song_time_ns_to_seconds(music_end_time_ns) + start_delay)
         .max(song_time_ns_to_seconds(notes_end_time_ns) + start_delay);
@@ -10107,6 +10124,7 @@ pub fn init(
         display_clock_diag: DisplayClockDiagRing::new(),
         lane_note_indices,
         lane_hold_indices,
+        lane_note_display_beat_sorted,
         row_entry_ranges,
         judged_row_cursor: row_entry_range_start,
         note_time_cache_ns,

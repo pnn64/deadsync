@@ -2681,6 +2681,32 @@ fn lane_window_bounds_by_display_beat(
 }
 
 #[inline(always)]
+fn lane_window_bounds_by_display_beat_linear(
+    note_indices: &[usize],
+    note_display_beats: &[f32],
+    min_beat: f32,
+    max_beat: f32,
+) -> (usize, usize) {
+    let mut start = note_indices.len();
+    let mut end = 0usize;
+    for (pos, &note_index) in note_indices.iter().enumerate() {
+        let beat = note_display_beats[note_index];
+        if beat < min_beat || beat > max_beat {
+            continue;
+        }
+        if start == note_indices.len() {
+            start = pos;
+        }
+        end = pos + 1;
+    }
+    if start == note_indices.len() {
+        (0, 0)
+    } else {
+        (start, end)
+    }
+}
+
+#[inline(always)]
 fn lane_hold_window_bounds_by_time_ns(
     hold_indices: &[usize],
     note_times_ns: &[SongTimeNs],
@@ -2713,18 +2739,26 @@ fn lane_hold_window_bounds_by_display_beat(
     min_beat: f32,
     max_beat: f32,
 ) -> (usize, usize) {
-    let (mut start, end) =
-        lane_window_bounds_by_display_beat(hold_indices, note_display_beats, min_beat, max_beat);
-    while start > 0 {
-        let prev_note_index = hold_indices[start - 1];
-        let prev_end_beat =
-            hold_end_display_beats[prev_note_index].unwrap_or(note_display_beats[prev_note_index]);
-        if prev_end_beat < min_beat {
-            break;
+    let mut start = hold_indices.len();
+    let mut end = 0usize;
+    for (pos, &note_index) in hold_indices.iter().enumerate() {
+        let head_beat = note_display_beats[note_index];
+        let tail_beat = hold_end_display_beats[note_index].unwrap_or(head_beat);
+        let hold_min_beat = head_beat.min(tail_beat);
+        let hold_max_beat = head_beat.max(tail_beat);
+        if hold_max_beat < min_beat || hold_min_beat > max_beat {
+            continue;
         }
-        start -= 1;
+        if start == hold_indices.len() {
+            start = pos;
+        }
+        end = pos + 1;
     }
-    (start, end)
+    if start == hold_indices.len() {
+        (0, 0)
+    } else {
+        (start, end)
+    }
 }
 
 pub fn build_bundles(
@@ -3113,7 +3147,7 @@ pub fn build_bundles(
             }
             ScrollSpeedSetting::CMod(_) => None,
         };
-        let lane_note_window_bounds = |note_indices: &[usize]| -> (usize, usize) {
+        let lane_note_window_bounds = |col: usize, note_indices: &[usize]| -> (usize, usize) {
             if let Some((min_time_ns, max_time_ns)) = visible_time_range_ns {
                 lane_window_bounds_by_time_ns(
                     note_indices,
@@ -3122,12 +3156,24 @@ pub fn build_bundles(
                     max_time_ns,
                 )
             } else if let Some((min_beat, max_beat)) = visible_display_beat_range {
-                lane_window_bounds_by_display_beat(
-                    note_indices,
-                    &state.note_display_beat_cache,
-                    min_beat,
-                    max_beat,
-                )
+                if state.lane_note_display_beat_sorted[col] {
+                    lane_window_bounds_by_display_beat(
+                        note_indices,
+                        &state.note_display_beat_cache,
+                        min_beat,
+                        max_beat,
+                    )
+                } else {
+                    // Scroll gimmicks can make displayed beats non-monotonic in chart order.
+                    // Fall back to a contiguous superset window instead of binary-searching
+                    // invalid ordering and dropping visible notes.
+                    lane_window_bounds_by_display_beat_linear(
+                        note_indices,
+                        &state.note_display_beat_cache,
+                        min_beat,
+                        max_beat,
+                    )
+                }
             } else {
                 (0, note_indices.len())
             }
@@ -5523,7 +5569,8 @@ pub fn build_bundles(
         for col_idx in 0..num_cols {
             let col = col_start + col_idx;
             let column_note_indices = &state.lane_note_indices[col];
-            let (lane_note_start, lane_note_end) = lane_note_window_bounds(column_note_indices);
+            let (lane_note_start, lane_note_end) =
+                lane_note_window_bounds(col, column_note_indices);
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
             let fill_slot = mine_ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
@@ -7137,11 +7184,12 @@ mod tests {
         append_mini_part, append_perspective_parts, append_turn_parts, bottom_cap_uv_window,
         clipped_hold_body_bounds, hallway_judgment_zoom, hold_head_render_flags, hold_segment_pose,
         hold_tail_cap_bounds, hud_layout_ys, hud_y, lane_hold_window_bounds_by_display_beat,
-        lane_hold_window_bounds_by_time_ns, let_go_head_beat,
-        maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha, note_slot_base_size, note_world_z,
-        note_x_extra, offset_center, predictive_itg_percents, push_transform_parts,
-        receptor_row_center, tap_judgment_rows, tap_part_for_note_type, tipsy_y_extra,
-        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_subtractive_counter_state,
+        lane_hold_window_bounds_by_time_ns, lane_window_bounds_by_display_beat_linear,
+        let_go_head_beat, maybe_mirror_uv_horiz_for_reverse_flipped, note_alpha,
+        note_slot_base_size, note_world_z, note_x_extra, offset_center, predictive_itg_percents,
+        push_transform_parts, receptor_row_center, tap_judgment_rows, tap_part_for_note_type,
+        tipsy_y_extra, top_cap_rotation_deg, turn_option_bits, turn_option_name,
+        zmod_subtractive_counter_state,
     };
     use crate::game::gameplay::{ActiveHold, AppearanceEffects, VisualEffects};
     use crate::game::judgment::{
@@ -7299,6 +7347,38 @@ mod tests {
                 45.0,
             ),
             (1, 3)
+        );
+    }
+
+    #[test]
+    fn lane_display_beat_linear_window_covers_unsorted_visible_notes() {
+        let note_indices = [0usize, 1, 2, 3, 4];
+        let note_display_beats = [10.0f32, 40.0, 20.0, 45.0, 30.0];
+        assert_eq!(
+            lane_window_bounds_by_display_beat_linear(
+                &note_indices,
+                &note_display_beats,
+                35.0,
+                46.0
+            ),
+            (1, 4)
+        );
+    }
+
+    #[test]
+    fn lane_hold_window_by_display_beat_includes_reversed_hold_interval() {
+        let hold_indices = [0usize, 1, 2];
+        let note_display_beats = [10.0f32, 50.0, 70.0];
+        let hold_end_display_beats = [Some(20.0f32), Some(20.0), Some(90.0)];
+        assert_eq!(
+            lane_hold_window_bounds_by_display_beat(
+                &hold_indices,
+                &note_display_beats,
+                &hold_end_display_beats,
+                30.0,
+                40.0,
+            ),
+            (1, 2)
         );
     }
 
