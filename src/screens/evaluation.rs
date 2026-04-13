@@ -52,6 +52,7 @@ const EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS: f32 = 0.4;
 const EVAL_STAGE_IN_TOTAL_SECONDS: f32 = EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS
     + EVAL_STAGE_IN_TEXT_HOLD_SECONDS
     + EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS;
+const DEFERRED_RESULTS_INIT_DELAY_SECONDS: f32 = EVAL_STAGE_IN_BLACK_DELAY_SECONDS;
 const GRAPH_BARELY_SAMPLE_COUNT: usize = 100;
 const GRAPH_BARELY_LIFE_MAX: f32 = 0.1;
 const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
@@ -934,7 +935,6 @@ const fn eval_graph_prev(pane: EvalGraphPane) -> EvalGraphPane {
     }
 }
 
-#[derive(Clone)]
 pub struct State {
     pub active_color_index: i32,
     bg: heart_bg::State,
@@ -969,6 +969,78 @@ pub struct State {
     active_graph: [EvalGraphPane; MAX_PLAYERS],
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; MAX_PLAYERS],
+    pending_gameplay_results: Option<Box<gameplay::State>>,
+}
+
+impl Clone for State {
+    fn clone(&self) -> Self {
+        Self {
+            active_color_index: self.active_color_index,
+            bg: self.bg.clone(),
+            screen_elapsed: self.screen_elapsed,
+            session_elapsed: self.session_elapsed,
+            gameplay_elapsed: self.gameplay_elapsed,
+            stage_duration_seconds: self.stage_duration_seconds,
+            score_info: self.score_info.clone(),
+            itl_progress: self.itl_progress.clone(),
+            density_graph_mesh: self.density_graph_mesh.clone(),
+            timing_hist_mesh: self.timing_hist_mesh.clone(),
+            timing_hist_mesh_ex: self.timing_hist_mesh_ex.clone(),
+            timing_hist_mesh_hard_ex: self.timing_hist_mesh_hard_ex.clone(),
+            scatter_mesh_itg: self.scatter_mesh_itg.clone(),
+            scatter_mesh_ex: self.scatter_mesh_ex.clone(),
+            scatter_mesh_hard_ex: self.scatter_mesh_hard_ex.clone(),
+            scatter_mesh_arrow: self.scatter_mesh_arrow.clone(),
+            scatter_mesh_foot: self.scatter_mesh_foot.clone(),
+            density_graph_texture_key: self.density_graph_texture_key.clone(),
+            return_to_course: self.return_to_course,
+            auto_advance_seconds: self.auto_advance_seconds,
+            allow_online_panes: self.allow_online_panes,
+            auto_screenshot_taken: self.auto_screenshot_taken,
+            itl_overlay_visible: self.itl_overlay_visible,
+            itl_overlay_shown: self.itl_overlay_shown,
+            submit_groovestats_fallback: self.submit_groovestats_fallback,
+            submit_arrowcloud_fallback: self.submit_arrowcloud_fallback,
+            lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
+            lobby_disconnect_hold_p2: self.lobby_disconnect_hold_p2,
+            itl_overlay_page: self.itl_overlay_page,
+            active_pane: self.active_pane,
+            active_graph: self.active_graph,
+            menu_lr_chord: self.menu_lr_chord,
+            menu_lr_undo: self.menu_lr_undo,
+            pending_gameplay_results: None,
+        }
+    }
+}
+
+fn adopt_initialized_state(dst: &mut State, mut src: State) {
+    src.active_color_index = dst.active_color_index;
+    src.bg = dst.bg.clone();
+    src.screen_elapsed = dst.screen_elapsed;
+    src.session_elapsed = dst.session_elapsed;
+    src.gameplay_elapsed = dst.gameplay_elapsed;
+    src.return_to_course = dst.return_to_course;
+    src.auto_advance_seconds = dst.auto_advance_seconds;
+    src.allow_online_panes = dst.allow_online_panes;
+    src.auto_screenshot_taken = dst.auto_screenshot_taken;
+    src.itl_overlay_visible = dst.itl_overlay_visible;
+    src.itl_overlay_shown = dst.itl_overlay_shown;
+    src.submit_groovestats_fallback = dst.submit_groovestats_fallback;
+    src.submit_arrowcloud_fallback = dst.submit_arrowcloud_fallback;
+    src.lobby_disconnect_hold_p1 = dst.lobby_disconnect_hold_p1;
+    src.lobby_disconnect_hold_p2 = dst.lobby_disconnect_hold_p2;
+    src.itl_overlay_page = dst.itl_overlay_page;
+    src.menu_lr_chord = dst.menu_lr_chord;
+    src.menu_lr_undo = dst.menu_lr_undo;
+    src.pending_gameplay_results = None;
+    *dst = src;
+}
+
+pub fn init_deferred(gameplay_results: gameplay::State) -> State {
+    let mut state = init(None);
+    state.stage_duration_seconds = gameplay_results.total_elapsed_in_screen;
+    state.pending_gameplay_results = Some(Box::new(gameplay_results));
+    state
 }
 
 pub fn init(gameplay_results: Option<gameplay::State>) -> State {
@@ -1462,6 +1534,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
+        pending_gameplay_results: None,
     }
 }
 
@@ -1528,6 +1601,7 @@ pub fn init_from_score_info(
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; MAX_PLAYERS],
+        pending_gameplay_results: None,
     }
 }
 
@@ -1595,7 +1669,22 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
     }
 }
 
-pub fn update(state: &mut State, dt: f32) {
+pub fn update(state: &mut State, dt: f32) -> bool {
+    let mut results_became_ready = false;
+    if dt > 0.0 {
+        state.screen_elapsed += dt;
+    }
+    if state.pending_gameplay_results.is_some()
+        && state.screen_elapsed >= DEFERRED_RESULTS_INIT_DELAY_SECONDS
+    {
+        let gameplay_results = *state
+            .pending_gameplay_results
+            .take()
+            .expect("pending gameplay results should exist");
+        adopt_initialized_state(state, init(Some(gameplay_results)));
+        results_became_ready = true;
+    }
+
     online::lobbies::poll_reconnect();
     online::lobbies::update_machine_state_sides_with_stats(
         "ScreenEvaluationStage",
@@ -1616,9 +1705,7 @@ pub fn update(state: &mut State, dt: f32) {
     }
     sync_submit_itl_progress(state);
     sync_missing_submit_status_fallbacks(state);
-    if dt > 0.0 {
-        state.screen_elapsed += dt;
-    }
+    results_became_ready
 }
 
 fn local_lobby_player_count() -> usize {

@@ -2103,52 +2103,60 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         asset_manager: &AssetManager,
-    ) -> Option<ScreenAction> {
+    ) -> (Option<ScreenAction>, bool) {
         match self.current_screen {
             CurrentScreen::Gameplay => self
                 .gameplay_state
                 .as_mut()
-                .map(|gs| gameplay::update(gs, delta_time)),
-            CurrentScreen::Init => Some(init::update(&mut self.init_state, delta_time)),
-            CurrentScreen::Options => {
-                options::update(&mut self.options_state, delta_time, asset_manager)
-            }
+                .map(|gs| gameplay::update(gs, delta_time))
+                .map_or((None, false), |action| (Some(action), false)),
+            CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
+            CurrentScreen::Options => (
+                options::update(&mut self.options_state, delta_time, asset_manager),
+                false,
+            ),
             CurrentScreen::Credits => {
                 credits::update(&mut self.credits_state, delta_time);
-                None
+                (None, false)
             }
-            CurrentScreen::ManageLocalProfiles => {
-                manage_local_profiles::update(&mut self.manage_local_profiles_state, delta_time)
-            }
+            CurrentScreen::ManageLocalProfiles => (
+                manage_local_profiles::update(&mut self.manage_local_profiles_state, delta_time),
+                false,
+            ),
             CurrentScreen::Mappings => {
                 mappings::update(&mut self.mappings_state, delta_time);
-                None
+                (None, false)
             }
-            CurrentScreen::Input => input_screen::update(&mut self.input_state, delta_time),
+            CurrentScreen::Input => (
+                input_screen::update(&mut self.input_state, delta_time),
+                false,
+            ),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &mut self.player_options_state {
                     player_options::update(pos, delta_time, asset_manager);
                 }
-                None
+                (None, false)
             }
             CurrentScreen::Sandbox => {
                 sandbox::update(&mut self.sandbox_state, delta_time);
-                None
+                (None, false)
             }
             CurrentScreen::SelectProfile => {
                 select_profile::update(&mut self.select_profile_state, delta_time);
-                None
+                (None, false)
             }
             CurrentScreen::SelectColor => {
                 select_color::update(&mut self.select_color_state, delta_time);
-                None
+                (None, false)
             }
-            CurrentScreen::SelectStyle => {
-                select_style::update(&mut self.select_style_state, delta_time)
-            }
-            CurrentScreen::SelectPlayMode => {
-                select_mode::update(&mut self.select_play_mode_state, delta_time)
-            }
+            CurrentScreen::SelectStyle => (
+                select_style::update(&mut self.select_style_state, delta_time),
+                false,
+            ),
+            CurrentScreen::SelectPlayMode => (
+                select_mode::update(&mut self.select_play_mode_state, delta_time),
+                false,
+            ),
             CurrentScreen::ProfileLoad => {
                 let action = profile_load::update(&mut self.profile_load_state, delta_time);
                 if matches!(
@@ -2189,7 +2197,7 @@ impl ScreensState {
                         self.profile_load_state.active_color_index;
                     select_course::trigger_immediate_refresh(&mut self.select_course_state);
                 }
-                action
+                (action, false)
             }
             CurrentScreen::Evaluation => {
                 if let Some(start) = session.session_start_time {
@@ -2197,22 +2205,30 @@ impl ScreensState {
                 }
                 self.evaluation_state.gameplay_elapsed =
                     total_gameplay_elapsed(&session.played_stages);
-                evaluation::update(&mut self.evaluation_state, delta_time);
-                if let Some(delay) = self.evaluation_state.auto_advance_seconds
+                let results_became_ready =
+                    evaluation::update(&mut self.evaluation_state, delta_time);
+                let action = if let Some(delay) = self.evaluation_state.auto_advance_seconds
                     && self.evaluation_state.screen_elapsed >= delay
                     && self.player_options_state.is_some()
                 {
                     Some(ScreenAction::Navigate(CurrentScreen::Gameplay))
                 } else {
                     None
-                }
+                };
+                (action, results_became_ready)
             }
             CurrentScreen::EvaluationSummary => {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
-                None
+                (None, false)
             }
-            CurrentScreen::Initials => initials::update(&mut self.initials_state, delta_time),
-            CurrentScreen::GameOver => gameover::update(&mut self.gameover_state, delta_time),
+            CurrentScreen::Initials => (
+                initials::update(&mut self.initials_state, delta_time),
+                false,
+            ),
+            CurrentScreen::GameOver => (
+                gameover::update(&mut self.gameover_state, delta_time),
+                false,
+            ),
             CurrentScreen::SelectMusic => {
                 if let Some(start) = session.session_start_time {
                     self.select_music_state.session_elapsed =
@@ -2220,22 +2236,28 @@ impl ScreensState {
                 }
                 self.select_music_state.gameplay_elapsed =
                     total_gameplay_elapsed(&session.played_stages);
-                Some(select_music::update(
-                    &mut self.select_music_state,
-                    delta_time,
-                ))
+                (
+                    Some(select_music::update(
+                        &mut self.select_music_state,
+                        delta_time,
+                    )),
+                    false,
+                )
             }
             CurrentScreen::SelectCourse => {
                 if let Some(start) = session.session_start_time {
                     self.select_course_state.session_elapsed =
                         now.duration_since(start).as_secs_f32();
                 }
-                Some(select_course::update(
-                    &mut self.select_course_state,
-                    delta_time,
-                ))
+                (
+                    Some(select_course::update(
+                        &mut self.select_course_state,
+                        delta_time,
+                    )),
+                    false,
+                )
             }
-            CurrentScreen::Menu => None,
+            CurrentScreen::Menu => (None, false),
         }
     }
 }
@@ -2541,16 +2563,21 @@ impl App {
                 let gameplay_prompt_active = self.state.screens.current_screen
                     == CurrentScreen::Gameplay
                     && self.state.gameplay_offset_save_prompt.is_some();
-                if !gameplay_prompt_active
-                    && let Some(action) = self.state.screens.step_idle(
+                if !gameplay_prompt_active {
+                    let (action, eval_results_ready) = self.state.screens.step_idle(
                         delta_time,
                         redraw_started,
                         &self.state.session,
                         &self.asset_manager,
-                    )
-                    && !matches!(action, ScreenAction::None)
-                {
-                    let _ = self.handle_action(action, event_loop);
+                    );
+                    if eval_results_ready {
+                        self.finalize_entered_evaluation();
+                    }
+                    if let Some(action) = action
+                        && !matches!(action, ScreenAction::None)
+                    {
+                        let _ = self.handle_action(action, event_loop);
+                    }
                 }
                 if self.state.screens.current_screen == CurrentScreen::Evaluation
                     && !self.state.screens.evaluation_state.auto_screenshot_taken
@@ -3488,6 +3515,77 @@ impl App {
             }
         }
         stage_summary
+    }
+
+    fn finalize_entered_evaluation(&mut self) {
+        if let Some(backend) = self.backend.as_mut() {
+            self.dynamic_media
+                .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
+        }
+
+        let color_idx = self.state.screens.evaluation_state.active_color_index;
+        let eval_snapshot = self.state.screens.evaluation_state.clone();
+        let _ = self.append_stage_results_from_eval(&eval_snapshot);
+        self.state.screens.evaluation_state.return_to_course =
+            self.state.session.course_run.is_some();
+        self.state.screens.evaluation_state.auto_advance_seconds = None;
+
+        if let Some(course_run) = self.state.session.course_run.as_mut() {
+            if course_run.next_stage_index >= course_run.stages.len() {
+                let score_hash = course_run.score_hash.clone();
+                let per_song_pages = course_run.stage_eval_pages.clone();
+                let course_summary = build_course_summary_stage(course_run);
+                self.state.session.course_run = None;
+                self.state.session.course_eval_pages.clear();
+                self.state.session.course_eval_page_index = 0;
+
+                if let Some(course_stage) = course_summary {
+                    for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
+                        if let Some(player) = course_stage.players[side_ix(side)].as_ref() {
+                            scores::save_local_summary_score_for_side(
+                                score_hash.as_str(),
+                                side,
+                                course_stage.music_rate,
+                                player,
+                            );
+                        }
+                    }
+                    self.state.session.played_stages.push(course_stage.clone());
+
+                    let gameplay_elapsed =
+                        total_gameplay_elapsed(&self.state.session.played_stages);
+                    let session_elapsed = self.state.screens.evaluation_state.session_elapsed;
+                    let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
+                    let mut course_page = build_course_summary_eval_state(
+                        &course_stage,
+                        color_idx,
+                        session_elapsed,
+                        gameplay_elapsed,
+                    );
+                    course_page.screen_elapsed = screen_elapsed;
+                    self.state.screens.evaluation_state = course_page.clone();
+
+                    let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
+                    pages.push(course_page);
+                    for mut page in per_song_pages {
+                        page.return_to_course = true;
+                        page.auto_advance_seconds = None;
+                        page.screen_elapsed = screen_elapsed;
+                        page.session_elapsed = session_elapsed;
+                        page.gameplay_elapsed = gameplay_elapsed;
+                        pages.push(page);
+                    }
+                    self.state.session.course_eval_pages = pages;
+                    self.state.session.course_eval_page_index = 0;
+                }
+            }
+        } else {
+            self.state.session.course_eval_pages.clear();
+            self.state.session.course_eval_page_index = 0;
+        }
+
+        self.state.screens.evaluation_state.gameplay_elapsed =
+            total_gameplay_elapsed(&self.state.session.played_stages);
     }
 
     fn post_select_display_stages(&self) -> Cow<'_, [stage_stats::StageSummary]> {
@@ -5619,6 +5717,7 @@ impl App {
         let mut commands = Vec::new();
         if prev == CurrentScreen::Gameplay
             && target != CurrentScreen::Gameplay
+            && target != CurrentScreen::Evaluation
             && let Some(backend) = self.backend.as_mut()
         {
             self.dynamic_media
@@ -5999,70 +6098,13 @@ impl App {
                 self.state.screens.evaluation_state.active_color_index,
                 |gs| gs.active_color_index,
             );
-            self.state.screens.evaluation_state = evaluation::init(gameplay_results);
+            self.state.screens.evaluation_state = gameplay_results
+                .map(evaluation::init_deferred)
+                .unwrap_or_else(|| evaluation::init(None));
             self.state.screens.evaluation_state.active_color_index = color_idx;
-            let eval_snapshot = self.state.screens.evaluation_state.clone();
-            let _ = self.append_stage_results_from_eval(&eval_snapshot);
             self.state.screens.evaluation_state.return_to_course =
                 self.state.session.course_run.is_some();
             self.state.screens.evaluation_state.auto_advance_seconds = None;
-
-            if let Some(course_run) = self.state.session.course_run.as_mut() {
-                if course_run.next_stage_index >= course_run.stages.len() {
-                    let score_hash = course_run.score_hash.clone();
-                    let per_song_pages = course_run.stage_eval_pages.clone();
-                    let course_summary = build_course_summary_stage(course_run);
-                    self.state.session.course_run = None;
-                    self.state.session.course_eval_pages.clear();
-                    self.state.session.course_eval_page_index = 0;
-
-                    if let Some(course_stage) = course_summary {
-                        for side in [profile::PlayerSide::P1, profile::PlayerSide::P2] {
-                            if let Some(player) = course_stage.players[side_ix(side)].as_ref() {
-                                scores::save_local_summary_score_for_side(
-                                    score_hash.as_str(),
-                                    side,
-                                    course_stage.music_rate,
-                                    player,
-                                );
-                            }
-                        }
-                        self.state.session.played_stages.push(course_stage.clone());
-
-                        let gameplay_elapsed =
-                            total_gameplay_elapsed(&self.state.session.played_stages);
-                        let session_elapsed = self.state.screens.evaluation_state.session_elapsed;
-                        let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
-                        let mut course_page = build_course_summary_eval_state(
-                            &course_stage,
-                            color_idx,
-                            session_elapsed,
-                            gameplay_elapsed,
-                        );
-                        course_page.screen_elapsed = screen_elapsed;
-                        self.state.screens.evaluation_state = course_page.clone();
-
-                        let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
-                        pages.push(course_page);
-                        for mut page in per_song_pages {
-                            page.return_to_course = true;
-                            page.auto_advance_seconds = None;
-                            page.screen_elapsed = screen_elapsed;
-                            page.session_elapsed = session_elapsed;
-                            page.gameplay_elapsed = gameplay_elapsed;
-                            pages.push(page);
-                        }
-                        self.state.session.course_eval_pages = pages;
-                        self.state.session.course_eval_page_index = 0;
-                    }
-                }
-            } else {
-                self.state.session.course_eval_pages.clear();
-                self.state.session.course_eval_page_index = 0;
-            }
-
-            self.state.screens.evaluation_state.gameplay_elapsed =
-                total_gameplay_elapsed(&self.state.session.played_stages);
         }
 
         if target == CurrentScreen::EvaluationSummary {
