@@ -106,6 +106,7 @@ pub struct SongLuaPlayerContext {
     pub enabled: bool,
     pub difficulty: SongLuaDifficulty,
     pub speedmod: SongLuaSpeedMod,
+    pub display_bpms: [f32; 2],
     pub noteskin_name: String,
     pub screen_x: f32,
     pub screen_y: f32,
@@ -117,6 +118,7 @@ impl Default for SongLuaPlayerContext {
             enabled: true,
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
+            display_bpms: [60.0, 60.0],
             noteskin_name: crate::game::profile::NoteSkin::default().to_string(),
             screen_x: 320.0,
             screen_y: 240.0,
@@ -128,6 +130,7 @@ impl Default for SongLuaPlayerContext {
 pub struct SongLuaCompileContext {
     pub song_dir: PathBuf,
     pub main_title: String,
+    pub song_display_bpms: [f32; 2],
     pub global_offset_seconds: f32,
     pub screen_width: f32,
     pub screen_height: f32,
@@ -142,6 +145,7 @@ impl SongLuaCompileContext {
         Self {
             song_dir: song_dir.into(),
             main_title: main_title.into(),
+            song_display_bpms: [60.0, 60.0],
             global_offset_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
@@ -643,6 +647,25 @@ fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     if matches!(string.get::<Value>("gfind")?, Value::Nil) {
         let gmatch = string.get::<Value>("gmatch")?;
         string.set("gfind", gmatch)?;
+    }
+    let math: Table = globals.get("math")?;
+    if matches!(math.get::<Value>("round")?, Value::Nil) {
+        math.set(
+            "round",
+            lua.create_function(|_, value: f64| {
+                Ok(if value >= 0.0 {
+                    (value + 0.5).floor()
+                } else {
+                    (value - 0.5).ceil()
+                })
+            })?,
+        )?;
+    }
+    if matches!(math.get::<Value>("clamp")?, Value::Nil) {
+        math.set(
+            "clamp",
+            lua.create_function(|_, (value, min, max): (f64, f64, f64)| Ok(value.clamp(min, max)))?,
+        )?;
     }
     globals.set("unpack", table.get::<Value>("unpack")?)?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
@@ -1458,8 +1481,16 @@ fn create_player_tables(
         create_player_state_table(lua, context.players[1].clone())?,
     ];
     let steps = [
-        create_steps_table(lua, context.players[0].difficulty)?,
-        create_steps_table(lua, context.players[1].difficulty)?,
+        create_steps_table(
+            lua,
+            context.players[0].difficulty,
+            context.players[0].display_bpms,
+        )?,
+        create_steps_table(
+            lua,
+            context.players[1].difficulty,
+            context.players[1].display_bpms,
+        )?,
     ];
     Ok(PlayerLuaTables {
         player_states,
@@ -1752,7 +1783,11 @@ fn create_player_state_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::R
     Ok(table)
 }
 
-fn create_steps_table(lua: &Lua, difficulty: SongLuaDifficulty) -> mlua::Result<Table> {
+fn create_steps_table(
+    lua: &Lua,
+    difficulty: SongLuaDifficulty,
+    display_bpms: [f32; 2],
+) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let difficulty = difficulty.sm_name().to_string();
     table.set(
@@ -1761,6 +1796,18 @@ fn create_steps_table(lua: &Lua, difficulty: SongLuaDifficulty) -> mlua::Result<
             Ok(Value::String(lua.create_string(&difficulty)?))
         })?,
     )?;
+    let display_bpms = create_display_bpms_table(lua, display_bpms)?;
+    table.set(
+        "GetDisplayBpms",
+        lua.create_function(move |_, _args: MultiValue| Ok(display_bpms.clone()))?,
+    )?;
+    Ok(table)
+}
+
+fn create_display_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.raw_set(1, bpms[0])?;
+    table.raw_set(2, bpms[1])?;
     Ok(table)
 }
 
@@ -1875,6 +1922,18 @@ fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result
         lua.create_function(move |lua, _args: MultiValue| {
             Ok(Value::String(lua.create_string(&title)?))
         })?,
+    )?;
+    let display_title = context.main_title.clone();
+    table.set(
+        "GetDisplayMainTitle",
+        lua.create_function(move |lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string(&display_title)?))
+        })?,
+    )?;
+    let display_bpms = create_display_bpms_table(lua, context.song_display_bpms)?;
+    table.set(
+        "GetDisplayBpms",
+        lua.create_function(move |_, _args: MultiValue| Ok(display_bpms.clone()))?,
     )?;
     let timing = create_timing_table(lua)?;
     table.set(
@@ -5918,6 +5977,44 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn compile_song_lua_exposes_song_and_steps_display_bpms() {
+        let song_dir = test_dir("display-bpms");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local song_bpms = GAMESTATE:GetCurrentSong():GetDisplayBpms()
+local step_bpms = GAMESTATE:GetCurrentSteps(PLAYER_1):GetDisplayBpms()
+mod_actions = {
+    {
+        1,
+        string.format(
+            "%s:%d:%d:%d:%d",
+            GAMESTATE:GetCurrentSong():GetDisplayMainTitle(),
+            song_bpms[1],
+            song_bpms[2],
+            step_bpms[1],
+            step_bpms[2]
+        ),
+        true,
+    },
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Display BPMs");
+        context.song_display_bpms = [120.0, 180.0];
+        context.players[0].display_bpms = [150.0, 200.0];
+        let compiled = compile_song_lua(&entry, &context).unwrap();
+
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "Display BPMs:120:180:150:200");
+    }
+
+    #[test]
     fn compile_song_lua_exposes_debug_getinfo_source() {
         let song_dir = test_dir("debug-getinfo");
         let lua_dir = song_dir.join("lua");
@@ -5952,6 +6049,28 @@ return assert(loadfile(GAMESTATE:GetCurrentSong():GetSongDir() .. "lua/child.lua
             compiled.messages[0].message,
             format!("@{}", file_path_string(&lua_dir.join("child.lua")))
         );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_math_round_compat() {
+        let song_dir = test_dir("math-round");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {1, string.format("%d:%d:%d", math.round(1.49), math.round(1.5), math.round(-1.5)), true},
+}
+
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled =
+            compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Math Round")).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "1:2:-2");
     }
 
     #[test]

@@ -4668,6 +4668,8 @@ fn build_song_lua_runtime_windows(
             .unwrap_or_default(),
         song.title.clone(),
     );
+    context.song_display_bpms =
+        song_lua_display_bpm_pair(song, charts.first().map(|chart| chart.as_ref()));
     context.global_offset_seconds = machine_global_offset_seconds;
     context.screen_width = screen_width;
     context.screen_height = screen_height;
@@ -4683,6 +4685,11 @@ fn build_song_lua_runtime_windows(
             song_lua_difficulty_from_chart(&charts[player].difficulty)
         } else {
             SongLuaDifficulty::default_enabled()
+        },
+        display_bpms: if player < num_players {
+            song_lua_display_bpm_pair(song, Some(charts[player].as_ref()))
+        } else {
+            [60.0, 60.0]
         },
         speedmod: if player < num_players {
             song_lua_speedmod_from_setting(scroll_speed[player])
@@ -9241,6 +9248,20 @@ fn get_reference_bpm_from_display_tag(
         return max_str.trim().parse::<f32>().ok();
     }
     s.parse::<f32>().ok()
+}
+
+fn song_lua_display_bpm_pair(song: &SongData, chart: Option<&ChartData>) -> [f32; 2] {
+    song.chart_display_bpm_range(chart)
+        .map(|(lo, hi)| {
+            let lo = lo as f32;
+            let hi = hi as f32;
+            if lo.is_finite() && hi.is_finite() && lo > 0.0 && hi > 0.0 {
+                [lo, hi]
+            } else {
+                [60.0, 60.0]
+            }
+        })
+        .unwrap_or([60.0, 60.0])
 }
 
 fn step_stats_notefield_width(
